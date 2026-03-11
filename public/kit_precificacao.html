@@ -358,10 +358,38 @@ hr{border:none;border-top:1px solid var(--border);margin:14px 0;}
 // ═══════════════════════════════════════════════════════════
 // API — HELPER para chamadas ao backend Railway
 // ═══════════════════════════════════════════════════════════
-const API_BASE = '';  // mesmo domínio (Railway serve o HTML e a API juntos)
+// URL base — usa o origin para funcionar dentro do iframe do index.html
+// URL base robusta — funciona em iframe, acesso direto e Railway
+const API_BASE = (() => {
+  const o = window.location.origin;
+  if (!o || o === 'null' || o.startsWith('file')) return 'https://bombeef-web-production.up.railway.app';
+  return o;
+})();
+
+// Token: recebido via postMessage pelo index.html (type: 'bb_auth')
+// ou lido do sessionStorage se o sistema for acessado direto
+let _token = sessionStorage.getItem('bb_token') || '';
+
+// Escuta o token injetado pelo index.html
+window.addEventListener('message', (e) => {
+  if (e.data && e.data.type === 'bb_auth' && e.data.token) {
+    _token = e.data.token;
+    // Recarrega com autenticação agora disponível
+    document.getElementById('loading-overlay').style.display = 'flex';
+    Promise.all([carregarProdutos(), carregarKits()]).then(() => {
+      document.getElementById('loading-overlay').style.display = 'none';
+      renderProdutos();
+      renderKitsSalvos();
+    });
+  }
+});
 
 function getToken() {
-  return localStorage.getItem('bb_token') || sessionStorage.getItem('bb_token') || '';
+  return _token
+    || sessionStorage.getItem('bb_token')
+    || localStorage.getItem('bb_token')
+    || (typeof window.BB_TOKEN !== 'undefined' ? window.BB_TOKEN : '')
+    || '';
 }
 
 async function apiFetch(path, opts = {}) {
