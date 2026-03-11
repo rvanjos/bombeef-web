@@ -77,7 +77,7 @@ module.exports = (pool) => {
   // ── PATCH /api/produtos/:codigo ──────────────────────────
   // Atualização manual de campos complementares (não-TOTVS)
   router.patch('/:codigo', autenticar(['admin','gerente','estoque']), async (req, res) => {
-    const campos = ['perecivel','controla_validade','controla_lote','fornecedor_principal','ativo'];
+    const campos = ['perecivel','controla_validade','controla_lote','fornecedor_principal','ativo','preco_custo','preco_venda','descricao_produto','descricao_reduzida','categoria','unidade'];
     const sets   = [];
     const params = [];
 

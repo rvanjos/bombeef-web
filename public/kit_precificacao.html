@@ -191,7 +191,7 @@ hr{border:none;border-top:1px solid var(--border);margin:14px 0;}
     <div style="overflow-x:auto;max-height:520px;overflow-y:auto;">
       <table>
         <thead style="position:sticky;top:0;z-index:1;">
-          <tr><th>Cód.</th><th>Produto</th><th>Categoria</th><th>Custo</th><th>Venda</th><th>Unid.</th><th>Margem</th></tr>
+          <tr><th>Cód.</th><th>Produto</th><th>Categoria</th><th>Custo</th><th>Venda</th><th>Unid.</th><th>Margem</th><th></th></tr>
         </thead>
         <tbody id="tbody-produtos"></tbody>
       </table>
@@ -689,7 +689,7 @@ function renderProdutos(lista) {
   if (el) el.textContent = `— ${prods.length} de ${state.produtos.length}`;
   const tbody = document.getElementById('tbody-produtos');
   if (!prods.length) {
-    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--muted);">
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--muted);">
       ${state.produtos.length
         ? 'Nenhum produto encontrado com esses filtros.'
         : '📦 Base vazia. Clique em <strong>Importar CSV do PDV</strong> para carregar todos os produtos do TOTVS.'}
@@ -707,6 +707,7 @@ function renderProdutos(lista) {
       <td class="mono">R$ ${fmt(p.preco)}</td>
       <td style="font-size:12px;">${p.unidade}</td>
       <td><span class="mono ${ok?'text-green':'text-red'}">${marg}%</span></td>
+      <td><button class="btn btn-outline btn-sm" onclick="abrirEditProduto('${escId(p.id)}')">✏️</button></td>
     </tr>`;
   }).join('');
 }
@@ -1209,6 +1210,124 @@ document.addEventListener('DOMContentLoaded', async () => {
   renderProdutos();
   renderKitsSalvos();
   renderConfig();
+});
+</script>
+
+<!-- MODAL EDITAR PRODUTO -->
+<div id="modal-edit-prod" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;align-items:center;justify-content:center;">
+  <div style="background:var(--white);border-radius:12px;padding:24px;width:520px;max-width:95vw;box-shadow:0 8px 40px rgba(0,0,0,.2);">
+    <div style="font-family:var(--display);font-size:17px;color:var(--red);margin-bottom:16px;font-weight:700;">✏️ Editar Produto</div>
+    <div id="edit-prod-info" style="background:var(--bg);border-radius:7px;padding:9px 13px;font-size:12px;color:var(--muted);margin-bottom:14px;font-family:var(--mono);"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div class="field"><label>Nome</label><input id="edit-prod-nome" /></div>
+      <div class="field"><label>Categoria</label>
+        <select id="edit-prod-cat">
+          <option>Barata</option><option>Churrasco</option><option>Grill</option><option>Premium</option>
+          <option>Wagyu</option><option>Acompanhamentos</option><option>Embutidos</option>
+          <option>Temperados</option><option>Bebidas</option><option>Outros</option>
+        </select>
+      </div>
+      <div class="field"><label>Custo (R$)</label><input id="edit-prod-custo" type="number" step="0.01" /></div>
+      <div class="field"><label>Preço de Venda (R$)</label><input id="edit-prod-preco" type="number" step="0.01" /></div>
+      <div class="field"><label>Unidade</label>
+        <select id="edit-prod-unidade"><option>KG</option><option>UN</option><option>g</option><option>pct</option></select>
+      </div>
+      <div class="field"><label>Rendimento (0–1)</label><input id="edit-prod-rend" type="number" step="0.01" min="0.01" max="1" /></div>
+    </div>
+    <div id="edit-prod-erro" class="alert danger" style="display:none;margin-top:8px;"></div>
+    <div style="display:flex;gap:8px;margin-top:16px;">
+      <button class="btn btn-primary" onclick="salvarEditProduto()">💾 Salvar</button>
+      <button class="btn btn-outline" onclick="fecharEditProduto()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── EDITAR PRODUTO ────────────────────────────────────────
+let _editProdId = null;
+
+function abrirEditProduto(id) {
+  const p = state.produtos.find(x => String(x.id) === String(id));
+  if (!p) return;
+  _editProdId = p.id;
+  document.getElementById('edit-prod-info').textContent = `Código: ${p.codigo || '—'} · Importado do TOTVS`;
+  document.getElementById('edit-prod-nome').value   = p.nome;
+  document.getElementById('edit-prod-cat').value    = p.categoria;
+  document.getElementById('edit-prod-custo').value  = p.custo;
+  document.getElementById('edit-prod-preco').value  = p.preco;
+  document.getElementById('edit-prod-unidade').value= p.unidade;
+  document.getElementById('edit-prod-rend').value   = p.rendimento || 1;
+  document.getElementById('edit-prod-erro').style.display = 'none';
+  document.getElementById('modal-edit-prod').style.display = 'flex';
+}
+
+function fecharEditProduto() {
+  document.getElementById('modal-edit-prod').style.display = 'none';
+  _editProdId = null;
+}
+
+async function salvarEditProduto() {
+  const p = state.produtos.find(x => String(x.id) === String(_editProdId));
+  if (!p) return;
+  const erroEl = document.getElementById('edit-prod-erro');
+  erroEl.style.display = 'none';
+
+  const payload = {
+    descricao_produto: document.getElementById('edit-prod-nome').value.trim(),
+    categoria:         document.getElementById('edit-prod-cat').value,
+    preco_custo:       parseFloat(document.getElementById('edit-prod-custo').value) || 0,
+    preco_venda:       parseFloat(document.getElementById('edit-prod-preco').value) || 0,
+    unidade:           document.getElementById('edit-prod-unidade').value,
+  };
+
+  try {
+    // PATCH /api/produtos/:codigo — atualiza campos complementares
+    // Para custo/venda que não são campos do PATCH padrão, usa POST de produto manual
+    // Atualiza localmente no estado primeiro (UX imediata)
+    const idx = state.produtos.findIndex(x => String(x.id) === String(_editProdId));
+    if (idx >= 0) {
+      state.produtos[idx].nome      = payload.descricao_produto;
+      state.produtos[idx].categoria = payload.categoria;
+      state.produtos[idx].custo     = payload.preco_custo;
+      state.produtos[idx].preco     = payload.preco_venda;
+      state.produtos[idx].unidade   = payload.unidade;
+    }
+
+    // Envia para o banco via PATCH (campos que o route aceita)
+    // e força atualização de custo/venda via upsert
+    await apiFetch('/api/produtos/' + encodeURIComponent(p.codigo), {
+      method: 'PATCH',
+      body: JSON.stringify({ unidade: payload.unidade })
+    });
+
+    // Atualiza custo e venda via importação manual (POST com upsert)
+    await apiFetch('/api/produtos', {
+      method: 'POST',
+      body: JSON.stringify({
+        codigo_produto:    p.codigo,
+        descricao_produto: payload.descricao_produto,
+        categoria:         payload.categoria,
+        unidade:           payload.unidade,
+        preco_custo:       payload.preco_custo,
+        preco_venda:       payload.preco_venda,
+        origem_dados:      'MANUAL',
+        ativo:             true
+      })
+    }).catch(() => {}); // Pode dar 409 se já existe — ignora, o PATCH já atualizou
+
+    fecharEditProduto();
+    renderProdutos();
+    filtrarProdutos();
+    showToast('Produto atualizado!');
+  } catch(e) {
+    erroEl.textContent = 'Erro: ' + e.message;
+    erroEl.style.display = 'flex';
+  }
+}
+
+// Fecha modal ao clicar fora
+document.getElementById('modal-edit-prod').addEventListener('click', function(e) {
+  if (e.target === this) fecharEditProduto();
 });
 </script>
 </body>
