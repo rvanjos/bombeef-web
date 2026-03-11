@@ -6,10 +6,9 @@ const autenticar = require('../middleware/auth');
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 20 * 1024 * 1024 }, // 20 MB
+  limits: { fileSize: 20 * 1024 * 1024 },
 });
 
-// Limpar e converter valor monetário de qualquer formato
 function limparPreco(v) {
   if (v === null || v === undefined || v === '') return null;
   const s = String(v).replace(/[R$\s]/g, '').replace(',', '.');
@@ -17,9 +16,8 @@ function limparPreco(v) {
   return isNaN(n) ? null : n;
 }
 
-// Detectar qual chave do objeto corresponde a um dos candidatos
 function encontrarCol(obj, candidatos) {
-  const chaves = Object.keys(obj);
+  const chaves    = Object.keys(obj);
   const chavesLow = chaves.map(k => k.toLowerCase().trim().replace(/[^a-z0-9]/g, ''));
   for (const c of candidatos) {
     const norm = c.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -27,6 +25,41 @@ function encontrarCol(obj, candidatos) {
     if (idx >= 0) return chaves[idx];
   }
   return null;
+}
+
+// Detecta encoding do buffer e retorna string
+function bufferToString(buf) {
+  // UTF-16 LE tem BOM FF FE
+  if (buf[0] === 0xFF && buf[1] === 0xFE) return buf.toString('utf16le');
+  // UTF-16 BE tem BOM FE FF
+  if (buf[0] === 0xFE && buf[1] === 0xFF) {
+    // Troca bytes e converte
+    const swapped = Buffer.alloc(buf.length);
+    for (let i = 0; i < buf.length - 1; i += 2) { swapped[i] = buf[i+1]; swapped[i+1] = buf[i]; }
+    return swapped.toString('utf16le');
+  }
+  // UTF-8 BOM
+  if (buf[0] === 0xEF && buf[1] === 0xBB && buf[2] === 0xBF) return buf.slice(3).toString('utf-8');
+  // Tenta UTF-8, fallback para latin1
+  try {
+    const s = buf.toString('utf-8');
+    // Verifica se tem replacement characters (sinal de encoding errado)
+    if (!s.includes('\uFFFD')) return s;
+  } catch(e) {}
+  return buf.toString('latin1');
+}
+
+// Remove linhas de cabeçalho extras antes dos dados reais
+// O TOTVS Chef Web exporta filtros nas primeiras linhas antes do cabeçalho de colunas
+function removerLinhasExtra(texto, delimitador) {
+  const linhas = texto.split('\n').map(l => l.replace(/\r/g, ''));
+  // Procura a primeira linha que contém o delimitador mais de 2 vezes (é o cabeçalho real)
+  let inicio = 0;
+  for (let i = 0; i < linhas.length; i++) {
+    const ocorrencias = (linhas[i].match(new RegExp('\\' + delimitador, 'g')) || []).length;
+    if (ocorrencias >= 3) { inicio = i; break; }
+  }
+  return linhas.slice(inicio).join('\n');
 }
 
 module.exports = (pool) => {
@@ -52,8 +85,7 @@ module.exports = (pool) => {
                 i.status, u.nome AS usuario_nome
          FROM importacoes_totvs i
          LEFT JOIN usuarios u ON u.id = i.usuario_responsavel
-         ORDER BY i.data_importacao DESC
-         LIMIT 30`
+         ORDER BY i.data_importacao DESC LIMIT 30`
       );
       res.json(rows);
     } catch (err) {
@@ -83,7 +115,6 @@ module.exports = (pool) => {
     let inseridos = 0, atualizados = 0, erros = 0, importacaoId;
 
     try {
-      // Criar registro de importação
       const { rows: [imp] } = await client.query(
         `INSERT INTO importacoes_totvs (nome_arquivo, tipo_relatorio, status, usuario_responsavel)
          VALUES ($1, 'produtos', 'processando', $2) RETURNING id`,
@@ -96,9 +127,12 @@ module.exports = (pool) => {
       const ext = req.file.originalname.split('.').pop().toLowerCase();
 
       if (['csv', 'txt'].includes(ext)) {
-        const texto = req.file.buffer.toString('utf-8');
-        const delim = texto.split('\n')[0].includes(';') ? ';' : ',';
-        registros = parse(texto, {
+        // Detecta encoding automaticamente (suporta UTF-16 do TOTVS Chef Web)
+        const texto = bufferToString(req.file.buffer);
+        const delim = texto.includes(';') ? ';' : ',';
+        // Remove linhas de cabeçalho extras (filtros exportados pelo TOTVS)
+        const textoLimpo = removerLinhasExtra(texto, delim);
+        registros = parse(textoLimpo, {
           columns: true,
           skip_empty_lines: true,
           trim: true,
@@ -118,22 +152,22 @@ module.exports = (pool) => {
       // ── Mapear colunas ───────────────────────────────────
       const primeira = registros[0];
       const mapa = {
-        codigo:    encontrarCol(primeira, ['codigo','cod','code','id produto','item']),
-        descricao: encontrarCol(primeira, ['descricao','descricao produto','nome produto','produto','desc']),
+        codigo:    encontrarCol(primeira, ['codigoproduto','codigo','cod','code','id produto','item']),
+        descricao: encontrarCol(primeira, ['nomeproduto','descricao produto','descricao','nome produto','produto','desc']),
         desc_red:  encontrarCol(primeira, ['reduzida','abrev','abreviada','desc reduz']),
-        custo:     encontrarCol(primeira, ['preco custo','precusto','custo unit','custo','pc']),
-        venda:     encontrarCol(primeira, ['preco venda','precovenda','pvenda','venda','pv']),
+        custo:     encontrarCol(primeira, ['precocompra','preco custo','precusto','custo unit','custo','pc']),
+        venda:     encontrarCol(primeira, ['precovenda','preco venda','pvenda','venda','pv']),
         categoria: encontrarCol(primeira, ['categoria','grupo','classe','tipo produto']),
         unidade:   encontrarCol(primeira, ['unidade','un','und','medida']),
-        ativo:     encontrarCol(primeira, ['ativo','situacao','status']),
+        ativo:     encontrarCol(primeira, ['situacao','ativo','status']),
       };
 
       if (!mapa.codigo)
-        throw new Error('Coluna de código do produto não encontrada. Verifique o formato do relatório.');
+        throw new Error(`Coluna de código não encontrada. Colunas disponíveis: ${Object.keys(primeira).join(', ')}`);
       if (!mapa.descricao)
-        throw new Error('Coluna de descrição não encontrada.');
+        throw new Error(`Coluna de descrição não encontrada. Colunas disponíveis: ${Object.keys(primeira).join(', ')}`);
 
-      // ── Processar cada linha em transação ────────────────
+      // ── Processar em transação ───────────────────────────
       await client.query('BEGIN');
 
       for (let i = 0; i < registros.length; i++) {
@@ -143,11 +177,17 @@ module.exports = (pool) => {
 
         const codigo    = codigoBruto;
         const descricao = String(linha[mapa.descricao] || '').trim();
-        if (!descricao) { erros++; log.push({ linha: i + 2, codigo, acao: 'erro', erro: 'Descrição vazia' }); continue; }
+        if (!descricao) { erros++; continue; }
 
-        const descRed    = mapa.desc_red  ? String(linha[mapa.desc_red]  || '').trim()  : null;
-        const categoria  = mapa.categoria ? String(linha[mapa.categoria] || '').trim()  : null;
-        const unidade    = mapa.unidade   ? String(linha[mapa.unidade]   || 'KG').trim(): 'KG';
+        // Filtra produtos desativados (situacao = DESATIVADO)
+        if (mapa.ativo) {
+          const sit = String(linha[mapa.ativo] || '').toUpperCase().trim();
+          if (sit === 'DESATIVADO' || sit === 'INATIVO' || sit === 'FALSE' || sit === '0') continue;
+        }
+
+        const descRed    = mapa.desc_red  ? String(linha[mapa.desc_red]  || '').trim()   : null;
+        const categoria  = mapa.categoria ? String(linha[mapa.categoria] || '').trim()   : null;
+        const unidade    = mapa.unidade   ? String(linha[mapa.unidade]   || 'KG').trim() : 'KG';
         const precoCusto = mapa.custo     ? limparPreco(linha[mapa.custo])  : null;
         const precoVenda = mapa.venda     ? limparPreco(linha[mapa.venda])  : null;
 
@@ -170,17 +210,11 @@ module.exports = (pool) => {
             [codigo, descricao, descRed || null, categoria || null, unidade,
              precoCusto, precoVenda, importacaoId]
           );
-
-          if (result.rows[0].foi_insert) {
-            inseridos++;
-            log.push({ linha: i + 2, codigo, acao: 'inserido' });
-          } else {
-            atualizados++;
-            log.push({ linha: i + 2, codigo, acao: 'atualizado' });
-          }
+          if (result.rows[0].foi_insert) { inseridos++; log.push({ linha: i+2, codigo, acao: 'inserido' }); }
+          else                           { atualizados++; log.push({ linha: i+2, codigo, acao: 'atualizado' }); }
         } catch (erroLinha) {
           erros++;
-          log.push({ linha: i + 2, codigo, acao: 'erro', erro: erroLinha.message });
+          log.push({ linha: i+2, codigo, acao: 'erro', erro: erroLinha.message });
         }
       }
 
@@ -191,14 +225,11 @@ module.exports = (pool) => {
          WHERE id=$6`,
         [registros.length, inseridos, atualizados, erros, JSON.stringify(log), importacaoId]
       );
-
       await client.query('COMMIT');
 
       res.json({
-        sucesso: true,
-        importacao_id: importacaoId,
-        total: registros.length,
-        inseridos, atualizados, erros,
+        sucesso: true, importacao_id: importacaoId,
+        total: registros.length, inseridos, atualizados, erros,
         mensagem: `Importação concluída: ${inseridos} inseridos, ${atualizados} atualizados, ${erros} erros.`,
       });
 
