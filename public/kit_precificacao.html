@@ -3,26 +3,21 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>🥩 Bom Beef — Kits & Precificação</title>
+<title>🥩 Bom Beef — Produtos & Kits</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap');
-
 :root {
-  --red:#8B0000; --red-light:#C0392B; --red-pale:#fff5f5; --red-border:#f5c6c6;
-  --green:#1a7a4a; --green-light:#e8f7ef; --green-border:#a8d5bc;
-  --orange:#c76b00; --orange-light:#fff3e0;
-  --blue:#1a5c8a; --blue-light:#e8f0f7;
-  --yellow:#b8860b; --yellow-light:#fffbea;
-  --bg:#f7f4f0; --white:#fff; --text:#1a1a1a; --muted:#7a7068;
-  --border:#e8e0d8; --border2:#d4c8bc;
-  --shadow:0 2px 12px rgba(0,0,0,0.08);
-  --shadow-md:0 4px 20px rgba(0,0,0,0.13);
-  --sans:'DM Sans',sans-serif; --mono:'DM Mono',monospace; --display:'Playfair Display',serif;
+  --red:#8B0000;--red-light:#C0392B;--red-pale:#fff5f5;--red-border:#f5c6c6;
+  --green:#1a7a4a;--green-light:#e8f7ef;--green-border:#a8d5bc;
+  --orange:#c76b00;--orange-light:#fff3e0;
+  --blue:#1a5c8a;--blue-light:#e8f0f7;
+  --bg:#f7f4f0;--white:#fff;--text:#1a1a1a;--muted:#7a7068;
+  --border:#e8e0d8;--border2:#d4c8bc;
+  --shadow:0 2px 12px rgba(0,0,0,0.08);--shadow-md:0 4px 20px rgba(0,0,0,0.13);
+  --sans:'DM Sans',sans-serif;--mono:'DM Mono',monospace;--display:'Playfair Display',serif;
 }
-
 *{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;}
-
 header{background:var(--red);background-image:repeating-linear-gradient(45deg,transparent,transparent 10px,rgba(255,255,255,.03) 10px,rgba(255,255,255,.03) 20px);padding:16px 28px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 3px 16px rgba(139,0,0,.4);position:sticky;top:0;z-index:200;}
 .header-left{display:flex;align-items:center;gap:14px;}
 .logo-icon{font-size:30px;}
@@ -30,73 +25,58 @@ header{background:var(--red);background-image:repeating-linear-gradient(45deg,tr
 .header-text p{font-size:10px;color:rgba(255,255,255,.7);margin-top:2px;letter-spacing:1px;text-transform:uppercase;}
 .header-right{display:flex;align-items:center;gap:10px;}
 #kit-name-header{font-size:12px;color:rgba(255,255,255,.6);font-family:var(--mono);}
-
+#sync-status{font-size:11px;font-family:var(--mono);color:rgba(255,255,255,.7);}
 .tabs{background:var(--white);border-bottom:2px solid var(--border);display:flex;padding:0 28px;overflow-x:auto;box-shadow:var(--shadow);}
 .tab{padding:12px 18px;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .15s;white-space:nowrap;background:none;border-top:none;border-left:none;border-right:none;font-family:var(--sans);}
-.tab:hover{color:var(--red);}
-.tab.active{color:var(--red);border-bottom-color:var(--red);}
-
+.tab:hover{color:var(--red);}.tab.active{color:var(--red);border-bottom-color:var(--red);}
 .content{padding:24px 28px;max-width:1400px;margin:0 auto;}
 .panel{display:none;}.panel.active{display:block;}
-
 .card{background:var(--white);border:1px solid var(--border);border-radius:10px;padding:20px;margin-bottom:16px;box-shadow:var(--shadow);}
 .card-title{font-family:var(--display);font-size:15px;color:var(--red);margin-bottom:16px;display:flex;align-items:center;gap:8px;font-weight:700;}
-
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
 .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;}
 .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
 .two-col{display:grid;grid-template-columns:1fr 1fr;gap:20px;}
-
 input,select,textarea{background:var(--white);border:1px solid var(--border);border-radius:7px;color:var(--text);font-family:var(--sans);font-size:13px;padding:8px 11px;width:100%;transition:border-color .15s;outline:none;}
 input:focus,select:focus,textarea:focus{border-color:var(--red);box-shadow:0 0 0 3px rgba(139,0,0,.08);}
-select option{background:var(--white);}
 label{font-size:11px;color:var(--muted);font-weight:600;letter-spacing:.05em;text-transform:uppercase;display:block;margin-bottom:4px;}
 .field{margin-bottom:12px;}
-
 .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:7px;font-size:12px;font-weight:600;letter-spacing:.05em;cursor:pointer;transition:all .15s;border:none;font-family:var(--sans);text-transform:uppercase;white-space:nowrap;}
 .btn-primary{background:var(--red);color:#fff;}.btn-primary:hover{background:var(--red-light);}
 .btn-outline{background:transparent;border:1px solid var(--border2);color:var(--muted);}.btn-outline:hover{border-color:var(--red);color:var(--red);}
 .btn-success{background:var(--green);color:#fff;}.btn-success:hover{background:#1d8f56;}
 .btn-danger{background:#fdeaea;color:var(--red);border:1px solid var(--red-border);}.btn-danger:hover{background:var(--red);color:#fff;}
 .btn-sm{padding:5px 10px;font-size:11px;}
-
 table{width:100%;border-collapse:collapse;}
 thead tr{background:var(--red);}
 th{padding:10px 11px;text-align:left;color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:.8px;font-weight:600;white-space:nowrap;}
 td{padding:9px 11px;border-bottom:1px solid var(--border);font-size:13px;color:var(--muted);}
 tbody tr:hover td{background:#faf8f6;}
 .mono{font-family:var(--mono);font-size:12px;}
-
 .badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;}
 .badge-red{background:#fdeaea;color:var(--red);border:1px solid var(--red-border);}
 .badge-green{background:var(--green-light);color:var(--green);border:1px solid var(--green-border);}
 .badge-orange{background:var(--orange-light);color:var(--orange);}
 .badge-blue{background:var(--blue-light);color:var(--blue);}
 .badge-gray{background:#f0ebe4;color:var(--muted);}
-
 .kpi{background:var(--white);border:1px solid var(--border);border-radius:10px;padding:14px 16px;border-left:4px solid var(--red);}
 .kpi.green{border-left-color:var(--green);}.kpi.orange{border-left-color:var(--orange);}.kpi.blue{border-left-color:var(--blue);}
 .kpi-label{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:4px;font-weight:600;}
 .kpi-value{font-family:var(--mono);font-size:20px;font-weight:500;color:var(--text);}
 .kpi-value.red{color:var(--red);}.kpi-value.green{color:var(--green);}.kpi-value.orange{color:var(--orange);}.kpi-value.blue{color:var(--blue);}
 .kpi-sub{font-size:10px;color:var(--muted);margin-top:3px;}
-
 .status-banner{border-radius:10px;padding:14px 18px;display:flex;align-items:center;gap:12px;margin-bottom:16px;font-weight:600;font-size:14px;border:1px solid;}
 .status-banner.green{background:var(--green-light);border-color:var(--green-border);color:var(--green);}
 .status-banner.orange{background:var(--orange-light);border-color:#f5c88a;color:var(--orange);}
 .status-banner.red{background:var(--red-pale);border-color:var(--red-border);color:var(--red);}
 .status-icon{font-size:22px;}
-
 .alert{border-radius:7px;padding:9px 13px;font-size:12px;margin-bottom:8px;display:flex;align-items:flex-start;gap:8px;border:1px solid;}
 .alert.warn{background:var(--orange-light);border-color:#f5c88a;color:var(--orange);}
 .alert.danger{background:var(--red-pale);border-color:var(--red-border);color:var(--red);}
 .alert.info{background:var(--blue-light);border-color:#b8d0e8;color:var(--blue);}
 .alert.success{background:var(--green-light);border-color:var(--green-border);color:var(--green);}
-
 .margin-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);}
 .margin-row:last-child{border-bottom:none;}
-
-/* ---- PRODUCT SEARCH DROPDOWN ---- */
 .prod-search-wrap{position:relative;}
 .prod-dropdown{position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--white);border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow-md);max-height:300px;overflow-y:auto;z-index:9999;display:none;}
 .prod-dropdown.open{display:block;}
@@ -106,48 +86,45 @@ tbody tr:hover td{background:#faf8f6;}
 .dd-nome{font-weight:600;color:var(--text);font-size:13px;}
 .dd-info{font-size:11px;color:var(--muted);margin-top:2px;font-family:var(--mono);}
 .prod-dd-empty{padding:14px;text-align:center;color:var(--muted);font-size:13px;}
-
 .kit-item-row{display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr auto;gap:8px;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);}
 .kit-item-header{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);padding-bottom:8px;border-bottom:2px solid var(--border);}
-
 .item-analysis-row{display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr 1.2fr;gap:8px;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);font-size:12px;}
-
 .promo-grid{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;}
 .promo-btn{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:7px 13px;color:var(--muted);font-family:var(--mono);font-size:13px;cursor:pointer;transition:all .15s;font-weight:500;}
 .promo-btn:hover{border-color:var(--red);color:var(--red);}
-
 hr{border:none;border-top:1px solid var(--border);margin:14px 0;}
-::-webkit-scrollbar{width:6px;height:6px;}
-::-webkit-scrollbar-track{background:var(--bg);}
-::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px;}
+::-webkit-scrollbar{width:6px;height:6px;}::-webkit-scrollbar-track{background:var(--bg);}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px;}
 .flex{display:flex;}.items-center{align-items:center;}.justify-between{justify-content:space-between;}
 .gap6{gap:6px;}.gap8{gap:8px;}.gap12{gap:12px;}
 .mb8{margin-bottom:8px;}.mb16{margin-bottom:16px;}.mt8{margin-top:8px;}.mt16{margin-top:16px;}
-.text-red{color:var(--red);}.text-green{color:var(--green);}.text-orange{color:var(--orange);}
-.text-muted{color:var(--muted);}
-
-@media(max-width:768px){
-  .content{padding:16px;}
-  .grid2,.grid3,.grid4,.two-col{grid-template-columns:1fr;}
-  .tabs{padding:0 16px;}
-  header{padding:12px 16px;}
-  .kit-item-row{grid-template-columns:1fr 1fr;}
-}
+.text-red{color:var(--red);}.text-green{color:var(--green);}.text-orange{color:var(--orange);}.text-muted{color:var(--muted);}
+/* Loading overlay */
+#loading-overlay{position:fixed;inset:0;background:rgba(247,244,240,.92);display:flex;align-items:center;justify-content:center;z-index:9999;flex-direction:column;gap:14px;}
+.spinner{width:38px;height:38px;border:3px solid var(--border);border-top-color:var(--red);border-radius:50%;animation:spin .7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+@media(max-width:768px){.content{padding:16px;}.grid2,.grid3,.grid4,.two-col{grid-template-columns:1fr;}.tabs{padding:0 16px;}header{padding:12px 16px;}.kit-item-row{grid-template-columns:1fr 1fr;}}
 </style>
 </head>
 <body>
+
+<!-- LOADING OVERLAY -->
+<div id="loading-overlay">
+  <div class="spinner"></div>
+  <div style="font-size:13px;color:var(--muted);font-family:var(--sans);" id="loading-msg">Carregando dados do banco...</div>
+</div>
 
 <header>
   <div class="header-left">
     <div class="logo-icon">🥩</div>
     <div class="header-text">
-      <h1>Bom Beef — Kits & Precificação</h1>
-      <p>Sistema de montagem e análise de kits promocionais</p>
+      <h1>Bom Beef — Produtos &amp; Kits</h1>
+      <p>Cadastro de produtos e precificação de kits</p>
     </div>
   </div>
   <div class="header-right">
-    <span id="kit-name-header">Nenhum kit ativo</span>
-    <button class="btn btn-sm" style="background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3);" onclick="importProdutosNFe()" title="Importar produtos das NF-e">📥 NF-e</button> <button class="btn btn-sm" style="background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3);" onclick="saveKit()">💾 Salvar Kit</button>
+    <span id="sync-status"></span>
+    <span id="kit-name-header" style="font-size:12px;color:rgba(255,255,255,.6);font-family:var(--mono);">Nenhum kit ativo</span>
+    <button class="btn btn-sm" style="background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3);" onclick="saveKit()">💾 Salvar Kit</button>
   </div>
 </header>
 
@@ -162,13 +139,13 @@ hr{border:none;border-top:1px solid var(--border);margin:14px 0;}
 
 <div class="content">
 
-<!-- ABA 1 — PRODUTOS -->
+<!-- ═══════════════ ABA 1 — PRODUTOS ═══════════════ -->
 <div id="panel-produtos" class="panel active">
   <div class="flex justify-between items-center mb16" style="flex-wrap:wrap;gap:10px;">
     <h2 style="font-family:var(--display);font-size:22px;color:var(--red);">Cadastro de Produtos</h2>
     <div class="flex gap8">
       <button class="btn btn-outline" onclick="document.getElementById('csv-input').click()">📥 Importar CSV do PDV</button>
-      <input type="file" id="csv-input" accept=".csv" style="display:none" onchange="importarCSV(this)" />
+      <input type="file" id="csv-input" accept=".csv,.txt,.xlsx" style="display:none" onchange="importarCSV(this)" />
       <button class="btn btn-primary" onclick="toggleForm('form-produto')">+ Novo Produto</button>
     </div>
   </div>
@@ -176,21 +153,22 @@ hr{border:none;border-top:1px solid var(--border);margin:14px 0;}
   <div id="import-banner" class="card mb16" style="display:none;"><div id="import-progress"></div></div>
 
   <div id="form-produto" class="card" style="display:none;">
-    <div class="card-title">✦ Novo Produto</div>
+    <div class="card-title">✦ Novo Produto Manual</div>
     <div class="grid3">
+      <div class="field"><label>Código</label><input id="prod-codigo" placeholder="Ex: 116" /></div>
       <div class="field"><label>Nome</label><input id="prod-nome" placeholder="Ex: Picanha Angus" /></div>
       <div class="field"><label>Categoria</label>
         <select id="prod-cat"><option>Barata</option><option>Churrasco</option><option>Grill</option><option>Premium</option><option>Wagyu</option><option>Acompanhamentos</option><option>Embutidos</option><option>Temperados</option><option>Bebidas</option><option>Outros</option></select>
       </div>
-      <div class="field"><label>Fornecedor</label><input id="prod-fornecedor" placeholder="Opcional" /></div>
       <div class="field"><label>Custo (R$)</label><input id="prod-custo" type="number" step="0.01" placeholder="0,00" /></div>
       <div class="field"><label>Preço de Venda (R$)</label><input id="prod-preco" type="number" step="0.01" placeholder="0,00" /></div>
       <div class="field"><label>Unidade</label><select id="prod-unidade"><option>KG</option><option>UN</option><option>g</option><option>pct</option></select></div>
       <div class="field"><label>Rendimento (0–1)</label><input id="prod-rendimento" type="number" step="0.01" min="0.01" max="1" placeholder="Ex: 0.90" /></div>
+      <div class="field"><label>Fornecedor</label><input id="prod-fornecedor" placeholder="Opcional" /></div>
       <div class="field"><label>Observações</label><input id="prod-obs" placeholder="Opcional" /></div>
     </div>
     <div class="flex gap8">
-      <button class="btn btn-primary" onclick="addProduct()">Salvar</button>
+      <button class="btn btn-primary" onclick="addProduct()">Salvar no Banco</button>
       <button class="btn btn-outline" onclick="toggleForm('form-produto')">Cancelar</button>
     </div>
   </div>
@@ -207,12 +185,13 @@ hr{border:none;border-top:1px solid var(--border);margin:14px 0;}
         <select id="filtro-unidade" style="width:85px;" onchange="filtrarProdutos()">
           <option value="">Unid.</option><option>KG</option><option>UN</option>
         </select>
+        <button class="btn btn-outline btn-sm" onclick="carregarProdutos(true)">🔄 Atualizar</button>
       </div>
     </div>
     <div style="overflow-x:auto;max-height:520px;overflow-y:auto;">
       <table>
         <thead style="position:sticky;top:0;z-index:1;">
-          <tr><th>Cód.</th><th>Produto</th><th>Categoria</th><th>Custo</th><th>Venda</th><th>Unid.</th><th>Estoque</th><th>Margem</th><th>Rend.</th><th></th></tr>
+          <tr><th>Cód.</th><th>Produto</th><th>Categoria</th><th>Custo</th><th>Venda</th><th>Unid.</th><th>Margem</th></tr>
         </thead>
         <tbody id="tbody-produtos"></tbody>
       </table>
@@ -220,13 +199,12 @@ hr{border:none;border-top:1px solid var(--border);margin:14px 0;}
   </div>
 </div>
 
-<!-- ABA 2 — MONTAR KIT -->
+<!-- ═══════════════ ABA 2 — MONTAR KIT ═══════════════ -->
 <div id="panel-kit" class="panel">
   <div class="flex justify-between items-center mb16">
     <h2 style="font-family:var(--display);font-size:22px;color:var(--red);">Montagem do Kit</h2>
     <button class="btn btn-outline" onclick="recalcAll()">🔄 Recalcular</button>
   </div>
-
   <div class="two-col">
     <div>
       <div class="card">
@@ -239,26 +217,18 @@ hr{border:none;border-top:1px solid var(--border);margin:14px 0;}
           <div class="field" style="grid-column:1/-1;"><label>Descrição / Campanha</label><input id="kit-desc" placeholder="Ex: Kit especial de fim de semana" /></div>
         </div>
       </div>
-
       <div class="card">
         <div class="card-title">➕ Adicionar Produto ao Kit</div>
         <div style="display:grid;grid-template-columns:1fr 80px 60px auto;gap:8px;align-items:end;">
           <div class="field" style="margin:0;">
             <label>Buscar produto (nome ou código)</label>
             <div class="prod-search-wrap">
-              <input id="kit-prod-search" placeholder="Digite para buscar entre todos os produtos..." autocomplete="off"
-                oninput="abrirDropdown()" onfocus="abrirDropdown()" />
+              <input id="kit-prod-search" placeholder="Digite para buscar..." autocomplete="off" oninput="abrirDropdown()" onfocus="abrirDropdown()" />
               <div id="prod-dropdown" class="prod-dropdown"></div>
             </div>
           </div>
-          <div class="field" style="margin:0;">
-            <label>Qtd.</label>
-            <input id="kit-qty" type="number" step="0.1" min="0.1" value="1" />
-          </div>
-          <div class="field" style="margin:0;">
-            <label>Unid.</label>
-            <input id="kit-item-unidade" readonly style="background:#faf8f6;color:var(--muted);" />
-          </div>
+          <div class="field" style="margin:0;"><label>Qtd.</label><input id="kit-qty" type="number" step="0.1" min="0.1" value="1" /></div>
+          <div class="field" style="margin:0;"><label>Unid.</label><input id="kit-item-unidade" readonly style="background:#faf8f6;color:var(--muted);" /></div>
           <button class="btn btn-primary" style="margin-bottom:0;" onclick="addKitItem()">+ Add</button>
         </div>
         <div id="prod-selecionado" style="display:none;margin-top:10px;padding:9px 13px;background:#faf8f6;border-radius:7px;border:1px solid var(--border);font-size:13px;">
@@ -266,13 +236,11 @@ hr{border:none;border-top:1px solid var(--border);margin:14px 0;}
           <span id="prod-sel-info" style="color:var(--muted);margin-left:10px;font-size:11px;font-family:var(--mono);"></span>
         </div>
       </div>
-
       <div class="card">
         <div class="card-title">🥩 Itens do Kit</div>
         <div id="kit-items-list"><p class="text-muted" style="font-size:13px;">Nenhum item adicionado ainda.</p></div>
       </div>
     </div>
-
     <div>
       <div class="card">
         <div class="card-title">💰 Preço de Venda do Kit</div>
@@ -290,7 +258,7 @@ hr{border:none;border-top:1px solid var(--border);margin:14px 0;}
   </div>
 </div>
 
-<!-- ABA 3 — SIMULAÇÃO -->
+<!-- ═══════════════ ABA 3 — SIMULAÇÃO ═══════════════ -->
 <div id="panel-simulacao" class="panel">
   <h2 style="font-family:var(--display);font-size:22px;color:var(--red);margin-bottom:20px;">Simulador de Preços</h2>
   <div class="two-col">
@@ -327,7 +295,7 @@ hr{border:none;border-top:1px solid var(--border);margin:14px 0;}
   </div>
 </div>
 
-<!-- ABA 4 — RESULTADO -->
+<!-- ═══════════════ ABA 4 — RESULTADO ═══════════════ -->
 <div id="panel-resultado" class="panel">
   <h2 style="font-family:var(--display);font-size:22px;color:var(--red);margin-bottom:20px;">Resultado Gerencial</h2>
   <div id="status-banner-area"></div>
@@ -343,7 +311,7 @@ hr{border:none;border-top:1px solid var(--border);margin:14px 0;}
   </div>
 </div>
 
-<!-- ABA 5 — CONFIGURAÇÕES -->
+<!-- ═══════════════ ABA 5 — CONFIGURAÇÕES ═══════════════ -->
 <div id="panel-config" class="panel">
   <h2 style="font-family:var(--display);font-size:22px;color:var(--red);margin-bottom:20px;">Configurações</h2>
   <div class="two-col">
@@ -352,12 +320,12 @@ hr{border:none;border-top:1px solid var(--border);margin:14px 0;}
       <div id="config-custos"></div>
       <hr>
       <div class="field"><label>Lucro Alvo (%)</label><input id="cfg-lucro-alvo" type="number" step="0.1" /></div>
-      <button class="btn btn-primary mt16" onclick="saveConfig()">Salvar</button>
+      <button class="btn btn-primary mt16" onclick="saveConfig()">Salvar Configurações</button>
     </div>
     <div class="card">
       <div class="card-title">📐 Margens Mínimas por Categoria</div>
       <div id="config-margens"></div>
-      <button class="btn btn-primary mt16" onclick="saveConfig()">Salvar</button>
+      <button class="btn btn-primary mt16" onclick="saveConfig()">Salvar Configurações</button>
     </div>
   </div>
   <div class="card">
@@ -375,10 +343,11 @@ hr{border:none;border-top:1px solid var(--border);margin:14px 0;}
   </div>
 </div>
 
-<!-- ABA 6 — KITS SALVOS -->
+<!-- ═══════════════ ABA 6 — KITS SALVOS ═══════════════ -->
 <div id="panel-kits-salvos" class="panel">
   <div class="flex justify-between items-center mb16">
     <h2 style="font-family:var(--display);font-size:22px;color:var(--red);">Kits Salvos</h2>
+    <button class="btn btn-outline btn-sm" onclick="carregarKits(true)">🔄 Atualizar</button>
   </div>
   <div id="kits-salvos-list"><p class="text-muted">Nenhum kit salvo ainda.</p></div>
 </div>
@@ -386,14 +355,38 @@ hr{border:none;border-top:1px solid var(--border);margin:14px 0;}
 </div><!-- /content -->
 
 <script>
-// ============================================================
-// ESTADO
-// ============================================================
-let state = {
-  produtos: [],
-  kitItems: [],
+// ═══════════════════════════════════════════════════════════
+// API — HELPER para chamadas ao backend Railway
+// ═══════════════════════════════════════════════════════════
+const API_BASE = '';  // mesmo domínio (Railway serve o HTML e a API juntos)
+
+function getToken() {
+  return localStorage.getItem('bb_token') || sessionStorage.getItem('bb_token') || '';
+}
+
+async function apiFetch(path, opts = {}) {
+  const token = getToken();
+  const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  const res = await fetch(API_BASE + path, { ...opts, headers });
+  if (!res.ok) {
+    let msg = 'Erro ' + res.status;
+    try { const j = await res.json(); msg = j.erro || j.message || msg; } catch(e) {}
+    throw new Error(msg);
+  }
+  return res.json();
+}
+
+// ═══════════════════════════════════════════════════════════
+// ESTADO DA APLICAÇÃO
+// ═══════════════════════════════════════════════════════════
+const state = {
+  produtos: [],          // carregados do banco (produtos_mestre)
+  kitItems: [],          // itens do kit em montagem: [{prodId, qty}]
   kitPrecoVenda: 0,
   kitProdSelecionado: null,
+  kitEditandoId: null,   // id_kit do banco se estiver editando
+  kitsSalvos: [],        // carregados do banco (kits)
   config: {
     custos: { cartao:3, royalties:4.875, desperdicio:5, imposto:6, fixos:25 },
     lucroAlvo: 15,
@@ -402,22 +395,160 @@ let state = {
       'Acompanhamentos':25,'Embutidos':28,'Temperados':30,'Bebidas':35,'Outros':25
     },
     arredondamento: 'x9.90'
-  },
-  kitsSalvos: []
+  }
 };
 
-// ============================================================
+// ═══════════════════════════════════════════════════════════
+// SINCRONIZAÇÃO COM O BANCO
+// ═══════════════════════════════════════════════════════════
+function setSyncStatus(msg, ok) {
+  const el = document.getElementById('sync-status');
+  if (el) el.textContent = msg;
+}
+
+// Mapeamento de categorias do banco para categorias do sistema de kits
+const CAT_MAP = {
+  'BOVINO':'Churrasco','BOVINOS':'Churrasco','SUINO':'Churrasco','SUINOS':'Churrasco',
+  'AVES':'Churrasco','PEIXE':'Churrasco','CONGELADOS':'Churrasco','CONGELADO':'Churrasco',
+  'EMBUTIDOS':'Embutidos','BEBIDAS':'Bebidas','ACOMPANHAMENTOS':'Acompanhamentos',
+  'TEMPEROS':'Temperados','PREMIUM':'Premium','WAGYU':'Wagyu','GRILL':'Grill',
+};
+
+function normalizarCategoria(cat) {
+  if (!cat) return 'Outros';
+  const c = cat.toUpperCase().trim();
+  if (CAT_MAP[c]) return CAT_MAP[c];
+  if (c.includes('WAGYU')) return 'Wagyu';
+  if (c.includes('PREMIUM')||c.includes('RESERVA')) return 'Premium';
+  if (c.includes('GRILL')||c.includes('ASSADO')) return 'Grill';
+  if (c.includes('EMBUTIDO')||c.includes('LINGUIÇA')||c.includes('LINGUICA')) return 'Embutidos';
+  if (c.includes('BEBIDA')||c.includes('CERVEJA')||c.includes('VINHO')) return 'Bebidas';
+  if (c.includes('ACOMPAN')||c.includes('QUEIJO')||c.includes('PAO')||c.includes('PÃO')) return 'Acompanhamentos';
+  if (c.includes('TEMPERO')||c.includes('SAL')) return 'Temperados';
+  if (c.includes('BARATA')||c.includes('ECONOM')) return 'Barata';
+  if (c.includes('BOVI')||c.includes('CARNE')||c.includes('CHURRAS')) return 'Churrasco';
+  return 'Outros';
+}
+
+async function carregarProdutos(mostrarToast = false) {
+  try {
+    setSyncStatus('⏳ Carregando...');
+    // Pede até 2000 produtos ativos
+    const data = await apiFetch('/api/produtos?limit=2000&ativo=true');
+    const lista = Array.isArray(data) ? data : (data.produtos || data.rows || []);
+    state.produtos = lista.map(p => ({
+      id: p.codigo_produto,
+      codigo: p.codigo_produto,
+      nome: p.descricao_produto,
+      categoria: normalizarCategoria(p.categoria || p.subcategoria),
+      custo: parseFloat(p.preco_custo) || 0,
+      preco: parseFloat(p.preco_venda) || 0,
+      unidade: (p.unidade || 'KG').toUpperCase(),
+      rendimento: 1,
+      obs: p.descricao_reduzida || ''
+    }));
+    setSyncStatus('✅ ' + state.produtos.length + ' produtos');
+    if (mostrarToast) showToast('Produtos atualizados: ' + state.produtos.length);
+  } catch(e) {
+    setSyncStatus('⚠️ ' + e.message);
+    console.warn('Erro ao carregar produtos:', e);
+  }
+}
+
+async function carregarKits(mostrarToast = false) {
+  try {
+    const data = await apiFetch('/api/kits');
+    const lista = Array.isArray(data) ? data : (data.kits || data.rows || []);
+    state.kitsSalvos = lista.map(k => ({
+      id: k.id_kit,
+      nome: k.nome_kit,
+      desc: k.descricao || '',
+      tipo: k.tipo_kit || 'Kit Churrasco',
+      precoVenda: parseFloat(k.preco_venda) || 0,
+      custo: parseFloat(k.custo_total) || 0,
+      margReal: parseFloat(k.margem) || 0,
+      // itens vêm do join; se não tiver, será array vazio (carrega ao abrir kit)
+      items: (k.itens || []).map(i => ({
+        prodId: i.codigo_produto,
+        qty: parseFloat(i.quantidade) || 1
+      })),
+      savedAt: k.criado_em
+        ? new Date(k.criado_em).toLocaleDateString('pt-BR')
+        : '—'
+    }));
+    if (mostrarToast) showToast('Kits atualizados: ' + state.kitsSalvos.length);
+  } catch(e) {
+    console.warn('Erro ao carregar kits:', e);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// IMPORTAÇÃO CSV  →  POST /api/totvs/importar  (multipart)
+// ═══════════════════════════════════════════════════════════
+async function importarCSV(input) {
+  const file = input.files[0]; if (!file) return;
+  const banner = document.getElementById('import-banner');
+  const prog   = document.getElementById('import-progress');
+  banner.style.display = 'block';
+  prog.innerHTML = `<div style="color:var(--blue);font-size:13px;">⏳ Enviando <strong>${file.name}</strong> para o banco...</div>`;
+
+  try {
+    const token = getToken();
+    const fd = new FormData();
+    fd.append('arquivo', file, file.name);
+
+    const res = await fetch(API_BASE + '/api/totvs/importar', {
+      method: 'POST',
+      headers: token ? { 'Authorization': 'Bearer ' + token } : {},
+      body: fd
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.erro || err.message || 'Erro ' + res.status);
+    }
+
+    const r = await res.json();
+    const inseridos  = r.inseridos  || 0;
+    const atualizados= r.atualizados|| 0;
+    const erros      = r.erros      || 0;
+
+    // Recarrega produtos do banco
+    await carregarProdutos();
+    renderProdutos();
+    input.value = '';
+
+    prog.innerHTML = `
+      <div class="flex items-center gap8" style="flex-wrap:wrap;">
+        <div>
+          <div style="color:var(--green);font-size:15px;font-weight:700;">✅ Importação concluída e salva no banco!</div>
+          <div style="color:var(--muted);font-size:12px;margin-top:2px;">${file.name} · Import. #${r.importacao_id || '—'}</div>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+          <div class="kpi green" style="padding:8px 14px;min-width:80px;"><div class="kpi-label">Novos</div><div class="kpi-value green">${inseridos}</div></div>
+          <div class="kpi blue"  style="padding:8px 14px;min-width:80px;"><div class="kpi-label">Atualizados</div><div class="kpi-value blue">${atualizados}</div></div>
+          <div class="kpi"       style="padding:8px 14px;min-width:80px;"><div class="kpi-label">Total banco</div><div class="kpi-value">${state.produtos.length}</div></div>
+          ${erros > 0 ? `<div class="kpi orange" style="padding:8px 14px;min-width:80px;"><div class="kpi-label">Erros</div><div class="kpi-value orange">${erros}</div></div>` : ''}
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="document.getElementById('import-banner').style.display='none'">Fechar</button>
+      </div>`;
+  } catch(e) {
+    prog.innerHTML = `<div class="alert danger">❌ ${e.message}</div>`;
+    input.value = '';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
 // TABS
-// ============================================================
+// ═══════════════════════════════════════════════════════════
 function showTab(name) {
-  const tabs = ['produtos','kit','simulacao','resultado','config','kits-salvos'];
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  const names = ['produtos','kit','simulacao','resultado','config','kits-salvos'];
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', names[i]===name));
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.tab')[tabs.indexOf(name)].classList.add('active');
   document.getElementById('panel-'+name).classList.add('active');
-  if(name==='resultado'||name==='simulacao') recalcAll();
-  if(name==='kits-salvos') renderKitsSalvos();
-  if(name==='config') renderConfig();
+  if (name==='resultado'||name==='simulacao') recalcAll();
+  if (name==='kits-salvos') renderKitsSalvos();
+  if (name==='config') renderConfig();
 }
 
 function toggleForm(id) {
@@ -425,108 +556,121 @@ function toggleForm(id) {
   el.style.display = el.style.display==='none' ? 'block' : 'none';
 }
 
-// ============================================================
-// BUSCA DE PRODUTO — dropdown com texto (corrige bug do select)
-// ============================================================
+// ═══════════════════════════════════════════════════════════
+// BUSCA DROPDOWN (kit)
+// ═══════════════════════════════════════════════════════════
 function abrirDropdown() {
-  const q = (document.getElementById('kit-prod-search').value||'').toLowerCase().trim();
+  const q  = (document.getElementById('kit-prod-search').value||'').toLowerCase().trim();
   const dd = document.getElementById('prod-dropdown');
-
-  if(!state.produtos.length) {
-    dd.innerHTML = '<div class="prod-dd-empty">Nenhum produto cadastrado. Importe o CSV na aba Produtos.</div>';
-    dd.classList.add('open');
-    return;
+  if (!state.produtos.length) {
+    dd.innerHTML = '<div class="prod-dd-empty">Nenhum produto. Importe o CSV do PDV.</div>';
+    dd.classList.add('open'); return;
   }
-
-  // filtra por busca (vazio = mostra os primeiros 80)
   let lista = q
     ? state.produtos.filter(p =>
         p.nome.toLowerCase().includes(q) ||
-        String(p.codigo||'').includes(q) ||
-        p.categoria.toLowerCase().includes(q)
-      )
+        String(p.codigo||'').toLowerCase().includes(q) ||
+        p.categoria.toLowerCase().includes(q))
     : state.produtos;
-
   const total = lista.length;
   lista = lista.slice(0, 80);
-
-  if(!lista.length) {
-    dd.innerHTML = '<div class="prod-dd-empty">Nenhum produto encontrado para "'+q+'".</div>';
+  if (!lista.length) {
+    dd.innerHTML = `<div class="prod-dd-empty">Nenhum produto para "${q}".</div>`;
   } else {
     dd.innerHTML = lista.map(p => {
-      const marg = p.preco>0 ? ((p.preco-p.custo)/p.preco*100).toFixed(1) : '?';
-      const estoqueInfo = p.estoque!=null ? ` | Est: ${fmt(p.estoque)} ${p.unidade}` : '';
-      return `<div class="prod-dd-item" onmousedown="selecionarProduto(${p.id})">
+      const marg = p.preco > 0 ? ((p.preco-p.custo)/p.preco*100).toFixed(1) : '?';
+      return `<div class="prod-dd-item" onmousedown="selecionarProduto('${escId(p.id)}')">
         <div class="dd-nome">${p.nome}</div>
-        <div class="dd-info"><span class="badge badge-gray" style="font-size:9px;">${p.categoria}</span> &nbsp;Custo: R$&nbsp;${fmt(p.custo)} | Venda: R$&nbsp;${fmt(p.preco)} | Marg: ${marg}%${estoqueInfo}${p.codigo?' | #'+p.codigo:''}</div>
+        <div class="dd-info">
+          <span class="badge badge-gray" style="font-size:9px;">${p.categoria}</span>
+          &nbsp;Custo: R$&nbsp;${fmt(p.custo)} | Venda: R$&nbsp;${fmt(p.preco)} | Marg: ${marg}%
+          ${p.codigo?' | #'+p.codigo:''}
+        </div>
       </div>`;
     }).join('');
-    if(total > 80)
-      dd.innerHTML += `<div class="prod-dd-empty" style="font-size:11px;border-top:1px solid var(--border);">+ ${total-80} outros resultados. Refine a busca.</div>`;
+    if (total > 80)
+      dd.innerHTML += `<div class="prod-dd-empty" style="font-size:11px;border-top:1px solid var(--border);">+${total-80} outros. Refine a busca.</div>`;
   }
   dd.classList.add('open');
 }
 
 function selecionarProduto(id) {
-  const prod = state.produtos.find(p => p.id===id);
-  if(!prod) return;
+  const prod = state.produtos.find(p => String(p.id) === String(id));
+  if (!prod) return;
   state.kitProdSelecionado = prod;
-  document.getElementById('kit-prod-search').value = prod.nome;
+  document.getElementById('kit-prod-search').value  = prod.nome;
   document.getElementById('kit-item-unidade').value = prod.unidade;
   document.getElementById('prod-dropdown').classList.remove('open');
-  const marg = prod.preco>0 ? ((prod.preco-prod.custo)/prod.preco*100).toFixed(1) : '?';
+  const marg = prod.preco > 0 ? ((prod.preco-prod.custo)/prod.preco*100).toFixed(1) : '?';
   document.getElementById('prod-sel-nome').textContent = prod.nome;
   document.getElementById('prod-sel-info').textContent =
-    `Custo: R$ ${fmt(prod.custo)} | Venda: R$ ${fmt(prod.preco)} | Margem: ${marg}% | ${prod.unidade}${prod.estoque!=null?' | Estoque: '+fmt(prod.estoque):''}`;
+    `Custo: R$ ${fmt(prod.custo)} | Venda: R$ ${fmt(prod.preco)} | Margem: ${marg}% | ${prod.unidade}`;
   document.getElementById('prod-selecionado').style.display = 'block';
 }
 
 document.addEventListener('click', e => {
-  if(!e.target.closest('.prod-search-wrap'))
+  if (!e.target.closest('.prod-search-wrap'))
     document.getElementById('prod-dropdown').classList.remove('open');
 });
 
-// ============================================================
-// PRODUTOS — CRUD
-// ============================================================
-function addProduct() {
-  const nome = document.getElementById('prod-nome').value.trim();
+// ═══════════════════════════════════════════════════════════
+// PRODUTOS — adicionar produto manual
+// ═══════════════════════════════════════════════════════════
+async function addProduct() {
+  const nome  = document.getElementById('prod-nome').value.trim();
   const custo = parseFloat(document.getElementById('prod-custo').value);
   const preco = parseFloat(document.getElementById('prod-preco').value);
-  if(!nome||isNaN(custo)||isNaN(preco)){alert('Preencha nome, custo e preço.');return;}
+  if (!nome||isNaN(custo)||isNaN(preco)) { alert('Preencha nome, custo e preço.'); return; }
   const rend = parseFloat(document.getElementById('prod-rendimento').value)||1;
-  state.produtos.push({
-    id:Date.now(), codigo:'', nome,
-    categoria:document.getElementById('prod-cat').value,
-    fornecedor:document.getElementById('prod-fornecedor').value,
-    custo, preco,
-    unidade:document.getElementById('prod-unidade').value,
-    rendimento:rend>0&&rend<=1?rend:1, estoque:null,
-    obs:document.getElementById('prod-obs').value
-  });
-  renderProdutos();
-  ['prod-nome','prod-fornecedor','prod-custo','prod-preco','prod-rendimento','prod-obs'].forEach(id=>document.getElementById(id).value='');
-  toggleForm('form-produto');
+  const cod  = document.getElementById('prod-codigo').value.trim() || ('MAN-'+Date.now());
+
+  // Monta payload compatível com produtos_mestre
+  const payload = {
+    codigo_produto:    cod,
+    descricao_produto: nome,
+    descricao_reduzida: document.getElementById('prod-obs').value || null,
+    categoria:         document.getElementById('prod-cat').value,
+    unidade:           document.getElementById('prod-unidade').value,
+    preco_custo:       custo,
+    preco_venda:       preco,
+    fornecedor_principal: document.getElementById('prod-fornecedor').value || null,
+    origem_dados:      'MANUAL',
+    ativo:             true
+  };
+
+  try {
+    // Tenta inserir; se já existir (409), faz PATCH
+    await apiFetch('/api/produtos', { method: 'POST', body: JSON.stringify(payload) });
+    await carregarProdutos();
+    renderProdutos();
+    ['prod-codigo','prod-nome','prod-fornecedor','prod-custo','prod-preco','prod-rendimento','prod-obs']
+      .forEach(id => document.getElementById(id).value = '');
+    toggleForm('form-produto');
+    showToast('Produto salvo no banco!');
+  } catch(e) {
+    alert('Erro ao salvar produto: ' + e.message);
+  }
 }
 
-function removeProduct(id) {
-  state.produtos = state.produtos.filter(p=>p.id!==id);
-  state.kitItems = state.kitItems.filter(i=>i.prodId!==id);
-  renderProdutos(); renderKitItems();
-}
-
+// ═══════════════════════════════════════════════════════════
+// RENDER PRODUTOS
+// ═══════════════════════════════════════════════════════════
 function renderProdutos(lista) {
-  const prods = lista!==undefined ? lista : state.produtos;
+  const prods = lista !== undefined ? lista : state.produtos;
   const el = document.getElementById('prod-count');
-  if(el) el.textContent = `— ${prods.length} de ${state.produtos.length}`;
+  if (el) el.textContent = `— ${prods.length} de ${state.produtos.length}`;
   const tbody = document.getElementById('tbody-produtos');
-  if(!prods.length){
-    tbody.innerHTML=`<tr><td colspan="10" style="text-align:center;padding:24px;color:var(--muted);">${state.produtos.length?'Nenhum produto encontrado.':'Nenhum produto cadastrado. Importe o CSV ou cadastre manualmente.'}</td></tr>`;
+  if (!prods.length) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--muted);">
+      ${state.produtos.length
+        ? 'Nenhum produto encontrado com esses filtros.'
+        : '📦 Base vazia. Clique em <strong>Importar CSV do PDV</strong> para carregar todos os produtos do TOTVS.'}
+    </td></tr>`;
     return;
   }
-  tbody.innerHTML = prods.map(p=>{
-    const marg = p.preco>0?((p.preco-p.custo)/p.preco*100).toFixed(1):0;
-    const ok = parseFloat(marg)>=(state.config.margensMinimas[p.categoria]||25);
+  tbody.innerHTML = prods.map(p => {
+    const marg = p.preco > 0 ? ((p.preco-p.custo)/p.preco*100).toFixed(1) : 0;
+    const ok   = parseFloat(marg) >= (state.config.margensMinimas[p.categoria]||25);
     return `<tr>
       <td class="mono" style="font-size:11px;">${p.codigo||'—'}</td>
       <td><strong style="color:var(--text);">${p.nome}</strong></td>
@@ -534,126 +678,125 @@ function renderProdutos(lista) {
       <td class="mono">R$ ${fmt(p.custo)}</td>
       <td class="mono">R$ ${fmt(p.preco)}</td>
       <td style="font-size:12px;">${p.unidade}</td>
-      <td class="mono ${p.estoque>0?'text-green':'text-muted'}">${p.estoque!=null?fmt(p.estoque):'—'}</td>
       <td><span class="mono ${ok?'text-green':'text-red'}">${marg}%</span></td>
-      <td class="mono text-muted">${p.rendimento<1?(p.rendimento*100).toFixed(0)+'%':'—'}</td>
-      <td><button class="btn btn-danger btn-sm" onclick="removeProduct(${p.id})">✕</button></td>
     </tr>`;
   }).join('');
 }
 
 function filtrarProdutos() {
-  const q=(document.getElementById('filtro-busca').value||'').toLowerCase();
-  const cat=document.getElementById('filtro-cat').value;
-  const unid=document.getElementById('filtro-unidade').value;
-  let lista=state.produtos;
-  if(q) lista=lista.filter(p=>p.nome.toLowerCase().includes(q)||String(p.codigo||'').includes(q));
-  if(cat) lista=lista.filter(p=>p.categoria===cat);
-  if(unid) lista=lista.filter(p=>(p.unidade||'').toUpperCase()===unid);
+  const q    = (document.getElementById('filtro-busca').value||'').toLowerCase();
+  const cat  = document.getElementById('filtro-cat').value;
+  const unid = document.getElementById('filtro-unidade').value;
+  let lista  = state.produtos;
+  if (q)    lista = lista.filter(p => p.nome.toLowerCase().includes(q) || String(p.codigo||'').toLowerCase().includes(q));
+  if (cat)  lista = lista.filter(p => p.categoria === cat);
+  if (unid) lista = lista.filter(p => (p.unidade||'').toUpperCase() === unid);
   renderProdutos(lista);
 }
 
-// ============================================================
+// ═══════════════════════════════════════════════════════════
 // KIT — ITENS
-// ============================================================
+// ═══════════════════════════════════════════════════════════
 function addKitItem() {
   const prod = state.kitProdSelecionado;
-  const qty = parseFloat(document.getElementById('kit-qty').value);
-  if(!prod){alert('Selecione um produto usando a busca acima.');return;}
-  if(!qty||qty<=0){alert('Informe uma quantidade válida.');return;}
-  const existing = state.kitItems.find(i=>i.prodId===prod.id);
-  if(existing) existing.qty+=qty;
-  else state.kitItems.push({prodId:prod.id, qty});
-  document.getElementById('kit-prod-search').value='';
-  document.getElementById('kit-item-unidade').value='';
-  document.getElementById('prod-selecionado').style.display='none';
-  document.getElementById('kit-qty').value=1;
-  state.kitProdSelecionado=null;
+  const qty  = parseFloat(document.getElementById('kit-qty').value);
+  if (!prod) { alert('Selecione um produto usando a busca.'); return; }
+  if (!qty||qty<=0) { alert('Informe uma quantidade válida.'); return; }
+  const ex = state.kitItems.find(i => String(i.prodId)===String(prod.id));
+  if (ex) ex.qty += qty;
+  else state.kitItems.push({ prodId: prod.id, qty });
+  document.getElementById('kit-prod-search').value  = '';
+  document.getElementById('kit-item-unidade').value = '';
+  document.getElementById('prod-selecionado').style.display = 'none';
+  document.getElementById('kit-qty').value = 1;
+  state.kitProdSelecionado = null;
   renderKitItems(); recalcAll();
 }
 
-function removeKitItem(prodId){
-  state.kitItems=state.kitItems.filter(i=>i.prodId!==prodId);
+function removeKitItem(prodId) {
+  state.kitItems = state.kitItems.filter(i => String(i.prodId) !== String(prodId));
   renderKitItems(); recalcAll();
 }
 
-function changeQty(prodId,val){
-  const item=state.kitItems.find(i=>i.prodId===prodId);
-  if(item){item.qty=parseFloat(val)||0; recalcAll();}
+function changeQty(prodId, val) {
+  const item = state.kitItems.find(i => String(i.prodId) === String(prodId));
+  if (item) { item.qty = parseFloat(val)||0; recalcAll(); }
 }
 
-function renderKitItems(){
-  const el=document.getElementById('kit-items-list');
-  if(!state.kitItems.length){el.innerHTML='<p class="text-muted" style="font-size:13px;">Nenhum item adicionado ainda.</p>';return;}
-  el.innerHTML=`
+function renderKitItems() {
+  const el = document.getElementById('kit-items-list');
+  if (!state.kitItems.length) { el.innerHTML='<p class="text-muted" style="font-size:13px;">Nenhum item adicionado ainda.</p>'; return; }
+  el.innerHTML = `
     <div class="kit-item-row kit-item-header">
       <span>Produto</span><span>Qtd</span><span>Custo</span><span>Val. Sep.</span><span>Margem</span><span></span>
     </div>
-    ${state.kitItems.map(item=>{
-      const p=state.produtos.find(x=>x.id===item.prodId);
-      if(!p) return '';
-      const c=(p.custo/p.rendimento)*item.qty;
-      const v=p.preco*item.qty;
-      const marg=v>0?((v-c)/v*100).toFixed(1):0;
-      const ok=parseFloat(marg)>=(state.config.margensMinimas[p.categoria]||25);
+    ${state.kitItems.map(item => {
+      const p = state.produtos.find(x => String(x.id)===String(item.prodId));
+      if (!p) return `<div class="kit-item-row"><span style="color:var(--muted);font-size:12px;">Produto ${item.prodId} não encontrado</span><span></span><span></span><span></span><span></span>
+        <button class="btn btn-danger btn-sm" onclick="removeKitItem('${escId(item.prodId)}')">✕</button></div>`;
+      const c   = p.custo * item.qty;
+      const v   = p.preco * item.qty;
+      const marg = v > 0 ? ((v-c)/v*100).toFixed(1) : 0;
+      const ok  = parseFloat(marg) >= (state.config.margensMinimas[p.categoria]||25);
       return `<div class="kit-item-row">
-        <div><strong style="color:var(--text);font-size:13px;">${p.nome}</strong><br><span class="badge badge-gray" style="font-size:9px;">${p.categoria}</span></div>
+        <div><strong style="color:var(--text);font-size:13px;">${p.nome}</strong><br>
+          <span class="badge badge-gray" style="font-size:9px;">${p.categoria}</span></div>
         <div style="display:flex;align-items:center;gap:4px;">
-          <input type="number" value="${item.qty}" step="0.1" min="0.1" style="width:60px;font-family:var(--mono);" oninput="changeQty(${p.id},this.value)"/>
+          <input type="number" value="${item.qty}" step="0.1" min="0.1" style="width:60px;font-family:var(--mono);"
+            oninput="changeQty('${escId(p.id)}',this.value)"/>
           <span style="font-size:11px;color:var(--muted);">${p.unidade}</span>
         </div>
         <div class="mono text-red">R$ ${fmt(c)}</div>
         <div class="mono" style="color:var(--blue);">R$ ${fmt(v)}</div>
         <div class="mono ${ok?'text-green':'text-red'}">${marg}%</div>
-        <button class="btn btn-danger btn-sm" onclick="removeKitItem(${p.id})">✕</button>
+        <button class="btn btn-danger btn-sm" onclick="removeKitItem('${escId(p.id)}')">✕</button>
       </div>`;
     }).join('')}`;
 }
 
-function updateKitHeader(){
-  document.getElementById('kit-name-header').textContent=document.getElementById('kit-nome').value||'Sem nome';
+function updateKitHeader() {
+  document.getElementById('kit-name-header').textContent =
+    document.getElementById('kit-nome').value || 'Sem nome';
 }
 
-// ============================================================
+// ═══════════════════════════════════════════════════════════
 // CÁLCULOS
-// ============================================================
-function calcKit(){
-  const cfg=state.config;
-  const op=Object.values(cfg.custos).reduce((a,b)=>a+b,0);
-  const mkOp=1/(1-op/100);
-  const mkIdeal=1/(1-(op+cfg.lucroAlvo)/100);
+// ═══════════════════════════════════════════════════════════
+function calcKit() {
+  const cfg   = state.config;
+  const op    = Object.values(cfg.custos).reduce((a,b)=>a+b,0);
+  const mkOp  = 1/(1-op/100);
+  const mkIdeal = 1/(1-(op+cfg.lucroAlvo)/100);
   let custo=0, valSep=0;
-  state.kitItems.forEach(item=>{
-    const p=state.produtos.find(x=>x.id===item.prodId);
-    if(!p) return;
-    custo+=(p.custo/p.rendimento)*item.qty;
-    valSep+=p.preco*item.qty;
+  state.kitItems.forEach(item => {
+    const p = state.produtos.find(x => String(x.id)===String(item.prodId));
+    if (!p) return;
+    custo  += p.custo * item.qty;
+    valSep += p.preco * item.qty;
   });
-  const precoMin=custo*mkOp, precoIdeal=custo*mkIdeal;
-  const pv=state.kitPrecoVenda||precoIdeal;
-  const lb=pv-custo, mb=pv>0?lb/pv*100:0;
-  const opVal=pv*(op/100), lr=pv-custo-opVal, mr=pv>0?lr/pv*100:0;
-  const desc=valSep-pv, pDesc=valSep>0?desc/valSep*100:0;
+  const precoMin   = custo * mkOp;
+  const precoIdeal = custo * mkIdeal;
+  const pv   = state.kitPrecoVenda || precoIdeal;
+  const lb   = pv - custo;
+  const mb   = pv > 0 ? lb/pv*100 : 0;
+  const opV  = pv * (op/100);
+  const lr   = pv - custo - opV;
+  const mr   = pv > 0 ? lr/pv*100 : 0;
+  const desc = valSep - pv;
+  const pDesc= valSep > 0 ? desc/valSep*100 : 0;
   return {custo,valSep,precoMin,precoIdeal,pv,lb,mb,lr,mr,desc,pDesc,op,mkOp,mkIdeal};
 }
 
-function recalcAll(){
-  state.kitPrecoVenda=parseFloat(document.getElementById('kit-preco-venda').value)||0;
-  renderKitItems();
-  renderResumoRapido();
-  renderQuickPrices();
-  renderResultado();
-  renderSimulacao();
+function recalcAll() {
+  state.kitPrecoVenda = parseFloat(document.getElementById('kit-preco-venda').value)||0;
+  renderKitItems(); renderResumoRapido(); renderQuickPrices(); renderResultado(); renderSimulacao();
 }
 
-// ============================================================
-// RESUMO RÁPIDO
-// ============================================================
-function renderResumoRapido(){
-  const el=document.getElementById('resumo-rapido');
-  if(!state.kitItems.length){el.innerHTML='<p class="text-muted" style="font-size:13px;">Adicione itens ao kit.</p>';return;}
-  const c=calcKit(), st=getStatus(c);
-  el.innerHTML=`
+function renderResumoRapido() {
+  const el = document.getElementById('resumo-rapido');
+  if (!state.kitItems.length) { el.innerHTML='<p class="text-muted" style="font-size:13px;">Adicione itens ao kit.</p>'; return; }
+  const c = calcKit(), st = getStatus(c);
+  el.innerHTML = `
     <div class="margin-row"><span class="text-muted">Custo Total</span><span class="mono text-red">R$ ${fmt(c.custo)}</span></div>
     <div class="margin-row"><span class="text-muted">Valor Separado</span><span class="mono" style="color:var(--blue);">R$ ${fmt(c.valSep)}</span></div>
     <div class="margin-row"><span class="text-muted">Preço Mínimo</span><span class="mono">R$ ${fmt(c.precoMin)}</span></div>
@@ -667,86 +810,64 @@ function renderResumoRapido(){
     </div>`;
 }
 
-function renderQuickPrices(){
-  const el=document.getElementById('quick-prices');
-  el.innerHTML='';
-  if(!state.kitItems.length) return;
-  const c=calcKit();
-  [c.precoMin,c.precoIdeal,psico(c.precoIdeal),psico(c.precoIdeal)+10].forEach(p=>{
-    const b=document.createElement('button');
-    b.className='promo-btn'; b.textContent='R$ '+fmt(p);
-    b.onclick=()=>{document.getElementById('kit-preco-venda').value=fmt2(p);recalcAll();};
+function renderQuickPrices() {
+  const el = document.getElementById('quick-prices'); el.innerHTML = '';
+  if (!state.kitItems.length) return;
+  const c = calcKit();
+  [c.precoMin, c.precoIdeal, psico(c.precoIdeal), psico(c.precoIdeal)+10].forEach(p => {
+    const b = document.createElement('button');
+    b.className = 'promo-btn'; b.textContent = 'R$ '+fmt(p);
+    b.onclick = () => { document.getElementById('kit-preco-venda').value = fmt2(p); recalcAll(); };
     el.appendChild(b);
   });
 }
 
-// ============================================================
-// RESULTADO
-// ============================================================
-function renderResultado(){
-  if(!state.kitItems.length) return;
-  const c=calcKit(), st=getStatus(c);
-  document.getElementById('status-banner-area').innerHTML=`
-    <div class="status-banner ${st.color}">
-      <span class="status-icon">${st.icon}</span>
+function renderResultado() {
+  if (!state.kitItems.length) return;
+  const c = calcKit(), st = getStatus(c);
+  document.getElementById('status-banner-area').innerHTML = `
+    <div class="status-banner ${st.color}"><span class="status-icon">${st.icon}</span>
       <div><div>${st.label}</div><div style="font-size:12px;font-weight:400;margin-top:2px;opacity:.85;">${st.desc}</div></div>
     </div>`;
-  const kpis=[
-    {l:'Custo Total',     v:`R$ ${fmt(c.custo)}`,         k:'red'},
-    {l:'Valor Separado',  v:`R$ ${fmt(c.valSep)}`,        k:'blue'},
-    {l:'Preço do Kit',    v:`R$ ${fmt(c.pv)}`,            k:''},
-    {l:'Desconto',        v:`${c.pDesc.toFixed(1)}%`,     k:c.desc>0?'green':'red'},
-    {l:'Lucro Bruto',     v:`R$ ${fmt(c.lb)}`,            k:c.lb>=0?'green':'red'},
-    {l:'Lucro Real',      v:`R$ ${fmt(c.lr)}`,            k:c.lr>=0?'green':'red'},
-    {l:'Margem Bruta',    v:`${c.mb.toFixed(1)}%`,        k:c.mb>=30?'green':'orange'},
-    {l:'Margem Real',     v:`${c.mr.toFixed(1)}%`,        k:c.mr>=state.config.lucroAlvo?'green':(c.mr>0?'orange':'red')},
+  const kpis = [
+    {l:'Custo Total',    v:`R$ ${fmt(c.custo)}`,        k:'red'},
+    {l:'Valor Separado', v:`R$ ${fmt(c.valSep)}`,       k:'blue'},
+    {l:'Preço do Kit',   v:`R$ ${fmt(c.pv)}`,           k:''},
+    {l:'Desconto',       v:`${c.pDesc.toFixed(1)}%`,    k:c.desc>0?'green':'red'},
+    {l:'Lucro Bruto',    v:`R$ ${fmt(c.lb)}`,           k:c.lb>=0?'green':'red'},
+    {l:'Lucro Real',     v:`R$ ${fmt(c.lr)}`,           k:c.lr>=0?'green':'red'},
+    {l:'Margem Bruta',   v:`${c.mb.toFixed(1)}%`,       k:c.mb>=30?'green':'orange'},
+    {l:'Margem Real',    v:`${c.mr.toFixed(1)}%`,       k:c.mr>=state.config.lucroAlvo?'green':(c.mr>0?'orange':'red')},
   ];
-  document.getElementById('kpi-grid').innerHTML=kpis.map(k=>`
-    <div class="kpi ${k.k}"><div class="kpi-label">${k.l}</div><div class="kpi-value ${k.k}">${k.v}</div></div>`).join('');
-
-  document.getElementById('composicao-custos').innerHTML=`
+  document.getElementById('kpi-grid').innerHTML = kpis.map(k =>
+    `<div class="kpi ${k.k}"><div class="kpi-label">${k.l}</div><div class="kpi-value ${k.k}">${k.v}</div></div>`
+  ).join('');
+  document.getElementById('composicao-custos').innerHTML = `
     <div class="margin-row"><span class="text-muted">Custo das Carnes</span><span class="mono text-red">R$ ${fmt(c.custo)} (${c.pv>0?(c.custo/c.pv*100).toFixed(1):0}%)</span></div>
-    ${Object.entries(state.config.custos).map(([k,v])=>`<div class="margin-row"><span class="text-muted">${labCusto(k)}</span><span class="mono text-muted">${v}% = R$ ${fmt(c.pv*v/100)}</span></div>`).join('')}
+    ${Object.entries(state.config.custos).map(([k,v])=>
+      `<div class="margin-row"><span class="text-muted">${labCusto(k)}</span><span class="mono text-muted">${v}% = R$ ${fmt(c.pv*v/100)}</span></div>`
+    ).join('')}
     <div class="margin-row" style="border-top:2px solid var(--border);padding-top:10px;margin-top:4px;">
-      <span style="font-weight:600;">Total Operacional</span><span class="mono text-orange">${c.op.toFixed(2)}% = R$ ${fmt(c.pv*c.op/100)}</span>
-    </div>
-    <div class="margin-row">
-      <span style="font-weight:700;">Lucro Real</span>
-      <span class="mono ${c.lr>=0?'text-green':'text-red'}" style="font-weight:700;">R$ ${fmt(c.lr)} (${c.mr.toFixed(1)}%)</span>
-    </div>
-    <div class="margin-row"><span class="text-muted">Markup Operacional</span><span class="mono text-muted">×${c.mkOp.toFixed(4)}</span></div>
-    <div class="margin-row"><span class="text-muted">Markup c/ Lucro Alvo</span><span class="mono text-muted">×${c.mkIdeal.toFixed(4)}</span></div>`;
-
-  // Alertas
-  const al=[];
-  if(c.pv>c.valSep&&c.valSep>0) al.push({t:'danger',m:'⚠️ Kit mais caro do que comprar os itens separados! Revise o preço.'});
-  if(c.lr<0) al.push({t:'danger',m:`💸 Prejuízo real de R$ ${fmt(Math.abs(c.lr))}. Aumente o preço ou reduza custos.`});
-  if(c.lr>=0&&c.mr<state.config.lucroAlvo) al.push({t:'warn',m:`📉 Margem real (${c.mr.toFixed(1)}%) abaixo do alvo de ${state.config.lucroAlvo}%.`});
-  if(c.desc<=0&&c.valSep>0) al.push({t:'warn',m:'🏷️ Kit não oferece desconto percebido ao cliente.'});
-  state.kitItems.forEach(item=>{
-    const p=state.produtos.find(x=>x.id===item.prodId);
-    if(!p) return;
-    const m=p.preco>0?(p.preco-p.custo)/p.preco*100:0;
-    const mn=state.config.margensMinimas[p.categoria]||25;
-    if(m<mn) al.push({t:'warn',m:`🔺 "${p.nome}" abaixo da margem mínima de ${p.categoria} (${m.toFixed(1)}% < ${mn}%).`});
-  });
-  document.getElementById('alertas-kit').innerHTML=al.length
-    ?al.map(a=>`<div class="alert ${a.t}">${a.m}</div>`).join('')
-    :'<div class="alert success">✅ Nenhum alerta crítico. Kit equilibrado.</div>';
-
-  // Análise por item
-  let html=`<div class="item-analysis-row" style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);">
-    <span>Produto</span><span>Custo</span><span>Val.Sep.</span><span>Marg.</span><span>Mín.</span><span>Status</span>
-  </div>`;
-  state.kitItems.forEach(item=>{
-    const p=state.produtos.find(x=>x.id===item.prodId);
-    if(!p) return;
-    const custo=(p.custo/p.rendimento)*item.qty;
-    const val=p.preco*item.qty;
-    const marg=val>0?(val-custo)/val*100:0;
-    const min=state.config.margensMinimas[p.categoria]||25;
-    const ok=marg>=min;
-    html+=`<div class="item-analysis-row">
+      <span style="font-weight:600;">Total Operacional</span><span class="mono text-orange">${c.op.toFixed(2)}% = R$ ${fmt(c.pv*c.op/100)}</span></div>
+    <div class="margin-row"><span style="font-weight:700;">Lucro Real</span>
+      <span class="mono ${c.lr>=0?'text-green':'text-red'}" style="font-weight:700;">R$ ${fmt(c.lr)} (${c.mr.toFixed(1)}%)</span></div>`;
+  const al = [];
+  if (c.pv>c.valSep&&c.valSep>0) al.push({t:'danger',m:'⚠️ Kit mais caro do que comprar os itens separados!'});
+  if (c.lr<0) al.push({t:'danger',m:`💸 Prejuízo real de R$ ${fmt(Math.abs(c.lr))}.`});
+  if (c.lr>=0&&c.mr<state.config.lucroAlvo) al.push({t:'warn',m:`📉 Margem ${c.mr.toFixed(1)}% abaixo do alvo de ${state.config.lucroAlvo}%.`});
+  document.getElementById('alertas-kit').innerHTML = al.length
+    ? al.map(a=>`<div class="alert ${a.t}">${a.m}</div>`).join('')
+    : '<div class="alert success">✅ Kit equilibrado.</div>';
+  let html = `<div class="item-analysis-row" style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);">
+    <span>Produto</span><span>Custo</span><span>Val.Sep.</span><span>Marg.</span><span>Mín.</span><span>Status</span></div>`;
+  state.kitItems.forEach(item => {
+    const p = state.produtos.find(x => String(x.id)===String(item.prodId)); if (!p) return;
+    const custo = p.custo * item.qty;
+    const val   = p.preco * item.qty;
+    const marg  = val > 0 ? (val-custo)/val*100 : 0;
+    const min   = state.config.margensMinimas[p.categoria]||25;
+    const ok    = marg >= min;
+    html += `<div class="item-analysis-row">
       <div><strong style="color:var(--text);">${p.nome}</strong><br><span style="font-size:10px;color:var(--muted);">${item.qty} ${p.unidade}</span></div>
       <div class="mono text-red">R$ ${fmt(custo)}</div>
       <div class="mono" style="color:var(--blue);">R$ ${fmt(val)}</div>
@@ -755,49 +876,47 @@ function renderResultado(){
       <span class="badge ${ok?'badge-green':'badge-red'}">${ok?'✅ OK':'⚠️ Baixo'}</span>
     </div>`;
   });
-  document.getElementById('analise-itens').innerHTML=html;
+  document.getElementById('analise-itens').innerHTML = html;
 }
 
-// ============================================================
+// ═══════════════════════════════════════════════════════════
 // SIMULAÇÃO
-// ============================================================
-function renderSimulacao(){
-  if(!state.kitItems.length) return;
-  const c=calcKit();
-  // Sugeridos
-  const op=c.op;
-  const sugs=[
-    {l:'Preço Mínimo (sem lucro)', v:c.precoMin, d:'Apenas cobre custos operacionais.'},
+// ═══════════════════════════════════════════════════════════
+function renderSimulacao() {
+  if (!state.kitItems.length) return;
+  const c = calcKit(), op = c.op;
+  const sugs = [
+    {l:'Preço Mínimo (sem lucro)',              v:c.precoMin,        d:'Apenas cobre custos operacionais.'},
     {l:`Preço Ideal (${state.config.lucroAlvo}% lucro)`, v:c.precoIdeal, d:'Inclui lucro alvo configurado.'},
-    {l:'Promocional Leve (-5%)', v:c.precoIdeal*0.95, d:'Pequena vantagem ao cliente.'},
-    {l:'Promocional Forte (-10%)', v:c.precoIdeal*0.90, d:'Desconto relevante, margem pressionada.'},
-    {l:'Psicológico', v:psico(c.precoIdeal), d:'Arredondado para formato comercial.'},
+    {l:'Promocional Leve (-5%)',                v:c.precoIdeal*0.95, d:'Pequena vantagem ao cliente.'},
+    {l:'Promocional Forte (-10%)',              v:c.precoIdeal*0.90, d:'Desconto relevante, margem pressionada.'},
+    {l:'Psicológico',                           v:psico(c.precoIdeal),d:'Arredondado para formato comercial.'},
   ];
-  document.getElementById('precos-sugeridos').innerHTML=sugs.map(s=>{
-    const lr=s.v-c.custo-s.v*(op/100);
-    const mr=s.v>0?lr/s.v*100:0;
+  document.getElementById('precos-sugeridos').innerHTML = sugs.map(s => {
+    const lr = s.v - c.custo - s.v*(op/100), mr = s.v>0 ? lr/s.v*100 : 0;
     return `<div class="margin-row">
       <div><div style="font-size:13px;font-weight:600;">${s.l}</div><div style="font-size:11px;color:var(--muted);">${s.d}</div></div>
       <div style="text-align:right;">
         <div class="mono" style="font-size:16px;color:var(--blue);">R$ ${fmt(s.v)}</div>
         <div class="mono ${mr>=state.config.lucroAlvo?'text-green':'text-orange'}" style="font-size:11px;">Marg. real: ${mr.toFixed(1)}%</div>
-        <button class="btn btn-outline btn-sm" style="margin-top:4px;" onclick="document.getElementById('kit-preco-venda').value=${fmt2(s.v)};showTab('kit');recalcAll()">Usar</button>
+        <button class="btn btn-outline btn-sm" style="margin-top:4px;"
+          onclick="document.getElementById('kit-preco-venda').value=${fmt2(s.v)};showTab('kit');recalcAll()">Usar</button>
       </div></div>`;
   }).join('');
   // Psicológicos
-  const vars=[
-    {l:'Terminar ,90',v:psico(c.precoIdeal,'x9.90')},
-    {l:',90 menor', v:psico(c.precoIdeal,'x9.90')-10},
-    {l:'Inteiro',    v:Math.ceil(c.precoIdeal)},
-    {l:'Arred.↑',   v:Math.ceil(c.precoIdeal/5)*5},
-    {l:'Arred.↓',   v:Math.floor(c.precoIdeal/5)*5},
+  const vars = [
+    {l:'Terminar ,90', v:psico(c.precoIdeal,'x9.90')},
+    {l:',90 menor',    v:psico(c.precoIdeal,'x9.90')-10},
+    {l:'Inteiro',      v:Math.ceil(c.precoIdeal)},
+    {l:'Arred.↑',     v:Math.ceil(c.precoIdeal/5)*5},
+    {l:'Arred.↓',     v:Math.floor(c.precoIdeal/5)*5},
   ];
-  document.getElementById('precos-psicologicos').innerHTML=`<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;">
-    ${vars.map(v=>{
-      const lr=v.v-c.custo-v.v*(op/100);
-      const mr=v.v>0?lr/v.v*100:0;
-      const desc=c.valSep>0?(c.valSep-v.v)/c.valSep*100:0;
-      return `<div class="kpi" style="cursor:pointer;text-align:center;" onclick="document.getElementById('kit-preco-venda').value=${v.v};showTab('kit');recalcAll()">
+  document.getElementById('precos-psicologicos').innerHTML = `<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;">
+    ${vars.map(v => {
+      const lr = v.v - c.custo - v.v*(op/100), mr = v.v>0?lr/v.v*100:0;
+      const desc = c.valSep>0 ? (c.valSep-v.v)/c.valSep*100 : 0;
+      return `<div class="kpi" style="cursor:pointer;text-align:center;"
+          onclick="document.getElementById('kit-preco-venda').value=${v.v};showTab('kit');recalcAll()">
         <div class="kpi-label">${v.l}</div>
         <div class="kpi-value blue" style="font-size:17px;">R$ ${fmt(v.v)}</div>
         <div class="kpi-sub">Marg: <span class="${mr>=state.config.lucroAlvo?'text-green':'text-orange'}">${mr.toFixed(1)}%</span></div>
@@ -807,15 +926,15 @@ function renderSimulacao(){
   </div>`;
 }
 
-function simularPreco(){
-  const v=parseFloat(document.getElementById('sim-preco').value);
-  if(!v||!state.kitItems.length){document.getElementById('sim-resultado').innerHTML='';return;}
-  const c=calcKit(), op=c.op;
+function simularPreco() {
+  const v = parseFloat(document.getElementById('sim-preco').value);
+  if (!v||!state.kitItems.length) { document.getElementById('sim-resultado').innerHTML=''; return; }
+  const c = calcKit(), op = c.op;
   const lb=v-c.custo, lr=v-c.custo-v*(op/100);
   const mb=v>0?lb/v*100:0, mr=v>0?lr/v*100:0;
   const desc=c.valSep-v, pd=c.valSep>0?desc/c.valSep*100:0;
-  const st=lr>0?(mr>=state.config.lucroAlvo?'KIT LUCRATIVO':'MARGEM APERTADA'):'KIT COM PREJUÍZO';
-  const sb=lr>0?(mr>=state.config.lucroAlvo?'badge-green':'badge-orange'):'badge-red';
+  const st = lr>0?(mr>=state.config.lucroAlvo?'KIT LUCRATIVO':'MARGEM APERTADA'):'KIT COM PREJUÍZO';
+  const sb = lr>0?(mr>=state.config.lucroAlvo?'badge-green':'badge-orange'):'badge-red';
   document.getElementById('sim-resultado').innerHTML=`<hr>
     <div class="grid2" style="margin-top:12px;">
       <div class="kpi ${lb>=0?'green':'red'}"><div class="kpi-label">Lucro Bruto</div><div class="kpi-value ${lb>=0?'green':'red'}">R$ ${fmt(lb)}</div></div>
@@ -823,7 +942,8 @@ function simularPreco(){
       <div class="kpi"><div class="kpi-label">Margem Bruta</div><div class="kpi-value">${mb.toFixed(1)}%</div></div>
       <div class="kpi ${mr>=state.config.lucroAlvo?'green':'orange'}"><div class="kpi-label">Margem Real</div><div class="kpi-value ${mr>=state.config.lucroAlvo?'green':'orange'}">${mr.toFixed(1)}%</div></div>
     </div>
-    <div class="margin-row mt16"><span class="text-muted">Desconto Percebido</span><span class="mono ${desc>0?'text-green':'text-red'}">${pd.toFixed(1)}% (R$ ${fmt(desc)})</span></div>
+    <div class="margin-row mt16"><span class="text-muted">Desconto Percebido</span>
+      <span class="mono ${desc>0?'text-green':'text-red'}">${pd.toFixed(1)}% (R$ ${fmt(desc)})</span></div>
     <div style="margin-top:10px;"><span class="badge ${sb}">${st}</span></div>`;
 }
 function simPrecoBtn(v){document.getElementById('sim-preco').value=v;simularPreco();}
@@ -831,22 +951,22 @@ function simDesconto(p){const c=calcKit();simPrecoBtn(fmt2(c.valSep*(1-p/100)));
 function simIdeal(){simPrecoBtn(fmt2(calcKit().precoIdeal));}
 function simMinimo(){simPrecoBtn(fmt2(calcKit().precoMin));}
 
-// ============================================================
-// CONFIGURAÇÕES
-// ============================================================
-function renderConfig(){
-  const cfg=state.config;
-  document.getElementById('config-custos').innerHTML=Object.entries(cfg.custos).map(([k,v])=>`
+// ═══════════════════════════════════════════════════════════
+// CONFIGURAÇÕES (salvas em localStorage — preferência do usuário)
+// ═══════════════════════════════════════════════════════════
+function renderConfig() {
+  const cfg = state.config;
+  document.getElementById('config-custos').innerHTML = Object.entries(cfg.custos).map(([k,v])=>`
     <div class="field"><label>${labCusto(k)} (%)</label>
       <input type="number" step="0.1" min="0" max="100" value="${v}" onchange="cfg_custo('${k}',this.value)" />
     </div>`).join('');
-  document.getElementById('cfg-lucro-alvo').value=cfg.lucroAlvo;
-  document.getElementById('cfg-arredondamento').value=cfg.arredondamento;
-  document.getElementById('config-margens').innerHTML=Object.entries(cfg.margensMinimas).map(([cat,m])=>`
-    <div class="margin-row">
-      <span><span class="badge badge-gray">${cat}</span></span>
+  document.getElementById('cfg-lucro-alvo').value      = cfg.lucroAlvo;
+  document.getElementById('cfg-arredondamento').value  = cfg.arredondamento;
+  document.getElementById('config-margens').innerHTML  = Object.entries(cfg.margensMinimas).map(([cat,m])=>`
+    <div class="margin-row"><span><span class="badge badge-gray">${cat}</span></span>
       <div style="display:flex;align-items:center;gap:8px;">
-        <input type="number" step="1" min="0" max="100" value="${m}" style="width:70px;font-family:var(--mono);" onchange="cfg_margem('${cat}',this.value)" />
+        <input type="number" step="1" min="0" max="100" value="${m}" style="width:70px;font-family:var(--mono);"
+          onchange="cfg_margem('${cat}',this.value)" />
         <span class="text-muted" style="font-size:11px;">%</span>
       </div>
     </div>`).join('');
@@ -854,252 +974,214 @@ function renderConfig(){
 function cfg_custo(k,v){state.config.custos[k]=parseFloat(v)||0;}
 function cfg_margem(c,v){state.config.margensMinimas[c]=parseFloat(v)||0;}
 function saveConfig(){
-  state.config.lucroAlvo=parseFloat(document.getElementById('cfg-lucro-alvo').value)||15;
-  state.config.arredondamento=document.getElementById('cfg-arredondamento').value;
-  bbSaveKit(); recalcAll(); showToastKit('Configurações salvas!');
+  state.config.lucroAlvo    = parseFloat(document.getElementById('cfg-lucro-alvo').value)||15;
+  state.config.arredondamento= document.getElementById('cfg-arredondamento').value;
+  localStorage.setItem('bb_kit_cfg', JSON.stringify(state.config));
+  recalcAll(); showToast('Configurações salvas!');
 }
 
-// ============================================================
-// KITS SALVOS
-// ============================================================
-function saveKit(){
-  const nome=document.getElementById('kit-nome').value.trim()||'Kit sem nome';
-  if(!state.kitItems.length){alert('Adicione itens ao kit antes de salvar.');return;}
-  const c=calcKit();
-  const kit={id:Date.now(),nome,desc:document.getElementById('kit-desc').value,
-    tipo:document.getElementById('kit-tipo').value,
-    items:JSON.parse(JSON.stringify(state.kitItems)),
-    precoVenda:state.kitPrecoVenda,ativo:true,
-    custo:c.custo,lucReal:c.lr,margReal:c.mr,savedAt:new Date().toLocaleDateString('pt-BR')};
-  const idx=state.kitsSalvos.findIndex(k=>k.nome===nome);
-  if(idx>=0){if(!confirm('Substituir kit existente?'))return; state.kitsSalvos[idx]=kit;}
-  else state.kitsSalvos.push(kit);
-  bbSaveKit(); renderKitsSalvos(); showToastKit('Kit salvo!');
+// ═══════════════════════════════════════════════════════════
+// KITS SALVOS — POST/PUT/DELETE via API
+// ═══════════════════════════════════════════════════════════
+async function saveKit() {
+  const nome = document.getElementById('kit-nome').value.trim() || 'Kit sem nome';
+  if (!state.kitItems.length) { alert('Adicione pelo menos um item ao kit antes de salvar.'); return; }
+
+  const c = calcKit();
+
+  // Verifica se todos os produtos existem no banco (produtos_mestre)
+  const itens = state.kitItems.map(i => ({
+    codigo_produto: String(i.prodId),
+    quantidade:     i.qty
+  }));
+
+  const payload = {
+    nome_kit:    nome,
+    tipo_kit:    document.getElementById('kit-tipo').value,
+    descricao:   document.getElementById('kit-desc').value || null,
+    preco_venda: state.kitPrecoVenda || c.precoIdeal,
+    custo_total: c.custo,
+    margem:      c.mr,
+    itens
+  };
+
+  try {
+    let r;
+    if (state.kitEditandoId) {
+      r = await apiFetch('/api/kits/' + state.kitEditandoId, { method:'PUT', body:JSON.stringify(payload) });
+    } else {
+      r = await apiFetch('/api/kits', { method:'POST', body:JSON.stringify(payload) });
+    }
+    // Guarda o id para edições futuras
+    if (r.id_kit) state.kitEditandoId = r.id_kit;
+    await carregarKits();
+    renderKitsSalvos();
+    showToast('Kit "' + nome + '" salvo no banco!');
+  } catch(e) {
+    alert('Erro ao salvar kit: ' + e.message);
+  }
 }
-function loadKit(id){
-  const kit=state.kitsSalvos.find(k=>k.id===id);
-  if(!kit) return;
-  state.kitItems=JSON.parse(JSON.stringify(kit.items));
-  document.getElementById('kit-nome').value=kit.nome;
-  document.getElementById('kit-desc').value=kit.desc;
-  document.getElementById('kit-tipo').value=kit.tipo;
-  document.getElementById('kit-preco-venda').value=kit.precoVenda||'';
+
+async function loadKit(id) {
+  // Busca detalhes completos do kit (com itens) direto da API
+  try {
+    const k = await apiFetch('/api/kits/' + id);
+    state.kitItems     = (k.itens || k.kit_itens || []).map(i => ({
+      prodId: i.codigo_produto,
+      qty:    parseFloat(i.quantidade) || 1
+    }));
+    state.kitEditandoId = k.id_kit || id;
+    document.getElementById('kit-nome').value      = k.nome_kit  || '';
+    document.getElementById('kit-desc').value      = k.descricao || '';
+    document.getElementById('kit-tipo').value      = k.tipo_kit  || 'Kit Churrasco';
+    document.getElementById('kit-preco-venda').value = k.preco_venda || '';
+    updateKitHeader(); renderKitItems(); recalcAll(); showTab('kit');
+  } catch(e) {
+    // Fallback: usa dados em memória
+    const kit = state.kitsSalvos.find(k => k.id===id);
+    if (!kit) { alert('Kit não encontrado.'); return; }
+    state.kitItems = JSON.parse(JSON.stringify(kit.items));
+    state.kitEditandoId = kit.id;
+    document.getElementById('kit-nome').value      = kit.nome;
+    document.getElementById('kit-desc').value      = kit.desc;
+    document.getElementById('kit-tipo').value      = kit.tipo || 'Kit Churrasco';
+    document.getElementById('kit-preco-venda').value = kit.precoVenda || '';
+    updateKitHeader(); renderKitItems(); recalcAll(); showTab('kit');
+  }
+}
+
+function novoKit() {
+  state.kitItems      = [];
+  state.kitEditandoId = null;
+  state.kitPrecoVenda = 0;
+  document.getElementById('kit-nome').value        = '';
+  document.getElementById('kit-desc').value        = '';
+  document.getElementById('kit-tipo').value        = 'Kit Churrasco';
+  document.getElementById('kit-preco-venda').value = '';
   updateKitHeader(); renderKitItems(); recalcAll(); showTab('kit');
 }
-function duplicateKit(id){
-  const kit=state.kitsSalvos.find(k=>k.id===id);
-  if(!kit) return;
-  state.kitsSalvos.push({...JSON.parse(JSON.stringify(kit)),id:Date.now(),nome:kit.nome+' (cópia)',savedAt:new Date().toLocaleDateString('pt-BR')});
-  renderKitsSalvos();
+
+async function deleteKit(id) {
+  if (!confirm('Excluir este kit permanentemente do banco?')) return;
+  try {
+    await apiFetch('/api/kits/' + id, { method:'DELETE' });
+    if (state.kitEditandoId === id) { state.kitEditandoId = null; state.kitItems = []; }
+    await carregarKits();
+    renderKitsSalvos();
+    showToast('Kit excluído.', '#c0392b');
+  } catch(e) {
+    alert('Erro ao excluir kit: ' + e.message);
+  }
 }
-function deleteKit(id){
-  if(!confirm('Excluir este kit?')) return;
-  state.kitsSalvos=state.kitsSalvos.filter(k=>k.id!==id); bbSaveKit(); renderKitsSalvos();
-}
-function renderKitsSalvos(){
-  const el=document.getElementById('kits-salvos-list');
-  if(!state.kitsSalvos.length){el.innerHTML='<p class="text-muted">Nenhum kit salvo ainda.</p>';return;}
-  el.innerHTML=state.kitsSalvos.map(kit=>`
-    <div class="card mb8">
-      <div class="flex justify-between items-center" style="flex-wrap:wrap;gap:10px;">
+
+function renderKitsSalvos() {
+  const el = document.getElementById('kits-salvos-list');
+  if (!state.kitsSalvos.length) {
+    el.innerHTML = `<div class="card" style="text-align:center;padding:32px;">
+      <p style="color:var(--muted);font-size:14px;margin-bottom:16px;">Nenhum kit salvo ainda.</p>
+      <button class="btn btn-primary" onclick="showTab('kit')">➕ Montar Primeiro Kit</button>
+    </div>`;
+    return;
+  }
+  el.innerHTML = state.kitsSalvos.map(k => {
+    const mr = k.margReal || 0;
+    const ok = mr >= state.config.lucroAlvo;
+    const editando = state.kitEditandoId === k.id;
+    return `<div class="card" style="margin-bottom:12px;${editando?'border-color:var(--red);border-width:2px;':''}">
+      <div class="flex justify-between items-center" style="flex-wrap:wrap;gap:8px;">
         <div>
-          <strong style="font-size:15px;">${kit.nome}</strong>
-          <span class="badge badge-gray" style="margin-left:8px;">${kit.tipo}</span>
-          ${kit.ativo?'<span class="badge badge-green" style="margin-left:4px;">Ativo</span>':''}
-          <div style="font-size:11px;color:var(--muted);margin-top:4px;">${kit.desc||''} — Salvo em ${kit.savedAt}</div>
-        </div>
-        <div class="flex gap8 items-center">
-          <div style="text-align:right;margin-right:8px;">
-            <div class="mono text-red" style="font-size:12px;">Custo: R$ ${fmt(kit.custo)}</div>
-            <div class="mono ${kit.lucReal>=0?'text-green':'text-red'}" style="font-size:12px;">Lucro: R$ ${fmt(kit.lucReal)} (${kit.margReal.toFixed(1)}%)</div>
+          <div style="font-family:var(--display);font-size:16px;color:var(--text);font-weight:700;">
+            ${editando?'<span style="color:var(--red);font-size:12px;">● EDITANDO &nbsp;</span>':''}${k.nome}
           </div>
-          <button class="btn btn-outline btn-sm" onclick="loadKit(${kit.id})">📂 Abrir</button>
-          <button class="btn btn-outline btn-sm" onclick="duplicateKit(${kit.id})">📄 Duplicar</button>
-          <button class="btn btn-danger btn-sm" onclick="deleteKit(${kit.id})">✕</button>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px;">
+            ${k.tipo} · ${k.items.length} itens · Salvo ${k.savedAt}
+          </div>
+          ${k.desc?`<div style="font-size:12px;color:var(--muted);margin-top:4px;">${k.desc}</div>`:''}
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+          <div class="kpi ${ok?'green':'orange'}" style="padding:8px 14px;min-width:90px;">
+            <div class="kpi-label">Margem Real</div>
+            <div class="kpi-value ${ok?'green':'orange'}">${mr.toFixed(1)}%</div>
+          </div>
+          <div class="kpi blue" style="padding:8px 14px;min-width:90px;">
+            <div class="kpi-label">Preço Venda</div>
+            <div class="kpi-value blue">R$ ${fmt(k.precoVenda)}</div>
+          </div>
+          <div style="display:flex;gap:6px;">
+            <button class="btn btn-outline btn-sm" onclick="loadKit(${k.id})">📂 Carregar</button>
+            <button class="btn btn-danger btn-sm"  onclick="deleteKit(${k.id})">✕ Excluir</button>
+          </div>
         </div>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
-// ============================================================
-// IMPORTAÇÃO CSV PDV (CHEFWEB — UTF-16 LE, separador ;)
-// ============================================================
-const MAPA_CAT={
-  'WAGYU':'Wagyu','HAMBURGUER WAGYU':'Wagyu',
-  'LINHA RESERVA BLACK':'Premium','LINHA CLASSIC':'Premium','PREMIUM':'Premium',
-  'BOVINO':'Premium','BOVINOS':'Churrasco','CHURRASCO':'Churrasco',
-  'GRILL':'Grill','ASSADOS':'Grill','CARNES':'Churrasco','ACOUGUE':'Churrasco',
-  'RESFRIADO CONGELADO':'Churrasco','CONGELADO':'Churrasco','SUINOS':'Churrasco',
-  'AVES':'Churrasco','CORDEIROS':'Premium','HAMBURGUER':'Grill','ESPETINHO':'Churrasco',
-  'EMBUTIDOS':'Embutidos','LINGUICAS':'Embutidos',
-  'BEBIDAS':'Bebidas','CERVEJA':'Bebidas','CERVEJAS':'Bebidas','VINHO':'Bebidas',
-  'VINHOS':'Bebidas','DESTILADOS':'Bebidas','REFRIGERANTE':'Bebidas','REFRIGERANTES':'Bebidas',
-  'AGUA':'Bebidas','SUCO':'Bebidas','SUCOS':'Bebidas','ENERGETICO':'Bebidas',
-  'ACOMPANHAMENTOS':'Acompanhamentos','FAROFAS':'Acompanhamentos',
-  'FAROFA CANTAGALLO':'Acompanhamentos','FAROFA SANTA RITA':'Acompanhamentos',
-  'MOLHOS':'Acompanhamentos','MOLHOS CANTAGALLO':'Acompanhamentos','MOLHOS OUTROS':'Acompanhamentos',
-  'QUEIJO':'Acompanhamentos','QUEIJOS':'Acompanhamentos','PAES':'Acompanhamentos',
-  'SAL E TEMPEROS':'Temperados','SAIS E TEMPEROS':'Temperados',
-  'SAL E TEMPEROS CANTAGALLO':'Temperados','TEMPEROS':'Temperados','ZAFRAN':'Temperados',
-  'CARVAO':'Acompanhamentos','LENHA':'Acompanhamentos',
-};
-function inferirCat(sub,nome){
-  const s=(sub||'').toUpperCase().trim();
-  if(MAPA_CAT[s]) return MAPA_CAT[s];
-  const n=(nome||'').toUpperCase();
-  if(n.includes('WAGYU')) return 'Wagyu';
-  if(n.includes('RESERVA BLACK')||n.includes('PREMIUM')) return 'Premium';
-  if(n.includes('LINGUICA')||n.includes('CHORIZO')||n.includes('SALSICHA')) return 'Embutidos';
-  if(n.includes('CERVEJA')||n.includes('VINHO')||n.includes('AGUA')) return 'Bebidas';
-  return 'Outros';
-}
-function parseBR(s){
-  if(!s||['?','None',''].includes(String(s).trim())) return 0;
-  return parseFloat(String(s).replace(/\./g,'').replace(',','.')) || 0;
-}
-function importarCSV(input){
-  const file=input.files[0]; if(!file) return;
-  const banner=document.getElementById('import-banner');
-  const prog=document.getElementById('import-progress');
-  banner.style.display='block';
-  prog.innerHTML=`<div style="color:var(--blue);font-size:13px;">⏳ Lendo <strong>${file.name}</strong>...</div>`;
-  const reader=new FileReader();
-  reader.onload=function(e){
-    try{
-      const buf=e.target.result, u8=new Uint8Array(buf);
-      const text=(u8[0]===0xFF&&u8[1]===0xFE)
-        ?new TextDecoder('utf-16le').decode(buf)
-        :new TextDecoder('utf-8').decode(buf);
-      const linhas=text.split(/\r?\n/);
-      let hi=-1;
-      for(let i=0;i<linhas.length;i++){if(linhas[i].includes('CodigoProduto')&&linhas[i].includes('NomeProduto')){hi=i;break;}}
-      if(hi===-1) throw new Error('Cabeçalho não encontrado. Verifique o arquivo.');
-      const hdr=linhas[hi].split(';').map(h=>h.trim());
-      const iC=hdr.indexOf('CodigoProduto'),iN=hdr.indexOf('NomeProduto');
-      const iE=hdr.indexOf('QuantidadeEstoque'),iU=hdr.indexOf('Unidade');
-      const iV=hdr.indexOf('PrecoVenda'),iP=hdr.indexOf('PrecoCompra');
-      const iS=hdr.indexOf('situacao'),iSub=hdr.indexOf('Subgrupo');
-      let imp=0,atu=0,ign=0,scusto=0;
-      const novos=[];
-      for(let i=hi+1;i<linhas.length;i++){
-        const linha=linhas[i].trim(); if(!linha) continue;
-        const cols=linha.split(';'); if(cols.length<5) continue;
-        const cod=String(cols[iC]||'').trim();
-        const nome=(cols[iN]||'').trim();
-        const unid=(cols[iU]||'UN').trim().toUpperCase();
-        const sit=iS>=0?(cols[iS]||'').trim().toUpperCase():'ATIVADO';
-        const est=parseBR(cols[iE]);
-        const pv=parseBR(cols[iV]);
-        const pc=parseBR(cols[iP]);
-        const sub=iSub>=0?(cols[iSub]||'').trim():'';
-        if(!cod||!nome) continue;
-        if(sit==='DESATIVADO'){ign++;continue;}
-        if(pv<=0){ign++;continue;}
-        if(pc===0) scusto++;
-        const cat=inferirCat(sub,nome);
-        const ex=state.produtos.find(p=>String(p.codigo)===cod);
-        if(ex){ex.nome=nome;ex.custo=pc;ex.preco=pv;ex.estoque=est;ex.unidade=unid;ex.categoria=cat;atu++;imp++;}
-        else{novos.push({id:Date.now()+i,codigo:cod,nome,categoria:cat,fornecedor:'',custo:pc,preco:pv,unidade:unid,rendimento:1,estoque:est,obs:sub});imp++;}
-      }
-      state.produtos=[...state.produtos,...novos];
-      renderProdutos(); input.value='';
-      prog.innerHTML=`
-        <div class="flex items-center gap8" style="flex-wrap:wrap;">
-          <div><div style="color:var(--green);font-size:15px;font-weight:700;">✅ Importação concluída!</div>
-               <div style="color:var(--muted);font-size:12px;margin-top:2px;">${file.name}</div></div>
-          <div style="display:flex;gap:10px;flex-wrap:wrap;">
-            <div class="kpi green" style="padding:8px 14px;min-width:85px;"><div class="kpi-label">Importados</div><div class="kpi-value green">${imp}</div></div>
-            <div class="kpi blue" style="padding:8px 14px;min-width:85px;"><div class="kpi-label">Total base</div><div class="kpi-value blue">${state.produtos.length}</div></div>
-            <div class="kpi" style="padding:8px 14px;min-width:85px;"><div class="kpi-label">Atualizados</div><div class="kpi-value">${atu}</div></div>
-            <div class="kpi" style="padding:8px 14px;min-width:85px;"><div class="kpi-label">Ignorados</div><div class="kpi-value">${ign}</div><div class="kpi-sub">desativ./sem preço</div></div>
-            ${scusto>0?`<div class="kpi orange" style="padding:8px 14px;min-width:85px;"><div class="kpi-label">Sem custo</div><div class="kpi-value orange">${scusto}</div><div class="kpi-sub">verificar no PDV</div></div>`:''}
-          </div>
-          <button class="btn btn-outline btn-sm" onclick="document.getElementById('import-banner').style.display='none'">Fechar</button>
-        </div>`;
-    }catch(err){prog.innerHTML=`<div class="alert danger">❌ ${err.message}</div>`;input.value='';}
-  };
-  reader.readAsArrayBuffer(file);
-}
-
-// ============================================================
+// ═══════════════════════════════════════════════════════════
 // HELPERS
-// ============================================================
-function fmt(v){return(parseFloat(v)||0).toFixed(2).replace('.',',');}
-function fmt2(v){return parseFloat((parseFloat(v)||0).toFixed(2));}
-function psico(v,mode){
-  mode=mode||state.config.arredondamento;
-  if(mode==='x9.90') return Math.ceil(v/10)*10-0.10;
-  if(mode==='inteiro') return Math.ceil(v);
-  if(mode==='cima') return Math.ceil(v/5)*5;
-  if(mode==='baixo') return Math.floor(v/5)*5;
-  return Math.ceil(v/10)*10-0.10;
+// ═══════════════════════════════════════════════════════════
+function fmt(v)  { return (parseFloat(v)||0).toFixed(2).replace('.',','); }
+function fmt2(v) { return parseFloat((parseFloat(v)||0).toFixed(2)); }
+function escId(v){ return String(v).replace(/'/g,"\\'"); }
+function psico(v,mode) {
+  mode = mode || state.config.arredondamento;
+  if (mode==='x9.90')  return Math.ceil(v/10)*10 - 0.10;
+  if (mode==='inteiro') return Math.ceil(v);
+  if (mode==='cima')   return Math.ceil(v/5)*5;
+  if (mode==='baixo')  return Math.floor(v/5)*5;
+  return Math.ceil(v/10)*10 - 0.10;
 }
-function getStatus(c){
-  if(c.lr<0) return{color:'red',badge:'badge-red',icon:'💸',label:'KIT COM PREJUÍZO',desc:`Prejuízo real de R$ ${fmt(Math.abs(c.lr))}. Aumente o preço ou reduza custos.`};
-  if(c.mr<state.config.lucroAlvo) return{color:'orange',badge:'badge-orange',icon:'⚠️',label:'MARGEM APERTADA',desc:`Margem real ${c.mr.toFixed(1)}% abaixo do alvo de ${state.config.lucroAlvo}%.`};
-  return{color:'green',badge:'badge-green',icon:'✅',label:'KIT LUCRATIVO',desc:`Margem real de ${c.mr.toFixed(1)}%. Lucro real: R$ ${fmt(c.lr)}.`};
+function getStatus(c) {
+  if (c.lr < 0)
+    return {color:'red',  badge:'badge-red',   icon:'💸',label:'KIT COM PREJUÍZO', desc:`Prejuízo real de R$ ${fmt(Math.abs(c.lr))}.`};
+  if (c.mr < state.config.lucroAlvo)
+    return {color:'orange',badge:'badge-orange',icon:'⚠️',label:'MARGEM APERTADA',  desc:`Margem real ${c.mr.toFixed(1)}% abaixo do alvo.`};
+  return  {color:'green', badge:'badge-green', icon:'✅',label:'KIT LUCRATIVO',     desc:`Margem real de ${c.mr.toFixed(1)}%. Lucro: R$ ${fmt(c.lr)}.`};
 }
-function labCusto(k){return{cartao:'Cartão',royalties:'Royalties/Franquia',desperdicio:'Desperdício',imposto:'Impostos',fixos:'Custos Fixos'}[k]||k;}
+function labCusto(k) {
+  return {cartao:'Cartão',royalties:'Royalties/Franquia',desperdicio:'Desperdício',imposto:'Impostos',fixos:'Custos Fixos'}[k]||k;
+}
+function showToast(msg, bg) {
+  const t = document.createElement('div');
+  t.style.cssText = `position:fixed;bottom:20px;right:20px;background:${bg||'#1a7a4a'};color:#fff;
+    padding:10px 18px;border-radius:8px;font-size:13px;font-weight:600;z-index:9999;
+    box-shadow:0 4px 20px rgba(0,0,0,.3);transition:opacity .3s;`;
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => { t.style.opacity='0'; setTimeout(()=>t.remove(),300); }, 3000);
+}
 
-// ============================================================
-// INICIALIZAÇÃO — produtos demo do seu PDV
-// ============================================================
-document.addEventListener('DOMContentLoaded',()=>{
-  state.produtos=[
-    {id:1, codigo:'116',nome:'PICANHA DO CHEF FRIGOL',             categoria:'Churrasco',      fornecedor:'Frigol',        custo:80.24, preco:139.90,unidade:'KG',rendimento:0.95,estoque:11.0, obs:''},
-    {id:2, codigo:'109',nome:'FRALDA RED BOM BEEF',                categoria:'Churrasco',      fornecedor:'Bom Beef',      custo:74.61, preco:135.90,unidade:'KG',rendimento:0.92,estoque:0,    obs:''},
-    {id:3, codigo:'28', nome:'MAMINHA DA ALCATRA DO CHEF FRIGOL',  categoria:'Grill',          fornecedor:'Frigol',        custo:36.10, preco:65.90, unidade:'KG',rendimento:0.90,estoque:0,    obs:''},
-    {id:4, codigo:'111',nome:'T-BONE VPJ CONG',                    categoria:'Premium',        fornecedor:'VPJ',           custo:102.90,preco:199.90,unidade:'KG',rendimento:0.93,estoque:0.01, obs:''},
-    {id:5, codigo:'131',nome:'LINGUICA SUINA ERVAS FINAS 500G',    categoria:'Embutidos',      fornecedor:'De Braga',      custo:17.00, preco:32.90, unidade:'UN',rendimento:1,   estoque:0,    obs:''},
-    {id:6, codigo:'166',nome:'ANCHO CLASSIC BOMBEEF RESF',         categoria:'Churrasco',      fornecedor:'Bom Beef',      custo:51.00, preco:89.90, unidade:'KG',rendimento:0.95,estoque:0,    obs:'Linha Classic'},
-    {id:7, codigo:'150',nome:'PICANHA FRIGORACA',                  categoria:'Churrasco',      fornecedor:'Frigoraca',     custo:57.99, preco:99.90, unidade:'KG',rendimento:0.93,estoque:0.137,obs:''},
-    {id:8, codigo:'114',nome:'PAO BRIOCHE CASA VICTORIANA',        categoria:'Acompanhamentos',fornecedor:'Casa Victoriana',custo:8.26, preco:17.90, unidade:'UN',rendimento:1,   estoque:0,    obs:''},
-    {id:9, codigo:'102',nome:'QUEIJO MUSSARELA DEFUMADO COQUEIRO', categoria:'Acompanhamentos',fornecedor:'Coqueiro',      custo:20.03, preco:39.90, unidade:'UN',rendimento:1,   estoque:0,    obs:''},
-    {id:10,codigo:'165',nome:'BEEF DE PANELA COXAO DURO',          categoria:'Barata',         fornecedor:'',             custo:16.85, preco:56.80, unidade:'KG',rendimento:0.88,estoque:0,    obs:''},
-  ];
-  state.kitItems=[{prodId:1,qty:1.0},{prodId:6,qty:0.8},{prodId:2,qty:1.0},{prodId:5,qty:1},{prodId:8,qty:2}];
-  document.getElementById('kit-nome').value='Kit Churrasco Família';
-  document.getElementById('kit-desc').value='Kit especial de fim de semana para 6-8 pessoas';
-  document.getElementById('kit-tipo').value='Kit Churrasco';
-  document.getElementById('kit-preco-venda').value='189.90';
-  updateKitHeader(); renderProdutos(); renderKitItems(); renderConfig(); recalcAll();
+// ═══════════════════════════════════════════════════════════
+// INICIALIZAÇÃO
+// ═══════════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', async () => {
+  // Carrega config local (preferências de margem/custo — OK em localStorage)
+  try {
+    const cfg = JSON.parse(localStorage.getItem('bb_kit_cfg')||'null');
+    if (cfg) state.config = { ...state.config, ...cfg,
+      custos:         {...state.config.custos,        ...(cfg.custos||{})},
+      margensMinimas: {...state.config.margensMinimas,...(cfg.margensMinimas||{})}
+    };
+  } catch(e) {}
+
+  const loadMsg = document.getElementById('loading-msg');
+
+  // Carrega produtos do banco
+  loadMsg.textContent = 'Carregando produtos do banco...';
+  await carregarProdutos();
+
+  // Carrega kits do banco
+  loadMsg.textContent = 'Carregando kits salvos...';
+  await carregarKits();
+
+  // Remove overlay
+  document.getElementById('loading-overlay').style.display = 'none';
+
+  // Renderiza tudo
+  renderProdutos();
+  renderKitsSalvos();
+  renderConfig();
 });
-
-// ══ PERSISTÊNCIA bb_kit ════════════════════════════════════
-function bbSaveKit(){
-  try{localStorage.setItem('bb_kit',JSON.stringify({produtos:state.produtos,kitsSalvos:state.kitsSalvos,config:state.config}));}catch(e){}
-}
-function bbLoadKit(){
-  try{
-    const d=JSON.parse(localStorage.getItem('bb_kit')||'null');
-    if(d){if(d.produtos&&d.produtos.length)state.produtos=d.produtos;if(d.kitsSalvos)state.kitsSalvos=d.kitsSalvos;if(d.config)state.config=Object.assign(state.config,d.config);}
-  }catch(e){}
-}
-function importProdutosNFe(){
-  try{
-    const notas=JSON.parse(localStorage.getItem('nfe_notas')||'[]');
-    const list=Array.isArray(notas)?notas:(notas.notas||[]);
-    let added=0;
-    list.forEach(nota=>{
-      (nota.itens||[]).forEach(item=>{
-        if(!item.desc)return;
-        if(!state.produtos.find(p=>p.nome&&p.nome.toLowerCase()===item.desc.toLowerCase())){
-          state.produtos.push({id:Date.now()+Math.random(),nome:item.desc,codigo:nota.numero||'',categoria:'Outros',custo:parseFloat(item.vUnit||0)||0,venda:parseFloat(item.vUnit||0)*1.35||0,unidade:'KG',estoque:0});
-          added++;
-        }
-      });
-    });
-    bbSaveKit();renderProdutos();showToastKit(added+' produto(s) importado(s) das NF-e!');
-  }catch(e){alert('Erro: '+e.message);}
-}
-function showToastKit(msg,color){
-  const t=document.createElement('div');
-  t.style.cssText='position:fixed;bottom:20px;right:20px;background:'+(color||'#1a7a4a')+';color:#fff;padding:10px 18px;border-radius:8px;font-size:13px;font-weight:600;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,.3)';
-  t.textContent=msg;document.body.appendChild(t);
-  setTimeout(()=>{t.style.opacity='0';t.style.transition='opacity .3s';setTimeout(()=>t.remove(),300)},3000);
-}
-
-bbLoadKit();renderProdutos();renderKitsSalvos();
 </script>
 </body>
 </html>
