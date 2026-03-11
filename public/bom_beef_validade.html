@@ -1545,7 +1545,18 @@ function rpSrch() {
 function selRpProd(id) {
   rpProdId=id; const x=getEstq().find(p=>p.id===id); if(!x)return;
   document.getElementById('rp-srch').value=x.xProd; document.getElementById('rp-drop').classList.remove('open');
-  document.getElementById('rp-prod').value=x.xProd; if(x.valorUnit) document.getElementById('rp-vc').value=x.valorUnit;
+  document.getElementById('rp-prod').value=x.xProd;
+  // Busca custo: prioriza valorUnit do estoque; se zero, consulta CATALOG_SEED pelo código ou nome
+  let custoFinal = x.valorUnit || 0;
+  if (!custoFinal && x.cProd) {
+    const cat = CATALOG_SEED.find(c => c[0] === x.cProd);
+    if (cat && cat[5]) custoFinal = cat[5];
+  }
+  if (!custoFinal && x.xProd) {
+    const cat = CATALOG_SEED.find(c => c[1].toLowerCase() === x.xProd.toLowerCase());
+    if (cat && cat[5]) custoFinal = cat[5];
+  }
+  if (custoFinal) document.getElementById('rp-vc').value = custoFinal;
   const info=document.getElementById('rp-link-info'); info.style.display='block';
   info.innerHTML=`📦 <strong>${x.xProd}</strong> · ${fmtN(x.qAtual,2)} ${x.uCom} · Vence: ${fmtD(x.dVal)} ${bdgU(urgOf(x.dVal,x.customDias))}`;
   if(x.dVal&&!document.getElementById('rp-mot').value){document.getElementById('rp-mot').value='Vencimento/Validade';onRpMot();}
