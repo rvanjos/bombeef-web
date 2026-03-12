@@ -3103,11 +3103,9 @@ function syncEmployeesToBB() {
   alert('✅ ' + bbFuncs.length + ' funcionário(s) sincronizados!\n\nDados disponíveis em:\n→ ValidaStock (bb_f)\n→ Sistema Bom Beef (bb4_f)\n→ Gestão de NF-e');
 }
 
-</script>
-</body>
-</html>
+// ─── Inicialização: restaura sessão do banco ao abrir ─────────────────────────
 (async function inicializar(){
-  // Aguarda até 1s pelo portal estabelecer canal
+  // Aguarda até 300ms pelo portal estabelecer o canal postMessage
   await new Promise(resolve => setTimeout(resolve, 300));
 
   const d = await _apiViaPortal('GET', '/api/classificador/ultima');
@@ -3137,4 +3135,8 @@ function syncEmployeesToBB() {
     ? new Date(d.sessao.atualizado_em).toLocaleString('pt-BR') : '';
   toast(`☁️ Sessão restaurada — ${transactions.length} lançamentos${saved?' · '+saved:''}`);
 })();
+
+</script>
+</body>
+</html>
 
