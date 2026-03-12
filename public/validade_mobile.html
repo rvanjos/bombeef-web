@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="theme-color" content="#8B0000"/>
+<title>ValidaStock · Bom Beef</title>
+<link rel="manifest" href="/validade_manifest.json"/>
+<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%238B0000'/><text y='72' x='50' font-size='55' text-anchor='middle'>🥩</text></svg>"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+:root{
+  --red:#8B0000;--red2:#a30000;--red3:#fdeaea;--red4:#f5c6c6;
+  --green:#1a7a4a;--green2:#e8f7ef;--green3:#a8d5bc;
+  --orange:#c76b00;--orange2:#fff3e0;
+  --yellow:#b58900;--yellow2:#fffbe6;
+  --blue:#1a5c8a;--blue2:#e8f0f7;
+  --bg:#f7f4f0;--white:#fff;--text:#1a1a1a;--muted:#7a7068;
+  --border:#e8e0d8;--border2:#d4c8bc;
+  --shadow: 0 1px 8px rgba(0,0,0,.08);
+  --sans:'DM Sans',sans-serif;--mono:'DM Mono',monospace;
+  --safe-t:env(safe-area-inset-top,0px);
+  --safe-b:env(safe-area-inset-bottom,0px);
+  --nav-h:58px;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+html,body{height:100%;background:var(--bg);overflow:hidden;}
+body{font-family:var(--sans);color:var(--text);display:flex;flex-direction:column;-webkit-font-smoothing:antialiased;}
+
+/* ── HEADER ─────────────────────────────── */
+.hdr{
+  background:var(--red);
+  padding:calc(var(--safe-t) + 10px) 16px 10px;
+  display:flex;align-items:center;justify-content:space-between;
+  flex-shrink:0;z-index:100;
+  box-shadow:0 2px 16px rgba(80,0,0,.35);
+}
+.hdr-l{display:flex;align-items:center;gap:10px;}
+.hdr-logo{font-size:26px;line-height:1;}
+.hdr-name{font-size:15px;font-weight:700;color:#fff;letter-spacing:-.01em;}
+.hdr-sub{font-size:10px;color:rgba(255,255,255,.6);text-transform:uppercase;letter-spacing:.9px;margin-top:1px;}
+.hdr-r{display:flex;gap:6px;}
+.hdr-btn{width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,.15);border:none;font-size:17px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#fff;transition:background .15s;}
+.hdr-btn:active{background:rgba(255,255,255,.3);}
+
+/* ── URG STRIP ──────────────────────────── */
+.urg-strip{
+  background:var(--white);border-bottom:1px solid var(--border);
+  display:flex;overflow-x:auto;flex-shrink:0;
+  scrollbar-width:none;
+}
+.urg-strip::-webkit-scrollbar{display:none;}
+.up{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:9px 14px;min-width:60px;cursor:pointer;border-bottom:3px solid transparent;
+  transition:border-color .15s;flex-shrink:0;
+}
+.up.sel{border-bottom-color:var(--red);}
+.up-n{font-size:17px;font-weight:700;font-family:var(--mono);line-height:1.2;}
+.up-l{font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-top:1px;}
+
+/* ── SCROLL AREA ────────────────────────── */
+.scroll{
+  flex:1;overflow-y:auto;overflow-x:hidden;
+  padding-bottom:calc(var(--nav-h) + var(--safe-b) + 12px);
+  -webkit-overflow-scrolling:touch;
+  overscroll-behavior-y:contain;
+}
+
+/* ── PAGES ──────────────────────────────── */
+.pg{display:none;padding:12px 14px;}
+.pg.on{display:block;}
+.pg-title{font-size:17px;font-weight:700;color:var(--red);margin-bottom:12px;}
+
+/* ── CARD ───────────────────────────────── */
+.card{
+  background:var(--white);border-radius:14px;margin-bottom:10px;
+  overflow:hidden;border:1px solid var(--border);
+  border-left:4px solid var(--border);
+  box-shadow:var(--shadow);
+}
+.card.vencido{border-left-color:#ff4757;}
+.card.critico{border-left-color:#ff6b35;}
+.card.urgente{border-left-color:#ffa502;}
+.card.atencao{border-left-color:#2ed573;}
+.card.ok{border-left-color:#70a1ff;}
+.card-top{padding:11px 14px 8px;display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
+.card-nome{font-size:13px;font-weight:700;color:var(--text);line-height:1.3;flex:1;}
+.card-badge{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;padding:3px 8px;border-radius:20px;white-space:nowrap;flex-shrink:0;}
+.card-meta{padding:0 14px 8px;display:flex;flex-wrap:wrap;gap:6px;}
+.cm{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:3px;}
+.cm strong{color:var(--text);font-weight:600;}
+.card-acts{display:flex;gap:8px;padding:8px 14px;border-top:1px solid var(--border);background:#faf8f6;}
+.abtn{flex:1;padding:9px 0;border-radius:8px;font-size:11px;font-weight:700;border:none;cursor:pointer;font-family:var(--sans);text-transform:uppercase;letter-spacing:.04em;transition:opacity .1s;}
+.abtn:active{opacity:.75;}
+.ab-baixa{background:var(--red);color:#fff;}
+.ab-perda{background:var(--bg);color:var(--muted);border:1px solid var(--border);}
+
+/* ── KPI GRID ───────────────────────────── */
+.kpi-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;}
+.kpi{background:var(--white);border-radius:12px;padding:13px;border:1px solid var(--border);border-top:3px solid var(--border);}
+.kpi.r{border-top-color:#ff4757;}.kpi.o{border-top-color:#ff6b35;}
+.kpi.g{border-top-color:var(--green);}.kpi.b{border-top-color:var(--blue);}
+.kpi-l{font-size:9px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);font-weight:600;margin-bottom:3px;}
+.kpi-v{font-size:22px;font-weight:700;font-family:var(--mono);}
+.kpi-v.r{color:#ff4757;}.kpi-v.o{color:#ff6b35;}.kpi-v.g{color:var(--green);}.kpi-v.b{color:var(--blue);}
+.kpi-s{font-size:10px;color:var(--muted);margin-top:2px;}
+
+/* ── SECTION TITLE ──────────────────────── */
+.sec{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin:14px 0 8px;}
+
+/* ── BOTTOM NAV ─────────────────────────── */
+.bnav{
+  position:fixed;bottom:0;left:0;right:0;z-index:100;
+  background:var(--white);border-top:1px solid var(--border);
+  display:flex;padding-bottom:var(--safe-b);
+  box-shadow:0 -2px 12px rgba(0,0,0,.07);
+  min-height:var(--nav-h);
+}
+.ntab{
+  flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:7px 4px;cursor:pointer;border:none;background:none;
+  color:var(--muted);font-family:var(--sans);transition:color .15s;position:relative;
+}
+.ntab.on{color:var(--red);}
+.ntab-i{font-size:20px;line-height:1;}
+.ntab-l{font-size:9px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;margin-top:2px;}
+.nbadge{
+  position:absolute;top:4px;right:calc(50% - 20px);
+  background:#ff4757;color:#fff;font-size:9px;font-weight:700;
+  border-radius:20px;padding:1px 5px;min-width:16px;text-align:center;
+}
+
+/* ── SEARCH ─────────────────────────────── */
+.srch{
+  display:flex;align-items:center;gap:8px;background:var(--white);
+  border:1px solid var(--border);border-radius:10px;padding:9px 12px;
+  margin-bottom:12px;box-shadow:var(--shadow);
+}
+.srch input{flex:1;border:none;outline:none;font-size:14px;font-family:var(--sans);background:transparent;color:var(--text);}
+.srch input::placeholder{color:var(--muted);}
+.srch-ic{font-size:15px;color:var(--muted);}
+
+/* ── MODAL (bottom sheet) ───────────────── */
+.overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9000;
+  display:none;align-items:flex-end;justify-content:center;
+}
+.overlay.on{display:flex;}
+.sheet{
+  background:var(--white);border-radius:20px 20px 0 0;
+  width:100%;max-width:540px;max-height:92vh;overflow-y:auto;
+  padding-bottom:calc(var(--safe-b) + 8px);
+  animation:up .22s ease-out;
+}
+@keyframes up{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.sh-handle{width:40px;height:4px;background:var(--border2);border-radius:2px;margin:10px auto 0;}
+.sh-hdr{padding:12px 18px 14px;border-bottom:1px solid var(--border);}
+.sh-title{font-size:15px;font-weight:700;color:var(--red);}
+.sh-sub{font-size:11px;color:var(--muted);margin-top:2px;}
+.sh-body{padding:14px 18px;}
+.sh-foot{padding:10px 18px;border-top:1px solid var(--border);display:flex;gap:8px;}
+
+/* ── FIELD ──────────────────────────────── */
+.field{margin-bottom:11px;}
+.field label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);display:block;margin-bottom:4px;}
+.field input,.field select,.field textarea{
+  width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;
+  padding:11px 12px;font-size:15px;font-family:var(--sans);color:var(--text);outline:none;
+  transition:border-color .15s;
+}
+.field input:focus,.field select:focus{border-color:var(--red);background:var(--white);}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+
+/* ── BUTTONS ────────────────────────────── */
+.btn{display:flex;align-items:center;justify-content:center;gap:6px;padding:12px 20px;border-radius:10px;font-size:13px;font-weight:700;border:none;cursor:pointer;font-family:var(--sans);transition:opacity .15s;text-transform:uppercase;letter-spacing:.04em;}
+.btn:active{opacity:.75;}
+.btn-p{background:var(--red);color:#fff;flex:2;}
+.btn-n{background:var(--bg);color:var(--muted);border:1px solid var(--border);flex:1;}
+
+/* ── TIPO TABS ──────────────────────────── */
+.tipo-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;}
+.tipo-btn{background:var(--bg);border:2px solid var(--border);border-radius:8px;padding:8px 4px;font-size:11px;font-weight:600;color:var(--muted);cursor:pointer;text-align:center;transition:all .15s;line-height:1.4;}
+.tipo-btn.sel{border-color:var(--red);color:var(--red);background:var(--red3);}
+
+/* ── INFO BOX ───────────────────────────── */
+.ib{border-radius:8px;padding:10px 12px;font-size:12px;border:1px solid;margin-top:6px;}
+.ib-r{background:var(--red3);border-color:var(--red4);color:var(--red);}
+.ib-g{background:var(--green2);border-color:var(--green3);color:var(--green);}
+.ib-y{background:var(--yellow2);border-color:#d4a800;color:var(--yellow);}
+
+/* ── HIST ───────────────────────────────── */
+.hi{background:var(--white);border-radius:10px;padding:11px 14px;margin-bottom:8px;border:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:10px;}
+.hi-nome{font-size:13px;font-weight:600;}
+.hi-meta{font-size:11px;color:var(--muted);margin-top:2px;}
+.hi-val{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--red);white-space:nowrap;}
+
+/* ── LOGIN ──────────────────────────────── */
+.login-wrap{position:fixed;inset:0;background:var(--red);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;z-index:99999;}
+.login-wrap.hide{display:none;}
+.login-logo{font-size:52px;margin-bottom:8px;}
+.login-title{font-size:22px;font-weight:700;color:#fff;text-align:center;}
+.login-sub{font-size:12px;color:rgba(255,255,255,.7);text-align:center;margin:4px 0 28px;letter-spacing:.5px;}
+.login-box{background:#fff;border-radius:16px;padding:22px;width:100%;max-width:340px;}
+.lf{margin-bottom:12px;}
+.lf label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);display:block;margin-bottom:4px;}
+.lf input{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:15px;font-family:var(--sans);color:var(--text);outline:none;}
+.lf input:focus{border-color:var(--red);}
+#login-err{color:#c0392b;font-size:12px;margin-top:8px;text-align:center;min-height:16px;}
+.login-btn{width:100%;background:var(--red);color:#fff;border:none;border-radius:10px;padding:14px;font-size:15px;font-weight:700;font-family:var(--sans);cursor:pointer;margin-top:4px;transition:opacity .15s;}
+.login-btn:active{opacity:.8;}
+
+/* ── EMPTY ──────────────────────────────── */
+.empty{text-align:center;padding:40px 20px;}
+.empty-ic{font-size:44px;margin-bottom:10px;}
+.empty-t{font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px;}
+.empty-s{font-size:12px;color:var(--muted);}
+
+/* ── TOAST ──────────────────────────────── */
+.toast{
+  position:fixed;top:calc(var(--safe-t) + 70px);left:50%;transform:translateX(-50%);
+  background:#1a1a1a;color:#fff;padding:10px 18px;border-radius:10px;
+  font-size:12px;font-weight:600;z-index:99999;white-space:nowrap;
+  pointer-events:none;opacity:0;transition:opacity .2s;max-width:90vw;
+  text-overflow:ellipsis;overflow:hidden;
+}
+.toast.on{opacity:1;}
+
+/* ── LOADING ────────────────────────────── */
+.loading{text-align:center;padding:40px 20px;color:var(--muted);}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spinner{width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--red);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 12px;}
+
+/* ── PULL REFRESH ───────────────────────── */
+.pull-hint{text-align:center;padding:6px;font-size:11px;color:var(--muted);display:none;}
+</style>
+</head>
+<body>
+
+<!-- ══ LOGIN ═══════════════════════════════════════════════════ -->
+<div class="login-wrap" id="login-wrap">
+  <div class="login-logo">🥩</div>
+  <div class="login-title">ValidaStock</div>
+  <div class="login-sub">BOM BEEF · VALINHOS</div>
+  <div class="login-box">
+    <div class="lf"><label>Usuário</label><input id="lu" autocapitalize="none" autocomplete="username" inputmode="text"/></div>
+    <div class="lf"><label>Senha</label><input id="lp" type="password" autocomplete="current-password"/></div>
+    <div id="login-err"></div>
+    <button class="login-btn" onclick="doLogin()">Entrar</button>
+  </div>
+</div>
+
+<!-- ══ HEADER ══════════════════════════════════════════════════ -->
+<div class="hdr" id="hdr" style="display:none;">
+  <div class="hdr-l">
+    <div class="hdr-logo">🥩</div>
+    <div>
+      <div class="hdr-name">ValidaStock</div>
+      <div class="hdr-sub">Bom Beef · Valinhos</div>
+    </div>
+  </div>
+  <div class="hdr-r">
+    <button class="hdr-btn" onclick="refreshDados()" title="Atualizar">🔄</button>
+    <button class="hdr-btn" onclick="doLogout()" title="Sair">🚪</button>
+  </div>
+</div>
+
+<!-- ══ URG STRIP ═══════════════════════════════════════════════ -->
+<div class="urg-strip" id="urg-strip" style="display:none;">
+  <div class="up sel" data-f="" onclick="setFiltro(this,'')">
+    <div class="up-n" id="fc-t">—</div><div class="up-l">Todos</div>
+  </div>
+  <div class="up" data-f="vencido" onclick="setFiltro(this,'vencido')">
+    <div class="up-n" id="fc-v" style="color:#ff4757">—</div><div class="up-l">Vencidos</div>
+  </div>
+  <div class="up" data-f="critico" onclick="setFiltro(this,'critico')">
+    <div class="up-n" id="fc-c" style="color:#ff6b35">—</div><div class="up-l">Críticos</div>
+  </div>
+  <div class="up" data-f="urgente" onclick="setFiltro(this,'urgente')">
+    <div class="up-n" id="fc-u" style="color:#ffa502">—</div><div class="up-l">Urgentes</div>
+  </div>
+  <div class="up" data-f="atencao" onclick="setFiltro(this,'atencao')">
+    <div class="up-n" id="fc-a" style="color:#2ed573">—</div><div class="up-l">Atenção</div>
+  </div>
+  <div class="up" data-f="ok" onclick="setFiltro(this,'ok')">
+    <div class="up-n" id="fc-ok" style="color:#70a1ff">—</div><div class="up-l">OK</div>
+  </div>
+</div>
+
+<!-- ══ SCROLL AREA ═════════════════════════════════════════════ -->
+<div class="scroll" id="scroll">
+
+  <!-- DASHBOARD -->
+  <div class="pg on" id="pg-dash">
+    <div style="padding:2px 0 10px;">
+      <div style="font-size:17px;font-weight:700;" id="d-greeting">Olá!</div>
+      <div style="font-size:12px;color:var(--muted);" id="d-date"></div>
+    </div>
+    <div class="kpi-grid" id="d-kpis"></div>
+    <div class="sec">⚡ Requer Ação Imediata</div>
+    <div id="d-alertas"></div>
+  </div>
+
+  <!-- ESTOQUE -->
+  <div class="pg" id="pg-estoque">
+    <div class="srch">
+      <span class="srch-ic">🔍</span>
+      <input id="srch-est" placeholder="Buscar produto..." oninput="renderEst()"/>
+      <span id="srch-clear" style="font-size:14px;color:var(--muted);cursor:pointer;display:none;" onclick="document.getElementById('srch-est').value='';renderEst();">✕</span>
+    </div>
+    <div id="list-est"></div>
+  </div>
+
+  <!-- PERDAS -->
+  <div class="pg" id="pg-reg">
+    <div class="pg-title">➕ Registrar Perda</div>
+    <div class="srch">
+      <span class="srch-ic">🔍</span>
+      <input id="rp-srch" placeholder="Buscar produto do estoque..." oninput="rpSearch()"/>
+    </div>
+    <div id="rp-drop" style="background:var(--white);border:1px solid var(--border);border-radius:10px;margin-bottom:12px;display:none;overflow:hidden;max-height:260px;overflow-y:auto;"></div>
+    <div id="rp-form" style="display:none;">
+      <div id="rp-info" style="background:var(--white);border-radius:12px;padding:13px;border:1px solid var(--border);margin-bottom:12px;"></div>
+      <div class="field"><label>Tipo</label>
+        <div class="tipo-grid">
+          <div class="tipo-btn sel" onclick="selTipo(this,'vencimento')" data-t="vencimento">📅<br>Vencto</div>
+          <div class="tipo-btn" onclick="selTipo(this,'descarte')" data-t="descarte">🗑️<br>Descarte</div>
+          <div class="tipo-btn" onclick="selTipo(this,'perda')" data-t="perda">💢<br>Perda</div>
+          <div class="tipo-btn" onclick="selTipo(this,'outros')" data-t="outros">❓<br>Outros</div>
+        </div>
+      </div>
+      <div class="row2">
+        <div class="field"><label>Data</label><input type="date" id="rp-data"/></div>
+        <div class="field"><label>Qtd / Peso</label><input type="number" id="rp-qtd" step="0.001" min="0.001" inputmode="decimal" placeholder="0,000"/></div>
+      </div>
+      <div class="field"><label>Responsável</label>
+        <select id="rp-resp"><option value="">Selecione...</option></select>
+      </div>
+      <div class="field"><label>Observação</label><input id="rp-obs" placeholder="Opcional"/></div>
+      <button class="btn btn-p" style="width:100%;margin-top:4px;" onclick="confirmarPerda()">✔ Registrar Perda</button>
+    </div>
+    <div id="rp-empty" style="text-align:center;padding:28px 16px;color:var(--muted);font-size:13px;">Busque um produto acima para registrar a perda.</div>
+  </div>
+
+  <!-- HISTÓRICO -->
+  <div class="pg" id="pg-hist">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <div class="pg-title" style="margin-bottom:0;">📋 Histórico</div>
+      <select id="hist-mes" style="font-size:12px;padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--white);" onchange="loadHist()">
+        <option value="">Este mês</option>
+      </select>
+    </div>
+    <div class="kpi-grid" id="h-kpis" style="grid-template-columns:1fr 1fr 1fr;"></div>
+    <div id="list-hist"></div>
+  </div>
+
+</div><!-- /scroll -->
+
+<!-- ══ BOTTOM NAV ══════════════════════════════════════════════ -->
+<div class="bnav" id="bnav" style="display:none;">
+  <button class="ntab on" id="nt-dash" onclick="showPg('dash')">
+    <span class="ntab-i">📊</span><span class="ntab-l">Início</span>
+  </button>
+  <button class="ntab" id="nt-estoque" onclick="showPg('estoque')">
+    <span class="nbadge" id="badge-crit" style="display:none;">0</span>
+    <span class="ntab-i">📦</span><span class="ntab-l">Estoque</span>
+  </button>
+  <button class="ntab" id="nt-reg" onclick="showPg('reg')">
+    <span class="ntab-i">➕</span><span class="ntab-l">Perda</span>
+  </button>
+  <button class="ntab" id="nt-hist" onclick="showPg('hist')">
+    <span class="ntab-i">📋</span><span class="ntab-l">Histórico</span>
+  </button>
+</div>
+
+<!-- MODAL BAIXA -->
+<div class="overlay" id="mod-baixa" onclick="if(event.target===this)closeModal('mod-baixa')">
+  <div class="sheet">
+    <div class="sh-handle"></div>
+    <div class="sh-hdr">
+      <div class="sh-title">↓ Registrar Baixa</div>
+      <div class="sh-sub">Atualiza o estoque no banco de dados</div>
+    </div>
+    <div class="sh-body">
+      <div id="bx-info" style="background:var(--bg);border-radius:10px;padding:12px;margin-bottom:12px;"></div>
+      <div class="row2">
+        <div class="field"><label>Tipo</label>
+          <select id="bx-tipo" onchange="calcBxPrev()">
+            <option value="venda">Venda</option>
+            <option value="descarte">Descarte</option>
+            <option value="perda">Perda</option>
+            <option value="vencimento">Vencimento</option>
+            <option value="transferencia">Transferência</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Qtd <span id="bx-un" style="font-weight:400;text-transform:none;letter-spacing:0;"></span></label>
+          <input type="number" id="bx-qtd" step="0.001" min="0.001" inputmode="decimal" placeholder="0,000" oninput="calcBxPrev()" style="font-size:20px;text-align:center;font-family:var(--mono);"/>
+        </div>
+      </div>
+      <div class="field"><label>Responsável</label><select id="bx-resp"><option value="">Selecione...</option></select></div>
+      <div class="field"><label>Observação</label><input id="bx-obs" placeholder="Opcional"/></div>
+      <div id="bx-prev" style="display:none;"></div>
+    </div>
+    <div class="sh-foot">
+      <button class="btn btn-n" onclick="closeModal('mod-baixa')">Cancelar</button>
+      <button class="btn btn-p" id="bx-confirm-btn" onclick="confirmarBaixa()">✔ Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ═════════════════════════════════════════════════════════════════
+// CONFIG
+// ═════════════════════════════════════════════════════════════════
+const API = ''; // mesmo domínio — Railway serve o HTML e a API
+
+// ═════════════════════════════════════════════════════════════════
+// AUTH
+// ═════════════════════════════════════════════════════════════════
+let TOKEN = sessionStorage.getItem('vld_token') || '';
+let USER  = {};
+try { USER = JSON.parse(sessionStorage.getItem('vld_user') || '{}'); } catch {}
+
+async function doLogin() {
+  const u = document.getElementById('lu').value.trim();
+  const p = document.getElementById('lp').value;
+  const err = document.getElementById('login-err');
+  err.textContent = '';
+  if (!u || !p) { err.textContent = 'Preencha usuário e senha.'; return; }
+  const btn = document.querySelector('.login-btn');
+  btn.textContent = 'Entrando...'; btn.disabled = true;
+  try {
+    const r = await fetch('/auth/login', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ username: u, password: p })
+    });
+    const d = await r.json();
+    if (!r.ok || !d.token) throw new Error(d.erro || d.message || 'Credenciais inválidas');
+    TOKEN = d.token;
+    USER  = d.usuario || {};
+    sessionStorage.setItem('vld_token', TOKEN);
+    sessionStorage.setItem('vld_user', JSON.stringify(USER));
+    iniciarApp();
+  } catch(e) {
+    err.textContent = e.message;
+  } finally {
+    btn.textContent = 'Entrar'; btn.disabled = false;
+  }
+}
+document.addEventListener('keydown', e => { if(e.key==='Enter' && document.getElementById('login-wrap').style.display!=='none') doLogin(); });
+
+function doLogout() {
+  sessionStorage.clear(); TOKEN=''; USER={};
+  document.getElementById('login-wrap').classList.remove('hide');
+  document.getElementById('hdr').style.display='none';
+  document.getElementById('bnav').style.display='none';
+  document.getElementById('urg-strip').style.display='none';
+  toast('Sessão encerrada');
+}
+
+// ═════════════════════════════════════════════════════════════════
+// API HELPER
+// ═════════════════════════════════════════════════════════════════
+async function api(path, opts={}) {
+  const r = await fetch('/api/validade' + path, {
+    ...opts,
+    headers: { 'Authorization': 'Bearer ' + TOKEN, 'Content-Type': 'application/json', ...(opts.headers||{}) },
+    body: opts.body ? JSON.stringify(opts.body) : undefined,
+  });
+  if (r.status === 401) { doLogout(); throw new Error('Sessão expirada'); }
+  const d = await r.json();
+  if (!d.ok) throw new Error(d.erro || 'Erro na API');
+  return d;
+}
+
+// ═════════════════════════════════════════════════════════════════
+// ESTADO LOCAL (cache em memória — evita recarregar a cada interação)
+// ═════════════════════════════════════════════════════════════════
+let estoque   = [];
+let perdas    = [];
+let funcs     = [];
+let kpis      = {};
+let filtroUrg = '';
+let bxLoteId  = null;
+let rpLoteId  = null;
+let rpTipo    = 'vencimento';
+
+// ═════════════════════════════════════════════════════════════════
+// URG HELPERS
+// ═════════════════════════════════════════════════════════════════
+const URG = {
+  vencido:  {col:'#ff4757',bg:'#fff0f1',label:'VENCIDO', emoji:'💀'},
+  critico:  {col:'#ff6b35',bg:'#fff4f0',label:'CRÍTICO', emoji:'🔴'},
+  urgente:  {col:'#ffa502',bg:'#fffbf0',label:'URGENTE', emoji:'🟠'},
+  atencao:  {col:'#2ed573',bg:'#f0fff7',label:'ATENÇÃO', emoji:'🟡'},
+  ok:       {col:'#70a1ff',bg:'#f0f4ff',label:'OK',      emoji:'✅'},
+  'sem-data':{col:'#aaa',  bg:'#f5f5f5',label:'SEM DATA',emoji:'⬜'},
+};
+const URG_ORD = ['vencido','critico','urgente','atencao','ok','sem-data'];
+
+function dLabel(dias, status) {
+  if (dias === null) return 'Sem data';
+  if (dias < 0)  return `Vencido há ${Math.abs(dias)}d`;
+  if (dias === 0) return 'Vence HOJE';
+  return `${dias} dia${dias===1?'':'s'}`;
+}
+
+const fmtD = s => { if(!s)return'—'; const p=String(s).split('T')[0].split('-'); return `${p[2]}/${p[1]}/${p[0]}`; };
+const fmt  = v => new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(v||0);
+const fmtN = (v,d=3) => (v||0).toFixed(d).replace('.',',');
+
+// ═════════════════════════════════════════════════════════════════
+// INICIAR APP
+// ═════════════════════════════════════════════════════════════════
+function iniciarApp() {
+  document.getElementById('login-wrap').classList.add('hide');
+  document.getElementById('hdr').style.display='flex';
+  document.getElementById('bnav').style.display='flex';
+  refreshDados();
+}
+
+async function refreshDados() {
+  toast('🔄 Atualizando...');
+  try {
+    const [rEst, rKpi, rFun] = await Promise.all([
+      api('/estoque'),
+      api('/kpis'),
+      api('/funcionarios'),
+    ]);
+    estoque = rEst.data;
+    kpis    = rKpi.data;
+    funcs   = rFun.data;
+    atualizarStrip();
+    renderPgAtual();
+    toast('✅ Atualizado');
+  } catch(e) {
+    toast('❌ ' + e.message, 'err');
+  }
+}
+
+// ═════════════════════════════════════════════════════════════════
+// NAVEGAÇÃO
+// ═════════════════════════════════════════════════════════════════
+let pgAtual = 'dash';
+const pgsComStrip = ['estoque'];
+
+function showPg(p) {
+  document.querySelectorAll('.pg').forEach(el => el.classList.remove('on'));
+  document.querySelectorAll('.ntab').forEach(el => el.classList.remove('on'));
+  document.getElementById('pg-'+p).classList.add('on');
+  const nt = document.getElementById('nt-'+p);
+  if (nt) nt.classList.add('on');
+  document.getElementById('urg-strip').style.display = pgsComStrip.includes(p) ? 'flex' : 'none';
+  pgAtual = p;
+  document.getElementById('scroll').scrollTop = 0;
+  if (p==='dash')    renderDash();
+  if (p==='estoque') renderEst();
+  if (p==='reg')     initRpForm();
+  if (p==='hist')    loadHist();
+}
+
+function renderPgAtual() {
+  if (pgAtual==='dash')    renderDash();
+  if (pgAtual==='estoque') renderEst();
+  if (pgAtual==='hist')    loadHist();
+}
+
+// ═════════════════════════════════════════════════════════════════
+// FILTRO URGÊNCIA
+// ═════════════════════════════════════════════════════════════════
+function setFiltro(el, f) {
+  document.querySelectorAll('.up').forEach(p => p.classList.remove('sel'));
+  el.classList.add('sel');
+  filtroUrg = f;
+  renderEst();
+}
+
+function atualizarStrip() {
+  const c = {vencido:0,critico:0,urgente:0,atencao:0,ok:0,'sem-data':0};
+  estoque.forEach(x => c[x.status]++);
+  document.getElementById('fc-t').textContent  = estoque.length;
+  document.getElementById('fc-v').textContent  = c.vencido;
+  document.getElementById('fc-c').textContent  = c.critico;
+  document.getElementById('fc-u').textContent  = c.urgente;
+  document.getElementById('fc-a').textContent  = c.atencao;
+  document.getElementById('fc-ok').textContent = c.ok;
+  const nCrit = c.vencido + c.critico;
+  const badge = document.getElementById('badge-crit');
+  badge.style.display = nCrit > 0 ? 'block' : 'none';
+  badge.textContent = nCrit;
+}
+
+// ═════════════════════════════════════════════════════════════════
+// DASHBOARD
+// ═════════════════════════════════════════════════════════════════
+function renderDash() {
+  const h = new Date().getHours();
+  document.getElementById('d-greeting').textContent = (h<12?'Bom dia':(h<18?'Boa tarde':'Boa noite')) + '! 👋';
+  const d = new Date();
+  const dias = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
+  document.getElementById('d-date').textContent = `${dias[d.getDay()]}, ${d.toLocaleDateString('pt-BR',{day:'numeric',month:'long'})}`;
+
+  document.getElementById('d-kpis').innerHTML = `
+    <div class="kpi r"><div class="kpi-l">Vencidos</div><div class="kpi-v r">${kpis.vencidos||0}</div><div class="kpi-s">Retirar agora</div></div>
+    <div class="kpi o"><div class="kpi-l">Críticos</div><div class="kpi-v o">${kpis.criticos||0}</div><div class="kpi-s">Até 7 dias</div></div>
+    <div class="kpi g"><div class="kpi-l">Em estoque</div><div class="kpi-v g">${estoque.length}</div><div class="kpi-s">Produtos ativos</div></div>
+    <div class="kpi b"><div class="kpi-l">Perdas/mês</div><div class="kpi-v b">${kpis.qtd_perdas_mes||0}</div><div class="kpi-s">${fmt(kpis.valor_perdas_mes||0)}</div></div>`;
+
+  const alertas = estoque
+    .filter(x => ['vencido','critico','urgente'].includes(x.status))
+    .sort((a,b)=>(a.dias??999)-(b.dias??999))
+    .slice(0,5);
+
+  if (!alertas.length) {
+    document.getElementById('d-alertas').innerHTML = `<div class="empty"><div class="empty-ic">✅</div><div class="empty-t">Tudo sob controle!</div><div class="empty-s">Nenhum produto crítico.</div></div>`;
+    return;
+  }
+  document.getElementById('d-alertas').innerHTML = alertas.map(x => mkCard(x)).join('') +
+    (estoque.filter(x=>['vencido','critico','urgente'].includes(x.status)).length > 5
+      ? `<button class="btn btn-n" style="width:100%;margin-top:4px;" onclick="showPg('estoque');setFiltro(document.querySelector('[data-f=vencido]'),'vencido')">Ver todos →</button>` : '');
+}
+
+// ═════════════════════════════════════════════════════════════════
+// CARD DE PRODUTO
+// ═════════════════════════════════════════════════════════════════
+function mkCard(x) {
+  const urg = URG[x.status] || URG.ok;
+  return `
+    <div class="card ${x.status}">
+      <div class="card-top">
+        <div class="card-nome">${x.nome}</div>
+        <div class="card-badge" style="background:${urg.bg};color:${urg.col};">${urg.emoji} ${urg.label}</div>
+      </div>
+      <div class="card-meta">
+        <span class="cm">📅 <strong>${fmtD(x.data_validade)}</strong></span>
+        <span class="cm" style="color:${urg.col};font-weight:600;">${dLabel(x.dias, x.status)}</span>
+        <span class="cm">📍 ${x.local||'—'}</span>
+        <span class="cm">📊 <strong>${fmtN(x.quantidade_atual,2)} ${x.unidade||'KG'}</strong></span>
+        ${x.custo_unitario>0 ? `<span class="cm">💰 ${fmt(x.custo_unitario)}/${x.unidade||'KG'}</span>` : ''}
+        ${x.lote ? `<span class="cm">🏷️ Lote: ${x.lote}</span>` : ''}
+      </div>
+      <div class="card-acts">
+        <button class="abtn ab-baixa" onclick="abrirBaixa(${x.id})">↓ Baixa</button>
+        <button class="abtn ab-perda" onclick="abrirPerdaLote(${x.id})">📝 Perda</button>
+      </div>
+    </div>`;
+}
+
+// ═════════════════════════════════════════════════════════════════
+// ESTOQUE
+// ═════════════════════════════════════════════════════════════════
+function renderEst() {
+  const q = (document.getElementById('srch-est')?.value||'').toLowerCase().trim();
+  const cl = document.getElementById('srch-clear');
+  if (cl) cl.style.display = q ? 'block' : 'none';
+
+  let lista = [...estoque];
+  if (filtroUrg) lista = lista.filter(x => x.status === filtroUrg);
+  if (q) lista = lista.filter(x => x.nome.toLowerCase().includes(q) || (x.codigo_produto||'').toLowerCase().includes(q));
+  lista.sort((a,b) => URG_ORD.indexOf(a.status) - URG_ORD.indexOf(b.status));
+
+  if (!lista.length) {
+    document.getElementById('list-est').innerHTML = `<div class="empty"><div class="empty-ic">📦</div><div class="empty-t">${estoque.length?'Nenhum resultado':'Estoque vazio'}</div><div class="empty-s">${estoque.length?'Tente outro filtro.':'Importe produtos pelo sistema desktop.'}</div></div>`;
+    return;
+  }
+  document.getElementById('list-est').innerHTML = lista.map(x => mkCard(x)).join('');
+}
+
+// ═════════════════════════════════════════════════════════════════
+// MODAL BAIXA
+// ═════════════════════════════════════════════════════════════════
+function abrirBaixa(id) {
+  const x = estoque.find(l=>l.id===id); if(!x) return;
+  bxLoteId = id;
+  const urg = URG[x.status];
+  document.getElementById('bx-info').innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+      <div><div style="font-weight:700;font-size:14px;line-height:1.3;">${x.nome}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px;">${x.codigo_produto} · ${x.local||'—'}</div></div>
+      <div style="text-align:right;flex-shrink:0;">
+        <div style="font-size:9px;font-weight:700;padding:3px 8px;border-radius:20px;background:${urg.bg};color:${urg.col};">${urg.emoji} ${urg.label}</div>
+        <div style="font-family:var(--mono);font-size:16px;font-weight:700;margin-top:5px;">${fmtN(x.quantidade_atual,2)} ${x.unidade||'KG'}</div>
+        <div style="font-size:11px;color:var(--muted);">Vence: ${fmtD(x.data_validade)}</div>
+      </div>
+    </div>`;
+  document.getElementById('bx-qtd').value = '';
+  document.getElementById('bx-obs').value = '';
+  document.getElementById('bx-tipo').value = x.status==='vencido'?'vencimento':'venda';
+  document.getElementById('bx-un').textContent = x.unidade||'KG';
+  document.getElementById('bx-prev').style.display = 'none';
+  const sel = document.getElementById('bx-resp');
+  sel.innerHTML = '<option value="">Selecione...</option>' + funcs.map(f=>`<option value="${f.nome||f.id}">${f.nome}</option>`).join('');
+  document.getElementById('mod-baixa').classList.add('on');
+  setTimeout(()=>document.getElementById('bx-qtd').focus(),300);
+}
+
+function calcBxPrev() {
+  const x = estoque.find(l=>l.id===bxLoteId); if(!x) return;
+  const qtd = parseFloat(document.getElementById('bx-qtd').value)||0;
+  const prev = document.getElementById('bx-prev');
+  if (!qtd) { prev.style.display='none'; return; }
+  const nova = x.quantidade_atual - qtd;
+  prev.style.display='block';
+  if (nova < 0) { prev.className='ib ib-r'; prev.innerHTML='⚠️ Quantidade maior que o estoque!'; return; }
+  prev.className='ib '+(nova===0?'ib-g':'ib-y');
+  prev.innerHTML = nova===0
+    ? `✅ Estoque zerado — lote será encerrado`
+    : `Restará: <strong>${fmtN(Math.max(0,nova),2)} ${x.unidade||'KG'}</strong>${x.custo_unitario>0?' · '+fmt(qtd*x.custo_unitario):''}`;
+}
+
+async function confirmarBaixa() {
+  const x = estoque.find(l=>l.id===bxLoteId); if(!x) return;
+  const qtd  = parseFloat(document.getElementById('bx-qtd').value)||0;
+  if (qtd<=0) { toast('Informe a quantidade','err'); return; }
+  if (qtd > x.quantidade_atual) { toast('Quantidade maior que o estoque!','err'); return; }
+  const tipo = document.getElementById('bx-tipo').value;
+  const resp = document.getElementById('bx-resp').value;
+  const obs  = document.getElementById('bx-obs').value.trim();
+  const btn  = document.getElementById('bx-confirm-btn');
+  btn.textContent='Salvando...'; btn.disabled=true;
+  try {
+    await api(`/baixa/${bxLoteId}`, { method:'POST', body:{quantidade:qtd,tipo,funcionario_responsavel:resp,observacao:obs} });
+    closeModal('mod-baixa');
+    toast('✅ Baixa registrada com sucesso!');
+    await refreshDados();
+  } catch(e) {
+    toast('❌ ' + e.message, 'err');
+  } finally {
+    btn.textContent='✔ Confirmar'; btn.disabled=false;
+  }
+}
+
+// ═════════════════════════════════════════════════════════════════
+// REGISTRAR PERDA
+// ═════════════════════════════════════════════════════════════════
+function initRpForm() {
+  rpLoteId = null; rpTipo = 'vencimento';
+  document.getElementById('rp-srch').value = '';
+  document.getElementById('rp-drop').style.display='none';
+  document.getElementById('rp-form').style.display='none';
+  document.getElementById('rp-empty').style.display='block';
+  document.getElementById('rp-data').value = new Date().toISOString().split('T')[0];
+  document.querySelectorAll('.tipo-btn').forEach(b=>b.classList.remove('sel'));
+  document.querySelector('[data-t=vencimento]')?.classList.add('sel');
+  const sel = document.getElementById('rp-resp');
+  sel.innerHTML = '<option value="">Selecione...</option>' + funcs.map(f=>`<option value="${f.nome||f.id}">${f.nome}</option>`).join('');
+}
+
+function rpSearch() {
+  const q = (document.getElementById('rp-srch').value||'').toLowerCase().trim();
+  const drop = document.getElementById('rp-drop');
+  if (q.length < 1) { drop.style.display='none'; return; }
+  const res = estoque.filter(x => x.nome.toLowerCase().includes(q)||(x.codigo_produto||'').toLowerCase().includes(q)).slice(0,8);
+  if (!res.length) {
+    drop.innerHTML='<div style="padding:14px;text-align:center;color:var(--muted);font-size:12px;">Nenhum produto encontrado</div>';
+    drop.style.display='block'; return;
+  }
+  const urg_ord = ['vencido','critico','urgente','atencao','ok','sem-data'];
+  res.sort((a,b)=>urg_ord.indexOf(a.status)-urg_ord.indexOf(b.status));
+  drop.innerHTML = res.map(x => {
+    const urg = URG[x.status];
+    return `<div onclick="selRpProd(${x.id})" style="padding:11px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;cursor:pointer;">
+      <div style="width:8px;height:8px;border-radius:50%;background:${urg.col};flex-shrink:0;"></div>
+      <div style="flex:1;"><div style="font-weight:600;font-size:13px;">${x.nome}</div>
+      <div style="font-size:11px;color:var(--muted);">${x.local||'—'} · ${fmtN(x.quantidade_atual,2)} ${x.unidade} · ${fmtD(x.data_validade)}</div></div>
+    </div>`;
+  }).join('');
+  drop.style.display='block';
+}
+
+function abrirPerdaLote(id) { showPg('reg'); setTimeout(()=>selRpProd(id),150); }
+
+function selRpProd(id) {
+  const x = estoque.find(l=>l.id===id); if(!x) return;
+  rpLoteId = id;
+  const urg = URG[x.status];
+  document.getElementById('rp-info').innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+      <div><div style="font-weight:700;font-size:14px;">${x.nome}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px;">${x.local||'—'} · Vence: ${fmtD(x.data_validade)}</div></div>
+      <div style="font-size:9px;font-weight:700;padding:3px 8px;border-radius:20px;background:${urg.bg};color:${urg.col};">${urg.emoji} ${urg.label}</div>
+    </div>
+    <div style="font-family:var(--mono);font-size:17px;font-weight:700;color:var(--red);margin-top:8px;">${fmtN(x.quantidade_atual,2)} ${x.unidade} disponíveis</div>`;
+  document.getElementById('rp-srch').value = x.nome;
+  document.getElementById('rp-drop').style.display='none';
+  document.getElementById('rp-form').style.display='block';
+  document.getElementById('rp-empty').style.display='none';
+  document.getElementById('rp-qtd').value='';
+  document.getElementById('rp-qtd').focus();
+}
+
+function selTipo(el, t) {
+  document.querySelectorAll('.tipo-btn').forEach(b=>b.classList.remove('sel'));
+  el.classList.add('sel'); rpTipo = t;
+}
+
+async function confirmarPerda() {
+  if (!rpLoteId) { toast('Selecione um produto','err'); return; }
+  const x = estoque.find(l=>l.id===rpLoteId); if(!x) return;
+  const qtd  = parseFloat(document.getElementById('rp-qtd').value)||0;
+  if (qtd<=0) { toast('Informe o peso/quantidade','err'); return; }
+  if (qtd > x.quantidade_atual) { toast('Quantidade maior que o estoque!','err'); return; }
+  const resp = document.getElementById('rp-resp').value;
+  const obs  = document.getElementById('rp-obs')?.value?.trim()||'';
+  try {
+    await api(`/baixa/${rpLoteId}`, { method:'POST', body:{quantidade:qtd,tipo:rpTipo,funcionario_responsavel:resp,observacao:obs} });
+    toast(`✅ Perda de ${fmtN(qtd,2)} ${x.unidade} registrada`);
+    await refreshDados();
+    initRpForm();
+  } catch(e) {
+    toast('❌ ' + e.message, 'err');
+  }
+}
+
+// ═════════════════════════════════════════════════════════════════
+// HISTÓRICO
+// ═════════════════════════════════════════════════════════════════
+async function loadHist() {
+  const mes = document.getElementById('hist-mes').value;
+  document.getElementById('list-hist').innerHTML = '<div class="loading"><div class="spinner"></div>Carregando...</div>';
+  try {
+    const r = await api('/perdas' + (mes ? '?mes='+mes : ''));
+    perdas = r.data;
+    populateHistMes();
+    renderHist();
+  } catch(e) {
+    document.getElementById('list-hist').innerHTML = `<div class="empty"><div class="empty-ic">❌</div><div class="empty-t">Erro ao carregar</div><div class="empty-s">${e.message}</div></div>`;
+  }
+}
+
+function populateHistMes() {
+  const sel = document.getElementById('hist-mes');
+  const cur = sel.value;
+  const meses = [...new Set(perdas.map(l => (l.data_perda||'').substring(0,7)))].sort().reverse();
+  sel.innerHTML = '<option value="">Este mês</option>' + meses.map(m => {
+    const [y,mo] = m.split('-');
+    return `<option value="${m}" ${m===cur?'selected':''}>${mo}/${y}</option>`;
+  }).join('');
+}
+
+function renderHist() {
+  const total = perdas.reduce((s,l)=>s+(parseFloat(l.valor_estimado)||0),0);
+  const qtd   = perdas.reduce((s,l)=>s+(parseFloat(l.quantidade)||0),0);
+  document.getElementById('h-kpis').innerHTML = `
+    <div class="kpi r"><div class="kpi-l">Registros</div><div class="kpi-v r">${perdas.length}</div></div>
+    <div class="kpi o"><div class="kpi-l">Qtd/Kg</div><div class="kpi-v o">${fmtN(qtd,1)}</div></div>
+    <div class="kpi b"><div class="kpi-l">Valor</div><div class="kpi-v b" style="font-size:14px;">${fmt(total)}</div></div>`;
+  if (!perdas.length) {
+    document.getElementById('list-hist').innerHTML = `<div class="empty"><div class="empty-ic">📋</div><div class="empty-t">Nenhum registro</div><div class="empty-s">Sem perdas no período.</div></div>`;
+    return;
+  }
+  document.getElementById('list-hist').innerHTML = perdas.map(l => `
+    <div class="hi">
+      <div style="flex:1;min-width:0;">
+        <div class="hi-nome">${l.nome_produto||l.codigo_produto||'—'}</div>
+        <div class="hi-meta">${fmtD(l.data_perda)} · ${l.funcionario_responsavel||'—'} · ${l.tipo_motivo||l.motivo||'—'}</div>
+        ${l.observacao?`<div style="font-size:11px;color:var(--muted);margin-top:1px;">💬 ${l.observacao}</div>`:''}
+      </div>
+      <div style="text-align:right;flex-shrink:0;">
+        <div class="hi-val">${fmt(l.valor_estimado||0)}</div>
+        <div style="font-size:10px;color:var(--muted);">${fmtN(l.quantidade,3)} ${l.unidade||'un'}</div>
+      </div>
+    </div>`).join('');
+}
+
+// ═════════════════════════════════════════════════════════════════
+// UTILITÁRIOS
+// ═════════════════════════════════════════════════════════════════
+function closeModal(id) { document.getElementById(id).classList.remove('on'); }
+
+let toastT;
+function toast(msg, tipo='ok') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.style.background = tipo==='err'?'#c0392b':tipo==='warn'?'#c76b00':'#1a1a1a';
+  el.classList.add('on');
+  clearTimeout(toastT);
+  toastT = setTimeout(()=>el.classList.remove('on'),3000);
+}
+
+// ═════════════════════════════════════════════════════════════════
+// INIT
+// ═════════════════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', () => {
+  // Saudação corrigida (bug no template literal)
+  document.getElementById('d-greeting');
+
+  // Evita zoom duplo toque iOS
+  let lastTap=0;
+  document.addEventListener('touchend',e=>{
+    const now=Date.now();
+    if(now-lastTap<300)e.preventDefault();
+    lastTap=now;
+  },{passive:false});
+
+  // Enter no login
+  document.getElementById('lp').addEventListener('keydown',e=>{ if(e.key==='Enter')doLogin(); });
+
+  // Se já tem token, tenta direto
+  if (TOKEN) iniciarApp(); else document.getElementById('login-wrap').classList.remove('hide');
+});
+</script>
+
+<script>
+// Registra Service Worker para funcionar como PWA
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/validade-sw.js')
+      .then(reg => console.log('[SW] Registrado:', reg.scope))
+      .catch(err => console.warn('[SW] Falha:', err));
+  });
+}
+</script>
+</body>
+</html>

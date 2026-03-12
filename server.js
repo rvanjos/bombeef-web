@@ -49,6 +49,7 @@ app.use('/api/kits',         require('./routes/kits')(pool));
 app.use('/api/boletos',      require('./routes/boletos')(pool));
 app.use('/api/fornecedores', require('./routes/fornecedores')(pool));
 app.use('/api/dashboard',    require('./routes/dashboard')(pool));
+app.use('/api/validade',     require('./routes/validade')(pool));
 
 // ── Health check ──────────────────────────────────────────────
 app.get('/health', (_req, res) => res.json({ status: 'ok', ts: new Date().toISOString() }));
