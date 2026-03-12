@@ -1833,6 +1833,7 @@ async function sincronizarBanco() {
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
         body: JSON.stringify({
           codigo_produto:      p.cProd,
+          nome_produto:        p.xProd || '',
           data_validade:       p.dVal   || null,
           quantidade_atual:    parseFloat(p.qAtual) || 0,
           custo_unitario:      parseFloat(p.valorUnit) || null,
