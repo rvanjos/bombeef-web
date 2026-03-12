@@ -2924,18 +2924,44 @@ window.addEventListener('message', e => {
 });
 try { window.parent.postMessage({ type: 'bb_request_auth' }, '*'); } catch(e){}
 
-function _apiViaPortal(method, path, body) {
-  return new Promise((resolve) => {
-    const reqId = ++_reqCounter;
-    _pendingReqs[reqId] = resolve;
-    try {
-      window.parent.postMessage({ type: 'bb_api_request', reqId, method, path, body }, '*');
-    } catch(e) { resolve({ ok: false, erro: 'sem portal' }); }
-    // Timeout de 5s
-    setTimeout(() => {
-      if (reqId in _pendingReqs) { delete _pendingReqs[reqId]; resolve({ ok: false, erro: 'timeout' }); }
-    }, 5000);
-  });
+function _getBaseUrl() {
+  // Se estiver em blob ou sem origem, usa a origem do referrer ou location do parent
+  try {
+    const parentOrigin = window.parent.location.origin;
+    if (parentOrigin && parentOrigin !== 'null') return parentOrigin;
+  } catch(e) {}
+  // Tenta extrair do blob URL: blob:https://host/uuid
+  const src = (document.location.href || '');
+  const m = src.match(/^blob:(https?:\/\/[^/]+)/);
+  if (m) return m[1];
+  // Fallback: mesma origem
+  return window.location.origin !== 'null' ? window.location.origin : '';
+}
+
+async function _apiViaPortal(method, path, body) {
+  const token = _getToken();
+  const base  = _getBaseUrl();
+  const url   = base ? base + path : path;
+  try {
+    const r = await fetch(url, {
+      method: method || 'GET',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: body ? JSON.stringify(body) : undefined
+    });
+    return await r.json();
+  } catch(e) {
+    // Fallback: tenta via postMessage do portal
+    return new Promise((resolve) => {
+      const reqId = ++_reqCounter;
+      _pendingReqs[reqId] = resolve;
+      try {
+        window.parent.postMessage({ type: 'bb_api_request', reqId, method, path, body }, '*');
+      } catch(ex) { resolve({ ok: false, erro: 'sem portal' }); }
+      setTimeout(() => {
+        if (reqId in _pendingReqs) { delete _pendingReqs[reqId]; resolve({ ok: false, erro: 'timeout' }); }
+      }, 5000);
+    });
+  }
 }
 
 function _getToken(){
