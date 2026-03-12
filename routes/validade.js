@@ -13,13 +13,13 @@
  */
 
 const express = require('express');
-const { requireAuth } = require('../middleware/auth');
+const autenticar = require('../middleware/auth');
 
 module.exports = function (pool) {
   const r = express.Router();
 
   // Todos os endpoints exigem autenticação
-  r.use(requireAuth);
+  r.use(autenticar);
 
   // ── helpers ────────────────────────────────────────────────────────────────
   function calcStatus(dataValidade) {
