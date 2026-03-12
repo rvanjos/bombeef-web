@@ -1811,7 +1811,9 @@ async function sincronizarBanco() {
   const prods = getEstq();
   if (!prods.length) { toast('Nenhum produto no estoque para sincronizar.', 'warn'); return; }
 
-  const token = sessionStorage.getItem('bb_token') || localStorage.getItem('bb_token');
+  const token = window.BB_TOKEN
+    || sessionStorage.getItem('bb_token')
+    || localStorage.getItem('bb_token');
   if (!token) {
     toast('⚠️ Sessão não encontrada. Acesse pelo Portal principal.', 'warn');
     return;
