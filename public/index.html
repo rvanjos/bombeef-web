@@ -598,13 +598,34 @@ function toast(msg, color) {
 }
 
 // ── Responde pedidos de token dos iframes ──────────────────────────────────
-window.addEventListener('message', e => {
-  if (e.data && e.data.type === 'bb_request_auth') {
-    const frame = document.getElementById('emb-frame');
+window.addEventListener('message', async e => {
+  if (!e.data || !e.data.type) return;
+  const frame = document.getElementById('emb-frame');
+
+  // Iframe pedindo o token
+  if (e.data.type === 'bb_request_auth') {
     if (frame && frame.contentWindow) {
-      try {
-        frame.contentWindow.postMessage({ type: 'bb_auth', token: TOKEN, user: CUR_USER }, '*');
-      } catch(err) {}
+      try { frame.contentWindow.postMessage({ type: 'bb_auth', token: TOKEN, user: CUR_USER }, '*'); } catch(err) {}
+    }
+  }
+
+  // Iframe pedindo para salvar dados no banco (portal faz a chamada com o token)
+  if (e.data.type === 'bb_api_request' && TOKEN) {
+    const { reqId, method, path, body } = e.data;
+    try {
+      const resp = await fetch(path, {
+        method: method || 'GET',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + TOKEN },
+        body: body ? JSON.stringify(body) : undefined
+      });
+      const data = await resp.json();
+      if (frame && frame.contentWindow) {
+        frame.contentWindow.postMessage({ type: 'bb_api_response', reqId, data }, '*');
+      }
+    } catch(err) {
+      if (frame && frame.contentWindow) {
+        frame.contentWindow.postMessage({ type: 'bb_api_response', reqId, data: { ok: false, erro: err.message } }, '*');
+      }
     }
   }
 });
