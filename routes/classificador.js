@@ -2,11 +2,11 @@
 // Salva e carrega sessões do Classificador de Extrato no PostgreSQL
 'use strict';
 const { Router } = require('express');
-const autenticar  = require('../middleware/auth');
+const autenticar = require('../middleware/auth');
 
 module.exports = (pool) => {
   const r = Router();
-  r.use(autenticar);
+  r.use(autenticar());
 
   // ── Garante que as tabelas existem ────────────────────────────────────────
   pool.query(`
@@ -51,7 +51,7 @@ module.exports = (pool) => {
         WHERE usuario_id = $1
         ORDER BY atualizado_em DESC
         LIMIT 20
-      `, [req.user.id]);
+      `, [req.usuario.id]);
       res.json({ ok: true, sessoes: rows });
     } catch (e) {
       res.status(500).json({ ok: false, erro: e.message });
@@ -68,7 +68,7 @@ module.exports = (pool) => {
         WHERE usuario_id = $1
         ORDER BY atualizado_em DESC
         LIMIT 1
-      `, [req.user.id]);
+      `, [req.usuario.id]);
       if (!rows.length) return res.json({ ok: true, sessao: null });
       res.json({ ok: true, sessao: rows[0] });
     } catch (e) {
@@ -107,7 +107,7 @@ module.exports = (pool) => {
           SET dados_json = $1, mes_ref = $2, descricao = $3, atualizado_em = NOW()
           WHERE id = $4 AND usuario_id = $5
           RETURNING id
-        `, [dadosJson, mes_ref || null, descricao || null, sessao_id, req.user.id]);
+        `, [dadosJson, mes_ref || null, descricao || null, sessao_id, req.usuario.id]);
         id = rows[0]?.id;
       } else {
         // Cria nova sessão
@@ -115,7 +115,7 @@ module.exports = (pool) => {
           INSERT INTO classificador_sessoes (usuario_id, mes_ref, descricao, dados_json)
           VALUES ($1, $2, $3, $4)
           RETURNING id
-        `, [req.user.id, mes_ref || null, descricao || null, dadosJson]);
+        `, [req.usuario.id, mes_ref || null, descricao || null, dadosJson]);
         id = rows[0].id;
       }
 
@@ -131,7 +131,7 @@ module.exports = (pool) => {
     try {
       await pool.query(
         'DELETE FROM classificador_sessoes WHERE id = $1 AND usuario_id = $2',
-        [req.params.id, req.user.id]
+        [req.params.id, req.usuario.id]
       );
       res.json({ ok: true });
     } catch (e) {
