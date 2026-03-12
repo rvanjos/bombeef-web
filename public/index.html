@@ -472,8 +472,8 @@ function openSys(id) {
   fetch(s.file + '?v=' + Date.now())
     .then(r => { if (!r.ok) throw new Error('fetch failed'); return r.text(); })
     .then(html => {
-      // Injeta variável global com token antes de qualquer script
-      const injected = html.replace('<script>', `<script>
+      // Injeta token no <head> para garantir disponibilidade em qualquer script
+      const injected = html.replace('</head>', `<script>
 window.BB_TOKEN = ${JSON.stringify(TOKEN)};
 window.BB_USER  = ${JSON.stringify(CUR_USER)};
 window.BB_API   = async (method, path, body) => {
@@ -481,7 +481,7 @@ window.BB_API   = async (method, path, body) => {
   const r = await fetch(path,{method,headers:h,body:body?JSON.stringify(body):undefined});
   return r.json();
 };
-`);
+</script></head>`);
       const blob = new Blob([injected], { type: 'text/html' });
       const url  = URL.createObjectURL(blob);
       if (frame._blobUrl) URL.revokeObjectURL(frame._blobUrl);
