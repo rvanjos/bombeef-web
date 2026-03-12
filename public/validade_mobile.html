@@ -247,7 +247,7 @@ body{font-family:var(--sans);color:var(--text);display:flex;flex-direction:colum
   <div class="login-title">ValidaStock</div>
   <div class="login-sub">BOM BEEF · VALINHOS</div>
   <div class="login-box">
-    <div class="lf"><label>Usuário</label><input id="lu" autocapitalize="none" autocomplete="username" inputmode="text"/></div>
+    <div class="lf"><label>E-mail</label><input id="lu" type="email" autocapitalize="none" autocomplete="email" inputmode="email"/></div>
     <div class="lf"><label>Senha</label><input id="lp" type="password" autocomplete="current-password"/></div>
     <div id="login-err"></div>
     <button class="login-btn" onclick="doLogin()">Entrar</button>
@@ -439,7 +439,7 @@ async function doLogin() {
   try {
     const r = await fetch('/auth/login', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ username: u, password: p })
+      body: JSON.stringify({ email: u, senha: p })
     });
     const d = await r.json();
     if (!r.ok || !d.token) throw new Error(d.erro || d.message || 'Credenciais inválidas');
