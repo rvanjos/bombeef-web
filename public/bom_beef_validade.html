@@ -504,6 +504,7 @@ tr:last-child td{border-bottom:none}
     <div style="display:flex;gap:8px">
       <button class="btn btn-neutral btn-sm" onclick="go('import')">⬆️ Importar</button>
       <button class="btn btn-primary btn-sm" onclick="openAddProd()">＋ Produto</button>
+      <button class="btn btn-sm" style="background:#1a7a4a;color:#fff;" onclick="sincronizarBanco()" id="btn-sync">☁️ Sincronizar</button>
     </div>
   </div>
 
@@ -1804,8 +1805,52 @@ function forceSyncDash() {
 }
 
 // ══════════════════════════════════════════════════════════
-// INIT
+// SINCRONIZAR LOCALSTORAGE → BANCO (lotes_estoque)
 // ══════════════════════════════════════════════════════════
+async function sincronizarBanco() {
+  const prods = getEstq();
+  if (!prods.length) { toast('Nenhum produto no estoque para sincronizar.', 'warn'); return; }
+
+  const token = sessionStorage.getItem('bb_token') || localStorage.getItem('bb_token');
+  if (!token) {
+    toast('⚠️ Sessão não encontrada. Acesse pelo Portal principal.', 'warn');
+    return;
+  }
+
+  const btn = document.getElementById('btn-sync');
+  btn.textContent = '⏳ Sincronizando...';
+  btn.disabled = true;
+
+  let ok = 0, err = 0;
+
+  for (const p of prods) {
+    // Só sincroniza produtos com código vinculado ao catálogo
+    if (!p.cProd) { err++; continue; }
+
+    try {
+      const resp = await fetch('/api/validade/sincronizar-lote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({
+          codigo_produto:      p.cProd,
+          data_validade:       p.dVal   || null,
+          quantidade_atual:    parseFloat(p.qAtual) || 0,
+          custo_unitario:      parseFloat(p.valorUnit) || null,
+          local_armazenamento: p.local  || null,
+          unidade:             p.uCom   || 'KG',
+        })
+      });
+      const d = await resp.json();
+      if (d.ok) ok++; else err++;
+    } catch { err++; }
+  }
+
+  btn.textContent = '☁️ Sincronizar';
+  btn.disabled = false;
+  toast(`✅ Sincronizado: ${ok} produtos enviados ao banco${err ? ` · ${err} sem código (ignorados)` : ''}.`);
+}
+
+
 (function(){
   const d=new Date();
   document.getElementById('hk-today').textContent=d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'});
