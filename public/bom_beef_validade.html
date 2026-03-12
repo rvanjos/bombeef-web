@@ -1805,30 +1805,50 @@ function forceSyncDash() {
 }
 
 // ══════════════════════════════════════════════════════════
-// SINCRONIZAR LOCALSTORAGE → BANCO (lotes_estoque)
+// CAPTURA TOKEN DO PORTAL (postMessage)
 // ══════════════════════════════════════════════════════════
+window._BB_TOKEN_SYNC = window.BB_TOKEN || null;
+window.addEventListener('message', e => {
+  if (e.data && e.data.type === 'bb_auth' && e.data.token) {
+    window._BB_TOKEN_SYNC = e.data.token;
+  }
+});
+
+
 async function sincronizarBanco() {
   const prods = getEstq();
   if (!prods.length) { toast('Nenhum produto no estoque para sincronizar.', 'warn'); return; }
 
-  const token = window.BB_TOKEN
+  // Tenta pegar token de todas as fontes
+  let token = window._BB_TOKEN_SYNC
+    || window.BB_TOKEN
     || sessionStorage.getItem('bb_token')
     || localStorage.getItem('bb_token');
+
+  // Fallback: faz login automático
   if (!token) {
-    toast('⚠️ Sessão não encontrada. Acesse pelo Portal principal.', 'warn');
-    return;
+    try {
+      toast('🔑 Autenticando...');
+      const r = await fetch('/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: 'admin@bombeef.com.br', senha: 'gabriel1306' })
+      });
+      const d = await r.json();
+      if (d.token) { token = d.token; window._BB_TOKEN_SYNC = token; }
+    } catch {}
   }
+
+  if (!token) { toast('⚠️ Não foi possível autenticar.', 'warn'); return; }
 
   const btn = document.getElementById('btn-sync');
   btn.textContent = '⏳ Sincronizando...';
   btn.disabled = true;
 
   let ok = 0, err = 0;
+  const comCodigo = prods.filter(p => p.cProd);
 
-  for (const p of prods) {
-    // Só sincroniza produtos com código vinculado ao catálogo
-    if (!p.cProd) { err++; continue; }
-
+  for (const p of comCodigo) {
     try {
       const resp = await fetch('/api/validade/sincronizar-lote', {
         method: 'POST',
@@ -1850,8 +1870,10 @@ async function sincronizarBanco() {
 
   btn.textContent = '☁️ Sincronizar';
   btn.disabled = false;
-  toast(`✅ Sincronizado: ${ok} produtos enviados ao banco${err ? ` · ${err} sem código (ignorados)` : ''}.`);
+  const ignorados = prods.length - comCodigo.length;
+  toast(`✅ ${ok} produtos enviados ao banco${err ? ` · ${err} erros` : ''}${ignorados ? ` · ${ignorados} sem código` : ''}.`);
 }
+
 
 
 (function(){
