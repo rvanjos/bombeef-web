@@ -286,9 +286,9 @@ module.exports = function (pool) {
     try {
       // Garante que o produto existe em produtos_mestre (upsert simples)
       await pool.query(`
-        INSERT INTO produtos_mestre (codigo_produto, descricao_produto, unidade, controla_validade, perecivel, origem_dados)
-        VALUES ($1, $2, $3, true, true, 'MANUAL')
-        ON CONFLICT (codigo_produto) DO NOTHING
+        INSERT INTO produtos_mestre (codigo_produto, descricao_produto, unidade, controla_validade)
+        VALUES ($1, $2, $3, true)
+        ON CONFLICT (codigo_produto) DO UPDATE SET controla_validade = true
       `, [codigo_produto, nome_produto || codigo_produto, unidade || 'KG']);
 
       // Verifica se já existe lote ativo para esse produto com essa validade
