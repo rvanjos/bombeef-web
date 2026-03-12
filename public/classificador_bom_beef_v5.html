@@ -3096,24 +3096,37 @@ window.addEventListener('message', e => {
   if(e.data && e.data.type === 'bb_auth' && e.data.token)
     window._BB_TOKEN_SYNC = e.data.token;
 });
+// Pede o token ao portal pai ativamente
+try { window.parent.postMessage({ type: 'bb_request_auth' }, '*'); } catch(e){}
 
 // ── INICIALIZAÇÃO: tenta carregar última sessão do banco ───────────────────
 (async function inicializar(){
+  // Aguarda até 800ms pelo token do portal
+  await new Promise(resolve => {
+    if(window._BB_TOKEN_SYNC || window.BB_TOKEN) return resolve();
+    let waited = 0;
+    const check = setInterval(() => {
+      waited += 50;
+      if(window._BB_TOKEN_SYNC || window.BB_TOKEN || waited >= 800) {
+        clearInterval(check); resolve();
+      }
+    }, 50);
+  });
+
   const token = window.BB_TOKEN || window._BB_TOKEN_SYNC
     || sessionStorage.getItem('bb_token') || localStorage.getItem('bb_token') || '';
-  if(!token) return; // sem token, fica na tela de upload
+  if(!token) return;
 
   try {
     const resp = await fetch('/api/classificador/ultima', {
       headers: { 'Authorization': 'Bearer ' + token }
     });
     const d = await resp.json();
-    if(!d.ok || !d.sessao) return; // sem sessão salva, fica no upload
+    if(!d.ok || !d.sessao) return;
 
     const s = d.sessao.dados_json;
     if(!s.transactions || !s.transactions.length) return;
 
-    // Restaura estado
     _sessaoId = d.sessao.id;
     transactions = s.transactions;
     employees = s.employees || [];
@@ -3127,7 +3140,6 @@ window.addEventListener('message', e => {
     }
     if(s.supplierCatMemory) Object.assign(supplierCatMemory, s.supplierCatMemory);
 
-    // Vai direto para o dashboard
     document.getElementById("dropzone").style.display = "none";
     document.getElementById("app-content").style.display = "block";
     populateFilters(); updateAll(); updateFileBanner();
@@ -3136,7 +3148,7 @@ window.addEventListener('message', e => {
       ? new Date(d.sessao.atualizado_em).toLocaleString('pt-BR') : '';
     toast(`☁️ Sessão restaurada do banco — ${transactions.length} lançamentos${saved?' · '+saved:''}`);
   } catch(e) {
-    // falha silenciosa — fica na tela de upload
+    // falha silenciosa
   }
 })();
 

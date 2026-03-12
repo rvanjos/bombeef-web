@@ -1813,6 +1813,8 @@ window.addEventListener('message', e => {
     window._BB_TOKEN_SYNC = e.data.token;
   }
 });
+// Pede o token ao portal pai ativamente
+try { window.parent.postMessage({ type: 'bb_request_auth' }, '*'); } catch(e){}
 
 
 async function sincronizarBanco() {

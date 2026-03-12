@@ -597,6 +597,18 @@ function toast(msg, color) {
   setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity .3s'; setTimeout(() => t.remove(), 300); }, 3000);
 }
 
+// ── Responde pedidos de token dos iframes ──────────────────────────────────
+window.addEventListener('message', e => {
+  if (e.data && e.data.type === 'bb_request_auth') {
+    const frame = document.getElementById('emb-frame');
+    if (frame && frame.contentWindow) {
+      try {
+        frame.contentWindow.postMessage({ type: 'bb_auth', token: TOKEN, user: CUR_USER }, '*');
+      } catch(err) {}
+    }
+  }
+});
+
 // ── Init ──────────────────────────────────────────────────────
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeEmb(); });
 
