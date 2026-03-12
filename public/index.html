@@ -463,21 +463,19 @@ function openSys(id) {
   document.getElementById('emb-title').textContent = s.icon + ' ' + s.title;
   const frame = document.getElementById('emb-frame');
 
-  // Injeta token no localStorage do iframe após carregamento
-  // Carrega direto pelo arquivo — sem blob — para URLs relativas funcionarem
+  // Carrega direto — sem blob — para URLs relativas e CORS funcionarem
   frame.onload = () => {
     try {
       frame.contentWindow.postMessage({ type: 'bb_auth', token: TOKEN, user: CUR_USER }, '*');
     } catch (e) {}
   };
-  if (frame._blobUrl) { URL.revokeObjectURL(frame._blobUrl); frame._blobUrl = null; }
   frame.src = s.file + '?v=' + Date.now();
   showScr('scr-embedded');
 }
 
 function closeEmb() {
   const frame = document.getElementById('emb-frame');
-  if (frame._blobUrl) { URL.revokeObjectURL(frame._blobUrl); frame._blobUrl = null; }
+
   frame.src = 'about:blank';
   showScr('scr-portal');
   setTimeout(() => loadDashboard(), 600);
