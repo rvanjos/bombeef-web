@@ -888,6 +888,8 @@ function finishLoad(){
   document.getElementById("app-content").style.display="block";
   updateFileBanner();
   hideLoading();
+  // Auto-salva no banco silenciosamente
+  salvarNoBanco(true);
 }
 
 function updateFileBanner(){
@@ -2909,8 +2911,58 @@ function showLoading(msg){document.getElementById("loading-text").textContent=ms
 function hideLoading(){document.getElementById("loading-overlay").classList.remove("show");}
 
 // ─── Save / Load Session ───────────────────────────────────────────────────────
+// ── ID da sessão atual no banco ────────────────────────────────────────────
+let _sessaoId = null;
+
+function _getToken(){
+  return window.BB_TOKEN || window._BB_TOKEN_SYNC
+    || sessionStorage.getItem('bb_token') || localStorage.getItem('bb_token') || '';
+}
+
+async function salvarNoBanco(silent=false){
+  const token = _getToken();
+  if(!token) return null; // sem autenticação, ignora silenciosamente
+
+  const customCats={};
+  for(const[gk,g] of Object.entries(DRE_CATEGORIES)){
+    const c=g.subs.filter(s=>!DEFAULT_CATS.has(s));
+    if(c.length) customCats[gk]=c;
+  }
+  const dados = {
+    transactions, employees, loadedFiles, globalId, customCats,
+    supplierCatMemory: Object.fromEntries(Object.entries(supplierCatMemory).slice(0,500))
+  };
+
+  // Detecta mês de referência pelo mês mais frequente nas transações
+  let mes_ref = null;
+  if(transactions.length){
+    const meses = {};
+    transactions.forEach(t=>{ if(t.mes) meses[t.mes]=(meses[t.mes]||0)+1; });
+    const top = Object.entries(meses).sort((a,b)=>b[1]-a[1])[0];
+    if(top) mes_ref = top[0].split('/').reverse().join('-'); // "03/2026" → "2026-03"
+  }
+
+  try {
+    const resp = await fetch('/api/classificador/salvar', {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json', 'Authorization':'Bearer '+token },
+      body: JSON.stringify({ sessao_id: _sessaoId, mes_ref, dados })
+    });
+    const d = await resp.json();
+    if(d.ok){ _sessaoId = d.sessao_id; if(!silent) toast(`☁️ Salvo no banco — ${transactions.length} lançamentos`); }
+    else if(!silent) toast('⚠️ Erro ao salvar no banco: '+d.erro,'warn');
+    return d.ok ? d.sessao_id : null;
+  } catch(e){
+    if(!silent) toast('⚠️ Sem conexão com servidor','warn');
+    return null;
+  }
+}
+
 function saveSession(){
   if(!transactions.length){alert('Nenhum lançamento para salvar.');return;}
+  // Salva no banco
+  salvarNoBanco();
+  // Também mantém download local como backup
   const customCats={};
   for(const[gk,g] of Object.entries(DRE_CATEGORIES)){
     const c=g.subs.filter(s=>!DEFAULT_CATS.has(s));
@@ -2929,7 +2981,7 @@ function saveSession(){
   a.download=`sessao_bom_beef_${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}.json`;
   document.body.appendChild(a);a.click();
   setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},200);
-  toast(`💾 Sessão salva — ${transactions.length} lançamentos, ${employees.length} funcionários`);
+  toast(`💾 Sessão salva localmente — ${transactions.length} lançamentos`);
 }
 
 function loadSession(file){
@@ -3038,7 +3090,53 @@ function syncEmployeesToBB() {
   if (el) { el.textContent = '✅ ' + bbFuncs.length + ' sincronizados'; setTimeout(()=>{el.textContent='';},4000); }
   alert('✅ ' + bbFuncs.length + ' funcionário(s) sincronizados!\n\nDados disponíveis em:\n→ ValidaStock (bb_f)\n→ Sistema Bom Beef (bb4_f)\n→ Gestão de NF-e');
 }
+// ── CAPTURA TOKEN DO PORTAL ────────────────────────────────────────────────
+window._BB_TOKEN_SYNC = window.BB_TOKEN || null;
+window.addEventListener('message', e => {
+  if(e.data && e.data.type === 'bb_auth' && e.data.token)
+    window._BB_TOKEN_SYNC = e.data.token;
+});
 
-</script>
-</body>
-</html>
+// ── INICIALIZAÇÃO: tenta carregar última sessão do banco ───────────────────
+(async function inicializar(){
+  const token = window.BB_TOKEN || window._BB_TOKEN_SYNC
+    || sessionStorage.getItem('bb_token') || localStorage.getItem('bb_token') || '';
+  if(!token) return; // sem token, fica na tela de upload
+
+  try {
+    const resp = await fetch('/api/classificador/ultima', {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    const d = await resp.json();
+    if(!d.ok || !d.sessao) return; // sem sessão salva, fica no upload
+
+    const s = d.sessao.dados_json;
+    if(!s.transactions || !s.transactions.length) return;
+
+    // Restaura estado
+    _sessaoId = d.sessao.id;
+    transactions = s.transactions;
+    employees = s.employees || [];
+    loadedFiles = s.loadedFiles || [];
+    globalId = s.globalId || transactions.length;
+    if(s.customCats){
+      for(const[gk,cats] of Object.entries(s.customCats)){
+        if(!DRE_CATEGORIES[gk]) continue;
+        cats.forEach(cat => { if(!DRE_CATEGORIES[gk].subs.includes(cat)) DRE_CATEGORIES[gk].subs.push(cat); });
+      }
+    }
+    if(s.supplierCatMemory) Object.assign(supplierCatMemory, s.supplierCatMemory);
+
+    // Vai direto para o dashboard
+    document.getElementById("dropzone").style.display = "none";
+    document.getElementById("app-content").style.display = "block";
+    populateFilters(); updateAll(); updateFileBanner();
+
+    const saved = d.sessao.atualizado_em
+      ? new Date(d.sessao.atualizado_em).toLocaleString('pt-BR') : '';
+    toast(`☁️ Sessão restaurada do banco — ${transactions.length} lançamentos${saved?' · '+saved:''}`);
+  } catch(e) {
+    // falha silenciosa — fica na tela de upload
+  }
+})();
+
