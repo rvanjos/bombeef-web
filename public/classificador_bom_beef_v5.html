@@ -3105,8 +3105,13 @@ function syncEmployeesToBB() {
 
 // ─── Inicialização: restaura sessão do banco ao abrir ─────────────────────────
 (async function inicializar(){
-  // Aguarda até 300ms pelo portal estabelecer o canal postMessage
-  await new Promise(resolve => setTimeout(resolve, 300));
+  // Aguarda o portal enviar o token via postMessage (até 3s)
+  let tentativas = 0;
+  while (!window._BB_TOKEN_SYNC && !window.BB_TOKEN && tentativas < 15) {
+    await new Promise(resolve => setTimeout(resolve, 200));
+    tentativas++;
+  }
+  if (!window._BB_TOKEN_SYNC && !window.BB_TOKEN) return; // sem token, abandona
 
   const d = await _apiViaPortal('GET', '/api/classificador/ultima');
   if(!d.ok || !d.sessao) return;
