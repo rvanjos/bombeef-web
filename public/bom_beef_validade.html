@@ -1834,7 +1834,7 @@ async function sincronizarBanco() {
 
   for (const p of comCodigo) {
     try {
-      const resp = await fetch('/api/validade/sincronizar-lote', {
+      const resp = await fetch(window.location.origin + '/api/validade/sincronizar-lote', {
         method: 'POST',
         credentials: 'include',  // envia cookie de sessão automaticamente
         headers: {
