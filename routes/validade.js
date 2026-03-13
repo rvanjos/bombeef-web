@@ -278,67 +278,95 @@ module.exports = function (pool) {
     }
   });
 
-  // ── POST /sincronizar-lote ────────────────────────────────────────────────
-  r.post('/sincronizar-lote', async (req, res) => {
-    const { codigo_produto, nome_produto, data_validade, quantidade_atual, custo_unitario, local_armazenamento, unidade } = req.body;
-    if (!codigo_produto) return res.status(400).json({ ok: false, erro: 'codigo_produto obrigatório' });
+ // ── POST /sincronizar-lote ────────────────────────────────────────────────
+r.post('/sincronizar-lote', async (req, res) => {
 
-    try {
-      // Garante que o produto existe em produtos_mestre (upsert simples)
+  const {
+    codigo_produto,
+    nome_produto,
+    data_validade,
+    quantidade_atual,
+    custo_unitario,
+    local_armazenamento,
+    unidade
+  } = req.body;
+
+  if (!codigo_produto) {
+    return res.status(400).json({
+      ok:false,
+      erro:'codigo_produto obrigatório'
+    });
+  }
+
+  try {
+
+    // garante produto no cadastro
+    await pool.query(`
+      INSERT INTO produtos_mestre
+      (codigo_produto, descricao_produto, unidade, controla_validade)
+      VALUES ($1,$2,$3,true)
+      ON CONFLICT (codigo_produto)
+      DO UPDATE SET controla_validade = true
+    `,[
+      codigo_produto,
+      nome_produto || codigo_produto,
+      unidade || 'KG'
+    ]);
+
+    // procura lote existente
+    const { rows:existing } = await pool.query(`
+      SELECT id
+      FROM lotes_estoque
+      WHERE codigo_produto=$1
+      AND ativo=true
+      AND (data_validade=$2 OR ($2 IS NULL AND data_validade IS NULL))
+      LIMIT 1
+    `,[codigo_produto, data_validade || null]);
+
+    if(existing.length){
+
       await pool.query(`
-        INSERT INTO produtos_mestre (codigo_produto, descricao_produto, unidade, controla_validade)
-        VALUES ($1, $2, $3, true)
-        ON CONFLICT (codigo_produto) DO UPDATE SET controla_validade = true
-      `, [codigo_produto, nome_produto || codigo_produto, unidade || 'KG']);
+        UPDATE lotes_estoque
+        SET quantidade_atual=$1,
+            custo_unitario=COALESCE($2,custo_unitario),
+            local_armazenamento=COALESCE($3,local_armazenamento),
+            atualizado_em=NOW()
+        WHERE id=$4
+      `,[
+        quantidade_atual || 0,
+        custo_unitario || null,
+        local_armazenamento || null,
+        existing[0].id
+      ]);
 
-      // Verifica se já existe lote ativo para esse produto com essa validade
-      const { rows: existing } = await pool.query(`
-        SELECT id FROM lotes_estoque 
-        WHERE codigo_produto = $1 AND ativo = true
-        AND (data_validade = $2 OR (data_validade IS NULL AND $2 IS NULL))
-        LIMIT 1
-      `, [codigo_produto, data_validade || null]);
+    }else{
 
-      if (existing.length) {
-        await pool.query(`
-          UPDATE lotes_estoque 
-          SET quantidade_atual = $1, custo_unitario = COALESCE($2, custo_unitario),
-              local_armazenamento = COALESCE($3, local_armazenamento), atualizado_em = NOW()
-          WHERE id = $4
-        `, [quantidade_atual || 0, custo_unitario || null, local_armazenamento || null, existing[0].id]);
-      } else {
-        await pool.query(`
-          INSERT INTO lotes_estoque
-            (codigo_produto, data_validade, quantidade, quantidade_atual, custo_unitario, local_armazenamento, usuario_lancamento)
-          VALUES ($1, $2, $3, $3, $4, $5, $6)
-        `, [codigo_produto, data_validade || null, quantidade_atual || 0,
-            custo_unitario || null, local_armazenamento || null, req.user.id]);
-      }
+      await pool.query(`
+        INSERT INTO lotes_estoque
+        (codigo_produto,data_validade,quantidade,quantidade_atual,custo_unitario,local_armazenamento,usuario_lancamento)
+        VALUES ($1,$2,$3,$3,$4,$5,$6)
+      `,[
+        codigo_produto,
+        data_validade || null,
+        quantidade_atual || 0,
+        custo_unitario || null,
+        local_armazenamento || null,
+        req.user.id
+      ]);
 
-      res.json({ ok: true });
-    } catch (e) {
-      console.error('[validade/sincronizar-lote]', e.message);
-      res.status(500).json({ ok: false, erro: e.message });
     }
-  });
 
+    return res.status(200).json({ ok:true });
 
-  r.get('/produtos-search', async (req, res) => {
-    try {
-      const { q = '' } = req.query;
-      const { rows } = await pool.query(`
-        SELECT codigo_produto, descricao_produto, descricao_reduzida, unidade, preco_custo
-        FROM produtos_mestre
-        WHERE ativo = true AND controla_validade = true
-          AND (descricao_produto ILIKE $1 OR codigo_produto ILIKE $1)
-        ORDER BY descricao_produto ASC
-        LIMIT 20
-      `, [`%${q}%`]);
-      res.json({ ok: true, data: rows });
-    } catch (e) {
-      res.status(500).json({ ok: false, erro: e.message });
-    }
-  });
+  } catch(e){
 
-  return r;
-};
+    console.error('[validade/sincronizar-lote]', e);
+
+    return res.status(500).json({
+      ok:false,
+      erro:e.message
+    });
+
+  }
+
+});
