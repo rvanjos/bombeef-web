@@ -25,14 +25,35 @@ pool.connect()
 // ── App ───────────────────────────────────────────────────────
 const app = express();
 
+const allowedOrigins = [
+  process.env.FRONTEND_URL,
+  process.env.APP_URL,
+  'https://bombeef-web-production.up.railway.app',
+].filter(Boolean);
+
+const corsOptions = {
+  origin(origin, callback) {
+    // Permite chamadas sem Origin (Postman, curl, healthchecks internos, apps instalados)
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    return callback(new Error(`Origem não permitida por CORS: ${origin}`));
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  optionsSuccessStatus: 204,
+};
+
 app.use(helmet({
   contentSecurityPolicy: false, // desativado para facilitar iframes dos sub-módulos
   crossOriginEmbedderPolicy: false,
 }));
-app.use(cors({
-  origin: process.env.FRONTEND_URL || '*',
-  credentials: true,
-}));
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
