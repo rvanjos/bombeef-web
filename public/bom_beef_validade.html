@@ -1139,37 +1139,29 @@ tr:last-child td{border-bottom:none}
 <div class="page" id="page-config-func">
   <div class="pg-hdr">
     <div>
-      <div class="pg-title">Configuração de Funcionárias</div>
-      <div class="pg-sub">Limites de retirada e cadastro de funcionárias</div>
+      <div class="pg-title">Bônus de Funcionárias</div>
+      <div class="pg-sub">Configure o limite de bônus (a preço de custo) para cada funcionária — nomes vêm do Classificador</div>
+    </div>
+    <div>
+      <button class="btn btn-neutral btn-sm" onclick="loadConfigFunc()">🔄 Recarregar do Classificador</button>
     </div>
   </div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-    <div>
-      <div style="background:var(--white);border-radius:10px;box-shadow:var(--shadow);padding:18px;margin-bottom:14px">
-        <div style="font-size:11px;color:var(--red);text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin-bottom:14px">➕ Adicionar Funcionária</div>
-        <div class="fg" style="margin-bottom:10px">
-          <label>Nome</label>
-          <input id="cf-nome" placeholder="Nome completo" style="padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-family:'DM Sans',sans-serif;font-size:13px;width:100%"/>
-        </div>
-        <div class="fg" style="margin-bottom:10px">
-          <label>Limite mensal a preço de custo (R$)</label>
-          <input type="number" id="cf-limite-custo" placeholder="Ex: 150" step="0.01" min="0" style="padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-family:'DM Sans',sans-serif;font-size:13px;width:100%"/>
-          <div class="hint">Valor máximo que ela pode retirar a preço de custo por mês</div>
-        </div>
-        <div class="fg" style="margin-bottom:14px">
-          <label>Equivalente em preço de venda (R$) <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted)">— informativo</span></label>
-          <input type="number" id="cf-limite-venda" placeholder="Ex: 300" step="0.01" min="0" style="padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-family:'DM Sans',sans-serif;font-size:13px;width:100%"/>
-          <div class="hint">Quanto esse limite representa se fosse no preço de venda</div>
-        </div>
-        <button class="btn btn-primary" style="width:100%" onclick="salvarFuncionaria()">💾 Salvar Funcionária</button>
-      </div>
+  <div class="info-box ib-blue" style="margin-bottom:14px">
+    ℹ️ Os nomes das funcionárias são sincronizados automaticamente do <strong>Classificador de Extrato (bb_f)</strong>. Aqui você configura apenas o <strong>valor do bônus mensal</strong> que cada uma tem direito a retirar a preço de custo.
+  </div>
+  <div style="background:var(--white);border-radius:10px;box-shadow:var(--shadow);overflow:hidden">
+    <div style="padding:12px 16px;border-bottom:1px solid var(--border);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted)">
+      Funcionárias ativas no Classificador
     </div>
-    <div>
-      <div style="background:var(--white);border-radius:10px;box-shadow:var(--shadow);padding:18px">
-        <div style="font-size:11px;color:var(--red);text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin-bottom:12px">👥 Funcionárias Cadastradas</div>
-        <div id="cf-lista"></div>
-      </div>
+    <div id="cf-lista"></div>
+    <div id="cf-vazio" style="display:none;text-align:center;padding:32px;color:var(--muted)">
+      <div style="font-size:28px;margin-bottom:8px">👥</div>
+      <div style="font-weight:600;margin-bottom:4px">Nenhum funcionário carregado</div>
+      <div style="font-size:12px">Sincronize via Classificador de Extrato para carregar os nomes.</div>
     </div>
+  </div>
+  <div style="display:flex;justify-content:flex-end;margin-top:14px">
+    <button class="btn btn-primary" onclick="saveConfigFunc()">💾 Salvar Configurações</button>
   </div>
 </div>
 
@@ -1309,7 +1301,7 @@ tr:last-child td{border-bottom:none}
         <select id="bx-resp"><option value="">Selecione...</option></select>
       </div>
     </div>
-    <div class="fg" style="margin-bottom:12px"><label>Quantidade *</label>
+    <div class="fg" id="bx-qtd-row" style="margin-bottom:12px"><label>Quantidade *</label>
       <div style="display:flex;gap:6px;align-items:center">
         <input type="number" id="bx-qtd" placeholder="0" step="0.001" min="0" style="flex:1" oninput="calcBxPrev()"/>
         <span id="bx-un-lbl" style="font-size:12px;color:var(--muted)">UN</span>
@@ -1319,7 +1311,7 @@ tr:last-child td{border-bottom:none}
     <div class="fg"><label>Obs</label><textarea id="bx-obs" style="min-height:44px"></textarea></div>
     <div class="modal-btns">
       <button class="btn btn-neutral" onclick="closeModal('modal-baixa')">Cancelar</button>
-      <button class="btn btn-primary" onclick="confirmBaixa()">✔ Confirmar</button>
+      <button class="btn btn-primary" id="bx-confirm-btn" onclick="confirmBaixa()">✔ Confirmar</button>
     </div>
   </div>
 </div>
@@ -1654,7 +1646,7 @@ function renderDash() {
         <div style="font-size:10px;color:var(--muted);margin-top:4px">${fmtD(x.dVal)}</div>
         ${x.acaoAnteVencer ? `<div style="font-size:10px;color:${borderCol};margin-top:4px;font-style:italic">→ ${x.acaoAnteVencer}</div>` : ''}
         <div class="crit-actions">
-          <button class="act-btn act-baixa" onclick="openBaixa('${x.id}')">↓ Baixa</button>
+          <button class="act-btn ${x.qAtual<=0?'act-cfg':'act-baixa'}" onclick="openBaixa('${x.id}')" title="${x.qAtual<=0?'Remover da lista':'Registrar baixa'}">${x.qAtual<=0?'↓ Saída':'↓ Baixa'}</button>
           <button class="act-btn act-edit" onclick="editProd('${x.id}')">✎ Editar</button>
           <button class="act-btn" style="background:#fff0f0;color:var(--red)" onclick="rpFromProd('${x.id}')">📉 Perda</button>
         </div>
@@ -1703,7 +1695,7 @@ function renderEst() {
       <td style="font-size:11px;max-width:140px;overflow:hidden;text-overflow:ellipsis;color:${u==='vencido'?'var(--red)':u==='critico'?'#8b0000':'inherit'}">${x.acaoAnteVencer||'—'}</td>
       <td style="font-size:11px;color:var(--muted)">${x.resultado||'—'}</td>
       <td><div class="action-btns">
-        <button class="act-btn act-baixa" onclick="openBaixa('${x.id}')">↓</button>
+        <button class="act-btn ${x.qAtual<=0?'act-cfg':'act-baixa'}" onclick="openBaixa('${x.id}')" title="${x.qAtual<=0?'Remover da lista':'Registrar baixa'}">${x.qAtual<=0?'↓ Saída':'↓'}</button>
         <button class="act-btn act-edit" onclick="editProd('${x.id}')">✎</button>
         <button class="act-btn act-cfg" onclick="openCrit('${x.id}')">⚙</button>
         <button class="act-btn act-del" onclick="delProd('${x.id}')">✕</button>
@@ -1766,7 +1758,7 @@ function renderAlertas() {
             <td><span class="local-badge">${x.local||'—'}</span></td>
             <td style="font-size:11px;max-width:180px;overflow:hidden;text-overflow:ellipsis">${x.acaoAnteVencer||'—'}</td>
             <td><div class="action-btns">
-              <button class="act-btn act-baixa" onclick="openBaixa('${x.id}')">↓ Baixa</button>
+              <button class="act-btn ${x.qAtual<=0?'act-cfg':'act-baixa'}" onclick="openBaixa('${x.id}')" title="${x.qAtual<=0?'Remover da lista':'Registrar baixa'}">${x.qAtual<=0?'↓ Saída':'↓ Baixa'}</button>
               <button class="act-btn act-edit" onclick="editProd('${x.id}')">✎</button>
               <button class="act-btn" style="background:#fff0f0;color:var(--red);font-size:10px;font-weight:700;padding:4px 8px;border:none;border-radius:5px;cursor:pointer" onclick="rpFromProd('${x.id}')">📉 Perda</button>
             </div></td>
@@ -1860,37 +1852,79 @@ let bxId = null;
 function openBaixa(id) {
   const x = getEstq().find(p=>p.id===id); if (!x) return; bxId=id;
   const u = urgOf(x.dVal,x.customDias);
+  const semEstoque = x.qAtual <= 0;
+
   document.getElementById('bx-info').innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center">
-      <div><div style="font-weight:700;font-size:13px">${x.xProd}</div>
-        <div style="font-size:11px;color:var(--muted)">${x.cProd||'Sem código'} · ${x.local||'—'}</div></div>
-      <div style="text-align:right">${bdgU(u)}<div style="font-weight:700;margin-top:4px">${fmtN(x.qAtual,2)} ${x.uCom||'UN'}</div><div style="font-size:11px;color:var(--muted)">Vence: ${fmtD(x.dVal)}</div></div>
-    </div>`;
+      <div>
+        <div style="font-weight:700;font-size:13px">${x.xProd}</div>
+        <div style="font-size:11px;color:var(--muted)">${x.cProd||'Sem código'} · ${x.local||'—'}</div>
+      </div>
+      <div style="text-align:right">
+        ${bdgU(u)}
+        <div style="font-weight:700;margin-top:4px;color:${semEstoque?'var(--muted)':'inherit'}">${semEstoque?'Sem estoque registrado':fmtN(x.qAtual,x.uCom==='KG'?3:2)+' '+( x.uCom||'UN')}</div>
+        <div style="font-size:11px;color:var(--muted)">Vence: ${fmtD(x.dVal)}</div>
+      </div>
+    </div>
+    ${semEstoque ? `<div style="margin-top:8px;padding:7px 10px;background:#fff8f0;border:1px solid rgba(199,107,0,.25);border-radius:6px;font-size:11px;color:var(--orange)">
+      ℹ️ Produto sem estoque — registre a saída para remover da lista de controle.
+    </div>` : ''}`;
+
   ['bx-qtd','bx-obs'].forEach(i=>document.getElementById(i).value='');
-  document.getElementById('bx-tipo').value = 'venda';
+  document.getElementById('bx-tipo').value = x.status==='vencido' ? 'descarte' : 'venda';
   document.getElementById('bx-un-lbl').textContent = x.uCom||'UN';
   document.getElementById('bx-prev').style.display='none';
+
+  // Campo de quantidade: oculta e desabilita quando sem estoque
+  document.getElementById('bx-qtd-row').style.display = semEstoque ? 'none' : '';
+  document.getElementById('bx-qtd').disabled = semEstoque;
+
+  // Título do modal muda conforme contexto
+  document.querySelector('#modal-baixa h3').textContent =
+    semEstoque ? '↓ Registrar Saída da Lista' : '↓ Registrar Baixa';
+  document.getElementById('bx-confirm-btn').textContent =
+    semEstoque ? '✔ Remover da Lista' : '✔ Confirmar';
+
   const sel=document.getElementById('bx-resp');
   const funcs=getFuncs().filter(f=>f.ativo!==false);
   sel.innerHTML='<option value="">Selecione...</option>'+funcs.map(f=>`<option>${f.nome}</option>`).join('');
   openModal('modal-baixa');
+  if (!semEstoque) setTimeout(()=>document.getElementById('bx-qtd').focus(), 300);
 }
+
 function calcBxPrev() {
   const x=getEstq().find(p=>p.id===bxId); if(!x)return;
+  if (x.qAtual <= 0) return; // sem estoque — não calcula previsão
   const qtd=parseFloat(document.getElementById('bx-qtd').value)||0, prev=document.getElementById('bx-prev');
   if (!qtd){prev.style.display='none';return;}
   const nova=x.qAtual-qtd; prev.style.display='block';
   prev.innerHTML=`Estoque após: <strong>${fmtN(Math.max(0,nova),2)} ${x.uCom||'UN'}</strong>${x.valorUnit>0?' · Valor: <strong>'+fmt(qtd*x.valorUnit)+'</strong>':''}${nova<0?'<strong style="color:var(--red);margin-left:8px"> ⚠ Excede estoque!</strong>':''}`;
   prev.className='info-box '+(nova<0?'ib-red':'ib-gold');
 }
+
 function confirmBaixa() {
   const x=getEstq().find(p=>p.id===bxId); if(!x)return;
-  const qtd=parseFloat(document.getElementById('bx-qtd').value)||0; if(qtd<=0){toast('Informe a quantidade','err');return;}
-  const tipo=document.getElementById('bx-tipo').value, resp=document.getElementById('bx-resp').value, obs=document.getElementById('bx-obs').value.trim();
+  const semEstoque = x.qAtual <= 0;
+  const tipo = document.getElementById('bx-tipo').value;
+  const resp = document.getElementById('bx-resp').value;
+  const obs  = document.getElementById('bx-obs').value.trim();
+
+  // Produto sem estoque: remove direto da lista sem pedir quantidade
+  if (semEstoque) {
+    store(BB.estq, getEstq().filter(p=>p.id!==bxId));
+    closeModal('modal-baixa');
+    toast(`✅ "${x.xProd}" removido da lista de controle`);
+    renderEst(); updateSidebar(); renderDash();
+    return;
+  }
+
+  // Produto com estoque: valida quantidade normalmente
+  const qtd=parseFloat(document.getElementById('bx-qtd').value)||0;
+  if(qtd<=0){toast('Informe a quantidade','err');return;}
+
   let prods=getEstq(), i=prods.findIndex(p=>p.id===bxId);
   if (i>=0){
     prods[i].qAtual=Math.max(0,prods[i].qAtual-qtd);
-    // Remove da lista se zerou OU se foi venda (tratado, não precisa aparecer)
     const novaQtd = prods[i].qAtual;
     if (novaQtd <= 0 || tipo === 'venda') {
       prods = prods.filter(p=>p.id!==bxId);
@@ -1900,7 +1934,7 @@ function confirmBaixa() {
     }
     store(BB.estq,prods);
   }
-  if (tipo==='descarte'||tipo==='perda'){
+  if (tipo==='descarte'||tipo==='perda'||tipo==='vencimento'){
     const vc=x.valorUnit||0, p4=getPbb(), fator=p4.fator/100, arr=getLosses();
     arr.push({id:Date.now(),data:new Date().toISOString().split('T')[0],resp,produto:x.xProd,categoria:'',motivo:'Vencimento/Validade',peso:qtd,vc,vp:qtd*vc*fator,obs,snap:null,pesoBruto:null,pesoLiq:null,pesoPct:null});
     store(BB.l,arr);
@@ -2811,92 +2845,77 @@ function exportFatCSV() {
 
 // ══════════════════════════════════════════════════════════
 // FUNCIONÁRIAS & RETIRADAS
-// Storage:
-//   bb_funcionarias  → [{ id, nome, limiteCusto, limiteVenda, ativa }]
-//   bb_retiradas     → [{ id, func_id, func_nome, data, produto, qtd, un, pc, pv, totalCusto, totalVenda, obs }]
+// Funcionárias: lidas de bb_f (Classificador) — não cadastradas aqui
+// Bônus config: bb_bonus { "nome_func": { limiteCusto } }
+// Retiradas:    bb_retiradas → [{ id, func_id, func_nome, data, produto,
+//               qtd, un, pc, pv, totalCusto, totalVenda, obs }]
 // ══════════════════════════════════════════════════════════
 
+// bb_bonus: guarda só o limite de bônus por nome (chave = nome normalizado)
+function getBonusConfig() { return load('bb_bonus') || {}; }
+function saveBonusConfig(obj) { store('bb_bonus', obj); }
+function getBonusFunc(nome) { return (getBonusConfig()[nome] || {}).limiteCusto || 0; }
+
+// Funcionárias vêm do Classificador (bb_f / bb4_f)
+// Retorna array { id, nome, cargo, ativo, limiteCusto }
 function getFuncionarias() {
-  return load('bb_funcionarias') || [];
+  const funcs = getFuncs(); // bb_f do Classificador
+  const bonus = getBonusConfig();
+  return funcs.map(f => ({
+    ...f,
+    limiteCusto: (bonus[f.nome] || {}).limiteCusto || 0,
+  }));
 }
-function saveFuncionarias(arr) { store('bb_funcionarias', arr); }
-function getRetiradas() {
-  return load('bb_retiradas') || [];
-}
+
+function getRetiradas() { return load('bb_retiradas') || []; }
 function saveRetiradas(arr) { store('bb_retiradas', arr); }
 
 // ── Config funcionárias ──────────────────────────────────
-let editFuncId = null;
-
 function loadConfigFunc() {
-  editFuncId = null;
-  document.getElementById('cf-nome').value = '';
-  document.getElementById('cf-limite-custo').value = '';
-  document.getElementById('cf-limite-venda').value = '';
-  renderListaFuncs();
-}
-
-function salvarFuncionaria() {
-  const nome  = document.getElementById('cf-nome').value.trim();
-  const lc    = parseFloat(document.getElementById('cf-limite-custo').value) || 0;
-  const lv    = parseFloat(document.getElementById('cf-limite-venda').value) || 0;
-  if (!nome) { toast('Informe o nome', 'err'); return; }
-
-  const arr = getFuncionarias();
-  if (editFuncId) {
-    const i = arr.findIndex(f => f.id === editFuncId);
-    if (i >= 0) arr[i] = { ...arr[i], nome, limiteCusto: lc, limiteVenda: lv };
-  } else {
-    arr.push({ id: uid(), nome, limiteCusto: lc, limiteVenda: lv, ativa: true });
-  }
-  saveFuncionarias(arr);
-  toast(editFuncId ? '✅ Funcionária atualizada!' : '✅ Funcionária cadastrada!');
-  editFuncId = null;
-  document.getElementById('cf-nome').value = '';
-  document.getElementById('cf-limite-custo').value = '';
-  document.getElementById('cf-limite-venda').value = '';
-  renderListaFuncs();
-}
-
-function editarFunc(id) {
-  const f = getFuncionarias().find(x => x.id === id); if (!f) return;
-  editFuncId = id;
-  document.getElementById('cf-nome').value = f.nome;
-  document.getElementById('cf-limite-custo').value = f.limiteCusto || '';
-  document.getElementById('cf-limite-venda').value = f.limiteVenda || '';
-  document.querySelector('#page-config-func .btn-primary').textContent = '💾 Atualizar Funcionária';
-}
-
-function toggleAtivaFunc(id) {
-  const arr = getFuncionarias();
-  const i = arr.findIndex(f => f.id === id);
-  if (i >= 0) arr[i].ativa = !arr[i].ativa;
-  saveFuncionarias(arr);
-  renderListaFuncs();
-}
-
-function renderListaFuncs() {
   const funcs = getFuncionarias();
-  const el = document.getElementById('cf-lista');
+  const el    = document.getElementById('cf-lista');
+  const vazio = document.getElementById('cf-vazio');
+
   if (!funcs.length) {
-    el.innerHTML = '<div style="text-align:center;color:var(--muted);padding:20px;font-size:12px">Nenhuma funcionária cadastrada</div>';
+    el.innerHTML = '';
+    vazio.style.display = 'block';
     return;
   }
+  vazio.style.display = 'none';
+
+  // Cada linha: nome (readonly, vem do classificador) + campo de bônus editável
   el.innerHTML = funcs.map(f => `
-    <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
-      <div style="width:32px;height:32px;border-radius:50%;background:var(--red);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0">${f.nome[0].toUpperCase()}</div>
+    <div style="display:flex;align-items:center;gap:14px;padding:12px 16px;border-bottom:1px solid var(--border)">
+      <div style="width:34px;height:34px;border-radius:50%;background:var(--red);color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;flex-shrink:0">${(f.nome||'?')[0].toUpperCase()}</div>
       <div style="flex:1;min-width:0">
         <div style="font-weight:600;font-size:13px">${f.nome}</div>
-        <div style="font-size:10px;color:var(--muted);margin-top:2px">
-          Limite custo: <strong>${f.limiteCusto>0?fmt(f.limiteCusto):'—'}</strong>
-          ${f.limiteVenda>0?' · Equiv. venda: <strong>'+fmt(f.limiteVenda)+'</strong>':''}
+        <div style="font-size:11px;color:var(--muted)">${f.cargo||'Funcionária'} · ${f.ativo===false?'<span style="color:#e74c3c">Inativa</span>':'<span style="color:var(--green)">Ativa</span>'}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+        <label style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap">Bônus custo/mês</label>
+        <div style="position:relative">
+          <span style="position:absolute;left:9px;top:50%;transform:translateY(-50%);font-size:12px;color:var(--muted);pointer-events:none">R$</span>
+          <input type="number" step="0.01" min="0" placeholder="0,00"
+            id="bonus-${f.nome.replace(/\s+/g,'_')}"
+            value="${f.limiteCusto > 0 ? f.limiteCusto : ''}"
+            style="width:120px;padding:7px 10px 7px 28px;border:1px solid var(--border);border-radius:7px;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600"/>
         </div>
       </div>
-      <div style="display:flex;gap:4px;flex-shrink:0">
-        <button class="act-btn act-edit" onclick="editarFunc('${f.id}')">✎</button>
-        <button class="act-btn ${f.ativa!==false?'act-baixa':'act-del'}" onclick="toggleAtivaFunc('${f.id}')" title="${f.ativa!==false?'Desativar':'Ativar'}">${f.ativa!==false?'✓':'✗'}</button>
-      </div>
     </div>`).join('');
+}
+
+function saveConfigFunc() {
+  const funcs  = getFuncionarias();
+  const bonus  = getBonusConfig();
+  funcs.forEach(f => {
+    const inp = document.getElementById('bonus-' + f.nome.replace(/\s+/g,'_'));
+    const val = inp ? parseFloat(inp.value) || 0 : 0;
+    if (val > 0) bonus[f.nome] = { limiteCusto: val };
+    else delete bonus[f.nome];
+  });
+  saveBonusConfig(bonus);
+  toast('✅ Configurações de bônus salvas!');
+  loadConfigFunc();
 }
 
 // ── Retiradas ────────────────────────────────────────────
