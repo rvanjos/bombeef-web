@@ -285,8 +285,8 @@ const SYS = [
 ];
 
 // ── Estado global ─────────────────────────────────────────────
-let TOKEN    = sessionStorage.getItem('bb_token') || null;
-let CUR_USER = JSON.parse(sessionStorage.getItem('bb_user') || 'null');
+let TOKEN    = sessionStorage.getItem('bb_token') || localStorage.getItem('bb_token') || null;
+let CUR_USER = JSON.parse(sessionStorage.getItem('bb_user') || localStorage.getItem('bb_user') || 'null');
 let editId   = null;
 let allUsers = [];
 
@@ -324,6 +324,10 @@ async function doLogin() {
     CUR_USER = usuario;
     sessionStorage.setItem('bb_token', token);
     sessionStorage.setItem('bb_user',  JSON.stringify(usuario));
+    // localStorage permite que outras abas (bom_beef_validade, validade_mobile)
+    // leiam o token sem depender de postMessage ou iframe
+    localStorage.setItem('bb_token', token);
+    localStorage.setItem('bb_user',  JSON.stringify(usuario));
     document.getElementById('li-u').value = '';
     document.getElementById('li-p').value = '';
     err.textContent = '';
@@ -341,6 +345,8 @@ function doLogout() {
   TOKEN = null; CUR_USER = null;
   sessionStorage.removeItem('bb_token');
   sessionStorage.removeItem('bb_user');
+  localStorage.removeItem('bb_token');
+  localStorage.removeItem('bb_user');
   closeEmb();
   showScr('scr-login');
   setTimeout(() => document.getElementById('li-u').focus(), 80);

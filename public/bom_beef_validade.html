@@ -1805,16 +1805,40 @@ function forceSyncDash() {
 }
 
 // ══════════════════════════════════════════════════════════
-// CAPTURA TOKEN DO PORTAL (postMessage)
+// CAPTURA TOKEN — múltiplas fontes em ordem de prioridade:
+//   1. window.BB_TOKEN (injeção direta pelo portal)
+//   2. sessionStorage 'bb_token' (portal na mesma aba/iframe)
+//   3. sessionStorage 'vld_token' (mobile PWA)
+//   4. localStorage 'bb_token' (fallback legado)
+//   5. postMessage do portal pai (iframe)
 // ══════════════════════════════════════════════════════════
-window._BB_TOKEN_SYNC = window.BB_TOKEN || null;
+window._BB_TOKEN_SYNC = (
+  window.BB_TOKEN ||
+  sessionStorage.getItem('bb_token') ||
+  sessionStorage.getItem('vld_token') ||
+  localStorage.getItem('bb_token') ||
+  null
+);
+
 window.addEventListener('message', e => {
   if (e.data && e.data.type === 'bb_auth' && e.data.token) {
     window._BB_TOKEN_SYNC = e.data.token;
+    console.log('[ValidaStock] Token recebido via postMessage');
   }
 });
-// Pede o token ao portal pai ativamente
+
+// Pede o token ao portal pai ativamente (quando aberto como iframe)
 try { window.parent.postMessage({ type: 'bb_request_auth' }, '*'); } catch(e){}
+
+// Avisa no header se não tem token (aberto fora do portal)
+(function() {
+  if (!window._BB_TOKEN_SYNC) {
+    const dot = document.getElementById('sb-sync-dot');
+    if (dot) { dot.style.background = '#e74c3c'; dot.title = 'Sem autenticação — abra pelo Portal'; }
+    const info = document.getElementById('sb-sync-info');
+    if (info) info.innerHTML = '<span style="color:#e74c3c">⚠ Abra pelo Portal para sincronizar</span>';
+  }
+})();
 
 
 // ══════════════════════════════════════════════════════════
@@ -1828,10 +1852,18 @@ async function sincronizarBanco() {
   const btn = document.getElementById('btn-sync');
   btn.textContent = '⏳ Sincronizando...'; btn.disabled = true;
 
-  // Tenta obter token do portal pai (iframe) ou do localStorage
-  const token = window._BB_TOKEN_SYNC || localStorage.getItem('bb_token') || '';
+  // Relê o token em todas as fontes no momento do clique
+  const token = (
+    window._BB_TOKEN_SYNC ||
+    window.BB_TOKEN ||
+    sessionStorage.getItem('bb_token') ||
+    sessionStorage.getItem('vld_token') ||
+    localStorage.getItem('bb_token') ||
+    ''
+  );
+
   if (!token) {
-    toast('⚠ Sem token de autenticação — faça login no portal', 'warn');
+    toast('⚠ Sem token — abra o ValidaStock pelo Portal Bom Beef', 'warn');
     btn.textContent = '☁️ Sincronizar'; btn.disabled = false;
     return;
   }
@@ -1840,19 +1872,25 @@ async function sincronizarBanco() {
   for (const p of prods) {
     try {
       const body = {
-        codigo_produto:    p.cProd || ('MANUAL_' + p.id),
-        nome_produto:      p.xProd,
-        data_validade:     p.dVal || null,
-        quantidade_atual:  parseFloat(p.qAtual) || 0,
-        custo_unitario:    parseFloat(p.valorUnit) || null,
+        codigo_produto:      p.cProd || ('MANUAL_' + p.id),
+        nome_produto:        p.xProd,
+        data_validade:       p.dVal || null,
+        quantidade_atual:    parseFloat(p.qAtual) || 0,
+        custo_unitario:      parseFloat(p.valorUnit) || null,
         local_armazenamento: p.local || null,
-        unidade:           p.uCom || 'KG',
+        unidade:             p.uCom || 'KG',
       };
       const r = await fetch('/api/validade/sincronizar-lote', {
-        method: 'POST',
+        method:  'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-        body: JSON.stringify(body),
+        body:    JSON.stringify(body),
       });
+      if (r.status === 401) {
+        // Token expirado — para imediatamente
+        toast('⚠ Sessão expirada — faça login novamente no Portal', 'warn');
+        btn.textContent = '☁️ Sincronizar'; btn.disabled = false;
+        return;
+      }
       const d = await r.json();
       if (d.ok) ok++; else erros++;
     } catch(e) {
@@ -1864,15 +1902,14 @@ async function sincronizarBanco() {
 
   if (erros === 0) {
     toast(`✅ ${ok} produto(s) sincronizados com o banco!`);
-    // Atualiza o dot de sincronização na sidebar
     const dot = document.getElementById('sb-sync-dot');
-    if (dot) { dot.style.background = '#4ecdc4'; }
+    if (dot) dot.style.background = '#4ecdc4';
     store(BB.pdate, new Date().toLocaleDateString('pt-BR'));
     document.getElementById('hk-plan').textContent = new Date().toLocaleDateString('pt-BR');
   } else if (ok > 0) {
     toast(`⚠ ${ok} ok, ${erros} com erro. Verifique o banco.`, 'warn');
   } else {
-    toast(`❌ Falha na sincronização. Verifique a conexão.`, 'err');
+    toast('❌ Falha na sincronização. Verifique a conexão.', 'err');
   }
 }
 
