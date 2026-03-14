@@ -66,7 +66,7 @@ module.exports = function (pool) {
         JOIN produtos_mestre pm ON pm.codigo_produto = l.codigo_produto
         WHERE l.ativo = true
           AND l.quantidade_atual > 0
-          AND pm.controla_validade = true
+          AND COALESCE(pm.controla_validade, true) = true
         ORDER BY l.data_validade ASC NULLS LAST, pm.descricao_produto ASC
       `;
 
@@ -105,7 +105,7 @@ module.exports = function (pool) {
         JOIN produtos_mestre pm ON pm.codigo_produto = l.codigo_produto
         WHERE l.ativo = true
           AND l.quantidade_atual > 0
-          AND pm.controla_validade = true
+          AND COALESCE(pm.controla_validade, true) = true
           AND (l.data_validade IS NULL OR l.data_validade <= CURRENT_DATE + INTERVAL '15 days')
         ORDER BY l.data_validade ASC NULLS FIRST
       `;
@@ -128,16 +128,16 @@ module.exports = function (pool) {
     try {
       const { rows } = await pool.query(`
         SELECT
-          COUNT(*) FILTER (WHERE data_validade < CURRENT_DATE)                              AS vencidos,
-          COUNT(*) FILTER (WHERE data_validade BETWEEN CURRENT_DATE AND CURRENT_DATE + 7)   AS criticos,
-          COUNT(*) FILTER (WHERE data_validade BETWEEN CURRENT_DATE + 8 AND CURRENT_DATE + 15) AS urgentes,
-          COUNT(*) FILTER (WHERE data_validade BETWEEN CURRENT_DATE + 16 AND CURRENT_DATE + 30) AS atencao,
-          COUNT(*) FILTER (WHERE data_validade > CURRENT_DATE + 30)                         AS ok,
-          COUNT(*) FILTER (WHERE data_validade IS NULL)                                     AS sem_data,
-          COUNT(*)                                                                           AS total
+          COUNT(*) FILTER (WHERE data_validade < CURRENT_DATE)                                                    AS vencidos,
+          COUNT(*) FILTER (WHERE data_validade BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days')         AS criticos,
+          COUNT(*) FILTER (WHERE data_validade BETWEEN CURRENT_DATE + INTERVAL '8 days'  AND CURRENT_DATE + INTERVAL '15 days') AS urgentes,
+          COUNT(*) FILTER (WHERE data_validade BETWEEN CURRENT_DATE + INTERVAL '16 days' AND CURRENT_DATE + INTERVAL '30 days') AS atencao,
+          COUNT(*) FILTER (WHERE data_validade > CURRENT_DATE + INTERVAL '30 days')                               AS ok,
+          COUNT(*) FILTER (WHERE data_validade IS NULL)                                                           AS sem_data,
+          COUNT(*)                                                                                                 AS total
         FROM lotes_estoque l
         JOIN produtos_mestre pm ON pm.codigo_produto = l.codigo_produto
-        WHERE l.ativo = true AND l.quantidade_atual > 0 AND pm.controla_validade = true
+        WHERE l.ativo = true AND l.quantidade_atual > 0 AND COALESCE(pm.controla_validade, true) = true
       `);
 
       // Perdas do mês
@@ -286,7 +286,7 @@ module.exports = function (pool) {
       const { rows } = await pool.query(`
         SELECT codigo_produto, descricao_produto, descricao_reduzida, unidade, preco_custo
         FROM produtos_mestre
-        WHERE ativo = true AND controla_validade = true
+        WHERE ativo = true AND COALESCE(controla_validade, true) = true
           AND (descricao_produto ILIKE $1 OR codigo_produto ILIKE $1)
         ORDER BY descricao_produto ASC
         LIMIT 20
