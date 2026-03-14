@@ -279,6 +279,7 @@ module.exports = function (pool) {
   });
 
   // ── GET /produtos-search ──────────────────────────────────────────────────
+  // Usado pelo PWA mobile em rpSearch() para buscar produtos no cadastro
   r.get('/produtos-search', async (req, res) => {
     try {
       const { q = '' } = req.query;
@@ -293,6 +294,90 @@ module.exports = function (pool) {
       res.json({ ok: true, data: rows });
     } catch (e) {
       res.status(500).json({ ok: false, erro: e.message });
+    }
+  });
+
+  // ── POST /sincronizar-lote ────────────────────────────────────────────────
+  // Chamado pelo desktop (bom_beef_validade.html) via botão "☁️ Sincronizar"
+  // Faz upsert do lote: atualiza se já existe (mesmo produto + mesma validade),
+  // insere se não existe. Garante que o produto esteja em produtos_mestre.
+  r.post('/sincronizar-lote', async (req, res) => {
+    const {
+      codigo_produto,
+      nome_produto,
+      data_validade,
+      quantidade_atual,
+      custo_unitario,
+      local_armazenamento,
+      unidade,
+    } = req.body;
+
+    if (!codigo_produto) {
+      return res.status(400).json({ ok: false, erro: 'codigo_produto obrigatório' });
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Garante que o produto exista em produtos_mestre
+      await client.query(`
+        INSERT INTO produtos_mestre
+          (codigo_produto, descricao_produto, unidade, controla_validade, ativo)
+        VALUES ($1, $2, $3, true, true)
+        ON CONFLICT (codigo_produto)
+        DO UPDATE SET
+          descricao_produto = COALESCE(EXCLUDED.descricao_produto, produtos_mestre.descricao_produto),
+          controla_validade = true
+      `, [codigo_produto, nome_produto || codigo_produto, unidade || 'KG']);
+
+      // Busca lote ativo com o mesmo produto e validade
+      const { rows: existing } = await client.query(`
+        SELECT id FROM lotes_estoque
+        WHERE codigo_produto = $1
+          AND ativo = true
+          AND (
+            (data_validade = $2::date) OR
+            (data_validade IS NULL AND $2 IS NULL)
+          )
+        LIMIT 1
+      `, [codigo_produto, data_validade || null]);
+
+      if (existing.length) {
+        // Atualiza lote existente
+        await client.query(`
+          UPDATE lotes_estoque
+          SET quantidade_atual      = $1,
+              custo_unitario        = COALESCE($2, custo_unitario),
+              local_armazenamento   = COALESCE($3, local_armazenamento),
+              atualizado_em         = NOW()
+          WHERE id = $4
+        `, [quantidade_atual || 0, custo_unitario || null, local_armazenamento || null, existing[0].id]);
+      } else {
+        // Cria novo lote
+        await client.query(`
+          INSERT INTO lotes_estoque
+            (codigo_produto, data_validade, quantidade, quantidade_atual,
+             custo_unitario, local_armazenamento, usuario_lancamento)
+          VALUES ($1, $2, $3, $3, $4, $5, $6)
+        `, [
+          codigo_produto,
+          data_validade || null,
+          quantidade_atual || 0,
+          custo_unitario || null,
+          local_armazenamento || null,
+          req.user.id,
+        ]);
+      }
+
+      await client.query('COMMIT');
+      return res.json({ ok: true });
+    } catch (e) {
+      await client.query('ROLLBACK');
+      console.error('[validade/sincronizar-lote]', e.message);
+      return res.status(500).json({ ok: false, erro: e.message });
+    } finally {
+      client.release();
     }
   });
 

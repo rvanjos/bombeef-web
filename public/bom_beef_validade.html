@@ -1817,49 +1817,63 @@ window.addEventListener('message', e => {
 try { window.parent.postMessage({ type: 'bb_request_auth' }, '*'); } catch(e){}
 
 
+// ══════════════════════════════════════════════════════════
+// SINCRONIZAR COM O BANCO (ValidaStock mobile ↔ desktop)
+// Envia todos os produtos do estoque local para o banco via API
+// ══════════════════════════════════════════════════════════
 async function sincronizarBanco() {
   const prods = getEstq();
-  if (!prods.length) { toast('Nenhum produto no estoque para sincronizar.', 'warn'); return; }
+  if (!prods.length) { toast('Sem produtos para sincronizar', 'warn'); return; }
 
   const btn = document.getElementById('btn-sync');
-  btn.textContent = '⏳ Sincronizando...';
-  btn.disabled = true;
+  btn.textContent = '⏳ Sincronizando...'; btn.disabled = true;
 
-  // Pega token de todas as fontes possíveis
-  const token = window._BB_TOKEN_SYNC || window.BB_TOKEN
-    || sessionStorage.getItem('bb_token') || localStorage.getItem('bb_token') || '';
-
-  let ok = 0, err = 0;
-  const comCodigo = prods.filter(p => p.cProd);
-
-  for (const p of comCodigo) {
-    try {
-      const resp = await fetch(window.location.origin + '/api/validade/sincronizar-lote', {
-        method: 'POST',
-        credentials: 'include',  // envia cookie de sessão automaticamente
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': 'Bearer ' + token } : {})
-        },
-        body: JSON.stringify({
-          codigo_produto:      p.cProd,
-          nome_produto:        p.xProd || '',
-          data_validade:       p.dVal   || null,
-          quantidade_atual:    parseFloat(p.qAtual) || 0,
-          custo_unitario:      parseFloat(p.valorUnit) || null,
-          local_armazenamento: p.local  || null,
-          unidade:             p.uCom   || 'KG',
-        })
-      });
-      const d = await resp.json();
-      if (d.ok) ok++; else err++;
-    } catch { err++; }
+  // Tenta obter token do portal pai (iframe) ou do localStorage
+  const token = window._BB_TOKEN_SYNC || localStorage.getItem('bb_token') || '';
+  if (!token) {
+    toast('⚠ Sem token de autenticação — faça login no portal', 'warn');
+    btn.textContent = '☁️ Sincronizar'; btn.disabled = false;
+    return;
   }
 
-  btn.textContent = '☁️ Sincronizar';
-  btn.disabled = false;
-  const ignorados = prods.length - comCodigo.length;
-  toast(`✅ ${ok} produtos enviados ao banco${err ? ` · ${err} erros` : ''}${ignorados ? ` · ${ignorados} sem código` : ''}.`);
+  let ok = 0, erros = 0;
+  for (const p of prods) {
+    try {
+      const body = {
+        codigo_produto:    p.cProd || ('MANUAL_' + p.id),
+        nome_produto:      p.xProd,
+        data_validade:     p.dVal || null,
+        quantidade_atual:  parseFloat(p.qAtual) || 0,
+        custo_unitario:    parseFloat(p.valorUnit) || null,
+        local_armazenamento: p.local || null,
+        unidade:           p.uCom || 'KG',
+      };
+      const r = await fetch('/api/validade/sincronizar-lote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify(body),
+      });
+      const d = await r.json();
+      if (d.ok) ok++; else erros++;
+    } catch(e) {
+      erros++;
+    }
+  }
+
+  btn.textContent = '☁️ Sincronizar'; btn.disabled = false;
+
+  if (erros === 0) {
+    toast(`✅ ${ok} produto(s) sincronizados com o banco!`);
+    // Atualiza o dot de sincronização na sidebar
+    const dot = document.getElementById('sb-sync-dot');
+    if (dot) { dot.style.background = '#4ecdc4'; }
+    store(BB.pdate, new Date().toLocaleDateString('pt-BR'));
+    document.getElementById('hk-plan').textContent = new Date().toLocaleDateString('pt-BR');
+  } else if (ok > 0) {
+    toast(`⚠ ${ok} ok, ${erros} com erro. Verifique o banco.`, 'warn');
+  } else {
+    toast(`❌ Falha na sincronização. Verifique a conexão.`, 'err');
+  }
 }
 
 

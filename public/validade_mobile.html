@@ -523,6 +523,7 @@ function iniciarApp() {
   document.getElementById('login-wrap').classList.add('hide');
   document.getElementById('hdr').style.display='flex';
   document.getElementById('bnav').style.display='flex';
+  document.getElementById('urg-strip').style.display='flex'; // estava faltando — causava a strip invisível
   refreshDados();
 }
 
@@ -753,26 +754,99 @@ function initRpForm() {
   sel.innerHTML = '<option value="">Selecione...</option>' + funcs.map(f=>`<option value="${f.nome||f.id}">${f.nome}</option>`).join('');
 }
 
+// Debounce para não disparar requisição a cada tecla
+let rpSearchTimer = null;
+
 function rpSearch() {
   const q = (document.getElementById('rp-srch').value||'').toLowerCase().trim();
   const drop = document.getElementById('rp-drop');
   if (q.length < 1) { drop.style.display='none'; return; }
-  const res = estoque.filter(x => x.nome.toLowerCase().includes(q)||(x.codigo_produto||'').toLowerCase().includes(q)).slice(0,8);
-  if (!res.length) {
-    drop.innerHTML='<div style="padding:14px;text-align:center;color:var(--muted);font-size:12px;">Nenhum produto encontrado</div>';
-    drop.style.display='block'; return;
-  }
+
+  // 1) Filtra primeiro no cache local (estoque ativo)
   const urg_ord = ['vencido','critico','urgente','atencao','ok','sem-data'];
-  res.sort((a,b)=>urg_ord.indexOf(a.status)-urg_ord.indexOf(b.status));
-  drop.innerHTML = res.map(x => {
-    const urg = URG[x.status];
-    return `<div onclick="selRpProd(${x.id})" style="padding:11px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;cursor:pointer;">
-      <div style="width:8px;height:8px;border-radius:50%;background:${urg.col};flex-shrink:0;"></div>
-      <div style="flex:1;"><div style="font-weight:600;font-size:13px;">${x.nome}</div>
-      <div style="font-size:11px;color:var(--muted);">${x.local||'—'} · ${fmtN(x.quantidade_atual,2)} ${x.unidade} · ${fmtD(x.data_validade)}</div></div>
-    </div>`;
-  }).join('');
-  drop.style.display='block';
+  const local = estoque
+    .filter(x => x.nome.toLowerCase().includes(q)||(x.codigo_produto||'').toLowerCase().includes(q))
+    .sort((a,b)=>urg_ord.indexOf(a.status)-urg_ord.indexOf(b.status))
+    .slice(0,8);
+
+  // Renderiza resultados locais imediatamente (responsivo)
+  if (local.length) {
+    drop.innerHTML = local.map(x => {
+      const urg = URG[x.status];
+      return `<div onclick="selRpProd(${x.id})" style="padding:11px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;cursor:pointer;">
+        <div style="width:8px;height:8px;border-radius:50%;background:${urg.col};flex-shrink:0;"></div>
+        <div style="flex:1;"><div style="font-weight:600;font-size:13px;">${x.nome}</div>
+        <div style="font-size:11px;color:var(--muted);">${x.local||'—'} · ${fmtN(x.quantidade_atual,2)} ${x.unidade} · ${fmtD(x.data_validade)}</div></div>
+        <div style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:9px;background:${urg.bg};color:${urg.col};">${urg.label}</div>
+      </div>`;
+    }).join('');
+    drop.style.display='block';
+  } else {
+    drop.innerHTML='<div style="padding:10px 14px;text-align:center;color:var(--muted);font-size:12px;">🔍 Buscando...</div>';
+    drop.style.display='block';
+  }
+
+  // 2) Consulta a API /produtos-search com debounce de 300ms
+  // Isso sincroniza com o banco e traz produtos que podem não estar no cache
+  clearTimeout(rpSearchTimer);
+  rpSearchTimer = setTimeout(async () => {
+    try {
+      const r = await api(`/produtos-search?q=${encodeURIComponent(q)}`);
+      if (!r.data || !r.data.length) {
+        if (!local.length) {
+          drop.innerHTML='<div style="padding:14px;text-align:center;color:var(--muted);font-size:12px;">Nenhum produto encontrado</div>';
+        }
+        return;
+      }
+
+      // Mescla resultados da API com os locais, priorizando os que têm estoque ativo
+      const localIds = new Set(local.map(x=>String(x.codigo_produto)));
+      const apiExtras = r.data.filter(p => !localIds.has(String(p.codigo_produto)));
+
+      // Monta itens da API que não estão no cache local (sem lote ativo, mas existem no cadastro)
+      const apiItems = apiExtras.slice(0, Math.max(0, 8 - local.length)).map(p => ({
+        _apiOnly: true,
+        codigo_produto: p.codigo_produto,
+        nome: p.descricao_produto,
+        unidade: p.unidade,
+        custo_unitario: p.preco_custo || 0,
+        quantidade_atual: 0,
+        data_validade: null,
+        local: null,
+        status: 'sem-data',
+        dias: null,
+      }));
+
+      const combined = [...local, ...apiItems];
+      if (!combined.length) {
+        drop.innerHTML='<div style="padding:14px;text-align:center;color:var(--muted);font-size:12px;">Nenhum produto encontrado</div>';
+        return;
+      }
+
+      drop.innerHTML = combined.map(x => {
+        if (x._apiOnly) {
+          // Produto do catálogo sem lote ativo — não pode registrar baixa, mas informa
+          return `<div style="padding:11px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;opacity:.6;">
+            <div style="width:8px;height:8px;border-radius:50%;background:#aaa;flex-shrink:0;"></div>
+            <div style="flex:1;"><div style="font-weight:600;font-size:13px;">${x.nome}</div>
+            <div style="font-size:11px;color:var(--muted);">Sem lote ativo em estoque</div></div>
+            <div style="font-size:9px;padding:2px 6px;border-radius:9px;background:#f5f5f5;color:#aaa;">SEM ESTOQUE</div>
+          </div>`;
+        }
+        const urg = URG[x.status];
+        return `<div onclick="selRpProd(${x.id})" style="padding:11px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;cursor:pointer;">
+          <div style="width:8px;height:8px;border-radius:50%;background:${urg.col};flex-shrink:0;"></div>
+          <div style="flex:1;"><div style="font-weight:600;font-size:13px;">${x.nome}</div>
+          <div style="font-size:11px;color:var(--muted);">${x.local||'—'} · ${fmtN(x.quantidade_atual,2)} ${x.unidade} · ${fmtD(x.data_validade)}</div></div>
+          <div style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:9px;background:${urg.bg};color:${urg.col};">${urg.label}</div>
+        </div>`;
+      }).join('');
+      drop.style.display='block';
+    } catch(e) {
+      // Silencia erros da busca na API — os resultados locais já foram exibidos
+      console.warn('[rpSearch/api]', e.message);
+    }
+  }, 300);
 }
 
 function abrirPerdaLote(id) { showPg('reg'); setTimeout(()=>selRpProd(id),150); }
