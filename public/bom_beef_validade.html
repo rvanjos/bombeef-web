@@ -2053,6 +2053,7 @@ function confirmBaixa() {
       toast(`Baixa de ${fmtN(qtd,2)} ${x.uCom||'UN'} registrada — restam ${fmtN(novaQtd,2)}`);
     }
     store(BB.estq,prods);
+  }
   syncBg('POST','/estoque-desktop/'+bxId+'/baixa',{qtd,tipo,resp,obs});
   if (tipo==='descarte'||tipo==='perda'||tipo==='vencimento'){
     const vc=x.valorUnit||0, p4=getPbb(), fator=p4.fator/100, arr=getLosses();
