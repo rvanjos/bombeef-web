@@ -480,7 +480,11 @@ tr:last-child td{border-bottom:none}
     <div class="sb-section">Metas &amp; Resultados</div>
     <div class="nav-item" onclick="go('metas')"><span class="ni">🎯</span>Dashboard Metas</div>
     <div class="nav-item" onclick="go('relatorio')"><span class="ni">📈</span>Relatório Mensal</div>
+    <div class="nav-item" onclick="go('faturamento')"><span class="ni">💰</span>Faturamento Histórico</div>
     <div class="nav-item" onclick="go('config-metas')"><span class="ni">⚙️</span>Config. Metas</div>
+    <div class="sb-section">Funcionárias</div>
+    <div class="nav-item" onclick="go('retiradas')"><span class="ni">🛍️</span>Retiradas</div>
+    <div class="nav-item" onclick="go('config-func')"><span class="ni">👥</span>Config. Funcionárias</div>
     <div class="sb-section">Importação</div>
     <div class="nav-item" onclick="go('import')"><span class="ni">⬆️</span>Importar Planilha</div>
     <div class="sb-section">Config</div>
@@ -963,30 +967,88 @@ tr:last-child td{border-bottom:none}
   </div>
 </div>
 
+<!-- ── FATURAMENTO HISTÓRICO ── -->
+<div class="page" id="page-faturamento">
+  <div class="pg-hdr">
+    <div>
+      <div class="pg-title">Faturamento Histórico</div>
+      <div class="pg-sub">Cadastre o faturamento real de cada mês — gera estimativa automática quando não há valor</div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-neutral btn-sm" onclick="exportFatCSV()">⬇ CSV</button>
+    </div>
+  </div>
+
+  <!-- Formulário de entrada -->
+  <div style="background:var(--white);border-radius:10px;box-shadow:var(--shadow);padding:18px;margin-bottom:14px">
+    <div style="font-size:11px;color:var(--red);text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin-bottom:14px">➕ Cadastrar / Atualizar Mês</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:12px;align-items:end">
+      <div class="fg">
+        <label>Mês de Referência</label>
+        <select id="fat-mes-inp" style="padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-family:'DM Sans',sans-serif;font-size:13px;width:100%"></select>
+      </div>
+      <div class="fg">
+        <label>Faturamento Real (R$)</label>
+        <input type="number" id="fat-real" placeholder="0,00" step="0.01" min="0" style="padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-family:'DM Sans',sans-serif;font-size:13px"/>
+        <div class="hint">Valor confirmado no fechamento do mês</div>
+      </div>
+      <div class="fg">
+        <label>Faturamento Previsto (R$) <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted)">— opcional</span></label>
+        <input type="number" id="fat-prev" placeholder="0,00" step="0.01" min="0" style="padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-family:'DM Sans',sans-serif;font-size:13px"/>
+        <div class="hint">Estimativa antes do fechamento</div>
+      </div>
+      <button class="btn btn-primary" onclick="salvarFaturamento()" style="white-space:nowrap;margin-bottom:0">💾 Salvar</button>
+    </div>
+  </div>
+
+  <!-- Estatísticas -->
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px" id="fat-kpis"></div>
+
+  <!-- Tabela histórica -->
+  <div style="background:var(--white);border-radius:10px;box-shadow:var(--shadow);overflow:hidden">
+    <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+      <div style="font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:1.2px">Histórico de Faturamentos</div>
+      <div style="font-size:11px;color:var(--muted)" id="fat-media-info"></div>
+    </div>
+    <div class="tbl-scroll" style="max-height:480px">
+      <table>
+        <thead><tr>
+          <th>Mês</th>
+          <th>Real (R$)</th>
+          <th>Previsto (R$)</th>
+          <th>Estimativa automática</th>
+          <th>Status</th>
+          <th style="width:60px"></th>
+        </tr></thead>
+        <tbody id="fat-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+  <div style="margin-top:8px;font-size:11px;color:var(--muted)">
+    💡 A <strong>estimativa automática</strong> é a média dos mesmos meses dos anos anteriores, usada quando o valor real ainda não foi cadastrado.
+  </div>
+</div>
+
 <!-- ── CONFIG METAS ── -->
 <div class="page" id="page-config-metas">
   <div class="pg-hdr">
     <div>
       <div class="pg-title">Parâmetros de Metas</div>
-      <div class="pg-sub">Configure faturamento, meta de perdas e prêmio da equipe</div>
+      <div class="pg-sub">Meta de perdas, prêmio e regras de ponderação</div>
     </div>
   </div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
     <div>
       <div style="background:var(--white);border-radius:10px;box-shadow:var(--shadow);padding:18px;margin-bottom:14px">
-        <div style="font-size:11px;color:var(--red);text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin-bottom:14px">💰 Dados Financeiros do Mês</div>
+        <div style="font-size:11px;color:var(--red);text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin-bottom:14px">🏆 Prêmio da Equipe</div>
         <div class="fg" style="margin-bottom:12px">
           <label>Mês de Referência</label>
           <select id="cm-mes" style="padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-family:'DM Sans',sans-serif;font-size:13px"></select>
         </div>
-        <div class="fg" style="margin-bottom:12px">
-          <label>Faturamento do Mês (R$)</label>
-          <input type="number" id="cm-fat" placeholder="Ex: 80000" step="0.01" min="0" style="padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-family:'DM Sans',sans-serif;font-size:13px"/>
-          <div class="hint">Ou cadastre no Classificador — será lido automaticamente de bb_fat</div>
-        </div>
         <div class="fg">
           <label>Valor do Prêmio Integral (R$)</label>
-          <input type="number" id="cm-premio" placeholder="Ex: 500" step="0.01" min="0" style="padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-family:'DM Sans',sans-serif;font-size:13px"/>
+          <input type="number" id="cm-premio" placeholder="Ex: 350" step="0.01" min="0" style="padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-family:'DM Sans',sans-serif;font-size:13px"/>
+          <div class="hint">Valor pago quando a equipe bate a meta</div>
         </div>
       </div>
       <div style="background:var(--white);border-radius:10px;box-shadow:var(--shadow);padding:18px">
@@ -1035,9 +1097,144 @@ tr:last-child td{border-bottom:none}
   </div>
 </div>
 
+<!-- ── RETIRADAS DE FUNCIONÁRIAS ── -->
+<div class="page" id="page-retiradas">
+  <div class="pg-hdr">
+    <div>
+      <div class="pg-title">Retiradas de Funcionárias</div>
+      <div class="pg-sub" id="ret-sub">Controle de produtos retirados a preço de custo</div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <select id="ret-mes" onchange="renderRetiradas()" style="padding:7px 11px;border:1px solid var(--border);border-radius:7px;font-family:'DM Sans',sans-serif;font-size:13px"></select>
+      <button class="btn btn-primary btn-sm" onclick="openModalRetirada()">➕ Nova Retirada</button>
+      <button class="btn btn-neutral btn-sm" onclick="exportRetiradasCSV()">⬇ CSV</button>
+    </div>
+  </div>
+
+  <!-- KPIs por funcionária -->
+  <div id="ret-kpis-func" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin-bottom:14px"></div>
+
+  <!-- Tabela de lançamentos -->
+  <div style="background:var(--white);border-radius:10px;box-shadow:var(--shadow);overflow:hidden">
+    <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted)">Lançamentos do mês</span>
+      <select id="ret-fil-func" onchange="renderRetiradas()" style="padding:5px 9px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:'DM Sans',sans-serif">
+        <option value="">Todas as funcionárias</option>
+      </select>
+    </div>
+    <div class="tbl-scroll" style="max-height:400px">
+      <table>
+        <thead><tr>
+          <th>Data</th><th>Funcionária</th><th>Produto</th><th>Qtd/Peso</th><th>Un</th>
+          <th>Preço Custo</th><th>Total Custo</th><th>Preço Venda</th><th>Total Venda</th><th>Obs</th><th></th>
+        </tr></thead>
+        <tbody id="ret-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+  <div style="text-align:right;font-size:11px;color:var(--muted);margin-top:6px" id="ret-foot"></div>
+</div>
+
+<!-- ── CONFIG FUNCIONÁRIAS ── -->
+<div class="page" id="page-config-func">
+  <div class="pg-hdr">
+    <div>
+      <div class="pg-title">Configuração de Funcionárias</div>
+      <div class="pg-sub">Limites de retirada e cadastro de funcionárias</div>
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+    <div>
+      <div style="background:var(--white);border-radius:10px;box-shadow:var(--shadow);padding:18px;margin-bottom:14px">
+        <div style="font-size:11px;color:var(--red);text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin-bottom:14px">➕ Adicionar Funcionária</div>
+        <div class="fg" style="margin-bottom:10px">
+          <label>Nome</label>
+          <input id="cf-nome" placeholder="Nome completo" style="padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-family:'DM Sans',sans-serif;font-size:13px;width:100%"/>
+        </div>
+        <div class="fg" style="margin-bottom:10px">
+          <label>Limite mensal a preço de custo (R$)</label>
+          <input type="number" id="cf-limite-custo" placeholder="Ex: 150" step="0.01" min="0" style="padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-family:'DM Sans',sans-serif;font-size:13px;width:100%"/>
+          <div class="hint">Valor máximo que ela pode retirar a preço de custo por mês</div>
+        </div>
+        <div class="fg" style="margin-bottom:14px">
+          <label>Equivalente em preço de venda (R$) <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted)">— informativo</span></label>
+          <input type="number" id="cf-limite-venda" placeholder="Ex: 300" step="0.01" min="0" style="padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-family:'DM Sans',sans-serif;font-size:13px;width:100%"/>
+          <div class="hint">Quanto esse limite representa se fosse no preço de venda</div>
+        </div>
+        <button class="btn btn-primary" style="width:100%" onclick="salvarFuncionaria()">💾 Salvar Funcionária</button>
+      </div>
+    </div>
+    <div>
+      <div style="background:var(--white);border-radius:10px;box-shadow:var(--shadow);padding:18px">
+        <div style="font-size:11px;color:var(--red);text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin-bottom:12px">👥 Funcionárias Cadastradas</div>
+        <div id="cf-lista"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
 </div><!-- /content-area -->
 </div><!-- /app-body -->
 </div><!-- /app-wrap -->
+
+<!-- ══════════ MODAL RETIRADA ══════════════════════════════ -->
+<div class="modal-overlay" id="modal-ret" onclick="if(event.target===this)closeModal('modal-ret')">
+  <div class="modal modal-wide">
+    <h3>➕ Nova Retirada</h3>
+    <div class="modal-sub">Registre um produto retirado pela funcionária</div>
+    <div class="form-grid">
+      <div class="fg">
+        <label>Funcionária *</label>
+        <select id="mr-func" onchange="calcRetTotal()" style="padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-family:'DM Sans',sans-serif;font-size:13px;width:100%">
+          <option value="">Selecione...</option>
+        </select>
+        <div id="mr-saldo-info" style="font-size:11px;color:var(--muted);margin-top:4px"></div>
+      </div>
+      <div class="fg">
+        <label>Data *</label>
+        <input type="date" id="mr-data" style="padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-family:'DM Sans',sans-serif;font-size:13px;width:100%"/>
+      </div>
+    </div>
+    <div class="fg" style="margin-bottom:12px">
+      <label>Produto *</label>
+      <input id="mr-produto" placeholder="Ex: Picanha Angus, Linguiça Toscana..." style="padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-family:'DM Sans',sans-serif;font-size:13px;width:100%"/>
+    </div>
+    <div class="form-grid">
+      <div class="fg">
+        <label>Quantidade / Peso *</label>
+        <input type="number" id="mr-qtd" placeholder="0,000" step="0.001" min="0" oninput="calcRetTotal()" style="padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-family:'DM Sans',sans-serif;font-size:13px;width:100%"/>
+      </div>
+      <div class="fg">
+        <label>Unidade</label>
+        <select id="mr-un" style="padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-family:'DM Sans',sans-serif;font-size:13px;width:100%">
+          <option value="KG">KG</option>
+          <option value="UN">UN</option>
+          <option value="LT">LT</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-grid">
+      <div class="fg">
+        <label>Preço de Custo (R$/un ou R$/kg) *</label>
+        <input type="number" id="mr-pc" placeholder="0,00" step="0.01" min="0" oninput="calcRetTotal()" style="padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-family:'DM Sans',sans-serif;font-size:13px;width:100%"/>
+      </div>
+      <div class="fg">
+        <label>Preço de Venda (R$/un ou R$/kg)</label>
+        <input type="number" id="mr-pv" placeholder="0,00" step="0.01" min="0" oninput="calcRetTotal()" style="padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-family:'DM Sans',sans-serif;font-size:13px;width:100%"/>
+        <div class="hint">Opcional — para mostrar o equivalente no relatório</div>
+      </div>
+    </div>
+    <div id="mr-total-box" style="display:none;margin-bottom:12px"></div>
+    <div class="fg">
+      <label>Observação</label>
+      <input id="mr-obs" placeholder="Opcional" style="padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-family:'DM Sans',sans-serif;font-size:13px;width:100%"/>
+    </div>
+    <div class="modal-btns">
+      <button class="btn btn-neutral" onclick="closeModal('modal-ret')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarRetirada()">💾 Registrar</button>
+    </div>
+  </div>
+</div>
 
 <!-- ══════════ MODAL PRODUTO ══════════════════════════════ -->
 <div class="modal-overlay" id="modal-prod" onclick="if(event.target===this)closeModal('modal-prod')">
@@ -2414,39 +2611,16 @@ function loadConfigMetas() {
   document.getElementById('cm-alerta').value = p.alerta || 80;
   document.getElementById('cm-fator').value  = p.fator || 50;
   document.getElementById('cm-premio').value = p.premio || '';
-  // Faturamento do mês selecionado
-  const mes = document.getElementById('cm-mes')?.value || nowMes();
-  const fat = getFatMes(mes);
-  document.getElementById('cm-fat').value = fat || '';
 }
-
-document.addEventListener('change', e => {
-  if (e.target.id === 'cm-mes') {
-    const mes = e.target.value;
-    const fat = getFatMes(mes);
-    document.getElementById('cm-fat').value = fat || '';
-  }
-});
 
 function saveConfigMetas() {
   const meta   = parseFloat(document.getElementById('cm-meta').value) || 2;
   const alerta = parseFloat(document.getElementById('cm-alerta').value) || 80;
   const fator  = parseFloat(document.getElementById('cm-fator').value) || 50;
   const premio = parseFloat(document.getElementById('cm-premio').value) || 0;
-  const fat    = parseFloat(document.getElementById('cm-fat').value) || 0;
-  const mes    = document.getElementById('cm-mes')?.value || nowMes();
 
-  // Salva params em bb_p (compartilhado com classificador)
   const params = Object.assign(getMetasP(), { meta, alerta, fator, premio });
   store(BB.p, params); store('bb4_p', params);
-
-  // Salva faturamento em bb_fat se foi preenchido manualmente
-  if (fat > 0) {
-    const fh = getFH();
-    if (!fh[mes]) fh[mes] = {};
-    if (!fh[mes].real) fh[mes].manual = fat; // só sobrescreve se não tiver real
-    store(BB.fat, fh); store('bb4_fat', fh);
-  }
 
   toast('✅ Parâmetros de metas salvos!');
   updateSidebar(); renderMetas();
@@ -2467,6 +2641,456 @@ Object.assign(PAGE_INIT, {
   metas:        renderMetas,
   relatorio:    renderRelatorio,
   'config-metas': loadConfigMetas,
+});
+
+
+// ══════════════════════════════════════════════════════════
+// FATURAMENTO HISTÓRICO
+// Storage: bb_fat  { "MM/YYYY": { real, manual, prev } }
+// ══════════════════════════════════════════════════════════
+const BB_FAT_MESES_EXTRAS = 24; // quantos meses passados gerar no select
+
+function buildFatMesSel(selId) {
+  const sel = document.getElementById(selId); if (!sel) return;
+  const cur = sel.value || nowMes();
+  const opts = [];
+  const d = new Date();
+  for (let i = 0; i < BB_FAT_MESES_EXTRAS; i++) {
+    const m = String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
+    opts.push(m);
+    d.setMonth(d.getMonth()-1);
+  }
+  sel.innerHTML = opts.map(m => {
+    const [mm,yy] = m.split('/');
+    const lbl = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][parseInt(mm)-1]+'/'+yy;
+    return `<option value="${m}" ${m===cur?'selected':''}>${lbl}</option>`;
+  }).join('');
+  if (!opts.includes(cur)) sel.value = opts[0];
+}
+
+function calcEstimativaFat(mes) {
+  // Média dos mesmos meses em anos anteriores
+  const fh = getFH();
+  const [mm] = mes.split('/');
+  const pool = Object.entries(fh)
+    .filter(([k]) => k.split('/')[0] === mm && k !== mes)
+    .map(([,v]) => v.real || v.manual || 0)
+    .filter(v => v > 0);
+  if (!pool.length) return null;
+  return pool.reduce((s,v)=>s+v,0) / pool.length;
+}
+
+function loadFaturamento() {
+  buildFatMesSel('fat-mes-inp');
+  renderFaturamento();
+  // Carrega valor do mês selecionado no form
+  const mes = document.getElementById('fat-mes-inp')?.value || nowMes();
+  preencherFormFat(mes);
+}
+
+document.addEventListener('change', e => {
+  if (e.target.id === 'fat-mes-inp') preencherFormFat(e.target.value);
+});
+
+function preencherFormFat(mes) {
+  const fh = getFH();
+  const entry = fh[mes] || {};
+  document.getElementById('fat-real').value  = entry.real  || '';
+  document.getElementById('fat-prev').value  = entry.prev  || '';
+}
+
+function salvarFaturamento() {
+  const mes  = document.getElementById('fat-mes-inp')?.value; if (!mes) return;
+  const real = parseFloat(document.getElementById('fat-real').value) || 0;
+  const prev = parseFloat(document.getElementById('fat-prev').value) || 0;
+
+  if (real <= 0 && prev <= 0) { toast('Informe ao menos um valor', 'err'); return; }
+
+  const fh = getFH();
+  if (!fh[mes]) fh[mes] = {};
+  if (real > 0) fh[mes].real = real;
+  if (prev > 0) fh[mes].prev = prev;
+  // Compatibilidade: manual = real para sistemas que usam .manual
+  if (real > 0) fh[mes].manual = real;
+
+  store(BB.fat, fh); store('bb4_fat', fh);
+  toast(`✅ Faturamento de ${mes} salvo!`);
+  renderFaturamento();
+  updateSidebar();
+}
+
+function deletarFatMes(mes) {
+  if (!confirm(`Remover faturamento de ${mes}?`)) return;
+  const fh = getFH();
+  delete fh[mes];
+  store(BB.fat, fh); store('bb4_fat', fh);
+  toast(`Faturamento de ${mes} removido`, 'warn');
+  renderFaturamento();
+}
+
+function renderFaturamento() {
+  const fh = getFH();
+  const meses = Object.keys(fh).sort((a,b) => {
+    const [ma,ya]=a.split('/'); const [mb,yb]=b.split('/');
+    return new Date(parseInt(yb),parseInt(mb)-1) - new Date(parseInt(ya),parseInt(ma)-1);
+  });
+
+  // KPIs
+  const reais = meses.map(m=>fh[m].real||0).filter(v=>v>0);
+  const media = reais.length ? reais.reduce((s,v)=>s+v,0)/reais.length : 0;
+  const maxV  = reais.length ? Math.max(...reais) : 0;
+  const minV  = reais.length ? Math.min(...reais) : 0;
+  const curFat = fh[nowMes()]?.real || fh[nowMes()]?.manual || 0;
+
+  document.getElementById('fat-kpis').innerHTML = `
+    <div class="kpi-card" style="border-top-color:#c9a044">
+      <div class="kpi-lbl">Mês Atual</div>
+      <div class="kpi-val" style="font-size:18px">${curFat>0?fmt(curFat):'—'}</div>
+      <div class="kpi-sub">${nowMes()}</div>
+    </div>
+    <div class="kpi-card green">
+      <div class="kpi-lbl">Média Histórica</div>
+      <div class="kpi-val" style="font-size:18px">${media>0?fmt(media):'—'}</div>
+      <div class="kpi-sub">${reais.length} meses com dado real</div>
+    </div>
+    <div class="kpi-card blue">
+      <div class="kpi-lbl">Maior Mês</div>
+      <div class="kpi-val" style="font-size:18px">${maxV>0?fmt(maxV):'—'}</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-lbl">Menor Mês</div>
+      <div class="kpi-val" style="font-size:18px">${minV>0?fmt(minV):'—'}</div>
+    </div>`;
+
+  document.getElementById('fat-media-info').textContent =
+    media > 0 ? `Média histórica: ${fmt(media)}` : '';
+
+  // Tabela
+  if (!meses.length) {
+    document.getElementById('fat-tbody').innerHTML =
+      '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:24px">Nenhum faturamento cadastrado ainda</td></tr>';
+    return;
+  }
+
+  document.getElementById('fat-tbody').innerHTML = meses.map(mes => {
+    const e = fh[mes];
+    const real = e.real || 0;
+    const prev = e.prev || e.manual || 0;
+    const est  = calcEstimativaFat(mes);
+    const [mm,yy] = mes.split('/');
+    const nomeMes = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'][parseInt(mm)-1];
+    const status = real > 0
+      ? `<span style="font-size:10px;padding:2px 8px;border-radius:9px;background:#f0faf4;color:var(--green);font-weight:700">✓ Real</span>`
+      : prev > 0
+        ? `<span style="font-size:10px;padding:2px 8px;border-radius:9px;background:#fff8f0;color:var(--orange);font-weight:700">Previsto</span>`
+        : `<span style="font-size:10px;padding:2px 8px;border-radius:9px;background:#f5f5f5;color:#999;font-weight:700">Estimado</span>`;
+    return `<tr>
+      <td style="font-weight:600">${nomeMes}/${yy}</td>
+      <td style="font-family:'DM Mono',monospace;font-weight:700;color:${real>0?'var(--green)':'var(--muted)'}">${real>0?fmt(real):'—'}</td>
+      <td style="font-family:'DM Mono',monospace;color:var(--muted)">${prev>0?fmt(prev):'—'}</td>
+      <td style="font-family:'DM Mono',monospace;color:var(--muted);font-size:11px">${est?fmt(est)+' (média)':'—'}</td>
+      <td>${status}</td>
+      <td><button class="act-btn act-del" onclick="deletarFatMes('${mes}')">✕</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function exportFatCSV() {
+  const fh = getFH();
+  const meses = Object.keys(fh).sort();
+  if (!meses.length) { toast('Sem dados', 'err'); return; }
+  const hdr = 'Mes,Real,Previsto,Estimativa';
+  const rows = meses.map(m => {
+    const e = fh[m]; const est = calcEstimativaFat(m);
+    return [m, e.real||0, e.prev||e.manual||0, est?est.toFixed(2):0].join(',');
+  });
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,\uFEFF' + encodeURIComponent([hdr,...rows].join('\n'));
+  a.download = 'faturamento_historico.csv'; a.click(); toast('CSV exportado!');
+}
+
+// ══════════════════════════════════════════════════════════
+// FUNCIONÁRIAS & RETIRADAS
+// Storage:
+//   bb_funcionarias  → [{ id, nome, limiteCusto, limiteVenda, ativa }]
+//   bb_retiradas     → [{ id, func_id, func_nome, data, produto, qtd, un, pc, pv, totalCusto, totalVenda, obs }]
+// ══════════════════════════════════════════════════════════
+
+function getFuncionarias() {
+  return load('bb_funcionarias') || [];
+}
+function saveFuncionarias(arr) { store('bb_funcionarias', arr); }
+function getRetiradas() {
+  return load('bb_retiradas') || [];
+}
+function saveRetiradas(arr) { store('bb_retiradas', arr); }
+
+// ── Config funcionárias ──────────────────────────────────
+let editFuncId = null;
+
+function loadConfigFunc() {
+  editFuncId = null;
+  document.getElementById('cf-nome').value = '';
+  document.getElementById('cf-limite-custo').value = '';
+  document.getElementById('cf-limite-venda').value = '';
+  renderListaFuncs();
+}
+
+function salvarFuncionaria() {
+  const nome  = document.getElementById('cf-nome').value.trim();
+  const lc    = parseFloat(document.getElementById('cf-limite-custo').value) || 0;
+  const lv    = parseFloat(document.getElementById('cf-limite-venda').value) || 0;
+  if (!nome) { toast('Informe o nome', 'err'); return; }
+
+  const arr = getFuncionarias();
+  if (editFuncId) {
+    const i = arr.findIndex(f => f.id === editFuncId);
+    if (i >= 0) arr[i] = { ...arr[i], nome, limiteCusto: lc, limiteVenda: lv };
+  } else {
+    arr.push({ id: uid(), nome, limiteCusto: lc, limiteVenda: lv, ativa: true });
+  }
+  saveFuncionarias(arr);
+  toast(editFuncId ? '✅ Funcionária atualizada!' : '✅ Funcionária cadastrada!');
+  editFuncId = null;
+  document.getElementById('cf-nome').value = '';
+  document.getElementById('cf-limite-custo').value = '';
+  document.getElementById('cf-limite-venda').value = '';
+  renderListaFuncs();
+}
+
+function editarFunc(id) {
+  const f = getFuncionarias().find(x => x.id === id); if (!f) return;
+  editFuncId = id;
+  document.getElementById('cf-nome').value = f.nome;
+  document.getElementById('cf-limite-custo').value = f.limiteCusto || '';
+  document.getElementById('cf-limite-venda').value = f.limiteVenda || '';
+  document.querySelector('#page-config-func .btn-primary').textContent = '💾 Atualizar Funcionária';
+}
+
+function toggleAtivaFunc(id) {
+  const arr = getFuncionarias();
+  const i = arr.findIndex(f => f.id === id);
+  if (i >= 0) arr[i].ativa = !arr[i].ativa;
+  saveFuncionarias(arr);
+  renderListaFuncs();
+}
+
+function renderListaFuncs() {
+  const funcs = getFuncionarias();
+  const el = document.getElementById('cf-lista');
+  if (!funcs.length) {
+    el.innerHTML = '<div style="text-align:center;color:var(--muted);padding:20px;font-size:12px">Nenhuma funcionária cadastrada</div>';
+    return;
+  }
+  el.innerHTML = funcs.map(f => `
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
+      <div style="width:32px;height:32px;border-radius:50%;background:var(--red);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0">${f.nome[0].toUpperCase()}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:600;font-size:13px">${f.nome}</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:2px">
+          Limite custo: <strong>${f.limiteCusto>0?fmt(f.limiteCusto):'—'}</strong>
+          ${f.limiteVenda>0?' · Equiv. venda: <strong>'+fmt(f.limiteVenda)+'</strong>':''}
+        </div>
+      </div>
+      <div style="display:flex;gap:4px;flex-shrink:0">
+        <button class="act-btn act-edit" onclick="editarFunc('${f.id}')">✎</button>
+        <button class="act-btn ${f.ativa!==false?'act-baixa':'act-del'}" onclick="toggleAtivaFunc('${f.id}')" title="${f.ativa!==false?'Desativar':'Ativar'}">${f.ativa!==false?'✓':'✗'}</button>
+      </div>
+    </div>`).join('');
+}
+
+// ── Retiradas ────────────────────────────────────────────
+function openModalRetirada() {
+  const funcs = getFuncionarias().filter(f => f.ativa !== false);
+  if (!funcs.length) { toast('Cadastre funcionárias primeiro em Config. Funcionárias', 'warn'); return; }
+
+  const sel = document.getElementById('mr-func');
+  sel.innerHTML = '<option value="">Selecione...</option>' +
+    funcs.map(f => `<option value="${f.id}" data-nome="${f.nome}" data-lc="${f.limiteCusto||0}">${f.nome}</option>`).join('');
+
+  document.getElementById('mr-data').value = new Date().toISOString().split('T')[0];
+  ['mr-produto','mr-qtd','mr-pc','mr-pv','mr-obs'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('mr-total-box').style.display = 'none';
+  document.getElementById('mr-saldo-info').textContent = '';
+  openModal('modal-ret');
+}
+
+document.addEventListener('change', e => {
+  if (e.target.id === 'mr-func') {
+    const mes = getMesAtualStr();
+    const funcId = e.target.value;
+    if (!funcId) { document.getElementById('mr-saldo-info').textContent = ''; return; }
+    const func = getFuncionarias().find(f => f.id === funcId);
+    if (!func || !func.limiteCusto) return;
+    const usado = getRetiradas()
+      .filter(r => r.func_id === funcId && getMR(r.data) === mes)
+      .reduce((s,r) => s + (r.totalCusto||0), 0);
+    const saldo = (func.limiteCusto||0) - usado;
+    const cor = saldo < 0 ? 'var(--red)' : saldo < func.limiteCusto*0.2 ? 'var(--orange)' : 'var(--green)';
+    document.getElementById('mr-saldo-info').innerHTML =
+      `Limite: ${fmt(func.limiteCusto)} · Usado: ${fmt(usado)} · <strong style="color:${cor}">Saldo: ${fmt(saldo)}</strong>`;
+  }
+});
+
+function getMesAtualStr() {
+  const d = new Date();
+  return String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
+}
+
+function calcRetTotal() {
+  const qtd = parseFloat(document.getElementById('mr-qtd').value) || 0;
+  const pc  = parseFloat(document.getElementById('mr-pc').value) || 0;
+  const pv  = parseFloat(document.getElementById('mr-pv').value) || 0;
+  const box = document.getElementById('mr-total-box');
+
+  if (!qtd || !pc) { box.style.display = 'none'; return; }
+  const tc = qtd * pc, tv = pv > 0 ? qtd * pv : null;
+  box.style.display = 'block';
+  box.className = 'info-box ib-gold';
+  box.innerHTML = `Total a preço de custo: <strong>${fmt(tc)}</strong>` +
+    (tv ? ` · Equivalente venda: <strong>${fmt(tv)}</strong>` : '');
+}
+
+function salvarRetirada() {
+  const funcId = document.getElementById('mr-func').value;
+  const data   = document.getElementById('mr-data').value;
+  const prod   = document.getElementById('mr-produto').value.trim();
+  const qtd    = parseFloat(document.getElementById('mr-qtd').value) || 0;
+  const un     = document.getElementById('mr-un').value;
+  const pc     = parseFloat(document.getElementById('mr-pc').value) || 0;
+  const pv     = parseFloat(document.getElementById('mr-pv').value) || 0;
+  const obs    = document.getElementById('mr-obs').value.trim();
+
+  if (!funcId || !data || !prod || qtd <= 0 || pc <= 0) {
+    toast('Preencha todos os campos obrigatórios', 'err'); return;
+  }
+
+  const func = getFuncionarias().find(f => f.id === funcId);
+  const tc   = qtd * pc;
+  const tv   = pv > 0 ? qtd * pv : 0;
+
+  // Aviso se ultrapassar limite
+  if (func?.limiteCusto > 0) {
+    const mesRef = getMR(data);
+    const usado = getRetiradas()
+      .filter(r => r.func_id === funcId && getMR(r.data) === mesRef)
+      .reduce((s,r) => s + (r.totalCusto||0), 0);
+    if (usado + tc > func.limiteCusto) {
+      if (!confirm(`⚠️ Esta retirada (${fmt(tc)}) ultrapassará o limite de ${func.nome} (${fmt(func.limiteCusto)}).
+Usado: ${fmt(usado)} · Novo total: ${fmt(usado+tc)}
+
+Deseja continuar mesmo assim?`)) return;
+    }
+  }
+
+  const arr = getRetiradas();
+  arr.push({ id: uid(), func_id: funcId, func_nome: func?.nome||'—', data, produto: prod, qtd, un, pc, pv: pv||null, totalCusto: tc, totalVenda: tv||null, obs: obs||null });
+  saveRetiradas(arr);
+
+  toast(`✅ Retirada de ${func?.nome} registrada!`);
+  closeModal('modal-ret');
+  renderRetiradas();
+}
+
+function deletarRetirada(id) {
+  if (!confirm('Remover esta retirada?')) return;
+  saveRetiradas(getRetiradas().filter(r => r.id !== id));
+  renderRetiradas(); toast('Removida', 'warn');
+}
+
+function renderRetiradas() {
+  buildMesSelMetas('ret-mes');
+  const mes = document.getElementById('ret-mes')?.value || nowMes();
+  document.getElementById('ret-sub').textContent = `Mês: ${mes}`;
+
+  const todas = getRetiradas().filter(r => getMR(r.data) === mes);
+  const funcs = getFuncionarias();
+
+  // Popula filtro
+  const fil = document.getElementById('ret-fil-func');
+  const cur = fil.value;
+  fil.innerHTML = '<option value="">Todas as funcionárias</option>' +
+    funcs.map(f => `<option value="${f.id}" ${f.id===cur?'selected':''}>${f.nome}</option>`).join('');
+
+  const filtId = fil.value;
+  const lista  = filtId ? todas.filter(r => r.func_id === filtId) : todas;
+
+  // KPIs por funcionária
+  const kpisEl = document.getElementById('ret-kpis-func');
+  kpisEl.innerHTML = funcs.filter(f => f.ativa !== false).map(f => {
+    const ret = todas.filter(r => r.func_id === f.id);
+    const usado = ret.reduce((s,r) => s+(r.totalCusto||0), 0);
+    const usadoV = ret.reduce((s,r) => s+(r.totalVenda||0), 0);
+    const lim = f.limiteCusto || 0;
+    const pct = lim > 0 ? Math.min(usado/lim*100, 100) : 0;
+    const cor = usado > lim && lim > 0 ? 'var(--red)' : usado > lim*0.8 && lim > 0 ? 'var(--orange)' : 'var(--green)';
+    return `<div class="kpi-card" style="border-top-color:${cor};cursor:pointer" onclick="document.getElementById('ret-fil-func').value='${f.id}';renderRetiradas()">
+      <div style="font-size:11px;font-weight:700;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center">
+        <span>${f.nome}</span>
+        <span style="font-size:10px;font-weight:400;color:var(--muted)">${ret.length} item(s)</span>
+      </div>
+      <div style="font-family:'DM Mono',monospace;font-size:15px;font-weight:700;color:${cor}">${fmt(usado)}</div>
+      ${usadoV > 0 ? `<div style="font-size:10px;color:var(--muted);margin-top:2px">Equiv. venda: ${fmt(usadoV)}</div>` : ''}
+      ${lim > 0 ? `
+        <div style="margin-top:8px">
+          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-bottom:3px">
+            <span>Limite: ${fmt(lim)}</span>
+            <span>${pct.toFixed(0)}%</span>
+          </div>
+          <div style="height:5px;background:var(--border);border-radius:3px;overflow:hidden">
+            <div style="height:100%;width:${pct}%;background:${cor};border-radius:3px;transition:width .5s"></div>
+          </div>
+        </div>` : '<div style="font-size:10px;color:var(--muted);margin-top:4px">Sem limite definido</div>'}
+    </div>`;
+  }).join('');
+
+  // Tabela
+  if (!lista.length) {
+    document.getElementById('ret-tbody').innerHTML =
+      '<tr><td colspan="11" style="text-align:center;color:var(--muted);padding:24px">Nenhuma retirada neste mês</td></tr>';
+    document.getElementById('ret-foot').textContent = '';
+    return;
+  }
+
+  lista.sort((a,b) => b.data.localeCompare(a.data));
+  document.getElementById('ret-tbody').innerHTML = lista.map(r => `
+    <tr>
+      <td style="font-size:11px;color:var(--muted);white-space:nowrap">${fmtD(r.data)}</td>
+      <td style="font-weight:600">${r.func_nome}</td>
+      <td>${r.produto}</td>
+      <td style="font-family:'DM Mono',monospace">${fmtN(r.qtd,3)}</td>
+      <td style="color:var(--muted)">${r.un||'KG'}</td>
+      <td style="font-family:'DM Mono',monospace">${fmt(r.pc||0)}</td>
+      <td style="font-family:'DM Mono',monospace;font-weight:700;color:var(--red)">${fmt(r.totalCusto||0)}</td>
+      <td style="font-family:'DM Mono',monospace;color:var(--muted)">${r.pv?fmt(r.pv):'—'}</td>
+      <td style="font-family:'DM Mono',monospace;color:var(--muted)">${r.totalVenda?fmt(r.totalVenda):'—'}</td>
+      <td style="font-size:11px;color:var(--muted);max-width:120px;overflow:hidden;text-overflow:ellipsis">${r.obs||'—'}</td>
+      <td><button class="act-btn act-del" onclick="deletarRetirada('${r.id}')">✕</button></td>
+    </tr>`).join('');
+
+  const totC = lista.reduce((s,r)=>s+(r.totalCusto||0),0);
+  const totV = lista.reduce((s,r)=>s+(r.totalVenda||0),0);
+  document.getElementById('ret-foot').textContent =
+    `${lista.length} retirada(s) · Total custo: ${fmt(totC)}` + (totV>0?` · Equiv. venda: ${fmt(totV)}`:'');
+}
+
+function exportRetiradasCSV() {
+  const mes = document.getElementById('ret-mes')?.value || nowMes();
+  const lista = getRetiradas().filter(r => getMR(r.data) === mes);
+  if (!lista.length) { toast('Sem dados', 'err'); return; }
+  const hdr = 'Data,Funcionaria,Produto,Qtd,Un,PrecoCusto,TotalCusto,PrecoVenda,TotalVenda,Obs';
+  const rows = lista.map(r => [fmtD(r.data), `"${r.func_nome}"`, `"${r.produto}"`,
+    fmtN(r.qtd,3), r.un, r.pc||0, r.totalCusto||0, r.pv||0, r.totalVenda||0, `"${r.obs||''}"`].join(','));
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,\uFEFF' + encodeURIComponent([hdr,...rows].join('\n'));
+  a.download = `retiradas_${mes.replace('/','_')}.csv`; a.click(); toast('CSV exportado!');
+}
+
+// ── Registra as novas páginas no PAGE_INIT ────────────────
+Object.assign(PAGE_INIT, {
+  faturamento:   loadFaturamento,
+  retiradas:     renderRetiradas,
+  'config-func': loadConfigFunc,
 });
 
 (function(){
