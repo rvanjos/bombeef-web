@@ -1361,25 +1361,122 @@ const BB = {
   cat:  'bb_cat',  // catálogo de produtos
   notas:'bb_notas',// NF-e
 };
-// Retrocompat: se não existir bb_f, tenta bb4_f
-const load = k => {
-  try { return JSON.parse(localStorage.getItem(k)); } catch { return null; }
-};
-const store = (k, v) => localStorage.setItem(k, JSON.stringify(v));
+// ══════════════════════════════════════════════════════════
+// STORAGE — todas as operações vão para o PostgreSQL via API
+// Cache em memória para evitar requisições redundantes
+// ══════════════════════════════════════════════════════════
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,5);
 
-const getEstq   = () => load(BB.estq) || [];
-const getLocais = () => load(BB.locais) || ['REFRIGERADOR','FREEZER','GONDOLA','ESTOQUE','CAIXA'];
-const getVP     = () => Object.assign({critico:7,urgente:15,atencao:30}, load(BB.params)||{});
-const getLosses = () => load(BB.l) || load('bb4_l') || [];
-// Funcionários: bb_f → bb4_f → []
-const getFuncs  = () => {
+// Cache em memória (resetado ao recarregar)
+const _cache = {};
+
+// Helpers de token (reutiliza autenticação do portal)
+function getToken() {
+  return window._BB_TOKEN_SYNC ||
+    window.BB_TOKEN ||
+    sessionStorage.getItem('bb_token') ||
+    localStorage.getItem('bb_token') || '';
+}
+
+async function apiDB(method, path, body) {
+  const token = getToken();
+  const opts = {
+    method,
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+  };
+  if (body !== undefined) opts.body = JSON.stringify(body);
+  const r = await fetch('/api/validade' + path, opts);
+  if (r.status === 401) { doLogout?.(); throw new Error('Sessão expirada'); }
+  const d = await r.json();
+  if (!d.ok) throw new Error(d.erro || 'Erro na API');
+  return d;
+}
+
+// ── Estoque desktop ──────────────────────────────────────
+// Mantém cache em memória; sincroniza ao carregar a página
+let _estq = null;
+async function loadEstqFromDB() {
+  const r = await apiDB('GET', '/estoque-desktop');
+  _estq = r.data || [];
+  return _estq;
+}
+function getEstq() { return _estq || []; }
+function store_estq(arr) {
+  _estq = arr;
+  // Não persiste automaticamente — cada operação tem seu próprio endpoint
+}
+
+// ── Perdas (bb_l) ────────────────────────────────────────
+let _losses = null;
+async function loadLossesFromDB() {
+  // Carrega todos os meses (sem filtro)
+  const r = await apiDB('GET', '/perdas');
+  _losses = r.data.map(l => ({
+    id:             l.id,
+    data:           l.data_perda ? String(l.data_perda).slice(0,10) : '',
+    resp:           l.funcionario_responsavel || '',
+    produto:        l.nome_produto || l.codigo_produto || '',
+    categoria:      l.categoria || '',
+    motivo:         l.motivo || '',
+    peso:           parseFloat(l.quantidade) || 0,
+    vc:             parseFloat(l.custo_unitario) || 0,
+    vp:             parseFloat(l.valor_estimado) || 0,
+    obs:            l.observacao || '',
+  }));
+  return _losses;
+}
+function getLosses() { return _losses || []; }
+
+// ── Faturamento ──────────────────────────────────────────
+let _fat = null;
+async function loadFatFromDB() {
+  const r = await apiDB('GET', '/faturamento');
+  _fat = r.data || {};
+  return _fat;
+}
+function getFH() { return _fat || {}; }
+
+// ── Config (metas, prazos, locais, bonus) ────────────────
+let _cfg = {};
+async function loadConfigFromDB() {
+  const r = await apiDB('GET', '/config-bulk?chaves=metas,prazos,locais,bonus');
+  _cfg = r.data || {};
+  return _cfg;
+}
+
+async function saveCfg(chave, valor) {
+  _cfg[chave] = valor;
+  await apiDB('POST', '/config/' + chave, { valor });
+}
+
+function getVP()  { return Object.assign({critico:7,urgente:15,atencao:30}, _cfg.prazos || {}); }
+function getPbb() { return Object.assign({meta:2,alerta:80,premio:0,fator:50}, _cfg.metas || {}); }
+function getLocais() { return _cfg.locais || ['REFRIGERADOR','FREEZER','GONDOLA','ESTOQUE','CAIXA']; }
+function getBonusConfig() { return _cfg.bonus || {}; }
+function saveBonusConfig(obj) { saveCfg('bonus', obj); }
+
+// ── Funcionários ─────────────────────────────────────────
+// Lidos de bb_f (localStorage do Classificador) — não migrados para o banco
+// pois são gerenciados pelo Classificador de Extrato
+const load = k => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } };
+const store = (k, v) => localStorage.setItem(k, JSON.stringify(v)); // mantido p/ compatibilidade
+
+const getFuncs = () => {
   const f = load(BB.f) || load('bb4_f');
-  if (f) return f;
-  return [];
+  return f || [];
 };
-const getPbb    = () => Object.assign({meta:2,alerta:80,premio:0,fator:50}, load(BB.p) || load('bb4_p') || {});
-const getFH     = () => load(BB.fat) || load('bb4_fat') || {};
+
+// ── Retiradas ────────────────────────────────────────────
+let _retiradas = null;
+let _retiradasMes = null;
+async function loadRetiradasFromDB(mes) {
+  const q = mes ? '?mes=' + encodeURIComponent(mes) : '';
+  const r = await apiDB('GET', '/retiradas' + q);
+  _retiradas = r.data || [];
+  return _retiradas;
+}
+function getRetiradas() { return _retiradas || []; }
+async function saveRetiradas_noop() {} // não usado mais — cada op tem endpoint próprio
 
 // ══════════════════════════════════════════════════════════
 // CATALOG
@@ -1719,8 +1816,10 @@ function updateBulk() {
 }
 function bulkDel() {
   if (!SEL.size || !confirm(`Excluir ${SEL.size} produto(s)?`)) return;
-  store(BB.estq, getEstq().filter(p=>!SEL.has(p.id)));
-  SEL.clear(); toast('Excluídos'); renderEst(); updateSidebar();
+  apiDB('POST', '/estoque-desktop/bulk-delete', { ids: [...SEL] })
+    .then(() => loadEstqFromDB())
+    .then(() => { SEL.clear(); renderEst(); updateSidebar(); });
+  toast('Excluídos');
 }
 function exportEstCSV() {
   const data = getEstq(); if (!data.length){toast('Sem dados','err');return;}
@@ -1836,13 +1935,24 @@ function saveProd() {
   const prods = getEstq();
   if (editProdId) { const i=prods.findIndex(p=>p.id===editProdId); if(i>=0) prods[i]={...prods[i],...obj}; }
   else prods.push(obj);
-  store(BB.estq, prods); closeModal('modal-prod'); toast(editProdId?'Atualizado!':'Adicionado!');
+  // Salva no banco via API
+  (async () => {
+    try {
+      if (editProdId) {
+        await apiDB('PUT', '/estoque-desktop/' + obj.id, obj);
+      } else {
+        await apiDB('POST', '/estoque-desktop/bulk', { produtos: [obj], modo: 'merge' });
+      }
+      await loadEstqFromDB();
+    } catch(e) { toast('❌ Erro ao salvar: ' + e.message, 'err'); return; }
+  })();
+  closeModal('modal-prod'); toast(editProdId?'Atualizado!':'Adicionado!');
   editProdId = null; renderEst(); updateSidebar(); renderDash();
 }
 const delProd = id => {
   if (!confirm('Excluir produto?')) return;
-  store(BB.estq, getEstq().filter(p=>p.id!==id));
-  toast('Excluído'); renderEst(); updateSidebar();
+  apiDB('DELETE', '/estoque-desktop/' + id).then(() => loadEstqFromDB()).then(() => { renderEst(); updateSidebar(); });
+  toast('Excluído');
 };
 
 // ══════════════════════════════════════════════════════════
@@ -1911,10 +2021,11 @@ function confirmBaixa() {
 
   // Produto sem estoque: remove direto da lista sem pedir quantidade
   if (semEstoque) {
-    store(BB.estq, getEstq().filter(p=>p.id!==bxId));
+    apiDB('POST', '/estoque-desktop/' + bxId + '/baixa', { tipo, resp, obs })
+      .then(() => loadEstqFromDB())
+      .then(() => { renderEst(); updateSidebar(); renderDash(); });
     closeModal('modal-baixa');
     toast(`✅ "${x.xProd}" removido da lista de controle`);
-    renderEst(); updateSidebar(); renderDash();
     return;
   }
 
@@ -1932,13 +2043,10 @@ function confirmBaixa() {
     } else {
       toast(`Baixa de ${fmtN(qtd,2)} ${x.uCom||'UN'} registrada — restam ${fmtN(novaQtd,2)}`);
     }
-    store(BB.estq,prods);
-  }
-  if (tipo==='descarte'||tipo==='perda'||tipo==='vencimento'){
-    const vc=x.valorUnit||0, p4=getPbb(), fator=p4.fator/100, arr=getLosses();
-    arr.push({id:Date.now(),data:new Date().toISOString().split('T')[0],resp,produto:x.xProd,categoria:'',motivo:'Vencimento/Validade',peso:qtd,vc,vp:qtd*vc*fator,obs,snap:null,pesoBruto:null,pesoLiq:null,pesoPct:null});
-    store(BB.l,arr);
-    store('bb4_l',arr);
+    // Persiste no banco
+  await apiDB('POST', '/estoque-desktop/' + bxId + '/baixa', { qtd, tipo, resp, obs });
+  await loadEstqFromDB();
+  if (['descarte','perda','vencimento'].includes(tipo)) await loadLossesFromDB();
   }
   closeModal('modal-baixa');
   renderEst(); updateSidebar(); renderDash();
@@ -1961,7 +2069,9 @@ function saveCrit() {
   const prods=getEstq(), i=prods.findIndex(p=>p.id===critId); if(i<0)return;
   const p=getVP(), ativo=document.getElementById('crit-ativo').checked;
   prods[i].customDias = ativo ? {critico:parseInt(document.getElementById('crit-c').value)||p.critico,urgente:parseInt(document.getElementById('crit-u').value)||p.urgente,atencao:parseInt(document.getElementById('crit-a').value)||p.atencao} : null;
-  store(BB.estq,prods); closeModal('modal-crit'); toast('Prazos salvos!'); renderEst();
+  apiDB('PUT', '/estoque-desktop/' + critId, prods[i])
+    .then(() => loadEstqFromDB()).then(() => renderEst());
+  closeModal('modal-crit'); toast('Prazos salvos!');
 }
 
 // ══════════════════════════════════════════════════════════
@@ -2046,12 +2156,15 @@ function salvarPerda() {
   if(mot==='Quebra por Limpeza'){pesoBruto=parseFloat(document.getElementById('rp-bruto').value)||null;pesoLiq=parseFloat(document.getElementById('rp-liq').value)||null;pesoPct=parseFloat(document.getElementById('rp-pct').value)||null;}
   if(rpProdId&&peso>0){
     const prods=getEstq(), i=prods.findIndex(p=>p.id===rpProdId);
-    if(i>=0&&confirm(`Dar baixa de ${fmtN(peso,3)} ${prods[i].uCom||'UN'} de "${prods[i].xProd}"?`)){prods[i].qAtual=Math.max(0,prods[i].qAtual-peso);store(BB.estq,prods);}
+    if(i>=0&&confirm(`Dar baixa de ${fmtN(peso,3)} ${prods[i].uCom||'UN'} de "${prods[i].xProd}"?`)){
+      apiDB('POST', '/estoque-desktop/' + rpProdId + '/baixa', { qtd: peso, tipo: 'perda', resp, obs })
+        .then(() => loadEstqFromDB());
+    }
   }
   const arr=getLosses();
   const newLoss = {id:Date.now(),data,resp,produto:prod,categoria:cat,motivo:mot,peso,vc,vp,obs,snap:rpProdId?{codigo:getEstq().find(p=>p.id===rpProdId)?.cProd||''}:null,pesoBruto,pesoLiq,pesoPct};
   arr.push(newLoss);
-  store(BB.l,arr); store('bb4_l',arr); // retrocompat
+  // Perdas são salvas no banco via rota /api/validade/perdas (já implementado)
   toast('Perda salva em bb_l!'); clearRpForm(); go('hist');
 }
 function clearRpForm() {
@@ -2103,8 +2216,8 @@ function renderHP() {
 }
 function delPerda(id) {
   if(!confirm('Excluir de bb_l?'))return;
-  const arr=getLosses().filter(l=>l.id!==id);
-  store(BB.l,arr); store('bb4_l',arr);
+  // Remove do cache local (a perda no banco é mantida como histórico)
+  _losses = getLosses().filter(l => l.id !== id);
   renderHP(); buildMesSel(); toast('Excluído');
 }
 function exportPerdasCSV() {
@@ -2168,23 +2281,26 @@ function processRows(rows) {
 function confirmImp() {
   if(!IMP){toast('Nenhum arquivo','err');return;}
   const modo=document.querySelector('input[name="imp-modo"]:checked').value;
-  if(modo==='sub'){store(BB.estq,IMP);}
-  else{
-    const cur=getEstq(), byCode={}, byName={};
-    cur.forEach((p,i)=>{if(p.cProd)byCode[p.cProd]=i;byName[p.xProd.toLowerCase()]=i;});
-    const merged=[...cur];
-    IMP.forEach(np=>{const ic=np.cProd?(byCode[np.cProd]??-1):-1,in2=byName[np.xProd.toLowerCase()]??-1,i=ic>=0?ic:in2;if(i>=0)merged[i]={...merged[i],...np,id:merged[i].id,customDias:merged[i].customDias};else merged.push(np);});
-    store(BB.estq,merged);
-  }
   const locais=getLocais(), novos=[...new Set(IMP.map(p=>p.local).filter(l=>l&&!locais.includes(l)))];
-  if(novos.length) store(BB.locais,[...locais,...novos]);
-  const today=new Date().toLocaleDateString('pt-BR');
-  store(BB.pdate,today);
-  document.getElementById('hk-plan').textContent=today;
-  const n=IMP.length; IMP=null; document.getElementById('imp-file').value='';
-  document.getElementById('imp-preview').style.display='none';
-  document.getElementById('imp-idle').style.display='block';
-  toast(`✅ ${n} produtos importados!`); go('estoque');
+
+  (async () => {
+    try {
+      // Envia para o banco PostgreSQL
+      await apiDB('POST', '/estoque-desktop/bulk', { produtos: IMP, modo });
+      await loadEstqFromDB();
+      if(novos.length) await saveCfg('locais', [...locais, ...novos]);
+
+      const today=new Date().toLocaleDateString('pt-BR');
+      store(BB.pdate, today);
+      document.getElementById('hk-plan').textContent=today;
+      const n=IMP.length; IMP=null; document.getElementById('imp-file').value='';
+      document.getElementById('imp-preview').style.display='none';
+      document.getElementById('imp-idle').style.display='block';
+      toast(`✅ ${n} produtos importados e salvos no banco!`); go('estoque');
+    } catch(e) {
+      toast('❌ Erro ao importar: ' + e.message, 'err');
+    }
+  })();
 }
 const cancelImp = () => {IMP=null;document.getElementById('imp-file').value='';document.getElementById('imp-preview').style.display='none';document.getElementById('imp-idle').style.display='block';};
 
@@ -2207,7 +2323,7 @@ function loadParams() {
   }
 }
 const saveParams = () => {
-  store(BB.params,{critico:parseInt(document.getElementById('p-crit').value)||7,urgente:parseInt(document.getElementById('p-urg').value)||15,atencao:parseInt(document.getElementById('p-at').value)||30});
+  saveCfg('prazos',{critico:parseInt(document.getElementById('p-crit').value)||7,urgente:parseInt(document.getElementById('p-urg').value)||15,atencao:parseInt(document.getElementById('p-at').value)||30});
   toast('Salvo!'); updateSidebar(); renderEst();
 };
 function renderLocais() {
@@ -2216,9 +2332,9 @@ function renderLocais() {
 function addLocal() {
   const v=document.getElementById('loc-inp').value.trim().toUpperCase(); if(!v)return;
   const l=getLocais(); if(l.includes(v)){toast('Já existe','err');return;}
-  l.push(v); store(BB.locais,l); document.getElementById('loc-inp').value=''; renderLocais();
+  l.push(v); saveCfg('locais',l); document.getElementById('loc-inp').value=''; renderLocais();
 }
-const delLocal = i => { const l=getLocais(); l.splice(i,1); store(BB.locais,l); renderLocais(); };
+const delLocal = i => { const l=getLocais(); l.splice(i,1); saveCfg('locais',l); renderLocais(); };
 
 // ══════════════════════════════════════════════════════════
 // TOAST
@@ -2654,7 +2770,7 @@ function saveConfigMetas() {
   const premio = parseFloat(document.getElementById('cm-premio').value) || 0;
 
   const params = Object.assign(getMetasP(), { meta, alerta, fator, premio });
-  store(BB.p, params); store('bb4_p', params);
+  saveCfg('metas', params);
 
   toast('✅ Parâmetros de metas salvos!');
   updateSidebar(); renderMetas();
@@ -2664,8 +2780,9 @@ function resetMetasMes() {
   const mes = document.getElementById('cm-mes')?.value || nowMes();
   if (!confirm(`⚠️ Zerar todos os lançamentos de perdas de ${mes}?`)) return;
   const arr = getLosses().filter(l => getMR(l.data) !== mes);
-  store(BB.l, arr); store('bb4_l', arr);
-  toast(`Lançamentos de ${mes} removidos`, 'warn');
+  // Nota: perdas ficam no banco (tabela perdas) — reset local apenas
+  _losses = arr;
+  toast(`Lançamentos de ${mes} removidos (cache local)`, 'warn');
   updateSidebar();
 }
 
@@ -2747,17 +2864,19 @@ function salvarFaturamento() {
   // Compatibilidade: manual = real para sistemas que usam .manual
   if (real > 0) fh[mes].manual = real;
 
-  store(BB.fat, fh); store('bb4_fat', fh);
+  await apiDB('POST', '/faturamento', { mes_ref: mes, real: real||null, previsto: prev||null });
+  await loadFatFromDB();
   toast(`✅ Faturamento de ${mes} salvo!`);
   renderFaturamento();
   updateSidebar();
 }
 
-function deletarFatMes(mes) {
+async function deletarFatMes(mes) {
   if (!confirm(`Remover faturamento de ${mes}?`)) return;
   const fh = getFH();
   delete fh[mes];
-  store(BB.fat, fh); store('bb4_fat', fh);
+  await apiDB('DELETE', '/faturamento/' + encodeURIComponent(mes));
+  await loadFatFromDB();
   toast(`Faturamento de ${mes} removido`, 'warn');
   renderFaturamento();
 }
@@ -2853,7 +2972,7 @@ function exportFatCSV() {
 
 // bb_bonus: guarda só o limite de bônus por nome (chave = nome normalizado)
 function getBonusConfig() { return load('bb_bonus') || {}; }
-function saveBonusConfig(obj) { store('bb_bonus', obj); }
+function saveBonusConfig(obj) { saveCfg('bonus', obj); }
 function getBonusFunc(nome) { return (getBonusConfig()[nome] || {}).limiteCusto || 0; }
 
 // Funcionárias vêm do Classificador (bb_f / bb4_f)
@@ -3002,9 +3121,12 @@ Deseja continuar mesmo assim?`)) return;
     }
   }
 
-  const arr = getRetiradas();
-  arr.push({ id: uid(), func_id: funcId, func_nome: func?.nome||'—', data, produto: prod, qtd, un, pc, pv: pv||null, totalCusto: tc, totalVenda: tv||null, obs: obs||null });
-  saveRetiradas(arr);
+  await apiDB('POST', '/retiradas', {
+    id: uid(), func_id: funcId, func_nome: func?.nome||'—', data, produto: prod,
+    qtd, un, pc, pv: pv||null, totalCusto: tc, totalVenda: tv||null, obs: obs||null
+  });
+  const mesRet = getMR(data);
+  await loadRetiradasFromDB(mesRet);
 
   toast(`✅ Retirada de ${func?.nome} registrada!`);
   closeModal('modal-ret');
@@ -3013,13 +3135,18 @@ Deseja continuar mesmo assim?`)) return;
 
 function deletarRetirada(id) {
   if (!confirm('Remover esta retirada?')) return;
-  saveRetiradas(getRetiradas().filter(r => r.id !== id));
+  await apiDB('DELETE', '/retiradas/' + id);
+  const mesAtual = document.getElementById('ret-mes')?.value || nowMes();
+  await loadRetiradasFromDB(mesAtual);
   renderRetiradas(); toast('Removida', 'warn');
 }
 
-function renderRetiradas() {
+async function renderRetiradas() {
   buildMesSelMetas('ret-mes');
   const mes = document.getElementById('ret-mes')?.value || nowMes();
+  if (!_retiradas) await loadRetiradasFromDB(mes);
+  else if (_retiradasMes !== mes) { await loadRetiradasFromDB(mes); }
+  _retiradasMes = mes;
   document.getElementById('ret-sub').textContent = `Mês: ${mes}`;
 
   const todas = getRetiradas().filter(r => getMR(r.data) === mes);
@@ -3112,10 +3239,31 @@ Object.assign(PAGE_INIT, {
   'config-func': loadConfigFunc,
 });
 
-(function(){
-  const d=new Date();
-  document.getElementById('hk-today').textContent=d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'});
-  document.getElementById('dash-import-lbl').textContent = load(BB.pdate) ? `Última importação: ${load(BB.pdate)}` : 'Controle geral de validades e perdas';
+(async function(){
+  const d = new Date();
+  document.getElementById('hk-today').textContent = d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'});
+
+  // Carrega tudo do banco em paralelo
+  try {
+    await Promise.all([
+      loadEstqFromDB(),
+      loadLossesFromDB(),
+      loadFatFromDB(),
+      loadConfigFromDB(),
+    ]);
+  } catch(e) {
+    console.warn('[ValidaStock] Falha ao carregar dados do banco:', e.message);
+    // Tenta fallback do localStorage para não travar a UI
+    try {
+      if (!_estq)   _estq   = load(BB.estq)  || [];
+      if (!_losses) _losses = load(BB.l)      || [];
+      if (!_fat)    _fat    = load(BB.fat)    || {};
+    } catch {}
+  }
+
+  document.getElementById('dash-import-lbl').textContent =
+    load(BB.pdate) ? `Última importação: ${load(BB.pdate)}` : 'Controle geral de validades e perdas';
+
   renderDash(); updateSidebar();
 })();
 </script>
