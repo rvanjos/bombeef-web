@@ -117,7 +117,7 @@ module.exports = function (pool) {
           COALESCE(SUM(valor) FILTER (WHERE status = 'pago'
             AND dt_pagamento >= DATE_TRUNC('month', NOW())), 0)                        AS pago_mes,
           COALESCE(SUM(valor) FILTER (WHERE status = 'avencer'
-            AND vencimento BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days')),0) AS valor_vence_7dias
+            AND vencimento BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'), 0) AS valor_vence_7dias
         FROM boletos
         WHERE status != 'cancelado'
       `);

@@ -36,7 +36,7 @@ module.exports = function (pool) {
       CREATE TABLE IF NOT EXISTS kit_itens (
         id                    SERIAL PRIMARY KEY,
         kit_id                INTEGER NOT NULL REFERENCES kits(id) ON DELETE CASCADE,
-        produto_id            INTEGER REFERENCES produtos(id),
+        produto_id            INTEGER,
         codigo_produto        TEXT,
         descricao_produto     TEXT,
         quantidade            NUMERIC(10,3) DEFAULT 1,

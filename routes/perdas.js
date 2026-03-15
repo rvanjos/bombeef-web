@@ -46,7 +46,7 @@ module.exports = function (pool) {
   initTable().catch(e => console.error('[perdas] initTable:', e.message));
 
   // ── GET /meta/:mes ─────────────────────────────────────────────────────────
-  r.get('/meta/:mes', async (req, res) => {
+  r.get('/meta/:mes(*)', async (req, res) => {
     try {
       const mes = req.params.mes; // MM/YYYY
 

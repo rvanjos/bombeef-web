@@ -139,7 +139,7 @@ module.exports = function (pool) {
   });
 
   // ── GET /sessoes/:id ───────────────────────────────────────────────────────
-  r.get('/sessoes/:id', async (req, res) => {
+  r.get('/sessoes/:id(*)', async (req, res) => {
     try {
       const isNum = /^\d+$/.test(req.params.id);
       const query = isNum
