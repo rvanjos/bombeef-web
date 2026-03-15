@@ -2303,7 +2303,17 @@ function salvarPerda() {
   if(mot==='Quebra por Limpeza'){pesoBruto=parseFloat(document.getElementById('rp-bruto').value)||null;pesoLiq=parseFloat(document.getElementById('rp-liq').value)||null;pesoPct=parseFloat(document.getElementById('rp-pct').value)||null;}
   if(rpProdId&&peso>0){
     const prods=getEstq(), i=prods.findIndex(p=>p.id===rpProdId);
-    if(i>=0&&confirm(`Dar baixa de ${fmtN(peso,3)} ${prods[i].uCom||'UN'} de "${prods[i].xProd}"?`)){prods[i].qAtual=Math.max(0,prods[i].qAtual-peso);store(BB.estq,prods);syncBg('POST','/estoque-desktop/'+rpProdId+'/baixa',{qtd:peso,tipo:'perda',resp,obs});}
+    if(i>=0&&confirm(`Dar baixa de ${fmtN(peso,3)} ${prods[i].uCom||'UN'} de "${prods[i].xProd}"?`)){
+      prods[i].qAtual=Math.max(0,prods[i].qAtual-peso);
+      // Se zerou, remove automaticamente da lista
+      if(prods[i].qAtual<=0){
+        const _nomeProd = prods[i].xProd || '';
+        prods.splice(i,1);
+        toast(`✅ Perda registrada — "${_nomeProd}" removido da lista (estoque zerado)`);
+      }
+      store(BB.estq,prods);
+      syncBg('POST','/estoque-desktop/'+rpProdId+'/baixa',{qtd:peso,tipo:'perda',resp,obs});
+    }
   }
   const arr=getLosses();
   const newLoss = {id:Date.now(),data,resp,produto:prod,categoria:cat,motivo:mot,peso,vc,vp,obs,snap:rpProdId?{codigo:getEstq().find(p=>p.id===rpProdId)?.cProd||''}:null,pesoBruto,pesoLiq,pesoPct};
@@ -2403,7 +2413,11 @@ function processRows(rows) {
     const kgV=parseFloat(get(row,cols.kg).replace(',','.'))||0, pcV=parseFloat(get(row,cols.pecas).replace(',','.'))||0;
     const qtd=kgV>0?kgV:pcV, uCom=kgV>0?'KG':'UN', cod=get(row,cols.cod).replace(/\s+/g,'');
     const result=get(row,cols.result).toLowerCase(), acabou=result.includes('acabou');
-    prods.push({id:uid(),cProd:cod,xProd:nome,qAtual:acabou?0:qtd,uCom,valorUnit:0,dVal:dv,local:get(row,cols.local).toUpperCase().trim(),entrada:parseDateBR(get(row,cols.entr)),conferencia:get(row,cols.conf),acaoAnteVencer:get(row,cols.acao),resultado:get(row,cols.result),customDias:null});
+    // Busca valor de custo no catálogo pelo código, depois pelo nome
+    const catalogEntry = cod ? CATMAP[cod] : null;
+    const catalogByName = !catalogEntry ? Object.values(CATMAP).find(e => e.nome && nome && e.nome.toLowerCase().includes(nome.toLowerCase().slice(0,15))) : null;
+    const custoUnit = catalogEntry?.pc || catalogByName?.pc || 0;
+    prods.push({id:uid(),cProd:cod,xProd:nome,qAtual:acabou?0:qtd,uCom,valorUnit:custoUnit,dVal:dv,local:get(row,cols.local).toUpperCase().trim(),entrada:parseDateBR(get(row,cols.entr)),conferencia:get(row,cols.conf),acaoAnteVencer:get(row,cols.acao),resultado:get(row,cols.result),customDias:null});
   });
   if(!prods.length){toast('Nenhum produto encontrado','err');return;}
   IMP=prods;

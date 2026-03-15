@@ -697,10 +697,17 @@ let pagandoId=null;
 // ─── API KEY ─────────────────────────────────────────────────────────────────
 function saveApiKey(val){
   window._apiKey=(val||'').trim();
+  try { if(window._apiKey) localStorage.setItem('bb_pdf_apikey', window._apiKey);
+        else localStorage.removeItem('bb_pdf_apikey'); } catch(e) {}
   const s=document.getElementById('key-status');
   if(s){const ok=window._apiKey.startsWith('sk-ant-')&&window._apiKey.length>20;s.textContent=ok?'🟢':'🔴';}
 }
-function getApiKey(){return (window._apiKey||'').trim();}
+function getApiKey(){
+  if (!window._apiKey) {
+    try { window._apiKey = localStorage.getItem('bb_pdf_apikey') || ''; } catch(e) {}
+  }
+  return (window._apiKey||'').trim();
+}
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 const MES_NAMES=["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
@@ -1305,39 +1312,6 @@ function resetAll(){notas=[];globalId=0;updateAll();}
 // Chave: bb_boletos  (lida também pelo Classificador de Extrato)
 // ════════════════════════════════════════════════════════════════════════════
 const BB_KEY = 'bb_boletos';
-
-// ── Token (recebido do portal via postMessage) ─────────────────────────────────
-let _bbToken = sessionStorage.getItem('bb_token') || localStorage.getItem('bb_token') || null;
-
-window.addEventListener('message', e => {
-  if (e.data?.type === 'bb_auth' && e.data.token) {
-    _bbToken = e.data.token;
-  }
-});
-try { window.parent.postMessage({ type: 'bb_request_auth' }, '*'); } catch(e) {}
-
-function waitToken(ms = 6000) {
-  return new Promise(resolve => {
-    if (_bbToken) { resolve(_bbToken); return; }
-    const h = e => { if (e.data?.type==='bb_auth' && e.data.token) { _bbToken=e.data.token; window.removeEventListener('message',h); clearTimeout(t); resolve(_bbToken); } };
-    window.addEventListener('message', h);
-    const t = setTimeout(() => { window.removeEventListener('message',h); resolve(_bbToken||localStorage.getItem('bb_token')||null); }, ms);
-  });
-}
-
-// Espelha operação no banco em background (não bloqueia UI)
-function syncBoleto(method, path, body) {
-  waitToken(6000).then(token => {
-    if (!token) return;
-    fetch(path, {
-      method,
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-      body: body ? JSON.stringify(body) : undefined,
-    }).then(r => r.json()).then(d => {
-      if (d && !d.ok) console.warn('[boletos sync]', path, d.erro || d);
-    }).catch(e => console.warn('[boletos sync]', path, e.message));
-  });
-}
 const PLANOS = [
   'Fornec - Proteínas','Fornec - Acompanhamentos','Fornec - Bebidas/Gelo/Sorvete',
   'Fornec - Empório (outros)','Fornec - Empório (carvão)','Fornec - Embalagens',
@@ -1365,63 +1339,7 @@ function saveBoletos() {
   try {
     localStorage.setItem(BB_KEY, JSON.stringify({ boletos, globalId: boletosId, at: new Date().toISOString() }));
     updateBadge();
-    // Espelha no banco em background
-    syncBoletosParaBanco();
-    // Atualiza o export para o classificador
-    atualizarExportClassificador();
-  } catch(e) { showToast('⚠️ Erro ao salvar: ' + e.message, '#c0392b'); }
-}
-
-function syncBoletosParaBanco() {
-  syncBoleto('POST', '/api/boletos/bulk', { boletos, globalId: boletosId });
-}
-
-function atualizarExportClassificador() {
-  try {
-    const data = boletos.filter(b => b.status !== 'pago').map(b => ({
-      fornecedor: b.fornecedor, nf: b.nf||'', parcela: b.parcela||'1',
-      vencimento: b.vencimento, valor: b.valor, plano: b.plano||'',
-      status: b.status, origem: b.origem||'manual',
-    }));
-    localStorage.setItem('bb_boletos_export', JSON.stringify({ data, exportedAt: new Date().toISOString() }));
-  } catch(e) {}
-}
-
-// Ao abrir o sistema, puxa boletos do banco e mescla com localStorage
-async function pullBoletosFromDB() {
-  const token = await waitToken(6000);
-  if (!token) return;
-  try {
-    const r = await fetch('/api/boletos', {
-      headers: { 'Authorization': 'Bearer ' + token }
-    });
-    if (!r.ok) return;
-    const d = await r.json();
-    if (!d.ok || !d.data?.length) return;
-    // Mescla: banco tem prioridade (tem dados de todos os dispositivos)
-    const byId = {};
-    // Primeiro carrega do banco
-    d.data.forEach(b => { byId[b.id] = b; });
-    // Depois mescla local (pode ter dados novos ainda não sincronizados)
-    boletos.forEach(b => { if (!byId[b.id]) byId[b.id] = b; });
-    boletos = Object.values(byId).sort((a,b) => {
-      if (!a.vencimento) return 1;
-      if (!b.vencimento) return -1;
-      return a.vencimento.localeCompare(b.vencimento);
-    });
-    boletosId = Math.max(boletosId, ...boletos.map(b => (b.id||0)+1), 0);
-    // Salva localmente sem triggar sync para o banco (evita loop)
-    try { localStorage.setItem(BB_KEY, JSON.stringify({ boletos, globalId: boletosId, at: new Date().toISOString() })); } catch(e) {}
-    updateBadge(); updateBStats(); updateBFilterOptions(); renderBoletos();
-    console.log('[boletos] pull do banco: ' + boletos.length + ' boletos');
-  } catch(e) { console.warn('[boletos] pull falhou:', e.message); }
-}
-
-// Registra baixa/pagamento também no banco
-function registrarBaixaNoBanco(boletoId, dtPagamento) {
-  syncBoleto('POST', '/api/boletos/' + boletoId + '/baixa', {
-    dtPagamento: dtPagamento || new Date().toISOString().slice(0,10)
-  });
+  } catch(e) { showToast('⚠️ Erro ao salvar no localStorage: ' + e.message, '#c0392b'); }
 }
 function loadBoletos() {
   try {
@@ -2050,8 +1968,17 @@ function showToast(msg,bg){
 // ── INIT BOLETOS ──────────────────────────────────────────────────────────────
 loadBoletos();
 updateBadge();
-// Puxa do banco após token estar disponível
-setTimeout(() => pullBoletosFromDB().catch(() => {}), 800);
+// Restaura API key do localStorage
+try {
+  const savedKey = localStorage.getItem('bb_pdf_apikey');
+  if (savedKey) {
+    window._apiKey = savedKey;
+    const inp = document.getElementById('api-key-input');
+    if (inp) inp.value = savedKey;
+    const s = document.getElementById('api-key-status');
+    if (s) s.textContent = savedKey.startsWith('sk-ant-') && savedKey.length > 20 ? '🟢' : '🔴';
+  }
+} catch(e) {}
 
 
 // ════════════════════════════════════════════════════════════════
