@@ -266,7 +266,7 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
 // ════════════════════════════════════════════════════════════════
 
 const SYS = [
-  { id:'config',        icon:'⚙️', title:'Configurações do Sistema',
+  { id:'config',        icon:'⚙', title:'Configurações do Sistema',
     desc:'Categorias DRE, funcionários, metas, locais, usuários e integrações — tudo em um lugar.',
     tags:['DRE','Funcionários','Metas','Usuários'], c:'#5C0000', file:'bb_config.html',
     perfis:['admin','gerente'] },
@@ -392,6 +392,7 @@ function sysCardHTML(s, locked) {
     ? `toast('Acesso não permitido para seu perfil.','#c0392b')`
     : s.file ? `openSys('${s.id}')` : `toast('Módulo em desenvolvimento.','#6c3483')`;
   return `<div class="sys-card${locked ? ' locked' : ''}" onclick="${click}" style="--c:${s.c}">
+    ${s.id === 'config' ? '<div class="sc-badge green">CENTRAL</div>' : ''}
     <div class="sc-icon">${s.icon}</div>
     <div class="sc-title">${s.title}</div>
     <div class="sc-desc">${s.desc}</div>
@@ -401,6 +402,7 @@ function sysCardHTML(s, locked) {
 }
 function buildGrids() {
   const perms = getPerms();
+  console.log('[buildGrids] perfil:', CUR_USER?.perfil, '| perms:', perms);
   document.getElementById('home-grid').innerHTML = SYS.filter(s => perms.includes(s.id)).map(s => sysCardHTML(s, false)).join('');
   document.getElementById('all-grid').innerHTML  = SYS.map(s => sysCardHTML(s, !perms.includes(s.id))).join('');
 }

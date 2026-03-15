@@ -58,7 +58,19 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // ── Servir frontend estático ──────────────────────────────────
-app.use(express.static(path.join(__dirname, 'public')));
+// index.html nunca cacheado — garante que novos módulos aparecem imediatamente
+app.get('/', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+app.use(express.static(path.join(__dirname, 'public'), {
+  etag: false,
+  setHeaders(res, filePath) {
+    if (filePath.endsWith('.html')) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    }
+  }
+}));
 
 // ── API Routes ────────────────────────────────────────────────
 app.use('/auth',             require('./routes/auth')(pool));
