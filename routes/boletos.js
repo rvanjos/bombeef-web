@@ -1,186 +1,266 @@
-const express    = require('express');
-const autenticar = require('../middleware/auth');
+/**
+ * routes/boletos.js
+ * Controle de boletos e NF-e — persistência no PostgreSQL
+ *
+ * Tabelas criadas automaticamente:
+ *   boletos  — boletos/parcelas cadastrados no nfe_boletos_bombeef.html
+ *
+ * Rotas:
+ *   GET  /api/boletos              → lista boletos (filtro: status, mes)
+ *   POST /api/boletos              → cria boleto individual
+ *   PUT  /api/boletos/:id          → atualiza boleto
+ *   DELETE /api/boletos/:id        → remove boleto
+ *   POST /api/boletos/bulk         → upsert em lote (sincronização do frontend)
+ *   POST /api/boletos/:id/baixa    → registra pagamento
+ *   GET  /api/boletos/kpis         → totais para o dashboard
+ *   GET  /api/boletos/classificador → exporta formato compatível com o classificador
+ */
 
-module.exports = (pool) => {
-  const router = express.Router();
+const express = require('express');
+const { requireAuth } = require('../middleware/auth');
 
-  // ── GET /api/boletos ─────────────────────────────────────
-  router.get('/', autenticar(['admin','gerente','financeiro']), async (req, res) => {
-    const { cnpj, status, periodo, limit = 200, offset = 0 } = req.query;
-    const where  = ['1=1'];
-    const params = [];
+module.exports = function (pool) {
+  const r = express.Router();
+  r.use(requireAuth);
 
-    if (cnpj)   where.push(`b.cnpj_fornecedor = $${params.push(cnpj)}`);
-    if (status) where.push(`b.status = $${params.push(status)}`);
-    if (periodo) {
-      // periodo = YYYY-MM
-      params.push(periodo);
-      where.push(`TO_CHAR(b.data_vencimento, 'YYYY-MM') = $${params.length}`);
-    }
+  // ── Init tabela ────────────────────────────────────────────────────────────
+  async function initTable() {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS boletos (
+        id              SERIAL PRIMARY KEY,
+        frontend_id     INTEGER,           -- ID gerado pelo frontend (boletosId)
+        fornecedor      TEXT NOT NULL,
+        produto         TEXT,
+        dt_nota         TEXT,              -- data da NF-e (YYYY-MM-DD ou string)
+        nf              TEXT,              -- número da NF-e
+        parcela         TEXT DEFAULT '1',
+        plano           TEXT,              -- categoria DRE
+        vencimento      DATE,
+        valor           NUMERIC(14,2) NOT NULL DEFAULT 0,
+        status          TEXT DEFAULT 'avencer', -- avencer | pago | vencido
+        dt_pagamento    DATE,
+        observacao      TEXT,
+        origem          TEXT DEFAULT 'manual', -- manual | nfe | csv
+        nf_id           INTEGER,           -- referência à NF-e de origem
+        usuario_id      INTEGER,
+        criado_em       TIMESTAMPTZ DEFAULT NOW(),
+        atualizado_em   TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_boletos_vencimento ON boletos(vencimento);
+      CREATE INDEX IF NOT EXISTS idx_boletos_status     ON boletos(status);
+      CREATE INDEX IF NOT EXISTS idx_boletos_frontend   ON boletos(frontend_id);
+    `);
+  }
+  initTable().catch(e => console.error('[boletos] initTable:', e.message));
 
+  // ── Helpers ────────────────────────────────────────────────────────────────
+  function rowToFrontend(b) {
+    return {
+      id:           b.frontend_id ?? b.id,
+      dbId:         b.id,
+      fornecedor:   b.fornecedor,
+      produto:      b.produto || '',
+      dtNota:       b.dt_nota || '',
+      nf:           b.nf || '',
+      parcela:      b.parcela || '1',
+      plano:        b.plano || '',
+      vencimento:   b.vencimento ? b.vencimento.toISOString().slice(0, 10) : '',
+      valor:        parseFloat(b.valor) || 0,
+      status:       b.status || 'avencer',
+      dtPagamento:  b.dt_pagamento ? b.dt_pagamento.toISOString().slice(0, 10) : '',
+      obs:          b.observacao || '',
+      origem:       b.origem || 'manual',
+    };
+  }
+
+  // ── GET /kpis ──────────────────────────────────────────────────────────────
+  r.get('/kpis', async (req, res) => {
     try {
+      const { rows } = await pool.query(`
+        SELECT
+          COUNT(*) FILTER (WHERE status != 'pago')                        AS abertos,
+          COUNT(*) FILTER (WHERE status = 'vencido' OR (status = 'avencer' AND vencimento < CURRENT_DATE)) AS vencidos,
+          COALESCE(SUM(valor) FILTER (WHERE status != 'pago'), 0)         AS total_aberto,
+          COALESCE(SUM(valor) FILTER (WHERE status = 'pago'
+            AND dt_pagamento >= DATE_TRUNC('month', NOW())), 0)           AS pago_mes
+        FROM boletos
+      `);
+      res.json({ ok: true, data: {
+        abertos:      parseInt(rows[0].abertos),
+        vencidos:     parseInt(rows[0].vencidos),
+        total_aberto: parseFloat(rows[0].total_aberto),
+        pago_mes:     parseFloat(rows[0].pago_mes),
+      }});
+    } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ── GET /classificador — formato para o classificador DRE ─────────────────
+  r.get('/classificador', async (req, res) => {
+    try {
+      const { rows } = await pool.query(`
+        SELECT * FROM boletos
+        WHERE status != 'pago'
+        ORDER BY vencimento ASC NULLS LAST
+      `);
+      const data = rows.map(b => ({
+        fornecedor:  b.fornecedor,
+        nf:          b.nf || '',
+        parcela:     b.parcela || '1',
+        vencimento:  b.vencimento ? b.vencimento.toISOString().slice(0, 10) : '',
+        valor:       parseFloat(b.valor) || 0,
+        plano:       b.plano || '',
+        status:      b.status,
+        origem:      b.origem || 'manual',
+      }));
+      res.json({ ok: true, data, exportedAt: new Date().toISOString() });
+    } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ── GET / — lista boletos ──────────────────────────────────────────────────
+  r.get('/', async (req, res) => {
+    try {
+      const { status, mes } = req.query;
+      const conds = [];
+      const params = [];
+      if (status && status !== 'todos') {
+        params.push(status);
+        conds.push(`status = $${params.length}`);
+      }
+      if (mes) {
+        // mes = MM/YYYY
+        const [mm, yyyy] = mes.split('/');
+        params.push(parseInt(mm), parseInt(yyyy));
+        conds.push(`EXTRACT(MONTH FROM vencimento) = $${params.length - 1}
+                    AND EXTRACT(YEAR FROM vencimento) = $${params.length}`);
+      }
+      const where = conds.length ? 'WHERE ' + conds.join(' AND ') : '';
       const { rows } = await pool.query(
-        `SELECT b.*,
-                COALESCE(f.nome_fantasia, f.razao_social, b.razao_social_fornecedor) AS fornecedor_nome,
-                CURRENT_DATE - b.data_vencimento AS dias_atraso
-         FROM boletos b
-         LEFT JOIN fornecedores f ON f.cnpj_fornecedor = b.cnpj_fornecedor
-         WHERE ${where.join(' AND ')}
-         ORDER BY b.data_vencimento ASC
-         LIMIT $${params.push(parseInt(limit))} OFFSET $${params.push(parseInt(offset))}`,
+        `SELECT * FROM boletos ${where} ORDER BY vencimento ASC NULLS LAST, id DESC`,
         params
       );
-      res.json(rows);
-    } catch (err) {
-      console.error('[boletos GET /]', err.message);
-      res.status(500).json({ erro: 'Erro ao buscar boletos.' });
-    }
+      res.json({ ok: true, data: rows.map(rowToFrontend) });
+    } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
-  // ── GET /api/boletos/abertos ─────────────────────────────
-  router.get('/abertos', autenticar(['admin','gerente','financeiro']), async (req, res) => {
+  // ── POST /bulk — upsert em lote (sincronização do frontend) ───────────────
+  r.post('/bulk', async (req, res) => {
+    const { boletos = [], globalId } = req.body;
+    if (!Array.isArray(boletos)) return res.status(400).json({ ok: false, erro: 'boletos deve ser array' });
+
+    const client = await pool.connect();
     try {
-      const { rows } = await pool.query('SELECT * FROM vw_boletos_abertos');
-      res.json(rows);
-    } catch (err) {
-      res.status(500).json({ erro: 'Erro ao buscar boletos abertos.' });
-    }
+      await client.query('BEGIN');
+
+      // Desativa todos os do usuário e reinsere — abordagem mais simples para bulk sync
+      // Mantém histórico de pagos
+      await client.query(`
+        DELETE FROM boletos WHERE status != 'pago' AND usuario_id = $1
+      `, [req.user.id]);
+
+      for (const b of boletos) {
+        if (!b.fornecedor || !b.valor) continue;
+        await client.query(`
+          INSERT INTO boletos
+            (frontend_id, fornecedor, produto, dt_nota, nf, parcela, plano,
+             vencimento, valor, status, dt_pagamento, observacao, origem, nf_id, usuario_id)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+        `, [
+          b.id ?? null,
+          b.fornecedor,
+          b.produto || null,
+          b.dtNota || b.dt_nota || null,
+          b.nf || null,
+          b.parcela || '1',
+          b.plano || null,
+          b.vencimento || null,
+          parseFloat(b.valor) || 0,
+          b.status || 'avencer',
+          b.dtPagamento || b.dt_pagamento || null,
+          b.obs || b.observacao || null,
+          b.origem || 'manual',
+          b.nfId || b.nf_id || null,
+          req.user.id,
+        ]);
+      }
+
+      await client.query('COMMIT');
+      res.json({ ok: true, count: boletos.length });
+    } catch (e) {
+      await client.query('ROLLBACK');
+      res.status(500).json({ ok: false, erro: e.message });
+    } finally { client.release(); }
   });
 
-  // ── GET /api/boletos/resumo ──────────────────────────────
-  router.get('/resumo', autenticar(['admin','gerente','financeiro']), async (req, res) => {
+  // ── POST / — cria boleto individual ───────────────────────────────────────
+  r.post('/', async (req, res) => {
+    const b = req.body;
+    if (!b.fornecedor || !b.valor) return res.status(400).json({ ok: false, erro: 'fornecedor e valor obrigatórios' });
     try {
-      const { rows } = await pool.query(
-        `SELECT
-           COUNT(*) FILTER (WHERE status = 'pendente')                         AS pendentes,
-           COUNT(*) FILTER (WHERE status = 'vencido')                          AS vencidos,
-           COUNT(*) FILTER (WHERE status = 'pago')                             AS pagos_mes,
-           COALESCE(SUM(valor) FILTER (WHERE status IN ('pendente','vencido')), 0) AS total_aberto,
-           COALESCE(SUM(valor) FILTER (WHERE status = 'pago'
-                                   AND DATE_TRUNC('month', data_pagamento) = DATE_TRUNC('month', NOW())), 0) AS total_pago_mes
-         FROM boletos`
-      );
-      res.json(rows[0]);
-    } catch (err) {
-      res.status(500).json({ erro: 'Erro ao buscar resumo.' });
-    }
+      const { rows } = await pool.query(`
+        INSERT INTO boletos
+          (frontend_id, fornecedor, produto, dt_nota, nf, parcela, plano,
+           vencimento, valor, status, observacao, origem, usuario_id)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+        RETURNING *
+      `, [
+        b.id ?? null, b.fornecedor, b.produto || null, b.dtNota || null,
+        b.nf || null, b.parcela || '1', b.plano || null,
+        b.vencimento || null, parseFloat(b.valor),
+        b.status || 'avencer', b.obs || null, b.origem || 'manual', req.user.id,
+      ]);
+      res.json({ ok: true, data: rowToFrontend(rows[0]) });
+    } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
-  // ── GET /api/boletos/:id ─────────────────────────────────
-  router.get('/:id', autenticar(['admin','gerente','financeiro']), async (req, res) => {
+  // ── PUT /:id — atualiza boleto ─────────────────────────────────────────────
+  r.put('/:id', async (req, res) => {
+    const b = req.body;
     try {
-      const { rows } = await pool.query(
-        `SELECT b.*, COALESCE(f.nome_fantasia, f.razao_social) AS fornecedor_nome
-         FROM boletos b
-         LEFT JOIN fornecedores f ON f.cnpj_fornecedor = b.cnpj_fornecedor
-         WHERE b.id = $1`,
-        [req.params.id]
-      );
-      if (!rows[0]) return res.status(404).json({ erro: 'Boleto não encontrado.' });
-      res.json(rows[0]);
-    } catch (err) {
-      res.status(500).json({ erro: 'Erro ao buscar boleto.' });
-    }
+      await pool.query(`
+        UPDATE boletos SET
+          fornecedor=$1, produto=$2, dt_nota=$3, nf=$4, parcela=$5, plano=$6,
+          vencimento=$7, valor=$8, status=$9, dt_pagamento=$10,
+          observacao=$11, atualizado_em=NOW()
+        WHERE id=$12 OR frontend_id=$12
+      `, [
+        b.fornecedor, b.produto || null, b.dtNota || null, b.nf || null,
+        b.parcela || '1', b.plano || null, b.vencimento || null,
+        parseFloat(b.valor), b.status || 'avencer',
+        b.dtPagamento || null, b.obs || null,
+        parseInt(req.params.id),
+      ]);
+      res.json({ ok: true });
+    } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
-  // ── POST /api/boletos ────────────────────────────────────
-  router.post('/', autenticar(['admin','gerente','financeiro']), async (req, res) => {
-    const {
-      cnpj_fornecedor, razao_social_fornecedor, numero_documento, numero_nfe,
-      data_emissao, data_vencimento, valor,
-      classificacao_contabil, centro_custo, forma_pagamento, banco, observacao
-    } = req.body;
-
-    if (!data_vencimento || !valor)
-      return res.status(400).json({ erro: 'data_vencimento e valor são obrigatórios.' });
-
+  // ── POST /:id/baixa — registra pagamento ──────────────────────────────────
+  r.post('/:id/baixa', async (req, res) => {
+    const { dtPagamento, obs } = req.body;
     try {
-      const { rows } = await pool.query(
-        `INSERT INTO boletos
-           (cnpj_fornecedor, razao_social_fornecedor, numero_documento, numero_nfe,
-            data_emissao, data_vencimento, valor, classificacao_contabil,
-            centro_custo, forma_pagamento, banco, observacao, usuario_lancamento)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
-         RETURNING *`,
-        [
-          cnpj_fornecedor || null, razao_social_fornecedor || null,
-          numero_documento || null, numero_nfe || null,
-          data_emissao || null, data_vencimento,
-          parseFloat(valor),
-          classificacao_contabil || null, centro_custo || null,
-          forma_pagamento || null, banco || null, observacao || null,
-          req.usuario.id,
-        ]
-      );
-      res.status(201).json(rows[0]);
-    } catch (err) {
-      console.error('[boletos POST]', err.message);
-      res.status(500).json({ erro: 'Erro ao criar boleto.' });
-    }
+      await pool.query(`
+        UPDATE boletos SET
+          status='pago',
+          dt_pagamento=COALESCE($1::date, CURRENT_DATE),
+          observacao=COALESCE($2, observacao),
+          atualizado_em=NOW()
+        WHERE id=$3 OR frontend_id=$3
+      `, [dtPagamento || null, obs || null, parseInt(req.params.id)]);
+      res.json({ ok: true });
+    } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
-  // ── PATCH /api/boletos/:id/pagar ─────────────────────────
-  router.patch('/:id/pagar', autenticar(['admin','gerente','financeiro']), async (req, res) => {
-    const { data_pagamento, forma_pagamento } = req.body;
+  // ── DELETE /:id ────────────────────────────────────────────────────────────
+  r.delete('/:id', async (req, res) => {
     try {
       await pool.query(
-        `UPDATE boletos SET
-           status = 'pago',
-           data_pagamento = $1,
-           forma_pagamento = COALESCE($2, forma_pagamento),
-           atualizado_em = NOW()
-         WHERE id = $3`,
-        [data_pagamento || new Date().toISOString().split('T')[0],
-         forma_pagamento || null, req.params.id]
+        `DELETE FROM boletos WHERE id=$1 OR frontend_id=$1`,
+        [parseInt(req.params.id)]
       );
       res.json({ ok: true });
-    } catch (err) {
-      res.status(500).json({ erro: 'Erro ao registrar pagamento.' });
-    }
+    } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
-  // ── PUT /api/boletos/:id ─────────────────────────────────
-  router.put('/:id', autenticar(['admin','gerente','financeiro']), async (req, res) => {
-    const {
-      cnpj_fornecedor, numero_documento, numero_nfe, data_emissao, data_vencimento,
-      valor, status, classificacao_contabil, centro_custo, observacao
-    } = req.body;
-    try {
-      await pool.query(
-        `UPDATE boletos SET
-           cnpj_fornecedor        = COALESCE($1, cnpj_fornecedor),
-           numero_documento       = COALESCE($2, numero_documento),
-           numero_nfe             = COALESCE($3, numero_nfe),
-           data_emissao           = COALESCE($4, data_emissao),
-           data_vencimento        = COALESCE($5, data_vencimento),
-           valor                  = COALESCE($6, valor),
-           status                 = COALESCE($7, status),
-           classificacao_contabil = COALESCE($8, classificacao_contabil),
-           centro_custo           = COALESCE($9, centro_custo),
-           observacao             = COALESCE($10, observacao),
-           atualizado_em = NOW()
-         WHERE id = $11`,
-        [cnpj_fornecedor||null, numero_documento||null, numero_nfe||null,
-         data_emissao||null, data_vencimento||null,
-         valor ? parseFloat(valor) : null, status||null,
-         classificacao_contabil||null, centro_custo||null, observacao||null,
-         req.params.id]
-      );
-      res.json({ ok: true });
-    } catch (err) {
-      res.status(500).json({ erro: 'Erro ao atualizar boleto.' });
-    }
-  });
-
-  // ── DELETE /api/boletos/:id ──────────────────────────────
-  router.delete('/:id', autenticar(['admin','gerente']), async (req, res) => {
-    try {
-      await pool.query(`UPDATE boletos SET status='cancelado', atualizado_em=NOW() WHERE id=$1`, [req.params.id]);
-      res.json({ ok: true });
-    } catch (err) {
-      res.status(500).json({ erro: 'Erro ao cancelar boleto.' });
-    }
-  });
-
-  return router;
+  return r;
 };

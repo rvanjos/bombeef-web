@@ -1377,7 +1377,6 @@ function syncBoletosParaBanco() {
 }
 
 function atualizarExportClassificador() {
-  // Exporta para bb_boletos_export (chave lida pelo classificador)
   try {
     const data = boletos.filter(b => b.status !== 'pago').map(b => ({
       fornecedor: b.fornecedor, nf: b.nf||'', parcela: b.parcela||'1',
@@ -1386,6 +1385,43 @@ function atualizarExportClassificador() {
     }));
     localStorage.setItem('bb_boletos_export', JSON.stringify({ data, exportedAt: new Date().toISOString() }));
   } catch(e) {}
+}
+
+// Ao abrir o sistema, puxa boletos do banco e mescla com localStorage
+async function pullBoletosFromDB() {
+  const token = await waitToken(6000);
+  if (!token) return;
+  try {
+    const r = await fetch('/api/boletos', {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    if (!r.ok) return;
+    const d = await r.json();
+    if (!d.ok || !d.data?.length) return;
+    // Mescla: banco tem prioridade (tem dados de todos os dispositivos)
+    const byId = {};
+    // Primeiro carrega do banco
+    d.data.forEach(b => { byId[b.id] = b; });
+    // Depois mescla local (pode ter dados novos ainda não sincronizados)
+    boletos.forEach(b => { if (!byId[b.id]) byId[b.id] = b; });
+    boletos = Object.values(byId).sort((a,b) => {
+      if (!a.vencimento) return 1;
+      if (!b.vencimento) return -1;
+      return a.vencimento.localeCompare(b.vencimento);
+    });
+    boletosId = Math.max(boletosId, ...boletos.map(b => (b.id||0)+1), 0);
+    // Salva localmente sem triggar sync para o banco (evita loop)
+    try { localStorage.setItem(BB_KEY, JSON.stringify({ boletos, globalId: boletosId, at: new Date().toISOString() })); } catch(e) {}
+    updateBadge(); updateBStats(); updateBFilterOptions(); renderBoletos();
+    console.log('[boletos] pull do banco: ' + boletos.length + ' boletos');
+  } catch(e) { console.warn('[boletos] pull falhou:', e.message); }
+}
+
+// Registra baixa/pagamento também no banco
+function registrarBaixaNoBanco(boletoId, dtPagamento) {
+  syncBoleto('POST', '/api/boletos/' + boletoId + '/baixa', {
+    dtPagamento: dtPagamento || new Date().toISOString().slice(0,10)
+  });
 }
 function loadBoletos() {
   try {
@@ -2014,6 +2050,8 @@ function showToast(msg,bg){
 // ── INIT BOLETOS ──────────────────────────────────────────────────────────────
 loadBoletos();
 updateBadge();
+// Puxa do banco após token estar disponível
+setTimeout(() => pullBoletosFromDB().catch(() => {}), 800);
 
 
 // ════════════════════════════════════════════════════════════════

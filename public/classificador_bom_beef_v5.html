@@ -538,6 +538,7 @@ tbody tr.overdue-row{background:#fff0f0!important;}
         <button class="btn btn-blue btn-sm" onclick="document.getElementById('addFileInput').click()">➕ OFX</button>
         <button class="btn btn-purple btn-sm" onclick="openPDFModal()">💳 Fatura PDF</button>
         <button class="btn btn-success btn-sm" onclick="openModal('modal-boletos')">📋 Boletos</button>
+        <button class="btn btn-success btn-sm" onclick="importarBoletosDB()" style="background:#1a7a4a" title="Carrega boletos do banco de dados automaticamente">☁️ Boletos DB</button>
         <button class="btn btn-neutral btn-sm" onclick="openModal('modal-employees')" style="background:#4a2060;color:#fff;">👥 Funcionários</button>
         <button class="btn btn-purple btn-sm" onclick="document.getElementById('nfeJsonInput').click()">🧾 NF-e JSON</button>
         <button class="btn btn-neutral btn-sm" onclick="openProvManual()" style="background:#1e40af;color:#fff;" title="Adicionar provisão manualmente">✏️ Provisão</button>
@@ -3100,6 +3101,68 @@ dz.addEventListener("dragleave",()=>dz.classList.remove("drag-over"));
 dz.addEventListener("drop",e=>{e.preventDefault();dz.classList.remove("drag-over");handleFiles(e.dataTransfer.files);});
 
 // Fechar modais clicando fora
+// ── IMPORTAR BOLETOS DO BANCO ────────────────────────────────────────────────
+let _classToken = sessionStorage.getItem('bb_token') || localStorage.getItem('bb_token') || null;
+window.addEventListener('message', e => {
+  if (e.data?.type === 'bb_auth' && e.data.token) _classToken = e.data.token;
+});
+try { window.parent.postMessage({ type: 'bb_request_auth' }, '*'); } catch(e) {}
+
+function waitClassToken(ms=6000) {
+  return new Promise(resolve => {
+    if (_classToken) { resolve(_classToken); return; }
+    const h = e => {
+      if (e.data?.type==='bb_auth' && e.data.token) {
+        _classToken = e.data.token;
+        window.removeEventListener('message', h);
+        clearTimeout(t);
+        resolve(_classToken);
+      }
+    };
+    window.addEventListener('message', h);
+    const t = setTimeout(() => {
+      window.removeEventListener('message', h);
+      resolve(_classToken || localStorage.getItem('bb_token') || null);
+    }, ms);
+  });
+}
+
+async function importarBoletosDB() {
+  const token = await waitClassToken(5000);
+  if (!token) {
+    alert('⚠️ Sem autenticação. Abra o Classificador pelo Portal Bom Beef.');
+    return;
+  }
+
+  // Pergunta o mês se quiser filtrar
+  const mesInput = prompt('Mês para importar (MM/AAAA) — deixe vazio para todos os pendentes:',
+    String(new Date().getMonth()+1).padStart(2,'0') + '/' + new Date().getFullYear());
+  if (mesInput === null) return; // Cancelou
+
+  try {
+    const mesParam = mesInput.trim()
+      ? '?mes=' + encodeURIComponent(mesInput.trim())
+      : '';
+    const resp = await fetch('/api/boletos/classificador' + mesParam, {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    const data = await resp.json();
+    if (!data.ok) throw new Error(data.erro || 'Erro na API');
+    if (!data.data.length) {
+      alert('Nenhum boleto pendente encontrado no banco para o período informado.');
+      return;
+    }
+
+    // Usa a mesma lógica do processBoletos para inserir no classificador
+    pendingBoletosData = data.data;
+    processBoletos();
+    // Não fecha o modal — processBoletos já faz isso
+  } catch(e) {
+    alert('❌ Erro ao importar boletos do banco: ' + e.message);
+    console.error('[importarBoletosDB]', e);
+  }
+}
+
 ['modal-new-cat','modal-manage-cats','modal-edit-cat','modal-pdf','modal-boletos','modal-bulk','modal-employees','modal-theme'].forEach(id=>{
   document.getElementById(id).addEventListener('click',e=>{if(e.target===e.currentTarget)closeModal(id);});
 });
