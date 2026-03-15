@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Boletos & NF-e — Bom Beef</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="/js/api.js"></script>
+<style>
+:root{--red:#8B0000;--red-l:#C0392B;--gold:#C9A044;--green:#1a7a4a;--orange:#c76b00;--blue:#1a5c8a;
+  --bg:#f7f4f0;--white:#fff;--text:#1a1a1a;--muted:#7a7068;--border:#e8e0d8;--shadow:0 2px 12px rgba(0,0,0,.08);}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
+.ph{background:var(--red);padding:12px 22px;display:flex;align-items:center;gap:10px;box-shadow:0 2px 12px rgba(139,0,0,.3);}
+.ph h2{font-family:'Playfair Display',serif;font-size:17px;color:#fff;font-weight:700;}
+.ph-sub{font-size:11px;color:rgba(255,255,255,.6);margin-left:auto;}
+.body{padding:22px 20px;max-width:1300px;margin:0 auto;}
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:20px;}
+.kc{background:var(--white);border:1px solid var(--border);border-radius:10px;padding:14px 16px;border-left:4px solid var(--red);box-shadow:var(--shadow);}
+.kc.g{border-left-color:var(--green);} .kc.o{border-left-color:var(--orange);} .kc.b{border-left-color:var(--blue);}
+.kc-l{font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);font-weight:600;margin-bottom:4px;}
+.kc-v{font-size:20px;font-weight:700;font-family:'DM Mono',monospace;}
+.kc-s{font-size:11px;color:var(--muted);margin-top:2px;}
+/* toolbar */
+.toolbar{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px;align-items:center;}
+.btn{padding:8px 16px;border-radius:8px;border:none;cursor:pointer;font-size:13px;font-weight:600;font-family:'DM Sans',sans-serif;transition:all .15s;display:inline-flex;align-items:center;gap:6px;}
+.btn-p{background:var(--red);color:#fff;} .btn-p:hover{background:var(--red-l);}
+.btn-s{background:var(--white);color:var(--text);border:1px solid var(--border);} .btn-s:hover{border-color:var(--red);color:var(--red);}
+.btn-g{background:var(--green);color:#fff;} .btn-g:hover{filter:brightness(1.1);}
+.btn-o{background:var(--orange);color:#fff;} .btn-o:hover{filter:brightness(1.1);}
+.search-wrap{flex:1;min-width:180px;position:relative;}
+.search-wrap input{width:100%;padding:8px 12px 8px 34px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--white);}
+.search-wrap::before{content:'🔍';position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:14px;}
+select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--white);cursor:pointer;}
+/* tabela */
+.card{background:var(--white);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);overflow:hidden;}
+.tbl{width:100%;border-collapse:collapse;}
+.tbl th{background:#fdf9f5;font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:700;padding:10px 12px;text-align:left;border-bottom:2px solid var(--border);}
+.tbl td{padding:10px 12px;font-size:13px;border-bottom:1px solid #f5efe8;vertical-align:middle;}
+.tbl tr:last-child td{border-bottom:none;}
+.tbl tr:hover td{background:#fdf9f4;}
+.pill{display:inline-block;padding:2px 9px;border-radius:8px;font-size:11px;font-weight:600;}
+.pill-v{background:#fff3cd;color:#856404;} .pill-p{background:#d1e7dd;color:#0a4a22;} .pill-a{background:#cfe2ff;color:#084298;} .pill-r{background:#f8d7da;color:#721c24;}
+.act-btn{padding:4px 10px;border:1px solid var(--border);border-radius:6px;background:var(--white);cursor:pointer;font-size:12px;transition:all .15s;margin-right:3px;}
+.act-btn:hover{background:var(--bg);}
+.val-r{color:var(--red-l);font-weight:600;}
+/* modal */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;align-items:center;justify-content:center;padding:16px;}
+.modal-bg.open{display:flex;}
+.modal{background:var(--white);border-radius:14px;width:100%;max-width:560px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3);}
+.modal-head{padding:18px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+.modal-head h3{font-family:'Playfair Display',serif;font-size:16px;color:var(--red);}
+.modal-close{background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);}
+.modal-body{padding:20px 22px;}
+.fg{margin-bottom:13px;}
+.fg label{display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);margin-bottom:5px;}
+.fg input,.fg select,.fg textarea{width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:'DM Sans',sans-serif;background:var(--white);}
+.fg input:focus,.fg select:focus{outline:none;border-color:var(--red);}
+.fg-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.modal-foot{padding:14px 22px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end;}
+/* upload zone */
+.upload-zone{border:2px dashed var(--border);border-radius:10px;padding:28px;text-align:center;cursor:pointer;transition:all .2s;margin-bottom:16px;}
+.upload-zone:hover,.upload-zone.drag{border-color:var(--red);background:#fff5f5;}
+.upload-zone p{font-size:13px;color:var(--muted);margin-top:8px;}
+/* preview */
+.preview-list{max-height:280px;overflow-y:auto;}
+.preview-item{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);font-size:13px;}
+.preview-item:last-child{border-bottom:none;}
+.empty{text-align:center;padding:48px 20px;color:var(--muted);}
+.empty-icon{font-size:42px;margin-bottom:12px;}
+@media(max-width:600px){.fg-row{grid-template-columns:1fr;}.tbl th:nth-child(3),.tbl td:nth-child(3),.tbl th:nth-child(5),.tbl td:nth-child(5){display:none;}}
+</style>
+</head>
+<body>
+<div class="ph"><span style="font-size:20px">📄</span><h2>Boletos & NF-e</h2><div class="ph-sub" id="ph-sub">carregando...</div></div>
+<div class="body">
+  <!-- KPIs -->
+  <div class="kpi-row">
+    <div class="kc"><div class="kc-l">A Vencer</div><div class="kc-v" id="k-avencer">—</div><div class="kc-s">boletos</div></div>
+    <div class="kc o"><div class="kc-l">Vencidos</div><div class="kc-v" id="k-vencidos" style="color:var(--orange)">—</div><div class="kc-s" id="k-venc-val">—</div></div>
+    <div class="kc"><div class="kc-l">Vence em 7d</div><div class="kc-v" id="k-v7d">—</div><div class="kc-s" id="k-v7d-val">—</div></div>
+    <div class="kc b"><div class="kc-l">Total Aberto</div><div class="kc-v" id="k-aberto">—</div><div class="kc-s">em aberto</div></div>
+    <div class="kc g"><div class="kc-l">Pago no Mês</div><div class="kc-v" id="k-pago">—</div><div class="kc-s">este mês</div></div>
+  </div>
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <button class="btn btn-p" onclick="abrirModal()">＋ Novo Boleto</button>
+    <button class="btn btn-s" onclick="abrirImportXML()">📥 Importar XML</button>
+    <button class="btn btn-s" onclick="abrirImportPDF()">📄 Importar PDF</button>
+    <div class="search-wrap"><input type="text" id="busca" placeholder="Buscar fornecedor, NF..." oninput="filtrar()"></div>
+    <select class="flt" id="flt-status" onchange="carregar()">
+      <option value="todos">Todos</option><option value="avencer" selected>A Vencer</option>
+      <option value="pago">Pagos</option><option value="vencido">Vencidos</option>
+    </select>
+    <input type="month" id="flt-mes" class="flt" style="padding:7px 10px" onchange="carregar()">
+  </div>
+  <!-- Tabela -->
+  <div class="card">
+    <table class="tbl">
+      <thead><tr>
+        <th>Fornecedor / Produto</th><th>NF</th><th>Vencimento</th>
+        <th>Parcela</th><th>Plano / Categoria</th><th>Valor</th><th>Status</th><th>Ações</th>
+      </tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+    <div class="empty" id="empty" style="display:none">
+      <div class="empty-icon">📄</div>
+      <p>Nenhum boleto encontrado</p>
+      <button class="btn btn-p" style="margin-top:12px" onclick="abrirModal()">＋ Adicionar Boleto</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Novo/Editar -->
+<div class="modal-bg" id="modal-boleto">
+  <div class="modal">
+    <div class="modal-head"><h3 id="modal-title">Novo Boleto</h3><button class="modal-close" onclick="fecharModal()">×</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="f-dbid">
+      <div class="fg"><label>Fornecedor *</label><input id="f-forn" placeholder="Nome do fornecedor"></div>
+      <div class="fg"><label>Produto / Descrição</label><input id="f-prod" placeholder="Descrição opcional"></div>
+      <div class="fg-row">
+        <div class="fg"><label>Nº NF-e</label><input id="f-nf" placeholder="000000"></div>
+        <div class="fg"><label>Data da Nota</label><input type="date" id="f-dtnota"></div>
+      </div>
+      <div class="fg-row">
+        <div class="fg"><label>Vencimento *</label><input type="date" id="f-venc"></div>
+        <div class="fg"><label>Valor *</label><input type="number" id="f-val" placeholder="0,00" min="0" step="0.01"></div>
+      </div>
+      <div class="fg-row">
+        <div class="fg"><label>Parcela</label><input id="f-parc" placeholder="1/1" value="1"></div>
+        <div class="fg"><label>Plano DRE</label>
+          <select id="f-plano">
+            <option value="">— Selecione —</option>
+            <option>Fornec - Proteínas</option><option>Fornec - Acompanhamentos</option>
+            <option>Fornec - Bebidas/Gelo/Sorvete</option><option>Fornec - Empório (outros)</option>
+            <option>Fornec - Empório (carvão)</option><option>Fornec - Embalagens</option>
+            <option>Fornec - Acessórios</option><option>Fornec - Outras Desp</option>
+          </select>
+        </div>
+      </div>
+      <div class="fg"><label>Observação</label><textarea id="f-obs" rows="2"></textarea></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-s" onclick="fecharModal()">Cancelar</button>
+      <button class="btn btn-p" onclick="salvar()">💾 Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Importar XML -->
+<div class="modal-bg" id="modal-xml">
+  <div class="modal">
+    <div class="modal-head"><h3>Importar NF-e (XML)</h3><button class="modal-close" onclick="fecharXML()">×</button></div>
+    <div class="modal-body">
+      <div class="upload-zone" id="zone-xml" onclick="document.getElementById('file-xml').click()" ondragover="ev.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')">
+        <div style="font-size:36px">📥</div>
+        <p>Clique ou arraste o arquivo XML da NF-e aqui</p>
+        <p style="font-size:11px;margin-top:4px">Formato: NF-e SEFAZ (.xml)</p>
+      </div>
+      <input type="file" id="file-xml" accept=".xml" style="display:none" onchange="processarXML(this)">
+      <div id="xml-preview" style="display:none">
+        <div style="font-size:13px;font-weight:600;margin-bottom:10px" id="xml-info"></div>
+        <div class="preview-list" id="xml-list"></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-s" onclick="fecharXML()">Cancelar</button>
+      <button class="btn btn-p" id="btn-confirm-xml" style="display:none" onclick="confirmarXML()">✅ Confirmar Importação</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Importar PDF -->
+<div class="modal-bg" id="modal-pdf">
+  <div class="modal">
+    <div class="modal-head"><h3>Importar Boleto PDF</h3><button class="modal-close" onclick="fecharPDF()">×</button></div>
+    <div class="modal-body">
+      <div class="upload-zone" onclick="document.getElementById('file-pdf').click()">
+        <div style="font-size:36px">📄</div>
+        <p>Clique para selecionar o boleto em PDF</p>
+      </div>
+      <input type="file" id="file-pdf" accept=".pdf" style="display:none" onchange="processarPDF(this)">
+      <div id="pdf-preview" style="display:none">
+        <div style="background:#f5f5f5;border-radius:8px;padding:14px;font-size:13px;" id="pdf-info"></div>
+        <div style="margin-top:12px" id="pdf-form"></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-s" onclick="fecharPDF()">Cancelar</button>
+      <button class="btn btn-p" id="btn-confirm-pdf" style="display:none" onclick="confirmarPDF()">💾 Salvar Boleto</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Baixa -->
+<div class="modal-bg" id="modal-baixa">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-head"><h3>Registrar Pagamento</h3><button class="modal-close" onclick="fecharBaixa()">×</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="baixa-id">
+      <div class="fg"><label>Data do Pagamento</label><input type="date" id="baixa-dt"></div>
+      <div class="fg"><label>Observação</label><input id="baixa-obs" placeholder="Opcional"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-s" onclick="fecharBaixa()">Cancelar</button>
+      <button class="btn btn-g" onclick="confirmarBaixa()">✅ Confirmar Pagamento</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const {api,fmt,toast} = BB;
+let boletos=[], xmlPreview=[], pdfPreview=null;
+
+// ── Init ───────────────────────────────────────────────────────────────────
+window.onBBReady = () => { carregar(); carregarKPIs(); };
+if(api.token()) { carregar(); carregarKPIs(); }
+
+// Mês atual no filtro
+const hoje = new Date();
+document.getElementById('flt-mes').value = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
+
+// ── KPIs ───────────────────────────────────────────────────────────────────
+async function carregarKPIs(){
+  const d = await api.get('/api/boletos/kpis');
+  if(!d.ok) return;
+  const k=d.data;
+  document.getElementById('k-avencer').textContent = fmt.n(k.avencer);
+  document.getElementById('k-vencidos').textContent = fmt.n(k.vencidos);
+  document.getElementById('k-venc-val').textContent = fmt.brl(k.totalAberto);
+  document.getElementById('k-v7d').textContent = fmt.n(k.vence7dias);
+  document.getElementById('k-v7d-val').textContent = fmt.brl(k.valorVence7d);
+  document.getElementById('k-aberto').textContent = fmt.brl(k.totalAberto);
+  document.getElementById('k-pago').textContent = fmt.brl(k.pagoMes);
+  document.getElementById('ph-sub').textContent = `${k.avencer} boletos em aberto · ${fmt.brl(k.totalAberto)}`;
+}
+
+// ── Carregar lista ─────────────────────────────────────────────────────────
+async function carregar(){
+  const status = document.getElementById('flt-status').value;
+  const mesVal = document.getElementById('flt-mes').value;
+  let url = `/api/boletos?status=${status}`;
+  if(mesVal){ const [y,m]=mesVal.split('-'); url+=`&mes=${m}/${y}`; }
+  const d = await api.get(url);
+  if(!d.ok){ toast('Erro ao carregar boletos'); return; }
+  boletos = d.data;
+  renderizar(boletos);
+}
+
+function filtrar(){
+  const q = document.getElementById('busca').value.toLowerCase();
+  const lista = boletos.filter(b =>
+    b.fornecedor.toLowerCase().includes(q) ||
+    (b.produto||'').toLowerCase().includes(q) ||
+    (b.nf||'').toLowerCase().includes(q)
+  );
+  renderizar(lista);
+}
+
+function renderizar(lista){
+  const tbody = document.getElementById('tbody');
+  const empty = document.getElementById('empty');
+  if(!lista.length){ tbody.innerHTML=''; empty.style.display=''; return; }
+  empty.style.display='none';
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+  tbody.innerHTML = lista.map(b => {
+    const venc = b.vencimento ? new Date(b.vencimento+'T12:00') : null;
+    const isVenc = venc && venc < hoje && b.status !== 'pago';
+    const pill = b.status==='pago'
+      ? '<span class="pill pill-p">Pago</span>'
+      : isVenc
+        ? '<span class="pill pill-r">Vencido</span>'
+        : b.status==='avencer'
+          ? '<span class="pill pill-a">A Vencer</span>'
+          : `<span class="pill pill-v">${b.status}</span>`;
+    const vencStr = b.vencimento ? fmt.date(b.vencimento) : '—';
+    const vencClass = isVenc ? 'val-r' : '';
+    return `<tr>
+      <td><div style="font-weight:600">${b.fornecedor}</div><div style="font-size:11px;color:var(--muted)">${b.produto||''}</div></td>
+      <td>${b.nf||'—'}</td>
+      <td class="${vencClass}">${vencStr}</td>
+      <td style="font-family:'DM Mono',monospace">${b.parcela||'1'}</td>
+      <td style="font-size:12px">${b.plano||'—'}</td>
+      <td style="font-family:'DM Mono',monospace;font-weight:600">${fmt.brl(b.valor)}</td>
+      <td>${pill}</td>
+      <td>
+        ${b.status!=='pago'?`<button class="act-btn" onclick="abrirBaixa(${b.dbId})">✅ Pagar</button>`:''}
+        <button class="act-btn" onclick="abrirModal(${b.dbId})">✏️</button>
+        <button class="act-btn" onclick="excluir(${b.dbId})" style="color:var(--red-l)">🗑</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Modal CRUD ─────────────────────────────────────────────────────────────
+function abrirModal(dbId){
+  document.getElementById('modal-title').textContent = dbId ? 'Editar Boleto' : 'Novo Boleto';
+  const b = dbId ? boletos.find(x=>x.dbId===dbId) : null;
+  document.getElementById('f-dbid').value  = b?.dbId||'';
+  document.getElementById('f-forn').value  = b?.fornecedor||'';
+  document.getElementById('f-prod').value  = b?.produto||'';
+  document.getElementById('f-nf').value    = b?.nf||'';
+  document.getElementById('f-dtnota').value= b?.dtNota||'';
+  document.getElementById('f-venc').value  = b?.vencimento||'';
+  document.getElementById('f-val').value   = b?.valor||'';
+  document.getElementById('f-parc').value  = b?.parcela||'1';
+  document.getElementById('f-plano').value = b?.plano||'';
+  document.getElementById('f-obs').value   = b?.obs||'';
+  document.getElementById('modal-boleto').classList.add('open');
+}
+function fecharModal(){ document.getElementById('modal-boleto').classList.remove('open'); }
+
+async function salvar(){
+  const dbId = document.getElementById('f-dbid').value;
+  const body = {
+    fornecedor: document.getElementById('f-forn').value.trim(),
+    produto:    document.getElementById('f-prod').value.trim(),
+    nf:         document.getElementById('f-nf').value.trim(),
+    dtNota:     document.getElementById('f-dtnota').value,
+    vencimento: document.getElementById('f-venc').value,
+    valor:      parseFloat(document.getElementById('f-val').value)||0,
+    parcela:    document.getElementById('f-parc').value,
+    plano:      document.getElementById('f-plano').value,
+    obs:        document.getElementById('f-obs').value,
+  };
+  if(!body.fornecedor||!body.valor){ toast('Fornecedor e valor são obrigatórios'); return; }
+  const d = dbId
+    ? await api.put(`/api/boletos/${dbId}`, body)
+    : await api.post('/api/boletos', body);
+  if(!d.ok){ toast('Erro: '+d.erro); return; }
+  toast(dbId?'Boleto atualizado!':'Boleto criado!');
+  fecharModal(); carregar(); carregarKPIs();
+}
+
+async function excluir(dbId){
+  if(!confirm('Cancelar este boleto?')) return;
+  const d = await api.delete(`/api/boletos/${dbId}`);
+  if(d.ok){ toast('Boleto cancelado'); carregar(); carregarKPIs(); }
+  else toast('Erro: '+d.erro);
+}
+
+// ── Baixa ──────────────────────────────────────────────────────────────────
+function abrirBaixa(dbId){
+  document.getElementById('baixa-id').value = dbId;
+  document.getElementById('baixa-dt').value = new Date().toISOString().slice(0,10);
+  document.getElementById('baixa-obs').value = '';
+  document.getElementById('modal-baixa').classList.add('open');
+}
+function fecharBaixa(){ document.getElementById('modal-baixa').classList.remove('open'); }
+async function confirmarBaixa(){
+  const id = document.getElementById('baixa-id').value;
+  const d = await api.post(`/api/boletos/${id}/baixa`,{
+    dtPagamento: document.getElementById('baixa-dt').value,
+    obs: document.getElementById('baixa-obs').value,
+  });
+  if(d.ok){ toast('✅ Pagamento registrado!'); fecharBaixa(); carregar(); carregarKPIs(); }
+  else toast('Erro: '+d.erro);
+}
+
+// ── Import XML ─────────────────────────────────────────────────────────────
+function abrirImportXML(){ document.getElementById('modal-xml').classList.add('open'); }
+function fecharXML(){ document.getElementById('modal-xml').classList.remove('open'); xmlPreview=[]; document.getElementById('xml-preview').style.display='none'; document.getElementById('btn-confirm-xml').style.display='none'; }
+
+async function processarXML(inp){
+  const f = inp.files[0]; if(!f) return;
+  const fd = new FormData(); fd.append('arquivo', f);
+  toast('Processando XML...');
+  const d = await api.upload('/api/boletos/import-xml', fd);
+  if(!d.ok){ toast('Erro: '+d.erro); return; }
+  xmlPreview = d.preview;
+  document.getElementById('xml-info').innerHTML = `<b>${d.fornecedor}</b> — NF ${d.nf} — ${d.totalParcelas} parcela(s) — Total: <b>${fmt.brl(d.valorTotal)}</b>`;
+  document.getElementById('xml-list').innerHTML = d.preview.map((p,i)=>`
+    <div class="preview-item">
+      <span>${p.fornecedor} — Parc. ${p.parcela}/${p.totalParcelas}</span>
+      <span>${fmt.date(p.vencimento)} — <b>${fmt.brl(p.valor)}</b></span>
+    </div>`).join('');
+  document.getElementById('xml-preview').style.display='';
+  document.getElementById('btn-confirm-xml').style.display='';
+}
+
+async function confirmarXML(){
+  // Pede plano para todos
+  const plano = prompt('Plano DRE (ex: Fornec - Proteínas):\nDeixe em branco para definir depois.') || '';
+  const boletos = xmlPreview.map(p=>({...p, plano}));
+  const d = await api.post('/api/boletos/import-xml/confirmar',{boletos});
+  if(!d.ok){ toast('Erro: '+d.erro); return; }
+  toast(`✅ ${d.count} boleto(s) importado(s)!`);
+  fecharXML(); carregar(); carregarKPIs();
+}
+
+// ── Import PDF ─────────────────────────────────────────────────────────────
+function abrirImportPDF(){ document.getElementById('modal-pdf').classList.add('open'); }
+function fecharPDF(){ document.getElementById('modal-pdf').classList.remove('open'); pdfPreview=null; document.getElementById('pdf-preview').style.display='none'; document.getElementById('btn-confirm-pdf').style.display='none'; }
+
+async function processarPDF(inp){
+  const f = inp.files[0]; if(!f) return;
+  const fd = new FormData(); fd.append('arquivo', f);
+  toast('Processando PDF...');
+  const d = await api.upload('/api/boletos/import-pdf', fd);
+  if(!d.ok){ toast('Erro: '+d.erro); return; }
+  pdfPreview = d.preview;
+  if(d.duplicata){ toast('⚠️ Boleto já cadastrado (código de barras duplicado)'); }
+  document.getElementById('pdf-info').innerHTML = `
+    <b>Beneficiário:</b> ${d.preview.fornecedor}<br>
+    <b>Vencimento:</b> ${fmt.date(d.preview.vencimento)}<br>
+    <b>Valor:</b> ${fmt.brl(d.preview.valor)}<br>
+    ${d.preview.codigoBarras?`<b>Código:</b> <small>${d.preview.codigoBarras}</small>`:''}
+    ${d.duplicata?'<br><span style="color:var(--orange)">⚠️ Possível duplicata!</span>':''}
+  `;
+  document.getElementById('pdf-form').innerHTML = `
+    <div class="fg"><label>Fornecedor</label><input id="pdf-forn" value="${d.preview.fornecedor}"></div>
+    <div class="fg-row">
+      <div class="fg"><label>Vencimento</label><input type="date" id="pdf-venc" value="${d.preview.vencimento||''}"></div>
+      <div class="fg"><label>Valor</label><input type="number" id="pdf-val" value="${d.preview.valor||0}" step="0.01"></div>
+    </div>
+    <div class="fg"><label>Plano DRE</label>
+      <select id="pdf-plano">
+        <option value="">— Selecione —</option>
+        <option>Fornec - Proteínas</option><option>Fornec - Acompanhamentos</option>
+        <option>Fornec - Embalagens</option><option>Fornec - Outras Desp</option>
+      </select>
+    </div>
+  `;
+  document.getElementById('pdf-preview').style.display='';
+  document.getElementById('btn-confirm-pdf').style.display='';
+}
+
+async function confirmarPDF(){
+  const b = {
+    fornecedor:   document.getElementById('pdf-forn').value,
+    vencimento:   document.getElementById('pdf-venc').value,
+    valor:        parseFloat(document.getElementById('pdf-val').value)||0,
+    plano:        document.getElementById('pdf-plano').value,
+    codigoBarras: pdfPreview?.codigoBarras||'',
+    origem:       'pdf',
+  };
+  const d = await api.post('/api/boletos', b);
+  if(d.ok){ toast('✅ Boleto importado!'); fecharPDF(); carregar(); carregarKPIs(); }
+  else toast('Erro: '+d.erro);
+}
+</script>
+</body>
+</html>

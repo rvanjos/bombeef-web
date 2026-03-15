@@ -1,96 +1,122 @@
+/**
+ * routes/dashboard.js — KPIs consolidados
+ *
+ * Rotas:
+ *   GET /api/dashboard/kpis  → todos os KPIs do dashboard principal
+ */
+
 const express    = require('express');
 const autenticar = require('../middleware/auth');
 
-module.exports = (pool) => {
-  const router = express.Router();
+module.exports = function (pool) {
+  const r = express.Router();
+  r.use(autenticar());
 
-  // ── GET /api/dashboard ───────────────────────────────────
-  // Retorna todos os indicadores em uma única chamada
-  router.get('/', autenticar(), async (req, res) => {
+  r.get('/kpis', async (req, res) => {
+    const mes = req.query.mes || (() => {
+      const d = new Date();
+      return `${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+    })();
+
     try {
-      // Atualizar boletos vencidos antes de consolidar
-      await pool.query('SELECT atualizar_status_boletos_vencidos()').catch(() => {});
+      const [boletos, validade, perdas, retiradas, dre, meta] = await Promise.all([
+        // M1: Boletos
+        pool.query(`
+          SELECT
+            COUNT(*) FILTER (WHERE status='avencer' AND vencimento BETWEEN CURRENT_DATE AND CURRENT_DATE + 7) AS vence_7d,
+            COUNT(*) FILTER (WHERE status='vencido' OR (status='avencer' AND vencimento < CURRENT_DATE))     AS vencidos,
+            COALESCE(SUM(valor) FILTER (WHERE status='avencer' AND vencimento BETWEEN CURRENT_DATE AND CURRENT_DATE + 7), 0) AS valor_vence_7d,
+            COALESCE(SUM(valor) FILTER (WHERE status != 'pago' AND status != 'cancelado'), 0) AS total_aberto
+          FROM boletos WHERE status != 'cancelado'
+        `),
 
-      const [statusBase, alertasVal, perdasResumo, boletosAbertos, topPerdas] = await Promise.all([
-        pool.query('SELECT * FROM vw_status_base'),
+        // M4: Validade
+        pool.query(`
+          SELECT
+            COUNT(*) FILTER (WHERE status='alerta')  AS alerta,
+            COUNT(*) FILTER (WHERE status='vencido') AS vencidos
+          FROM validade_items WHERE status NOT IN ('descartado')
+        `),
+
+        // M4: Perdas do mês
         pool.query(
-          `SELECT * FROM vw_produtos_validade
-           WHERE status_validade IN ('vencido','critico','urgente')
-           ORDER BY CASE status_validade WHEN 'vencido' THEN 0 WHEN 'critico' THEN 1 ELSE 2 END,
-                    proxima_validade ASC NULLS LAST
-           LIMIT 15`
+          `SELECT COALESCE(SUM(valor_perda), 0) AS total FROM perdas WHERE mes = $1`, [mes]
         ),
-        pool.query('SELECT * FROM vw_perdas_mes_atual LIMIT 10'),
-        pool.query('SELECT * FROM vw_boletos_abertos LIMIT 20'),
+
+        // M5: Retiradas do mês
         pool.query(
-          `SELECT p.codigo_produto, pm.descricao_produto, COUNT(*) AS ocorrencias,
-                  SUM(p.valor_estimado) AS valor_total
-           FROM perdas p
-           JOIN produtos_mestre pm ON pm.codigo_produto = p.codigo_produto
-           WHERE p.data_perda >= CURRENT_DATE - INTERVAL '90 days'
-           GROUP BY p.codigo_produto, pm.descricao_produto
-           ORDER BY valor_total DESC NULLS LAST
-           LIMIT 5`
+          `SELECT COALESCE(SUM(valor_total), 0) AS total FROM retiradas WHERE mes = $1`, [mes]
+        ),
+
+        // M2: DRE do mês
+        pool.query(
+          `SELECT dados_json FROM dre_sessoes WHERE mes_ref = $1 ORDER BY atualizado_em DESC LIMIT 1`, [mes]
+        ),
+
+        // M6: Meta do mês
+        pool.query(
+          `SELECT * FROM metas WHERE mes = $1 LIMIT 1`, [mes]
         ),
       ]);
 
-      const status = statusBase.rows[0] || {};
+      // Calcula receitas/despesas do DRE
+      let dreReceitas = 0, dreDespesas = 0;
+      if (dre.rows.length && dre.rows[0].dados_json) {
+        const txs = dre.rows[0].dados_json.transactions || [];
+        for (const t of txs) {
+          if (t.ignorar) continue;
+          const v = parseFloat(t.valor || 0);
+          if (v > 0) dreReceitas += v;
+          else dreDespesas += Math.abs(v);
+        }
+      }
+
+      const metaRow          = meta.rows[0] || {};
+      const faturamentoMeta  = parseFloat(metaRow.faturamento_meta || 0);
+      const faturamentoReal  = parseFloat(metaRow.faturamento_real || dreReceitas || 0);
+      const metaPerdaPct     = parseFloat(metaRow.meta_perda_pct || 0);
+      const metaPerdasValor  = faturamentoReal > 0 ? (faturamentoReal * metaPerdaPct / 100) : 0;
+      const totalPerdas      = parseFloat(perdas.rows[0].total);
+      const totalRetiradas   = parseFloat(retiradas.rows[0].total);
 
       res.json({
-        status_base: {
-          ...status,
-          alerta_desatualizada: parseInt(status.dias_desde_importacao || 0) > 7,
-        },
-        alertas_validade: alertasVal.rows,
-        perdas_mes:       perdasResumo.rows,
-        boletos_abertos:  boletosAbertos.rows,
-        top_perdas_90d:   topPerdas.rows,
+        ok: true,
+        mes,
+        data: {
+          // M1
+          boletosVence7d:   parseInt(boletos.rows[0].vence_7d),
+          boletosVencidos:  parseInt(boletos.rows[0].vencidos),
+          boletosValorVence7d: parseFloat(boletos.rows[0].valor_vence_7d),
+          boletosAberto:    parseFloat(boletos.rows[0].total_aberto),
+
+          // M2
+          dreReceitas, dreDespesas,
+          dreResultado: dreReceitas - dreDespesas,
+
+          // M4 validade
+          validadeAlerta:   parseInt(validade.rows[0].alerta),
+          validadeVencidos: parseInt(validade.rows[0].vencidos),
+
+          // M4 perdas
+          perdasMes:      totalPerdas,
+          perdasMeta:     metaPerdasValor,
+          perdasDentroMeta: metaPerdasValor > 0 ? totalPerdas <= metaPerdasValor : null,
+
+          // M5
+          retiradasMes: totalRetiradas,
+
+          // M6
+          faturamentoMeta, faturamentoReal,
+          faturamentoPct: faturamentoMeta > 0
+            ? parseFloat(((faturamentoReal / faturamentoMeta) * 100).toFixed(1))
+            : 0,
+        }
       });
-    } catch (err) {
-      console.error('[dashboard GET /]', err.message);
-      res.status(500).json({ erro: 'Erro ao carregar dashboard.' });
+    } catch (e) {
+      console.error('[dashboard/kpis]', e.message);
+      res.status(500).json({ ok: false, erro: e.message });
     }
   });
 
-  // ── GET /api/dashboard/kpis ──────────────────────────────
-  // KPIs individuais por perfil
-  router.get('/kpis', autenticar(), async (req, res) => {
-    try {
-      const [produtos, perdas, boletos, kits, lotes] = await Promise.all([
-        pool.query('SELECT COUNT(*) AS total FROM produtos_mestre WHERE ativo = true'),
-        pool.query(
-          `SELECT COUNT(*) AS ocorrencias,
-                  COALESCE(SUM(valor_estimado),0) AS valor_total
-           FROM perdas
-           WHERE DATE_TRUNC('month',data_perda) = DATE_TRUNC('month',NOW())`
-        ),
-        pool.query(
-          `SELECT COUNT(*) FILTER (WHERE status IN ('avencer','vencido')) AS abertos,
-                  COALESCE(SUM(valor) FILTER (WHERE status IN ('avencer','vencido')),0) AS total_aberto,
-                  COUNT(*) FILTER (WHERE status='vencido') AS vencidos
-           FROM boletos`
-        ),
-        pool.query(`SELECT COUNT(*) AS total FROM kits WHERE ativo = true`),
-        pool.query(
-          `SELECT COUNT(*) AS lotes_criticos
-           FROM lotes_estoque
-           WHERE quantidade_atual > 0 AND ativo = true
-             AND data_validade <= CURRENT_DATE + INTERVAL '7 days'`
-        ),
-      ]);
-
-      res.json({
-        total_produtos:     parseInt(produtos.rows[0].total),
-        perdas_mes:         { ocorrencias: parseInt(perdas.rows[0].ocorrencias), valor: parseFloat(perdas.rows[0].valor_total) },
-        boletos:            { abertos: parseInt(boletos.rows[0].abertos), total: parseFloat(boletos.rows[0].total_aberto), vencidos: parseInt(boletos.rows[0].vencidos) },
-        total_kits:         parseInt(kits.rows[0].total),
-        lotes_criticos:     parseInt(lotes.rows[0].lotes_criticos),
-      });
-    } catch (err) {
-      console.error('[dashboard/kpis]', err.message);
-      res.status(500).json({ erro: 'Erro ao buscar KPIs.' });
-    }
-  });
-
-  return router;
+  return r;
 };

@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DRE & Classificador — Bom Beef</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="/js/api.js"></script>
+<style>
+:root{--red:#8B0000;--red-l:#C0392B;--gold:#C9A044;--green:#1a7a4a;--orange:#c76b00;--blue:#1a5c8a;
+  --bg:#f7f4f0;--white:#fff;--text:#1a1a1a;--muted:#7a7068;--border:#e8e0d8;--shadow:0 2px 12px rgba(0,0,0,.08);}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
+.ph{background:var(--blue);padding:12px 22px;display:flex;align-items:center;gap:10px;box-shadow:0 2px 12px rgba(26,92,138,.3);}
+.ph h2{font-family:'Playfair Display',serif;font-size:17px;color:#fff;font-weight:700;}
+.ph-sub{font-size:11px;color:rgba(255,255,255,.7);margin-left:auto;}
+.body{padding:22px 20px;max-width:1300px;margin:0 auto;}
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:20px;}
+.kc{background:var(--white);border:1px solid var(--border);border-radius:10px;padding:14px;border-left:4px solid var(--blue);box-shadow:var(--shadow);}
+.kc.g{border-left-color:var(--green);} .kc.r{border-left-color:var(--red-l);} .kc.o{border-left-color:var(--orange);}
+.kc-l{font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);font-weight:600;margin-bottom:4px;}
+.kc-v{font-size:20px;font-weight:700;font-family:'DM Mono',monospace;}
+.toolbar{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px;align-items:center;}
+.btn{padding:8px 16px;border-radius:8px;border:none;cursor:pointer;font-size:13px;font-weight:600;font-family:'DM Sans',sans-serif;transition:all .15s;display:inline-flex;align-items:center;gap:6px;}
+.btn-p{background:var(--blue);color:#fff;} .btn-p:hover{filter:brightness(1.1);}
+.btn-s{background:var(--white);color:var(--text);border:1px solid var(--border);} .btn-s:hover{border-color:var(--blue);}
+select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--white);cursor:pointer;}
+/* Painel split */
+.split{display:grid;grid-template-columns:1fr 320px;gap:16px;align-items:start;}
+.card{background:var(--white);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);overflow:hidden;}
+.card-head{padding:12px 16px;border-bottom:1px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.8px;font-weight:700;color:var(--blue);display:flex;align-items:center;justify-content:space-between;}
+/* Tabela de lançamentos */
+.tbl{width:100%;border-collapse:collapse;}
+.tbl th{background:#f0f7ff;font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:700;padding:9px 12px;text-align:left;border-bottom:2px solid var(--border);}
+.tbl td{padding:9px 12px;font-size:12px;border-bottom:1px solid #f5efe8;vertical-align:middle;}
+.tbl tr:hover td{background:#f5f9ff;}
+.tbl tr.ignorado td{opacity:.4;text-decoration:line-through;}
+.cat-select{padding:4px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:'DM Sans',sans-serif;max-width:180px;}
+/* DRE Resumo */
+.dre-grupo{margin-bottom:12px;}
+.dre-grupo-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;padding:7px 14px;background:#f5f5f5;color:var(--muted);}
+.dre-linha{display:flex;justify-content:space-between;padding:6px 14px;font-size:13px;border-bottom:1px solid #f5efe8;}
+.dre-linha:hover{background:#f9f9f9;}
+.dre-total{display:flex;justify-content:space-between;padding:8px 14px;font-size:14px;font-weight:700;background:#f0f7ff;border-top:2px solid var(--border);}
+.dre-resultado{display:flex;justify-content:space-between;padding:12px 14px;font-size:15px;font-weight:700;background:var(--blue);color:#fff;margin:0;}
+.pos{color:var(--green);} .neg{color:var(--red-l);}
+/* modal */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;align-items:center;justify-content:center;padding:16px;}
+.modal-bg.open{display:flex;}
+.modal{background:var(--white);border-radius:14px;width:100%;max-width:560px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3);}
+.modal-head{padding:18px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+.modal-head h3{font-family:'Playfair Display',serif;font-size:16px;color:var(--blue);}
+.modal-close{background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);}
+.modal-body{padding:20px 22px;}
+.fg{margin-bottom:12px;}
+.fg label{display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);margin-bottom:5px;}
+.fg input,.fg select{width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:'DM Sans',sans-serif;}
+.fg input:focus,.fg select:focus{outline:none;border-color:var(--blue);}
+.modal-foot{padding:14px 22px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end;}
+.upload-zone{border:2px dashed var(--border);border-radius:10px;padding:24px;text-align:center;cursor:pointer;transition:.2s;margin-bottom:12px;}
+.upload-zone:hover{border-color:var(--blue);}
+.empty{text-align:center;padding:40px;color:var(--muted);}
+@media(max-width:900px){.split{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+<div class="ph"><span style="font-size:20px">📊</span><h2>DRE & Classificador</h2><div class="ph-sub" id="ph-sub">—</div></div>
+<div class="body">
+  <div class="kpi-row">
+    <div class="kc g"><div class="kc-l">Receitas</div><div class="kc-v" id="k-rec">—</div></div>
+    <div class="kc r"><div class="kc-l">Despesas</div><div class="kc-v" id="k-desp">—</div></div>
+    <div class="kc"><div class="kc-l">Resultado</div><div class="kc-v" id="k-res">—</div></div>
+    <div class="kc o"><div class="kc-l">Margem</div><div class="kc-v" id="k-marg">—</div></div>
+    <div class="kc"><div class="kc-l">Lançamentos</div><div class="kc-v" id="k-lanc">—</div></div>
+  </div>
+
+  <div class="toolbar">
+    <button class="btn btn-p" onclick="abrirImport()">📥 Importar Extrato</button>
+    <button class="btn btn-s" onclick="importarBoletos()">📄 Carregar Boletos</button>
+    <button class="btn btn-s" onclick="adicionarManual()">＋ Lançamento Manual</button>
+    <button class="btn btn-s" onclick="salvarSessao()">💾 Salvar Sessão</button>
+    <input type="month" id="flt-mes" class="flt" style="padding:7px 10px" onchange="trocarMes()">
+    <select class="flt" id="flt-cat" onchange="filtrar()">
+      <option value="">Todas as categorias</option>
+    </select>
+  </div>
+
+  <div class="split">
+    <!-- Lançamentos -->
+    <div class="card">
+      <div class="card-head">
+        <span>Lançamentos</span>
+        <span id="lanc-count" style="font-weight:400;color:var(--muted)">0 itens</span>
+      </div>
+      <table class="tbl">
+        <thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Valor</th><th>Ações</th></tr></thead>
+        <tbody id="tbody-lanc"></tbody>
+      </table>
+      <div class="empty" id="empty-lanc" style="display:none">
+        <p>Nenhum lançamento.<br>Importe um extrato bancário para começar.</p>
+      </div>
+    </div>
+
+    <!-- DRE Resumo -->
+    <div>
+      <div class="card">
+        <div class="card-head">DRE Resumido — <span id="dre-mes">—</span></div>
+        <div id="dre-body">
+          <div style="padding:24px;text-align:center;color:var(--muted);font-size:13px">Classifique os lançamentos para ver o DRE</div>
+        </div>
+      </div>
+      <div class="card" style="margin-top:12px">
+        <div class="card-head">Sessões Salvas</div>
+        <div id="sessoes-list" style="max-height:200px;overflow-y:auto">
+          <div style="padding:16px;text-align:center;color:var(--muted);font-size:12px">Nenhuma sessão salva</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Importar Extrato -->
+<div class="modal-bg" id="modal-import">
+  <div class="modal">
+    <div class="modal-head"><h3>Importar Extrato Bancário</h3><button class="modal-close" onclick="fecharImport()">×</button></div>
+    <div class="modal-body">
+      <div class="upload-zone" onclick="document.getElementById('file-ext').click()">
+        <div style="font-size:36px">🏦</div>
+        <p style="font-size:13px;color:var(--muted);margin-top:8px">Clique para selecionar o arquivo</p>
+        <p style="font-size:11px;color:var(--muted);margin-top:4px">Formatos: XLSX, CSV, OFX</p>
+      </div>
+      <input type="file" id="file-ext" accept=".xlsx,.xls,.csv,.ofx,.ofc" style="display:none" onchange="processarExtrato(this)">
+      <div id="import-result" style="display:none;padding:12px;background:#f0f7ff;border-radius:8px;font-size:13px"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-s" onclick="fecharImport()">Cancelar</button>
+      <button class="btn btn-p" id="btn-add-ext" style="display:none" onclick="adicionarExtrato()">✅ Adicionar à Sessão</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Lançamento Manual -->
+<div class="modal-bg" id="modal-manual">
+  <div class="modal">
+    <div class="modal-head"><h3>Lançamento Manual</h3><button class="modal-close" onclick="fecharManual()">×</button></div>
+    <div class="modal-body">
+      <div class="fg"><label>Descrição *</label><input id="m-desc" placeholder="Descrição do lançamento"></div>
+      <div class="fg"><label>Valor (negativo = saída)</label><input type="number" id="m-valor" step="0.01" placeholder="-100.00"></div>
+      <div class="fg"><label>Data</label><input type="date" id="m-data"></div>
+      <div class="fg"><label>Categoria</label><select id="m-cat"><option value="">— Selecione —</option></select></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-s" onclick="fecharManual()">Cancelar</button>
+      <button class="btn btn-p" onclick="salvarManual()">＋ Adicionar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const {api,fmt,toast} = BB;
+let transactions=[], categorias=[], extratoPreview=[], sessaoId=null, mesRef='';
+
+window.onBBReady = () => { init(); };
+if(api.token()) init();
+
+async function init(){
+  const hoje = new Date();
+  mesRef = fmt.mesAtual();
+  document.getElementById('flt-mes').value = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
+  document.getElementById('dre-mes').textContent = mesRef;
+  document.getElementById('m-data').value = hoje.toISOString().slice(0,10);
+  await carregarCategorias();
+  await carregarSessao();
+  carregarSessoes();
+}
+
+async function carregarCategorias(){
+  const d = await api.get('/api/dre/categorias');
+  if(!d.ok) return;
+  categorias = d.data;
+  const sels = [document.getElementById('flt-cat'), document.getElementById('m-cat')];
+  categorias.forEach(c=>{
+    sels.forEach(sel=>{
+      const o=document.createElement('option'); o.value=c.subgrupo; o.textContent=`[${c.grupo}] ${c.label_exibicao||c.subgrupo}`; sel.appendChild(o);
+    });
+  });
+}
+
+async function carregarSessao(){
+  const d = await api.get(`/api/dre/sessoes/${mesRef}`);
+  if(d.ok && d.data.dados_json){
+    sessaoId = d.data.id;
+    transactions = d.data.dados_json.transactions || [];
+    toast(`📂 Sessão carregada: ${transactions.length} lançamentos`);
+  } else {
+    transactions = [];
+  }
+  render(); atualizarKPIs(); atualizarDRE();
+}
+
+async function trocarMes(){
+  const mesVal = document.getElementById('flt-mes').value;
+  const [y,m] = mesVal.split('-');
+  mesRef = `${m}/${y}`;
+  document.getElementById('dre-mes').textContent = mesRef;
+  await carregarSessao();
+}
+
+function render(){
+  const q = document.getElementById('flt-cat').value;
+  const lista = q ? transactions.filter(t=>t.categoria===q) : transactions;
+  const tb = document.getElementById('tbody-lanc');
+  const em = document.getElementById('empty-lanc');
+  document.getElementById('lanc-count').textContent = `${transactions.length} itens`;
+  if(!lista.length){ tb.innerHTML=''; em.style.display=''; return; }
+  em.style.display='none';
+  tb.innerHTML = lista.map((t,i)=>{
+    const realIdx = transactions.indexOf(t);
+    const catOpts = ['', ...categorias.map(c=>c.subgrupo)].map(c=>
+      `<option value="${c}" ${t.categoria===c?'selected':''}>${c||'— Sem categoria —'}</option>`
+    ).join('');
+    return `<tr class="${t.ignorar?'ignorado':''}">
+      <td style="font-size:11px;white-space:nowrap">${t.data?fmt.date(t.data):'—'}</td>
+      <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${t.lancamento}">${t.lancamento}</td>
+      <td><select class="cat-select" onchange="setCategoria(${realIdx},this.value)">${catOpts}</select></td>
+      <td style="font-family:'DM Mono',monospace;font-weight:600;color:${parseFloat(t.valor||0)>=0?'var(--green)':'var(--red-l)'}">${fmt.brl(t.valor)}</td>
+      <td>
+        <button class="act-btn" onclick="toggleIgnorar(${realIdx})" title="${t.ignorar?'Reativar':'Ignorar'}">${t.ignorar?'↩️':'🚫'}</button>
+        <button class="act-btn" onclick="removerLanc(${realIdx})" style="color:var(--red-l)">×</button>
+      </td>
+    </tr>`;
+  }).join('');
+  atualizarDRE();
+}
+
+function filtrar(){ render(); }
+
+function setCategoria(idx, val){
+  transactions[idx].categoria = val;
+  atualizarKPIs(); atualizarDRE();
+  autoSave();
+}
+
+function toggleIgnorar(idx){
+  transactions[idx].ignorar = !transactions[idx].ignorar;
+  render(); atualizarKPIs(); atualizarDRE(); autoSave();
+}
+
+function removerLanc(idx){
+  transactions.splice(idx,1);
+  render(); atualizarKPIs(); atualizarDRE(); autoSave();
+}
+
+function atualizarKPIs(){
+  const ativos = transactions.filter(t=>!t.ignorar);
+  const rec  = ativos.filter(t=>parseFloat(t.valor||0)>0).reduce((s,t)=>s+parseFloat(t.valor),0);
+  const desp = ativos.filter(t=>parseFloat(t.valor||0)<0).reduce((s,t)=>s+Math.abs(parseFloat(t.valor)),0);
+  const res  = rec - desp;
+  document.getElementById('k-rec').textContent  = fmt.brl(rec);
+  document.getElementById('k-desp').textContent = fmt.brl(desp);
+  document.getElementById('k-res').textContent  = fmt.brl(res);
+  document.getElementById('k-res').style.color  = res>=0?'var(--green)':'var(--red-l)';
+  document.getElementById('k-marg').textContent = rec>0?fmt.pct((res/rec)*100):'—';
+  document.getElementById('k-lanc').textContent = fmt.n(transactions.length);
+  document.getElementById('ph-sub').textContent = `${mesRef} · ${transactions.length} lançamentos · ${fmt.brl(res)}`;
+}
+
+function atualizarDRE(){
+  const ativos = transactions.filter(t=>!t.ignorar);
+  const grupos = {};
+  for(const t of ativos){
+    const cat = t.categoria||'Sem categoria';
+    const c = categorias.find(x=>x.subgrupo===cat);
+    const grupo = c?.grupo || (parseFloat(t.valor||0)>0?'RECEITAS':'DESPESAS');
+    if(!grupos[grupo]) grupos[grupo]={items:{},total:0};
+    if(!grupos[grupo].items[cat]) grupos[grupo].items[cat]=0;
+    grupos[grupo].items[cat]+=parseFloat(t.valor||0);
+    grupos[grupo].total+=parseFloat(t.valor||0);
+  }
+  const rec  = (grupos['RECEITAS']?.total||0);
+  const cmv  = Math.abs(grupos['CMV']?.total||0);
+  const desp = Math.abs(grupos['DESPESAS']?.total||0);
+  const fin  = (grupos['FINANCEIRO']?.total||0);
+  const res  = rec - cmv - desp + fin;
+  const lucBruto = rec - cmv;
+
+  let html = '';
+  const ordemGrupos = ['RECEITAS','CMV','DESPESAS','FINANCEIRO'];
+  for(const g of ordemGrupos){
+    if(!grupos[g]) continue;
+    html += `<div class="dre-grupo">
+      <div class="dre-grupo-title">${g}</div>
+      ${Object.entries(grupos[g].items).map(([cat,val])=>`
+        <div class="dre-linha"><span>${cat}</span><span class="${val>=0?'pos':'neg'}">${fmt.brl(val)}</span></div>
+      `).join('')}
+      <div class="dre-total"><span>Total ${g}</span><span class="${grupos[g].total>=0?'pos':'neg'}">${fmt.brl(grupos[g].total)}</span></div>
+    </div>`;
+  }
+  html += `
+    <div class="dre-linha" style="background:#f9f9f9"><b>Lucro Bruto</b><span class="${lucBruto>=0?'pos':'neg'}">${fmt.brl(lucBruto)}</span></div>
+    <div class="dre-resultado"><span>RESULTADO LÍQUIDO</span><span>${fmt.brl(res)}</span></div>`;
+  document.getElementById('dre-body').innerHTML = html || '<div style="padding:16px;text-align:center;color:var(--muted);font-size:13px">Classifique os lançamentos</div>';
+}
+
+// ── Importar extrato ───────────────────────────────────────────────────────
+function abrirImport(){ document.getElementById('modal-import').classList.add('open'); }
+function fecharImport(){
+  document.getElementById('modal-import').classList.remove('open');
+  extratoPreview=[];
+  document.getElementById('import-result').style.display='none';
+  document.getElementById('btn-add-ext').style.display='none';
+}
+
+async function processarExtrato(inp){
+  const f = inp.files[0]; if(!f) return;
+  const fd = new FormData(); fd.append('arquivo',f);
+  toast('Processando...');
+  const d = await api.upload('/api/dre/import-extrato', fd);
+  const el = document.getElementById('import-result');
+  el.style.display='';
+  if(!d.ok){ el.innerHTML=`❌ ${d.erro}`; return; }
+  extratoPreview = d.lancamentos;
+  el.innerHTML = `✅ <b>${d.total} lançamentos encontrados</b>`;
+  document.getElementById('btn-add-ext').style.display='';
+}
+
+function adicionarExtrato(){
+  const existing = new Set(transactions.map(t=>`${t.data}|${t.lancamento}|${t.valor}`));
+  let adicionados=0;
+  for(const l of extratoPreview){
+    const key=`${l.data}|${l.lancamento}|${l.valor}`;
+    if(!existing.has(key)){ transactions.push({...l,id:Date.now()+Math.random()}); adicionados++; }
+  }
+  toast(`✅ ${adicionados} lançamentos adicionados!`);
+  fecharImport(); render(); atualizarKPIs(); autoSave();
+}
+
+// ── Importar boletos do M1 ─────────────────────────────────────────────────
+async function importarBoletos(){
+  const d = await api.get(`/api/boletos/classificador?mes=${mesRef}`);
+  if(!d.ok){ toast('Erro ao carregar boletos'); return; }
+  let adicionados=0;
+  for(const l of d.data){
+    const existe = transactions.some(t=>t.boletoId===l.boletoId);
+    if(!existe){ transactions.push({...l,id:Date.now()+Math.random()}); adicionados++; }
+  }
+  toast(`📄 ${adicionados} boleto(s) adicionado(s)!`);
+  render(); atualizarKPIs(); autoSave();
+}
+
+// ── Manual ─────────────────────────────────────────────────────────────────
+function adicionarManual(){ document.getElementById('modal-manual').classList.add('open'); }
+function fecharManual(){ document.getElementById('modal-manual').classList.remove('open'); }
+
+function salvarManual(){
+  const desc  = document.getElementById('m-desc').value.trim();
+  const valor = parseFloat(document.getElementById('m-valor').value)||0;
+  const data  = document.getElementById('m-data').value;
+  const cat   = document.getElementById('m-cat').value;
+  if(!desc){ toast('Descrição obrigatória'); return; }
+  const mes = data?fmt.mesFromDate(data):mesRef;
+  transactions.push({ lancamento:desc, valor, data, mes, mesCaixa:mes, categoria:cat, fonte:'MANUAL', id:Date.now() });
+  toast('✅ Lançamento adicionado');
+  fecharManual(); render(); atualizarKPIs(); autoSave();
+}
+
+// ── Salvar sessão ──────────────────────────────────────────────────────────
+let _saveTimer;
+function autoSave(){
+  clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(()=>salvarSessao(true), 8000);
+}
+
+async function salvarSessao(silent=false){
+  const d = await api.post('/api/dre/salvar',{
+    sessao_id: sessaoId, mes_ref: mesRef,
+    descricao: `Sessão ${mesRef} — ${transactions.length} lançamentos`,
+    dados_json: { transactions, loadedFiles:[], _savedAt:new Date().toISOString() },
+  });
+  if(d.ok){
+    sessaoId = d.sessao_id;
+    if(!silent) toast('💾 Sessão salva!');
+    carregarSessoes();
+  } else if(!silent) toast('Erro ao salvar: '+d.erro);
+}
+
+async function carregarSessoes(){
+  const d = await api.get('/api/dre/sessoes');
+  if(!d.ok) return;
+  const el = document.getElementById('sessoes-list');
+  if(!d.data.length){ el.innerHTML='<div style="padding:12px;text-align:center;color:var(--muted);font-size:12px">Nenhuma sessão salva</div>'; return; }
+  el.innerHTML = d.data.slice(0,6).map(s=>`
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 14px;border-bottom:1px solid var(--border);font-size:12px;cursor:pointer" onclick="carregarSessaoId('${s.id}')">
+      <span><b>${s.mes_ref}</b> <span style="color:var(--muted)">${s.total_lancamentos||0} lanç.</span></span>
+      <button onclick="event.stopPropagation();excluirSessao(${s.id})" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:14px">×</button>
+    </div>`).join('');
+}
+
+async function carregarSessaoId(id){
+  const d = await api.get(`/api/dre/sessoes/${id}`);
+  if(!d.ok){ toast('Erro'); return; }
+  sessaoId = d.data.id;
+  mesRef   = d.data.mes_ref;
+  document.getElementById('dre-mes').textContent = mesRef;
+  const [m,y] = mesRef.split('/');
+  document.getElementById('flt-mes').value = `${y}-${m}`;
+  transactions = d.data.dados_json?.transactions||[];
+  toast(`📂 ${mesRef} carregado`);
+  render(); atualizarKPIs(); atualizarDRE();
+}
+
+async function excluirSessao(id){
+  if(!confirm('Remover esta sessão?')) return;
+  const d = await api.delete(`/api/dre/sessoes/${id}`);
+  if(d.ok){ toast('Sessão removida'); carregarSessoes(); }
+  else toast('Erro: '+d.erro);
+}
+</script>
+</body>
+</html>

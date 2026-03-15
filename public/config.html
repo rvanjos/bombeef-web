@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Configurações — Bom Beef</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="/js/api.js"></script>
+<style>
+:root{--red:#8B0000;--red-l:#C0392B;--gold:#C9A044;--green:#1a7a4a;--orange:#c76b00;--blue:#1a5c8a;--purple:#6c3483;
+  --bg:#f7f4f0;--white:#fff;--text:#1a1a1a;--muted:#7a7068;--border:#e8e0d8;--shadow:0 2px 12px rgba(0,0,0,.08);}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
+.ph{background:var(--red);padding:12px 22px;display:flex;align-items:center;gap:10px;box-shadow:0 2px 12px rgba(139,0,0,.3);}
+.ph h2{font-family:'Playfair Display',serif;font-size:17px;color:#fff;font-weight:700;}
+.layout{display:grid;grid-template-columns:200px 1fr;height:calc(100vh - 52px);}
+.sidebar{background:var(--white);border-right:1px solid var(--border);overflow-y:auto;padding:12px 0;}
+.sb-sec{font-size:9px;text-transform:uppercase;letter-spacing:1.5px;font-weight:700;color:var(--muted);padding:10px 18px 5px;margin-top:4px;}
+.nav-item{display:flex;align-items:center;gap:9px;padding:9px 18px;cursor:pointer;font-size:13px;font-weight:500;color:var(--text);transition:all .15s;border-left:3px solid transparent;}
+.nav-item:hover{background:#faf5f0;color:var(--red);}
+.nav-item.active{background:#fff5f5;color:var(--red);font-weight:700;border-left-color:var(--red);}
+.content{overflow-y:auto;background:var(--bg);padding:28px 28px;}
+.page{display:none;}
+.page.active{display:block;}
+.pg-title{font-family:'Playfair Display',serif;font-size:20px;color:var(--red);margin-bottom:4px;}
+.pg-sub{font-size:13px;color:var(--muted);margin-bottom:22px;}
+.card{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:16px;box-shadow:var(--shadow);}
+.card-title{font-size:11px;text-transform:uppercase;letter-spacing:1.3px;font-weight:700;color:var(--red);margin-bottom:14px;}
+.fg{margin-bottom:12px;}
+.fg label{display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);margin-bottom:5px;}
+.fg input,.fg select,.fg textarea{width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:'DM Sans',sans-serif;background:var(--white);}
+.fg input:focus,.fg select:focus{outline:none;border-color:var(--red);}
+.fg-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.fg-row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
+.btn{padding:8px 16px;border-radius:8px;border:none;cursor:pointer;font-size:13px;font-weight:600;font-family:'DM Sans',sans-serif;transition:all .15s;display:inline-flex;align-items:center;gap:6px;}
+.btn-p{background:var(--red);color:#fff;} .btn-p:hover{background:var(--red-l);}
+.btn-s{background:var(--white);color:var(--text);border:1px solid var(--border);} .btn-s:hover{border-color:var(--red);}
+.tbl{width:100%;border-collapse:collapse;}
+.tbl th{background:#fdf9f5;font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:700;padding:9px 12px;text-align:left;border-bottom:2px solid var(--border);}
+.tbl td{padding:9px 12px;font-size:13px;border-bottom:1px solid #f5efe8;vertical-align:middle;}
+.act-btn{padding:4px 10px;border:1px solid var(--border);border-radius:6px;background:var(--white);cursor:pointer;font-size:12px;margin-right:3px;}
+.pill{display:inline-block;padding:2px 9px;border-radius:8px;font-size:11px;font-weight:600;}
+.pill-ok{background:#d1e7dd;color:#0a4a22;} .pill-off{background:#f8d7da;color:#721c24;}
+/* modal */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;align-items:center;justify-content:center;padding:16px;}
+.modal-bg.open{display:flex;}
+.modal{background:var(--white);border-radius:14px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3);}
+.modal-head{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+.modal-head h3{font-family:'Playfair Display',serif;font-size:15px;color:var(--red);}
+.modal-close{background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);}
+.modal-body{padding:18px 20px;}
+.modal-foot{padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end;}
+@media(max-width:640px){.layout{grid-template-columns:1fr;}.sidebar{display:none;}}
+</style>
+</head>
+<body>
+<div class="ph"><span style="font-size:20px">⚙️</span><h2>Configurações do Sistema</h2></div>
+<div class="layout">
+  <div class="sidebar">
+    <div class="sb-sec">Principal</div>
+    <div class="nav-item active" onclick="showPage('sistema')">⚙️ Sistema</div>
+    <div class="nav-item" onclick="showPage('usuarios')">👤 Usuários</div>
+    <div class="nav-item" onclick="showPage('funcionarios')">👥 Funcionários</div>
+    <div class="sb-sec">Financeiro</div>
+    <div class="nav-item" onclick="showPage('metas')">🎯 Metas</div>
+    <div class="nav-item" onclick="showPage('categorias')">📊 Categorias DRE</div>
+  </div>
+
+  <div class="content">
+
+    <!-- SISTEMA -->
+    <div class="page active" id="page-sistema">
+      <div class="pg-title">Configurações Gerais</div>
+      <div class="pg-sub">Parâmetros globais do sistema</div>
+      <div class="card">
+        <div class="card-title">Identidade</div>
+        <div class="fg"><label>Nome da Empresa</label><input id="cfg-nome" placeholder="Bom Beef"></div>
+        <div class="fg-row">
+          <div class="fg"><label>Emoji / Logo</label><input id="cfg-emoji" placeholder="🥩" maxlength="5"></div>
+          <div class="fg"><label>Dias para Alerta de Validade</label><input type="number" id="cfg-dias-val" value="7" min="1"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Retiradas de Funcionários</div>
+        <div class="fg"><label>Desconto Padrão (%)</label><input type="number" id="cfg-desc" value="100" min="0" max="100">
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">100% = produto gratuito · 0% = preço cheio</div>
+        </div>
+      </div>
+      <button class="btn btn-p" onclick="salvarConfig()">💾 Salvar Configurações</button>
+    </div>
+
+    <!-- USUÁRIOS -->
+    <div class="page" id="page-usuarios">
+      <div class="pg-title">Usuários do Sistema</div>
+      <div class="pg-sub">Gerencie quem tem acesso e com qual nível</div>
+      <div style="margin-bottom:14px"><button class="btn btn-p" onclick="abrirUsuario()">＋ Novo Usuário</button></div>
+      <div class="card" style="padding:0;overflow:hidden">
+        <table class="tbl"><thead><tr><th>Nome</th><th>E-mail</th><th>Perfil</th><th>Status</th><th>Ações</th></tr></thead>
+        <tbody id="tbody-usr"></tbody></table>
+      </div>
+    </div>
+
+    <!-- FUNCIONÁRIOS -->
+    <div class="page" id="page-funcionarios">
+      <div class="pg-title">Funcionários</div>
+      <div class="pg-sub">Cadastro e limites de retirada</div>
+      <div style="margin-bottom:14px"><button class="btn btn-p" onclick="abrirFunc()">＋ Novo Funcionário</button></div>
+      <div class="card" style="padding:0;overflow:hidden">
+        <table class="tbl"><thead><tr><th>Nome</th><th>Cargo</th><th>E-mail</th><th>Limite/Mês</th><th>Status</th><th>Ações</th></tr></thead>
+        <tbody id="tbody-func"></tbody></table>
+      </div>
+    </div>
+
+    <!-- METAS -->
+    <div class="page" id="page-metas">
+      <div class="pg-title">Metas Mensais</div>
+      <div class="pg-sub">Faturamento, perdas e retiradas</div>
+      <div class="card">
+        <div class="card-title">Definir Meta — <span id="meta-mes-label"></span></div>
+        <div class="fg-row">
+          <div class="fg"><label>Mês de Referência</label><input type="month" id="meta-mes" onchange="carregarMeta()"></div>
+          <div class="fg"><label>Meta de Faturamento (R$)</label><input type="number" id="meta-fat" step="100" placeholder="0,00"></div>
+        </div>
+        <div class="fg-row3">
+          <div class="fg"><label>Faturamento Real (R$)</label><input type="number" id="meta-real" step="100" placeholder="0,00"></div>
+          <div class="fg"><label>Meta de Perdas (%)</label><input type="number" id="meta-perda-pct" value="2" step="0.1" min="0" max="100"></div>
+          <div class="fg"><label>Meta de Retiradas (R$)</label><input type="number" id="meta-retiradas" step="50" placeholder="0,00"></div>
+        </div>
+        <div class="fg"><label>Observação</label><input id="meta-obs" placeholder="Opcional"></div>
+        <button class="btn btn-p" onclick="salvarMeta()">💾 Salvar Meta</button>
+      </div>
+      <div class="card" style="padding:0;overflow:hidden">
+        <div style="padding:14px 16px;font-size:11px;text-transform:uppercase;letter-spacing:.8px;font-weight:700;color:var(--muted)">Histórico</div>
+        <table class="tbl"><thead><tr><th>Mês</th><th>Meta Fat.</th><th>Real</th><th>% Ating.</th><th>Meta Perda</th><th>Meta Retiradas</th></tr></thead>
+        <tbody id="tbody-metas"></tbody></table>
+      </div>
+    </div>
+
+    <!-- CATEGORIAS DRE -->
+    <div class="page" id="page-categorias">
+      <div class="pg-title">Categorias DRE</div>
+      <div class="pg-sub">Grupos e subgrupos para classificação dos lançamentos</div>
+      <div style="margin-bottom:14px"><button class="btn btn-p" onclick="abrirCat()">＋ Nova Categoria</button></div>
+      <div class="card" style="padding:0;overflow:hidden">
+        <table class="tbl"><thead><tr><th>Grupo</th><th>Subgrupo</th><th>Rótulo</th><th>Ordem</th><th>Ações</th></tr></thead>
+        <tbody id="tbody-cats"></tbody></table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Modal Usuário -->
+<div class="modal-bg" id="modal-usr">
+  <div class="modal">
+    <div class="modal-head"><h3 id="usr-title">Novo Usuário</h3><button class="modal-close" onclick="fecharUsr()">×</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="u-id">
+      <div class="fg"><label>Nome *</label><input id="u-nome" placeholder="Nome completo"></div>
+      <div class="fg"><label>E-mail *</label><input type="email" id="u-email" placeholder="email@bombeef.com.br"></div>
+      <div class="fg" id="u-senha-wrap"><label>Senha *</label><input type="password" id="u-senha" placeholder="Mínimo 6 caracteres"></div>
+      <div class="fg"><label>Perfil de Acesso</label>
+        <select id="u-perfil">
+          <option value="caixa">Caixa — Retiradas e Validade</option>
+          <option value="estoque">Estoque — Produtos e Validade</option>
+          <option value="financeiro">Financeiro — Boletos e DRE</option>
+          <option value="gestor">Gestor — Quase tudo</option>
+          <option value="admin">Admin — Acesso Total</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-s" onclick="fecharUsr()">Cancelar</button>
+      <button class="btn btn-p" onclick="salvarUsr()">💾 Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Funcionário -->
+<div class="modal-bg" id="modal-func">
+  <div class="modal">
+    <div class="modal-head"><h3 id="func-title">Novo Funcionário</h3><button class="modal-close" onclick="fecharFunc()">×</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="f-id">
+      <div class="fg"><label>Nome *</label><input id="f-nome" placeholder="Nome completo"></div>
+      <div class="fg-row">
+        <div class="fg"><label>Cargo</label><input id="f-cargo" placeholder="Açougueiro, Caixa..."></div>
+        <div class="fg"><label>Limite Retirada/Mês (R$)</label><input type="number" id="f-limite" placeholder="0,00" step="10" min="0"></div>
+      </div>
+      <div class="fg"><label>E-mail</label><input type="email" id="f-email" placeholder="funcionario@email.com"></div>
+      <div class="fg"><label>Telefone</label><input id="f-tel" placeholder="(19) 99999-9999"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-s" onclick="fecharFunc()">Cancelar</button>
+      <button class="btn btn-p" onclick="salvarFunc()">💾 Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Categoria -->
+<div class="modal-bg" id="modal-cat">
+  <div class="modal">
+    <div class="modal-head"><h3>Nova Categoria DRE</h3><button class="modal-close" onclick="fecharCat()">×</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="c-id">
+      <div class="fg"><label>Grupo *</label>
+        <select id="c-grupo">
+          <option value="RECEITAS">RECEITAS</option>
+          <option value="CMV">CMV (Custo Mercadoria)</option>
+          <option value="DESPESAS">DESPESAS</option>
+          <option value="FINANCEIRO">FINANCEIRO</option>
+        </select>
+      </div>
+      <div class="fg"><label>Subgrupo *</label><input id="c-subgrupo" placeholder="Ex: Fornec - Proteínas"></div>
+      <div class="fg-row">
+        <div class="fg"><label>Rótulo de Exibição</label><input id="c-label" placeholder="Deixe vazio para usar o subgrupo"></div>
+        <div class="fg"><label>Ordem</label><input type="number" id="c-ordem" value="99" min="0"></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-s" onclick="fecharCat()">Cancelar</button>
+      <button class="btn btn-p" onclick="salvarCat()">💾 Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const {api,fmt,toast} = BB;
+let usuarios=[], funcionarios=[], metas=[], categorias=[];
+
+window.onBBReady = () => { init(); };
+if(api.token()) init();
+
+async function init(){
+  await carregarConfig();
+  const hoje = new Date();
+  const mesVal = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
+  document.getElementById('meta-mes').value = mesVal;
+  document.getElementById('meta-mes-label').textContent = `${String(hoje.getMonth()+1).padStart(2,'0')}/${hoje.getFullYear()}`;
+  carregarMeta();
+  carregarMetas();
+}
+
+function showPage(p){
+  document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));
+  document.getElementById(`page-${p}`).classList.add('active');
+  event.currentTarget.classList.add('active');
+  if(p==='usuarios') carregarUsuarios();
+  if(p==='funcionarios') carregarFuncionarios();
+  if(p==='categorias') carregarCategorias();
+}
+
+// ── Config sistema ─────────────────────────────────────────────────────────
+async function carregarConfig(){
+  const d = await api.get('/api/config/sistema');
+  if(!d.ok) return;
+  const c = d.data;
+  document.getElementById('cfg-nome').value     = c.nome_empresa||'';
+  document.getElementById('cfg-emoji').value    = c.logo_emoji||'🥩';
+  document.getElementById('cfg-dias-val').value = c.dias_alerta_val||7;
+  document.getElementById('cfg-desc').value     = c.taxa_desconto_fun||100;
+}
+
+async function salvarConfig(){
+  const body = {
+    nome_empresa:     document.getElementById('cfg-nome').value,
+    logo_emoji:       document.getElementById('cfg-emoji').value,
+    dias_alerta_val:  document.getElementById('cfg-dias-val').value,
+    taxa_desconto_fun:document.getElementById('cfg-desc').value,
+  };
+  const d = await api.put('/api/config/sistema', body);
+  if(d.ok) toast('✅ Configurações salvas!');
+  else toast('Erro: '+d.erro);
+}
+
+// ── Usuários ───────────────────────────────────────────────────────────────
+async function carregarUsuarios(){
+  const d = await api.get('/auth/usuarios');
+  if(!d.ok) return;
+  usuarios = d.data;
+  const tb = document.getElementById('tbody-usr');
+  const perfis={admin:'Admin',gestor:'Gestor',financeiro:'Financeiro',estoque:'Estoque',caixa:'Caixa'};
+  tb.innerHTML = usuarios.map(u=>`<tr>
+    <td><b>${u.nome}</b></td>
+    <td style="font-size:12px">${u.email}</td>
+    <td><span class="pill" style="background:#e8e0ff;color:#4a2080">${perfis[u.perfil]||u.perfil}</span></td>
+    <td><span class="pill ${u.ativo?'pill-ok':'pill-off'}">${u.ativo?'Ativo':'Inativo'}</span></td>
+    <td>
+      <button class="act-btn" onclick="abrirUsuario(${u.id})">✏️</button>
+      ${u.ativo?`<button class="act-btn" onclick="inativarUsr(${u.id})" style="color:var(--red-l)">🗑</button>`:''}
+    </td>
+  </tr>`).join('');
+}
+
+function abrirUsuario(id){
+  const u = id ? usuarios.find(x=>x.id===id) : null;
+  document.getElementById('usr-title').textContent = u?'Editar Usuário':'Novo Usuário';
+  document.getElementById('u-id').value    = u?.id||'';
+  document.getElementById('u-nome').value  = u?.nome||'';
+  document.getElementById('u-email').value = u?.email||'';
+  document.getElementById('u-senha').value = '';
+  document.getElementById('u-perfil').value= u?.perfil||'caixa';
+  document.getElementById('u-senha-wrap').style.display = u?'none':'';
+  document.getElementById('modal-usr').classList.add('open');
+}
+function fecharUsr(){ document.getElementById('modal-usr').classList.remove('open'); }
+
+async function salvarUsr(){
+  const id = document.getElementById('u-id').value;
+  const body = {
+    nome:   document.getElementById('u-nome').value.trim(),
+    email:  document.getElementById('u-email').value.trim(),
+    senha:  document.getElementById('u-senha').value,
+    perfil: document.getElementById('u-perfil').value,
+  };
+  if(!body.nome||!body.email){ toast('Nome e e-mail obrigatórios'); return; }
+  if(!id && !body.senha){ toast('Senha obrigatória para novo usuário'); return; }
+  const d = id
+    ? await api.put(`/auth/usuarios/${id}`, {nome:body.nome,email:body.email,perfil:body.perfil})
+    : await api.post('/auth/usuarios', body);
+  if(!d.ok){ toast('Erro: '+d.erro); return; }
+  toast(id?'Usuário atualizado!':'Usuário criado!');
+  fecharUsr(); carregarUsuarios();
+}
+
+async function inativarUsr(id){
+  if(!confirm('Inativar este usuário?')) return;
+  const d = await api.delete(`/auth/usuarios/${id}`);
+  if(d.ok){ toast('Usuário inativado'); carregarUsuarios(); }
+  else toast('Erro: '+d.erro);
+}
+
+// ── Funcionários ───────────────────────────────────────────────────────────
+async function carregarFuncionarios(){
+  const d = await api.get('/api/config/funcionarios');
+  if(!d.ok) return;
+  funcionarios = d.data;
+  const tb = document.getElementById('tbody-func');
+  tb.innerHTML = funcionarios.map(f=>`<tr>
+    <td><b>${f.nome}</b></td>
+    <td style="font-size:12px">${f.cargo||'—'}</td>
+    <td style="font-size:12px">${f.email||'—'}</td>
+    <td style="font-family:'DM Mono',monospace;font-weight:600">${fmt.brl(f.limite_retirada)}</td>
+    <td><span class="pill ${f.ativo?'pill-ok':'pill-off'}">${f.ativo?'Ativo':'Inativo'}</span></td>
+    <td>
+      <button class="act-btn" onclick="abrirFunc(${f.id})">✏️</button>
+      ${f.ativo?`<button class="act-btn" onclick="inativarFunc(${f.id})" style="color:var(--red-l)">🗑</button>`:''}
+    </td>
+  </tr>`).join('');
+}
+
+function abrirFunc(id){
+  const f = id ? funcionarios.find(x=>x.id===id) : null;
+  document.getElementById('func-title').textContent = f?'Editar Funcionário':'Novo Funcionário';
+  document.getElementById('f-id').value     = f?.id||'';
+  document.getElementById('f-nome').value   = f?.nome||'';
+  document.getElementById('f-cargo').value  = f?.cargo||'';
+  document.getElementById('f-limite').value = f?.limite_retirada||0;
+  document.getElementById('f-email').value  = f?.email||'';
+  document.getElementById('f-tel').value    = f?.telefone||'';
+  document.getElementById('modal-func').classList.add('open');
+}
+function fecharFunc(){ document.getElementById('modal-func').classList.remove('open'); }
+
+async function salvarFunc(){
+  const id = document.getElementById('f-id').value;
+  const body = {
+    nome:           document.getElementById('f-nome').value.trim(),
+    cargo:          document.getElementById('f-cargo').value.trim(),
+    limiteRetirada: parseFloat(document.getElementById('f-limite').value)||0,
+    email:          document.getElementById('f-email').value.trim(),
+    telefone:       document.getElementById('f-tel').value.trim(),
+  };
+  if(!body.nome){ toast('Nome obrigatório'); return; }
+  const d = id
+    ? await api.put(`/api/config/funcionarios/${id}`, body)
+    : await api.post('/api/config/funcionarios', body);
+  if(!d.ok){ toast('Erro: '+d.erro); return; }
+  toast(id?'Funcionário atualizado!':'Funcionário criado!');
+  fecharFunc(); carregarFuncionarios();
+}
+
+async function inativarFunc(id){
+  if(!confirm('Inativar este funcionário?')) return;
+  const d = await api.delete(`/api/config/funcionarios/${id}`);
+  if(d.ok){ toast('Inativado'); carregarFuncionarios(); }
+  else toast('Erro: '+d.erro);
+}
+
+// ── Metas ──────────────────────────────────────────────────────────────────
+async function carregarMeta(){
+  const mesVal = document.getElementById('meta-mes').value;
+  if(!mesVal) return;
+  const [y,m] = mesVal.split('-');
+  const mes = `${m}/${y}`;
+  document.getElementById('meta-mes-label').textContent = mes;
+  const d = await api.get(`/api/config/metas/${mes}`);
+  if(!d.ok) return;
+  const mt = d.data;
+  document.getElementById('meta-fat').value       = mt.faturamento_meta||0;
+  document.getElementById('meta-real').value      = mt.faturamento_real||0;
+  document.getElementById('meta-perda-pct').value = mt.meta_perda_pct||2;
+  document.getElementById('meta-retiradas').value = mt.meta_retiradas||0;
+  document.getElementById('meta-obs').value       = mt.observacao||'';
+}
+
+async function salvarMeta(){
+  const mesVal = document.getElementById('meta-mes').value;
+  if(!mesVal){ toast('Selecione o mês'); return; }
+  const [y,m] = mesVal.split('-');
+  const body = {
+    mes:              `${m}/${y}`,
+    faturamentoMeta:  parseFloat(document.getElementById('meta-fat').value)||0,
+    faturamentoReal:  parseFloat(document.getElementById('meta-real').value)||0,
+    metaPerdaPct:     parseFloat(document.getElementById('meta-perda-pct').value)||0,
+    metaRetiradas:    parseFloat(document.getElementById('meta-retiradas').value)||0,
+    observacao:       document.getElementById('meta-obs').value,
+  };
+  const d = await api.post('/api/config/metas', body);
+  if(d.ok){ toast('✅ Meta salva!'); carregarMetas(); }
+  else toast('Erro: '+d.erro);
+}
+
+async function carregarMetas(){
+  const d = await api.get('/api/config/metas');
+  if(!d.ok) return;
+  metas = d.data;
+  const tb = document.getElementById('tbody-metas');
+  tb.innerHTML = metas.slice(0,12).map(m=>{
+    const pct = m.faturamento_meta>0 ? ((m.faturamento_real/m.faturamento_meta)*100).toFixed(0) : '—';
+    return `<tr>
+      <td style="font-weight:600">${m.mes}</td>
+      <td>${fmt.brl(m.faturamento_meta)}</td>
+      <td>${fmt.brl(m.faturamento_real)}</td>
+      <td style="color:${parseFloat(pct)>=100?'var(--green)':'var(--orange)';font-weight:600}">${pct}%</td>
+      <td>${m.meta_perda_pct}%</td>
+      <td>${fmt.brl(m.meta_retiradas)}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Categorias DRE ─────────────────────────────────────────────────────────
+async function carregarCategorias(){
+  const d = await api.get('/api/config/categorias');
+  if(!d.ok) return;
+  categorias = d.data;
+  const tb = document.getElementById('tbody-cats');
+  tb.innerHTML = categorias.map(c=>`<tr>
+    <td><span class="pill" style="background:#e8f4fd;color:#1a5c8a">${c.grupo}</span></td>
+    <td>${c.subgrupo}</td>
+    <td style="font-size:12px;color:var(--muted)">${c.label_exibicao||c.subgrupo}</td>
+    <td style="font-family:'DM Mono',monospace;font-size:12px">${c.ordem}</td>
+    <td>
+      <button class="act-btn" onclick="abrirCat(${c.id})">✏️</button>
+      <button class="act-btn" onclick="excluirCat(${c.id})" style="color:var(--red-l)">🗑</button>
+    </td>
+  </tr>`).join('');
+}
+
+function abrirCat(id){
+  const c = id ? categorias.find(x=>x.id===id) : null;
+  document.getElementById('c-id').value      = c?.id||'';
+  document.getElementById('c-grupo').value   = c?.grupo||'DESPESAS';
+  document.getElementById('c-subgrupo').value= c?.subgrupo||'';
+  document.getElementById('c-label').value   = c?.label_exibicao||'';
+  document.getElementById('c-ordem').value   = c?.ordem||99;
+  document.getElementById('modal-cat').classList.add('open');
+}
+function fecharCat(){ document.getElementById('modal-cat').classList.remove('open'); }
+
+async function salvarCat(){
+  const id = document.getElementById('c-id').value;
+  const body = {
+    grupo:         document.getElementById('c-grupo').value,
+    subgrupo:      document.getElementById('c-subgrupo').value.trim(),
+    labelExibicao: document.getElementById('c-label').value.trim(),
+    ordem:         parseInt(document.getElementById('c-ordem').value)||99,
+  };
+  if(!body.subgrupo){ toast('Subgrupo obrigatório'); return; }
+  const d = id
+    ? await api.put(`/api/config/categorias/${id}`, body)
+    : await api.post('/api/config/categorias', body);
+  if(!d.ok){ toast('Erro: '+d.erro); return; }
+  toast(id?'Categoria atualizada!':'Categoria criada!');
+  fecharCat(); carregarCategorias();
+}
+
+async function excluirCat(id){
+  if(!confirm('Remover esta categoria?')) return;
+  const d = await api.delete(`/api/config/categorias/${id}`);
+  if(d.ok){ toast('Removida'); carregarCategorias(); }
+  else toast('Erro: '+d.erro);
+}
+</script>
+</body>
+</html>

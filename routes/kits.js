@@ -1,155 +1,231 @@
+/**
+ * routes/kits.js — M3: Kits e Precificação
+ *
+ * Rotas:
+ *   GET  /api/kits          → lista kits com itens
+ *   GET  /api/kits/:id      → detalhe do kit
+ *   POST /api/kits          → cria kit com itens
+ *   PUT  /api/kits/:id      → atualiza kit e itens
+ *   DELETE /api/kits/:id    → inativa kit
+ *   GET  /api/kits/:id/preco → simula preço com margem
+ */
+
 const express    = require('express');
 const autenticar = require('../middleware/auth');
 
-module.exports = (pool) => {
-  const router = express.Router();
+module.exports = function (pool) {
+  const r = express.Router();
+  r.use(autenticar());
 
-  // ── GET /api/kits ────────────────────────────────────────
-  router.get('/', autenticar(), async (req, res) => {
-    const { ativo = 'true' } = req.query;
+  // ── Init tabelas ───────────────────────────────────────────────────────────
+  async function initTable() {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS kits (
+        id          SERIAL PRIMARY KEY,
+        codigo      TEXT UNIQUE NOT NULL,
+        nome        TEXT NOT NULL,
+        descricao   TEXT,
+        preco_venda NUMERIC(10,4) DEFAULT 0,
+        margem      NUMERIC(5,2) DEFAULT 0,
+        ativo       BOOLEAN DEFAULT true,
+        criado_em   TIMESTAMPTZ DEFAULT NOW(),
+        atualizado_em TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS kit_itens (
+        id                    SERIAL PRIMARY KEY,
+        kit_id                INTEGER NOT NULL REFERENCES kits(id) ON DELETE CASCADE,
+        produto_id            INTEGER REFERENCES produtos(id),
+        codigo_produto        TEXT,
+        descricao_produto     TEXT,
+        quantidade            NUMERIC(10,3) DEFAULT 1,
+        preco_custo_unitario  NUMERIC(10,4) DEFAULT 0
+      )
+    `);
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_kit_itens_kit ON kit_itens(kit_id);
+    `);
+  }
+  initTable().catch(e => console.error('[kits] initTable:', e.message));
+
+  // ── Helper: calcula custo total do kit ────────────────────────────────────
+  async function calcCustoKit(kitId, client = pool) {
+    const { rows } = await client.query(`
+      SELECT COALESCE(SUM(ki.quantidade * COALESCE(ki.preco_custo_unitario, p.preco_custo, 0)), 0) AS custo
+      FROM kit_itens ki
+      LEFT JOIN produtos p ON p.id = ki.produto_id
+      WHERE ki.kit_id = $1
+    `, [kitId]);
+    return parseFloat(rows[0].custo || 0);
+  }
+
+  // ── GET / ──────────────────────────────────────────────────────────────────
+  r.get('/', async (req, res) => {
     try {
-      const { rows } = await pool.query(
-        `SELECT k.*,
-                COUNT(ki.id) AS total_itens,
-                u.nome AS criado_por
-         FROM kits k
-         LEFT JOIN kit_itens ki ON ki.id_kit = k.id_kit
-         LEFT JOIN usuarios u ON u.id = k.usuario_criacao
-         WHERE k.ativo = $1
-         GROUP BY k.id_kit, u.nome
-         ORDER BY k.criado_em DESC`,
-        [ativo !== 'false']
-      );
-      res.json(rows);
-    } catch (err) {
-      console.error('[kits GET /]', err.message);
-      res.status(500).json({ erro: 'Erro ao buscar kits.' });
-    }
-  });
+      const { busca, ativo = 'true' } = req.query;
+      const conds = [], params = [];
+      if (ativo !== 'todos') { params.push(ativo !== 'false'); conds.push(`k.ativo = $${params.length}`); }
+      if (busca) { params.push(`%${busca}%`); conds.push(`(k.codigo ILIKE $${params.length} OR k.nome ILIKE $${params.length})`); }
+      const where = conds.length ? 'WHERE ' + conds.join(' AND ') : '';
 
-  // ── GET /api/kits/:id ────────────────────────────────────
-  router.get('/:id', autenticar(), async (req, res) => {
-    try {
-      const kitQ = pool.query('SELECT * FROM kits WHERE id_kit = $1', [req.params.id]);
-      const itensQ = pool.query(
-        `SELECT ki.*,
-                p.descricao_produto, p.categoria, p.unidade,
-                p.preco_custo AS custo_atual, p.preco_venda AS venda_atual,
-                (SELECT MIN(data_validade) FROM lotes_estoque
-                 WHERE codigo_produto = ki.codigo_produto AND quantidade_atual > 0 AND ativo = true) AS proxima_validade,
-                (SELECT SUM(quantidade_atual) FROM lotes_estoque
-                 WHERE codigo_produto = ki.codigo_produto AND ativo = true) AS estoque_disponivel
-         FROM kit_itens ki
-         JOIN produtos_mestre p ON p.codigo_produto = ki.codigo_produto
-         WHERE ki.id_kit = $1
-         ORDER BY p.descricao_produto`,
-        [req.params.id]
-      );
-
-      const [{ rows: [kit] }, { rows: itens }] = await Promise.all([kitQ, itensQ]);
-      if (!kit) return res.status(404).json({ erro: 'Kit não encontrado.' });
-      res.json({ ...kit, itens });
-    } catch (err) {
-      console.error('[kits GET /:id]', err.message);
-      res.status(500).json({ erro: 'Erro ao buscar kit.' });
-    }
-  });
-
-  // ── POST /api/kits ───────────────────────────────────────
-  router.post('/', autenticar(['admin','gerente']), async (req, res) => {
-    const { nome_kit, tipo_kit, descricao, preco_venda, itens = [] } = req.body;
-    if (!nome_kit) return res.status(400).json({ erro: 'nome_kit é obrigatório.' });
-    if (!itens.length) return res.status(400).json({ erro: 'Kit precisa ter pelo menos 1 item.' });
-
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-
-      const { rows: [kit] } = await client.query(
-        `INSERT INTO kits (nome_kit, tipo_kit, descricao, preco_venda, usuario_criacao)
-         VALUES ($1,$2,$3,$4,$5) RETURNING id_kit`,
-        [nome_kit, tipo_kit || 'Kit Churrasco', descricao || null,
-         preco_venda ? parseFloat(preco_venda) : null, req.usuario.id]
+      const { rows: kits } = await pool.query(
+        `SELECT k.*, (
+          SELECT COALESCE(SUM(ki.quantidade * COALESCE(ki.preco_custo_unitario, p.preco_custo, 0)), 0)
+          FROM kit_itens ki LEFT JOIN produtos p ON p.id = ki.produto_id WHERE ki.kit_id = k.id
+        ) AS custo_total
+        FROM kits k ${where} ORDER BY k.nome ASC`, params
       );
 
-      for (const item of itens) {
-        if (!item.codigo_produto || !item.quantidade) continue;
-        await client.query(
-          `INSERT INTO kit_itens (id_kit, codigo_produto, quantidade, custo_unitario)
-           VALUES ($1,$2,$3,$4)`,
-          [kit.id_kit, item.codigo_produto, parseFloat(item.quantidade),
-           item.custo_unitario ? parseFloat(item.custo_unitario) : null]
-        );
+      // Carrega itens de cada kit
+      const ids = kits.map(k => k.id);
+      let itens = [];
+      if (ids.length) {
+        const { rows } = await pool.query(`
+          SELECT ki.*, p.descricao AS prod_desc, p.unidade
+          FROM kit_itens ki
+          LEFT JOIN produtos p ON p.id = ki.produto_id
+          WHERE ki.kit_id = ANY($1)
+        `, [ids]);
+        itens = rows;
       }
 
-      await client.query('COMMIT');
+      const data = kits.map(k => ({
+        ...k,
+        custoTotal: parseFloat(k.custo_total || 0),
+        margemValor: parseFloat(k.preco_venda || 0) - parseFloat(k.custo_total || 0),
+        itens: itens.filter(i => i.kit_id === k.id),
+      }));
 
-      const { rows: [kitFinal] } = await pool.query('SELECT * FROM kits WHERE id_kit=$1', [kit.id_kit]);
-      res.status(201).json(kitFinal);
-    } catch (err) {
-      await client.query('ROLLBACK');
-      if (err.code === '23505') return res.status(400).json({ erro: 'Produto duplicado no kit.' });
-      console.error('[kits POST]', err.message);
-      res.status(500).json({ erro: 'Erro ao criar kit.' });
-    } finally {
-      client.release();
-    }
+      res.json({ ok: true, data, total: data.length });
+    } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
-  // ── PUT /api/kits/:id ────────────────────────────────────
-  router.put('/:id', autenticar(['admin','gerente']), async (req, res) => {
-    const { nome_kit, tipo_kit, descricao, preco_venda, ativo, itens } = req.body;
+  // ── GET /:id ───────────────────────────────────────────────────────────────
+  r.get('/:id', async (req, res) => {
+    try {
+      const { rows } = await pool.query(`SELECT * FROM kits WHERE id = $1 OR codigo = $1`, [req.params.id]);
+      if (!rows.length) return res.status(404).json({ ok: false, erro: 'Kit não encontrado' });
+      const kit = rows[0];
+
+      const { rows: itens } = await pool.query(`
+        SELECT ki.*, p.descricao AS prod_desc, p.unidade, p.preco_custo AS custo_atual
+        FROM kit_itens ki
+        LEFT JOIN produtos p ON p.id = ki.produto_id
+        WHERE ki.kit_id = $1
+      `, [kit.id]);
+
+      const custoTotal = await calcCustoKit(kit.id);
+      res.json({ ok: true, data: { ...kit, custoTotal, itens } });
+    } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ── POST / ─────────────────────────────────────────────────────────────────
+  r.post('/', async (req, res) => {
+    const { codigo, nome, descricao, precoVenda, margem, itens = [] } = req.body;
+    if (!codigo || !nome) return res.status(400).json({ ok: false, erro: 'codigo e nome obrigatórios' });
+
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
 
-      await client.query(
-        `UPDATE kits SET
-           nome_kit    = COALESCE($1, nome_kit),
-           tipo_kit    = COALESCE($2, tipo_kit),
-           descricao   = COALESCE($3, descricao),
-           preco_venda = COALESCE($4, preco_venda),
-           ativo       = COALESCE($5, ativo),
-           atualizado_em = NOW()
-         WHERE id_kit = $6`,
-        [nome_kit || null, tipo_kit || null, descricao || null,
-         preco_venda !== undefined ? parseFloat(preco_venda) : null,
-         ativo !== undefined ? ativo : null, req.params.id]
-      );
+      const { rows } = await client.query(`
+        INSERT INTO kits (codigo, nome, descricao, preco_venda, margem)
+        VALUES ($1, $2, $3, $4, $5) RETURNING id
+      `, [codigo.trim(), nome.trim(), descricao || null, parseFloat(precoVenda || 0), parseFloat(margem || 0)]);
 
-      // Se itens fornecidos, substituir
-      if (itens) {
-        await client.query('DELETE FROM kit_itens WHERE id_kit = $1', [req.params.id]);
+      const kitId = rows[0].id;
+
+      for (const item of itens) {
+        // Resolve produto_id pelo código se necessário
+        let prodId = item.produtoId || item.produto_id || null;
+        if (!prodId && item.codigo) {
+          const p = await client.query(`SELECT id, preco_custo FROM produtos WHERE codigo = $1`, [item.codigo]);
+          if (p.rows.length) prodId = p.rows[0].id;
+        }
+        await client.query(`
+          INSERT INTO kit_itens (kit_id, produto_id, codigo_produto, descricao_produto, quantidade, preco_custo_unitario)
+          VALUES ($1, $2, $3, $4, $5, $6)
+        `, [kitId, prodId, item.codigo || null, item.descricao || null,
+            parseFloat(item.quantidade || 1), parseFloat(item.precoCusto || item.preco_custo_unitario || 0)]);
+      }
+
+      const custo = await calcCustoKit(kitId, client);
+      await client.query('COMMIT');
+      res.json({ ok: true, id: kitId, custoTotal: custo });
+    } catch (e) {
+      await client.query('ROLLBACK');
+      if (e.code === '23505') return res.status(409).json({ ok: false, erro: 'Código de kit já existe' });
+      res.status(500).json({ ok: false, erro: e.message });
+    } finally { client.release(); }
+  });
+
+  // ── PUT /:id ───────────────────────────────────────────────────────────────
+  r.put('/:id', async (req, res) => {
+    const { nome, descricao, precoVenda, margem, itens } = req.body;
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      await client.query(`
+        UPDATE kits SET
+          nome = COALESCE($1, nome), descricao = COALESCE($2, descricao),
+          preco_venda = COALESCE($3, preco_venda), margem = COALESCE($4, margem),
+          atualizado_em = NOW()
+        WHERE id = $5 OR codigo = $5
+      `, [nome || null, descricao || null,
+          precoVenda !== undefined ? parseFloat(precoVenda) : null,
+          margem !== undefined ? parseFloat(margem) : null,
+          req.params.id]);
+
+      if (Array.isArray(itens)) {
+        const kitRow = await client.query(`SELECT id FROM kits WHERE id = $1 OR codigo = $1`, [req.params.id]);
+        if (!kitRow.rows.length) throw new Error('Kit não encontrado');
+        const kitId = kitRow.rows[0].id;
+
+        await client.query(`DELETE FROM kit_itens WHERE kit_id = $1`, [kitId]);
         for (const item of itens) {
-          if (!item.codigo_produto || !item.quantidade) continue;
-          await client.query(
-            `INSERT INTO kit_itens (id_kit, codigo_produto, quantidade, custo_unitario)
-             VALUES ($1,$2,$3,$4)`,
-            [req.params.id, item.codigo_produto, parseFloat(item.quantidade),
-             item.custo_unitario ? parseFloat(item.custo_unitario) : null]
-          );
+          let prodId = item.produtoId || item.produto_id || null;
+          if (!prodId && item.codigo) {
+            const p = await client.query(`SELECT id FROM produtos WHERE codigo = $1`, [item.codigo]);
+            if (p.rows.length) prodId = p.rows[0].id;
+          }
+          await client.query(`
+            INSERT INTO kit_itens (kit_id, produto_id, codigo_produto, descricao_produto, quantidade, preco_custo_unitario)
+            VALUES ($1,$2,$3,$4,$5,$6)
+          `, [kitId, prodId, item.codigo || null, item.descricao || null,
+              parseFloat(item.quantidade || 1), parseFloat(item.precoCusto || 0)]);
         }
       }
 
       await client.query('COMMIT');
       res.json({ ok: true });
-    } catch (err) {
+    } catch (e) {
       await client.query('ROLLBACK');
-      res.status(500).json({ erro: 'Erro ao atualizar kit.' });
-    } finally {
-      client.release();
-    }
+      res.status(500).json({ ok: false, erro: e.message });
+    } finally { client.release(); }
   });
 
-  // ── DELETE /api/kits/:id ─────────────────────────────────
-  router.delete('/:id', autenticar(['admin','gerente']), async (req, res) => {
+  // ── DELETE /:id ────────────────────────────────────────────────────────────
+  r.delete('/:id', async (req, res) => {
     try {
-      await pool.query('UPDATE kits SET ativo=false, atualizado_em=NOW() WHERE id_kit=$1', [req.params.id]);
+      await pool.query(`UPDATE kits SET ativo = false, atualizado_em = NOW() WHERE id = $1 OR codigo = $1`, [req.params.id]);
       res.json({ ok: true });
-    } catch (err) {
-      res.status(500).json({ erro: 'Erro ao remover kit.' });
-    }
+    } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
-  return router;
+  // ── GET /:id/preco — simula preço por margem ───────────────────────────────
+  r.get('/:id/preco', async (req, res) => {
+    try {
+      const { margem = 30 } = req.query;
+      const { rows } = await pool.query(`SELECT id FROM kits WHERE id = $1 OR codigo = $1`, [req.params.id]);
+      if (!rows.length) return res.status(404).json({ ok: false, erro: 'Kit não encontrado' });
+      const custo = await calcCustoKit(rows[0].id);
+      const m     = parseFloat(margem) / 100;
+      const precoSugerido = m < 1 ? custo / (1 - m) : custo * (1 + m);
+      res.json({ ok: true, data: { custo, margem: parseFloat(margem), precoSugerido: parseFloat(precoSugerido.toFixed(4)) } });
+    } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  return r;
 };

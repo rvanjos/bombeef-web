@@ -1,106 +1,262 @@
-const express    = require('express');
+/**
+ * routes/produtos.js — M3: Produtos
+ *
+ * Rotas:
+ *   GET    /api/produtos              → lista produtos
+ *   GET    /api/produtos/:id          → detalhe
+ *   POST   /api/produtos              → cria produto
+ *   PUT    /api/produtos/:id          → atualiza
+ *   DELETE /api/produtos/:id          → inativa (soft delete)
+ *   POST   /api/produtos/import       → importa planilha PDV (XLSX)
+ *   GET    /api/produtos/kpis         → KPIs
+ */
+
+const express  = require('express');
+const multer   = require('multer');
+const XLSX     = require('xlsx');
 const autenticar = require('../middleware/auth');
 
-module.exports = (pool) => {
-  const router = express.Router();
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: (parseInt(process.env.UPLOAD_MAX_MB) || 15) * 1024 * 1024 },
+});
 
-  // ── GET /api/produtos ────────────────────────────────────
-  router.get('/', autenticar(), async (req, res) => {
-    const { q, categoria, perecivel, ativo = 'true', limit = 300, offset = 0 } = req.query;
-    const params = [];
-    const where  = [];
+module.exports = function (pool) {
+  const r = express.Router();
+  r.use(autenticar());
 
-    where.push(`ativo = $${params.push(ativo !== 'false')}`);
-    if (q) {
-      params.push(`%${q}%`);
-      where.push(`(descricao_produto ILIKE $${params.length} OR codigo_produto ILIKE $${params.length})`);
-    }
-    if (categoria) where.push(`categoria = $${params.push(categoria)}`);
-    if (perecivel !== undefined) where.push(`perecivel = $${params.push(perecivel === 'true')}`);
+  // ── Init tabela ────────────────────────────────────────────────────────────
+  async function initTable() {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS produtos (
+        id            SERIAL PRIMARY KEY,
+        codigo        TEXT UNIQUE NOT NULL,
+        descricao     TEXT NOT NULL,
+        fornecedor    TEXT,
+        preco_custo   NUMERIC(10,4) DEFAULT 0,
+        preco_venda   NUMERIC(10,4) DEFAULT 0,
+        unidade       TEXT DEFAULT 'un',
+        categoria     TEXT,
+        ativo         BOOLEAN DEFAULT true,
+        origem        TEXT DEFAULT 'manual',
+        criado_em     TIMESTAMPTZ DEFAULT NOW(),
+        atualizado_em TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_produtos_codigo     ON produtos(codigo);
+      CREATE INDEX IF NOT EXISTS idx_produtos_descricao  ON produtos(descricao);
+      CREATE INDEX IF NOT EXISTS idx_produtos_fornecedor ON produtos(fornecedor);
+    `);
+  }
+  initTable().catch(e => console.error('[produtos] initTable:', e.message));
 
+  // ── GET /kpis ──────────────────────────────────────────────────────────────
+  r.get('/kpis', async (req, res) => {
     try {
-      const sql = `SELECT codigo_produto, descricao_produto, descricao_reduzida, categoria,
-                          unidade, preco_custo, preco_venda, perecivel, controla_validade,
-                          fornecedor_principal, ativo, data_ultima_importacao
-                   FROM produtos_mestre
-                   WHERE ${where.join(' AND ')}
-                   ORDER BY descricao_produto
-                   LIMIT $${params.push(parseInt(limit))} OFFSET $${params.push(parseInt(offset))}`;
-      const { rows } = await pool.query(sql, params);
-      res.json(rows);
-    } catch (err) {
-      console.error('[produtos GET /]', err.message);
-      res.status(500).json({ erro: 'Erro ao buscar produtos.' });
-    }
+      const { rows } = await pool.query(`
+        SELECT
+          COUNT(*) FILTER (WHERE ativo = true)           AS ativos,
+          COUNT(*) FILTER (WHERE ativo = false)          AS inativos,
+          COUNT(DISTINCT fornecedor) FILTER (WHERE ativo) AS fornecedores,
+          ROUND(AVG(preco_venda) FILTER (WHERE ativo AND preco_venda > 0), 2) AS preco_medio
+        FROM produtos
+      `);
+      res.json({ ok: true, data: {
+        ativos:       parseInt(rows[0].ativos),
+        inativos:     parseInt(rows[0].inativos),
+        fornecedores: parseInt(rows[0].fornecedores),
+        precoMedio:   parseFloat(rows[0].preco_medio || 0),
+      }});
+    } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
-  // ── GET /api/produtos/categorias ────────────────────────
-  router.get('/categorias', autenticar(), async (req, res) => {
+  // ── GET / ──────────────────────────────────────────────────────────────────
+  r.get('/', async (req, res) => {
     try {
-      const { rows } = await pool.query(
-        `SELECT DISTINCT categoria FROM produtos_mestre
-         WHERE ativo = true AND categoria IS NOT NULL
-         ORDER BY categoria`
-      );
-      res.json(rows.map(r => r.categoria));
-    } catch (err) {
-      res.status(500).json({ erro: 'Erro ao buscar categorias.' });
-    }
-  });
+      const { busca, fornecedor, categoria, ativo = 'true' } = req.query;
+      const conds = [], params = [];
 
-  // ── GET /api/produtos/count ──────────────────────────────
-  router.get('/count', autenticar(), async (req, res) => {
-    try {
-      const { rows } = await pool.query(
-        'SELECT COUNT(*) AS total FROM produtos_mestre WHERE ativo = true'
-      );
-      res.json({ total: parseInt(rows[0].total) });
-    } catch (err) {
-      res.status(500).json({ erro: 'Erro.' });
-    }
-  });
-
-  // ── GET /api/produtos/:codigo ────────────────────────────
-  router.get('/:codigo', autenticar(), async (req, res) => {
-    try {
-      const { rows } = await pool.query(
-        'SELECT * FROM produtos_mestre WHERE codigo_produto = $1',
-        [req.params.codigo]
-      );
-      if (!rows[0]) return res.status(404).json({ erro: 'Produto não encontrado.' });
-      res.json(rows[0]);
-    } catch (err) {
-      res.status(500).json({ erro: 'Erro ao buscar produto.' });
-    }
-  });
-
-  // ── PATCH /api/produtos/:codigo ──────────────────────────
-  // Atualização manual de campos complementares (não-TOTVS)
-  router.patch('/:codigo', autenticar(['admin','gerente','estoque']), async (req, res) => {
-    const campos = ['perecivel','controla_validade','controla_lote','fornecedor_principal','ativo','preco_custo','preco_venda','descricao_produto','descricao_reduzida','categoria','unidade'];
-    const sets   = [];
-    const params = [];
-
-    campos.forEach(c => {
-      if (req.body[c] !== undefined) {
-        params.push(req.body[c]);
-        sets.push(`${c} = $${params.length}`);
+      if (ativo !== 'todos') {
+        params.push(ativo === 'false' ? false : true);
+        conds.push(`ativo = $${params.length}`);
       }
-    });
+      if (fornecedor) { params.push(`%${fornecedor}%`); conds.push(`fornecedor ILIKE $${params.length}`); }
+      if (categoria)  { params.push(`%${categoria}%`);  conds.push(`categoria ILIKE $${params.length}`); }
+      if (busca) {
+        params.push(`%${busca}%`);
+        conds.push(`(codigo ILIKE $${params.length} OR descricao ILIKE $${params.length} OR fornecedor ILIKE $${params.length})`);
+      }
 
-    if (!sets.length) return res.status(400).json({ erro: 'Nenhum campo válido para atualizar.' });
-    params.push(req.params.codigo);
+      const where = conds.length ? 'WHERE ' + conds.join(' AND ') : '';
+      const { rows } = await pool.query(
+        `SELECT * FROM produtos ${where} ORDER BY descricao ASC`, params
+      );
+      res.json({ ok: true, data: rows, total: rows.length });
+    } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
 
+  // ── GET /:id ───────────────────────────────────────────────────────────────
+  r.get('/:id', async (req, res) => {
+    try {
+      const { rows } = await pool.query(
+        `SELECT * FROM produtos WHERE id = $1 OR codigo = $1`, [req.params.id]
+      );
+      if (!rows.length) return res.status(404).json({ ok: false, erro: 'Produto não encontrado' });
+      res.json({ ok: true, data: rows[0] });
+    } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ── POST / ─────────────────────────────────────────────────────────────────
+  r.post('/', async (req, res) => {
+    const p = req.body;
+    if (!p.codigo || !p.descricao) return res.status(400).json({ ok: false, erro: 'codigo e descricao obrigatórios' });
+    try {
+      const { rows } = await pool.query(`
+        INSERT INTO produtos (codigo, descricao, fornecedor, preco_custo, preco_venda, unidade, categoria, origem)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        RETURNING *
+      `, [p.codigo.trim(), p.descricao.trim(), p.fornecedor || null,
+          parseFloat(p.precoCusto || p.preco_custo) || 0,
+          parseFloat(p.precoVenda || p.preco_venda) || 0,
+          p.unidade || 'un', p.categoria || null, p.origem || 'manual']);
+      res.json({ ok: true, data: rows[0] });
+    } catch (e) {
+      if (e.code === '23505') return res.status(409).json({ ok: false, erro: 'Código de produto já existe' });
+      res.status(500).json({ ok: false, erro: e.message });
+    }
+  });
+
+  // ── PUT /:id ───────────────────────────────────────────────────────────────
+  r.put('/:id', async (req, res) => {
+    const p = req.body;
+    try {
+      const { rowCount } = await pool.query(`
+        UPDATE produtos SET
+          descricao     = COALESCE($1, descricao),
+          fornecedor    = COALESCE($2, fornecedor),
+          preco_custo   = COALESCE($3, preco_custo),
+          preco_venda   = COALESCE($4, preco_venda),
+          unidade       = COALESCE($5, unidade),
+          categoria     = COALESCE($6, categoria),
+          ativo         = COALESCE($7, ativo),
+          atualizado_em = NOW()
+        WHERE id = $8 OR codigo = $8
+      `, [
+        p.descricao || null, p.fornecedor || null,
+        p.precoCusto !== undefined ? parseFloat(p.precoCusto) : null,
+        p.precoVenda !== undefined ? parseFloat(p.precoVenda) : null,
+        p.unidade || null, p.categoria || null,
+        p.ativo !== undefined ? p.ativo : null,
+        req.params.id,
+      ]);
+      if (rowCount === 0) return res.status(404).json({ ok: false, erro: 'Produto não encontrado' });
+      res.json({ ok: true });
+    } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ── DELETE /:id ────────────────────────────────────────────────────────────
+  r.delete('/:id', async (req, res) => {
     try {
       await pool.query(
-        `UPDATE produtos_mestre SET ${sets.join(', ')}, atualizado_em=NOW() WHERE codigo_produto=$${params.length}`,
-        params
+        `UPDATE produtos SET ativo = false, atualizado_em = NOW() WHERE id = $1 OR codigo = $1`,
+        [req.params.id]
       );
       res.json({ ok: true });
-    } catch (err) {
-      res.status(500).json({ erro: 'Erro ao atualizar produto.' });
+    } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ── POST /import ── importa planilha PDV ───────────────────────────────────
+  r.post('/import', upload.single('arquivo'), async (req, res) => {
+    if (!req.file) return res.status(400).json({ ok: false, erro: 'Arquivo não enviado' });
+
+    try {
+      const wb    = XLSX.read(req.file.buffer, { type: 'buffer', cellDates: true });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows  = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+
+      if (rows.length < 2) return res.status(422).json({ ok: false, erro: 'Planilha vazia ou sem cabeçalho' });
+
+      const header = rows[0].map(c => String(c).toLowerCase().trim());
+      const col = (nomes) => {
+        for (const n of nomes) {
+          const i = header.findIndex(h => h.includes(n));
+          if (i >= 0) return i;
+        }
+        return -1;
+      };
+
+      const colCod   = col(['código', 'codigo', 'cod', 'sku', 'id']);
+      const colDesc  = col(['descrição', 'descricao', 'desc', 'produto', 'item', 'nome']);
+      const colForn  = col(['fornecedor', 'supplier', 'marca']);
+      const colCusto = col(['custo', 'cost', 'preco custo', 'preço custo', 'p. custo']);
+      const colVenda = col(['venda', 'sale', 'preco venda', 'preço venda', 'p. venda', 'pvenda']);
+      const colUnit  = col(['unid', 'unit', 'un']);
+      const colCat   = col(['categoria', 'category', 'grupo', 'depart']);
+
+      if (colCod < 0 || colDesc < 0) {
+        return res.status(422).json({
+          ok: false,
+          erro: 'Não foi possível identificar colunas de código e descrição. Verifique o cabeçalho da planilha.',
+          cabecalho: header,
+        });
+      }
+
+      const client = await pool.connect();
+      let inseridos = 0, atualizados = 0, erros = 0;
+      const detalheErros = [];
+
+      try {
+        await client.query('BEGIN');
+
+        for (let i = 1; i < rows.length; i++) {
+          const row = rows[i];
+          const codigo   = String(row[colCod] ?? '').trim();
+          const descricao = String(row[colDesc] ?? '').trim();
+          if (!codigo || !descricao) continue;
+
+          const fornecedor = colForn >= 0 ? String(row[colForn] ?? '').trim() || null : null;
+          const custo      = colCusto >= 0 ? parseFloat(String(row[colCusto] ?? '0').replace(/[^\d.,]/g, '').replace(',', '.')) || 0 : 0;
+          const venda      = colVenda >= 0 ? parseFloat(String(row[colVenda] ?? '0').replace(/[^\d.,]/g, '').replace(',', '.')) || 0 : 0;
+          const unidade    = colUnit  >= 0 ? String(row[colUnit] ?? 'un').trim() || 'un' : 'un';
+          const categoria  = colCat   >= 0 ? String(row[colCat]  ?? '').trim() || null : null;
+
+          try {
+            const { rowCount } = await client.query(`
+              INSERT INTO produtos (codigo, descricao, fornecedor, preco_custo, preco_venda, unidade, categoria, origem)
+              VALUES ($1, $2, $3, $4, $5, $6, $7, 'pdv')
+              ON CONFLICT (codigo) DO UPDATE SET
+                descricao     = EXCLUDED.descricao,
+                fornecedor    = COALESCE(EXCLUDED.fornecedor, produtos.fornecedor),
+                preco_custo   = CASE WHEN EXCLUDED.preco_custo > 0 THEN EXCLUDED.preco_custo ELSE produtos.preco_custo END,
+                preco_venda   = CASE WHEN EXCLUDED.preco_venda > 0 THEN EXCLUDED.preco_venda ELSE produtos.preco_venda END,
+                unidade       = EXCLUDED.unidade,
+                categoria     = COALESCE(EXCLUDED.categoria, produtos.categoria),
+                atualizado_em = NOW()
+            `, [codigo, descricao, fornecedor, custo, venda, unidade, categoria]);
+
+            // rowCount = 1 em ambos os casos para INSERT/UPDATE, checar via xmax
+            const chk = await client.query(`SELECT xmin = xmax AS is_update FROM produtos WHERE codigo = $1`, [codigo]);
+            if (chk.rows[0]?.is_update) atualizados++;
+            else inseridos++;
+          } catch (e) {
+            erros++;
+            detalheErros.push({ linha: i + 1, codigo, erro: e.message });
+          }
+        }
+
+        await client.query('COMMIT');
+      } catch (e) {
+        await client.query('ROLLBACK');
+        throw e;
+      } finally { client.release(); }
+
+      res.json({ ok: true, inseridos, atualizados, erros, detalheErros });
+    } catch (e) {
+      console.error('[produtos/import]', e.message);
+      res.status(500).json({ ok: false, erro: 'Erro ao processar planilha: ' + e.message });
     }
   });
 
-  return router;
+  return r;
 };

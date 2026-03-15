@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Validade & Perdas — Bom Beef</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="/js/api.js"></script>
+<style>
+:root{--red:#8B0000;--red-l:#C0392B;--gold:#C9A044;--green:#1a7a4a;--orange:#c76b00;--blue:#1a5c8a;
+  --bg:#f7f4f0;--white:#fff;--text:#1a1a1a;--muted:#7a7068;--border:#e8e0d8;--shadow:0 2px 12px rgba(0,0,0,.08);}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
+.ph{background:var(--orange);padding:12px 22px;display:flex;align-items:center;gap:10px;box-shadow:0 2px 12px rgba(199,107,0,.3);}
+.ph h2{font-family:'Playfair Display',serif;font-size:17px;color:#fff;font-weight:700;}
+.ph-sub{font-size:11px;color:rgba(255,255,255,.7);margin-left:auto;}
+.body{padding:22px 20px;max-width:1300px;margin:0 auto;}
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:20px;}
+.kc{background:var(--white);border:1px solid var(--border);border-radius:10px;padding:14px;border-left:4px solid var(--orange);box-shadow:var(--shadow);}
+.kc.g{border-left-color:var(--green);} .kc.r{border-left-color:var(--red-l);} .kc.b{border-left-color:var(--blue);}
+.kc-l{font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);font-weight:600;margin-bottom:4px;}
+.kc-v{font-size:20px;font-weight:700;font-family:'DM Mono',monospace;}
+.tabs{display:flex;background:var(--white);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:16px;box-shadow:var(--shadow);}
+.tab{flex:1;padding:10px;text-align:center;cursor:pointer;font-size:13px;font-weight:600;color:var(--muted);border:none;background:none;font-family:'DM Sans',sans-serif;}
+.tab.active{background:var(--orange);color:#fff;}
+.toolbar{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px;align-items:center;}
+.btn{padding:8px 16px;border-radius:8px;border:none;cursor:pointer;font-size:13px;font-weight:600;font-family:'DM Sans',sans-serif;transition:all .15s;display:inline-flex;align-items:center;gap:6px;}
+.btn-p{background:var(--orange);color:#fff;} .btn-p:hover{filter:brightness(1.1);}
+.btn-s{background:var(--white);color:var(--text);border:1px solid var(--border);} .btn-s:hover{border-color:var(--orange);}
+.btn-r{background:var(--red-l);color:#fff;} .btn-r:hover{filter:brightness(1.1);}
+.search-wrap{flex:1;min-width:180px;position:relative;}
+.search-wrap input{width:100%;padding:8px 12px 8px 34px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--white);}
+.search-wrap::before{content:'🔍';position:absolute;left:10px;top:50%;transform:translateY(-50%);}
+select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--white);cursor:pointer;}
+.card{background:var(--white);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);overflow:hidden;}
+.tbl{width:100%;border-collapse:collapse;}
+.tbl th{background:#fdf6ee;font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:700;padding:10px 12px;text-align:left;border-bottom:2px solid var(--border);}
+.tbl td{padding:10px 12px;font-size:13px;border-bottom:1px solid #f5efe8;vertical-align:middle;}
+.tbl tr:hover td{background:#fefaf4;}
+.act-btn{padding:4px 10px;border:1px solid var(--border);border-radius:6px;background:var(--white);cursor:pointer;font-size:12px;margin-right:3px;}
+.pill{display:inline-block;padding:2px 9px;border-radius:8px;font-size:11px;font-weight:600;}
+.pill-ok{background:#d1e7dd;color:#0a4a22;} .pill-al{background:#fff3cd;color:#856404;}
+.pill-ve{background:#f8d7da;color:#721c24;} .pill-ds{background:#e2e3e5;color:#555;}
+.sem-cod{background:#fff3cd;color:#856404;font-size:11px;padding:2px 6px;border-radius:4px;}
+/* modal */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;align-items:center;justify-content:center;padding:16px;}
+.modal-bg.open{display:flex;}
+.modal{background:var(--white);border-radius:14px;width:100%;max-width:560px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3);}
+.modal-head{padding:18px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+.modal-head h3{font-family:'Playfair Display',serif;font-size:16px;color:var(--orange);}
+.modal-close{background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);}
+.modal-body{padding:20px 22px;}
+.fg{margin-bottom:12px;}
+.fg label{display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);margin-bottom:5px;}
+.fg input,.fg select,.fg textarea{width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:'DM Sans',sans-serif;}
+.fg input:focus,.fg select:focus{outline:none;border-color:var(--orange);}
+.fg-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.modal-foot{padding:14px 22px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end;}
+.upload-zone{border:2px dashed var(--border);border-radius:10px;padding:24px;text-align:center;cursor:pointer;transition:.2s;margin-bottom:12px;}
+.upload-zone:hover{border-color:var(--orange);}
+.alerta-box{background:#fff8e6;border:1px solid #f5c842;border-radius:8px;padding:12px;font-size:13px;margin-bottom:12px;}
+.empty{text-align:center;padding:40px;color:var(--muted);}
+</style>
+</head>
+<body>
+<div class="ph"><span style="font-size:20px">🗓</span><h2>Validade & Perdas</h2><div class="ph-sub" id="ph-sub">—</div></div>
+<div class="body">
+  <div class="kpi-row">
+    <div class="kc g"><div class="kc-l">OK</div><div class="kc-v" id="k-ok">—</div></div>
+    <div class="kc"><div class="kc-l">Em Alerta</div><div class="kc-v" id="k-alerta" style="color:var(--orange)">—</div></div>
+    <div class="kc r"><div class="kc-l">Vencidos</div><div class="kc-v" id="k-vencidos" style="color:var(--red-l)">—</div></div>
+    <div class="kc b"><div class="kc-l">Sem Código</div><div class="kc-v" id="k-semcod">—</div><div style="font-size:10px;color:var(--muted)">pendentes</div></div>
+    <div class="kc r"><div class="kc-l">Perdas/Mês</div><div class="kc-v" id="k-perdas">—</div></div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" onclick="showSection('validade')">🗓 Validade</button>
+    <button class="tab" onclick="showSection('perdas')">🗑️ Perdas</button>
+  </div>
+
+  <!-- VALIDADE -->
+  <div id="sec-validade">
+    <div class="toolbar">
+      <button class="btn btn-p" onclick="abrirModal()">＋ Novo Item</button>
+      <button class="btn btn-s" onclick="abrirImport()">📥 Importar Planilha</button>
+      <div class="search-wrap"><input type="text" id="busca-val" placeholder="Buscar produto, código, lote..." oninput="filtrarVal()"></div>
+      <select class="flt" id="flt-status" onchange="carregar()">
+        <option value="todos">Todos</option>
+        <option value="alerta">Em Alerta</option>
+        <option value="vencido">Vencidos</option>
+        <option value="ok">OK</option>
+      </select>
+      <button class="btn btn-s" id="btn-semcod" onclick="mostrarSemCodigo()" style="display:none">⚠️ Vincular Códigos</button>
+    </div>
+    <div class="card">
+      <table class="tbl">
+        <thead><tr><th>Código</th><th>Descrição</th><th>Lote</th><th>Validade</th><th>Ação Prev.</th><th>Última Conf.</th><th>Responsável</th><th>Status</th><th>Ações</th></tr></thead>
+        <tbody id="tbody-val"></tbody>
+      </table>
+      <div class="empty" id="empty-val" style="display:none"><p>Nenhum item encontrado</p></div>
+    </div>
+  </div>
+
+  <!-- PERDAS -->
+  <div id="sec-perdas" style="display:none">
+    <div class="toolbar">
+      <button class="btn btn-r" onclick="abrirPerda()">＋ Registrar Perda</button>
+      <input type="month" id="flt-mes-perdas" class="flt" style="padding:7px 10px" onchange="carregarPerdas()">
+      <div style="margin-left:auto" id="meta-perdas-info"></div>
+    </div>
+    <div class="card">
+      <table class="tbl">
+        <thead><tr><th>Data</th><th>Produto</th><th>Motivo</th><th>Qtd</th><th>Valor Perda</th><th>Funcionário</th><th>Ações</th></tr></thead>
+        <tbody id="tbody-perdas"></tbody>
+      </table>
+      <div class="empty" id="empty-perdas" style="display:none"><p>Nenhuma perda registrada</p></div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Validade -->
+<div class="modal-bg" id="modal-val">
+  <div class="modal">
+    <div class="modal-head"><h3 id="val-title">Novo Item</h3><button class="modal-close" onclick="fecharModal()">×</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="v-id">
+      <div class="fg-row">
+        <div class="fg"><label>Código do Produto</label><input id="v-cod" placeholder="Deixe vazio se não souber" oninput="buscarProdVal()"><div id="v-cod-info" style="font-size:11px;color:var(--green);margin-top:4px"></div></div>
+        <div class="fg"><label>Qtd Unidades</label><input type="number" id="v-qtd" value="0" min="0"></div>
+      </div>
+      <div class="fg"><label>Descrição *</label><input id="v-desc" placeholder="Nome do produto"></div>
+      <div class="fg-row">
+        <div class="fg"><label>Data de Validade *</label><input type="date" id="v-val"></div>
+        <div class="fg"><label>Lote</label><input id="v-lote" placeholder="Número do lote"></div>
+      </div>
+      <div class="fg"><label>Ação Antes de Vencer</label>
+        <select id="v-acao">
+          <option value="">— Selecione —</option>
+          <option>Promover com 30% de desconto</option>
+          <option>Promover com 50% de desconto</option>
+          <option>Doação para funcionários</option>
+          <option>Retirar de circulação</option>
+          <option>Verificar com fornecedor</option>
+        </select>
+      </div>
+      <div class="fg-row">
+        <div class="fg"><label>Responsável</label><input id="v-resp" placeholder="Nome do responsável"></div>
+        <div class="fg"><label>Última Conferência</label><input type="date" id="v-conf"></div>
+      </div>
+      <div class="fg-row">
+        <div class="fg"><label>Localização</label><input id="v-local" placeholder="Câmara 1, Prateleira A..."></div>
+        <div class="fg"><label>Dias p/ Alerta</label><input type="number" id="v-alerta" value="7" min="1"></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-s" onclick="fecharModal()">Cancelar</button>
+      <button class="btn btn-p" onclick="salvarVal()">💾 Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Perda -->
+<div class="modal-bg" id="modal-perda">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-head"><h3>Registrar Perda</h3><button class="modal-close" onclick="fecharPerda()">×</button></div>
+    <div class="modal-body">
+      <div class="fg"><label>Descrição / Produto *</label><input id="pd-desc" placeholder="Nome do produto perdido"></div>
+      <div class="fg-row">
+        <div class="fg"><label>Motivo</label>
+          <select id="pd-motivo">
+            <option value="vencimento">Vencimento</option>
+            <option value="avaria">Avaria</option>
+            <option value="furto">Furto</option>
+            <option value="doacao">Doação</option>
+            <option value="outros">Outros</option>
+          </select>
+        </div>
+        <div class="fg"><label>Data</label><input type="date" id="pd-dt"></div>
+      </div>
+      <div class="fg-row">
+        <div class="fg"><label>Qtd Unidades</label><input type="number" id="pd-qtd" value="0" min="0"></div>
+        <div class="fg"><label>Valor da Perda (R$)</label><input type="number" id="pd-valor" step="0.01" placeholder="0,00"></div>
+      </div>
+      <div class="fg"><label>Funcionário Responsável</label>
+        <select id="pd-func"><option value="">— Selecione —</option></select>
+      </div>
+      <div class="fg"><label>Observação</label><textarea id="pd-obs" rows="2"></textarea></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-s" onclick="fecharPerda()">Cancelar</button>
+      <button class="btn btn-r" onclick="salvarPerda()">🗑️ Registrar Perda</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Import -->
+<div class="modal-bg" id="modal-import">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-head"><h3>Importar Planilha de Validades</h3><button class="modal-close" onclick="document.getElementById('modal-import').classList.remove('open')">×</button></div>
+    <div class="modal-body">
+      <div class="alerta-box">⚠️ Itens sem código serão importados como "pendentes". Você poderá vincular o código depois.</div>
+      <div class="upload-zone" onclick="document.getElementById('file-val').click()">
+        <div style="font-size:36px">📥</div>
+        <p style="font-size:13px;color:var(--muted);margin-top:8px">Clique para selecionar a planilha XLSX</p>
+        <p style="font-size:11px;color:var(--muted);margin-top:4px">Colunas: Código, Descrição, Validade, Lote, Ação, Responsável</p>
+      </div>
+      <input type="file" id="file-val" accept=".xlsx,.xls,.csv" style="display:none" onchange="processarImport(this)">
+      <div id="import-result" style="display:none;padding:12px;background:#f0faf4;border-radius:8px;font-size:13px"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const {api,fmt,toast} = BB;
+let itens=[], perdas=[], funcionarios=[];
+
+window.onBBReady = () => { init(); };
+if(api.token()) init();
+
+async function init(){
+  await carregarFuncionarios();
+  carregarKPIs(); carregar();
+  const hoje = new Date();
+  document.getElementById('flt-mes-perdas').value = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
+}
+
+function showSection(s){
+  document.getElementById('sec-validade').style.display = s==='validade'?'':'none';
+  document.getElementById('sec-perdas').style.display = s==='perdas'?'':'none';
+  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',(s==='validade'&&i===0)||(s==='perdas'&&i===1)));
+  if(s==='perdas') carregarPerdas();
+}
+
+async function carregarKPIs(){
+  const d = await api.get('/api/validade/kpis');
+  if(!d.ok) return;
+  document.getElementById('k-ok').textContent      = fmt.n(d.data.ok);
+  document.getElementById('k-alerta').textContent  = fmt.n(d.data.alerta);
+  document.getElementById('k-vencidos').textContent= fmt.n(d.data.vencidos);
+  document.getElementById('k-semcod').textContent  = fmt.n(d.data.semCodigo);
+  document.getElementById('ph-sub').textContent    = `${d.data.alerta} em alerta · ${d.data.vencidos} vencidos`;
+  if(d.data.semCodigo>0) document.getElementById('btn-semcod').style.display='';
+
+  const mes = fmt.mesAtual();
+  const pd = await api.get(`/api/perdas/meta/${mes}`);
+  if(pd.ok){
+    document.getElementById('k-perdas').textContent = fmt.brl(pd.data.totalPerdas);
+    document.getElementById('k-perdas').style.color = pd.data.dentroMeta===false?'var(--red-l)':'var(--text)';
+  }
+}
+
+async function carregarFuncionarios(){
+  const d = await api.get('/api/config/funcionarios');
+  if(!d.ok) return;
+  funcionarios = d.data.filter(f=>f.ativo);
+  const sel = document.getElementById('pd-func');
+  funcionarios.forEach(f=>{
+    const o=document.createElement('option'); o.value=f.id; o.textContent=f.nome; sel.appendChild(o);
+  });
+}
+
+async function carregar(){
+  const status = document.getElementById('flt-status').value;
+  const url = `/api/validade?status=${status}`;
+  const d = await api.get(url);
+  if(!d.ok) return;
+  itens = d.data;
+  renderVal(itens);
+}
+
+function filtrarVal(){
+  const q = document.getElementById('busca-val').value.toLowerCase();
+  renderVal(itens.filter(i=>
+    i.descricao.toLowerCase().includes(q)||
+    (i.codigo||'').toLowerCase().includes(q)||
+    (i.lote||'').toLowerCase().includes(q)
+  ));
+}
+
+function renderVal(lista){
+  const tb = document.getElementById('tbody-val');
+  const em = document.getElementById('empty-val');
+  if(!lista.length){ tb.innerHTML=''; em.style.display=''; return; }
+  em.style.display='none';
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+  tb.innerHTML = lista.map(v=>{
+    const pill = v.status==='ok'
+      ? '<span class="pill pill-ok">OK</span>'
+      : v.status==='alerta'
+        ? '<span class="pill pill-al">⚠️ Alerta</span>'
+        : v.status==='vencido'
+          ? '<span class="pill pill-ve">Vencido</span>'
+          : '<span class="pill pill-ds">Descartado</span>';
+    const codCell = v.codigo
+      ? `<span style="font-family:'DM Mono',monospace;font-size:12px">${v.codigo}</span>`
+      : `<span class="sem-cod">⚠️ Pendente</span>`;
+    return `<tr>
+      <td>${codCell}</td>
+      <td><b>${v.descricao}</b>${v.qtd_unidades?`<br><small style="color:var(--muted)">${v.qtd_unidades} un.</small>`:''}</td>
+      <td style="font-size:12px">${v.lote||'—'}</td>
+      <td style="font-weight:600;color:${v.status==='vencido'?'var(--red-l)':v.status==='alerta'?'var(--orange)':'inherit'}">${fmt.date(v.data_validade)}</td>
+      <td style="font-size:12px">${v.acao_antes_vencer||'—'}</td>
+      <td style="font-size:12px">${fmt.date(v.ultima_conferencia)||'—'}</td>
+      <td style="font-size:12px">${v.responsavel||'—'}</td>
+      <td>${pill}</td>
+      <td>
+        <button class="act-btn" onclick="abrirModal(${v.id})">✏️</button>
+        ${!v.codigo?`<button class="act-btn" onclick="vincular(${v.id})" title="Vincular código">🔗</button>`:''}
+        ${v.status!=='descartado'?`<button class="act-btn" onclick="registrarPerdaRapida(${v.id},'${v.descricao.replace(/'/g,"\\'")}',${v.preco_custo||0})" style="color:var(--red-l)" title="Registrar perda">🗑️</button>`:''}
+        <button class="act-btn" onclick="excluirItem(${v.id})" style="color:var(--muted)">×</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function mostrarSemCodigo(){
+  document.getElementById('busca-val').value='';
+  document.getElementById('flt-status').value='todos';
+  renderVal(itens.filter(i=>!i.codigo));
+}
+
+// ── Modal Validade ─────────────────────────────────────────────────────────
+function abrirModal(id){
+  const v = id ? itens.find(x=>x.id===id) : null;
+  document.getElementById('val-title').textContent = v ? 'Editar Item' : 'Novo Item';
+  document.getElementById('v-id').value    = v?.id||'';
+  document.getElementById('v-cod').value   = v?.codigo||'';
+  document.getElementById('v-desc').value  = v?.descricao||'';
+  document.getElementById('v-qtd').value   = v?.qtd_unidades||0;
+  document.getElementById('v-val').value   = v?.data_validade? fmt.dateInput(v.data_validade):'';
+  document.getElementById('v-lote').value  = v?.lote||'';
+  document.getElementById('v-acao').value  = v?.acao_antes_vencer||'';
+  document.getElementById('v-resp').value  = v?.responsavel||'';
+  document.getElementById('v-conf').value  = v?.ultima_conferencia? fmt.dateInput(v.ultima_conferencia):'';
+  document.getElementById('v-local').value = v?.localizacao||'';
+  document.getElementById('v-alerta').value= v?.dias_alerta||7;
+  document.getElementById('v-cod-info').textContent = '';
+  document.getElementById('modal-val').classList.add('open');
+}
+function fecharModal(){ document.getElementById('modal-val').classList.remove('open'); }
+
+async function buscarProdVal(){
+  const cod = document.getElementById('v-cod').value.trim();
+  if(cod.length<2) return;
+  const d = await api.get(`/api/produtos/${cod}`);
+  const info = document.getElementById('v-cod-info');
+  if(d.ok){
+    info.textContent = '✅ ' + d.data.descricao;
+    if(!document.getElementById('v-desc').value) document.getElementById('v-desc').value = d.data.descricao;
+  } else { info.textContent = ''; }
+}
+
+async function salvarVal(){
+  const id = document.getElementById('v-id').value;
+  const body = {
+    codigo:            document.getElementById('v-cod').value.trim()||null,
+    descricao:         document.getElementById('v-desc').value.trim(),
+    qtdUnidades:       parseInt(document.getElementById('v-qtd').value)||0,
+    dataValidade:      document.getElementById('v-val').value,
+    lote:              document.getElementById('v-lote').value,
+    acaoAntesVencer:   document.getElementById('v-acao').value,
+    responsavel:       document.getElementById('v-resp').value,
+    ultimaConferencia: document.getElementById('v-conf').value,
+    localizacao:       document.getElementById('v-local').value,
+    diasAlerta:        parseInt(document.getElementById('v-alerta').value)||7,
+  };
+  if(!body.descricao){ toast('Descrição obrigatória'); return; }
+  const d = id ? await api.put(`/api/validade/${id}`,body) : await api.post('/api/validade',body);
+  if(!d.ok){ toast('Erro: '+d.erro); return; }
+  toast(id?'Item atualizado!':'Item criado!');
+  fecharModal(); carregar(); carregarKPIs();
+}
+
+async function vincular(id){
+  const cod = prompt('Digite o código do produto para vincular:');
+  if(!cod) return;
+  const d = await api.post(`/api/validade/${id}/vincular`,{codigo:cod.trim()});
+  if(d.ok){ toast('✅ Produto vinculado: '+d.produto.descricao); carregar(); carregarKPIs(); }
+  else toast('Erro: '+d.erro);
+}
+
+async function excluirItem(id){
+  if(!confirm('Descartar este item?')) return;
+  const d = await api.delete(`/api/validade/${id}`);
+  if(d.ok){ toast('Item descartado'); carregar(); carregarKPIs(); }
+  else toast('Erro: '+d.erro);
+}
+
+// ── Perdas ─────────────────────────────────────────────────────────────────
+async function carregarPerdas(){
+  const mesVal = document.getElementById('flt-mes-perdas').value;
+  let url = '/api/perdas';
+  let mes = '';
+  if(mesVal){ const [y,m]=mesVal.split('-'); mes=`${m}/${y}`; url+=`?mes=${mes}`; }
+  const d = await api.get(url);
+  if(!d.ok) return;
+  perdas = d.data;
+
+  // Meta
+  if(mes){
+    const mt = await api.get(`/api/perdas/meta/${mes}`);
+    if(mt.ok){
+      const info = document.getElementById('meta-perdas-info');
+      const md = mt.data;
+      info.innerHTML = `Total: <b>${fmt.brl(md.totalPerdas)}</b> · Meta: ${fmt.brl(md.metaValor)} (${md.metaPct}%) · <span style="color:${md.dentroMeta===false?'var(--red-l)':'var(--green)'}">${md.dentroMeta===false?'⚠️ Acima da meta':'✅ Dentro da meta'}</span>`;
+    }
+  }
+
+  renderPerdas(perdas);
+}
+
+function renderPerdas(lista){
+  const tb = document.getElementById('tbody-perdas');
+  const em = document.getElementById('empty-perdas');
+  if(!lista.length){ tb.innerHTML=''; em.style.display=''; return; }
+  em.style.display='none';
+  const motivos={vencimento:'Vencimento',avaria:'Avaria',furto:'Furto',doacao:'Doação',outros:'Outros'};
+  tb.innerHTML = lista.map(p=>`<tr>
+    <td>${fmt.date(p.dt_perda)}</td>
+    <td><b>${p.descricao}</b>${p.produto_descricao&&p.produto_descricao!==p.descricao?`<br><small style="color:var(--muted)">${p.produto_descricao}</small>`:''}</td>
+    <td><span class="pill" style="background:#f8d7da;color:#721c24">${motivos[p.motivo]||p.motivo}</span></td>
+    <td style="font-family:'DM Mono',monospace">${p.qtd_unidades||0}</td>
+    <td style="font-family:'DM Mono',monospace;font-weight:600;color:var(--red-l)">${fmt.brl(p.valor_perda)}</td>
+    <td>${p.funcionario_nome||'—'}</td>
+    <td><button class="act-btn" onclick="excluirPerda(${p.id})" style="color:var(--red-l)">🗑</button></td>
+  </tr>`).join('');
+}
+
+function abrirPerda(){
+  document.getElementById('pd-dt').value = new Date().toISOString().slice(0,10);
+  document.getElementById('pd-desc').value=''; document.getElementById('pd-qtd').value=0;
+  document.getElementById('pd-valor').value=''; document.getElementById('pd-obs').value='';
+  document.getElementById('modal-perda').classList.add('open');
+}
+function fecharPerda(){ document.getElementById('modal-perda').classList.remove('open'); }
+
+function registrarPerdaRapida(validadeItemId, desc, custo){
+  document.getElementById('pd-desc').value = desc;
+  document.getElementById('pd-dt').value = new Date().toISOString().slice(0,10);
+  document.getElementById('pd-motivo').value = 'vencimento';
+  document.getElementById('modal-perda').classList.add('open');
+  document.getElementById('modal-perda')._validadeItemId = validadeItemId;
+}
+
+async function salvarPerda(){
+  const body = {
+    descricao:    document.getElementById('pd-desc').value.trim(),
+    motivo:       document.getElementById('pd-motivo').value,
+    dtPerda:      document.getElementById('pd-dt').value,
+    qtdUnidades:  parseInt(document.getElementById('pd-qtd').value)||0,
+    valorPerda:   parseFloat(document.getElementById('pd-valor').value)||0,
+    funcionarioId:document.getElementById('pd-func').value||null,
+    observacao:   document.getElementById('pd-obs').value,
+    validadeItemId: document.getElementById('modal-perda')._validadeItemId||null,
+  };
+  if(!body.descricao){ toast('Descrição obrigatória'); return; }
+  const d = await api.post('/api/perdas', body);
+  if(!d.ok){ toast('Erro: '+d.erro); return; }
+  toast('🗑️ Perda registrada!');
+  document.getElementById('modal-perda')._validadeItemId = null;
+  fecharPerda(); carregarPerdas(); carregar(); carregarKPIs();
+}
+
+async function excluirPerda(id){
+  if(!confirm('Remover registro de perda?')) return;
+  const d = await api.delete(`/api/perdas/${id}`);
+  if(d.ok){ toast('Removido'); carregarPerdas(); carregarKPIs(); }
+  else toast('Erro: '+d.erro);
+}
+
+// ── Importar ───────────────────────────────────────────────────────────────
+function abrirImport(){ document.getElementById('modal-import').classList.add('open'); }
+
+async function processarImport(inp){
+  const f = inp.files[0]; if(!f) return;
+  const fd = new FormData(); fd.append('arquivo',f);
+  toast('Importando...');
+  const d = await api.upload('/api/validade/import', fd);
+  const el = document.getElementById('import-result');
+  el.style.display='';
+  if(!d.ok){ el.innerHTML=`❌ ${d.erro}`; return; }
+  el.innerHTML = `✅ <b>${d.inseridos} itens importados!</b> · Erros: ${d.erros}`;
+  carregar(); carregarKPIs();
+}
+</script>
+</body>
+</html>

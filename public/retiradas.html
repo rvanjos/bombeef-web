@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Retiradas de Funcionários — Bom Beef</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="/js/api.js"></script>
+<style>
+:root{--red:#8B0000;--red-l:#C0392B;--gold:#C9A044;--green:#1a7a4a;--orange:#c76b00;--blue:#1a5c8a;--purple:#6c3483;
+  --bg:#f7f4f0;--white:#fff;--text:#1a1a1a;--muted:#7a7068;--border:#e8e0d8;--shadow:0 2px 12px rgba(0,0,0,.08);}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
+.ph{background:var(--purple);padding:12px 22px;display:flex;align-items:center;gap:10px;box-shadow:0 2px 12px rgba(108,52,131,.3);}
+.ph h2{font-family:'Playfair Display',serif;font-size:17px;color:#fff;font-weight:700;}
+.ph-sub{font-size:11px;color:rgba(255,255,255,.7);margin-left:auto;}
+.body{padding:22px 20px;max-width:1300px;margin:0 auto;}
+/* KPIs */
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:20px;}
+.kc{background:var(--white);border:1px solid var(--border);border-radius:10px;padding:14px;border-left:4px solid var(--purple);box-shadow:var(--shadow);}
+.kc.g{border-left-color:var(--green);} .kc.o{border-left-color:var(--orange);}
+.kc-l{font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);font-weight:600;margin-bottom:4px;}
+.kc-v{font-size:20px;font-weight:700;font-family:'DM Mono',monospace;}
+.kc-s{font-size:11px;color:var(--muted);margin-top:3px;}
+/* limites grid */
+.limites-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:20px;}
+.limite-card{background:var(--white);border:1px solid var(--border);border-radius:10px;padding:14px;box-shadow:var(--shadow);}
+.lc-nome{font-size:13px;font-weight:600;margin-bottom:8px;}
+.lc-bar-bg{background:#f0ebe4;border-radius:6px;height:8px;overflow:hidden;margin-bottom:6px;}
+.lc-bar{height:100%;border-radius:6px;background:var(--green);transition:width .4s ease;}
+.lc-bar.warn{background:var(--orange);} .lc-bar.danger{background:var(--red-l);}
+.lc-info{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);}
+/* toolbar */
+.toolbar{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px;align-items:center;}
+.btn{padding:8px 16px;border-radius:8px;border:none;cursor:pointer;font-size:13px;font-weight:600;font-family:'DM Sans',sans-serif;transition:all .15s;display:inline-flex;align-items:center;gap:6px;}
+.btn-p{background:var(--purple);color:#fff;} .btn-p:hover{filter:brightness(1.1);}
+.btn-s{background:var(--white);color:var(--text);border:1px solid var(--border);} .btn-s:hover{border-color:var(--purple);}
+select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--white);cursor:pointer;}
+/* tabela */
+.card{background:var(--white);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);overflow:hidden;}
+.tbl{width:100%;border-collapse:collapse;}
+.tbl th{background:#f8f4fd;font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:700;padding:10px 12px;text-align:left;border-bottom:2px solid var(--border);}
+.tbl td{padding:10px 12px;font-size:13px;border-bottom:1px solid #f5efe8;vertical-align:middle;}
+.tbl tr:hover td{background:#fdf8ff;}
+.act-btn{padding:4px 10px;border:1px solid var(--border);border-radius:6px;background:var(--white);cursor:pointer;font-size:12px;margin-right:3px;}
+/* modal */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;align-items:center;justify-content:center;padding:16px;}
+.modal-bg.open{display:flex;}
+.modal{background:var(--white);border-radius:14px;width:100%;max-width:540px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3);}
+.modal-head{padding:18px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+.modal-head h3{font-family:'Playfair Display',serif;font-size:16px;color:var(--purple);}
+.modal-close{background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);}
+.modal-body{padding:20px 22px;}
+.fg{margin-bottom:12px;}
+.fg label{display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);margin-bottom:5px;}
+.fg input,.fg select,.fg textarea{width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:'DM Sans',sans-serif;}
+.fg input:focus,.fg select:focus{outline:none;border-color:var(--purple);}
+.fg-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.modal-foot{padding:14px 22px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end;}
+.limite-alert{background:#fdf8ff;border:1px solid #d5b4e8;border-radius:8px;padding:12px;font-size:13px;margin-bottom:12px;}
+.empty{text-align:center;padding:40px;color:var(--muted);}
+/* relatorio */
+.rel-table{width:100%;border-collapse:collapse;font-size:13px;}
+.rel-table th{background:#f8f4fd;padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;border-bottom:2px solid var(--border);}
+.rel-table td{padding:8px 12px;border-bottom:1px solid var(--border);}
+</style>
+</head>
+<body>
+<div class="ph"><span style="font-size:20px">👥</span><h2>Retiradas de Funcionários</h2><div class="ph-sub" id="ph-sub">—</div></div>
+<div class="body">
+  <div class="kpi-row">
+    <div class="kc"><div class="kc-l">Total do Mês</div><div class="kc-v" id="k-total">—</div><div class="kc-s">retiradas</div></div>
+    <div class="kc g"><div class="kc-l">Funcionários</div><div class="kc-v" id="k-funcs">—</div><div class="kc-s">com retiradas</div></div>
+    <div class="kc o"><div class="kc-l">Maior Retirada</div><div class="kc-v" id="k-maior">—</div></div>
+    <div class="kc"><div class="kc-l">Mês Referência</div><div class="kc-v" id="k-mes">—</div></div>
+  </div>
+
+  <!-- Limites por funcionário -->
+  <div style="font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px">Limites por Funcionário</div>
+  <div class="limites-grid" id="limites-grid"></div>
+
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <button class="btn btn-p" onclick="abrirModal()">＋ Nova Retirada</button>
+    <button class="btn btn-s" onclick="abrirRelatorio()">📊 Relatório</button>
+    <select class="flt" id="flt-func" onchange="carregar()">
+      <option value="">Todos os funcionários</option>
+    </select>
+    <input type="month" id="flt-mes" class="flt" style="padding:7px 10px" onchange="carregar()">
+  </div>
+
+  <!-- Tabela -->
+  <div class="card">
+    <table class="tbl">
+      <thead><tr><th>Data</th><th>Funcionário</th><th>Produto / Descrição</th><th>Qtd</th><th>Preço Unit.</th><th>Desconto</th><th>Total</th><th>Ações</th></tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+    <div class="empty" id="empty" style="display:none"><p>Nenhuma retirada encontrada</p></div>
+  </div>
+</div>
+
+<!-- Modal Nova Retirada -->
+<div class="modal-bg" id="modal-ret">
+  <div class="modal">
+    <div class="modal-head"><h3 id="ret-title">Nova Retirada</h3><button class="modal-close" onclick="fecharModal()">×</button></div>
+    <div class="modal-body">
+      <div class="limite-alert" id="limite-info" style="display:none"></div>
+      <div class="fg"><label>Funcionário *</label>
+        <select id="r-func" onchange="atualizarLimite()">
+          <option value="">— Selecione —</option>
+        </select>
+      </div>
+      <div class="fg"><label>Produto (busque pelo código)</label>
+        <input id="r-cod" placeholder="Código do produto" oninput="buscarProd()">
+        <div id="r-prod-info" style="font-size:11px;color:var(--green);margin-top:4px"></div>
+      </div>
+      <input type="hidden" id="r-prod-id">
+      <div class="fg"><label>Descrição *</label><input id="r-desc" placeholder="Descrição do produto"></div>
+      <div class="fg-row">
+        <div class="fg"><label>Data</label><input type="date" id="r-dt"></div>
+        <div class="fg"><label>Quantidade</label><input type="number" id="r-qtd" value="1" min="0.001" step="0.001" oninput="calcTotal()"></div>
+      </div>
+      <div class="fg-row">
+        <div class="fg"><label>Preço Unitário (R$)</label><input type="number" id="r-preco" step="0.0001" placeholder="0,00" oninput="calcTotal()"></div>
+        <div class="fg"><label>Desconto (%)</label><input type="number" id="r-desc-pct" value="100" min="0" max="100" oninput="calcTotal()"></div>
+      </div>
+      <div style="background:#f8f4fd;border-radius:8px;padding:12px;text-align:center;font-size:14px;font-weight:600;margin-bottom:10px">
+        Valor Total: <span id="r-total" style="color:var(--purple)">R$ 0,00</span>
+      </div>
+      <div class="fg"><label>Observação</label><textarea id="r-obs" rows="2"></textarea></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-s" onclick="fecharModal()">Cancelar</button>
+      <button class="btn btn-p" onclick="salvar()">💾 Registrar Retirada</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Relatório -->
+<div class="modal-bg" id="modal-rel">
+  <div class="modal" style="max-width:700px">
+    <div class="modal-head"><h3>Relatório de Retiradas</h3><button class="modal-close" onclick="document.getElementById('modal-rel').classList.remove('open')">×</button></div>
+    <div class="modal-body" id="rel-body">Carregando...</div>
+  </div>
+</div>
+
+<script>
+const {api,fmt,toast} = BB;
+let retiradas=[], funcionarios=[], mesAtual='';
+
+window.onBBReady = () => { init(); };
+if(api.token()) init();
+
+async function init(){
+  const hoje = new Date();
+  mesAtual = `${String(hoje.getMonth()+1).padStart(2,'0')}/${hoje.getFullYear()}`;
+  document.getElementById('flt-mes').value = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
+  document.getElementById('r-dt').value = hoje.toISOString().slice(0,10);
+  document.getElementById('k-mes').textContent = mesAtual;
+
+  await carregarFuncionarios();
+  carregar();
+}
+
+async function carregarFuncionarios(){
+  const d = await api.get('/api/config/funcionarios');
+  if(!d.ok) return;
+  funcionarios = d.data.filter(f=>f.ativo);
+  const sels = [document.getElementById('flt-func'), document.getElementById('r-func')];
+  funcionarios.forEach(f=>{
+    sels.forEach(sel=>{
+      const o=document.createElement('option'); o.value=f.id; o.textContent=f.nome; sel.appendChild(o);
+    });
+  });
+  carregarLimites();
+}
+
+async function carregarLimites(){
+  const grid = document.getElementById('limites-grid');
+  grid.innerHTML='';
+  for(const f of funcionarios){
+    const d = await api.get(`/api/retiradas/limite/${f.id}?mes=${mesAtual}`);
+    if(!d.ok) continue;
+    const ld = d.data;
+    const pct = ld.limite>0 ? Math.min(100,(ld.usado/ld.limite)*100) : 0;
+    const cls = pct>=90?'danger':pct>=70?'warn':'';
+    grid.innerHTML += `<div class="limite-card">
+      <div class="lc-nome">${f.nome}</div>
+      <div class="lc-bar-bg"><div class="lc-bar ${cls}" style="width:${pct}%"></div></div>
+      <div class="lc-info">
+        <span>${fmt.brl(ld.usado)} usado</span>
+        <span>${fmt.pct(ld.percentualUsado)}</span>
+        <span>Limite: ${fmt.brl(ld.limite)}</span>
+      </div>
+    </div>`;
+  }
+}
+
+async function carregar(){
+  const funcId = document.getElementById('flt-func').value;
+  const mesVal = document.getElementById('flt-mes').value;
+  let url = '/api/retiradas?';
+  if(funcId) url += `funcionario_id=${funcId}&`;
+  if(mesVal){ const [y,m]=mesVal.split('-'); url+=`mes=${m}/${y}`; }
+  const d = await api.get(url);
+  if(!d.ok) return;
+  retiradas = d.data;
+
+  // KPIs
+  const total = retiradas.reduce((s,r)=>s+parseFloat(r.valor_total||0),0);
+  const funcsUnicos = new Set(retiradas.map(r=>r.funcionario_id)).size;
+  const maior = retiradas.length ? Math.max(...retiradas.map(r=>parseFloat(r.valor_total||0))) : 0;
+  document.getElementById('k-total').textContent = fmt.brl(total);
+  document.getElementById('k-funcs').textContent = fmt.n(funcsUnicos);
+  document.getElementById('k-maior').textContent = fmt.brl(maior);
+  document.getElementById('ph-sub').textContent  = `${retiradas.length} retiradas · ${fmt.brl(total)}`;
+
+  renderizar(retiradas);
+}
+
+function renderizar(lista){
+  const tb = document.getElementById('tbody');
+  const em = document.getElementById('empty');
+  if(!lista.length){ tb.innerHTML=''; em.style.display=''; return; }
+  em.style.display='none';
+  tb.innerHTML = lista.map(r=>`<tr>
+    <td>${fmt.date(r.dt_retirada)}</td>
+    <td><b>${r.funcionario_nome}</b></td>
+    <td>${r.descricao}${r.prod_descricao&&r.prod_descricao!==r.descricao?`<br><small style="color:var(--muted)">${r.prod_descricao}</small>`:''}</td>
+    <td style="font-family:'DM Mono',monospace">${parseFloat(r.qtd||1).toFixed(3)}</td>
+    <td style="font-family:'DM Mono',monospace">${fmt.brl(r.preco_unitario)}</td>
+    <td style="color:var(--green);font-weight:600">${parseFloat(r.desconto_pct||0).toFixed(0)}%</td>
+    <td style="font-family:'DM Mono',monospace;font-weight:700;color:var(--purple)">${fmt.brl(r.valor_total)}</td>
+    <td><button class="act-btn" onclick="excluir(${r.id})" style="color:var(--red-l)">🗑</button></td>
+  </tr>`).join('');
+}
+
+// ── Modal ──────────────────────────────────────────────────────────────────
+function abrirModal(){
+  document.getElementById('r-prod-id').value='';
+  document.getElementById('r-cod').value='';
+  document.getElementById('r-desc').value='';
+  document.getElementById('r-qtd').value=1;
+  document.getElementById('r-preco').value='';
+  document.getElementById('r-desc-pct').value=100;
+  document.getElementById('r-obs').value='';
+  document.getElementById('r-prod-info').textContent='';
+  document.getElementById('r-total').textContent='R$ 0,00';
+  document.getElementById('limite-info').style.display='none';
+  document.getElementById('modal-ret').classList.add('open');
+}
+function fecharModal(){ document.getElementById('modal-ret').classList.remove('open'); }
+
+async function buscarProd(){
+  const cod = document.getElementById('r-cod').value.trim();
+  if(cod.length<2) return;
+  const d = await api.get(`/api/produtos/${cod}`);
+  const info = document.getElementById('r-prod-info');
+  if(d.ok){
+    document.getElementById('r-prod-id').value = d.data.id;
+    document.getElementById('r-desc').value    = d.data.descricao;
+    document.getElementById('r-preco').value   = d.data.preco_custo;
+    info.textContent = '✅ ' + d.data.descricao + ' — Custo: ' + fmt.brl(d.data.preco_custo);
+    calcTotal();
+  } else { info.textContent=''; }
+}
+
+function calcTotal(){
+  const qtd   = parseFloat(document.getElementById('r-qtd').value)||1;
+  const preco = parseFloat(document.getElementById('r-preco').value)||0;
+  const desc  = parseFloat(document.getElementById('r-desc-pct').value)||0;
+  const total = preco * qtd * (1 - desc/100);
+  document.getElementById('r-total').textContent = fmt.brl(total);
+}
+
+async function atualizarLimite(){
+  const funcId = document.getElementById('r-func').value;
+  if(!funcId) return;
+  const d = await api.get(`/api/retiradas/limite/${funcId}?mes=${mesAtual}`);
+  if(!d.ok) return;
+  const info = document.getElementById('limite-info');
+  info.style.display='';
+  const ld = d.data;
+  info.innerHTML = `👤 <b>${ld.funcionario}</b> — Usado: ${fmt.brl(ld.usado)} · Saldo: <b style="color:${ld.saldo<=0?'var(--red-l)':'var(--green)'}">${fmt.brl(ld.saldo)}</b> de ${fmt.brl(ld.limite)}`;
+}
+
+async function salvar(){
+  const funcId = document.getElementById('r-func').value;
+  const desc   = document.getElementById('r-desc').value.trim();
+  if(!funcId||!desc){ toast('Funcionário e descrição são obrigatórios'); return; }
+  const body = {
+    funcionarioId: parseInt(funcId),
+    produtoId:     parseInt(document.getElementById('r-prod-id').value)||null,
+    descricao:     desc,
+    qtd:           parseFloat(document.getElementById('r-qtd').value)||1,
+    precoUnitario: parseFloat(document.getElementById('r-preco').value)||0,
+    descontoPct:   parseFloat(document.getElementById('r-desc-pct').value)||100,
+    dtRetirada:    document.getElementById('r-dt').value,
+    observacao:    document.getElementById('r-obs').value,
+  };
+  const d = await api.post('/api/retiradas', body);
+  if(!d.ok){ toast('Erro: '+d.erro); return; }
+  toast('✅ Retirada registrada!');
+  fecharModal(); carregar(); carregarLimites();
+}
+
+async function excluir(id){
+  if(!confirm('Remover esta retirada?')) return;
+  const d = await api.delete(`/api/retiradas/${id}`);
+  if(d.ok){ toast('Removido'); carregar(); carregarLimites(); }
+  else toast('Erro: '+d.erro);
+}
+
+// ── Relatório ──────────────────────────────────────────────────────────────
+async function abrirRelatorio(){
+  document.getElementById('modal-rel').classList.add('open');
+  const mesVal = document.getElementById('flt-mes').value;
+  let mes = mesAtual;
+  if(mesVal){ const [y,m]=mesVal.split('-'); mes=`${m}/${y}`; }
+  const d = await api.get(`/api/retiradas/relatorio?mes=${mes}`);
+  if(!d.ok){ document.getElementById('rel-body').innerHTML='Erro ao carregar'; return; }
+  const r = d.data;
+  document.getElementById('rel-body').innerHTML = `
+    <div style="font-size:14px;font-weight:600;margin-bottom:14px">Referência: ${r.mes} · Total Geral: <b style="color:var(--purple)">${fmt.brl(r.totalGeral)}</b></div>
+    <table class="rel-table">
+      <thead><tr><th>Funcionário</th><th>Qtd Itens</th><th>Total Retirado</th><th>Limite</th><th>Saldo</th></tr></thead>
+      <tbody>${r.resumo.map(f=>`<tr>
+        <td><b>${f.nome}</b></td>
+        <td>${f.qtd_itens}</td>
+        <td style="font-family:'DM Mono',monospace;font-weight:600">${fmt.brl(f.total_retirado)}</td>
+        <td style="font-family:'DM Mono',monospace">${fmt.brl(f.limite_retirada)}</td>
+        <td style="color:${parseFloat(f.saldo||0)>=0?'var(--green)':'var(--red-l)';font-weight:600}">${fmt.brl(f.saldo||0)}</td>
+      </tr>`).join('')}</tbody>
+    </table>`;
+}
+</script>
+</body>
+</html>

@@ -3,13 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Sistema de Gestão — Bom Beef</title>
+<title>Bom Beef — Sistema de Gestão</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root{
   --red:#8B0000;--red-d:#5C0000;--red-m:#7B1010;--red-l:#C0392B;
-  --gold:#C9A044;
-  --green:#1a7a4a;--orange:#c76b00;--blue:#1a5c8a;--purple:#6c3483;
+  --gold:#C9A044;--green:#1a7a4a;--orange:#c76b00;--blue:#1a5c8a;--purple:#6c3483;
   --bg:#f7f4f0;--white:#fff;--text:#1a1a1a;--muted:#7a7068;
   --border:#e8e0d8;--shadow:0 2px 12px rgba(0,0,0,.08);
 }
@@ -17,11 +16,13 @@
 html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
 .screen{display:none;position:fixed;inset:0;z-index:10;overflow:hidden;flex-direction:column;}
 .screen.active{display:flex;}
+
+/* ── LOGIN ─────────────────────────────────────────────────────────────── */
 #scr-login{background:var(--red);background-image:repeating-linear-gradient(45deg,transparent,transparent 10px,rgba(255,255,255,.03) 10px,rgba(255,255,255,.03) 20px);align-items:center;justify-content:center;}
 .login-wrap{width:400px;max-width:94vw;background:var(--white);border-radius:18px;padding:40px 36px;box-shadow:0 20px 60px rgba(0,0,0,.35);position:relative;}
 .login-wrap::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg,var(--red-d),var(--gold),var(--red-d));border-radius:18px 18px 0 0;}
 .lw-logo{text-align:center;margin-bottom:28px;}
-.lw-emblem{width:70px;height:70px;background:var(--red);border-radius:50%;margin:0 auto 14px;display:flex;align-items:center;justify-content:center;font-family:'Playfair Display',serif;font-size:26px;font-weight:900;color:var(--gold);box-shadow:0 4px 20px rgba(139,0,0,.4);}
+.lw-emblem{width:70px;height:70px;background:var(--red);border-radius:50%;margin:0 auto 14px;display:flex;align-items:center;justify-content:center;font-size:32px;}
 .lw-title{font-family:'Playfair Display',serif;font-size:21px;color:var(--red);font-weight:700;}
 .lw-sub{font-size:11px;color:var(--muted);margin-top:5px;letter-spacing:1.2px;text-transform:uppercase;}
 .lw-field{margin-bottom:14px;}
@@ -32,8 +33,10 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
 .lw-btn:hover{background:var(--red-l);transform:translateY(-1px);}
 .lw-btn:disabled{opacity:.6;cursor:not-allowed;transform:none;}
 .lw-err{color:var(--red-l);font-size:12px;text-align:center;margin-top:8px;min-height:16px;}
-.ph{background:var(--red);background-image:repeating-linear-gradient(45deg,transparent,transparent 10px,rgba(255,255,255,.03) 10px,rgba(255,255,255,.03) 20px);height:60px;padding:0 24px;display:flex;align-items:center;gap:12px;flex-shrink:0;box-shadow:0 3px 16px rgba(139,0,0,.4);position:relative;z-index:50;}
-.ph-logo{width:36px;height:36px;background:var(--gold);border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Playfair Display',serif;font-weight:900;font-size:14px;color:var(--red-d);flex-shrink:0;}
+
+/* ── PORTAL ────────────────────────────────────────────────────────────── */
+.ph{background:var(--red);background-image:repeating-linear-gradient(45deg,transparent,transparent 10px,rgba(255,255,255,.03) 10px,rgba(255,255,255,.03) 20px);height:60px;padding:0 24px;display:flex;align-items:center;gap:12px;flex-shrink:0;box-shadow:0 3px 16px rgba(139,0,0,.4);}
+.ph-logo{width:36px;height:36px;background:var(--gold);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;}
 .ph-brand h1{font-family:'Playfair Display',serif;font-size:16px;color:#fff;font-weight:700;}
 .ph-brand p{font-size:10px;color:rgba(255,255,255,.6);letter-spacing:1.2px;text-transform:uppercase;margin-top:1px;}
 .ph-space{flex:1;}
@@ -43,11 +46,13 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
 .ph-dot.err{background:#c0392b;animation:none;}
 @keyframes dot-p{0%,100%{opacity:1;}50%{opacity:.3;}}
 .ph-user{display:flex;align-items:center;gap:8px;}
-.ph-av{width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.15);border:2px solid rgba(255,255,255,.3);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;font-family:'DM Mono',monospace;}
+.ph-av{width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.15);border:2px solid rgba(255,255,255,.3);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;font-family:'DM Mono',monospace;}
 .ph-uname{font-size:13px;font-weight:600;color:#fff;}
 .ph-role-pill{background:rgba(255,255,255,.15);color:rgba(255,255,255,.85);border:1px solid rgba(255,255,255,.25);padding:2px 8px;border-radius:8px;font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;}
 .ph-logout{padding:6px 14px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:7px;color:rgba(255,255,255,.8);cursor:pointer;font-size:12px;font-weight:600;transition:all .15s;margin-left:6px;}
 .ph-logout:hover{background:rgba(255,255,255,.22);color:#fff;}
+
+/* ── TABS ──────────────────────────────────────────────────────────────── */
 .pnav{background:var(--white);border-bottom:2px solid var(--border);display:flex;padding:0 20px;flex-shrink:0;overflow-x:auto;box-shadow:var(--shadow);}
 .pnav-tab{padding:11px 16px;font-size:12px;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .15s;white-space:nowrap;letter-spacing:.2px;background:none;border-top:none;border-left:none;border-right:none;font-family:'DM Sans',sans-serif;}
 .pnav-tab:hover{color:var(--red);}
@@ -55,597 +60,489 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
 .portal-body{flex:1;overflow-y:auto;background:var(--bg);}
 .portal-page{display:none;padding:28px 24px;max-width:1280px;margin:0 auto;}
 .portal-page.active{display:block;}
+
+/* ── CARDS KPI ─────────────────────────────────────────────────────────── */
 .pg-header{margin-bottom:24px;}
 .pg-title{font-family:'Playfair Display',serif;font-size:22px;color:var(--red);margin-bottom:5px;}
 .pg-sub{font-size:13px;color:var(--muted);}
-.live-bar{display:flex;flex-wrap:wrap;gap:0;background:var(--white);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:22px;box-shadow:var(--shadow);}
-.lb-item{display:flex;align-items:center;gap:8px;padding:11px 16px;font-size:12px;color:var(--muted);border-right:1px solid var(--border);flex:1;min-width:140px;}
-.lb-item:last-child{border-right:none;}
-.lb-item .lb-icon{font-size:16px;}
-.lb-item .lb-val{font-weight:700;color:var(--text);font-size:14px;}
-.lb-item .lb-label{font-size:10px;text-transform:uppercase;letter-spacing:.6px;}
-.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-bottom:24px;}
-.kpi-card{background:var(--white);border:1px solid var(--border);border-radius:10px;padding:14px 16px;border-left:4px solid var(--red);box-shadow:var(--shadow);}
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:14px;margin-bottom:24px;}
+.kpi-card{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:16px 18px;border-left:4px solid var(--red);box-shadow:var(--shadow);transition:transform .15s;}
+.kpi-card:hover{transform:translateY(-2px);}
 .kpi-card.green{border-left-color:var(--green);}
 .kpi-card.orange{border-left-color:var(--orange);}
 .kpi-card.blue{border-left-color:var(--blue);}
-.kpi-label{font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);font-weight:600;margin-bottom:5px;}
-.kpi-val{font-size:20px;font-weight:700;font-family:'DM Mono',monospace;}
-.kpi-sub{font-size:11px;color:var(--muted);margin-top:3px;}
+.kpi-card.purple{border-left-color:var(--purple);}
+.kpi-card.gold{border-left-color:var(--gold);}
+.kpi-label{font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);font-weight:600;margin-bottom:6px;}
+.kpi-icon{font-size:18px;margin-bottom:4px;}
+.kpi-val{font-size:22px;font-weight:700;font-family:'DM Mono',monospace;line-height:1;}
+.kpi-sub{font-size:11px;color:var(--muted);margin-top:4px;}
+.kpi-alert{color:var(--red-l);}
+.kpi-ok{color:var(--green);}
+
+/* ── PROGRESS ──────────────────────────────────────────────────────────── */
+.prog-wrap{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:18px 20px;margin-bottom:24px;box-shadow:var(--shadow);}
+.prog-label{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;}
+.prog-bar-bg{background:#f0ebe4;border-radius:8px;height:12px;overflow:hidden;}
+.prog-bar{height:100%;border-radius:8px;background:var(--green);transition:width .6s ease;}
+.prog-bar.warn{background:var(--orange);}
+.prog-bar.danger{background:var(--red-l);}
+.prog-info{display:flex;justify-content:space-between;margin-top:6px;font-size:12px;color:var(--muted);}
+
+/* ── SYSTEM CARDS ──────────────────────────────────────────────────────── */
 .sys-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px;margin-bottom:28px;}
 .sys-card{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:22px 20px;cursor:pointer;transition:all .2s;position:relative;overflow:hidden;display:flex;flex-direction:column;gap:9px;box-shadow:var(--shadow);}
 .sys-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--c,var(--red));}
 .sys-card:hover{border-color:var(--c,var(--red));transform:translateY(-3px);box-shadow:0 8px 28px rgba(0,0,0,.12);}
-.sys-card.locked{opacity:.45;cursor:not-allowed;}
-.sys-card.locked:hover{transform:none;border-color:var(--border);}
-.sc-icon{font-size:32px;line-height:1;}
-.sc-title{font-family:'Playfair Display',serif;font-size:15px;font-weight:700;color:var(--text);}
-.sc-desc{font-size:12px;color:var(--muted);line-height:1.6;}
-.sc-tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:2px;}
-.sc-tag{background:var(--bg);color:var(--muted);padding:2px 7px;border-radius:5px;font-size:10px;border:1px solid var(--border);}
-.sc-arrow{margin-top:auto;font-size:14px;color:var(--c,var(--red));opacity:.7;align-self:flex-end;}
-.sc-badge{position:absolute;top:12px;right:12px;padding:2px 8px;border-radius:8px;font-size:9px;font-weight:700;letter-spacing:.4px;}
-.sc-badge.green{background:#e8f7ef;color:var(--green);}
-.sc-badge.gray{background:#f0ebe4;color:var(--muted);}
-.sec-title{font-family:'Playfair Display',serif;font-size:14px;color:var(--red);margin-bottom:12px;display:flex;align-items:center;gap:7px;border-bottom:1px solid var(--border);padding-bottom:8px;}
-.alerta-bar{background:#fff8e1;border:1px solid #f0c040;border-radius:8px;padding:10px 16px;margin-bottom:16px;font-size:12px;color:#7a5c00;display:flex;align-items:center;gap:8px;}
-.admin-layout{display:grid;grid-template-columns:280px 1fr;gap:18px;align-items:start;}
-@media(max-width:780px){.admin-layout{grid-template-columns:1fr;}}
-.admin-panel{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:20px;box-shadow:var(--shadow);}
-.admin-title{font-family:'Playfair Display',serif;font-size:14px;color:var(--red);margin-bottom:14px;font-weight:700;}
-.user-item{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;cursor:pointer;transition:background .15s;margin-bottom:3px;}
-.user-item:hover{background:var(--bg);}
-.user-item.sel{background:#fff5f5;border:1px solid #f5c6c6;}
-.ui-av{width:34px;height:34px;border-radius:50%;background:var(--red);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;font-family:'DM Mono',monospace;flex-shrink:0;}
-.ui-name{font-size:13px;font-weight:600;color:var(--text);}
-.ui-role{font-size:11px;color:var(--muted);}
-.ui-star{margin-left:auto;color:var(--gold);font-size:13px;}
-.af-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;}
-.af-row.full{grid-template-columns:1fr;}
-.af-field{display:flex;flex-direction:column;gap:4px;}
-.af-field label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);}
-.af-field input,.af-field select{padding:8px 11px;background:#faf8f5;border:1px solid var(--border);border-radius:7px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;}
-.af-field input:focus,.af-field select:focus{outline:none;border-color:var(--red);}
-.bb-btn{display:inline-flex;align-items:center;gap:5px;padding:8px 16px;border:none;border-radius:7px;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:12px;font-weight:700;transition:all .15s;white-space:nowrap;}
-.bb-btn:hover{transform:translateY(-1px);}
-.bb-btn.red{background:var(--red);color:#fff;}.bb-btn.red:hover{background:var(--red-l);}
-.bb-btn.green{background:var(--green);color:#fff;}
-.bb-btn.ghost{background:var(--bg);color:var(--muted);border:1px solid var(--border);}
-.bb-btn.ghost:hover{border-color:var(--red);color:var(--red);}
-.bb-btn.danger{background:#fdeaea;color:var(--red);border:1px solid #f5c6c6;}
-.bb-btn.danger:hover{background:var(--red);color:#fff;}
-.bb-btn.sm{padding:5px 11px;font-size:11px;}
-.divider{height:1px;background:var(--border);margin:16px 0;}
-#scr-embedded{background:var(--white);}
-.emb-bar{height:40px;background:var(--red);background-image:repeating-linear-gradient(45deg,transparent,transparent 10px,rgba(255,255,255,.03) 10px,rgba(255,255,255,.03) 20px);display:flex;align-items:center;gap:10px;padding:0 14px;flex-shrink:0;box-shadow:0 2px 8px rgba(139,0,0,.3);}
-.emb-back{display:flex;align-items:center;gap:5px;padding:4px 12px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.2);border-radius:6px;color:#fff;cursor:pointer;font-size:12px;font-weight:600;transition:all .15s;}
-.emb-back:hover{background:rgba(255,255,255,.25);}
-.emb-title{font-family:'Playfair Display',serif;font-size:13px;color:rgba(255,255,255,.9);}
-.emb-hint{margin-left:auto;font-size:11px;color:rgba(255,255,255,.4);}
-.emb-frame{flex:1;width:100%;border:none;}
-.bb-toast{position:fixed;bottom:20px;right:20px;padding:10px 18px;border-radius:8px;color:#fff;font-size:13px;font-weight:600;box-shadow:0 4px 20px rgba(0,0,0,.25);z-index:9999;animation:ta .25s ease;max-width:320px;display:flex;align-items:center;gap:7px;}
-@keyframes ta{from{opacity:0;transform:translateX(14px);}to{opacity:1;transform:none;}}
-@media(max-width:600px){.ph-brand p,.ph-sync{display:none;}.portal-page{padding:16px 12px;}.sys-grid{grid-template-columns:1fr 1fr;}}
-@media(max-width:380px){.sys-grid{grid-template-columns:1fr;}}
+.sys-icon{font-size:28px;}
+.sys-title{font-family:'Playfair Display',serif;font-size:15px;font-weight:700;color:var(--text);}
+.sys-desc{font-size:12px;color:var(--muted);line-height:1.5;}
+.sys-badge{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:3px 9px;border-radius:8px;background:rgba(0,0,0,.05);color:var(--muted);}
+.sys-badge.alert{background:rgba(199,107,0,.12);color:var(--orange);}
+.sys-badge.danger{background:rgba(139,0,0,.12);color:var(--red);}
+.sys-badge.ok{background:rgba(26,122,74,.12);color:var(--green);}
+
+/* ── IFRAME ────────────────────────────────────────────────────────────── */
+.module-frame{width:100%;height:100%;border:none;display:none;}
+.module-frame.active{display:block;}
+.frame-container{flex:1;display:none;overflow:hidden;}
+.frame-container.active{display:flex;flex-direction:column;}
+
+/* ── TOAST ─────────────────────────────────────────────────────────────── */
+#toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:#333;color:#fff;padding:10px 22px;border-radius:10px;font-size:13px;z-index:9999;transition:transform .3s ease;pointer-events:none;}
+#toast.show{transform:translateX(-50%) translateY(0);}
+
+/* ── LOADING ───────────────────────────────────────────────────────────── */
+.spin{display:inline-block;width:18px;height:18px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-overlay{position:fixed;inset:0;background:rgba(247,244,240,.7);display:flex;align-items:center;justify-content:center;z-index:100;backdrop-filter:blur(2px);}
+.loading-box{background:var(--white);border-radius:12px;padding:28px 36px;box-shadow:0 8px 40px rgba(0,0,0,.15);text-align:center;}
+
+/* ── RESPONSIVE ─────────────────────────────────────────────────────────── */
+@media(max-width:600px){
+  .kpi-grid{grid-template-columns:1fr 1fr;}
+  .sys-grid{grid-template-columns:1fr;}
+  .portal-page{padding:16px 14px;}
+  .ph-uname,.ph-role-pill{display:none;}
+}
 </style>
 </head>
 <body>
 
-<!-- ════ LOGIN ════ -->
-<div class="screen active" id="scr-login">
+<!-- ── TELA DE LOGIN ──────────────────────────────────────────────────── -->
+<div id="scr-login" class="screen active">
   <div class="login-wrap">
     <div class="lw-logo">
-      <div class="lw-emblem">BB</div>
-      <div class="lw-title">Sistema de Gestão</div>
-      <div class="lw-sub">Bom Beef · Valinhos · SP</div>
+      <div class="lw-emblem">🥩</div>
+      <div class="lw-title">Bom Beef</div>
+      <div class="lw-sub">Sistema de Gestão Integrado</div>
     </div>
     <div class="lw-field">
       <label>E-mail</label>
-      <input type="email" id="li-u" placeholder="seu@email.com.br" autocomplete="username" onkeydown="if(event.key==='Enter')doLogin()">
+      <input type="email" id="inp-email" placeholder="seu@email.com.br" autocomplete="username">
     </div>
     <div class="lw-field">
       <label>Senha</label>
-      <input type="password" id="li-p" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+      <input type="password" id="inp-senha" placeholder="••••••••" autocomplete="current-password">
     </div>
-    <button class="lw-btn" id="lw-btn" onclick="doLogin()">Entrar no Sistema →</button>
-    <div class="lw-err" id="li-err"></div>
+    <button class="lw-btn" id="btn-login" onclick="fazerLogin()">Entrar</button>
+    <div class="lw-err" id="lw-err"></div>
   </div>
 </div>
 
-<!-- ════ PORTAL ════ -->
-<div class="screen" id="scr-portal">
-  <header class="ph">
-    <div class="ph-logo">BB</div>
+<!-- ── TELA PORTAL ────────────────────────────────────────────────────── -->
+<div id="scr-portal" class="screen">
+
+  <!-- Header -->
+  <div class="ph">
+    <div class="ph-logo">🥩</div>
     <div class="ph-brand">
-      <h1>Sistema de Gestão Bom Beef</h1>
-      <p>Valinhos · SP</p>
+      <h1 id="ph-empresa">Bom Beef</h1>
+      <p>Sistema de Gestão</p>
     </div>
     <div class="ph-space"></div>
-    <div class="ph-sync" id="ph-sync"><span class="ph-dot" id="ph-dot"></span><span id="ph-sync-txt">conectado</span></div>
+    <div class="ph-sync">
+      <div class="ph-dot" id="sync-dot"></div>
+      <span id="sync-txt">online</span>
+    </div>
     <div class="ph-user">
       <div class="ph-av" id="ph-av">?</div>
-      <div>
-        <div class="ph-uname" id="ph-name">—</div>
-        <div class="ph-role-pill" id="ph-role">—</div>
-      </div>
+      <span class="ph-uname" id="ph-uname"></span>
+      <span class="ph-role-pill" id="ph-role"></span>
+      <button class="ph-logout" onclick="fazerLogout()">Sair</button>
     </div>
-    <button class="ph-logout" onclick="doLogout()">Sair</button>
-  </header>
+  </div>
 
-  <nav class="pnav">
-    <button class="pnav-tab active" data-tab="home" onclick="goTab('home')">🏠 Início</button>
-    <button class="pnav-tab" data-tab="sistemas" onclick="goTab('sistemas')">⚡ Módulos</button>
-    <button class="pnav-tab" data-tab="admin" id="tab-admin" onclick="goTab('admin')" style="display:none">⚙️ Usuários</button>
-  </nav>
+  <!-- Tabs de navegação -->
+  <div class="pnav" id="pnav">
+    <button class="pnav-tab active" onclick="showTab('dashboard')" data-tab="dashboard">🏠 Dashboard</button>
+    <button class="pnav-tab" onclick="showTab('boletos')"   data-tab="boletos"   data-perfil="admin,gestor,financeiro">📄 Boletos</button>
+    <button class="pnav-tab" onclick="showTab('dre')"       data-tab="dre"       data-perfil="admin,gestor,financeiro">📊 DRE</button>
+    <button class="pnav-tab" onclick="showTab('produtos')"  data-tab="produtos"  data-perfil="admin,gestor,estoque">📦 Produtos</button>
+    <button class="pnav-tab" onclick="showTab('validade')"  data-tab="validade"  data-perfil="admin,gestor,estoque,caixa">🗓 Validade</button>
+    <button class="pnav-tab" onclick="showTab('retiradas')" data-tab="retiradas" data-perfil="admin,gestor,caixa">👥 Retiradas</button>
+    <button class="pnav-tab" onclick="showTab('config')"    data-tab="config"    data-perfil="admin,gestor">⚙️ Config</button>
+  </div>
 
+  <!-- Corpo do portal -->
   <div class="portal-body">
-    <!-- HOME -->
-    <div class="portal-page active" id="pp-home">
-      <div id="alerta-base" style="display:none" class="alerta-bar">⚠️ <strong>Base desatualizada!</strong> A última importação do TOTVS foi há mais de 7 dias. Importe um novo relatório para manter os custos corretos.</div>
-      <div class="pg-header">
-        <div class="pg-title" id="greet-h">Bem-vindo!</div>
-        <div class="pg-sub" id="greet-p"></div>
-      </div>
-      <div class="live-bar">
-        <div class="lb-item"><span class="lb-icon">📦</span><div><div class="lb-val" id="lb-prod">—</div><div class="lb-label">Produtos</div></div></div>
-        <div class="lb-item"><span class="lb-icon">📋</span><div><div class="lb-val" id="lb-bol">—</div><div class="lb-label">Boletos abertos</div></div></div>
-        <div class="lb-item"><span class="lb-icon">⚠️</span><div><div class="lb-val" id="lb-venc" style="color:var(--orange)">—</div><div class="lb-label">Vencidos</div></div></div>
-        <div class="lb-item"><span class="lb-icon">🔴</span><div><div class="lb-val" id="lb-crit">—</div><div class="lb-label">Validades críticas</div></div></div>
-        <div class="lb-item" style="margin-left:auto"><span class="lb-icon">🕐</span><div><div class="lb-val" id="lb-clock">—</div><div class="lb-label">Agora</div></div></div>
-      </div>
-      <div class="kpi-grid" id="kpi-grid"></div>
-      <div class="sec-title">⚡ Seus Módulos</div>
-      <div class="sys-grid" id="home-grid"></div>
-    </div>
 
-    <!-- SISTEMAS -->
-    <div class="portal-page" id="pp-sistemas">
+    <!-- ── DASHBOARD ─────────────────────────────────────────────────── -->
+    <div class="portal-page active" id="page-dashboard">
       <div class="pg-header">
-        <div class="pg-title">Módulos do Sistema</div>
-        <div class="pg-sub">Todos os módulos — os bloqueados requerem permissão do administrador</div>
+        <div class="pg-title">Dashboard</div>
+        <div class="pg-sub" id="dash-mes-label">Carregando dados...</div>
       </div>
-      <div class="sys-grid" id="all-grid"></div>
-    </div>
 
-    <!-- ADMIN -->
-    <div class="portal-page" id="pp-admin">
-      <div class="pg-header">
-        <div class="pg-title">Usuários &amp; Perfis</div>
-        <div class="pg-sub">Gerencie usuários e defina permissões de acesso</div>
-      </div>
-      <div class="admin-layout">
-        <div class="admin-panel">
-          <div class="admin-title">👥 Usuários</div>
-          <div id="user-list"><div style="color:var(--muted);font-size:12px">Carregando...</div></div>
-          <div class="divider"></div>
-          <button class="bb-btn red" onclick="newUser()" style="width:100%;justify-content:center">➕ Novo Usuário</button>
-        </div>
-        <div class="admin-panel">
-          <div class="admin-title" id="edit-title">✏️ Editar Usuário</div>
-          <div class="af-row">
-            <div class="af-field"><label>Nome completo *</label><input id="eu-name" type="text" placeholder="Nome"></div>
-            <div class="af-field"><label>E-mail *</label><input id="eu-email" type="email" placeholder="email@bombeef.com.br"></div>
-          </div>
-          <div class="af-row">
-            <div class="af-field"><label>Senha (deixe vazio para não alterar)</label><input id="eu-pass" type="password" placeholder="••••••"></div>
-            <div class="af-field"><label>Perfil *</label>
-              <select id="eu-role">
-                <option value="operacao">Operação</option>
-                <option value="estoque">Estoque</option>
-                <option value="financeiro">Financeiro</option>
-                <option value="gerente">Gerente</option>
-                <option value="admin">Administrador</option>
-              </select>
-            </div>
-          </div>
-          <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap">
-            <button class="bb-btn red" onclick="saveUser()" style="flex:1;justify-content:center">💾 Salvar</button>
-            <button class="bb-btn danger sm" id="eu-del" onclick="deleteUser()" style="display:none">🗑️</button>
-            <button class="bb-btn ghost sm" onclick="newUser()">✕</button>
-          </div>
-          <div id="eu-msg" style="font-size:12px;margin-top:8px;min-height:14px"></div>
+      <!-- Faturamento -->
+      <div class="prog-wrap" id="prog-fat" style="display:none">
+        <div class="prog-label">🎯 Meta de Faturamento — <span id="prog-mes"></span></div>
+        <div class="prog-bar-bg"><div class="prog-bar" id="prog-bar" style="width:0%"></div></div>
+        <div class="prog-info">
+          <span>Real: <strong id="prog-real">R$ 0</strong></span>
+          <span id="prog-pct">0%</span>
+          <span>Meta: <strong id="prog-meta">R$ 0</strong></span>
         </div>
       </div>
-    </div>
-  </div>
-</div>
 
-<!-- ════ EMBEDDED ════ -->
-<div class="screen" id="scr-embedded">
-  <div class="emb-bar">
-    <div class="emb-back" onclick="closeEmb()">← Portal</div>
-    <div class="emb-title" id="emb-title">—</div>
-    <div class="emb-hint">ESC para voltar</div>
-  </div>
-  <iframe class="emb-frame" id="emb-frame" src="about:blank"></iframe>
-</div>
+      <!-- KPIs grid -->
+      <div class="kpi-grid" id="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-icon">📄</div>
+          <div class="kpi-label">Boletos Vencendo (7d)</div>
+          <div class="kpi-val" id="k-vence7d">—</div>
+          <div class="kpi-sub" id="k-vence7d-val">—</div>
+        </div>
+        <div class="kpi-card orange">
+          <div class="kpi-icon">⚠️</div>
+          <div class="kpi-label">Boletos Vencidos</div>
+          <div class="kpi-val kpi-alert" id="k-vencidos">—</div>
+          <div class="kpi-sub" id="k-aberto">—</div>
+        </div>
+        <div class="kpi-card blue">
+          <div class="kpi-icon">📊</div>
+          <div class="kpi-label">Resultado DRE</div>
+          <div class="kpi-val" id="k-resultado">—</div>
+          <div class="kpi-sub" id="k-resultado-sub">—</div>
+        </div>
+        <div class="kpi-card orange">
+          <div class="kpi-icon">🗓</div>
+          <div class="kpi-label">Validade — Alertas</div>
+          <div class="kpi-val" id="k-val-alerta">—</div>
+          <div class="kpi-sub" id="k-val-venc">—</div>
+        </div>
+        <div class="kpi-card red">
+          <div class="kpi-icon">🗑️</div>
+          <div class="kpi-label">Perdas do Mês</div>
+          <div class="kpi-val" id="k-perdas">—</div>
+          <div class="kpi-sub" id="k-perdas-meta">—</div>
+        </div>
+        <div class="kpi-card purple">
+          <div class="kpi-icon">👥</div>
+          <div class="kpi-label">Retiradas do Mês</div>
+          <div class="kpi-val" id="k-retiradas">—</div>
+          <div class="kpi-sub">funcionários</div>
+        </div>
+      </div>
+
+      <!-- Cards de acesso rápido -->
+      <div class="pg-header" style="margin-top:8px">
+        <div class="pg-title" style="font-size:17px">Acesso Rápido</div>
+      </div>
+      <div class="sys-grid">
+        <div class="sys-card" style="--c:var(--red)" onclick="showTab('boletos')">
+          <div class="sys-icon">📄</div>
+          <div class="sys-title">Boletos & NF-e</div>
+          <div class="sys-desc">Controle de boletos, importação de XML/PDF, baixas e vencimentos</div>
+          <div class="sys-badge" id="badge-boletos">Carregando...</div>
+        </div>
+        <div class="sys-card" style="--c:var(--blue)" onclick="showTab('dre')">
+          <div class="sys-icon">📊</div>
+          <div class="sys-title">DRE & Classificador</div>
+          <div class="sys-desc">Importação de extratos bancários, categorização e relatório DRE</div>
+          <div class="sys-badge" id="badge-dre">—</div>
+        </div>
+        <div class="sys-card" style="--c:var(--green)" onclick="showTab('produtos')">
+          <div class="sys-icon">📦</div>
+          <div class="sys-title">Produtos & Kits</div>
+          <div class="sys-desc">Catálogo de produtos, montagem de kits e precificação</div>
+          <div class="sys-badge" id="badge-produtos">Carregando...</div>
+        </div>
+        <div class="sys-card" style="--c:var(--orange)" onclick="showTab('validade')">
+          <div class="sys-icon">🗓</div>
+          <div class="sys-title">Controle de Validade</div>
+          <div class="sys-desc">Validades, alertas, conferências e registro de perdas</div>
+          <div class="sys-badge" id="badge-validade">Carregando...</div>
+        </div>
+        <div class="sys-card" style="--c:var(--purple)" onclick="showTab('retiradas')">
+          <div class="sys-icon">👥</div>
+          <div class="sys-title">Retiradas Funcionários</div>
+          <div class="sys-desc">Controle de retiradas com desconto, limites e relatórios</div>
+          <div class="sys-badge" id="badge-retiradas">Carregando...</div>
+        </div>
+        <div class="sys-card" style="--c:var(--gold)" onclick="showTab('config')">
+          <div class="sys-icon">⚙️</div>
+          <div class="sys-title">Configurações</div>
+          <div class="sys-desc">Usuários, funcionários, metas, categorias DRE e parâmetros</div>
+          <div class="sys-badge ok">Admin</div>
+        </div>
+      </div>
+    </div><!-- /dashboard -->
+
+    <!-- ── MÓDULOS (iframes) ──────────────────────────────────────────── -->
+    <div class="frame-container" id="frame-boletos">
+      <iframe class="module-frame active" id="iframe-boletos" src="boletos.html"></iframe>
+    </div>
+    <div class="frame-container" id="frame-dre">
+      <iframe class="module-frame active" id="iframe-dre" src="dre.html"></iframe>
+    </div>
+    <div class="frame-container" id="frame-produtos">
+      <iframe class="module-frame active" id="iframe-produtos" src="produtos.html"></iframe>
+    </div>
+    <div class="frame-container" id="frame-validade">
+      <iframe class="module-frame active" id="iframe-validade" src="validade.html"></iframe>
+    </div>
+    <div class="frame-container" id="frame-retiradas">
+      <iframe class="module-frame active" id="iframe-retiradas" src="retiradas.html"></iframe>
+    </div>
+    <div class="frame-container" id="frame-config">
+      <iframe class="module-frame active" id="iframe-config" src="config.html"></iframe>
+    </div>
+
+  </div><!-- /portal-body -->
+</div><!-- /portal -->
+
+<div id="toast"></div>
 
 <script>
-// ════════════════════════════════════════════════════════════════
-// SISTEMA DE GESTÃO BOM BEEF — PORTAL v4 (API mode)
-// ════════════════════════════════════════════════════════════════
+// ── Estado global ──────────────────────────────────────────────────────────
+const API = '';
+let usuario = null;
+let kpiTimer = null;
 
-const SYS = [
-  { id:'config',        icon:'⚙', title:'Configurações do Sistema',
-    desc:'Categorias DRE, funcionários, metas, locais, usuários e integrações — tudo em um lugar.',
-    tags:['DRE','Funcionários','Metas','Usuários'], c:'#5C0000', file:'bb_config.html',
-    perfis:['admin','gerente'] },
-  { id:'nfe',          icon:'🧾', title:'Gestão de NF-e & Boletos',
-    desc:'Importe XMLs, gerencie notas fiscais, controle boletos por vencimento.',
-    tags:['XML','PDF IA','Boletos','Parcelas'], c:'#8B0000', file:'nfe_boletos_bombeef.html',
-    perfis:['admin','gerente','financeiro'] },
-  { id:'classificador',icon:'📊', title:'Classificador de Extrato',
-    desc:'Importe extratos OFX/CC, classifique no DRE, gerencie funcionários.',
-    tags:['OFX','DRE','Funcionários','Cartão'], c:'#1a5c8a', file:'classificador_bom_beef_v5.html',
-    perfis:['admin','gerente','financeiro'] },
-  { id:'validade',     icon:'📦', title:'Controle de Validades',
-    desc:'Estoques perecíveis, alertas de vencimento, registro de perdas.',
-    tags:['Validades','Perdas','Alertas'], c:'#1a7a4a', file:'bom_beef_validade.html',
-    perfis:['admin','gerente','estoque','operacao'] },
-  { id:'precificacao', icon:'🏷️', title:'Kits & Precificação',
-    desc:'Monte kits, simule preços com custos reais, calcule margens.',
-    tags:['Kits','Margens','Simulação'], c:'#b8860b', file:'kit_precificacao.html',
-    perfis:['admin','gerente'] },
-];
+// ── Helpers ────────────────────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+const fmtBRL = v => 'R$ ' + parseFloat(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmtN   = v => parseInt(v||0).toLocaleString('pt-BR');
 
-// ── Estado global ─────────────────────────────────────────────
-let TOKEN    = sessionStorage.getItem('bb_token') || localStorage.getItem('bb_token') || null;
-let CUR_USER = JSON.parse(sessionStorage.getItem('bb_user') || localStorage.getItem('bb_user') || 'null');
-let editId   = null;
-let allUsers = [];
+function toast(msg, ms=2500) {
+  const el = $('toast'); el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), ms);
+}
 
-// ── API helper ────────────────────────────────────────────────
-async function api(method, path, body, opts = {}) {
-  const headers = { 'Content-Type': 'application/json' };
-  if (TOKEN) headers['Authorization'] = 'Bearer ' + TOKEN;
-  const res = await fetch(path, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
+function token() { return sessionStorage.getItem('bb_token'); }
+
+async function apiFetch(path, opts={}) {
+  const res = await fetch(API + path, {
     ...opts,
+    headers: { 'Content-Type':'application/json', 'Authorization':'Bearer '+token(), ...(opts.headers||{}) }
   });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.erro || `HTTP ${res.status}`);
-  return data;
+  return res.json();
 }
 
-// ── Telas ─────────────────────────────────────────────────────
-function showScr(id) {
-  document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === id));
-}
+// ── Login ──────────────────────────────────────────────────────────────────
+$('inp-senha').addEventListener('keydown', e => { if(e.key==='Enter') fazerLogin(); });
+$('inp-email').addEventListener('keydown', e => { if(e.key==='Enter') $('inp-senha').focus(); });
 
-// ── Login ─────────────────────────────────────────────────────
-async function doLogin() {
-  const email = document.getElementById('li-u').value.trim();
-  const senha = document.getElementById('li-p').value;
-  const err   = document.getElementById('li-err');
-  const btn   = document.getElementById('lw-btn');
-  if (!email || !senha) { err.textContent = 'Preencha e-mail e senha.'; return; }
-  btn.disabled = true; btn.textContent = 'Aguarde…';
+async function fazerLogin() {
+  const btn = $('btn-login');
+  const err = $('lw-err');
+  const email = $('inp-email').value.trim();
+  const senha = $('inp-senha').value;
+  err.textContent = '';
+  if (!email || !senha) { err.textContent = 'Preencha e-mail e senha'; return; }
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span> Entrando...';
   try {
-    const { token, usuario } = await api('POST', '/auth/login', { email, senha });
-    TOKEN    = token;
-    CUR_USER = usuario;
-    sessionStorage.setItem('bb_token', token);
-    sessionStorage.setItem('bb_user',  JSON.stringify(usuario));
-    // localStorage permite que outras abas (bom_beef_validade, validade_mobile)
-    // leiam o token sem depender de postMessage ou iframe
-    localStorage.setItem('bb_token', token);
-    localStorage.setItem('bb_user',  JSON.stringify(usuario));
-    document.getElementById('li-u').value = '';
-    document.getElementById('li-p').value = '';
-    err.textContent = '';
-    showScr('scr-portal');
-    initPortal();
-  } catch (e) {
-    err.textContent = e.message || 'Falha ao autenticar.';
-    document.getElementById('li-p').value = '';
+    const data = await fetch('/auth/login', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ email, senha })
+    }).then(r=>r.json());
+    if (!data.ok) { err.textContent = data.erro || 'Erro ao fazer login'; return; }
+    sessionStorage.setItem('bb_token', data.token);
+    usuario = data.usuario;
+    entrarNoPortal();
+  } catch(e) {
+    err.textContent = 'Não foi possível conectar ao servidor';
   } finally {
-    btn.disabled = false; btn.textContent = 'Entrar no Sistema →';
+    btn.disabled = false; btn.textContent = 'Entrar';
   }
 }
 
-function doLogout() {
-  TOKEN = null; CUR_USER = null;
+function entrarNoPortal() {
+  $('scr-login').classList.remove('active');
+  $('scr-portal').classList.add('active');
+  $('ph-av').textContent    = (usuario.nome||'?')[0].toUpperCase();
+  $('ph-uname').textContent = usuario.nome;
+  $('ph-role').textContent  = usuario.perfil;
+  filtrarTabs();
+  carregarConfig();
+  carregarKPIs();
+  kpiTimer = setInterval(carregarKPIs, 60000);
+}
+
+function fazerLogout() {
   sessionStorage.removeItem('bb_token');
-  sessionStorage.removeItem('bb_user');
-  localStorage.removeItem('bb_token');
-  localStorage.removeItem('bb_user');
-  closeEmb();
-  showScr('scr-login');
-  setTimeout(() => document.getElementById('li-u').focus(), 80);
+  usuario = null;
+  if(kpiTimer) clearInterval(kpiTimer);
+  $('scr-portal').classList.remove('active');
+  $('scr-login').classList.add('active');
+  $('inp-senha').value = '';
+  $('lw-err').textContent = '';
 }
 
-// ── Portal init ───────────────────────────────────────────────
-function initPortal() {
-  const u = CUR_USER;
-  const ini = (u.nome || u.email || 'U').slice(0, 2).toUpperCase();
-  document.getElementById('ph-av').textContent   = ini;
-  document.getElementById('ph-name').textContent = u.nome || u.email;
-  document.getElementById('ph-role').textContent = u.perfil;
-  document.getElementById('tab-admin').style.display = u.perfil === 'admin' ? 'block' : 'none';
-  const h = new Date().getHours();
-  document.getElementById('greet-h').textContent = (h < 12 ? 'Bom dia' : h < 18 ? 'Boa tarde' : 'Boa noite') + ', ' + (u.nome || '').split(' ')[0] + '!';
-  document.getElementById('greet-p').textContent = 'Hoje é ' + new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-  goTab('home');
-  buildGrids();
-  startClock();
-  loadDashboard();
-  if (u.perfil === 'admin') loadUserList();
+// ── Tabs ───────────────────────────────────────────────────────────────────
+function filtrarTabs() {
+  document.querySelectorAll('.pnav-tab[data-perfil]').forEach(tab => {
+    const perfis = tab.dataset.perfil.split(',');
+    tab.style.display = perfis.includes(usuario?.perfil) ? '' : 'none';
+  });
 }
 
-// ── Tabs ──────────────────────────────────────────────────────
-function goTab(tab) {
-  document.querySelectorAll('.pnav-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
-  document.querySelectorAll('.portal-page').forEach(p => p.classList.toggle('active', p.id === 'pp-' + tab));
-  if (tab === 'admin') loadUserList();
+function showTab(tab) {
+  // Desativa todos
+  document.querySelectorAll('.pnav-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.portal-page, .frame-container').forEach(p => p.classList.remove('active'));
+
+  // Ativa o selecionado
+  const tabBtn = document.querySelector(`[data-tab="${tab}"]`);
+  if(tabBtn) tabBtn.classList.add('active');
+
+  if (tab === 'dashboard') {
+    $('page-dashboard').classList.add('active');
+  } else {
+    const fc = $(`frame-${tab}`);
+    if(fc) {
+      fc.classList.add('active');
+      // Passa token para o iframe
+      const iframe = fc.querySelector('iframe');
+      if(iframe) {
+        iframe.onload = () => {
+          try { iframe.contentWindow.postMessage({type:'bb_token',token:token(),usuario}, '*'); } catch(_) {}
+        };
+        // Se já carregou
+        try { iframe.contentWindow.postMessage({type:'bb_token',token:token(),usuario}, '*'); } catch(_) {}
+      }
+    }
+  }
 }
 
-// ── System grids ──────────────────────────────────────────────
-function getPerms() {
-  const p = CUR_USER?.perfil;
-  if (p === 'admin' || p === 'gerente') return SYS.map(s => s.id);
-  return SYS.filter(s => s.perfis.includes(p)).map(s => s.id);
-}
-function sysCardHTML(s, locked) {
-  const click = locked
-    ? `toast('Acesso não permitido para seu perfil.','#c0392b')`
-    : s.file ? `openSys('${s.id}')` : `toast('Módulo em desenvolvimento.','#6c3483')`;
-  return `<div class="sys-card${locked ? ' locked' : ''}" onclick="${click}" style="--c:${s.c}">
-    ${s.id === 'config' ? '<div class="sc-badge green">CENTRAL</div>' : ''}
-    <div class="sc-icon">${s.icon}</div>
-    <div class="sc-title">${s.title}</div>
-    <div class="sc-desc">${s.desc}</div>
-    <div class="sc-tags">${s.tags.map(t => `<span class="sc-tag">${t}</span>`).join('')}</div>
-    <div class="sc-arrow">${locked ? '🔒' : s.file ? '→' : '⏳'}</div>
-  </div>`;
-}
-function buildGrids() {
-  const perms = getPerms();
-  console.log('[buildGrids] perfil:', CUR_USER?.perfil, '| perms:', perms);
-  document.getElementById('home-grid').innerHTML = SYS.filter(s => perms.includes(s.id)).map(s => sysCardHTML(s, false)).join('');
-  document.getElementById('all-grid').innerHTML  = SYS.map(s => sysCardHTML(s, !perms.includes(s.id))).join('');
-}
-
-// ── Dashboard (API) ───────────────────────────────────────────
-async function loadDashboard() {
+// ── KPIs Dashboard ─────────────────────────────────────────────────────────
+async function carregarKPIs() {
   setSyncStatus('loading');
   try {
-    const [data, valdData] = await Promise.allSettled([
-      api('GET', '/api/dashboard/kpis'),
-      api('GET', '/api/validade/kpis'),
-    ]);
-    const d    = data.status === 'fulfilled'     ? data.value    : {};
-    const vald = valdData.status === 'fulfilled' ? valdData.value?.data : null;
+    const data = await apiFetch('/api/dashboard/kpis');
+    if(!data.ok) { setSyncStatus('err'); return; }
+    const d = data.data;
 
-    const lotesCriticos = vald
-      ? (parseInt(vald.vencidos || 0) + parseInt(vald.criticos || 0))
-      : (d.lotes_criticos || 0);
-    const perdasMes = vald
-      ? { ocorrencias: parseInt(vald.qtd_perdas_mes || 0), valor: parseFloat(vald.valor_perdas_mes || 0) }
-      : (d.perdas_mes || { ocorrencias: 0, valor: 0 });
+    $('dash-mes-label').textContent = `Referência: ${data.mes}`;
 
-    // Live bar
-    document.getElementById('lb-prod').textContent  = (d.total_produtos || 0) + ' produtos';
-    document.getElementById('lb-bol').textContent   = (d.boletos?.abertos || 0) + ' em aberto';
-    document.getElementById('lb-venc').textContent  = d.boletos?.vencidos ? d.boletos.vencidos + ' boleto(s)' : '✓ Nenhum';
-    document.getElementById('lb-venc').style.color  = d.boletos?.vencidos ? 'var(--orange)' : 'var(--green)';
-    document.getElementById('lb-crit').textContent  = lotesCriticos ? lotesCriticos + ' lotes' : '✓ Nenhum';
-    document.getElementById('lb-crit').style.color  = lotesCriticos ? 'var(--red-l)' : 'var(--green)';
+    // Boletos
+    $('k-vence7d').textContent = fmtN(d.boletosVence7d);
+    $('k-vence7d-val').textContent = fmtBRL(d.boletosValorVence7d);
+    $('k-vencidos').textContent = fmtN(d.boletosVencidos);
+    $('k-aberto').textContent = 'Total aberto: ' + fmtBRL(d.boletosAberto);
+    if(d.boletosVencidos>0) $('k-vencidos').classList.add('kpi-alert');
 
-    const R = v => 'R$ ' + parseFloat(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
-    const kpis = [
-      { label:'Produtos Ativos',   value: d.total_produtos || 0,             sub:'na base mestre',       cls:'' },
-      { label:'Boletos em Aberto', value: d.boletos?.abertos || 0,           sub: R(d.boletos?.total),   cls: d.boletos?.vencidos ? 'orange':'green', color: d.boletos?.vencidos ? 'var(--orange)':'var(--green)' },
-      { label:'Perdas no Mês',     value: perdasMes.ocorrencias+' ocorr.',   sub: R(perdasMes.valor),    cls: perdasMes.valor > 500 ? 'orange':'' },
-      { label:'Lotes Críticos',    value: lotesCriticos,                     sub: vald ? `${vald.vencidos||0} venc. + ${vald.criticos||0} crít.` : 'vencendo em até 7 dias', cls: lotesCriticos > 0 ? 'orange':'green', color: lotesCriticos ? 'var(--red-l)':'var(--green)' },
-      { label:'Kits Ativos',       value: d.total_kits || 0,                 sub:'configurados',         cls:'blue', color:'var(--blue)' },
-    ];
-    document.getElementById('kpi-grid').innerHTML = kpis.map(c =>
-      `<div class="kpi-card ${c.cls || ''}"><div class="kpi-label">${c.label}</div><div class="kpi-val" style="color:${c.color||'var(--text)'}">${c.value}</div><div class="kpi-sub">${c.sub||''}</div></div>`
-    ).join('');
+    // DRE
+    const res = d.dreResultado;
+    $('k-resultado').textContent = fmtBRL(res);
+    $('k-resultado').style.color = res >= 0 ? 'var(--green)' : 'var(--red-l)';
+    $('k-resultado-sub').textContent = `Rec: ${fmtBRL(d.dreReceitas)} | Desp: ${fmtBRL(d.dreDespesas)}`;
 
-    try {
-      const status = await api('GET', '/api/totvs/status');
-      document.getElementById('alerta-base').style.display = status.base_desatualizada ? 'flex':'none';
-    } catch(e) { document.getElementById('alerta-base').style.display = 'none'; }
+    // Validade
+    $('k-val-alerta').textContent = fmtN(d.validadeAlerta);
+    $('k-val-venc').textContent = `${fmtN(d.validadeVencidos)} vencidos`;
+    if(d.validadeAlerta>0) $('k-val-alerta').classList.add('kpi-alert');
 
-    if (vald && parseInt(vald.vencidos||0) > 0) {
-      const alertEl = document.getElementById('alerta-base');
-      if (alertEl) {
-        alertEl.style.display = 'flex';
-        alertEl.innerHTML = `⚠️ <strong>${vald.vencidos} lote(s) VENCIDO(S)</strong> no ValidaStock — retire imediatamente. <a href="#" onclick="openSys('validade');return false;" style="color:var(--red);font-weight:700;margin-left:8px">Ver →</a>`;
-      }
+    // Perdas
+    $('k-perdas').textContent = fmtBRL(d.perdasMes);
+    $('k-perdas-meta').textContent = d.perdasMeta > 0
+      ? `Meta: ${fmtBRL(d.perdasMeta)} ${d.perdasDentroMeta ? '✅' : '⚠️'}`
+      : 'Meta não definida';
+
+    // Retiradas
+    $('k-retiradas').textContent = fmtBRL(d.retiradasMes);
+
+    // Progresso faturamento
+    if(d.faturamentoMeta > 0) {
+      $('prog-fat').style.display = '';
+      $('prog-mes').textContent = data.mes;
+      $('prog-real').textContent = fmtBRL(d.faturamentoReal);
+      $('prog-meta').textContent = fmtBRL(d.faturamentoMeta);
+      const pct = Math.min(100, d.faturamentoPct);
+      $('prog-pct').textContent = d.faturamentoPct + '%';
+      const bar = $('prog-bar');
+      bar.style.width = pct + '%';
+      bar.className = 'prog-bar' + (pct>=100?' ok' : pct>=70?'' : pct>=50?' warn':' danger');
     }
+
+    // Badges dos cards
+    $('badge-boletos').textContent = d.boletosVencidos > 0
+      ? `⚠️ ${d.boletosVencidos} vencido(s)`
+      : `✅ ${d.boletosVence7d} vence em 7d`;
+    $('badge-boletos').className = 'sys-badge ' + (d.boletosVencidos>0?'danger':'ok');
+
+    $('badge-dre').textContent = res >= 0 ? `✅ ${fmtBRL(res)}` : `⚠️ ${fmtBRL(res)}`;
+    $('badge-dre').className = 'sys-badge ' + (res>=0?'ok':'danger');
+
+    $('badge-validade').textContent = d.validadeVencidos > 0
+      ? `⚠️ ${d.validadeVencidos} vencido(s)`
+      : `✅ ${d.validadeAlerta} em alerta`;
+    $('badge-validade').className = 'sys-badge ' + (d.validadeVencidos>0?'danger':d.validadeAlerta>0?'alert':'ok');
+
+    $('badge-retiradas').textContent = fmtBRL(d.retiradasMes) + ' usado';
+    $('badge-retiradas').className = 'sys-badge';
+
     setSyncStatus('ok');
-  } catch (e) {
+  } catch(e) {
     setSyncStatus('err');
-    console.error('[dashboard]', e.message);
+    console.error('[kpis]', e);
   }
 }
 
-function setSyncStatus(s) {
-  const dot = document.getElementById('ph-dot');
-  const txt = document.getElementById('ph-sync-txt');
-  if (s === 'ok')      { dot.className = 'ph-dot';      txt.textContent = 'API conectada'; }
-  else if (s === 'err'){ dot.className = 'ph-dot err';  txt.textContent = 'sem conexão';   }
-  else                 { dot.className = 'ph-dot warn';  txt.textContent = 'carregando…';  }
-}
-
-function startClock() {
-  const el = document.getElementById('lb-clock');
-  const t = () => { if (el) el.textContent = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); };
-  t(); setInterval(t, 10000);
-}
-
-// ── Open embedded system ──────────────────────────────────────
-function openSys(id) {
-  const perms = getPerms();
-  if (!perms.includes(id)) { toast('Acesso não autorizado.', '#c0392b'); return; }
-  const s = SYS.find(x => x.id === id);
-  if (!s || !s.file) return;
-  document.getElementById('emb-title').textContent = s.icon + ' ' + s.title;
-  const frame = document.getElementById('emb-frame');
-
-  frame.onload = () => {
-    try { frame.contentWindow.postMessage({ type: 'bb_auth', token: TOKEN, user: CUR_USER }, '*'); } catch (e) {}
-    // Reenvia após 300ms — garante que o iframe registrou o listener antes
-    setTimeout(() => {
-      try { frame.contentWindow.postMessage({ type: 'bb_auth', token: TOKEN, user: CUR_USER }, '*'); } catch(e) {}
-    }, 300);
-  };
-  frame.src = s.file + '?v=' + Date.now();
-  showScr('scr-embedded');
-}
-
-function closeEmb() {
-  const frame = document.getElementById('emb-frame');
-
-  frame.src = 'about:blank';
-  showScr('scr-portal');
-  setTimeout(() => loadDashboard(), 600);
-}
-
-// ── Admin: Usuários via API ───────────────────────────────────
-async function loadUserList() {
+async function carregarConfig() {
   try {
-    allUsers = await api('GET', '/auth/usuarios');
-    buildUserList();
-  } catch (e) {
-    document.getElementById('user-list').innerHTML =
-      `<div style="color:var(--red-l);font-size:12px">Erro: ${e.message}</div>`;
-  }
+    const data = await apiFetch('/api/config/sistema');
+    if(data.ok && data.data.nome_empresa) {
+      $('ph-empresa').textContent = data.data.nome_empresa;
+      document.title = data.data.nome_empresa + ' — Gestão';
+    }
+
+    // Carregar badges de produtos
+    const prods = await apiFetch('/api/produtos/kpis');
+    if(prods.ok) {
+      $('badge-produtos').textContent = `${fmtN(prods.data.ativos)} produtos ativos`;
+      $('badge-produtos').className = 'sys-badge ok';
+    }
+  } catch(_) {}
 }
 
-function buildUserList() {
-  document.getElementById('user-list').innerHTML = allUsers.map(u => `
-    <div class="user-item${editId === u.id ? ' sel' : ''}" onclick="selectUser(${u.id})">
-      <div class="ui-av">${(u.nome || 'U').slice(0, 2).toUpperCase()}</div>
-      <div>
-        <div class="ui-name">${u.nome}</div>
-        <div class="ui-role">${u.perfil} · ${u.ativo ? 'ativo' : 'inativo'}</div>
-      </div>
-      ${u.perfil === 'admin' ? '<div class="ui-star">★</div>' : ''}
-    </div>`).join('');
+function setSyncStatus(st) {
+  const dot = $('sync-dot');
+  const txt = $('sync-txt');
+  if(st==='ok')      { dot.className='ph-dot'; txt.textContent='online'; }
+  else if(st==='err'){ dot.className='ph-dot err'; txt.textContent='offline'; }
+  else               { dot.className='ph-dot warn'; txt.textContent='sync...'; }
 }
 
-function selectUser(id) {
-  editId = id;
-  const u = allUsers.find(x => x.id === id);
-  if (!u) return;
-  document.getElementById('edit-title').textContent = '✏️ Editando: ' + u.nome;
-  document.getElementById('eu-name').value  = u.nome || '';
-  document.getElementById('eu-email').value = u.email || '';
-  document.getElementById('eu-pass').value  = '';
-  document.getElementById('eu-role').value  = u.perfil || 'operacao';
-  document.getElementById('eu-del').style.display = u.id === CUR_USER.id ? 'none' : 'inline-flex';
-  document.getElementById('eu-msg').textContent = '';
-  buildUserList();
-}
-
-function newUser() {
-  editId = null;
-  document.getElementById('edit-title').textContent = '➕ Novo Usuário';
-  ['eu-name', 'eu-email', 'eu-pass'].forEach(id => document.getElementById(id).value = '');
-  document.getElementById('eu-role').value = 'operacao';
-  document.getElementById('eu-del').style.display = 'none';
-  document.getElementById('eu-msg').textContent = '';
-  buildUserList();
-}
-
-async function saveUser() {
-  const nome  = document.getElementById('eu-name').value.trim();
-  const email = document.getElementById('eu-email').value.trim();
-  const senha = document.getElementById('eu-pass').value;
-  const perfil= document.getElementById('eu-role').value;
-  const msg   = document.getElementById('eu-msg');
-  if (!nome || !email) { msg.textContent = '⚠️ Nome e e-mail obrigatórios.'; msg.style.color = 'var(--red)'; return; }
+// ── Auto-login se token existir ────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', async () => {
+  const tk = token();
+  if(!tk) return;
   try {
-    if (editId) {
-      const body = { nome, email, perfil, ativo: true };
-      if (senha) body.senha = senha;
-      await api('PUT', '/auth/usuarios/' + editId, body);
-      msg.textContent = '✅ Atualizado.';
-    } else {
-      if (!senha) { msg.textContent = '⚠️ Senha obrigatória para novo usuário.'; msg.style.color = 'var(--red)'; return; }
-      await api('POST', '/auth/usuarios', { nome, email, senha, perfil });
-      msg.textContent = '✅ Usuário criado.';
-    }
-    msg.style.color = 'var(--green)';
-    await loadUserList();
-    setTimeout(() => msg.textContent = '', 3000);
-  } catch (e) {
-    msg.textContent = '⚠️ ' + e.message;
-    msg.style.color = 'var(--red)';
-  }
-}
-
-async function deleteUser() {
-  if (!editId) return;
-  const u = allUsers.find(x => x.id === editId);
-  if (!confirm('Desativar "' + u?.nome + '"?')) return;
-  try {
-    await api('PUT', '/auth/usuarios/' + editId, { nome: u.nome, email: u.email, perfil: u.perfil, ativo: false });
-    toast('Usuário desativado.');
-    editId = null;
-    newUser();
-    await loadUserList();
-  } catch (e) {
-    toast(e.message, '#c0392b');
-  }
-}
-
-// ── Toast ─────────────────────────────────────────────────────
-function toast(msg, color) {
-  const t = document.createElement('div'); t.className = 'bb-toast';
-  t.style.background = color || 'var(--green)'; t.textContent = msg;
-  document.body.appendChild(t);
-  setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity .3s'; setTimeout(() => t.remove(), 300); }, 3000);
-}
-
-// ── Responde pedidos de token dos iframes ──────────────────────────────────
-window.addEventListener('message', async e => {
-  if (!e.data || !e.data.type) return;
-  const frame = document.getElementById('emb-frame');
-
-  // Iframe pedindo o token
-  if (e.data.type === 'bb_request_auth') {
-    if (frame && frame.contentWindow) {
-      try { frame.contentWindow.postMessage({ type: 'bb_auth', token: TOKEN, user: CUR_USER }, '*'); } catch(err) {}
-    }
-  }
-
-  // Iframe pedindo para salvar dados no banco (portal faz a chamada com o token)
-  if (e.data.type === 'bb_api_request' && TOKEN) {
-    const { reqId, method, path, body } = e.data;
-    try {
-      const resp = await fetch(path, {
-        method: method || 'GET',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + TOKEN },
-        body: body ? JSON.stringify(body) : undefined
-      });
-      const data = await resp.json();
-      if (frame && frame.contentWindow) {
-        frame.contentWindow.postMessage({ type: 'bb_api_response', reqId, data }, '*');
-      }
-    } catch(err) {
-      if (frame && frame.contentWindow) {
-        frame.contentWindow.postMessage({ type: 'bb_api_response', reqId, data: { ok: false, erro: err.message } }, '*');
-      }
-    }
-  }
+    const data = await apiFetch('/auth/me');
+    if(data.ok) { usuario = data.data; entrarNoPortal(); }
+    else sessionStorage.removeItem('bb_token');
+  } catch(_) { sessionStorage.removeItem('bb_token'); }
 });
 
-// ── Init ──────────────────────────────────────────────────────
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeEmb(); });
-
-// Auto-restore session
-if (TOKEN && CUR_USER) {
-  showScr('scr-portal');
-  initPortal();
-} else {
-  setTimeout(() => document.getElementById('li-u').focus(), 80);
-}
+// ── Recebe mensagens dos iframes (logout, etc) ─────────────────────────────
+window.addEventListener('message', e => {
+  if(e.data?.type === 'bb_logout') fazerLogout();
+  if(e.data?.type === 'bb_navigate') showTab(e.data.tab);
+});
 </script>
 </body>
 </html>

@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Produtos & Kits — Bom Beef</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="/js/api.js"></script>
+<style>
+:root{--red:#8B0000;--red-l:#C0392B;--gold:#C9A044;--green:#1a7a4a;--orange:#c76b00;--blue:#1a5c8a;
+  --bg:#f7f4f0;--white:#fff;--text:#1a1a1a;--muted:#7a7068;--border:#e8e0d8;--shadow:0 2px 12px rgba(0,0,0,.08);}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
+.ph{background:var(--green);padding:12px 22px;display:flex;align-items:center;gap:10px;box-shadow:0 2px 12px rgba(26,122,74,.3);}
+.ph h2{font-family:'Playfair Display',serif;font-size:17px;color:#fff;font-weight:700;}
+.ph-sub{font-size:11px;color:rgba(255,255,255,.6);margin-left:auto;}
+.body{padding:22px 20px;max-width:1300px;margin:0 auto;}
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:20px;}
+.kc{background:var(--white);border:1px solid var(--border);border-radius:10px;padding:14px;border-left:4px solid var(--green);box-shadow:var(--shadow);}
+.kc-l{font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);font-weight:600;margin-bottom:4px;}
+.kc-v{font-size:20px;font-weight:700;font-family:'DM Mono',monospace;}
+/* tabs */
+.tabs{display:flex;gap:0;background:var(--white);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:16px;box-shadow:var(--shadow);}
+.tab{flex:1;padding:10px;text-align:center;cursor:pointer;font-size:13px;font-weight:600;color:var(--muted);border:none;background:none;font-family:'DM Sans',sans-serif;transition:all .15s;}
+.tab.active{background:var(--green);color:#fff;}
+/* toolbar */
+.toolbar{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px;align-items:center;}
+.btn{padding:8px 16px;border-radius:8px;border:none;cursor:pointer;font-size:13px;font-weight:600;font-family:'DM Sans',sans-serif;transition:all .15s;display:inline-flex;align-items:center;gap:6px;}
+.btn-p{background:var(--green);color:#fff;} .btn-p:hover{filter:brightness(1.1);}
+.btn-s{background:var(--white);color:var(--text);border:1px solid var(--border);} .btn-s:hover{border-color:var(--green);color:var(--green);}
+.search-wrap{flex:1;min-width:180px;position:relative;}
+.search-wrap input{width:100%;padding:8px 12px 8px 34px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--white);}
+.search-wrap::before{content:'🔍';position:absolute;left:10px;top:50%;transform:translateY(-50%);}
+/* tabela */
+.card{background:var(--white);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);overflow:hidden;}
+.tbl{width:100%;border-collapse:collapse;}
+.tbl th{background:#f0faf4;font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:700;padding:10px 12px;text-align:left;border-bottom:2px solid var(--border);}
+.tbl td{padding:10px 12px;font-size:13px;border-bottom:1px solid #f5efe8;vertical-align:middle;}
+.tbl tr:hover td{background:#f7fdf9;}
+.act-btn{padding:4px 10px;border:1px solid var(--border);border-radius:6px;background:var(--white);cursor:pointer;font-size:12px;margin-right:3px;}
+.act-btn:hover{background:var(--bg);}
+.pill{display:inline-block;padding:2px 9px;border-radius:8px;font-size:11px;font-weight:600;}
+.pill-ok{background:#d1e7dd;color:#0a4a22;} .pill-off{background:#f8d7da;color:#721c24;}
+/* modal */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;align-items:center;justify-content:center;padding:16px;}
+.modal-bg.open{display:flex;}
+.modal{background:var(--white);border-radius:14px;width:100%;max-width:580px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3);}
+.modal-head{padding:18px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+.modal-head h3{font-family:'Playfair Display',serif;font-size:16px;color:var(--green);}
+.modal-close{background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);}
+.modal-body{padding:20px 22px;}
+.fg{margin-bottom:12px;}
+.fg label{display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);margin-bottom:5px;}
+.fg input,.fg select{width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:'DM Sans',sans-serif;}
+.fg input:focus,.fg select:focus{outline:none;border-color:var(--green);}
+.fg-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.fg-row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
+.modal-foot{padding:14px 22px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end;}
+/* kit itens */
+.kit-item{display:grid;grid-template-columns:1fr 2fr 80px 90px 28px;gap:8px;align-items:center;padding:8px;background:#f9f9f9;border-radius:8px;margin-bottom:8px;}
+.kit-item input{padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:'DM Sans',sans-serif;}
+.kit-item-del{background:none;border:none;cursor:pointer;font-size:16px;color:var(--red-l);}
+.kit-custo{background:#f0faf4;border-radius:8px;padding:12px;font-size:13px;font-weight:600;text-align:center;margin-top:10px;}
+/* upload */
+.upload-zone{border:2px dashed var(--border);border-radius:10px;padding:24px;text-align:center;cursor:pointer;transition:.2s;margin-bottom:12px;}
+.upload-zone:hover{border-color:var(--green);}
+.empty{text-align:center;padding:40px;color:var(--muted);}
+</style>
+</head>
+<body>
+<div class="ph"><span style="font-size:20px">📦</span><h2>Produtos & Kits</h2><div class="ph-sub" id="ph-sub">—</div></div>
+<div class="body">
+  <div class="kpi-row">
+    <div class="kc"><div class="kc-l">Produtos Ativos</div><div class="kc-v" id="k-ativos">—</div></div>
+    <div class="kc"><div class="kc-l">Fornecedores</div><div class="kc-v" id="k-forn">—</div></div>
+    <div class="kc"><div class="kc-l">Preço Médio</div><div class="kc-v" id="k-preco">—</div></div>
+    <div class="kc"><div class="kc-l">Kits Ativos</div><div class="kc-v" id="k-kits">—</div></div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" onclick="showSection('produtos')">📦 Produtos</button>
+    <button class="tab" onclick="showSection('kits')">🎁 Kits</button>
+  </div>
+
+  <!-- PRODUTOS -->
+  <div id="sec-produtos">
+    <div class="toolbar">
+      <button class="btn btn-p" onclick="abrirProd()">＋ Novo Produto</button>
+      <button class="btn btn-s" onclick="abrirImport()">📥 Importar PDV</button>
+      <div class="search-wrap"><input type="text" id="busca-prod" placeholder="Buscar código, descrição..." oninput="filtrarProd()"></div>
+    </div>
+    <div class="card">
+      <table class="tbl">
+        <thead><tr><th>Código</th><th>Descrição</th><th>Fornecedor</th><th>Custo</th><th>Venda</th><th>Margem</th><th>Status</th><th>Ações</th></tr></thead>
+        <tbody id="tbody-prod"></tbody>
+      </table>
+      <div class="empty" id="empty-prod" style="display:none"><p>Nenhum produto encontrado</p></div>
+    </div>
+  </div>
+
+  <!-- KITS -->
+  <div id="sec-kits" style="display:none">
+    <div class="toolbar">
+      <button class="btn btn-p" onclick="abrirKit()">＋ Novo Kit</button>
+      <div class="search-wrap"><input type="text" id="busca-kit" placeholder="Buscar código, nome do kit..." oninput="filtrarKit()"></div>
+    </div>
+    <div class="card">
+      <table class="tbl">
+        <thead><tr><th>Código</th><th>Nome</th><th>Custo Total</th><th>Preço Venda</th><th>Margem</th><th>Itens</th><th>Status</th><th>Ações</th></tr></thead>
+        <tbody id="tbody-kit"></tbody>
+      </table>
+      <div class="empty" id="empty-kit" style="display:none"><p>Nenhum kit encontrado</p></div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Produto -->
+<div class="modal-bg" id="modal-prod">
+  <div class="modal">
+    <div class="modal-head"><h3 id="prod-title">Novo Produto</h3><button class="modal-close" onclick="fecharProd()">×</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="p-id">
+      <div class="fg-row">
+        <div class="fg"><label>Código *</label><input id="p-cod" placeholder="SKU001"></div>
+        <div class="fg"><label>Unidade</label><input id="p-un" value="un" placeholder="un/kg/cx"></div>
+      </div>
+      <div class="fg"><label>Descrição *</label><input id="p-desc" placeholder="Nome completo do produto"></div>
+      <div class="fg"><label>Fornecedor</label><input id="p-forn" placeholder="Nome do fornecedor"></div>
+      <div class="fg"><label>Categoria</label><input id="p-cat" placeholder="Proteínas, Embalagens..."></div>
+      <div class="fg-row">
+        <div class="fg"><label>Preço de Custo</label><input type="number" id="p-custo" step="0.0001" placeholder="0,0000"></div>
+        <div class="fg"><label>Preço de Venda</label><input type="number" id="p-venda" step="0.0001" placeholder="0,0000"></div>
+      </div>
+      <div id="p-margem-info" style="font-size:12px;color:var(--green);text-align:right;margin-top:-8px;margin-bottom:10px"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-s" onclick="fecharProd()">Cancelar</button>
+      <button class="btn btn-p" onclick="salvarProd()">💾 Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Kit -->
+<div class="modal-bg" id="modal-kit">
+  <div class="modal" style="max-width:680px">
+    <div class="modal-head"><h3 id="kit-title">Novo Kit</h3><button class="modal-close" onclick="fecharKit()">×</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="k-id">
+      <div class="fg-row">
+        <div class="fg"><label>Código *</label><input id="k-cod" placeholder="KIT001"></div>
+        <div class="fg"><label>Preço de Venda</label><input type="number" id="k-pvenda" step="0.01" placeholder="0,00" oninput="calcKitMargem()"></div>
+      </div>
+      <div class="fg"><label>Nome do Kit *</label><input id="k-nome" placeholder="Nome comercial do kit"></div>
+      <div class="fg"><label>Descrição</label><input id="k-desc" placeholder="Descrição opcional"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div style="font-size:13px;font-weight:600;color:var(--muted)">Itens do Kit</div>
+        <button class="btn btn-s" style="padding:5px 12px;font-size:12px" onclick="addKitItem()">＋ Adicionar Item</button>
+      </div>
+      <div id="kit-itens-list"></div>
+      <div class="kit-custo" id="kit-custo-info">Custo total: R$ 0,00 · Margem: — %</div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-s" onclick="fecharKit()">Cancelar</button>
+      <button class="btn btn-p" onclick="salvarKit()">💾 Salvar Kit</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Importar -->
+<div class="modal-bg" id="modal-import">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-head"><h3>Importar Planilha PDV</h3><button class="modal-close" onclick="document.getElementById('modal-import').classList.remove('open')">×</button></div>
+    <div class="modal-body">
+      <div class="upload-zone" onclick="document.getElementById('file-import').click()">
+        <div style="font-size:36px">📊</div>
+        <p style="font-size:13px;color:var(--muted);margin-top:8px">Clique para selecionar a planilha XLSX</p>
+        <p style="font-size:11px;color:var(--muted);margin-top:4px">Colunas: Código, Descrição, Fornecedor, Custo, Venda</p>
+      </div>
+      <input type="file" id="file-import" accept=".xlsx,.xls,.csv" style="display:none" onchange="processarImport(this)">
+      <div id="import-result" style="display:none;font-size:13px;padding:12px;background:#f0faf4;border-radius:8px;margin-top:8px"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const {api,fmt,toast} = BB;
+let produtos=[], kits=[], kitItensModal=[];
+
+window.onBBReady = () => { carregarKPIs(); carregarProd(); carregarKits(); };
+if(api.token()) { carregarKPIs(); carregarProd(); carregarKits(); }
+
+function showSection(s){
+  document.getElementById('sec-produtos').style.display = s==='produtos'?'':'none';
+  document.getElementById('sec-kits').style.display = s==='kits'?'':'none';
+  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',(s==='produtos'&&i===0)||(s==='kits'&&i===1)));
+}
+
+// ── KPIs ───────────────────────────────────────────────────────────────────
+async function carregarKPIs(){
+  const d = await api.get('/api/produtos/kpis');
+  if(!d.ok) return;
+  document.getElementById('k-ativos').textContent = fmt.n(d.data.ativos);
+  document.getElementById('k-forn').textContent   = fmt.n(d.data.fornecedores);
+  document.getElementById('k-preco').textContent  = fmt.brl(d.data.precoMedio);
+  document.getElementById('ph-sub').textContent   = `${d.data.ativos} produtos · ${d.data.fornecedores} fornecedores`;
+}
+
+// ── Produtos ───────────────────────────────────────────────────────────────
+async function carregarProd(){
+  const d = await api.get('/api/produtos?ativo=true');
+  if(!d.ok) return;
+  produtos = d.data;
+  renderProd(produtos);
+}
+
+function filtrarProd(){
+  const q = document.getElementById('busca-prod').value.toLowerCase();
+  renderProd(produtos.filter(p=>
+    p.codigo.toLowerCase().includes(q) ||
+    p.descricao.toLowerCase().includes(q) ||
+    (p.fornecedor||'').toLowerCase().includes(q)
+  ));
+}
+
+function renderProd(lista){
+  const tb = document.getElementById('tbody-prod');
+  const em = document.getElementById('empty-prod');
+  if(!lista.length){ tb.innerHTML=''; em.style.display=''; return; }
+  em.style.display='none';
+  tb.innerHTML = lista.map(p=>{
+    const custo = parseFloat(p.preco_custo||0);
+    const venda = parseFloat(p.preco_venda||0);
+    const margem = custo>0&&venda>0 ? (((venda-custo)/venda)*100).toFixed(1)+'%' : '—';
+    return `<tr>
+      <td style="font-family:'DM Mono',monospace;font-size:12px">${p.codigo}</td>
+      <td><b>${p.descricao}</b>${p.categoria?`<br><small style="color:var(--muted)">${p.categoria}</small>`:''}</td>
+      <td>${p.fornecedor||'—'}</td>
+      <td style="font-family:'DM Mono',monospace">${fmt.brl(custo)}</td>
+      <td style="font-family:'DM Mono',monospace;font-weight:600">${fmt.brl(venda)}</td>
+      <td style="color:var(--green);font-weight:600">${margem}</td>
+      <td><span class="pill ${p.ativo?'pill-ok':'pill-off'}">${p.ativo?'Ativo':'Inativo'}</span></td>
+      <td>
+        <button class="act-btn" onclick="abrirProd('${p.id}')">✏️</button>
+        <button class="act-btn" onclick="inativarProd('${p.id}')" style="color:var(--red-l)">🗑</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function abrirProd(id){
+  const p = id ? produtos.find(x=>x.id==id) : null;
+  document.getElementById('prod-title').textContent = p ? 'Editar Produto' : 'Novo Produto';
+  document.getElementById('p-id').value    = p?.id||'';
+  document.getElementById('p-cod').value   = p?.codigo||'';
+  document.getElementById('p-desc').value  = p?.descricao||'';
+  document.getElementById('p-forn').value  = p?.fornecedor||'';
+  document.getElementById('p-cat').value   = p?.categoria||'';
+  document.getElementById('p-custo').value = p?.preco_custo||'';
+  document.getElementById('p-venda').value = p?.preco_venda||'';
+  document.getElementById('p-un').value    = p?.unidade||'un';
+  document.getElementById('modal-prod').classList.add('open');
+}
+function fecharProd(){ document.getElementById('modal-prod').classList.remove('open'); }
+
+// Calcula margem ao editar preços
+['p-custo','p-venda'].forEach(id=>{
+  document.getElementById(id).addEventListener('input',()=>{
+    const c=parseFloat(document.getElementById('p-custo').value)||0;
+    const v=parseFloat(document.getElementById('p-venda').value)||0;
+    const el=document.getElementById('p-margem-info');
+    if(c>0&&v>0) el.textContent=`Margem: ${(((v-c)/v)*100).toFixed(1)}%`;
+    else el.textContent='';
+  });
+});
+
+async function salvarProd(){
+  const id = document.getElementById('p-id').value;
+  const body = {
+    codigo:     document.getElementById('p-cod').value.trim(),
+    descricao:  document.getElementById('p-desc').value.trim(),
+    fornecedor: document.getElementById('p-forn').value.trim(),
+    categoria:  document.getElementById('p-cat').value.trim(),
+    precoCusto: parseFloat(document.getElementById('p-custo').value)||0,
+    precoVenda: parseFloat(document.getElementById('p-venda').value)||0,
+    unidade:    document.getElementById('p-un').value||'un',
+  };
+  if(!body.codigo||!body.descricao){ toast('Código e descrição são obrigatórios'); return; }
+  const d = id ? await api.put(`/api/produtos/${id}`,body) : await api.post('/api/produtos',body);
+  if(!d.ok){ toast('Erro: '+d.erro); return; }
+  toast(id?'Produto atualizado!':'Produto criado!');
+  fecharProd(); carregarProd(); carregarKPIs();
+}
+
+async function inativarProd(id){
+  if(!confirm('Inativar este produto?')) return;
+  const d = await api.delete(`/api/produtos/${id}`);
+  if(d.ok){ toast('Produto inativado'); carregarProd(); carregarKPIs(); }
+  else toast('Erro: '+d.erro);
+}
+
+// ── Kits ───────────────────────────────────────────────────────────────────
+async function carregarKits(){
+  const d = await api.get('/api/kits');
+  if(!d.ok) return;
+  kits = d.data;
+  document.getElementById('k-kits').textContent = fmt.n(kits.length);
+  renderKits(kits);
+}
+
+function filtrarKit(){
+  const q = document.getElementById('busca-kit').value.toLowerCase();
+  renderKits(kits.filter(k=>k.codigo.toLowerCase().includes(q)||k.nome.toLowerCase().includes(q)));
+}
+
+function renderKits(lista){
+  const tb = document.getElementById('tbody-kit');
+  const em = document.getElementById('empty-kit');
+  if(!lista.length){ tb.innerHTML=''; em.style.display=''; return; }
+  em.style.display='none';
+  tb.innerHTML = lista.map(k=>{
+    const custo = parseFloat(k.custo_total||0);
+    const venda = parseFloat(k.preco_venda||0);
+    const margem = custo>0&&venda>0 ? (((venda-custo)/venda)*100).toFixed(1)+'%' : '—';
+    return `<tr>
+      <td style="font-family:'DM Mono',monospace;font-size:12px">${k.codigo}</td>
+      <td><b>${k.nome}</b>${k.descricao?`<br><small style="color:var(--muted)">${k.descricao}</small>`:''}</td>
+      <td style="font-family:'DM Mono',monospace">${fmt.brl(custo)}</td>
+      <td style="font-family:'DM Mono',monospace;font-weight:600">${fmt.brl(venda)}</td>
+      <td style="color:var(--green);font-weight:600">${margem}</td>
+      <td style="font-size:12px">${(k.itens||[]).length} item(ns)</td>
+      <td><span class="pill ${k.ativo?'pill-ok':'pill-off'}">${k.ativo?'Ativo':'Inativo'}</span></td>
+      <td>
+        <button class="act-btn" onclick="abrirKit('${k.id}')">✏️</button>
+        <button class="act-btn" onclick="excluirKit('${k.id}')" style="color:var(--red-l)">🗑</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function abrirKit(id){
+  const k = id ? kits.find(x=>x.id==id) : null;
+  document.getElementById('kit-title').textContent = k ? 'Editar Kit' : 'Novo Kit';
+  document.getElementById('k-id').value     = k?.id||'';
+  document.getElementById('k-cod').value    = k?.codigo||'';
+  document.getElementById('k-nome').value   = k?.nome||'';
+  document.getElementById('k-desc').value   = k?.descricao||'';
+  document.getElementById('k-pvenda').value = k?.preco_venda||'';
+  kitItensModal = k?.itens ? k.itens.map(i=>({...i})) : [];
+  renderKitItens();
+  document.getElementById('modal-kit').classList.add('open');
+}
+function fecharKit(){ document.getElementById('modal-kit').classList.remove('open'); }
+
+function renderKitItens(){
+  const el = document.getElementById('kit-itens-list');
+  if(!kitItensModal.length){
+    el.innerHTML = '<p style="text-align:center;color:var(--muted);font-size:13px;padding:12px">Nenhum item adicionado</p>';
+    atualizarCustoKit(); return;
+  }
+  el.innerHTML = kitItensModal.map((item,i)=>`
+    <div class="kit-item">
+      <input placeholder="Código" value="${item.codigo_produto||''}" oninput="kitItensModal[${i}].codigo_produto=this.value;buscarProdKit(${i},this.value)">
+      <input placeholder="Descrição" value="${item.descricao_produto||item.prod_desc||''}" oninput="kitItensModal[${i}].descricao_produto=this.value">
+      <input type="number" placeholder="Qtd" value="${item.quantidade||1}" min="0.001" step="0.001" oninput="kitItensModal[${i}].quantidade=parseFloat(this.value)||1;atualizarCustoKit()">
+      <input type="number" placeholder="Custo un." value="${item.preco_custo_unitario||item.custo_atual||''}" step="0.0001" oninput="kitItensModal[${i}].preco_custo_unitario=parseFloat(this.value)||0;atualizarCustoKit()">
+      <button class="kit-item-del" onclick="removerKitItem(${i})">×</button>
+    </div>`).join('');
+  atualizarCustoKit();
+}
+
+async function buscarProdKit(idx, cod){
+  if(cod.length<2) return;
+  const d = await api.get(`/api/produtos/${cod}`);
+  if(d.ok){
+    kitItensModal[idx].descricao_produto = d.data.descricao;
+    kitItensModal[idx].preco_custo_unitario = parseFloat(d.data.preco_custo);
+    renderKitItens();
+  }
+}
+
+function addKitItem(){ kitItensModal.push({codigo_produto:'',descricao_produto:'',quantidade:1,preco_custo_unitario:0}); renderKitItens(); }
+function removerKitItem(i){ kitItensModal.splice(i,1); renderKitItens(); }
+
+function atualizarCustoKit(){
+  const custo = kitItensModal.reduce((s,i)=>s+(parseFloat(i.quantidade||1)*parseFloat(i.preco_custo_unitario||0)),0);
+  const venda = parseFloat(document.getElementById('k-pvenda').value)||0;
+  const margem = custo>0&&venda>0 ? (((venda-custo)/venda)*100).toFixed(1) : '—';
+  document.getElementById('kit-custo-info').textContent = `Custo total: ${fmt.brl(custo)}  ·  Margem: ${margem}%`;
+}
+
+function calcKitMargem(){ atualizarCustoKit(); }
+
+async function salvarKit(){
+  const id = document.getElementById('k-id').value;
+  const body = {
+    codigo:     document.getElementById('k-cod').value.trim(),
+    nome:       document.getElementById('k-nome').value.trim(),
+    descricao:  document.getElementById('k-desc').value.trim(),
+    precoVenda: parseFloat(document.getElementById('k-pvenda').value)||0,
+    itens: kitItensModal.map(i=>({
+      codigo: i.codigo_produto, descricao: i.descricao_produto||i.prod_desc,
+      quantidade: parseFloat(i.quantidade||1),
+      precoCusto: parseFloat(i.preco_custo_unitario||0),
+    })),
+  };
+  if(!body.codigo||!body.nome){ toast('Código e nome são obrigatórios'); return; }
+  const d = id ? await api.put(`/api/kits/${id}`,body) : await api.post('/api/kits',body);
+  if(!d.ok){ toast('Erro: '+d.erro); return; }
+  toast(id?'Kit atualizado!':'Kit criado!');
+  fecharKit(); carregarKits();
+}
+
+async function excluirKit(id){
+  if(!confirm('Inativar este kit?')) return;
+  const d = await api.delete(`/api/kits/${id}`);
+  if(d.ok){ toast('Kit inativado'); carregarKits(); }
+  else toast('Erro: '+d.erro);
+}
+
+// ── Importar PDV ───────────────────────────────────────────────────────────
+function abrirImport(){ document.getElementById('modal-import').classList.add('open'); }
+
+async function processarImport(inp){
+  const f = inp.files[0]; if(!f) return;
+  const fd = new FormData(); fd.append('arquivo',f);
+  toast('Importando planilha...');
+  const d = await api.upload('/api/produtos/import', fd);
+  const el = document.getElementById('import-result');
+  el.style.display='';
+  if(!d.ok){ el.style.background='#fdf2f2'; el.innerHTML=`❌ Erro: ${d.erro}`; return; }
+  el.innerHTML = `✅ <b>Importação concluída!</b><br>
+    Inseridos: ${d.inseridos} · Atualizados: ${d.atualizados} · Erros: ${d.erros}
+    ${d.detalheErros?.length?`<br><small style="color:var(--red-l)">${d.detalheErros.map(e=>`Linha ${e.linha}: ${e.erro}`).join('<br>')}</small>`:''}`;
+  carregarProd(); carregarKPIs();
+}
+</script>
+</body>
+</html>

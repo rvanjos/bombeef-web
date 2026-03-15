@@ -1,151 +1,202 @@
+/**
+ * routes/perdas.js — M4: Perdas e Metas
+ *
+ * Rotas:
+ *   GET    /api/perdas              → lista perdas
+ *   POST   /api/perdas              → registra perda
+ *   PUT    /api/perdas/:id          → edita perda
+ *   DELETE /api/perdas/:id          → remove perda
+ *   GET    /api/perdas/meta/:mes    → status da meta de perda no mês
+ *   GET    /api/perdas/ranking      → ranking de perdas por funcionário
+ */
+
 const express    = require('express');
 const autenticar = require('../middleware/auth');
 
-module.exports = (pool) => {
-  const router = express.Router();
+module.exports = function (pool) {
+  const r = express.Router();
+  r.use(autenticar());
 
-  // ── GET /api/perdas ──────────────────────────────────────
-  router.get('/', autenticar(), async (req, res) => {
-    const { mes, codigo_produto, limit = 200, offset = 0 } = req.query;
-    const where  = ['1=1'];
-    const params = [];
+  // ── Init tabela ────────────────────────────────────────────────────────────
+  async function initTable() {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS perdas (
+        id                SERIAL PRIMARY KEY,
+        validade_item_id  INTEGER REFERENCES validade_items(id),
+        produto_id        INTEGER REFERENCES produtos(id),
+        descricao         TEXT NOT NULL,
+        motivo            TEXT DEFAULT 'vencimento'
+                          CHECK (motivo IN ('vencimento','avaria','furto','doacao','outros')),
+        qtd_unidades      INTEGER DEFAULT 0,
+        valor_perda       NUMERIC(10,2) DEFAULT 0,
+        funcionario_id    INTEGER REFERENCES funcionarios(id),
+        dt_perda          DATE DEFAULT CURRENT_DATE,
+        mes               TEXT,
+        observacao        TEXT,
+        usuario_id        INTEGER,
+        criado_em         TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_perdas_mes          ON perdas(mes);
+      CREATE INDEX IF NOT EXISTS idx_perdas_funcionario  ON perdas(funcionario_id);
+      CREATE INDEX IF NOT EXISTS idx_perdas_dt           ON perdas(dt_perda);
+    `);
+  }
+  initTable().catch(e => console.error('[perdas] initTable:', e.message));
 
-    if (mes) {
-      // mes = YYYY-MM
-      params.push(mes);
-      where.push(`TO_CHAR(p.data_perda, 'YYYY-MM') = $${params.length}`);
-    }
-    if (codigo_produto) where.push(`p.codigo_produto = $${params.push(codigo_produto)}`);
-
+  // ── GET /meta/:mes ─────────────────────────────────────────────────────────
+  r.get('/meta/:mes', async (req, res) => {
     try {
-      const { rows } = await pool.query(
-        `SELECT p.*,
-                pm.descricao_produto, pm.categoria,
-                l.lote AS lote_codigo, l.data_validade AS lote_validade
-         FROM perdas p
-         JOIN produtos_mestre pm ON pm.codigo_produto = p.codigo_produto
-         LEFT JOIN lotes_estoque l ON l.id = p.lote_id
-         WHERE ${where.join(' AND ')}
-         ORDER BY p.data_perda DESC, p.criado_em DESC
-         LIMIT $${params.push(parseInt(limit))} OFFSET $${params.push(parseInt(offset))}`,
-        params
+      const mes = req.params.mes; // MM/YYYY
+
+      // Total de perdas do mês
+      const { rows: perdas } = await pool.query(
+        `SELECT COALESCE(SUM(valor_perda), 0) AS total FROM perdas WHERE mes = $1`, [mes]
       );
-      res.json(rows);
-    } catch (err) {
-      console.error('[perdas GET /]', err.message);
-      res.status(500).json({ erro: 'Erro ao buscar perdas.' });
-    }
+      const totalPerdas = parseFloat(perdas[0].total);
+
+      // Meta do mês
+      const { rows: metas } = await pool.query(
+        `SELECT faturamento_real, meta_perda_pct FROM metas WHERE mes = $1 LIMIT 1`, [mes]
+      );
+      const meta = metas[0] || {};
+      const faturamento  = parseFloat(meta.faturamento_real || 0);
+      const metaPct      = parseFloat(meta.meta_perda_pct || 0);
+      const metaValor    = faturamento > 0 ? (faturamento * metaPct / 100) : 0;
+      const perdaPct     = faturamento > 0 ? (totalPerdas / faturamento * 100) : 0;
+
+      res.json({
+        ok: true, data: {
+          mes,
+          totalPerdas,
+          faturamento,
+          metaPct,
+          metaValor,
+          perdaPct: parseFloat(perdaPct.toFixed(2)),
+          dentroMeta: metaValor === 0 ? null : totalPerdas <= metaValor,
+        }
+      });
+    } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
-  // ── GET /api/perdas/resumo ───────────────────────────────
-  router.get('/resumo', autenticar(), async (req, res) => {
+  // ── GET /ranking ───────────────────────────────────────────────────────────
+  r.get('/ranking', async (req, res) => {
     try {
-      const { rows } = await pool.query('SELECT * FROM vw_perdas_mes_atual ORDER BY valor_total_perdido DESC LIMIT 20');
-      res.json(rows);
-    } catch (err) {
-      res.status(500).json({ erro: 'Erro ao buscar resumo de perdas.' });
-    }
+      const { mes } = req.query;
+      const conds = [], params = [];
+      if (mes) { params.push(mes); conds.push(`p.mes = $${params.length}`); }
+      const where = conds.length ? 'WHERE ' + conds.join(' AND ') : '';
+
+      const { rows } = await pool.query(`
+        SELECT
+          f.id AS funcionario_id, f.nome,
+          COUNT(p.id) AS total_ocorrencias,
+          COALESCE(SUM(p.valor_perda), 0) AS total_valor,
+          COALESCE(SUM(p.qtd_unidades), 0) AS total_unidades
+        FROM funcionarios f
+        LEFT JOIN perdas p ON p.funcionario_id = f.id ${where}
+        WHERE f.ativo = true
+        GROUP BY f.id, f.nome
+        ORDER BY total_valor DESC
+      `, params);
+      res.json({ ok: true, data: rows });
+    } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
-  // ── GET /api/perdas/top-produtos ─────────────────────────
-  router.get('/top-produtos', autenticar(), async (req, res) => {
-    const { meses = 3 } = req.query;
+  // ── GET / ──────────────────────────────────────────────────────────────────
+  r.get('/', async (req, res) => {
     try {
-      const { rows } = await pool.query(
-        `SELECT p.codigo_produto, pm.descricao_produto,
-                COUNT(*) AS ocorrencias,
-                SUM(p.quantidade) AS quantidade_total,
-                SUM(p.valor_estimado) AS valor_total
-         FROM perdas p
-         JOIN produtos_mestre pm ON pm.codigo_produto = p.codigo_produto
-         WHERE p.data_perda >= CURRENT_DATE - ($1 * INTERVAL '1 month')
-         GROUP BY p.codigo_produto, pm.descricao_produto
-         ORDER BY valor_total DESC NULLS LAST
-         LIMIT 10`,
-        [parseInt(meses)]
-      );
-      res.json(rows);
-    } catch (err) {
-      res.status(500).json({ erro: 'Erro ao buscar top produtos de perda.' });
-    }
+      const { mes, funcionario_id, motivo } = req.query;
+      const conds = [], params = [];
+      if (mes) { params.push(mes); conds.push(`p.mes = $${params.length}`); }
+      if (funcionario_id) { params.push(parseInt(funcionario_id)); conds.push(`p.funcionario_id = $${params.length}`); }
+      if (motivo) { params.push(motivo); conds.push(`p.motivo = $${params.length}`); }
+
+      const where = conds.length ? 'WHERE ' + conds.join(' AND ') : '';
+      const { rows } = await pool.query(`
+        SELECT p.*, f.nome AS funcionario_nome, pr.descricao AS produto_descricao
+        FROM perdas p
+        LEFT JOIN funcionarios f ON f.id = p.funcionario_id
+        LEFT JOIN produtos pr ON pr.id = p.produto_id
+        ${where}
+        ORDER BY p.dt_perda DESC, p.id DESC
+      `, params);
+      res.json({ ok: true, data: rows, total: rows.length });
+    } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
-  // ── POST /api/perdas ─────────────────────────────────────
-  router.post('/', autenticar(['admin','gerente','estoque','operacao']), async (req, res) => {
-    const {
-      codigo_produto, lote_id, data_perda, quantidade,
-      motivo, tipo_motivo, funcionario_responsavel, observacao
-    } = req.body;
-
-    if (!codigo_produto || !quantidade)
-      return res.status(400).json({ erro: 'codigo_produto e quantidade são obrigatórios.' });
-
-    const client = await pool.connect();
+  // ── POST / ─────────────────────────────────────────────────────────────────
+  r.post('/', async (req, res) => {
+    const p = req.body;
+    if (!p.descricao) return res.status(400).json({ ok: false, erro: 'descricao obrigatória' });
     try {
-      await client.query('BEGIN');
+      // Calcula valor se não informado (custo × qtd)
+      let valor = parseFloat(p.valorPerda || 0);
+      if (!valor && p.produtoId && p.qtdUnidades) {
+        const prod = await pool.query(`SELECT preco_custo FROM produtos WHERE id = $1`, [p.produtoId]);
+        if (prod.rows.length) valor = parseFloat(prod.rows[0].preco_custo) * parseInt(p.qtdUnidades);
+      }
 
-      // Buscar preço de custo atual do produto para valor_estimado
-      const { rows: [prod] } = await client.query(
-        'SELECT preco_custo FROM produtos_mestre WHERE codigo_produto = $1',
-        [codigo_produto]
-      );
-      if (!prod) { await client.query('ROLLBACK'); return res.status(400).json({ erro: 'Produto não encontrado.' }); }
+      const dtPerda = p.dtPerda || new Date().toISOString().slice(0, 10);
+      const mes     = p.mes || (dtPerda.slice(5, 7) + '/' + dtPerda.slice(0, 4));
 
-      const qtd = parseFloat(quantidade);
-      const valorEstimado = prod.preco_custo ? parseFloat((qtd * prod.preco_custo).toFixed(2)) : null;
+      const { rows } = await pool.query(`
+        INSERT INTO perdas
+          (validade_item_id, produto_id, descricao, motivo, qtd_unidades,
+           valor_perda, funcionario_id, dt_perda, mes, observacao, usuario_id)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+        RETURNING *
+      `, [
+        p.validadeItemId || null, p.produtoId || null, p.descricao,
+        p.motivo || 'vencimento', parseInt(p.qtdUnidades || 0),
+        valor, p.funcionarioId || null, dtPerda, mes, p.observacao || null, req.user.id,
+      ]);
 
-      const { rows } = await client.query(
-        `INSERT INTO perdas
-           (codigo_produto, lote_id, data_perda, quantidade, motivo, tipo_motivo,
-            valor_estimado, preco_custo_referencia, funcionario_responsavel,
-            usuario_lancamento, observacao)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
-         RETURNING *`,
-        [
-          codigo_produto,
-          lote_id || null,
-          data_perda || new Date().toISOString().split('T')[0],
-          qtd,
-          motivo || null,
-          tipo_motivo || null,
-          valorEstimado,
-          prod.preco_custo || null,
-          funcionario_responsavel || null,
-          req.usuario.id,
-          observacao || null,
-        ]
-      );
-
-      // Se lote informado, baixar do estoque automaticamente
-      if (lote_id) {
-        await client.query(
-          `UPDATE lotes_estoque
-           SET quantidade_atual = GREATEST(quantidade_atual - $1, 0), atualizado_em = NOW()
-           WHERE id = $2`,
-          [qtd, lote_id]
+      // Se veio de validade_item, marca como descartado
+      if (p.validadeItemId) {
+        await pool.query(
+          `UPDATE validade_items SET status='descartado', atualizado_em=NOW() WHERE id=$1`,
+          [p.validadeItemId]
         );
       }
 
-      await client.query('COMMIT');
-      res.status(201).json(rows[0]);
-    } catch (err) {
-      await client.query('ROLLBACK');
-      console.error('[perdas POST]', err.message);
-      res.status(500).json({ erro: 'Erro ao registrar perda.' });
-    } finally {
-      client.release();
-    }
+      res.json({ ok: true, data: rows[0] });
+    } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
-  // ── DELETE /api/perdas/:id ───────────────────────────────
-  router.delete('/:id', autenticar(['admin','gerente']), async (req, res) => {
+  // ── PUT /:id ───────────────────────────────────────────────────────────────
+  r.put('/:id', async (req, res) => {
+    const p = req.body;
     try {
-      await pool.query('DELETE FROM perdas WHERE id = $1', [req.params.id]);
+      await pool.query(`
+        UPDATE perdas SET
+          descricao       = COALESCE($1, descricao),
+          motivo          = COALESCE($2, motivo),
+          qtd_unidades    = COALESCE($3, qtd_unidades),
+          valor_perda     = COALESCE($4, valor_perda),
+          funcionario_id  = COALESCE($5, funcionario_id),
+          dt_perda        = COALESCE($6, dt_perda),
+          observacao      = COALESCE($7, observacao)
+        WHERE id = $8
+      `, [
+        p.descricao || null, p.motivo || null,
+        p.qtdUnidades !== undefined ? parseInt(p.qtdUnidades) : null,
+        p.valorPerda  !== undefined ? parseFloat(p.valorPerda) : null,
+        p.funcionarioId || null, p.dtPerda || null, p.observacao || null,
+        parseInt(req.params.id),
+      ]);
       res.json({ ok: true });
-    } catch (err) {
-      res.status(500).json({ erro: 'Erro ao excluir perda.' });
-    }
+    } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
-  return router;
+  // ── DELETE /:id ────────────────────────────────────────────────────────────
+  r.delete('/:id', async (req, res) => {
+    try {
+      await pool.query(`DELETE FROM perdas WHERE id = $1`, [parseInt(req.params.id)]);
+      res.json({ ok: true });
+    } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  return r;
 };
