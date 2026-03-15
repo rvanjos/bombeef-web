@@ -99,22 +99,60 @@ module.exports = function (pool) {
   // ── GET /classificador — formato para o classificador DRE ─────────────────
   r.get('/classificador', async (req, res) => {
     try {
-      const { rows } = await pool.query(`
-        SELECT * FROM boletos
-        WHERE status != 'pago'
-        ORDER BY vencimento ASC NULLS LAST
-      `);
-      const data = rows.map(b => ({
-        fornecedor:  b.fornecedor,
-        nf:          b.nf || '',
-        parcela:     b.parcela || '1',
-        vencimento:  b.vencimento ? b.vencimento.toISOString().slice(0, 10) : '',
-        valor:       parseFloat(b.valor) || 0,
-        plano:       b.plano || '',
-        status:      b.status,
-        origem:      b.origem || 'manual',
-      }));
-      res.json({ ok: true, data, exportedAt: new Date().toISOString() });
+      const { mes } = req.query;
+      let where = "WHERE status != 'pago'";
+      const params = [];
+      if (mes) {
+        const [mm, yyyy] = mes.split('/');
+        params.push(parseInt(mm), parseInt(yyyy));
+        where += ` AND EXTRACT(MONTH FROM vencimento) = $1 AND EXTRACT(YEAR FROM vencimento) = $2`;
+      }
+      const { rows } = await pool.query(
+        `SELECT * FROM boletos ${where} ORDER BY vencimento ASC NULLS LAST`, params
+      );
+
+      const PLANO_TO_DRE = {
+        'Fornec - Proteínas': 'COMPRAS - REVENDA',
+        'Fornec - Acompanhamentos': 'COMPRAS - REVENDA',
+        'Fornec - Bebidas/Gelo/Sorvete': 'COMPRAS - REVENDA',
+        'Fornec - Empório (outros)': 'COMPRAS - REVENDA',
+        'Fornec - Empório (carvão)': 'COMPRAS - REVENDA',
+        'Fornec - Embalagens': 'Material de Embalagens',
+        'Fornec - Acessórios': 'Materiais diversos',
+        'Fornec - Outras Desp': 'Serviços prestados por terceiros',
+      };
+
+      const hoje = new Date(); hoje.setHours(0,0,0,0);
+      const fmtDate = iso => iso ? iso.split('-').reverse().join('/') : '';
+
+      const data = rows.map(b => {
+        const venc = b.vencimento ? b.vencimento.toISOString().slice(0,10) : null;
+        const dtNota = b.dt_nota ? String(b.dt_nota).slice(0,10) : null;
+        const isPago = b.status === 'pago';
+        const vencDate = venc ? new Date(venc + 'T12:00:00') : null;
+        const isOverdue = vencDate && vencDate < hoje && !isPago;
+        const mesComp = dtNota
+          ? dtNota.slice(5,7) + '/' + dtNota.slice(0,4)
+          : (venc ? venc.slice(5,7) + '/' + venc.slice(0,4) : null);
+        const mesCaixa = venc ? venc.slice(5,7) + '/' + venc.slice(0,4) : mesComp;
+        const dtPag = b.dt_pagamento ? b.dt_pagamento.toISOString().slice(0,10) : null;
+        return {
+          fonte: isPago ? 'BOLETO' : 'BOLETO_PREV',
+          lancamento: b.fornecedor + (b.produto ? ' - ' + String(b.produto).slice(0,40) : ''),
+          valor: -Math.abs(parseFloat(b.valor) || 0),
+          data: fmtDate(isPago ? (dtPag || venc) : venc),
+          mes: mesComp,
+          mesCaixa,
+          categoria: PLANO_TO_DRE[b.plano] || b.plano || 'COMPRAS - REVENDA',
+          nf: b.nf || '',
+          parcela: b.parcela || '1',
+          plano: b.plano || '',
+          isOverdue,
+          boletoId: b.id,
+        };
+      });
+
+      res.json({ ok: true, data, total: data.length, exportedAt: new Date().toISOString() });
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 

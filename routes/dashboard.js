@@ -65,8 +65,8 @@ module.exports = (pool) => {
            WHERE DATE_TRUNC('month',data_perda) = DATE_TRUNC('month',NOW())`
         ),
         pool.query(
-          `SELECT COUNT(*) FILTER (WHERE status IN ('pendente','vencido')) AS abertos,
-                  COALESCE(SUM(valor) FILTER (WHERE status IN ('pendente','vencido')),0) AS total_aberto,
+          `SELECT COUNT(*) FILTER (WHERE status IN ('avencer','vencido')) AS abertos,
+                  COALESCE(SUM(valor) FILTER (WHERE status IN ('avencer','vencido')),0) AS total_aberto,
                   COUNT(*) FILTER (WHERE status='vencido') AS vencidos
            FROM boletos`
         ),
