@@ -2387,7 +2387,7 @@ window._BB_TOKEN_SYNC = (
 
 // Resolve quando o token estiver disponível
 let _tokenReady = null;
-function waitForToken(timeoutMs = 4000) {
+function waitForToken(timeoutMs = 6000) {
   if (_tokenReady) return _tokenReady;
   _tokenReady = new Promise(resolve => {
     if (window._BB_TOKEN_SYNC) { resolve(window._BB_TOKEN_SYNC); return; }
@@ -2404,6 +2404,9 @@ function waitForToken(timeoutMs = 4000) {
     // Timeout — resolve com null se não chegar
     const timer = setTimeout(() => {
       window.removeEventListener('message', handler);
+      // Tenta localStorage como fallback final
+      const fallback = localStorage.getItem('bb_token') || sessionStorage.getItem('bb_token');
+      if (fallback) window._BB_TOKEN_SYNC = fallback;
       resolve(window._BB_TOKEN_SYNC || null);
     }, timeoutMs);
   });
