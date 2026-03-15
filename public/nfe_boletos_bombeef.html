@@ -1305,6 +1305,39 @@ function resetAll(){notas=[];globalId=0;updateAll();}
 // Chave: bb_boletos  (lida também pelo Classificador de Extrato)
 // ════════════════════════════════════════════════════════════════════════════
 const BB_KEY = 'bb_boletos';
+
+// ── Token (recebido do portal via postMessage) ─────────────────────────────────
+let _bbToken = sessionStorage.getItem('bb_token') || localStorage.getItem('bb_token') || null;
+
+window.addEventListener('message', e => {
+  if (e.data?.type === 'bb_auth' && e.data.token) {
+    _bbToken = e.data.token;
+  }
+});
+try { window.parent.postMessage({ type: 'bb_request_auth' }, '*'); } catch(e) {}
+
+function waitToken(ms = 6000) {
+  return new Promise(resolve => {
+    if (_bbToken) { resolve(_bbToken); return; }
+    const h = e => { if (e.data?.type==='bb_auth' && e.data.token) { _bbToken=e.data.token; window.removeEventListener('message',h); clearTimeout(t); resolve(_bbToken); } };
+    window.addEventListener('message', h);
+    const t = setTimeout(() => { window.removeEventListener('message',h); resolve(_bbToken||localStorage.getItem('bb_token')||null); }, ms);
+  });
+}
+
+// Espelha operação no banco em background (não bloqueia UI)
+function syncBoleto(method, path, body) {
+  waitToken(6000).then(token => {
+    if (!token) return;
+    fetch(path, {
+      method,
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: body ? JSON.stringify(body) : undefined,
+    }).then(r => r.json()).then(d => {
+      if (d && !d.ok) console.warn('[boletos sync]', path, d.erro || d);
+    }).catch(e => console.warn('[boletos sync]', path, e.message));
+  });
+}
 const PLANOS = [
   'Fornec - Proteínas','Fornec - Acompanhamentos','Fornec - Bebidas/Gelo/Sorvete',
   'Fornec - Empório (outros)','Fornec - Empório (carvão)','Fornec - Embalagens',
@@ -1332,7 +1365,27 @@ function saveBoletos() {
   try {
     localStorage.setItem(BB_KEY, JSON.stringify({ boletos, globalId: boletosId, at: new Date().toISOString() }));
     updateBadge();
-  } catch(e) { showToast('⚠️ Erro ao salvar no localStorage: ' + e.message, '#c0392b'); }
+    // Espelha no banco em background
+    syncBoletosParaBanco();
+    // Atualiza o export para o classificador
+    atualizarExportClassificador();
+  } catch(e) { showToast('⚠️ Erro ao salvar: ' + e.message, '#c0392b'); }
+}
+
+function syncBoletosParaBanco() {
+  syncBoleto('POST', '/api/boletos/bulk', { boletos, globalId: boletosId });
+}
+
+function atualizarExportClassificador() {
+  // Exporta para bb_boletos_export (chave lida pelo classificador)
+  try {
+    const data = boletos.filter(b => b.status !== 'pago').map(b => ({
+      fornecedor: b.fornecedor, nf: b.nf||'', parcela: b.parcela||'1',
+      vencimento: b.vencimento, valor: b.valor, plano: b.plano||'',
+      status: b.status, origem: b.origem||'manual',
+    }));
+    localStorage.setItem('bb_boletos_export', JSON.stringify({ data, exportedAt: new Date().toISOString() }));
+  } catch(e) {}
 }
 function loadBoletos() {
   try {

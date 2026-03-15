@@ -413,10 +413,138 @@ tr:last-child td{border-bottom:none}
   .kpi-grid{grid-template-columns:repeat(3,1fr)}
   .crit-grid{grid-template-columns:repeat(2,1fr)}
 }
+@media(max-width:900px){
+  .sidebar{display:none}
+  .kpi-grid{grid-template-columns:repeat(3,1fr)}
+  .crit-grid{grid-template-columns:repeat(2,1fr)}
+}
 @media(max-width:600px){
+  /* Layout geral */
   .kpi-grid,.kpi-grid-4{grid-template-columns:1fr 1fr}
   .form-grid,.form-grid-3{grid-template-columns:1fr}
-  .content-area{padding:16px}
+  .content-area{padding:10px}
+  .app-body{flex-direction:column}
+
+  /* Header compacto */
+  header{padding:8px 12px;gap:8px}
+  header>div:first-child{font-size:20px}
+  header .header-kpis{gap:6px}
+  .hkpi{padding:4px 7px;gap:4px}
+  .hkpi-val{font-size:14px}
+  .hkpi-lbl{font-size:8px}
+  #hk-plan,#hk-today{display:none} /* remove datas no mobile */
+
+  /* Botão de sincronizar mais compacto */
+  #btn-sync{padding:5px 10px;font-size:11px}
+
+  /* Navegação mobile como bottom bar */
+  .sidebar{
+    display:flex!important;
+    flex-direction:row;
+    position:fixed;
+    bottom:0;left:0;right:0;
+    background:var(--white);
+    border-top:1px solid var(--border);
+    box-shadow:0 -2px 12px rgba(0,0,0,.1);
+    z-index:200;
+    padding:0;
+    overflow-x:auto;
+    height:56px;
+    align-items:stretch;
+  }
+  .sidebar .sb-section{display:none}
+  .sidebar .nav-item{
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:2px;
+    padding:4px 10px;
+    flex-shrink:0;
+    font-size:9px;
+    min-width:56px;
+    border-radius:0;
+    border-right:1px solid var(--border);
+  }
+  .sidebar .nav-item .ni{font-size:18px;margin:0}
+  /* Esconde itens menos usados no mobile — mantém os essenciais */
+  .sidebar .nav-item:nth-child(n+9){display:none}
+
+  /* Content area com margem para bottom bar */
+  .content-area{
+    padding-bottom:68px!important;
+    padding-top:8px;
+  }
+
+  /* Página de estoque — tabela scrollável horizontalmente */
+  .tbl-wrap,.tbl-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  table{min-width:600px;font-size:11px}
+  th,td{padding:6px 8px}
+
+  /* Cards de dashboard mais compactos */
+  .crit-grid{grid-template-columns:1fr!important}
+  .crit-card{padding:10px 12px}
+  .crit-loc{font-size:9px}
+
+  /* KPI cards */
+  .kpi-card{padding:10px 12px}
+  .kpi-val{font-size:16px!important}
+  .kpi-lbl{font-size:9px}
+
+  /* Modais ocupam tela cheia no mobile */
+  .modal{
+    width:100%!important;
+    max-width:100%!important;
+    margin:0!important;
+    border-radius:16px 16px 0 0!important;
+    position:fixed!important;
+    bottom:0!important;
+    left:0!important;
+    right:0!important;
+    max-height:90vh;
+    overflow-y:auto;
+  }
+  .modal-overlay{align-items:flex-end!important}
+
+  /* Formulários */
+  .fg label{font-size:10px}
+  .fg input,.fg select,.fg textarea{font-size:14px;padding:10px 10px}
+
+  /* Botões de ação na tabela */
+  .action-btns{flex-wrap:wrap;gap:3px}
+  .act-btn{padding:4px 7px;font-size:10px}
+
+  /* Dashboard metas — gráficos em coluna */
+  #page-metas > div[style*="grid-template-columns:1fr 1fr"],
+  #page-relatorio > div[style*="grid-template-columns:1fr 1fr"]{
+    grid-template-columns:1fr!important
+  }
+  #page-metas > div[style*="grid-template-columns:2fr 1fr"]{
+    grid-template-columns:1fr!important
+  }
+
+  /* Faturamento — form em coluna */
+  #page-faturamento > div[style*="grid-template-columns"]{
+    grid-template-columns:1fr!important
+  }
+  #page-faturamento > div[style*="grid-template-columns"] button{
+    margin-top:4px
+  }
+
+  /* Retiradas — KPIs em 2 colunas */
+  #ret-kpis-func{grid-template-columns:1fr 1fr!important}
+
+  /* Urg strip */
+  .urg-strip{padding:5px 10px;gap:6px}
+  .urg-pill{padding:3px 8px;font-size:10px}
+
+  /* Alerts */
+  .status-banner{font-size:12px;padding:8px 12px}
+
+  /* Pg header */
+  .pg-hdr{flex-direction:column;align-items:flex-start;gap:8px}
+  .pg-title{font-size:17px}
+  .pg-hdr > div:last-child{width:100%;display:flex;gap:6px;flex-wrap:wrap}
+  .pg-hdr > div:last-child button,.pg-hdr > div:last-child select{flex:1;min-width:0}
 }
 </style>
 </head>
@@ -1393,15 +1521,18 @@ function getToken() {
 // ── Sync em background — NUNCA bloqueia a UI ────────────
 // Dispara e esquece: erro é logado no console, não mostrado ao usuário
 function syncBg(method, path, body) {
-  const token = getToken();
-  if (!token) return; // sem token = sem sync, mas UI funciona normalmente
-  fetch('/api/validade' + path, {
-    method,
-    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  }).then(r => r.json()).then(d => {
-    if (!d.ok) console.warn('[sync]', path, d.erro);
-  }).catch(e => console.warn('[sync]', path, e.message));
+  // Aguarda o token estar disponível (postMessage pode chegar com atraso)
+  // Usa Promise para não bloquear a UI — dispara e esquece
+  waitForToken(6000).then(token => {
+    if (!token) return; // sem token = sem sync, UI continua funcionando
+    fetch('/api/validade' + path, {
+      method,
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    }).then(r => r.json()).then(d => {
+      if (!d.ok) console.warn('[sync]', path, d.erro);
+    }).catch(e => console.warn('[sync]', path, e.message));
+  });
 }
 
 // ── Pull do banco na abertura (silencioso) ───────────────
