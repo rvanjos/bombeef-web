@@ -57,9 +57,9 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
 .pnav-tab{padding:11px 16px;font-size:12px;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .15s;white-space:nowrap;letter-spacing:.2px;background:none;border-top:none;border-left:none;border-right:none;font-family:'DM Sans',sans-serif;}
 .pnav-tab:hover{color:var(--red);}
 .pnav-tab.active{color:var(--red);border-bottom-color:var(--red);}
-.portal-body{flex:1;overflow-y:auto;background:var(--bg);}
-.portal-page{display:none;padding:28px 24px;max-width:1280px;margin:0 auto;}
-.portal-page.active{display:block;}
+.portal-body{flex:1;overflow:hidden;background:var(--bg);display:flex;flex-direction:column;min-height:0;}
+.portal-page{display:none;padding:28px 24px;max-width:1280px;margin:0 auto;overflow-y:auto;}
+.portal-page.active{display:block;height:100%;}
 
 /* ── CARDS KPI ─────────────────────────────────────────────────────────── */
 .pg-header{margin-bottom:24px;}
@@ -103,9 +103,8 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
 .sys-badge.ok{background:rgba(26,122,74,.12);color:var(--green);}
 
 /* ── IFRAME ────────────────────────────────────────────────────────────── */
-.module-frame{width:100%;height:100%;border:none;display:none;}
-.module-frame.active{display:block;}
-.frame-container{flex:1;display:none;overflow:hidden;}
+.module-frame{width:100%;flex:1;border:none;display:block;min-height:0;}
+.frame-container{flex:1;display:none;overflow:hidden;min-height:0;}
 .frame-container.active{display:flex;flex-direction:column;}
 
 /* ── TOAST ─────────────────────────────────────────────────────────────── */
@@ -291,22 +290,22 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
 
     <!-- ── MÓDULOS (iframes) ──────────────────────────────────────────── -->
     <div class="frame-container" id="frame-boletos">
-      <iframe class="module-frame active" id="iframe-boletos" src="boletos.html"></iframe>
+      <iframe class="module-frame" id="iframe-boletos" src="boletos.html"></iframe>
     </div>
     <div class="frame-container" id="frame-dre">
-      <iframe class="module-frame active" id="iframe-dre" src="dre.html"></iframe>
+      <iframe class="module-frame" id="iframe-dre" src="dre.html"></iframe>
     </div>
     <div class="frame-container" id="frame-produtos">
-      <iframe class="module-frame active" id="iframe-produtos" src="produtos.html"></iframe>
+      <iframe class="module-frame" id="iframe-produtos" src="produtos.html"></iframe>
     </div>
     <div class="frame-container" id="frame-validade">
-      <iframe class="module-frame active" id="iframe-validade" src="validade.html"></iframe>
+      <iframe class="module-frame" id="iframe-validade" src="validade.html"></iframe>
     </div>
     <div class="frame-container" id="frame-retiradas">
-      <iframe class="module-frame active" id="iframe-retiradas" src="retiradas.html"></iframe>
+      <iframe class="module-frame" id="iframe-retiradas" src="retiradas.html"></iframe>
     </div>
     <div class="frame-container" id="frame-config">
-      <iframe class="module-frame active" id="iframe-config" src="config.html"></iframe>
+      <iframe class="module-frame" id="iframe-config" src="config.html"></iframe>
     </div>
 
   </div><!-- /portal-body -->
