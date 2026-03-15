@@ -266,6 +266,10 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
 // ════════════════════════════════════════════════════════════════
 
 const SYS = [
+  { id:'config',        icon:'⚙️', title:'Configurações do Sistema',
+    desc:'Categorias DRE, funcionários, metas, locais, usuários e integrações — tudo em um lugar.',
+    tags:['DRE','Funcionários','Metas','Usuários'], c:'#5C0000', file:'bb_config.html',
+    perfis:['admin','gerente'] },
   { id:'nfe',          icon:'🧾', title:'Gestão de NF-e & Boletos',
     desc:'Importe XMLs, gerencie notas fiscais, controle boletos por vencimento.',
     tags:['XML','PDF IA','Boletos','Parcelas'], c:'#8B0000', file:'nfe_boletos_bombeef.html',
@@ -405,20 +409,16 @@ function buildGrids() {
 async function loadDashboard() {
   setSyncStatus('loading');
   try {
-    // Busca KPIs gerais e KPIs de validade em paralelo
     const [data, valdData] = await Promise.allSettled([
       api('GET', '/api/dashboard/kpis'),
       api('GET', '/api/validade/kpis'),
     ]);
-
-    const d    = data.status === 'fulfilled'    ? data.value    : {};
+    const d    = data.status === 'fulfilled'     ? data.value    : {};
     const vald = valdData.status === 'fulfilled' ? valdData.value?.data : null;
 
-    // Usa lotes_criticos do banco de validade se disponível, senão do dashboard geral
     const lotesCriticos = vald
       ? (parseInt(vald.vencidos || 0) + parseInt(vald.criticos || 0))
       : (d.lotes_criticos || 0);
-
     const perdasMes = vald
       ? { ocorrencias: parseInt(vald.qtd_perdas_mes || 0), valor: parseFloat(vald.valor_perdas_mes || 0) }
       : (d.perdas_mes || { ocorrencias: 0, valor: 0 });
@@ -426,49 +426,35 @@ async function loadDashboard() {
     // Live bar
     document.getElementById('lb-prod').textContent  = (d.total_produtos || 0) + ' produtos';
     document.getElementById('lb-bol').textContent   = (d.boletos?.abertos || 0) + ' em aberto';
-    document.getElementById('lb-venc').textContent  = d.boletos?.vencidos
-      ? d.boletos.vencidos + ' boleto(s)' : '✓ Nenhum';
-    document.getElementById('lb-venc').style.color  = d.boletos?.vencidos
-      ? 'var(--orange)' : 'var(--green)';
-    document.getElementById('lb-crit').textContent  = lotesCriticos
-      ? lotesCriticos + ' lotes' : '✓ Nenhum';
-    document.getElementById('lb-crit').style.color  = lotesCriticos
-      ? 'var(--red-l)' : 'var(--green)';
+    document.getElementById('lb-venc').textContent  = d.boletos?.vencidos ? d.boletos.vencidos + ' boleto(s)' : '✓ Nenhum';
+    document.getElementById('lb-venc').style.color  = d.boletos?.vencidos ? 'var(--orange)' : 'var(--green)';
+    document.getElementById('lb-crit').textContent  = lotesCriticos ? lotesCriticos + ' lotes' : '✓ Nenhum';
+    document.getElementById('lb-crit').style.color  = lotesCriticos ? 'var(--red-l)' : 'var(--green)';
 
-    // KPIs
     const R = v => 'R$ ' + parseFloat(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
     const kpis = [
-      { label:'Produtos Ativos',    value: d.total_produtos || 0,           sub:'na base mestre',               cls:'' },
-      { label:'Boletos em Aberto',  value: d.boletos?.abertos || 0,         sub: R(d.boletos?.total),           cls: d.boletos?.vencidos ? 'orange' : 'green', color: d.boletos?.vencidos ? 'var(--orange)' : 'var(--green)' },
-      { label:'Perdas no Mês',      value: perdasMes.ocorrencias + ' ocorr.', sub: R(perdasMes.valor),          cls: perdasMes.valor > 500 ? 'orange' : '' },
-      { label:'Lotes Críticos',     value: lotesCriticos,                   sub: vald ? `${vald.vencidos||0} venc. + ${vald.criticos||0} crít.` : 'vencendo em até 7 dias', cls: lotesCriticos > 0 ? 'orange' : 'green', color: lotesCriticos ? 'var(--red-l)' : 'var(--green)' },
-      { label:'Kits Ativos',        value: d.total_kits || 0,               sub:'configurados',                 cls:'blue', color:'var(--blue)' },
+      { label:'Produtos Ativos',   value: d.total_produtos || 0,             sub:'na base mestre',       cls:'' },
+      { label:'Boletos em Aberto', value: d.boletos?.abertos || 0,           sub: R(d.boletos?.total),   cls: d.boletos?.vencidos ? 'orange':'green', color: d.boletos?.vencidos ? 'var(--orange)':'var(--green)' },
+      { label:'Perdas no Mês',     value: perdasMes.ocorrencias+' ocorr.',   sub: R(perdasMes.valor),    cls: perdasMes.valor > 500 ? 'orange':'' },
+      { label:'Lotes Críticos',    value: lotesCriticos,                     sub: vald ? `${vald.vencidos||0} venc. + ${vald.criticos||0} crít.` : 'vencendo em até 7 dias', cls: lotesCriticos > 0 ? 'orange':'green', color: lotesCriticos ? 'var(--red-l)':'var(--green)' },
+      { label:'Kits Ativos',       value: d.total_kits || 0,                 sub:'configurados',         cls:'blue', color:'var(--blue)' },
     ];
     document.getElementById('kpi-grid').innerHTML = kpis.map(c =>
-      `<div class="kpi-card ${c.cls || ''}">
-        <div class="kpi-label">${c.label}</div>
-        <div class="kpi-val" style="color:${c.color || 'var(--text)'}">${c.value}</div>
-        <div class="kpi-sub">${c.sub || ''}</div>
-      </div>`).join('');
+      `<div class="kpi-card ${c.cls || ''}"><div class="kpi-label">${c.label}</div><div class="kpi-val" style="color:${c.color||'var(--text)'}">${c.value}</div><div class="kpi-sub">${c.sub||''}</div></div>`
+    ).join('');
 
-    // Alerta base desatualizada
     try {
       const status = await api('GET', '/api/totvs/status');
-      document.getElementById('alerta-base').style.display =
-        status.base_desatualizada ? 'flex' : 'none';
-    } catch(e) {
-      document.getElementById('alerta-base').style.display = 'none';
-    }
+      document.getElementById('alerta-base').style.display = status.base_desatualizada ? 'flex':'none';
+    } catch(e) { document.getElementById('alerta-base').style.display = 'none'; }
 
-    // Alerta de lotes vencidos no topo do dashboard
-    if (vald && parseInt(vald.vencidos || 0) > 0) {
+    if (vald && parseInt(vald.vencidos||0) > 0) {
       const alertEl = document.getElementById('alerta-base');
       if (alertEl) {
         alertEl.style.display = 'flex';
         alertEl.innerHTML = `⚠️ <strong>${vald.vencidos} lote(s) VENCIDO(S)</strong> no ValidaStock — retire imediatamente. <a href="#" onclick="openSys('validade');return false;" style="color:var(--red);font-weight:700;margin-left:8px">Ver →</a>`;
       }
     }
-
     setSyncStatus('ok');
   } catch (e) {
     setSyncStatus('err');
@@ -499,13 +485,9 @@ function openSys(id) {
   document.getElementById('emb-title').textContent = s.icon + ' ' + s.title;
   const frame = document.getElementById('emb-frame');
 
-  // Envia token via postMessage assim que o iframe carrega
-  // E também responde imediatamente se o iframe pedir via bb_request_auth
   frame.onload = () => {
-    try {
-      frame.contentWindow.postMessage({ type: 'bb_auth', token: TOKEN, user: CUR_USER }, '*');
-    } catch (e) {}
-    // Reenvia após 300ms como segurança (alguns iframes demoram a registrar o listener)
+    try { frame.contentWindow.postMessage({ type: 'bb_auth', token: TOKEN, user: CUR_USER }, '*'); } catch (e) {}
+    // Reenvia após 300ms — garante que o iframe registrou o listener antes
     setTimeout(() => {
       try { frame.contentWindow.postMessage({ type: 'bb_auth', token: TOKEN, user: CUR_USER }, '*'); } catch(e) {}
     }, 300);

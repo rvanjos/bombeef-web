@@ -1,0 +1,1348 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Bom Beef — Configurações do Sistema</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+:root{
+  --red:#8B0000;--red-d:#5C0000;--red-l:#C0392B;--gold:#C9A044;
+  --green:#1a7a4a;--orange:#c76b00;--blue:#1a5c8a;--purple:#6c3483;
+  --bg:#f7f4f0;--white:#fff;--text:#1a1a1a;--muted:#7a7068;
+  --border:#e8e0d8;--shadow:0 2px 12px rgba(0,0,0,.08);
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
+
+/* ── HEADER ─────────────────────────────────────────────── */
+header{
+  background:var(--red);
+  background-image:repeating-linear-gradient(45deg,transparent,transparent 10px,rgba(255,255,255,.03) 10px,rgba(255,255,255,.03) 20px);
+  padding:14px 28px;display:flex;align-items:center;gap:14px;
+  box-shadow:0 3px 16px rgba(139,0,0,.4);position:sticky;top:0;z-index:100;
+}
+.logo-circle{width:36px;height:36px;background:var(--gold);border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Playfair Display',serif;font-weight:900;font-size:14px;color:var(--red-d);flex-shrink:0;}
+.hdr-title{font-family:'Playfair Display',serif;font-size:16px;color:#fff;font-weight:700;}
+.hdr-sub{font-size:10px;color:rgba(255,255,255,.65);letter-spacing:1.2px;text-transform:uppercase;margin-top:1px;}
+.hdr-right{margin-left:auto;display:flex;align-items:center;gap:10px;}
+.sync-badge{display:flex;align-items:center;gap:5px;font-size:11px;color:rgba(255,255,255,.6);}
+.sync-dot{width:7px;height:7px;border-radius:50%;background:#4ecdc4;animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.btn-logout{padding:6px 14px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:7px;color:rgba(255,255,255,.8);cursor:pointer;font-size:12px;font-weight:600;}
+
+/* ── LAYOUT ─────────────────────────────────────────────── */
+.layout{display:grid;grid-template-columns:220px 1fr;height:calc(100vh - 64px);}
+
+/* ── SIDEBAR ────────────────────────────────────────────── */
+.sidebar{background:var(--white);border-right:1px solid var(--border);overflow-y:auto;padding:16px 0;}
+.sb-section{font-size:9px;text-transform:uppercase;letter-spacing:1.5px;font-weight:700;color:var(--muted);padding:10px 20px 6px;margin-top:6px;}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 20px;cursor:pointer;font-size:13px;font-weight:500;color:var(--text);transition:all .15s;border-left:3px solid transparent;}
+.nav-item:hover{background:#faf5f0;color:var(--red);}
+.nav-item.active{background:#fff5f5;color:var(--red);font-weight:700;border-left-color:var(--red);}
+.nav-item .ni{font-size:16px;width:20px;text-align:center;}
+.nav-badge{margin-left:auto;background:var(--red);color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:8px;}
+
+/* ── CONTENT ────────────────────────────────────────────── */
+.content{overflow-y:auto;background:var(--bg);}
+.page{display:none;padding:28px 32px;max-width:1100px;}
+.page.active{display:block;}
+.pg-title{font-family:'Playfair Display',serif;font-size:22px;color:var(--red);margin-bottom:4px;}
+.pg-sub{font-size:13px;color:var(--muted);margin-bottom:24px;}
+
+/* ── CARDS ──────────────────────────────────────────────── */
+.card{background:var(--white);border-radius:12px;box-shadow:var(--shadow);padding:20px;margin-bottom:16px;}
+.card-title{font-size:11px;text-transform:uppercase;letter-spacing:1.4px;font-weight:700;color:var(--red);margin-bottom:14px;}
+.card-title span{font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted);font-size:11px;}
+
+/* ── FORM ───────────────────────────────────────────────── */
+.fg{margin-bottom:12px;}
+.fg label{display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);margin-bottom:5px;}
+.fg input,.fg select,.fg textarea{width:100%;padding:9px 11px;background:#faf8f5;border:1px solid var(--border);border-radius:8px;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);transition:border-color .2s;}
+.fg input:focus,.fg select:focus,.fg textarea:focus{outline:none;border-color:var(--red);background:var(--white);}
+.fg .hint{font-size:10px;color:var(--muted);margin-top:4px;}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.form-grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;}
+
+/* ── BUTTONS ────────────────────────────────────────────── */
+.btn{padding:9px 18px;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .15s;}
+.btn-primary{background:var(--red);color:#fff;}
+.btn-primary:hover{background:var(--red-l);}
+.btn-neutral{background:var(--bg);color:var(--text);border:1px solid var(--border);}
+.btn-neutral:hover{background:var(--border);}
+.btn-green{background:var(--green);color:#fff;}
+.btn-sm{padding:6px 12px;font-size:12px;}
+.btn-row{display:flex;gap:8px;margin-top:16px;}
+
+/* ── TABLES ─────────────────────────────────────────────── */
+.tbl-wrap{overflow-x:auto;}
+table{width:100%;border-collapse:collapse;font-size:12px;}
+th{text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);font-weight:700;padding:8px 10px;border-bottom:2px solid var(--border);}
+td{padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:middle;}
+tr:hover td{background:#faf5f0;}
+.act-btn{padding:3px 8px;border:none;border-radius:5px;font-size:11px;cursor:pointer;font-family:'DM Sans',sans-serif;}
+.act-edit{background:#fff3e0;color:var(--orange);}
+.act-del{background:#fff0f0;color:var(--red);}
+.pill{display:inline-block;padding:2px 8px;border-radius:8px;font-size:10px;font-weight:700;}
+.pill-green{background:#e8f7ef;color:var(--green);}
+.pill-red{background:#fff0f0;color:var(--red);}
+.pill-blue{background:#e8f0fa;color:var(--blue);}
+.pill-gray{background:#f0f0f0;color:var(--muted);}
+
+/* ── DRE TREE ───────────────────────────────────────────── */
+.dre-group{border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:10px;}
+.dre-group-hdr{background:var(--bg);padding:10px 14px;display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600;font-size:13px;}
+.dre-group-hdr .dre-arrow{font-size:10px;transition:transform .2s;color:var(--muted);}
+.dre-group-hdr.open .dre-arrow{transform:rotate(90deg);}
+.dre-subs{display:none;padding:8px 14px;background:var(--white);}
+.dre-subs.open{display:block;}
+.dre-sub-row{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #f5f0eb;}
+.dre-sub-row:last-child{border-bottom:none;}
+.dre-sub-name{flex:1;font-size:12px;}
+.dre-sub-custom{font-size:10px;color:var(--gold);margin-left:4px;}
+
+/* ── TOAST ──────────────────────────────────────────────── */
+.bb-toast{position:fixed;bottom:24px;right:24px;background:var(--green);color:#fff;padding:11px 18px;border-radius:9px;font-size:13px;font-weight:600;box-shadow:0 4px 20px rgba(0,0,0,.2);z-index:9999;animation:slideUp .3s ease;}
+@keyframes slideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
+
+/* ── INFO BOX ───────────────────────────────────────────── */
+.info-box{padding:10px 14px;border-radius:8px;font-size:12px;margin-bottom:12px;}
+.ib-blue{background:#e8f0fa;border:1px solid rgba(26,92,138,.2);color:var(--blue);}
+.ib-gold{background:#fff9ec;border:1px solid rgba(201,160,68,.25);color:#7a5c00;}
+.ib-red{background:#fff0f0;border:1px solid rgba(139,0,0,.15);color:var(--red);}
+
+/* ── TABS ───────────────────────────────────────────────── */
+.tab-bar{display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:20px;}
+.tab{padding:8px 16px;font-size:12px;font-weight:600;cursor:pointer;color:var(--muted);border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .15s;}
+.tab:hover{color:var(--red);}
+.tab.active{color:var(--red);border-bottom-color:var(--red);}
+.tab-content{display:none;}
+.tab-content.active{display:block;}
+
+/* ── DASHBOARD OVERVIEW ─────────────────────────────────── */
+.overview-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:24px;}
+.ov-card{background:var(--white);border-radius:10px;padding:16px;box-shadow:var(--shadow);border-left:4px solid var(--red);cursor:pointer;transition:all .15s;}
+.ov-card:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,.12);}
+.ov-card.green{border-left-color:var(--green);}
+.ov-card.blue{border-left-color:var(--blue);}
+.ov-card.orange{border-left-color:var(--orange);}
+.ov-card.purple{border-left-color:var(--purple);}
+.ov-icon{font-size:24px;margin-bottom:8px;}
+.ov-val{font-size:22px;font-weight:700;font-family:'DM Mono',monospace;}
+.ov-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin-top:3px;}
+.ov-sub{font-size:11px;color:var(--muted);margin-top:2px;}
+
+@media(max-width:700px){
+  .layout{grid-template-columns:1fr;}
+  .sidebar{display:none;}
+  .form-grid,.form-grid-3{grid-template-columns:1fr;}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-circle">BB</div>
+  <div>
+    <div class="hdr-title">Configurações — Bom Beef</div>
+    <div class="hdr-sub">Painel Central · Valinhos · SP</div>
+  </div>
+  <div class="hdr-right">
+    <div class="sync-badge"><div class="sync-dot" id="sync-dot"></div><span id="sync-txt">conectando...</span></div>
+    <button class="btn-logout" onclick="sair()">Sair</button>
+  </div>
+</header>
+
+<div class="layout">
+<!-- ═══ SIDEBAR ══════════════════════════════════════════════ -->
+<nav class="sidebar">
+  <div class="sb-section">Visão Geral</div>
+  <div class="nav-item active" onclick="go('overview')"><span class="ni">🏠</span>Dashboard</div>
+
+  <div class="sb-section">Financeiro</div>
+  <div class="nav-item" onclick="go('categorias')"><span class="ni">📊</span>Categorias DRE</div>
+  <div class="nav-item" onclick="go('metas')"><span class="ni">🎯</span>Metas & Prêmio</div>
+  <div class="nav-item" onclick="go('faturamento')"><span class="ni">💰</span>Faturamento</div>
+  <div class="nav-item" onclick="go('planos-boleto')"><span class="ni">📋</span>Planos de Boleto</div>
+
+  <div class="sb-section">Pessoas</div>
+  <div class="nav-item" onclick="go('funcionarios')"><span class="ni">👥</span>Funcionários <span class="nav-badge" id="badge-func">0</span></div>
+  <div class="nav-item" onclick="go('bonus')"><span class="ni">🎁</span>Bônus de Produto</div>
+
+  <div class="sb-section">Estoque & Validade</div>
+  <div class="nav-item" onclick="go('locais')"><span class="ni">📍</span>Locais de Armazenamento</div>
+  <div class="nav-item" onclick="go('prazos')"><span class="ni">⏱️</span>Prazos de Alerta</div>
+
+  <div class="sb-section">Sistema</div>
+  <div class="nav-item" onclick="go('usuarios')"><span class="ni">🔐</span>Usuários & Perfis</div>
+  <div class="nav-item" onclick="go('integracao')"><span class="ni">🔗</span>Integração & Sync</div>
+</nav>
+
+<!-- ═══ CONTENT ═══════════════════════════════════════════════ -->
+<main class="content">
+
+<!-- ── OVERVIEW ─────────────────────────────────────────── -->
+<div class="page active" id="page-overview">
+  <div class="pg-title">Dashboard de Configurações</div>
+  <div class="pg-sub">Tudo que você altera aqui reflete em todos os módulos do sistema automaticamente.</div>
+
+  <div class="overview-grid">
+    <div class="ov-card" onclick="go('funcionarios')">
+      <div class="ov-icon">👥</div>
+      <div class="ov-val" id="ov-funcs">—</div>
+      <div class="ov-lbl">Funcionários</div>
+      <div class="ov-sub">Ativos no sistema</div>
+    </div>
+    <div class="ov-card green" onclick="go('categorias')">
+      <div class="ov-icon">📊</div>
+      <div class="ov-val" id="ov-cats">—</div>
+      <div class="ov-lbl">Categorias DRE</div>
+      <div class="ov-sub">Padrão + personalizadas</div>
+    </div>
+    <div class="ov-card blue" onclick="go('locais')">
+      <div class="ov-icon">📍</div>
+      <div class="ov-val" id="ov-locais">—</div>
+      <div class="ov-lbl">Locais</div>
+      <div class="ov-sub">Armazenamento cadastrado</div>
+    </div>
+    <div class="ov-card orange" onclick="go('metas')">
+      <div class="ov-icon">🎯</div>
+      <div class="ov-val" id="ov-meta">—%</div>
+      <div class="ov-lbl">Meta de Perdas</div>
+      <div class="ov-sub">% do faturamento</div>
+    </div>
+    <div class="ov-card purple" onclick="go('usuarios')">
+      <div class="ov-icon">🔐</div>
+      <div class="ov-val" id="ov-users">—</div>
+      <div class="ov-lbl">Usuários</div>
+      <div class="ov-sub">Com acesso ao sistema</div>
+    </div>
+    <div class="ov-card" onclick="go('faturamento')">
+      <div class="ov-icon">💰</div>
+      <div class="ov-val" id="ov-fat">—</div>
+      <div class="ov-lbl">Faturamento</div>
+      <div class="ov-sub">Meses cadastrados</div>
+    </div>
+  </div>
+
+  <div class="info-box ib-blue">
+    ℹ️ Este painel centraliza todas as configurações compartilhadas entre os módulos. Alterações aqui são salvas no banco PostgreSQL e refletem imediatamente no Classificador, ValidaStock, Boletos e demais sistemas — sem necessidade de sincronização manual.
+  </div>
+</div>
+
+<!-- ── CATEGORIAS DRE ────────────────────────────────────── -->
+<div class="page" id="page-categorias">
+  <div class="pg-title">Categorias DRE</div>
+  <div class="pg-sub">Gerencie os grupos e subcategorias usados no Classificador de Extrato e Boletos.</div>
+
+  <div class="tab-bar">
+    <div class="tab active" onclick="catTab('arvore')">🌳 Árvore DRE</div>
+    <div class="tab" onclick="catTab('nova')">➕ Nova Subcategoria</div>
+    <div class="tab" onclick="catTab('mapeamentos')">🔗 Mapeamentos</div>
+  </div>
+
+  <div class="tab-content active" id="cat-arvore">
+    <div id="dre-tree"></div>
+    <div class="info-box ib-gold" style="margin-top:12px">
+      💡 As categorias em <strong>negrito</strong> são padrão do sistema e não podem ser removidas. Subcategorias personalizadas aparecem com ✦.
+    </div>
+  </div>
+
+  <div class="tab-content" id="cat-nova">
+    <div class="card">
+      <div class="card-title">Adicionar Subcategoria</div>
+      <div class="form-grid">
+        <div class="fg">
+          <label>Grupo DRE</label>
+          <select id="nc-grupo">
+            <option value="">Selecione o grupo...</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label>Nome da Subcategoria</label>
+          <input id="nc-nome" placeholder="Ex: Serviços de Marketing"/>
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="addCatSub()">➕ Adicionar ao DRE</button>
+    </div>
+  </div>
+
+  <div class="tab-content" id="cat-mapeamentos">
+    <div class="card">
+      <div class="card-title">Mapear Fornecedor → Categoria <span>— aplicado automaticamente no Classificador</span></div>
+      <div class="form-grid">
+        <div class="fg">
+          <label>Palavra-chave do fornecedor</label>
+          <input id="map-key" placeholder="Ex: FRIGOL, CANTAGALLO, AURORA"/>
+        </div>
+        <div class="fg">
+          <label>Categoria DRE</label>
+          <select id="map-cat"><option value="">Selecione...</option></select>
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="addMapping()">➕ Adicionar Mapeamento</button>
+    </div>
+    <div class="card">
+      <div class="card-title">Mapeamentos Ativos</div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Palavra-chave</th><th>Categoria</th><th>Origem</th><th></th></tr></thead>
+          <tbody id="map-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── FUNCIONÁRIOS ──────────────────────────────────────── -->
+<div class="page" id="page-funcionarios">
+  <div class="pg-title">Funcionários</div>
+  <div class="pg-sub">Cadastro central — reflete no Classificador (DRE pessoal), ValidaStock (responsável) e Retiradas de produtos.</div>
+
+  <div class="card">
+    <div class="card-title" id="func-form-title">➕ Novo Funcionário</div>
+    <div class="form-grid">
+      <div class="fg"><label>Nome Completo *</label><input id="f-nome" placeholder="Nome completo"/></div>
+      <div class="fg"><label>Cargo</label><input id="f-cargo" placeholder="Ex: Açougueiro, Caixa, Gerente"/></div>
+    </div>
+    <div class="form-grid-3">
+      <div class="fg">
+        <label>Salário Base (R$)</label>
+        <input type="number" id="f-salario" placeholder="0,00" step="0.01"/>
+      </div>
+      <div class="fg">
+        <label>Vale Alimentação (R$)</label>
+        <input type="number" id="f-va" placeholder="0,00" step="0.01"/>
+      </div>
+      <div class="fg">
+        <label>Vale Transporte (R$)</label>
+        <input type="number" id="f-vt" placeholder="0,00" step="0.01"/>
+      </div>
+    </div>
+    <div class="form-grid">
+      <div class="fg">
+        <label>Admissão</label>
+        <input type="date" id="f-admissao"/>
+      </div>
+      <div class="fg">
+        <label>Status</label>
+        <select id="f-ativo">
+          <option value="true">Ativo</option>
+          <option value="false">Inativo</option>
+        </select>
+      </div>
+    </div>
+    <div class="fg">
+      <label>Observações</label>
+      <input id="f-obs" placeholder="Opcional"/>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-neutral" onclick="cancelarFunc()">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarFunc()">💾 Salvar Funcionário</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Funcionários Cadastrados</div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Nome</th><th>Cargo</th><th>Salário</th><th>VA</th><th>VT</th><th>Status</th><th>Admissão</th><th></th></tr></thead>
+        <tbody id="func-tbody"></tbody>
+      </table>
+    </div>
+    <div style="margin-top:10px;font-size:11px;color:var(--muted)" id="func-foot"></div>
+  </div>
+</div>
+
+<!-- ── METAS ─────────────────────────────────────────────── -->
+<div class="page" id="page-metas">
+  <div class="pg-title">Metas & Prêmio</div>
+  <div class="pg-sub">Configurações de meta de perdas e prêmio da equipe — refletem no ValidaStock e no DRE do Classificador.</div>
+
+  <div class="card">
+    <div class="card-title">Parâmetros Globais de Metas</div>
+    <div class="info-box ib-blue">ℹ️ Esses parâmetros valem para todos os meses por padrão. O faturamento de cada mês é cadastrado na aba Faturamento.</div>
+    <div class="form-grid">
+      <div class="fg">
+        <label>Meta de Perda Máxima (%)</label>
+        <input type="number" id="m-meta" placeholder="2" step="0.1" min="0" max="100"/>
+        <div class="hint">Padrão: 2% do faturamento</div>
+      </div>
+      <div class="fg">
+        <label>Alerta quando atingir (% da meta)</label>
+        <input type="number" id="m-alerta" placeholder="80" step="1" min="0" max="100"/>
+        <div class="hint">Padrão: 80% → aviso laranja no dashboard</div>
+      </div>
+    </div>
+    <div class="form-grid">
+      <div class="fg">
+        <label>Valor do Prêmio Integral (R$)</label>
+        <input type="number" id="m-premio" placeholder="350" step="0.01"/>
+        <div class="hint">Pago quando a equipe bate a meta</div>
+      </div>
+      <div class="fg">
+        <label>Fator Quebra por Limpeza (%)</label>
+        <input type="number" id="m-fator" placeholder="50" step="5" min="0" max="100"/>
+        <div class="hint">50% = quebra por limpeza conta metade no índice</div>
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="salvarMetas()">💾 Salvar Metas</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📋 Regra do Prêmio</div>
+    <div style="font-size:13px;line-height:2;color:var(--text)">
+      🔴 <strong>Perdas acima da meta</strong> → prêmio <strong style="color:var(--red)">ZERADO</strong> para toda a equipe.<br>
+      🟡 <strong>Alerta atingido</strong> → notificação visual no ValidaStock Dashboard.<br>
+      🟢 <strong>Dentro da meta</strong> → prêmio integral pago normalmente.
+    </div>
+  </div>
+</div>
+
+<!-- ── FATURAMENTO ───────────────────────────────────────── -->
+<div class="page" id="page-faturamento">
+  <div class="pg-title">Faturamento Histórico</div>
+  <div class="pg-sub">Cadastre o faturamento real de cada mês para cálculo automático do índice de perdas.</div>
+
+  <div class="card">
+    <div class="card-title">Cadastrar / Atualizar Mês</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:12px;align-items:end">
+      <div class="fg">
+        <label>Mês de Referência</label>
+        <select id="fat-mes"></select>
+      </div>
+      <div class="fg">
+        <label>Faturamento Real (R$)</label>
+        <input type="number" id="fat-real" placeholder="0,00" step="0.01"/>
+        <div class="hint">Confirmado no fechamento do mês</div>
+      </div>
+      <div class="fg">
+        <label>Faturamento Previsto (R$)</label>
+        <input type="number" id="fat-prev" placeholder="0,00" step="0.01"/>
+        <div class="hint">Estimativa antes do fechamento</div>
+      </div>
+      <button class="btn btn-primary" onclick="salvarFat()" style="margin-bottom:0">💾 Salvar</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Histórico</div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Mês</th><th>Real (R$)</th><th>Previsto (R$)</th><th>Status</th><th></th></tr></thead>
+        <tbody id="fat-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ── PLANOS DE BOLETO ──────────────────────────────────── -->
+<div class="page" id="page-planos-boleto">
+  <div class="pg-title">Planos de Boleto</div>
+  <div class="pg-sub">Mapeamento entre plano do boleto e categoria DRE — usado automaticamente ao importar NF-e.</div>
+
+  <div class="card">
+    <div class="card-title">Planos Configurados</div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Plano</th><th>Categoria DRE</th></tr></thead>
+        <tbody id="planos-tbody"></tbody>
+      </table>
+    </div>
+    <div class="info-box ib-gold" style="margin-top:12px">
+      💡 Estes planos são usados automaticamente pelo sistema de Boletos ao gerar lançamentos no Classificador. Edição via banco de dados ou suporte.
+    </div>
+  </div>
+</div>
+
+<!-- ── LOCAIS ────────────────────────────────────────────── -->
+<div class="page" id="page-locais">
+  <div class="pg-title">Locais de Armazenamento</div>
+  <div class="pg-sub">Locais cadastrados aqui ficam disponíveis em todos os módulos de estoque e validade.</div>
+
+  <div class="card">
+    <div class="card-title">Adicionar Local</div>
+    <div style="display:flex;gap:10px;align-items:end">
+      <div class="fg" style="flex:1;margin:0">
+        <label>Nome do Local</label>
+        <input id="loc-inp" placeholder="Ex: CÂMARA FRIA 1, FREEZER AÇOUGUE, GONDOLA 3" onkeydown="if(event.key==='Enter')addLocal()"/>
+      </div>
+      <button class="btn btn-primary" onclick="addLocal()">➕ Adicionar</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Locais Cadastrados</div>
+    <div id="locais-list" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+    <div style="margin-top:12px;font-size:11px;color:var(--muted)" id="locais-foot"></div>
+  </div>
+</div>
+
+<!-- ── PRAZOS ────────────────────────────────────────────── -->
+<div class="page" id="page-prazos">
+  <div class="pg-title">Prazos de Alerta</div>
+  <div class="pg-sub">Defina quantos dias antes do vencimento cada nível de alerta é ativado no ValidaStock.</div>
+
+  <div class="card">
+    <div class="card-title">Configuração Global de Prazos</div>
+    <div class="form-grid-3">
+      <div class="fg">
+        <label>🔴 Crítico (dias)</label>
+        <input type="number" id="p-crit" placeholder="7" min="1" max="90"/>
+        <div class="hint">Padrão: 7 dias</div>
+      </div>
+      <div class="fg">
+        <label>🟡 Urgente (dias)</label>
+        <input type="number" id="p-urg" placeholder="15" min="1" max="90"/>
+        <div class="hint">Padrão: 15 dias</div>
+      </div>
+      <div class="fg">
+        <label>🔵 Atenção (dias)</label>
+        <input type="number" id="p-at" placeholder="30" min="1" max="180"/>
+        <div class="hint">Padrão: 30 dias</div>
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="salvarPrazos()">💾 Salvar Prazos</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── BÔNUS DE PRODUTO ──────────────────────────────────── -->
+<div class="page" id="page-bonus">
+  <div class="pg-title">Bônus de Produto</div>
+  <div class="pg-sub">Configure o limite mensal de produto (a preço de custo) que cada funcionária pode retirar como benefício.</div>
+
+  <div class="card">
+    <div class="card-title">Limites por Funcionária</div>
+    <div class="info-box ib-blue">ℹ️ Os nomes são carregados automaticamente do cadastro de funcionários acima.</div>
+    <div id="bonus-list"></div>
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="salvarBonus()">💾 Salvar Limites</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── USUÁRIOS ──────────────────────────────────────────── -->
+<div class="page" id="page-usuarios">
+  <div class="pg-title">Usuários & Perfis</div>
+  <div class="pg-sub">Gerencie o acesso ao sistema. Cada perfil determina o que o usuário pode ver e fazer.</div>
+
+  <div class="card">
+    <div class="card-title" id="usr-form-title">➕ Novo Usuário</div>
+    <div class="form-grid">
+      <div class="fg"><label>Nome *</label><input id="u-nome" placeholder="Nome completo"/></div>
+      <div class="fg"><label>E-mail *</label><input id="u-email" type="email" placeholder="email@bombeef.com.br"/></div>
+    </div>
+    <div class="form-grid">
+      <div class="fg">
+        <label>Senha <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted)">(deixe vazio para manter)</span></label>
+        <input id="u-senha" type="password" placeholder="••••••••"/>
+      </div>
+      <div class="fg">
+        <label>Perfil</label>
+        <select id="u-perfil">
+          <option value="operacao">Operação — acesso básico</option>
+          <option value="estoque">Estoque — validades e perdas</option>
+          <option value="financeiro">Financeiro — boletos e DRE</option>
+          <option value="gerente">Gerente — tudo exceto admin</option>
+          <option value="admin">Administrador — acesso total</option>
+        </select>
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-neutral" onclick="cancelarUser()">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarUser()">💾 Salvar</button>
+      <span id="u-msg" style="font-size:12px;color:var(--muted);align-self:center;margin-left:8px"></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Usuários do Sistema</div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Nome</th><th>E-mail</th><th>Perfil</th><th>Último Acesso</th><th>Status</th><th></th></tr></thead>
+        <tbody id="usr-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ── INTEGRAÇÃO ────────────────────────────────────────── -->
+<div class="page" id="page-integracao">
+  <div class="pg-title">Integração & Sincronização</div>
+  <div class="pg-sub">Visualize o status de sincronização entre os módulos e o banco de dados.</div>
+
+  <div class="card">
+    <div class="card-title">Status das Rotas de API</div>
+    <div id="api-status-list" style="display:flex;flex-direction:column;gap:8px"></div>
+    <button class="btn btn-neutral btn-sm" onclick="checkAPIs()" style="margin-top:12px">🔄 Verificar Agora</button>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Publicar Configurações <span>— força re-leitura em todos os módulos</span></div>
+    <div class="info-box ib-gold">
+      ⚡ Todas as alterações já são salvas em tempo real no banco. Use este botão se algum módulo parecer desatualizado.
+    </div>
+    <button class="btn btn-primary" onclick="publicarConfig()">📡 Publicar Configurações</button>
+  </div>
+</div>
+
+</main>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════
+// TOKEN & API
+// ══════════════════════════════════════════════════════════
+let TOKEN = sessionStorage.getItem('bb_token') || localStorage.getItem('bb_token') || null;
+
+// Recebe token do portal pai (iframe)
+window.addEventListener('message', e => {
+  if (e.data?.type === 'bb_auth' && e.data.token) {
+    TOKEN = e.data.token;
+    iniciar();
+  }
+});
+try { window.parent.postMessage({ type: 'bb_request_auth' }, '*'); } catch(e) {}
+
+async function api(method, path, body) {
+  if (!TOKEN) throw new Error('Sem autenticação');
+  const r = await fetch(path, {
+    method,
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + TOKEN },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.erro || `HTTP ${r.status}`);
+  return d;
+}
+
+function toast(msg, tipo='ok') {
+  const el = document.createElement('div');
+  el.className = 'bb-toast';
+  el.style.background = tipo === 'err' ? 'var(--red)' : tipo === 'warn' ? 'var(--orange)' : 'var(--green)';
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => { el.style.opacity='0'; el.style.transition='opacity .3s'; setTimeout(()=>el.remove(),300); }, 3000);
+}
+
+const fmt = v => 'R$ ' + parseFloat(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2});
+const fmtN = n => parseInt(n||0).toString();
+
+// ══════════════════════════════════════════════════════════
+// NAVEGAÇÃO
+// ══════════════════════════════════════════════════════════
+function go(pg) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + pg)?.classList.add('active');
+  document.querySelector(`.nav-item[onclick="go('${pg}')"]`)?.classList.add('active');
+  const init = PAGE_INIT[pg];
+  if (init) init();
+}
+
+const PAGE_INIT = {
+  overview:       loadOverview,
+  categorias:     loadCategorias,
+  funcionarios:   loadFuncionarios,
+  metas:          loadMetas,
+  faturamento:    loadFaturamento,
+  'planos-boleto':loadPlanos,
+  locais:         loadLocais,
+  prazos:         loadPrazos,
+  bonus:          loadBonus,
+  usuarios:       loadUsuarios,
+  integracao:     loadIntegracao,
+};
+
+function catTab(t) {
+  document.querySelectorAll('#page-categorias .tab').forEach((el,i) => el.classList.toggle('active', ['arvore','nova','mapeamentos'][i]===t));
+  document.querySelectorAll('#page-categorias .tab-content').forEach((el,i) => el.classList.toggle('active', ['cat-arvore','cat-nova','cat-mapeamentos'][i]==='cat-'+t));
+}
+
+// ══════════════════════════════════════════════════════════
+// DRE CATEGORIES — dados locais (mesmos do Classificador)
+// ══════════════════════════════════════════════════════════
+const DRE_GROUPS = {
+  "RECEITAS":    { label:"RECEITAS",                            subs:["VENDAS DE MERCADORIAS","Juros de aplicacoes financeiras","Descontos financeiros obtidos"] },
+  "CMV":         { label:"CUSTO DA MERCADORIA VENDIDA",         subs:["COMPRAS - REVENDA","Bovino","Suíno","Cordeiro","Aves","Outras Proteínas","Carvão","Empório (Diversos)","Bebidas","Acessórios","Embalagens","Acompanhamentos","Gelo","Sorvete"] },
+  "PESSOAL":     { label:"DESPESA COM PESSOAL",                 subs:["Salarios e ordenados","FGTS","Vale transporte","Vale alimentação","Provisão 13º Salario","Provisão Férias","Provisão Fgts s/ 13º","Provisão Fgts s/ Férias"] },
+  "VENDAS_CAT":  { label:"DESPESAS COM VENDAS",                 subs:["Fretes com vendas","Royalties"] },
+  "CONSUMO":     { label:"DESPESAS DE CONSUMO",                 subs:["Alugueis de imoveis","Alugueis de Equipamentos","Energia eletrica","Agua e esgoto","Telefone"] },
+  "TERCEIROS":   { label:"SERVIÇOS PRESTADOS POR TERCEIROS",    subs:["Assistencia Contábil","Serviços com Segurança","Serviços de Manutenção e Higiene","Serviços com Internet/Software","Serviços prestados por terceiros","Serviços de Consultoria de Alimentos"] },
+  "MATERIAL":    { label:"MATERIAL DE USO/CONSUMO",             subs:["Material de Embalagens","Material de Higiene e Limpeza","Material de Copa e cozinha","Materiais diversos"] },
+  "FINANCEIRAS": { label:"DESPESAS FINANCEIRAS",                subs:["Juros de mora","Juros e comissoes bancarias","Multa de Mora","Tarifas Bancarias","IOF S/ Imp. S/ Oper. Financeiras","Tarifa de Administração de Cartões"] },
+  "OUTRAS":      { label:"OUTRAS DESPESAS OPERACIONAIS",        subs:["Depreciação e Amortização"] },
+  "IMPOSTOS":    { label:"IMPOSTOS, TAXAS E CONTRIBUIÇÕES",     subs:["IPTU","TFE","Simples Nacional","ICMS Sobre Diferencial de Aliquota"] },
+};
+
+const PLANO_TO_DRE = {
+  'Fornec - Proteínas':           'COMPRAS - REVENDA',
+  'Fornec - Acompanhamentos':     'COMPRAS - REVENDA',
+  'Fornec - Bebidas/Gelo/Sorvete':'COMPRAS - REVENDA',
+  'Fornec - Empório (outros)':    'COMPRAS - REVENDA',
+  'Fornec - Empório (carvão)':    'COMPRAS - REVENDA',
+  'Fornec - Embalagens':          'Material de Embalagens',
+  'Fornec - Acessórios':          'Materiais diversos',
+  'Fornec - Outras Desp':         'Serviços prestados por terceiros',
+};
+
+// Categorias extras do banco
+let _extraCats = {};  // { grupKey: ['nome1','nome2'] }
+let _mappings  = [];  // [ {key, cat, origem} ]
+
+function allCats() {
+  const out = [];
+  for (const [k, g] of Object.entries(DRE_GROUPS)) {
+    const extras = _extraCats[k] || [];
+    [...g.subs, ...extras].forEach(s => out.push(s));
+  }
+  return [...new Set(out)].sort();
+}
+
+function populateCatSels() {
+  ['nc-grupo','map-cat'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (id === 'nc-grupo') {
+      el.innerHTML = '<option value="">Selecione o grupo...</option>' +
+        Object.entries(DRE_GROUPS).map(([k,g]) => `<option value="${k}">${g.label}</option>`).join('');
+    } else {
+      el.innerHTML = '<option value="">Selecione...</option>' +
+        allCats().map(c => `<option value="${c}">${c}</option>`).join('');
+    }
+  });
+}
+
+// ══════════════════════════════════════════════════════════
+// OVERVIEW
+// ══════════════════════════════════════════════════════════
+async function loadOverview() {
+  try {
+    const [funcs, cfg, fat] = await Promise.all([
+      api('GET', '/api/validade/funcionarios'),
+      api('GET', '/api/validade/config-bulk?chaves=metas,prazos,locais,bonus'),
+      api('GET', '/api/validade/faturamento'),
+    ]);
+    document.getElementById('ov-funcs').textContent = funcs.data?.length || 0;
+    document.getElementById('badge-func').textContent = funcs.data?.length || 0;
+    const totalCats = Object.values(DRE_GROUPS).reduce((s,g) => s + g.subs.length, 0);
+    document.getElementById('ov-cats').textContent = totalCats;
+    const locais = cfg.data?.locais || [];
+    document.getElementById('ov-locais').textContent = locais.length;
+    document.getElementById('ov-meta').textContent = (cfg.data?.metas?.meta || 2) + '%';
+    document.getElementById('ov-fat').textContent = Object.keys(fat.data || {}).length;
+
+    // Usuários
+    try {
+      const u = await api('GET', '/auth/usuarios');
+      document.getElementById('ov-users').textContent = u.filter?.(x=>x.ativo)?.length || u.length || 0;
+    } catch(e) {}
+
+    document.getElementById('sync-dot').style.background = '#4ecdc4';
+    document.getElementById('sync-txt').textContent = 'banco conectado';
+  } catch(e) {
+    document.getElementById('sync-dot').style.background = '#c0392b';
+    document.getElementById('sync-txt').textContent = 'erro: ' + e.message;
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+// CATEGORIAS
+// ══════════════════════════════════════════════════════════
+async function loadCategorias() {
+  try {
+    const r = await api('GET', '/api/validade/config/cat_extras');
+    _extraCats = r.data || {};
+  } catch(e) { _extraCats = {}; }
+  try {
+    const r = await api('GET', '/api/validade/config/cat_mappings');
+    _mappings = r.data || [];
+  } catch(e) { _mappings = []; }
+
+  renderDreTree();
+  renderMappings();
+  populateCatSels();
+}
+
+function renderDreTree() {
+  const tree = document.getElementById('dre-tree');
+  tree.innerHTML = Object.entries(DRE_GROUPS).map(([k, g]) => {
+    const extras = _extraCats[k] || [];
+    const subs = [
+      ...g.subs.map(s => `<div class="dre-sub-row"><div class="dre-sub-name">${s}</div></div>`),
+      ...extras.map(s => `<div class="dre-sub-row">
+        <div class="dre-sub-name">${s}<span class="dre-sub-custom">✦ personalizada</span></div>
+        <button class="act-btn act-del" onclick="removerSubcat('${k}','${s}')">✕</button>
+      </div>`),
+    ].join('');
+    return `<div class="dre-group">
+      <div class="dre-group-hdr" onclick="toggleGrupo(this)">
+        <span class="dre-arrow">▶</span>
+        <span style="font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);font-weight:700">${g.label}</span>
+        <span style="margin-left:auto;font-size:11px;color:var(--muted)">${g.subs.length + extras.length} categorias</span>
+      </div>
+      <div class="dre-subs">${subs}</div>
+    </div>`;
+  }).join('');
+}
+
+function toggleGrupo(hdr) {
+  hdr.classList.toggle('open');
+  hdr.nextElementSibling.classList.toggle('open');
+}
+
+async function addCatSub() {
+  const grupo = document.getElementById('nc-grupo').value;
+  const nome  = document.getElementById('nc-nome').value.trim();
+  if (!grupo || !nome) { toast('Preencha grupo e nome', 'err'); return; }
+  if (!_extraCats[grupo]) _extraCats[grupo] = [];
+  if (_extraCats[grupo].includes(nome)) { toast('Categoria já existe', 'warn'); return; }
+  _extraCats[grupo].push(nome);
+  await salvarCfg('cat_extras', _extraCats);
+  document.getElementById('nc-nome').value = '';
+  toast(`✅ "${nome}" adicionada ao DRE`);
+  renderDreTree(); populateCatSels();
+}
+
+async function removerSubcat(grupo, nome) {
+  if (!confirm(`Remover "${nome}" do DRE?`)) return;
+  _extraCats[grupo] = (_extraCats[grupo] || []).filter(s => s !== nome);
+  await salvarCfg('cat_extras', _extraCats);
+  toast(`Removida: ${nome}`, 'warn');
+  renderDreTree(); populateCatSels();
+}
+
+function renderMappings() {
+  const allM = [
+    ...Object.entries({
+      'WEW IMPORTACAO':'COMPRAS - REVENDA','CABANHA INTERLAGOS':'COMPRAS - REVENDA',
+      'FRIGOL':'COMPRAS - REVENDA','MINERVA FUNDO':'COMPRAS - REVENDA',
+      'AURORA LTDA':'COMPRAS - REVENDA','GUIDARA COMERCIO':'COMPRAS - REVENDA',
+      'CANTAGALLO':'COMPRAS - REVENDA','FRIGORIFICO HUMAITA':'COMPRAS - REVENDA',
+      'REDECARD':'VENDAS DE MERCADORIAS','PAGCERTO':'Tarifa de Administração de Cartões',
+      'MDK FRANCHISING':'Royalties','ASI CAMPINAS':'Serviços com Segurança',
+    }).map(([k,v]) => ({ key:k, cat:v, origem:'sistema' })),
+    ..._mappings,
+  ];
+  document.getElementById('map-tbody').innerHTML = allM.map(m => `
+    <tr>
+      <td style="font-family:'DM Mono',monospace;font-size:11px">${m.key}</td>
+      <td>${m.cat}</td>
+      <td><span class="pill ${m.origem==='sistema'?'pill-gray':'pill-blue'}">${m.origem}</span></td>
+      <td>${m.origem!=='sistema'?`<button class="act-btn act-del" onclick="removerMapping('${m.key}')">✕</button>`:'—'}</td>
+    </tr>`).join('');
+}
+
+async function addMapping() {
+  const key = document.getElementById('map-key').value.trim().toUpperCase();
+  const cat = document.getElementById('map-cat').value;
+  if (!key || !cat) { toast('Preencha palavra-chave e categoria', 'err'); return; }
+  _mappings = _mappings.filter(m => m.key !== key);
+  _mappings.push({ key, cat, origem: 'personalizado' });
+  await salvarCfg('cat_mappings', _mappings);
+  document.getElementById('map-key').value = '';
+  toast(`✅ Mapeamento "${key}" → "${cat}" salvo`);
+  renderMappings();
+}
+
+async function removerMapping(key) {
+  _mappings = _mappings.filter(m => m.key !== key);
+  await salvarCfg('cat_mappings', _mappings);
+  toast('Mapeamento removido', 'warn');
+  renderMappings();
+}
+
+// ══════════════════════════════════════════════════════════
+// FUNCIONÁRIOS
+// ══════════════════════════════════════════════════════════
+let _funcs = [], _editFuncId = null;
+
+async function loadFuncionarios() {
+  try {
+    const r = await api('GET', '/api/validade/funcionarios');
+    _funcs = r.data || [];
+    document.getElementById('badge-func').textContent = _funcs.filter(f=>f.ativo!==false).length;
+    renderFuncs();
+  } catch(e) { toast('Erro ao carregar funcionários: ' + e.message, 'err'); }
+}
+
+function renderFuncs() {
+  document.getElementById('func-tbody').innerHTML = _funcs.map(f => `
+    <tr>
+      <td style="font-weight:600">${f.nome}</td>
+      <td style="color:var(--muted)">${f.cargo||'—'}</td>
+      <td style="font-family:'DM Mono',monospace">${f.salario>0?fmt(f.salario):'—'}</td>
+      <td style="font-family:'DM Mono',monospace">${f.va>0?fmt(f.va):'—'}</td>
+      <td style="font-family:'DM Mono',monospace">${f.vt>0?fmt(f.vt):'—'}</td>
+      <td><span class="pill ${f.ativo!==false?'pill-green':'pill-red'}">${f.ativo!==false?'Ativo':'Inativo'}</span></td>
+      <td style="font-size:11px;color:var(--muted)">${f.admissao||'—'}</td>
+      <td>
+        <button class="act-btn act-edit" onclick="editarFunc('${f.id||f.nome}')">✎</button>
+      </td>
+    </tr>`).join('');
+  document.getElementById('func-foot').textContent = `${_funcs.length} funcionário(s) — ${_funcs.filter(f=>f.ativo!==false).length} ativo(s)`;
+}
+
+function editarFunc(id) {
+  const f = _funcs.find(x => (x.id||x.nome) === id);
+  if (!f) return;
+  _editFuncId = id;
+  document.getElementById('func-form-title').textContent = '✎ Editando: ' + f.nome;
+  document.getElementById('f-nome').value    = f.nome || '';
+  document.getElementById('f-cargo').value   = f.cargo || '';
+  document.getElementById('f-salario').value = f.salario || '';
+  document.getElementById('f-va').value      = f.va || '';
+  document.getElementById('f-vt').value      = f.vt || '';
+  document.getElementById('f-ativo').value   = f.ativo===false ? 'false' : 'true';
+  document.getElementById('f-admissao').value= f.admissao || '';
+  document.getElementById('f-obs').value     = f.obs || '';
+  window.scrollTo(0,0);
+}
+
+function cancelarFunc() {
+  _editFuncId = null;
+  document.getElementById('func-form-title').textContent = '➕ Novo Funcionário';
+  ['f-nome','f-cargo','f-salario','f-va','f-vt','f-admissao','f-obs'].forEach(id => document.getElementById(id).value='');
+  document.getElementById('f-ativo').value = 'true';
+}
+
+async function salvarFunc() {
+  const nome = document.getElementById('f-nome').value.trim();
+  if (!nome) { toast('Nome obrigatório', 'err'); return; }
+
+  const func = {
+    id:       _editFuncId || (Date.now().toString(36)),
+    nome,
+    cargo:    document.getElementById('f-cargo').value.trim() || null,
+    salario:  parseFloat(document.getElementById('f-salario').value) || 0,
+    va:       parseFloat(document.getElementById('f-va').value) || 0,
+    vt:       parseFloat(document.getElementById('f-vt').value) || 0,
+    ativo:    document.getElementById('f-ativo').value !== 'false',
+    admissao: document.getElementById('f-admissao').value || null,
+    obs:      document.getElementById('f-obs').value.trim() || null,
+  };
+
+  if (_editFuncId) {
+    const i = _funcs.findIndex(f => (f.id||f.nome) === _editFuncId);
+    if (i >= 0) _funcs[i] = func; else _funcs.push(func);
+  } else {
+    _funcs.push(func);
+  }
+
+  // Salva em bb_f via config para compartilhar com todos os módulos
+  await salvarCfg('bb_f', _funcs);
+  // Também espelha no localStorage para compatibilidade
+  try { localStorage.setItem('bb_f', JSON.stringify(_funcs)); localStorage.setItem('bb4_f', JSON.stringify(_funcs)); } catch(e) {}
+
+  toast(_editFuncId ? '✅ Funcionário atualizado!' : '✅ Funcionário cadastrado!');
+  cancelarFunc();
+  renderFuncs();
+  document.getElementById('badge-func').textContent = _funcs.filter(f=>f.ativo!==false).length;
+}
+
+// ══════════════════════════════════════════════════════════
+// METAS
+// ══════════════════════════════════════════════════════════
+async function loadMetas() {
+  try {
+    const r = await api('GET', '/api/validade/config/metas');
+    const m = r.data || {};
+    document.getElementById('m-meta').value   = m.meta   || 2;
+    document.getElementById('m-alerta').value = m.alerta || 80;
+    document.getElementById('m-premio').value = m.premio || '';
+    document.getElementById('m-fator').value  = m.fator  || 50;
+  } catch(e) {}
+}
+
+async function salvarMetas() {
+  const metas = {
+    meta:   parseFloat(document.getElementById('m-meta').value)   || 2,
+    alerta: parseFloat(document.getElementById('m-alerta').value) || 80,
+    premio: parseFloat(document.getElementById('m-premio').value) || 0,
+    fator:  parseFloat(document.getElementById('m-fator').value)  || 50,
+  };
+  await salvarCfg('metas', metas);
+  // Compatibilidade com sistemas legados
+  try { localStorage.setItem('bb_p', JSON.stringify(metas)); localStorage.setItem('bb4_p', JSON.stringify(metas)); } catch(e) {}
+  toast('✅ Metas salvas e publicadas!');
+  document.getElementById('ov-meta').textContent = metas.meta + '%';
+}
+
+// ══════════════════════════════════════════════════════════
+// FATURAMENTO
+// ══════════════════════════════════════════════════════════
+let _fat = {};
+
+async function loadFaturamento() {
+  buildFatMesSel();
+  try {
+    const r = await api('GET', '/api/validade/faturamento');
+    _fat = r.data || {};
+    renderFatTabela();
+  } catch(e) {}
+}
+
+function buildFatMesSel() {
+  const sel = document.getElementById('fat-mes');
+  const cur = sel.value;
+  const d = new Date();
+  const opts = [];
+  for (let i = 0; i < 24; i++) {
+    const mm = String(d.getMonth()+1).padStart(2,'0');
+    const yy = d.getFullYear();
+    const v = mm + '/' + yy;
+    const l = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][d.getMonth()] + '/' + yy;
+    opts.push(`<option value="${v}" ${v===cur?'selected':''}>${l}</option>`);
+    d.setMonth(d.getMonth()-1);
+  }
+  sel.innerHTML = opts.join('');
+}
+
+async function salvarFat() {
+  const mes  = document.getElementById('fat-mes').value;
+  const real = parseFloat(document.getElementById('fat-real').value) || 0;
+  const prev = parseFloat(document.getElementById('fat-prev').value) || 0;
+  if (!real && !prev) { toast('Informe ao menos um valor', 'err'); return; }
+
+  await api('POST', '/api/validade/faturamento', { mes_ref: mes, real: real||null, previsto: prev||null });
+  if (!_fat[mes]) _fat[mes] = {};
+  if (real) { _fat[mes].real = real; _fat[mes].manual = real; }
+  if (prev) _fat[mes].prev = prev;
+  try { localStorage.setItem('bb_fat', JSON.stringify(_fat)); localStorage.setItem('bb4_fat', JSON.stringify(_fat)); } catch(e) {}
+  toast(`✅ Faturamento de ${mes} salvo!`);
+  renderFatTabela();
+  document.getElementById('ov-fat').textContent = Object.keys(_fat).length;
+}
+
+function renderFatTabela() {
+  const meses = Object.keys(_fat).sort((a,b) => {
+    const [ma,ya]=a.split('/'), [mb,yb]=b.split('/');
+    return new Date(parseInt(yb),parseInt(mb)-1) - new Date(parseInt(ya),parseInt(ma)-1);
+  });
+  document.getElementById('fat-tbody').innerHTML = meses.length ? meses.map(m => {
+    const e = _fat[m];
+    const real = e.real || e.manual || 0;
+    const prev = e.prev || 0;
+    const status = real > 0
+      ? '<span class="pill pill-green">✓ Real</span>'
+      : '<span class="pill pill-gray">Previsto</span>';
+    return `<tr>
+      <td style="font-weight:600">${m}</td>
+      <td style="font-family:'DM Mono',monospace">${real>0?fmt(real):'—'}</td>
+      <td style="font-family:'DM Mono',monospace;color:var(--muted)">${prev>0?fmt(prev):'—'}</td>
+      <td>${status}</td>
+      <td><button class="act-btn act-del" onclick="delFat('${m}')">✕</button></td>
+    </tr>`;
+  }).join('') : '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px">Nenhum faturamento cadastrado</td></tr>';
+}
+
+async function delFat(mes) {
+  if (!confirm(`Remover faturamento de ${mes}?`)) return;
+  await api('DELETE', `/api/validade/faturamento/${encodeURIComponent(mes)}`);
+  delete _fat[mes];
+  renderFatTabela();
+  toast(`Faturamento de ${mes} removido`, 'warn');
+}
+
+// ══════════════════════════════════════════════════════════
+// PLANOS DE BOLETO
+// ══════════════════════════════════════════════════════════
+function loadPlanos() {
+  document.getElementById('planos-tbody').innerHTML = Object.entries(PLANO_TO_DRE).map(([k,v]) => `
+    <tr>
+      <td style="font-weight:600">${k}</td>
+      <td><span class="pill pill-blue">${v}</span></td>
+    </tr>`).join('');
+}
+
+// ══════════════════════════════════════════════════════════
+// LOCAIS
+// ══════════════════════════════════════════════════════════
+let _locais = ['REFRIGERADOR','FREEZER','GONDOLA','ESTOQUE','CAIXA'];
+
+async function loadLocais() {
+  try {
+    const r = await api('GET', '/api/validade/config/locais');
+    if (r.data?.length) _locais = r.data;
+  } catch(e) {}
+  renderLocais();
+}
+
+function renderLocais() {
+  document.getElementById('locais-list').innerHTML = _locais.map((l,i) => `
+    <div style="display:flex;align-items:center;gap:6px;background:var(--white);border:1px solid var(--border);border-radius:8px;padding:7px 12px">
+      <span style="font-size:13px;font-weight:600">${l}</span>
+      <button class="act-btn act-del" onclick="delLocal(${i})">✕</button>
+    </div>`).join('');
+  document.getElementById('locais-foot').textContent = `${_locais.length} local(is) cadastrado(s)`;
+}
+
+async function addLocal() {
+  const v = document.getElementById('loc-inp').value.trim().toUpperCase();
+  if (!v) return;
+  if (_locais.includes(v)) { toast('Local já existe', 'warn'); return; }
+  _locais.push(v);
+  await salvarCfg('locais', _locais);
+  try { localStorage.setItem('bb_locais', JSON.stringify(_locais)); } catch(e) {}
+  document.getElementById('loc-inp').value = '';
+  renderLocais();
+  toast(`✅ Local "${v}" adicionado!`);
+}
+
+async function delLocal(i) {
+  const nome = _locais[i];
+  if (!confirm(`Remover local "${nome}"?`)) return;
+  _locais.splice(i, 1);
+  await salvarCfg('locais', _locais);
+  try { localStorage.setItem('bb_locais', JSON.stringify(_locais)); } catch(e) {}
+  renderLocais();
+  toast(`Local "${nome}" removido`, 'warn');
+}
+
+// ══════════════════════════════════════════════════════════
+// PRAZOS
+// ══════════════════════════════════════════════════════════
+async function loadPrazos() {
+  try {
+    const r = await api('GET', '/api/validade/config/prazos');
+    const p = r.data || {};
+    document.getElementById('p-crit').value = p.critico || 7;
+    document.getElementById('p-urg').value  = p.urgente || 15;
+    document.getElementById('p-at').value   = p.atencao || 30;
+  } catch(e) {}
+}
+
+async function salvarPrazos() {
+  const prazos = {
+    critico: parseInt(document.getElementById('p-crit').value) || 7,
+    urgente: parseInt(document.getElementById('p-urg').value)  || 15,
+    atencao: parseInt(document.getElementById('p-at').value)   || 30,
+  };
+  await salvarCfg('prazos', prazos);
+  try { localStorage.setItem('bb_vparams', JSON.stringify(prazos)); } catch(e) {}
+  toast('✅ Prazos salvos e publicados!');
+}
+
+// ══════════════════════════════════════════════════════════
+// BÔNUS
+// ══════════════════════════════════════════════════════════
+let _bonus = {};
+
+async function loadBonus() {
+  try {
+    const r = await api('GET', '/api/validade/config/bonus');
+    _bonus = r.data || {};
+  } catch(e) { _bonus = {}; }
+  renderBonus();
+}
+
+function renderBonus() {
+  const ativos = _funcs.filter(f => f.ativo !== false);
+  document.getElementById('bonus-list').innerHTML = ativos.length ? ativos.map(f => `
+    <div style="display:flex;align-items:center;gap:14px;padding:12px 0;border-bottom:1px solid var(--border)">
+      <div style="width:34px;height:34px;border-radius:50%;background:var(--red);color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700">${f.nome[0]}</div>
+      <div style="flex:1">
+        <div style="font-weight:600;font-size:13px">${f.nome}</div>
+        <div style="font-size:11px;color:var(--muted)">${f.cargo||'Funcionária'}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <label style="font-size:11px;color:var(--muted)">Bônus custo/mês</label>
+        <div style="position:relative">
+          <span style="position:absolute;left:9px;top:50%;transform:translateY(-50%);font-size:12px;color:var(--muted)">R$</span>
+          <input type="number" step="0.01" min="0" placeholder="0,00" id="bonus-${f.nome.replace(/\s+/g,'_')}"
+            value="${(_bonus[f.nome]?.limiteCusto||0)>0?_bonus[f.nome].limiteCusto:''}"
+            style="width:120px;padding:7px 10px 7px 28px;border:1px solid var(--border);border-radius:7px;font-family:'DM Sans',sans-serif;font-size:13px"/>
+        </div>
+      </div>
+    </div>`).join('') : '<div style="color:var(--muted);padding:20px;text-align:center">Cadastre funcionários primeiro</div>';
+}
+
+async function salvarBonus() {
+  const ativos = _funcs.filter(f => f.ativo !== false);
+  ativos.forEach(f => {
+    const inp = document.getElementById('bonus-' + f.nome.replace(/\s+/g,'_'));
+    const val = inp ? parseFloat(inp.value) || 0 : 0;
+    if (val > 0) _bonus[f.nome] = { limiteCusto: val };
+    else delete _bonus[f.nome];
+  });
+  await salvarCfg('bonus', _bonus);
+  try { localStorage.setItem('bb_bonus', JSON.stringify(_bonus)); } catch(e) {}
+  toast('✅ Configurações de bônus salvas!');
+}
+
+// ══════════════════════════════════════════════════════════
+// USUÁRIOS
+// ══════════════════════════════════════════════════════════
+let _editUserId = null;
+
+async function loadUsuarios() {
+  try {
+    const users = await api('GET', '/auth/usuarios');
+    document.getElementById('ov-users').textContent = users.filter(u=>u.ativo).length;
+    document.getElementById('usr-tbody').innerHTML = users.map(u => `
+      <tr>
+        <td style="font-weight:600">${u.nome}</td>
+        <td style="color:var(--muted);font-size:12px">${u.email}</td>
+        <td><span class="pill pill-blue">${u.perfil}</span></td>
+        <td style="font-size:11px;color:var(--muted)">${u.ultimo_acesso ? new Date(u.ultimo_acesso).toLocaleDateString('pt-BR') : '—'}</td>
+        <td><span class="pill ${u.ativo?'pill-green':'pill-red'}">${u.ativo?'Ativo':'Inativo'}</span></td>
+        <td>
+          <button class="act-btn act-edit" onclick="editarUser(${u.id})">✎</button>
+          ${u.perfil!=='admin'?`<button class="act-btn act-del" onclick="toggleUser(${u.id},${u.ativo})">${u.ativo?'Desativar':'Ativar'}</button>`:''}
+        </td>
+      </tr>`).join('');
+  } catch(e) { toast('Erro ao carregar usuários: ' + e.message, 'err'); }
+}
+
+async function editarUser(id) {
+  const trs = document.querySelectorAll('#usr-tbody tr');
+  // Pega dados da linha
+  try {
+    const users = await api('GET', '/auth/usuarios');
+    const u = users.find(x => x.id === id);
+    if (!u) return;
+    _editUserId = id;
+    document.getElementById('usr-form-title').textContent = '✎ Editando: ' + u.nome;
+    document.getElementById('u-nome').value  = u.nome;
+    document.getElementById('u-email').value = u.email;
+    document.getElementById('u-senha').value = '';
+    document.getElementById('u-perfil').value= u.perfil;
+    window.scrollTo(0,0);
+  } catch(e) {}
+}
+
+function cancelarUser() {
+  _editUserId = null;
+  document.getElementById('usr-form-title').textContent = '➕ Novo Usuário';
+  ['u-nome','u-email','u-senha'].forEach(id => document.getElementById(id).value='');
+  document.getElementById('u-perfil').value = 'operacao';
+  document.getElementById('u-msg').textContent = '';
+}
+
+async function salvarUser() {
+  const nome  = document.getElementById('u-nome').value.trim();
+  const email = document.getElementById('u-email').value.trim();
+  const senha = document.getElementById('u-senha').value;
+  const perfil= document.getElementById('u-perfil').value;
+  const msg   = document.getElementById('u-msg');
+
+  if (!nome || !email) { msg.textContent = '⚠️ Nome e e-mail obrigatórios'; msg.style.color='var(--red)'; return; }
+  if (!_editUserId && !senha) { msg.textContent = '⚠️ Senha obrigatória para novo usuário'; msg.style.color='var(--red)'; return; }
+
+  try {
+    if (_editUserId) {
+      const body = { nome, email, perfil, ativo: true };
+      if (senha) body.senha = senha;
+      await api('PUT', `/auth/usuarios/${_editUserId}`, body);
+      msg.textContent = '✅ Atualizado!';
+    } else {
+      await api('POST', '/auth/usuarios', { nome, email, senha, perfil });
+      msg.textContent = '✅ Criado!';
+    }
+    msg.style.color = 'var(--green)';
+    toast('✅ Usuário salvo!');
+    cancelarUser();
+    loadUsuarios();
+  } catch(e) {
+    msg.textContent = '⚠️ ' + e.message;
+    msg.style.color = 'var(--red)';
+  }
+}
+
+async function toggleUser(id, ativo) {
+  try {
+    const users = await api('GET', '/auth/usuarios');
+    const u = users.find(x => x.id === id);
+    if (!u) return;
+    await api('PUT', `/auth/usuarios/${id}`, { nome: u.nome, email: u.email, perfil: u.perfil, ativo: !ativo });
+    loadUsuarios();
+    toast(ativo ? 'Usuário desativado' : 'Usuário ativado', ativo ? 'warn' : 'ok');
+  } catch(e) { toast(e.message, 'err'); }
+}
+
+// ══════════════════════════════════════════════════════════
+// INTEGRAÇÃO
+// ══════════════════════════════════════════════════════════
+async function loadIntegracao() { checkAPIs(); }
+
+async function checkAPIs() {
+  const endpoints = [
+    { name: 'Auth',           url: '/auth/me' },
+    { name: 'Validade KPIs',  url: '/api/validade/kpis' },
+    { name: 'Boletos KPIs',   url: '/api/boletos/kpis' },
+    { name: 'Dashboard',      url: '/api/dashboard/kpis' },
+    { name: 'Classificador',  url: '/api/classificador/ultima' },
+  ];
+  const el = document.getElementById('api-status-list');
+  el.innerHTML = endpoints.map(e => `
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+      <div style="width:8px;height:8px;border-radius:50%;background:#ddd" id="dot-${e.name.replace(/\s+/g,'_')}"></div>
+      <span style="font-weight:600;font-size:13px">${e.name}</span>
+      <span style="font-size:12px;color:var(--muted);margin-left:auto" id="status-${e.name.replace(/\s+/g,'_')}">verificando...</span>
+    </div>`).join('');
+
+  for (const ep of endpoints) {
+    const dotId = 'dot-' + ep.name.replace(/\s+/g,'_');
+    const txtId = 'status-' + ep.name.replace(/\s+/g,'_');
+    try {
+      const t0 = Date.now();
+      await api('GET', ep.url);
+      const ms = Date.now() - t0;
+      document.getElementById(dotId).style.background = '#4ecdc4';
+      document.getElementById(txtId).textContent = `✅ OK (${ms}ms)`;
+    } catch(e) {
+      document.getElementById(dotId).style.background = '#c0392b';
+      document.getElementById(txtId).textContent = `❌ ${e.message}`;
+    }
+  }
+}
+
+async function publicarConfig() {
+  try {
+    // Republica todas as configs no banco
+    const r1 = await api('GET', '/api/validade/config-bulk?chaves=metas,prazos,locais,bonus,bb_f,cat_extras,cat_mappings');
+    const cfg = r1.data || {};
+    // Espelha em localStorage para compatibilidade com todos os módulos
+    if (cfg.metas)   { localStorage.setItem('bb_p', JSON.stringify(cfg.metas));   localStorage.setItem('bb4_p', JSON.stringify(cfg.metas)); }
+    if (cfg.prazos)  { localStorage.setItem('bb_vparams', JSON.stringify(cfg.prazos)); }
+    if (cfg.locais)  { localStorage.setItem('bb_locais', JSON.stringify(cfg.locais)); }
+    if (cfg.bonus)   { localStorage.setItem('bb_bonus', JSON.stringify(cfg.bonus)); }
+    if (cfg.bb_f)    { localStorage.setItem('bb_f', JSON.stringify(cfg.bb_f));     localStorage.setItem('bb4_f', JSON.stringify(cfg.bb_f)); }
+    toast('✅ Configurações publicadas em todos os módulos!');
+  } catch(e) { toast('Erro: ' + e.message, 'err'); }
+}
+
+// ══════════════════════════════════════════════════════════
+// HELPER: salva config no banco
+// ══════════════════════════════════════════════════════════
+async function salvarCfg(chave, valor) {
+  await api('POST', `/api/validade/config/${chave}`, { valor });
+}
+
+// ══════════════════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════════════════
+function sair() {
+  localStorage.removeItem('bb_token'); sessionStorage.removeItem('bb_token');
+  window.location.href = '/';
+}
+
+async function iniciar() {
+  // Carrega funcionários primeiro (outros módulos dependem)
+  try {
+    const r = await api('GET', '/api/validade/funcionarios');
+    _funcs = r.data || [];
+    document.getElementById('badge-func').textContent = _funcs.filter(f=>f.ativo!==false).length;
+  } catch(e) {}
+  loadOverview();
+}
+
+// Inicia se já tem token
+if (TOKEN) iniciar();
+</script>
+</body>
+</html>
