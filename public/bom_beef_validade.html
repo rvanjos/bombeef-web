@@ -1407,8 +1407,12 @@ function syncBg(method, path, body) {
 // ── Pull do banco na abertura (silencioso) ───────────────
 // Se o banco tiver dados mais recentes, atualiza o localStorage
 async function pullFromDB() {
-  const token = getToken();
-  if (!token) return;
+  // Aguarda token estar disponível (postMessage do portal pode demorar ~200ms)
+  const token = await waitForToken(4000);
+  if (!token) {
+    console.log('[pull] Sem token — pulando sincronização com banco');
+    return;
+  }
   try {
     // Estoque desktop
     const re = await fetch('/api/validade/estoque-desktop', {
@@ -2381,6 +2385,31 @@ window._BB_TOKEN_SYNC = (
   null
 );
 
+// Resolve quando o token estiver disponível
+let _tokenReady = null;
+function waitForToken(timeoutMs = 4000) {
+  if (_tokenReady) return _tokenReady;
+  _tokenReady = new Promise(resolve => {
+    if (window._BB_TOKEN_SYNC) { resolve(window._BB_TOKEN_SYNC); return; }
+    // Aguarda o postMessage do portal
+    const handler = e => {
+      if (e.data?.type === 'bb_auth' && e.data.token) {
+        window._BB_TOKEN_SYNC = e.data.token;
+        window.removeEventListener('message', handler);
+        clearTimeout(timer);
+        resolve(e.data.token);
+      }
+    };
+    window.addEventListener('message', handler);
+    // Timeout — resolve com null se não chegar
+    const timer = setTimeout(() => {
+      window.removeEventListener('message', handler);
+      resolve(window._BB_TOKEN_SYNC || null);
+    }, timeoutMs);
+  });
+  return _tokenReady;
+}
+
 window.addEventListener('message', e => {
   if (e.data && e.data.type === 'bb_auth' && e.data.token) {
     window._BB_TOKEN_SYNC = e.data.token;
@@ -2411,23 +2440,18 @@ async function sincronizarBanco() {
   if (!prods.length) { toast('Sem produtos para sincronizar', 'warn'); return; }
 
   const btn = document.getElementById('btn-sync');
-  btn.textContent = '⏳ Sincronizando...'; btn.disabled = true;
+  btn.textContent = '⏳ Aguardando token...'; btn.disabled = true;
 
-  // Relê o token em todas as fontes no momento do clique
-  const token = (
-    window._BB_TOKEN_SYNC ||
-    window.BB_TOKEN ||
-    sessionStorage.getItem('bb_token') ||
-    sessionStorage.getItem('vld_token') ||
-    localStorage.getItem('bb_token') ||
-    ''
-  );
+  // Aguarda token — dá tempo do postMessage chegar
+  const token = await waitForToken(4000);
 
   if (!token) {
-    toast('⚠ Sem token — abra o ValidaStock pelo Portal Bom Beef', 'warn');
+    toast('⚠ Sem token — abra pelo Portal Bom Beef', 'warn');
     btn.textContent = '☁️ Sincronizar'; btn.disabled = false;
     return;
   }
+
+  btn.textContent = '⏳ Sincronizando...';
 
   let ok = 0, erros = 0;
   for (const p of prods) {
@@ -2883,7 +2907,7 @@ function salvarFaturamento() {
   updateSidebar();
 }
 
-async function deletarFatMes(mes) {
+function deletarFatMes(mes) {
   if (!confirm(`Remover faturamento de ${mes}?`)) return;
   const fh = getFH();
   delete fh[mes];
@@ -3252,11 +3276,11 @@ Object.assign(PAGE_INIT, {
   document.getElementById('hk-today').textContent=d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'});
   document.getElementById('dash-import-lbl').textContent = load(BB.pdate) ? `Última importação: ${load(BB.pdate)}` : 'Controle geral de validades e perdas';
   renderDash(); updateSidebar();
-  // Puxa dados do banco em background — atualiza o localStorage silenciosamente
-  // e re-renderiza se encontrar dados mais novos
+  // Puxa dados do banco em background após token estar disponível
+  // waitForToken já garante que o pull só roda quando o token chegar
   setTimeout(() => {
     pullFromDB().then(() => { renderDash(); updateSidebar(); }).catch(() => {});
-  }, 1500);
+  }, 500);
 })();
 </script>
 </body>
