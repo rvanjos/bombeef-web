@@ -22,14 +22,13 @@ module.exports = function (pool) {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS perdas (
         id                SERIAL PRIMARY KEY,
-        validade_item_id  INTEGER REFERENCES validade_items(id),
-        produto_id        INTEGER REFERENCES produtos(id),
+        validade_item_id  INTEGER,
+        produto_id        INTEGER,
         descricao         TEXT NOT NULL,
-        motivo            TEXT DEFAULT 'vencimento'
-                          CHECK (motivo IN ('vencimento','avaria','furto','doacao','outros')),
+        motivo            TEXT DEFAULT 'vencimento',
         qtd_unidades      INTEGER DEFAULT 0,
         valor_perda       NUMERIC(10,2) DEFAULT 0,
-        funcionario_id    INTEGER REFERENCES funcionarios(id),
+        funcionario_id    INTEGER,
         dt_perda          DATE DEFAULT CURRENT_DATE,
         mes               TEXT,
         observacao        TEXT,
@@ -37,11 +36,31 @@ module.exports = function (pool) {
         criado_em         TIMESTAMPTZ DEFAULT NOW()
       )
     `);
+    // Garante colunas novas
+    const cols = [
+      ['mes',               'TEXT'],
+      ['motivo',            "TEXT DEFAULT 'vencimento'"],
+      ['validade_item_id',  'INTEGER'],
+      ['produto_id',        'INTEGER'],
+      ['funcionario_id',    'INTEGER'],
+      ['qtd_unidades',      'INTEGER DEFAULT 0'],
+      ['valor_perda',       'NUMERIC(10,2) DEFAULT 0'],
+    ];
+    for (const [col, def] of cols) {
+      await pool.query(
+        `ALTER TABLE perdas ADD COLUMN IF NOT EXISTS ${col} ${def}`
+      ).catch(() => {});
+    }
+    // Popula coluna mes nos registros antigos que não têm
     await pool.query(`
-      CREATE INDEX IF NOT EXISTS idx_perdas_mes          ON perdas(mes);
-      CREATE INDEX IF NOT EXISTS idx_perdas_funcionario  ON perdas(funcionario_id);
-      CREATE INDEX IF NOT EXISTS idx_perdas_dt           ON perdas(dt_perda);
-    `);
+      UPDATE perdas SET mes = TO_CHAR(dt_perda, 'MM/YYYY')
+      WHERE mes IS NULL AND dt_perda IS NOT NULL
+    `).catch(() => {});
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_perdas_mes         ON perdas(mes);
+      CREATE INDEX IF NOT EXISTS idx_perdas_funcionario ON perdas(funcionario_id);
+      CREATE INDEX IF NOT EXISTS idx_perdas_dt          ON perdas(dt_perda);
+    `).catch(() => {});
   }
   initTable().catch(e => console.error('[perdas] initTable:', e.message));
 

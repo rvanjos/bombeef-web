@@ -21,21 +21,34 @@ module.exports = function (pool) {
   async function initTable() {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS kits (
-        id          SERIAL PRIMARY KEY,
-        codigo      TEXT UNIQUE NOT NULL,
-        nome        TEXT NOT NULL,
-        descricao   TEXT,
-        preco_venda NUMERIC(10,4) DEFAULT 0,
-        margem      NUMERIC(5,2) DEFAULT 0,
-        ativo       BOOLEAN DEFAULT true,
-        criado_em   TIMESTAMPTZ DEFAULT NOW(),
+        id            SERIAL PRIMARY KEY,
+        codigo        TEXT,
+        nome          TEXT NOT NULL,
+        descricao     TEXT,
+        preco_venda   NUMERIC(10,4) DEFAULT 0,
+        margem        NUMERIC(5,2) DEFAULT 0,
+        ativo         BOOLEAN DEFAULT true,
+        criado_em     TIMESTAMPTZ DEFAULT NOW(),
         atualizado_em TIMESTAMPTZ DEFAULT NOW()
       )
     `);
+    // Adiciona colunas novas sem quebrar tabela existente
+    const cols = [
+      ['codigo',        'TEXT'],
+      ['descricao',     'TEXT'],
+      ['margem',        'NUMERIC(5,2) DEFAULT 0'],
+      ['ativo',         'BOOLEAN DEFAULT true'],
+      ['atualizado_em', 'TIMESTAMPTZ DEFAULT NOW()'],
+    ];
+    for (const [col, def] of cols) {
+      await pool.query(
+        `ALTER TABLE kits ADD COLUMN IF NOT EXISTS ${col} ${def}`
+      ).catch(() => {});
+    }
     await pool.query(`
       CREATE TABLE IF NOT EXISTS kit_itens (
         id                    SERIAL PRIMARY KEY,
-        kit_id                INTEGER NOT NULL REFERENCES kits(id) ON DELETE CASCADE,
+        kit_id                INTEGER NOT NULL,
         produto_id            INTEGER,
         codigo_produto        TEXT,
         descricao_produto     TEXT,
@@ -44,8 +57,13 @@ module.exports = function (pool) {
       )
     `);
     await pool.query(`
-      CREATE INDEX IF NOT EXISTS idx_kit_itens_kit ON kit_itens(kit_id);
-    `);
+      ALTER TABLE kit_itens ADD COLUMN IF NOT EXISTS codigo_produto TEXT;
+      ALTER TABLE kit_itens ADD COLUMN IF NOT EXISTS descricao_produto TEXT;
+      ALTER TABLE kit_itens ADD COLUMN IF NOT EXISTS preco_custo_unitario NUMERIC(10,4) DEFAULT 0;
+    `).catch(() => {});
+    await pool.query(
+      `CREATE INDEX IF NOT EXISTS idx_kit_itens_kit ON kit_itens(kit_id)`
+    ).catch(() => {});
   }
   initTable().catch(e => console.error('[kits] initTable:', e.message));
 
@@ -123,16 +141,35 @@ module.exports = function (pool) {
   // ── POST / ─────────────────────────────────────────────────────────────────
   r.post('/', async (req, res) => {
     const { codigo, nome, descricao, precoVenda, margem, itens = [] } = req.body;
-    if (!codigo || !nome) return res.status(400).json({ ok: false, erro: 'codigo e nome obrigatórios' });
+    if (!nome) return res.status(400).json({ ok: false, erro: 'nome é obrigatório' });
 
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
 
-      const { rows } = await client.query(`
-        INSERT INTO kits (codigo, nome, descricao, preco_venda, margem)
-        VALUES ($1, $2, $3, $4, $5) RETURNING id
-      `, [codigo.trim(), nome.trim(), descricao || null, parseFloat(precoVenda || 0), parseFloat(margem || 0)]);
+      // Verifica se coluna codigo existe na tabela
+      const colCheck = await client.query(`
+        SELECT column_name FROM information_schema.columns
+        WHERE table_name='kits' AND column_name='codigo'
+      `);
+      const temCodigo = colCheck.rows.length > 0;
+
+      let rows;
+      if (temCodigo && codigo) {
+        ({ rows } = await client.query(`
+          INSERT INTO kits (codigo, nome, descricao, preco_venda, margem)
+          VALUES ($1, $2, $3, $4, $5) RETURNING id
+        `, [codigo.trim(), nome.trim(), descricao || null, parseFloat(precoVenda || 0), parseFloat(margem || 0)]));
+      } else {
+        ({ rows } = await client.query(`
+          INSERT INTO kits (nome, descricao, preco_venda)
+          VALUES ($1, $2, $3) RETURNING id
+        `, [nome.trim(), descricao || null, parseFloat(precoVenda || 0)]));
+        // Adiciona codigo depois se a coluna existir
+        if (temCodigo && codigo) {
+          await client.query(`UPDATE kits SET codigo=$1 WHERE id=$2`, [codigo.trim(), rows[0].id]).catch(()=>{});
+        }
+      }
 
       const kitId = rows[0].id;
 

@@ -60,9 +60,16 @@ module.exports = function (pool) {
     // Adiciona colunas novas sem quebrar tabela existente
     const colunas = [
       ['fornecedor',     'TEXT'],
+      ['produto',        'TEXT'],
+      ['dt_nota',        'TEXT'],
+      ['nf',             'TEXT'],
       ['chave_nfe',      'TEXT'],
+      ['parcela',        "TEXT DEFAULT '1'"],
       ['total_parcelas', 'INTEGER DEFAULT 1'],
+      ['plano',          'TEXT'],
+      ['observacao',     'TEXT'],
       ['codigo_barras',  'TEXT'],
+      ['origem',         "TEXT DEFAULT 'manual'"],
       ['atualizado_em',  'TIMESTAMPTZ DEFAULT NOW()'],
     ];
     for (const [col, def] of colunas) {

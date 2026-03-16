@@ -32,97 +32,82 @@ module.exports = function (pool) {
         WHERE status NOT IN ('descartado') AND data_validade IS NOT NULL
       `).catch(() => {}); // silencia erro se tabela não existir ainda
 
-      const [boletos, validade, perdas, retiradas, dre, meta] = await Promise.all([
-        // M1: Boletos
-        pool.query(`
-          SELECT
-            COUNT(*) FILTER (WHERE status='avencer' AND vencimento BETWEEN CURRENT_DATE AND CURRENT_DATE + 7) AS vence_7d,
-            COUNT(*) FILTER (WHERE status='vencido' OR (status='avencer' AND vencimento < CURRENT_DATE))     AS vencidos,
-            COALESCE(SUM(valor) FILTER (WHERE status='avencer' AND vencimento BETWEEN CURRENT_DATE AND CURRENT_DATE + 7), 0) AS valor_vence_7d,
-            COALESCE(SUM(valor) FILTER (WHERE status != 'pago' AND status != 'cancelado'), 0) AS total_aberto
-          FROM boletos WHERE status != 'cancelado'
-        `),
+      // Cada query isolada — se uma falhar, retorna zero sem quebrar o dashboard
+      const safeQuery = async (sql, params=[]) => {
+        try { return (await pool.query(sql, params)).rows[0] || {}; }
+        catch (e) { console.warn('[dashboard] query falhou:', e.message); return {}; }
+      };
 
-        // M4: Validade
-        pool.query(`
+      const [bRow, vRow, pRow, rRow, dreRow, metaRow] = await Promise.all([
+        // M1: Boletos
+        safeQuery(`
           SELECT
-            COUNT(*) FILTER (WHERE status='alerta')  AS alerta,
-            COUNT(*) FILTER (WHERE status='vencido') AS vencidos
+            COALESCE(COUNT(*) FILTER (WHERE status='avencer' AND vencimento BETWEEN CURRENT_DATE AND CURRENT_DATE+7),0) AS vence_7d,
+            COALESCE(COUNT(*) FILTER (WHERE status='vencido' OR (status='avencer' AND vencimento<CURRENT_DATE)),0)       AS vencidos,
+            COALESCE(SUM(valor) FILTER (WHERE status='avencer' AND vencimento BETWEEN CURRENT_DATE AND CURRENT_DATE+7),0) AS valor_vence_7d,
+            COALESCE(SUM(valor) FILTER (WHERE status!='pago' AND status!='cancelado'),0) AS total_aberto
+          FROM boletos WHERE status!='cancelado'
+        `),
+        // M4: Validade
+        safeQuery(`
+          SELECT
+            COALESCE(COUNT(*) FILTER (WHERE status='alerta'),0)  AS alerta,
+            COALESCE(COUNT(*) FILTER (WHERE status='vencido'),0) AS vencidos
           FROM validade_items WHERE status NOT IN ('descartado')
         `),
-
-        // M4: Perdas do mês
-        pool.query(
-          `SELECT COALESCE(SUM(valor_perda), 0) AS total FROM perdas WHERE mes = $1`, [mes]
+        // M4: Perdas — usa coluna mes se existir, senão TO_CHAR
+        safeQuery(`
+          SELECT COALESCE(SUM(valor_perda),0) AS total FROM perdas
+          WHERE COALESCE(mes, TO_CHAR(dt_perda,'MM/YYYY')) = $1
+        `, [mes]),
+        // M5: Retiradas
+        safeQuery(
+          `SELECT COALESCE(SUM(valor_total),0) AS total FROM retiradas WHERE mes=$1`, [mes]
         ),
-
-        // M5: Retiradas do mês
-        pool.query(
-          `SELECT COALESCE(SUM(valor_total), 0) AS total FROM retiradas WHERE mes = $1`, [mes]
+        // M2: DRE
+        safeQuery(
+          `SELECT dados_json FROM dre_sessoes WHERE mes_ref=$1 ORDER BY atualizado_em DESC LIMIT 1`, [mes]
         ),
-
-        // M2: DRE do mês
-        pool.query(
-          `SELECT dados_json FROM dre_sessoes WHERE mes_ref = $1 ORDER BY atualizado_em DESC LIMIT 1`, [mes]
-        ),
-
-        // M6: Meta do mês
-        pool.query(
-          `SELECT * FROM metas WHERE mes = $1 LIMIT 1`, [mes]
-        ),
+        // M6: Meta
+        safeQuery(`SELECT * FROM metas WHERE mes=$1 LIMIT 1`, [mes]),
       ]);
 
       // Calcula receitas/despesas do DRE
-      let dreReceitas = 0, dreDespesas = 0;
-      if (dre.rows.length && dre.rows[0].dados_json) {
-        const txs = dre.rows[0].dados_json.transactions || [];
+      let dreReceitas=0, dreDespesas=0;
+      if (dreRow.dados_json) {
+        const txs = dreRow.dados_json.transactions || [];
         for (const t of txs) {
           if (t.ignorar) continue;
-          const v = parseFloat(t.valor || 0);
-          if (v > 0) dreReceitas += v;
-          else dreDespesas += Math.abs(v);
+          const v=parseFloat(t.valor||0);
+          if (v>0) dreReceitas+=v; else dreDespesas+=Math.abs(v);
         }
       }
 
-      const metaRow          = meta.rows[0] || {};
-      const faturamentoMeta  = parseFloat(metaRow.faturamento_meta || 0);
-      const faturamentoReal  = parseFloat(metaRow.faturamento_real || dreReceitas || 0);
-      const metaPerdaPct     = parseFloat(metaRow.meta_perda_pct || 0);
-      const metaPerdasValor  = faturamentoReal > 0 ? (faturamentoReal * metaPerdaPct / 100) : 0;
-      const totalPerdas      = parseFloat(perdas.rows[0].total);
-      const totalRetiradas   = parseFloat(retiradas.rows[0].total);
+      const faturamentoMeta = parseFloat(metaRow.faturamento_meta||0);
+      const faturamentoReal = parseFloat(metaRow.faturamento_real||dreReceitas||0);
+      const metaPerdaPct    = parseFloat(metaRow.meta_perda_pct||0);
+      const metaPerdasValor = faturamentoReal>0 ? (faturamentoReal*metaPerdaPct/100) : 0;
+      const totalPerdas     = parseFloat(pRow.total||0);
+      const totalRetiradas  = parseFloat(rRow.total||0);
 
       res.json({
-        ok: true,
-        mes,
+        ok: true, mes,
         data: {
-          // M1
-          boletosVence7d:   parseInt(boletos.rows[0].vence_7d),
-          boletosVencidos:  parseInt(boletos.rows[0].vencidos),
-          boletosValorVence7d: parseFloat(boletos.rows[0].valor_vence_7d),
-          boletosAberto:    parseFloat(boletos.rows[0].total_aberto),
-
-          // M2
+          boletosVence7d:      parseInt(bRow.vence_7d||0),
+          boletosVencidos:     parseInt(bRow.vencidos||0),
+          boletosValorVence7d: parseFloat(bRow.valor_vence_7d||0),
+          boletosAberto:       parseFloat(bRow.total_aberto||0),
           dreReceitas, dreDespesas,
           dreResultado: dreReceitas - dreDespesas,
-
-          // M4 validade
-          validadeAlerta:   parseInt(validade.rows[0].alerta),
-          validadeVencidos: parseInt(validade.rows[0].vencidos),
-
-          // M4 perdas
-          perdasMes:      totalPerdas,
-          perdasMeta:     metaPerdasValor,
-          perdasDentroMeta: metaPerdasValor > 0 ? totalPerdas <= metaPerdasValor : null,
-
-          // M5
-          retiradasMes: totalRetiradas,
-
-          // M6
+          validadeAlerta:      parseInt(vRow.alerta||0),
+          validadeVencidos:    parseInt(vRow.vencidos||0),
+          perdasMes:           totalPerdas,
+          perdasMeta:          metaPerdasValor,
+          perdasDentroMeta:    metaPerdasValor>0 ? totalPerdas<=metaPerdasValor : null,
+          retiradasMes:        totalRetiradas,
           faturamentoMeta, faturamentoReal,
-          faturamentoPct: faturamentoMeta > 0
-            ? parseFloat(((faturamentoReal / faturamentoMeta) * 100).toFixed(1))
-            : 0,
+          faturamentoPct: faturamentoMeta>0
+            ? parseFloat(((faturamentoReal/faturamentoMeta)*100).toFixed(1)) : 0,
         }
       });
     } catch (e) {

@@ -11,69 +11,82 @@
   --bg:#f7f4f0;--white:#fff;--text:#1a1a1a;--muted:#7a7068;--border:#e8e0d8;--shadow:0 2px 12px rgba(0,0,0,.08);}
 *{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden;}
-.ph{background:var(--blue);padding:10px 18px;display:flex;align-items:center;gap:10px;flex-shrink:0;}
+/* HEADER */
+.ph{background:var(--red);background-image:repeating-linear-gradient(45deg,transparent,transparent 10px,rgba(255,255,255,.03) 10px,rgba(255,255,255,.03) 20px);padding:10px 18px;display:flex;align-items:center;gap:10px;flex-shrink:0;}
 .ph h2{font-family:'Playfair Display',serif;font-size:15px;color:#fff;}
-.sync-dot{width:7px;height:7px;border-radius:50%;background:#4ecdc4;animation:p 2s infinite;}
+.sdot{width:7px;height:7px;border-radius:50%;background:#4ecdc4;animation:p 2s infinite;margin-left:8px;flex-shrink:0;}
 @keyframes p{0%,100%{opacity:1}50%{opacity:.3}}
-.stats{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;padding:8px 14px;background:var(--white);border-bottom:1px solid var(--border);flex-shrink:0;}
-.sc{border-radius:7px;padding:8px 10px;border-left:3px solid var(--blue);}
-.sc.g{border-left-color:var(--green);}.sc.r{border-left-color:var(--red-l);}.sc.o{border-left-color:var(--orange);}.sc.p{border-left-color:var(--purple);}
-.sc-l{font-size:9px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);font-weight:700;margin-bottom:2px;}
-.sc-v{font-size:15px;font-weight:700;font-family:'DM Mono',monospace;}
+/* STATS GRID — igual ao sistema anterior */
+.stats-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;padding:8px 14px;background:var(--white);border-bottom:1px solid var(--border);flex-shrink:0;}
+.sg{border-radius:8px;padding:10px 12px;border-left:3px solid var(--blue);}
+.sg.g{border-left-color:var(--green);}.sg.r{border-left-color:var(--red-l);}.sg.o{border-left-color:var(--orange);}.sg.p{border-left-color:var(--purple);}
+.sg-l{font-size:9px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);font-weight:700;margin-bottom:3px;}
+.sg-v{font-size:15px;font-weight:700;font-family:'DM Mono',monospace;}
+/* TOTALS ROW */
+.totals-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;padding:0 14px 8px;background:var(--white);border-bottom:1px solid var(--border);flex-shrink:0;}
+.tc{background:var(--bg);border-radius:8px;padding:9px 12px;display:flex;align-items:center;gap:10px;}
+.tc-icon{font-size:20px;}
+.tc-l{font-size:9px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);font-weight:600;}
+.tc-v{font-size:17px;font-weight:700;font-family:'DM Mono',monospace;}
+/* PROGRESSO */
 .prog{background:var(--white);border-bottom:1px solid var(--border);padding:5px 14px;flex-shrink:0;}
-.prog-bg{background:#ede8e0;border-radius:4px;height:5px;}
+.prog-bg{background:#ede8e0;border-radius:4px;height:6px;}
 .prog-fill{background:linear-gradient(90deg,var(--green),#2ecc71);border-radius:4px;height:100%;transition:width .4s;}
 .prog-lbl{display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-bottom:3px;}
+/* BANNER */
 .banner{background:#fff;border-bottom:1px solid var(--border);padding:7px 14px;display:none;align-items:center;gap:8px;flex-wrap:wrap;flex-shrink:0;}
 .banner.show{display:flex;}
 .ftag{background:#f0ebe4;border-radius:10px;padding:2px 8px;font-size:11px;color:var(--muted);}
 .ftag.cc{background:#e8f0f7;color:var(--blue);}
+/* CONTROLES */
 .ctrl{background:var(--white);border-bottom:1px solid var(--border);padding:7px 12px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;flex-shrink:0;}
 .ctrl input[type=text]{flex:1;min-width:150px;padding:5px 9px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:'DM Sans',sans-serif;}
 .ctrl select{padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--white);font-family:'DM Sans',sans-serif;}
 .btn{padding:5px 11px;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;font-family:'DM Sans',sans-serif;transition:all .15s;white-space:nowrap;}
 .btn:hover{filter:brightness(1.08);}
-.bp{background:var(--blue);color:#fff;}.bg{background:var(--green);color:#fff;}.bo{background:var(--orange);color:#fff;}.bn{background:#eee;color:#555;border:1px solid var(--border);}.bs{background:var(--white);border:1px solid var(--border);color:var(--text);}
+.bp{background:var(--blue);color:#fff;}.bg{background:var(--green);color:#fff;}.br{background:var(--red);color:#fff;}.bn{background:#eee;color:#555;border:1px solid var(--border);}.bs{background:var(--white);border:1px solid var(--border);color:var(--text);}
+/* LAYOUT SPLIT */
 .split{display:flex;flex:1;overflow:hidden;min-height:0;}
 .main{flex:1;overflow-y:auto;display:flex;flex-direction:column;}
+/* BULK BAR — igual ao sistema anterior */
+#bulk-bar{display:none;position:sticky;bottom:0;z-index:50;background:var(--red);color:#fff;padding:9px 16px;align-items:center;gap:10px;flex-wrap:wrap;box-shadow:0 -4px 16px rgba(139,0,0,.35);flex-shrink:0;}
+#bulk-bar.show{display:flex;}
+#bulk-bar select{padding:5px 10px;border-radius:6px;border:none;font-family:'DM Sans',sans-serif;font-size:12px;min-width:220px;}
+.btn-bulk{background:rgba(255,255,255,.2);color:#fff;border:1px solid rgba(255,255,255,.35);padding:5px 13px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;}
+.btn-bulk:hover{background:rgba(255,255,255,.35);}
+/* TABELA */
 table{width:100%;border-collapse:collapse;font-size:12px;}
 thead tr{background:var(--red);}
 thead th{padding:7px 9px;text-align:left;color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;position:sticky;top:0;z-index:5;}
 tbody tr{border-bottom:1px solid #f0ebe4;}
 tbody tr:hover{background:#fdf9f6!important;}
 tbody tr.uncat{background:#fff8e6!important;}
-tbody tr.ign{opacity:.4;text-decoration:line-through;}
-tbody tr.cc{background:#f0f5fb!important;}
+tbody tr.ign{opacity:.4;}
+tbody tr.cc-row{background:#f0f5fb!important;}
+tbody tr.boleto-row{background:#f5fff5!important;}
 td{padding:5px 9px;vertical-align:middle;}
 .badge{display:inline-block;padding:1px 6px;border-radius:8px;font-weight:600;font-size:10px;}
 .bofx{background:#e8f7ef;color:var(--green);}.bcc{background:#e8f0f7;color:var(--blue);}
 .bbol{background:#d1fae5;color:#065f46;}.bbolp{background:#fff3e0;color:var(--orange);}.bman{background:#dbeafe;color:#1e40af;}
-.csel{padding:2px 5px;border:1px solid var(--border);border-radius:4px;font-size:11px;font-family:'DM Sans',sans-serif;max-width:190px;background:var(--white);}
-.csel.u{border-color:var(--orange);background:#fff8e6;}
+.csel{padding:2px 5px;border:1px solid var(--border);border-radius:4px;font-size:11px;font-family:'DM Sans',sans-serif;max-width:200px;background:var(--white);}
+.csel.u{border:2px solid var(--orange);background:#fff8e6;color:var(--orange);font-weight:600;}
 .vp{color:var(--green);font-weight:600;font-family:'DM Mono',monospace;}
 .vn{color:var(--red-l);font-weight:600;font-family:'DM Mono',monospace;}
-.bulk{padding:6px 12px;background:#f0f5ff;border-top:1px solid var(--border);flex-shrink:0;display:none;gap:7px;align-items:center;font-size:12px;}
-.bulk.show{display:flex;}
-/* DRE PANEL */
-.dre-p{width:320px;min-width:260px;border-left:1px solid var(--border);background:var(--white);overflow-y:auto;flex-shrink:0;transition:width .2s;}
+/* DRE PAINEL */
+.dre-p{width:340px;min-width:280px;border-left:1px solid var(--border);background:var(--white);overflow-y:auto;flex-shrink:0;transition:width .2s;}
 .dre-p.hid{width:0;min-width:0;overflow:hidden;}
-.dre-hd{padding:8px 12px;border-bottom:2px solid var(--border);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--blue);display:flex;justify-content:space-between;align-items:center;}
-.dghd{padding:6px 10px;background:#f0ebe4;font-size:10px;font-weight:700;text-transform:uppercase;color:var(--muted);}
-.dl{display:flex;justify-content:space-between;padding:4px 10px;font-size:11px;border-bottom:1px solid #f9f4ef;}
-.dl:hover{background:#fdf9f5;}
-.dt{display:flex;justify-content:space-between;padding:6px 10px;font-size:12px;font-weight:700;background:#f0f7ff;border-top:1px solid var(--border);}
-.dres{display:flex;justify-content:space-between;padding:9px 10px;font-size:13px;font-weight:700;background:var(--blue);color:#fff;}
-.dlb{display:flex;justify-content:space-between;padding:5px 10px;font-size:11px;font-weight:600;background:#f0faf4;border-top:1px solid var(--border);}
+.dre-hd{padding:8px 12px;border-bottom:2px solid var(--border);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--blue);display:flex;justify-content:space-between;align-items:center;flex-shrink:0;}
 /* DROPZONE */
 .dz{border:3px dashed var(--border);border-radius:12px;padding:28px 20px;text-align:center;background:var(--white);cursor:pointer;transition:.2s;margin-bottom:12px;}
 .dz:hover,.dz.drag{border-color:var(--blue);background:#f0f5ff;}
 .dz h3{font-family:'Playfair Display',serif;font-size:16px;color:var(--blue);margin-bottom:5px;}
 /* MODALS */
-.mbg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:500;align-items:center;justify-content:center;padding:14px;}
+.mbg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;align-items:center;justify-content:center;padding:14px;}
 .mbg.open{display:flex;}
-.md{background:var(--white);border-radius:12px;width:100%;max-width:500px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3);}
+.md{background:var(--white);border-radius:13px;width:100%;max-width:500px;max-height:92vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3);}
+.md-lg{max-width:1050px;}
 .mdh{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;}
-.mdh h3{font-family:'Playfair Display',serif;font-size:14px;color:var(--blue);}
+.mdh h3{font-family:'Playfair Display',serif;font-size:14px;color:var(--red);}
 .mdx{background:none;border:none;font-size:18px;cursor:pointer;color:var(--muted);}
 .mdb{padding:16px 18px;}
 .mdf{padding:11px 18px;border-top:1px solid var(--border);display:flex;gap:7px;justify-content:flex-end;}
@@ -84,47 +97,61 @@ td{padding:5px 9px;vertical-align:middle;}
 .fgr{display:grid;grid-template-columns:1fr 1fr;gap:9px;}
 .si{display:flex;justify-content:space-between;align-items:center;padding:7px 12px;border-bottom:1px solid var(--border);cursor:pointer;font-size:12px;}
 .si:hover{background:#f5f9ff;}
-.chk{accent-color:var(--blue);}
-@media(max-width:800px){.dre-p{display:none;}.stats{grid-template-columns:repeat(3,1fr);}}
+.chk{accent-color:var(--red);}
+@media(max-width:800px){.dre-p{display:none;}.stats-grid,.totals-row{grid-template-columns:1fr 1fr;}}
 </style>
 </head>
 <body>
 
+<!-- HEADER -->
 <div class="ph">
   <span style="font-size:17px">📊</span>
-  <h2>DRE & Classificador</h2>
-  <div class="sync-dot" id="sd" style="margin-left:8px"></div>
+  <h2>DRE & Classificador de Extrato</h2>
+  <div class="sdot" id="sd"></div>
   <span style="font-size:11px;color:rgba(255,255,255,.6);margin-left:4px" id="st">online</span>
   <span style="font-size:11px;color:rgba(255,255,255,.5);margin-left:auto" id="ph-sub">—</span>
 </div>
 
-<div class="stats" id="stats" style="display:none">
-  <div class="sc"><div class="sc-l">Lançamentos</div><div class="sc-v" id="s-tot">0</div></div>
-  <div class="sc p"><div class="sc-l">Classificados</div><div class="sc-v" id="s-cls">0/0</div></div>
-  <div class="sc o"><div class="sc-l">Pendentes</div><div class="sc-v" id="s-pen">0</div></div>
-  <div class="sc g"><div class="sc-l">Receitas</div><div class="sc-v" id="s-rec">—</div></div>
-  <div class="sc r"><div class="sc-l">Despesas</div><div class="sc-v" id="s-dep">—</div></div>
+<!-- STATS GRID (igual ao sistema anterior) -->
+<div class="stats-grid" id="stats-grid" style="display:none">
+  <div class="sg"><div class="sg-l">Lançamentos</div><div class="sg-v" id="s-tot">0</div></div>
+  <div class="sg p"><div class="sg-l">Classificados</div><div class="sg-v" id="s-cls">0/0</div></div>
+  <div class="sg o"><div class="sg-l">Pendentes</div><div class="sg-v" id="s-pen" style="color:var(--orange)">0</div></div>
+  <div class="sg g"><div class="sg-l">Receitas</div><div class="sg-v" id="s-rec" style="color:var(--green)">—</div></div>
+  <div class="sg r"><div class="sg-l">Despesas</div><div class="sg-v" id="s-dep" style="color:var(--red-l)">—</div></div>
 </div>
+
+<!-- TOTALS ROW -->
+<div class="totals-row" id="totals-row" style="display:none">
+  <div class="tc"><div class="tc-icon">💹</div><div><div class="tc-l">Receitas Classificadas</div><div class="tc-v" id="t-rec" style="color:var(--green)">R$ 0</div></div></div>
+  <div class="tc"><div class="tc-icon">💸</div><div><div class="tc-l">Despesas Classificadas</div><div class="tc-v" id="t-dep" style="color:var(--red-l)">R$ 0</div></div></div>
+  <div class="tc" id="tc-lucro"><div class="tc-icon">📊</div><div><div class="tc-l">Lucro / Prejuízo</div><div class="tc-v" id="t-luc">R$ 0</div></div></div>
+</div>
+
+<!-- PROGRESSO -->
 <div class="prog" id="prog-w" style="display:none">
-  <div class="prog-lbl"><span>Progresso</span><span id="prog-p">0%</span></div>
+  <div class="prog-lbl"><span>Progresso de classificação</span><span id="prog-p">0%</span></div>
   <div class="prog-bg"><div class="prog-fill" id="prog-f" style="width:0%"></div></div>
 </div>
+
+<!-- BANNER DE ARQUIVOS -->
 <div class="banner" id="banner">
-  <span style="font-size:11px;font-weight:600;color:var(--muted)">Carregados:</span>
+  <span style="font-size:11px;font-weight:600;color:var(--muted)">Arquivos:</span>
   <div id="ftags" style="display:flex;flex-wrap:wrap;gap:4px"></div>
   <div style="display:flex;gap:5px;margin-left:auto;flex-wrap:wrap">
-    <button class="btn bs" onclick="document.getElementById('f-ofx').click()">+ OFX/XLSX</button>
-    <button class="btn bs" onclick="document.getElementById('f-cc').click()">+ Fatura CC</button>
-    <button class="btn bs" onclick="importBoletos()">📄 Boletos</button>
+    <button class="btn bs" onclick="document.getElementById('f-ofx').click()">➕ OFX</button>
+    <button class="btn bs" onclick="document.getElementById('f-cc').click()">💳 Fatura CC</button>
+    <button class="btn bs" onclick="importBoletos()">📄 Boletos DB</button>
     <button class="btn bg" onclick="salvar()">💾 Salvar</button>
     <button class="btn bn" onclick="limpar()">🗑 Limpar</button>
   </div>
 </div>
+
+<!-- BARRA DE CONTROLES -->
 <div class="ctrl">
   <input type="text" id="busca" placeholder="🔍 Buscar lançamento ou empresa..." oninput="render()">
-  <select id="f-grp" onchange="render()">
+  <select id="f-grp" onchange="onGrpChange()">
     <option value="">Todos os grupos</option>
-    <option>RECEITAS</option><option>CMV</option><option>DESPESAS</option><option>FINANCEIRO</option>
   </select>
   <select id="f-mes" onchange="render()"><option value="">Todos os meses</option></select>
   <select id="f-fonte" onchange="render()">
@@ -134,26 +161,29 @@ td{padding:5px 9px;vertical-align:middle;}
   <label style="font-size:12px;display:flex;align-items:center;gap:4px;white-space:nowrap">
     <input type="checkbox" class="chk" id="f-pend" onchange="render()"> Só pendentes
   </label>
-  <button class="btn bp" onclick="abrirDZ()">📥 Arquivo</button>
+  <button class="btn bp" onclick="abrirDZ()">📥 Importar</button>
   <button class="btn bs" onclick="abrirManual()">＋ Manual</button>
-  <button class="btn bs" id="btn-dre" onclick="toggleDRE()">📊 DRE</button>
+  <button class="btn br" onclick="abrirDREModal()">📊 Ver DRE</button>
   <button class="btn bg" onclick="salvar()">💾 Salvar</button>
   <button class="btn bs" onclick="exportXLS()">📤 Excel</button>
   <button class="btn bs" onclick="abrirSessoes()">📂 Sessões</button>
-  <button class="btn bp" onclick="abrirDREModal()" style="background:var(--red)">📊 Ver DRE</button>
   <input type="month" id="f-mesref" style="padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px" onchange="trocarMes()">
 </div>
 
+<!-- SPLIT: tabela + painel DRE -->
 <div class="split">
   <div class="main">
+
+    <!-- DROPZONE inicial -->
     <div id="dz-area" style="padding:20px">
-      <div class="dz" id="dz" onclick="document.getElementById('f-ofx').click()"
+      <div class="dz" id="dz"
+        onclick="document.getElementById('f-ofx').click()"
         ondragover="event.preventDefault();this.classList.add('drag')"
         ondragleave="this.classList.remove('drag')"
         ondrop="onDrop(event)">
-        <div style="font-size:40px;margin-bottom:8px">🏦</div>
+        <div style="font-size:44px;margin-bottom:10px">🏦</div>
         <h3>Importar Extrato Bancário</h3>
-        <p style="color:var(--muted);font-size:12px;margin-top:4px">Clique ou arraste o arquivo aqui</p>
+        <p style="color:var(--muted);font-size:12px;margin-top:4px">Arraste o arquivo aqui ou clique para selecionar</p>
         <div style="margin-top:10px;display:flex;justify-content:center;gap:6px;flex-wrap:wrap">
           <span style="background:var(--blue);color:#fff;padding:2px 9px;border-radius:10px;font-size:11px;font-weight:600">OFX</span>
           <span style="background:var(--green);color:#fff;padding:2px 9px;border-radius:10px;font-size:11px;font-weight:600">XLSX / CSV</span>
@@ -161,20 +191,20 @@ td{padding:5px 9px;vertical-align:middle;}
         </div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
-        <div style="background:var(--white);border:1px solid var(--border);border-radius:9px;padding:12px;cursor:pointer" onclick="document.getElementById('f-ofx').click()">
-          <div style="font-size:20px;margin-bottom:4px">🏦</div>
-          <div style="font-weight:600;font-size:12px">Extrato OFX / XLSX / CSV</div>
-          <div style="font-size:11px;color:var(--muted)">Extrato bancário padrão</div>
+        <div style="background:var(--white);border:1px solid var(--border);border-radius:9px;padding:14px;cursor:pointer;transition:.2s" onmouseover="this.style.borderColor='var(--blue)'" onmouseout="this.style.borderColor='var(--border)'" onclick="document.getElementById('f-ofx').click()">
+          <div style="font-size:22px;margin-bottom:6px">🏦</div>
+          <div style="font-weight:600;font-size:13px">Extrato OFX / XLSX / CSV</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:3px">Extrato bancário padrão</div>
         </div>
-        <div style="background:var(--white);border:1px solid var(--border);border-radius:9px;padding:12px;cursor:pointer" onclick="document.getElementById('f-cc').click()">
-          <div style="font-size:20px;margin-bottom:4px">💳</div>
-          <div style="font-weight:600;font-size:12px">Fatura Cartão de Crédito</div>
-          <div style="font-size:11px;color:var(--muted)">CSV ou XLSX da fatura</div>
+        <div style="background:var(--white);border:1px solid var(--border);border-radius:9px;padding:14px;cursor:pointer;transition:.2s" onmouseover="this.style.borderColor='var(--blue)'" onmouseout="this.style.borderColor='var(--border)'" onclick="document.getElementById('f-cc').click()">
+          <div style="font-size:22px;margin-bottom:6px">💳</div>
+          <div style="font-weight:600;font-size:13px">Fatura Cartão de Crédito</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:3px">CSV ou XLSX da fatura</div>
         </div>
-        <div style="background:var(--white);border:1px solid var(--border);border-radius:9px;padding:12px;cursor:pointer" onclick="importBoletos()">
-          <div style="font-size:20px;margin-bottom:4px">📄</div>
-          <div style="font-weight:600;font-size:12px">Boletos do Sistema</div>
-          <div style="font-size:11px;color:var(--muted)">Integração automática M1</div>
+        <div style="background:var(--white);border:1px solid var(--border);border-radius:9px;padding:14px;cursor:pointer;transition:.2s" onmouseover="this.style.borderColor='var(--blue)'" onmouseout="this.style.borderColor='var(--border)'" onclick="importBoletos()">
+          <div style="font-size:22px;margin-bottom:6px">📄</div>
+          <div style="font-weight:600;font-size:13px">Boletos do Sistema</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:3px">Integração M1 automática</div>
         </div>
       </div>
       <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
@@ -183,77 +213,67 @@ td{padding:5px 9px;vertical-align:middle;}
       </div>
     </div>
 
+    <!-- TABELA de lançamentos -->
     <div id="tbl-area" style="display:none;flex:1;overflow-y:auto">
       <table>
         <thead><tr>
-          <th style="width:24px"><input type="checkbox" class="chk" id="chk-all" onchange="selAll(this)"></th>
+          <th style="width:26px;text-align:center"><input type="checkbox" class="chk" id="chk-all" onchange="selAll(this)"></th>
           <th>Data</th><th>Mês DRE</th><th>Mês Caixa</th>
-          <th>Fonte</th><th style="min-width:180px">Lançamento</th>
-          <th style="min-width:190px">Categoria DRE</th>
-          <th>Valor</th><th></th>
+          <th>Fonte</th><th style="min-width:180px">Estabelecimento</th><th>Portador/Razão</th>
+          <th style="min-width:200px">Categoria DRE</th>
+          <th style="text-align:right">Valor</th>
+          <th style="text-align:center;width:28px" title="Ignorar">🚫</th>
         </tr></thead>
         <tbody id="tbody"></tbody>
       </table>
+      <div id="footer-note" style="padding:6px 14px;font-size:11px;color:var(--muted);text-align:right"></div>
     </div>
 
-    <div class="bulk" id="bulk">
-      <span id="bulk-n" style="font-weight:600">0</span>
-      <select id="bulk-cat" style="padding:3px 7px;border:1px solid var(--border);border-radius:5px;font-size:11px">
+    <!-- BULK BAR (sticky bottom, igual ao sistema anterior) -->
+    <div id="bulk-bar">
+      <span id="bulk-count" style="font-size:13px;font-weight:600;flex:1">0 selecionados</span>
+      <select id="bulk-cat-sel">
         <option value="">— Classificar como —</option>
       </select>
-      <button class="btn bp" style="padding:3px 9px;font-size:11px" onclick="aplicarBulk()">✓ Aplicar</button>
-      <button class="btn bn" style="padding:3px 9px;font-size:11px" onclick="bulkIgn()">🚫 Ignorar</button>
-      <button class="btn bn" style="padding:3px 9px;font-size:11px" onclick="abrirBulkMes()">📅 Mês</button>
-      <button class="btn bn" style="padding:3px 9px;font-size:11px" onclick="limparSel()">✕</button>
+      <label style="font-size:11px;display:flex;align-items:center;gap:5px;cursor:pointer;white-space:nowrap">
+        <input type="checkbox" class="chk" id="bulk-apply-supplier" style="accent-color:#fff"> Aplicar a todo o fornecedor
+      </label>
+      <button class="btn-bulk" onclick="aplicarBulk()">✓ Aplicar</button>
+      <button class="btn-bulk" onclick="abrirBulkMes()">📅 Mês</button>
+      <button class="btn-bulk" onclick="bulkIgn()">🚫 Ignorar</button>
+      <button class="btn-bulk" onclick="limparSel()">✕</button>
     </div>
   </div>
 
+  <!-- PAINEL DRE LATERAL -->
   <div class="dre-p hid" id="dre-p">
     <div class="dre-hd">
-      <span>DRE — <span id="dre-mes">—</span></span>
+      <span>DRE — <span id="dre-mes-label">—</span></span>
       <div style="display:flex;gap:5px;align-items:center">
         <select id="dre-modo" onchange="renderDRE()" style="padding:2px 6px;border:1px solid var(--border);border-radius:5px;font-size:11px">
           <option value="comp">Competência</option>
           <option value="caixa">Caixa</option>
         </select>
         <button class="btn bn" style="padding:2px 9px;font-size:11px" onclick="abrirDREModal()">⛶</button>
-        <button class="btn bn" style="padding:2px 7px;font-size:11px" onclick="toggleDRE()">✕</button>
+        <button class="btn bn" style="padding:2px 7px;font-size:11px" onclick="toggleDREPanel()">✕</button>
       </div>
     </div>
-    <div id="dre-body"><div style="padding:20px;text-align:center;color:var(--muted);font-size:12px">Classifique os lançamentos</div></div>
+    <div id="dre-body" style="padding:8px 0"><div style="padding:20px;text-align:center;color:var(--muted);font-size:12px">Classifique os lançamentos para ver o DRE</div></div>
   </div>
 </div>
 
-<!-- Modal DRE Tela Cheia -->
-<div class="mbg" id="m-dre-full" style="z-index:600">
-  <div class="md" style="max-width:1100px;max-height:95vh">
-    <div class="mdh" style="background:var(--red);border-radius:12px 12px 0 0">
-      <div style="display:flex;align-items:center;gap:10px">
-        <h3 style="color:#fff;font-family:'Playfair Display',serif">🥩 DRE — DEMONSTRATIVO POR MÊS</h3>
-        <select id="dre-modo-full" onchange="sincModo()" style="padding:3px 8px;border:1px solid rgba(255,255,255,.3);border-radius:6px;font-size:12px;background:rgba(255,255,255,.15);color:#fff">
-          <option value="comp">Competência (data da compra)</option>
-          <option value="caixa">Caixa (data do pagamento)</option>
-        </select>
-      </div>
-      <button class="mdx" onclick="document.getElementById('m-dre-full').classList.remove('open')" style="color:#fff">✕ Fechar</button>
-    </div>
-    <div class="mdb" style="padding:0;overflow-y:auto;max-height:calc(95vh - 80px)">
-      <div id="dre-full-body" style="padding:16px"></div>
-    </div>
-  </div>
-</div>
-
+<!-- Inputs ocultos -->
 <input type="file" id="f-ofx" accept=".ofx,.ofc,.xlsx,.xls,.csv" style="display:none" onchange="loadFile(this,'ext')">
-<input type="file" id="f-cc"  accept=".csv,.xlsx,.xls" style="display:none" onchange="loadFile(this,'cc')">
+<input type="file" id="f-cc" accept=".csv,.xlsx,.xls" style="display:none" onchange="loadFile(this,'cc')">
 
 <!-- Modal Manual -->
 <div class="mbg" id="m-manual">
   <div class="md" style="max-width:440px">
-    <div class="mdh"><h3>Lançamento Manual</h3><button class="mdx" onclick="fecharManual()">×</button></div>
+    <div class="mdh"><h3>Lançamento Manual</h3><button class="mdx" onclick="fecharModal('m-manual')">×</button></div>
     <div class="mdb">
-      <div class="fg"><label>Descrição *</label><input id="ml-d" placeholder="Descrição"></div>
+      <div class="fg"><label>Descrição *</label><input id="ml-d" placeholder="Ex: Aluguel depósito"></div>
       <div class="fgr">
-        <div class="fg"><label>Valor</label><input type="number" id="ml-v" step="0.01" placeholder="-100.00"></div>
+        <div class="fg"><label>Valor (neg=saída)</label><input type="number" id="ml-v" step="0.01" placeholder="-1500.00"></div>
         <div class="fg"><label>Data</label><input type="date" id="ml-dt"></div>
       </div>
       <div class="fg"><label>Categoria DRE</label><select id="ml-c"><option value="">— Sem categoria —</option></select></div>
@@ -262,28 +282,47 @@ td{padding:5px 9px;vertical-align:middle;}
         <div class="fg"><label>Mês Caixa</label><input id="ml-mc" placeholder="03/2026"></div>
       </div>
     </div>
-    <div class="mdf"><button class="btn bn" onclick="fecharManual()">Cancelar</button><button class="btn bp" onclick="salvarManual()">＋ Adicionar</button></div>
+    <div class="mdf"><button class="btn bn" onclick="fecharModal('m-manual')">Cancelar</button><button class="btn bg" onclick="salvarManual()">＋ Adicionar</button></div>
   </div>
 </div>
 
 <!-- Modal Sessões -->
 <div class="mbg" id="m-sess">
-  <div class="md" style="max-width:480px">
-    <div class="mdh"><h3>Sessões Salvas</h3><button class="mdx" onclick="document.getElementById('m-sess').classList.remove('open')">×</button></div>
-    <div id="sess-lst" style="max-height:400px;overflow-y:auto"><div style="padding:20px;text-align:center;color:var(--muted)">Carregando...</div></div>
+  <div class="md" style="max-width:500px">
+    <div class="mdh"><h3>Sessões Salvas</h3><button class="mdx" onclick="fecharModal('m-sess')">×</button></div>
+    <div id="sess-lst" style="max-height:420px;overflow-y:auto"><div style="padding:20px;text-align:center;color:var(--muted)">Carregando...</div></div>
   </div>
 </div>
 
 <!-- Modal Mês Bulk -->
 <div class="mbg" id="m-mes">
   <div class="md" style="max-width:380px">
-    <div class="mdh"><h3>Alterar Mês — <span id="bm-n">0</span> lançamentos</h3><button class="mdx" onclick="document.getElementById('m-mes').classList.remove('open')">×</button></div>
+    <div class="mdh"><h3>Alterar Mês — <span id="bm-n">0</span> lançamentos</h3><button class="mdx" onclick="fecharModal('m-mes')">×</button></div>
     <div class="mdb">
       <div class="fg"><label>Novo Mês</label><select id="bm-v" style="width:100%;padding:7px;border:1px solid var(--border);border-radius:6px;font-size:13px"></select></div>
       <label style="display:flex;align-items:center;gap:7px;font-size:13px;margin-bottom:8px"><input type="checkbox" class="chk" id="bm-c" checked> Mês de competência (DRE)</label>
       <label style="display:flex;align-items:center;gap:7px;font-size:13px"><input type="checkbox" class="chk" id="bm-cx" checked> Mês de caixa</label>
     </div>
-    <div class="mdf"><button class="btn bn" onclick="document.getElementById('m-mes').classList.remove('open')">Cancelar</button><button class="btn bp" onclick="confirmarBulkMes()">✓ Aplicar</button></div>
+    <div class="mdf"><button class="btn bn" onclick="fecharModal('m-mes')">Cancelar</button><button class="btn bp" onclick="confirmarBulkMes()">✓ Aplicar</button></div>
+  </div>
+</div>
+
+<!-- Modal DRE Tela Cheia -->
+<div class="mbg" id="m-dre">
+  <div class="md md-lg">
+    <div class="mdh" style="background:var(--red);border-radius:13px 13px 0 0">
+      <div style="display:flex;align-items:center;gap:10px">
+        <h3 style="color:#fff;font-size:15px">📊 DRE — DEMONSTRATIVO POR MÊS</h3>
+        <select id="dre-modo-full" onchange="sincModo()" style="padding:3px 8px;border:1px solid rgba(255,255,255,.3);border-radius:6px;font-size:12px;background:rgba(255,255,255,.15);color:#fff">
+          <option value="comp">Competência (data da compra)</option>
+          <option value="caixa">Caixa (data do pagamento)</option>
+        </select>
+      </div>
+      <button onclick="fecharModal('m-dre')" style="background:none;border:none;color:rgba(255,255,255,.8);font-size:22px;cursor:pointer">×</button>
+    </div>
+    <div style="overflow-y:auto;max-height:calc(95vh - 70px)">
+      <div id="dre-full-body" style="padding:16px"></div>
+    </div>
   </div>
 </div>
 
@@ -292,331 +331,432 @@ const {api, fmt, toast} = BB;
 let TXS=[], sessId=null, mesRef='', files=[], supMem={}, selIds=new Set(), _sv;
 const MO=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
+// ─── Categorias DRE (exatas do sistema anterior) ──────────────────────────────
 const CATS={
-  RECEITAS:{l:'RECEITAS',s:[
-    'VENDAS DE MERCADORIAS','Delivery','Juros de aplicacoes financeiras',
-    'Outros Créditos','Transferência entre contas','Outros (não classificar)'
-  ]},
-  CMV:{l:'CUSTO DA MERCADORIA VENDIDA',s:[
-    'Bovino','Suíno','Cordeiro','Aves','Pães','Embutidos',
-    'Acompanhamentos','Bebidas','Empório (Diversos)','Carvão','Gelo',
-    'COMPRAS - REVENDA','Material de Embalagens','Descartáveis'
-  ]},
-  PESSOAL:{l:'DESPESA COM PESSOAL',s:[
-    'Salarios e ordenados','Vale transporte','Vale alimentação',
-    'FGTS','INSS empresa','Sindicato','Hora extra','PLR'
-  ]},
-  VENDAS:{l:'DESPESAS COM VENDAS',s:[
-    'Fretes com vendas','Royalties','Embalagens para delivery',
-    'Marketing','Publicidade'
-  ]},
-  CONSUMO:{l:'DESPESAS DE CONSUMO',s:[
-    'Energia eletrica','Telefone','Agua e esgoto',
-    'Alugueis de Equipamentos','Gás','Internet'
-  ]},
-  TERCEIROS:{l:'SERVIÇOS PRESTADOS POR TERCEIROS',s:[
-    'Assistencia Contábil','Serviços com Internet/Software',
-    'Serviços de Consultoria de Alimentos',
-    'Serviços de Manutenção e Higiene',
-    'Serviços prestados por terceiros','Advocacia','RH / Recrutamento'
-  ]},
-  MATERIAL:{l:'MATERIAL DE USO/CONSUMO',s:[
-    'Material de Copa e cozinha','Material de Limpeza',
-    'Materiais diversos','EPI / Uniformes'
-  ]},
-  FINANCEIRO:{l:'DESPESAS FINANCEIRAS',s:[
-    'Juros e comissoes bancarias','IOF S/ Imp. S/ Oper. Financeiras',
-    'Empréstimo','Tarifa de Administração de Cartões',
-    'Tarifas Bancarias','Antecipação de Recebíveis'
-  ]},
-  OUTRAS:{l:'OUTRAS DESPESAS OPERACIONAIS',s:[
-    'Seguro','Aluguel','Condomínio','IPTU','Outras Despesas'
-  ]},
-  IMPOSTOS:{l:'IMPOSTOS, TAXAS E CONTRIBUIÇÕES',s:[
-    'Simples Nacional','DARF','ISS / ISSQN','Taxas e Impostos'
-  ]}
+  RECEITAS:{l:'RECEITAS',s:['VENDAS DE MERCADORIAS','Juros de aplicacoes financeiras','Descontos financeiros obtidos','Delivery','Outros Créditos','Transferência entre contas','Outros (não classificar)']},
+  CMV:{l:'CUSTO DA MERCADORIA VENDIDA',s:['COMPRAS - REVENDA','Bovino','Suíno','Cordeiro','Aves','Outras Proteínas','Carvão','Empório (Diversos)','Bebidas','Acessórios','Embalagens','Acompanhamentos','Gelo','Sorvete','Pães']},
+  PESSOAL:{l:'DESPESA COM PESSOAL',s:['Salarios e ordenados','FGTS','Vale transporte','Vale alimentação','Provisão 13º Salario','Provisão Férias','Provisão Fgts s/ 13º','Provisão Fgts s/ Férias','Sindicato','INSS empresa']},
+  VENDAS_CAT:{l:'DESPESAS COM VENDAS',s:['Fretes com vendas','Royalties','Embalagens para delivery','Marketing','Publicidade']},
+  CONSUMO:{l:'DESPESAS DE CONSUMO',s:['Alugueis de imoveis','Alugueis de Equipamentos','Energia eletrica','Agua e esgoto','Telefone','Internet','Gás']},
+  TERCEIROS:{l:'SERVIÇOS PRESTADOS POR TERCEIROS',s:['Assistencia Contábil','Serviços com Segurança','Serviços de Manutenção e Higiene','Serviços com Internet/Software','Serviços prestados por terceiros','Serviços de Consultoria de Alimentos','Advocacia','RH / Recrutamento']},
+  MATERIAL:{l:'MATERIAL DE USO/CONSUMO',s:['Material de Embalagens','Material de Higiene e Limpeza','Material de Copa e cozinha','Materiais diversos','EPI / Uniformes']},
+  FINANCEIRAS:{l:'DESPESAS FINANCEIRAS',s:['Juros de mora','Juros e comissoes bancarias','Multa de Mora','Tarifas Bancarias','IOF S/ Imp. S/ Oper. Financeiras','Tarifa de Administração de Cartões','Empréstimo','Antecipação de Recebíveis']},
+  OUTRAS:{l:'OUTRAS DESPESAS OPERACIONAIS',s:['Depreciação e Amortização','Seguro','Outras Despesas']},
+  IMPOSTOS:{l:'IMPOSTOS, TAXAS E CONTRIBUIÇÕES',s:['IPTU','TFE','Simples Nacional','ICMS Sobre Diferencial de Aliquota','DARF','ISS / ISSQN']}
 };
 
-function catGrupo(c){for(const[k,g]of Object.entries(CATS))if(g.s.includes(c))return k;return null;}
+// ─── Mapeamentos de auto-classificação (fornecedores conhecidos) ─────────────
+const MAPPINGS=[
+  ['WEW IMPORTACAO','COMPRAS - REVENDA'],['CABANHA INTERLAGOS','COMPRAS - REVENDA'],
+  ['FRIGOL','COMPRAS - REVENDA'],['MINERVA FUNDO','COMPRAS - REVENDA'],
+  ['AURORA ALIMENTOS','COMPRAS - REVENDA'],['PRONI E SUZUKI','COMPRAS - REVENDA'],
+  ['FABENE ALIMENTOS','COMPRAS - REVENDA'],['COMERCIAL TUDO EM CARNES','COMPRAS - REVENDA'],
+  ['SPECIALLI','COMPRAS - REVENDA'],['SPAL IND','COMPRAS - REVENDA'],
+  ['SABOR MOR','COMPRAS - REVENDA'],['AGROPECUARIA MFL','COMPRAS - REVENDA'],
+  ['DISTRIBUIDORA MIOTTO','COMPRAS - REVENDA'],['CAMPO VERDE ALIMENTOS','COMPRAS - REVENDA'],
+  ['CANTAGALLO','COMPRAS - REVENDA'],['BARRA MANSA COMERCIO DE CARNES','COMPRAS - REVENDA'],
+  ['FRIGORIFICO HUMAITA','COMPRAS - REVENDA'],['ALSSABAK','COMPRAS - REVENDA'],
+  ['INTERLAGOS GOURMET','COMPRAS - REVENDA'],['GUIDARA COMERCIO','COMPRAS - REVENDA'],
+  ['NOVA MIX INDL','COMPRAS - REVENDA'],['LATICINIO CAMBUIENSE','COMPRAS - REVENDA'],
+  ['REDECARD','VENDAS DE MERCADORIAS'],['ALELO','VENDAS DE MERCADORIAS'],
+  ['TICKET SERVICOS','VENDAS DE MERCADORIAS'],['VR BENEFICIOS','VENDAS DE MERCADORIAS'],
+  ['VR BENEFCIOS','VENDAS DE MERCADORIAS'],['VEROCHEQUE','VENDAS DE MERCADORIAS'],
+  ['PLUXEE','VENDAS DE MERCADORIAS'],['SWILE DO BRASIL','VENDAS DE MERCADORIAS'],
+  ['AR BOUTIQUE DE CARNES','VENDAS DE MERCADORIAS'],['CASA DE CARNES MOTA','VENDAS DE MERCADORIAS'],
+  ['PAGCERTO','Tarifa de Administração de Cartões'],['ZOOP BRASIL','Tarifa de Administração de Cartões'],
+  ['LUIZ FERRAROTTO','Salarios e ordenados'],['DANIELA APARECIDA DE FARIA','Salarios e ordenados'],
+  ['JIUSCELENE DE LOURDES','Salarios e ordenados'],['TIAGO LOPES ISCARO','Salarios e ordenados'],
+  ['PAULO HENRIQUE RIBEIRO','Salarios e ordenados'],['RAFAEL VIEIRA DOS ANJOS','Salarios e ordenados'],
+  ['BRUNA CRISTINA KOHLMANN','Salarios e ordenados'],['ANNA LUIZA ALONSO','Salarios e ordenados'],
+  ['LEANDRO NORBERTO','Salarios e ordenados'],['JOSE AUGUSTO CARMONA','Salarios e ordenados'],
+  ['M M M SERV CONTABEIS','Assistencia Contábil'],['CREDCAMP','Alugueis de Equipamentos'],
+  ['MDK FRANCHISING','Royalties'],['ASI CAMPINAS','Serviços com Segurança'],
+  ['DEDETIZI','Serviços de Manutenção e Higiene'],['V4 COMPANY','Serviços com Internet/Software'],
+  ['TRADEMASTER','Serviços com Internet/Software'],['SR GRAFICA','Material de Embalagens'],
+  ['ALPACK INDUSTRIA','Material de Embalagens'],['QBRAZA','Material de Copa e cozinha'],
+  ['MISTER GELO','Gelo'],['PORTO SEGURO','Serviços prestados por terceiros'],
+  ['CPFL','Energia eletrica'],['VIVO FIXO','Telefone'],['CLARO','Telefone'],
+  ['DEPARTAMENTO DE AGUAS','Agua e esgoto'],['BANCO C6','Juros e comissoes bancarias'],
+  ['RECEITA FEDERAL','Simples Nacional'],['PREFEITURA','IPTU'],
+];
 
-function catOptsHtml(sel=''){
-  return Object.entries(CATS).map(([,g])=>
-    `<optgroup label="${g.l}">${g.s.map(s=>`<option value="${s}"${s===sel?' selected':''}>${s}</option>`).join('')}</optgroup>`
+function autoClassificar(lancamento) {
+  if (!lancamento) return '';
+  const up = lancamento.toUpperCase();
+  // Memória de fornecedor
+  for (const [k,v] of Object.entries(supMem)) { if (up.includes(k.toUpperCase())) return v; }
+  // Mapeamentos fixos
+  for (const [k,v] of MAPPINGS) { if (up.includes(k.toUpperCase())) return v; }
+  // Heurísticas
+  if (/RENDIMENTO|APLIC AUT MAIS/.test(up)) return 'Juros de aplicacoes financeiras';
+  if (/^IOF\s*$/.test(up.trim())) return 'IOF S/ Imp. S/ Oper. Financeiras';
+  if (/BUSINESS /.test(up)) return 'Tarifas Bancarias';
+  if (/PARCELA GIRO/.test(up)) return 'Juros e comissoes bancarias';
+  if (/PIX RECEBIDO|RECEBIMENTO REDE|TED RECEBIDA|PIX QR CODE RECEBIDO/.test(up)) return 'VENDAS DE MERCADORIAS';
+  if (/^RECEBIMENTOS/.test(up)) return 'VENDAS DE MERCADORIAS';
+  return '';
+}
+
+function catGrupo(c) { for (const [k,g] of Object.entries(CATS)) if (g.s.includes(c)) return k; return null; }
+
+function catOptsHtml(sel='') {
+  return Object.entries(CATS).map(([,g]) =>
+    `<optgroup label="${g.l}">${g.s.map(s =>
+      `<option value="${s}"${s===sel?' selected':''}>${s}</option>`
+    ).join('')}</optgroup>`
   ).join('');
 }
 
-function preencherSels(){
-  ['ml-c','bulk-cat'].forEach(id=>{
-    const el=document.getElementById(id);
-    if(!el)return;
-    el.innerHTML='<option value="">— Sem categoria —</option>'+catOptsHtml();
+function preencherSels() {
+  ['ml-c','bulk-cat-sel'].forEach(id => {
+    const el = document.getElementById(id); if (!el) return;
+    el.innerHTML = '<option value="">— Sem categoria —</option>' + catOptsHtml();
   });
+  // Preenche filtro de grupos
+  const fg = document.getElementById('f-grp');
+  fg.innerHTML = '<option value="">Todos os grupos</option>' +
+    Object.entries(CATS).map(([k,g]) => `<option value="${k}">${g.l}</option>`).join('');
 }
 
-window.onBBReady=()=>init();
-if(api.token())init();
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+window.onBBReady = () => init();
+if (api.token()) init();
 
-async function init(){
-  const h=new Date();
-  mesRef=fmt.mesAtual();
-  document.getElementById('f-mesref').value=`${h.getFullYear()}-${String(h.getMonth()+1).padStart(2,'0')}`;
-  document.getElementById('ml-dt').value=h.toISOString().slice(0,10);
-  document.getElementById('ml-m').value=mesRef;
-  document.getElementById('ml-mc').value=mesRef;
-  document.getElementById('dre-mes').textContent=mesRef;
+async function init() {
+  const hoje = new Date();
+  mesRef = fmt.mesAtual();
+  document.getElementById('f-mesref').value = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
+  document.getElementById('ml-dt').value = hoje.toISOString().slice(0,10);
+  document.getElementById('ml-m').value = mesRef;
+  document.getElementById('ml-mc').value = mesRef;
+  document.getElementById('dre-mes-label').textContent = mesRef;
   preencherSels();
   await carregarSessao();
 }
 
-async function carregarSessao(){
+async function carregarSessao() {
   setSt('load');
-  const d=await api.get(`/api/dre/sessoes/${mesRef}`);
-  if(d.ok&&d.data?.dados_json){
-    sessId=d.data.id;
-    TXS=d.data.dados_json.transactions||[];
-    files=d.data.dados_json.loadedFiles||[];
-    supMem=d.data.dados_json.supplierMem||{};
-    if(TXS.length){showTable();toast(`📂 ${TXS.length} lançamentos`);}
-  } else {TXS=[];files=[];supMem={};}
+  const d = await api.get(`/api/dre/sessoes/${mesRef}`);
+  if (d.ok && d.data?.dados_json) {
+    sessId = d.data.id;
+    TXS   = d.data.dados_json.transactions || [];
+    files = d.data.dados_json.loadedFiles  || [];
+    supMem= d.data.dados_json.supplierMem  || {};
+    if (TXS.length) { showTable(); toast(`📂 ${TXS.length} lançamentos carregados`); }
+  } else { TXS=[]; files=[]; supMem={}; }
   setSt('ok');
   updMesFiltro(); render(); updStats(); renderDRE();
 }
 
-async function trocarMes(){
-  const v=document.getElementById('f-mesref').value; if(!v)return;
-  const[y,m]=v.split('-'); mesRef=`${m}/${y}`;
-  document.getElementById('dre-mes').textContent=mesRef;
+async function trocarMes() {
+  const v = document.getElementById('f-mesref').value; if (!v) return;
+  const [y,m] = v.split('-'); mesRef = `${m}/${y}`;
+  document.getElementById('dre-mes-label').textContent = mesRef;
   await carregarSessao();
 }
 
-function abrirDZ(){document.getElementById('f-ofx').click();}
+// ─── CARREGAR ARQUIVOS ────────────────────────────────────────────────────────
+function abrirDZ() { document.getElementById('f-ofx').click(); }
 
-function onDrop(e){
+function onDrop(e) {
   e.preventDefault(); document.getElementById('dz').classList.remove('drag');
-  const f=e.dataTransfer.files[0]; if(!f)return;
-  const ext=f.name.split('.').pop().toLowerCase();
-  const isFatura=f.name.toLowerCase().includes('fatura')||f.name.toLowerCase().includes('cartao')||f.name.toLowerCase().includes('cc');
-  if(isFatura&&['csv','xlsx','xls'].includes(ext)) procCC(f);
+  const f = e.dataTransfer.files[0]; if (!f) return;
+  const isFatura = /fatura|cartao|cc/i.test(f.name);
+  const ext = f.name.split('.').pop().toLowerCase();
+  if (isFatura && ['csv','xlsx','xls'].includes(ext)) procCC(f);
   else procExt(f);
 }
 
-async function loadFile(inp,tipo){
-  const f=inp.files[0]; if(!f)return;
-  if(tipo==='cc') procCC(f); else procExt(f);
-  inp.value='';
+async function loadFile(inp, tipo) {
+  const f = inp.files[0]; if (!f) return;
+  if (tipo === 'cc') procCC(f); else procExt(f);
+  inp.value = '';
 }
 
-async function procExt(file){
+async function procExt(file) {
   toast('⏳ Processando extrato...');
-  const fd=new FormData(); fd.append('arquivo',file);
-  const d=await api.upload('/api/dre/import-extrato',fd);
-  if(!d.ok){toast('❌ '+d.erro);return;}
-  addLancs(d.lancamentos,file.name);
+  const fd = new FormData(); fd.append('arquivo', file);
+  const d = await api.upload('/api/dre/import-extrato', fd);
+  if (!d.ok) { toast('❌ ' + (d.erro||'Erro ao processar')); return; }
+  // Auto-classifica com mapeamentos
+  const lancs = (d.lancamentos||[]).map(l => ({
+    ...l,
+    categoria: l.categoria || autoClassificar(l.lancamento)
+  }));
+  addLancs(lancs, file.name);
 }
 
-async function procCC(file){
+async function procCC(file) {
   toast('💳 Processando fatura CC...');
-  const buf=await file.arrayBuffer();
-  const wb=XLSX.read(buf,{type:'array',cellDates:true});
-  const ws=wb.Sheets[wb.SheetNames[0]];
-  const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
-  const lancs=parseCCRows(rows);
-  if(!lancs.length){toast('⚠️ Nenhum lançamento encontrado');return;}
-  addLancs(lancs,file.name,true);
+  const buf = await file.arrayBuffer();
+  const wb  = XLSX.read(buf, {type:'array', cellDates:true});
+  const ws  = wb.Sheets[wb.SheetNames[0]];
+  const rows= XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+  const lancs = parseCCRows(rows);
+  if (!lancs.length) { toast('⚠️ Nenhum lançamento encontrado na fatura'); return; }
+  addLancs(lancs, file.name);
 }
 
-function parseCCRows(rows){
-  if(rows.length<2)return[];
-  const h=rows[0].map(c=>String(c).toLowerCase().trim());
-  const ic=ns=>{for(const n of ns){const i=h.findIndex(x=>x.includes(n));if(i>=0)return i;}return -1;};
-  const cD=ic(['data','date','dt']);
-  const cN=ic(['descri','lancamento','lançamento','estabelecimento','merchant','comercio']);
-  const cV=ic(['valor','value','montante','total']);
-  const cP=ic(['parcela','parcel']);
-  const result=[];
-  for(let i=1;i<rows.length;i++){
+function parseCCRows(rows) {
+  if (rows.length < 2) return [];
+  const h = rows[0].map(c => String(c).toLowerCase().trim());
+  const ic = ns => { for (const n of ns) { const i = h.findIndex(x => x.includes(n)); if (i>=0) return i; } return -1; };
+  const cD=ic(['data','date','dt']), cN=ic(['descri','lancamento','estabelecimento','merchant']),
+        cV=ic(['valor','value','montante','total']), cP=ic(['parcela','parcel']);
+  const result = [];
+  for (let i=1; i<rows.length; i++) {
     const row=rows[i];
     const nome=String(row[cN]??'').trim();
-    if(!nome||nome.toLowerCase().includes('total')||nome.toLowerCase().includes('pagamento'))continue;
-    let v=parseFloat(String(row[cV]??'0').replace(/[^\d.,-]/g,'').replace(',','.'));
-    if(!v||isNaN(v))continue;
-    v=-Math.abs(v);
+    if (!nome||nome.toLowerCase().includes('total')||nome.toLowerCase().includes('pagamento')) continue;
+    let v=parseFloat(String(row[cV]??'0').replace(/[^\d.,-]/g,'').replace(',','.'))||0;
+    if (!v) continue;
+    v = -Math.abs(v);
     let dt='';
-    if(cD>=0&&row[cD]){
+    if (cD>=0 && row[cD]) {
       const d=row[cD];
-      if(d instanceof Date) dt=d.toISOString().slice(0,10);
-      else{const s=String(d).trim();
-        if(/^\d{2}\/\d{2}\/\d{4}$/.test(s)) dt=s.split('/').reverse().join('-');
-        else if(/^\d{2}\/\d{2}$/.test(s)){const[dd,mm]=s.split('/');dt=`${new Date().getFullYear()}-${mm}-${dd}`;}
-        else dt=s.slice(0,10);
-      }
+      if (d instanceof Date) dt=d.toISOString().slice(0,10);
+      else { const s=String(d).trim();
+        if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) dt=s.split('/').reverse().join('-');
+        else dt=s.slice(0,10); }
     }
-    const mes=dt?dt.slice(5,7)+'/'+dt.slice(0,4):mesRef;
-    const parc=cP>=0?String(row[cP]||''):'';
-    const desc=parc?`${nome} (${parc})`:nome;
-    const cat=supMem[nome.toUpperCase().slice(0,30)]||'';
-    result.push({id:'cc_'+Date.now()+'_'+i,lancamento:desc,valor:v,data:dt,mes,mesCaixa:mes,categoria:cat,fonte:'CC'});
+    const mes = dt ? dt.slice(5,7)+'/'+dt.slice(0,4) : mesRef;
+    const parc = cP>=0 ? String(row[cP]||'') : '';
+    result.push({id:'cc_'+Date.now()+'_'+i, lancamento:parc?`${nome} (${parc})`:nome,
+      valor:v, data:dt, mes, mesCaixa:mes, categoria:autoClassificar(nome), fonte:'CC'});
   }
   return result;
 }
 
-function addLancs(novos,fileName,isCC=false){
-  const ex=new Set(TXS.map(t=>`${t.data}|${t.lancamento}|${t.valor}`));
-  let n=0;
-  for(const l of novos){
-    const k=`${l.data}|${l.lancamento}|${l.valor}`;
-    if(!ex.has(k)){
-      if(!l.categoria&&l.lancamento){const ch=l.lancamento.toUpperCase().slice(0,30);l.categoria=supMem[ch]||'';}
-      TXS.push({...l,id:l.id||(Date.now()+'_'+Math.random())});n++;
+function addLancs(novos, fileName) {
+  const ex = new Set(TXS.map(t=>`${t.data}|${t.lancamento}|${t.valor}`));
+  let n = 0;
+  for (const l of novos) {
+    const k = `${l.data}|${l.lancamento}|${l.valor}`;
+    if (!ex.has(k)) {
+      if (!l.categoria && l.lancamento) {
+        const ch=l.lancamento.toUpperCase().slice(0,30);
+        l.categoria = supMem[ch] || autoClassificar(l.lancamento);
+      }
+      TXS.push({...l, id:l.id||(Date.now()+'_'+Math.random())});
+      n++;
     }
   }
-  if(!files.includes(fileName))files.push(fileName);
-  toast(`✅ ${n} lançamentos adicionados`);
+  if (!files.includes(fileName)) files.push(fileName);
+  const autoC = TXS.filter(t=>t.categoria).length;
+  toast(`✅ ${n} adicionados · ${autoC} classificados automaticamente`);
   showTable(); updMesFiltro(); render(); updStats(); renderDRE(); autoSv();
 }
 
-function showTable(){
+function showTable() {
   document.getElementById('dz-area').style.display='none';
   document.getElementById('tbl-area').style.display='block';
-  document.getElementById('stats').style.display='';
+  document.getElementById('stats-grid').style.display='';
+  document.getElementById('totals-row').style.display='';
   document.getElementById('prog-w').style.display='';
   document.getElementById('banner').classList.add('show');
-  document.getElementById('ftags').innerHTML=files.map(f=>
-    `<span class="ftag${f.toLowerCase().includes('fatura')||f.toLowerCase().includes('cc')?' cc':''}">${f}</span>`
+  document.getElementById('ftags').innerHTML = files.map(f =>
+    `<span class="ftag${/fatura|cc|cartao/i.test(f)?' cc':''}">${/fatura|cc|cartao/i.test(f)?'💳':'📄'} ${f}</span>`
   ).join('');
 }
 
-function render(){
-  const q=(document.getElementById('busca').value||'').toLowerCase();
-  const grp=document.getElementById('f-grp').value;
-  const mes=document.getElementById('f-mes').value;
-  const fonte=document.getElementById('f-fonte').value;
-  const pend=document.getElementById('f-pend').checked;
+// ─── RENDER ───────────────────────────────────────────────────────────────────
+function onGrpChange() {
+  // Quando filtro de grupo muda, render normalmente
+  render();
+}
 
-  const lista=TXS.filter(t=>{
-    if(q&&!t.lancamento.toLowerCase().includes(q))return false;
-    if(grp&&catGrupo(t.categoria)!==grp)return false;
-    if(mes&&t.mes!==mes)return false;
-    if(fonte&&t.fonte!==fonte)return false;
-    if(pend&&t.categoria)return false;
+function render() {
+  const q     = (document.getElementById('busca').value||'').toLowerCase();
+  const grp   = document.getElementById('f-grp').value;
+  const mes   = document.getElementById('f-mes').value;
+  const fonte = document.getElementById('f-fonte').value;
+  const pend  = document.getElementById('f-pend').checked;
+
+  const lista = TXS.filter(t => {
+    if (q && !t.lancamento.toLowerCase().includes(q) && !(t.razaoSocial||'').toLowerCase().includes(q)) return false;
+    if (grp && catGrupo(t.categoria) !== grp) return false;
+    if (mes && t.mes !== mes) return false;
+    if (fonte && t.fonte !== fonte) return false;
+    if (pend && t.categoria) return false;
     return true;
   });
 
-  const tb=document.getElementById('tbody');
-  if(!lista.length){tb.innerHTML='<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--muted)">Nenhum lançamento</td></tr>';return;}
+  const bads = {OFX:'<span class="badge bofx">OFX</span>',CC:'<span class="badge bcc">CC</span>',
+    BOLETO:'<span class="badge bbol">Boleto</span>',BOLETO_PREV:'<span class="badge bbolp">Prev.</span>',
+    MANUAL:'<span class="badge bman">Manual</span>'};
 
-  tb.innerHTML=lista.map(t=>{
-    const v=parseFloat(t.valor||0);
-    const cls=t.ignorar?'ign':!t.categoria?'uncat':t.fonte==='CC'?'cc':'';
-    const bads={OFX:'<span class="badge bofx">OFX</span>',CC:'<span class="badge bcc">CC</span>',BOLETO:'<span class="badge bbol">Boleto</span>',BOLETO_PREV:'<span class="badge bbolp">Prev.</span>',MANUAL:'<span class="badge bman">Manual</span>'};
-    const badge=bads[t.fonte]||`<span class="badge bman">${t.fonte||'?'}</span>`;
-    return`<tr class="${cls}" id="tr-${t.id}">
-      <td><input type="checkbox" class="chk tcb" data-id="${t.id}" ${selIds.has(t.id)?'checked':''} onchange="togSel('${t.id}',this.checked)"></td>
+  const tb = document.getElementById('tbody');
+  if (!lista.length) {
+    tb.innerHTML='<tr><td colspan="10" style="text-align:center;padding:28px;color:var(--muted)">Nenhum lançamento encontrado</td></tr>';
+    document.getElementById('footer-note').textContent='';
+    return;
+  }
+
+  tb.innerHTML = lista.map(t => {
+    const v   = parseFloat(t.valor||0);
+    const isCat = !!t.categoria;
+    const rowCls= t.ignorar?'ign':!isCat?'uncat':t.fonte==='CC'?'cc-row':t.fonte?.startsWith('BOLETO')?'boleto-row':'';
+    const badge = bads[t.fonte]||`<span class="badge bman">${t.fonte||'?'}</span>`;
+    return `<tr class="${rowCls}" id="tr-${t.id}">
+      <td style="text-align:center"><input type="checkbox" class="chk tcb" data-id="${t.id}" ${selIds.has(t.id)?'checked':''} onchange="togSel('${t.id}',this.checked)"></td>
       <td style="font-size:11px;color:var(--muted);white-space:nowrap">${t.data?fmt.date(t.data):'—'}</td>
-      <td style="font-size:11px;white-space:nowrap;cursor:pointer;color:var(--blue)" onclick="editMes('${t.id}','mes',this)">${fmtMes(t.mes)}</td>
-      <td style="font-size:11px;white-space:nowrap;cursor:pointer;color:var(--muted)" onclick="editMes('${t.id}','mesCaixa',this)">${fmtMes(t.mesCaixa||t.mes)}</td>
+      <td style="font-size:11px;white-space:nowrap;cursor:pointer;color:var(--blue);text-decoration:underline dotted" onclick="editMes('${t.id}','mes',this)">${fmtMes(t.mes)}</td>
+      <td style="font-size:11px;white-space:nowrap;cursor:pointer;color:var(--muted);text-decoration:underline dotted" onclick="editMes('${t.id}','mesCaixa',this)">${fmtMes(t.mesCaixa||t.mes)}</td>
       <td>${badge}</td>
-      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${t.lancamento}">${t.lancamento}</td>
-      <td><select class="csel${t.categoria?'':' u'}" onchange="setCat('${t.id}',this.value)"><option value=""${!t.categoria?' selected':''}>— Sem categoria —</option>${catOptsHtml(t.categoria)}</select></td>
-      <td class="${v>=0?'vp':'vn'}" style="white-space:nowrap">${fmt.brl(v)}</td>
-      <td style="white-space:nowrap">
-        <button style="background:none;border:none;cursor:pointer;font-size:13px" onclick="togIgn('${t.id}')" title="${t.ignorar?'Reativar':'Ignorar'}">${t.ignorar?'↩️':'🚫'}</button>
-        <button style="background:none;border:none;cursor:pointer;font-size:13px;color:var(--red-l)" onclick="delLanc('${t.id}')">×</button>
-      </td>
+      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500" title="${t.lancamento}">${t.lancamento}</td>
+      <td style="font-size:11px;color:var(--muted);max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.razaoSocial||t.portador||'—'}</td>
+      <td><select class="csel${isCat?'':' u'}" onchange="setCat('${t.id}',this.value)">
+        <option value=""${!isCat?' selected':''}>— Sem categoria —</option>
+        ${catOptsHtml(t.categoria)}
+      </select></td>
+      <td class="${v>=0?'vp':'vn'}" style="white-space:nowrap;text-align:right">${fmt.brl(v)}</td>
+      <td style="text-align:center"><button title="${t.ignorar?'Reativar':'Ignorar'}" onclick="togIgn('${t.id}')" style="background:none;border:none;cursor:pointer;font-size:13px;opacity:${t.ignorar?1:.4}">${t.ignorar?'↩️':'🚫'}</button></td>
     </tr>`;
   }).join('');
+
+  document.getElementById('footer-note').textContent = `${lista.length} lançamento(s) exibido(s) de ${TXS.length} total`;
 }
 
-function fmtMes(m){if(!m)return'—';const[mm,y]=m.split('/');return`${MO[+mm-1]||mm}/${y}`;}
+function fmtMes(m) {
+  if (!m) return '—';
+  const [mm,y] = m.split('/');
+  const mi = parseInt(mm)-1;
+  return `${MO[mi]||mm}/${y}`;
+}
 
-function setCat(id,cat){
-  const t=TXS.find(x=>x.id===id); if(!t)return;
-  t.categoria=cat;
-  if(cat&&t.lancamento){
-    const k=t.lancamento.toUpperCase().slice(0,30); supMem[k]=cat;
-    TXS.forEach(tx=>{if(!tx.categoria&&tx.lancamento?.toUpperCase().slice(0,30)===k)tx.categoria=cat;});
+// ─── CATEGORIAS ───────────────────────────────────────────────────────────────
+function setCat(id, cat) {
+  const t = TXS.find(x => x.id===id); if (!t) return;
+  t.categoria = cat;
+  if (cat && t.lancamento) {
+    const k = t.lancamento.toUpperCase().slice(0,30);
+    supMem[k] = cat;
+    // Aplica a outros do mesmo fornecedor sem categoria
+    TXS.forEach(tx => {
+      if (!tx.categoria && tx.lancamento?.toUpperCase().slice(0,30)===k) tx.categoria=cat;
+    });
   }
-  const row=document.getElementById('tr-'+id);
-  if(row)row.className=t.ignorar?'ign':cat?t.fonte==='CC'?'cc':'':'uncat';
+  const row = document.getElementById('tr-'+id);
+  if (row) row.className = t.ignorar?'ign':cat?t.fonte==='CC'?'cc-row':t.fonte?.startsWith('BOLETO')?'boleto-row':'':'uncat';
   updStats(); renderDRE(); autoSv();
 }
 
-function togIgn(id){const t=TXS.find(x=>x.id===id);if(t){t.ignorar=!t.ignorar;render();updStats();renderDRE();autoSv();}}
-function delLanc(id){TXS=TXS.filter(x=>x.id!==id);render();updStats();renderDRE();autoSv();}
-
-function togSel(id,chk){chk?selIds.add(id):selIds.delete(id);updBulk();}
-function selAll(el){document.querySelectorAll('.tcb').forEach(c=>{c.checked=el.checked;el.checked?selIds.add(c.dataset.id):selIds.delete(c.dataset.id);});updBulk();}
-function limparSel(){selIds.clear();render();updBulk();}
-function updBulk(){const n=selIds.size;const el=document.getElementById('bulk');el.classList.toggle('show',n>0);document.getElementById('bulk-n').textContent=`${n} selecionado(s)`;}
-
-function aplicarBulk(){
-  const cat=document.getElementById('bulk-cat').value; if(!cat){toast('Selecione categoria');return;}
-  let n=0; TXS.forEach(t=>{if(selIds.has(t.id)){t.categoria=cat;n++;}});
-  toast(`✅ ${n} classificados`); limparSel(); render(); updStats(); renderDRE(); autoSv();
+function togIgn(id) {
+  const t=TXS.find(x=>x.id===id); if(t){t.ignorar=!t.ignorar; render(); updStats(); renderDRE(); autoSv();}
 }
-function bulkIgn(){TXS.forEach(t=>{if(selIds.has(t.id))t.ignorar=!t.ignorar;});limparSel();render();updStats();renderDRE();autoSv();}
 
-function editMes(id,field,td){
-  const t=TXS.find(x=>x.id===id); if(!t)return;
+function delLanc(id) { TXS=TXS.filter(x=>x.id!==id); render(); updStats(); renderDRE(); autoSv(); }
+
+// ─── SELEÇÃO / BULK ───────────────────────────────────────────────────────────
+function togSel(id, chk) { chk?selIds.add(id):selIds.delete(id); updBulk(); }
+function selAll(el) {
+  document.querySelectorAll('.tcb').forEach(c => {
+    c.checked=el.checked; el.checked?selIds.add(c.dataset.id):selIds.delete(c.dataset.id);
+  });
+  updBulk();
+}
+function limparSel() { selIds.clear(); render(); updBulk(); }
+function updBulk() {
+  const n=selIds.size;
+  const bar=document.getElementById('bulk-bar');
+  bar.classList.toggle('show', n>0);
+  document.getElementById('bulk-count').textContent=`${n} selecionado(s)`;
+}
+
+function aplicarBulk() {
+  const cat=document.getElementById('bulk-cat-sel').value; if (!cat){toast('Selecione uma categoria');return;}
+  const applySupplier=document.getElementById('bulk-apply-supplier').checked;
+  let n=0;
+  const fornecedores=new Set();
+  TXS.forEach(t=>{
+    if (selIds.has(t.id)){t.categoria=cat;n++;if(t.lancamento)fornecedores.add(t.lancamento.toUpperCase().slice(0,30));}
+  });
+  if (applySupplier) {
+    TXS.forEach(t=>{
+      if (!selIds.has(t.id)&&t.lancamento&&fornecedores.has(t.lancamento.toUpperCase().slice(0,30))){t.categoria=cat;n++;}
+    });
+    fornecedores.forEach(k=>supMem[k]=cat);
+  }
+  toast(`✅ ${n} lançamentos classificados como "${cat}"`);
+  limparSel(); render(); updStats(); renderDRE(); autoSv();
+}
+
+function bulkIgn() {
+  TXS.forEach(t=>{if(selIds.has(t.id))t.ignorar=!t.ignorar;});
+  limparSel(); render(); updStats(); renderDRE(); autoSv();
+}
+
+// ─── EDIÇÃO DE MÊS ───────────────────────────────────────────────────────────
+function editMes(id, field, td) {
+  const t=TXS.find(x=>x.id===id); if (!t) return;
   const cur=field==='mes'?(t.mes||''):(t.mesCaixa||t.mes||'');
   const anos=[...new Set(TXS.map(x=>(x.mes||'').split('/')[1]||'2026'))];
   const opts=new Set(); anos.forEach(y=>MO.forEach((_,i)=>opts.add(`${String(i+1).padStart(2,'0')}/${y}`)));
-  if(cur)opts.add(cur);
+  if (cur) opts.add(cur);
   const sorted=[...opts].sort((a,b)=>{const p=s=>{const[m,y]=s.split('/');return(+y)*12+(+m);};return p(a)-p(b);});
-  td.innerHTML=`<select style="font-size:11px;padding:2px 5px;border-radius:4px;border:1px solid var(--purple)" onchange="applyMes('${id}','${field}',this.value)">${sorted.map(m=>`<option value="${m}" ${m===cur?'selected':''}>${fmtMes(m)}</option>`).join('')}</select>`;
+  td.innerHTML=`<select style="font-size:11px;padding:2px 5px;border-radius:4px;border:1px solid var(--purple)"
+    onchange="applyMes('${id}','${field}',this.value)">
+    ${sorted.map(m=>`<option value="${m}"${m===cur?' selected':''}>${fmtMes(m)}</option>`).join('')}
+  </select>`;
   td.querySelector('select').focus();
   td.querySelector('select').addEventListener('blur',()=>setTimeout(()=>render(),150));
 }
 function applyMes(id,field,val){const t=TXS.find(x=>x.id===id);if(t){t[field]=val;}updMesFiltro();renderDRE();autoSv();setTimeout(()=>render(),50);}
 
-function abrirBulkMes(){
-  if(!selIds.size){toast('Selecione lançamentos');return;}
+function abrirBulkMes() {
+  if (!selIds.size){toast('Selecione lançamentos');return;}
   document.getElementById('bm-n').textContent=selIds.size;
   const anos=[...new Set(TXS.map(t=>(t.mes||'').split('/')[1]||'2026'))];
   const opts=new Set(); anos.forEach(y=>MO.forEach((_,i)=>opts.add(`${String(i+1).padStart(2,'0')}/${y}`)));
   const sorted=[...opts].sort((a,b)=>{const p=s=>{const[m,y]=s.split('/');return(+y)*12+(+m);};return p(a)-p(b);});
-  const sel=document.getElementById('bm-v');
-  sel.innerHTML=sorted.map(m=>`<option value="${m}">${fmtMes(m)}</option>`).join('');
+  document.getElementById('bm-v').innerHTML=sorted.map(m=>`<option value="${m}">${fmtMes(m)}</option>`).join('');
   document.getElementById('m-mes').classList.add('open');
 }
 function confirmarBulkMes(){
   const v=document.getElementById('bm-v').value;
-  const ac=document.getElementById('bm-c').checked;
-  const ax=document.getElementById('bm-cx').checked;
+  const ac=document.getElementById('bm-c').checked, ax=document.getElementById('bm-cx').checked;
   TXS.forEach(t=>{if(!selIds.has(t.id))return;if(ac)t.mes=v;if(ax)t.mesCaixa=v;});
-  document.getElementById('m-mes').classList.remove('open');
-  limparSel(); updMesFiltro(); render(); renderDRE(); autoSv();
+  fecharModal('m-mes'); limparSel(); updMesFiltro(); render(); renderDRE(); autoSv();
   toast(`📅 Mês atualizado`);
 }
 
-function updMesFiltro(){
+// ─── STATS ────────────────────────────────────────────────────────────────────
+function updMesFiltro() {
   const meses=[...new Set(TXS.map(t=>t.mes).filter(Boolean))].sort((a,b)=>{const p=s=>{const[m,y]=s.split('/');return(+y)*12+(+m);};return p(a)-p(b);});
   const sel=document.getElementById('f-mes'),cur=sel.value;
-  sel.innerHTML='<option value="">Todos os meses</option>'+meses.map(m=>`<option value="${m}" ${m===cur?'selected':''}>${fmtMes(m)}</option>`).join('');
+  sel.innerHTML='<option value="">Todos os meses</option>'+meses.map(m=>`<option value="${m}"${m===cur?' selected':''}>${fmtMes(m)}</option>`).join('');
 }
 
-function updStats(){
+function updStats() {
   const at=TXS.filter(t=>!t.ignorar);
   const cl=at.filter(t=>t.categoria).length;
   const pend=at.length-cl;
   const rec=at.filter(t=>parseFloat(t.valor||0)>0).reduce((s,t)=>s+parseFloat(t.valor),0);
   const dep=at.filter(t=>parseFloat(t.valor||0)<0).reduce((s,t)=>s+Math.abs(parseFloat(t.valor)),0);
+  const lucro=rec-dep;
   const pct=at.length?Math.round(cl/at.length*100):0;
+
   document.getElementById('s-tot').textContent=fmt.n(TXS.length);
   document.getElementById('s-cls').textContent=`${cl}/${at.length}`;
   document.getElementById('s-pen').textContent=fmt.n(pend);
   document.getElementById('s-rec').textContent=fmt.brl(rec);
   document.getElementById('s-dep').textContent=fmt.brl(dep);
+  document.getElementById('t-rec').textContent=fmt.brl(rec);
+  document.getElementById('t-dep').textContent=fmt.brl(dep);
+  const lEl=document.getElementById('t-luc');
+  lEl.textContent=fmt.brl(lucro);
+  lEl.style.color=lucro>=0?'var(--green)':'var(--red-l)';
+  document.getElementById('tc-lucro').style.borderLeft=`3px solid ${lucro>=0?'var(--green)':'var(--red-l)'}`;
   document.getElementById('prog-f').style.width=pct+'%';
   document.getElementById('prog-p').textContent=pct+'%';
-  document.getElementById('ph-sub').textContent=`${mesRef} · ${TXS.length} lanç · ${pct}%`;
+  document.getElementById('ph-sub').textContent=`${mesRef} · ${TXS.length} lanç · ${pct}% classificado`;
 }
 
+// ─── DRE VISUAL ───────────────────────────────────────────────────────────────
 function getModo(){return document.getElementById('dre-modo')?.value||'comp';}
 function sincModo(){
   const v=document.getElementById('dre-modo-full')?.value||'comp';
-  const el=document.getElementById('dre-modo');
-  if(el)el.value=v;
+  const el=document.getElementById('dre-modo'); if(el) el.value=v;
   renderDRE(); renderDREFull();
 }
 function getMesTx(t){return getModo()==='caixa'?(t.mesCaixa||t.mes||mesRef):(t.mes||mesRef);}
@@ -625,23 +765,29 @@ function renderDRE(){_buildDRE(document.getElementById('dre-body'),false);}
 function renderDREFull(){_buildDRE(document.getElementById('dre-full-body'),true);}
 
 function abrirDREModal(){
-  document.getElementById('m-dre-full').classList.add('open');
-  const modoEl=document.getElementById('dre-modo-full');
-  if(modoEl)modoEl.value=getModo();
+  document.getElementById('m-dre').classList.add('open');
+  const el=document.getElementById('dre-modo-full'); if(el) el.value=getModo();
   renderDREFull();
 }
 
-function _buildDRE(el,full){
-  if(!el)return;
-  const at=TXS.filter(t=>!t.ignorar&&t.categoria);
-  if(!at.length){el.innerHTML='<div style="padding:20px;text-align:center;color:var(--muted);font-size:13px">Classifique os lançamentos para ver o DRE</div>';return;}
+function toggleDREPanel(){
+  const p=document.getElementById('dre-p'); p.classList.toggle('hid');
+  document.getElementById('btn-dre-lateral')?.classList.toggle('active');
+}
 
+function _buildDRE(el, full) {
+  if (!el) return;
+  const at=TXS.filter(t=>!t.ignorar&&t.categoria);
+  if (!at.length) {
+    el.innerHTML='<div style="padding:20px;text-align:center;color:var(--muted);font-size:12px">Classifique os lançamentos para ver o DRE</div>';
+    return;
+  }
   const mesesSet=new Set(at.map(t=>getMesTx(t)));
   const meses=[...mesesSet].sort((a,b)=>{const p=s=>{const[m,y]=s.split('/');return(+y)*12+(+m);};return p(a)-p(b);});
   const showTot=meses.length>1||full;
 
   const data={};
-  for(const t of at){
+  for (const t of at) {
     const g=catGrupo(t.categoria)||'OUTROS';
     const m=getMesTx(t);
     const v=parseFloat(t.valor||0);
@@ -654,41 +800,39 @@ function _buildDRE(el,full){
   const sgt=(gk)=>meses.reduce((s,m)=>s+sg(gk,m),0);
 
   const fv=(v,isDesp)=>{
-    if(v===0)return '<span style="color:#bbb;font-family:\'DM Mono\',monospace">—</span>';
-    const abs=Math.abs(v);
+    if(v===0) return `<span style="color:#bbb;font-family:'DM Mono',monospace">—</span>`;
     const col=isDesp?(v<0?'#e74c3c':'#2ecc71'):(v>0?'#2ecc71':'#e74c3c');
-    const sign=isDesp&&v!==0?'-':v>0?'+':'';
-    return `<span style="font-family:'DM Mono',monospace;white-space:nowrap;color:${col}">${sign}${fmt.brl(abs)}</span>`;
+    const sign=isDesp&&v!==0?'-':(v>0?'+':'');
+    return `<span style="font-family:'DM Mono',monospace;white-space:nowrap;color:${col}">${sign}${fmt.brl(Math.abs(v))}</span>`;
   };
 
-  const TH='padding:8px 10px;text-align:right;font-size:10px;color:#fff;font-weight:700;text-transform:uppercase;background:var(--red);white-space:nowrap;border-right:1px solid rgba(255,255,255,.1)';
-  const THL='padding:8px 14px;text-align:left;font-size:10px;color:#fff;font-weight:700;text-transform:uppercase;background:var(--red)';
-  const TD='padding:5px 10px;text-align:right;font-size:12px;border-bottom:1px solid #f5efe8;border-right:1px solid #f5efe8';
-  const TDL='padding:5px 14px;text-align:left;font-size:12px;border-bottom:1px solid #f5efe8';
-  const minW=full?'220px':'180px';
+  const TH=`padding:8px 10px;text-align:right;font-size:10px;color:#fff;font-weight:700;text-transform:uppercase;background:var(--red);white-space:nowrap;border-right:1px solid rgba(255,255,255,.1)`;
+  const THL=`padding:8px 14px;text-align:left;font-size:10px;color:#fff;font-weight:700;text-transform:uppercase;background:var(--red)`;
+  const TD=`padding:5px 10px;text-align:right;font-size:12px;border-bottom:1px solid #f5efe8;border-right:1px solid #f5efe8`;
+  const TDL=`padding:5px ${full?'14':'10'}px;text-align:left;font-size:12px;border-bottom:1px solid #f5efe8`;
 
   let h=`<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
   <thead><tr>
-    <th style="${THL};min-width:${minW}">Grupo / Categoria</th>
+    <th style="${THL};min-width:${full?'220':'170'}px">Grupo / Categoria</th>
     ${meses.map(m=>`<th style="${TH}">${fmtMes(m)}</th>`).join('')}
     ${showTot?`<th style="${TH};background:#5a2020">TOTAL</th>`:''}
   </tr></thead><tbody>`;
 
-  const ORDEM=['RECEITAS','CMV','PESSOAL','VENDAS','CONSUMO','TERCEIROS','MATERIAL','FINANCEIRO','OUTRAS','IMPOSTOS','OUTROS'];
+  const ORDEM=['RECEITAS','CMV','PESSOAL','VENDAS_CAT','CONSUMO','TERCEIROS','MATERIAL','FINANCEIRAS','OUTRAS','IMPOSTOS','OUTROS'];
   const lucroMes=Object.fromEntries(meses.map(m=>[m,0]));
 
-  for(const gk of ORDEM){
-    if(!data[gk])continue;
+  for (const gk of ORDEM) {
+    if (!data[gk]) continue;
     const g=CATS[gk];
     const isDesp=gk!=='RECEITAS';
     const totG=sgt(gk);
-    const ghBg=gk==='RECEITAS'?'#1a5c2a':gk==='CMV'?'#5a2020':'#1a1a1a';
+    const ghBg=gk==='RECEITAS'?'#1a5c2a':gk==='CMV'?'#5a2020':'#2d2d2d';
 
     h+=`<tr><td colspan="${meses.length+(showTot?2:1)}" style="padding:7px 14px;background:${ghBg};color:#fff;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.5px">
       ${g?g.l:gk}${full?`<span style="float:right;font-size:10px;font-weight:400;opacity:.6">CLIQUE PARA RECOLHER</span>`:''}
     </td></tr>`;
 
-    for(const[cat,mD]of Object.entries(data[gk])){
+    for (const [cat,mD] of Object.entries(data[gk])) {
       const totC=Object.values(mD).reduce((s,v)=>s+v,0);
       h+=`<tr>
         <td style="${TDL};padding-left:${full?'22':'18'}px;color:var(--muted)">· ${cat}</td>
@@ -701,7 +845,8 @@ function _buildDRE(el,full){
     const stCol=gk==='RECEITAS'?'var(--green)':'var(--red-l)';
     h+=`<tr style="background:${stBg}">
       <td style="${TDL};font-weight:700;color:${stCol}">▶ SUBTOTAL ${g?g.l:gk}</td>
-      ${meses.map(m=>{const v=sg(gk,m);lucroMes[m]=(lucroMes[m]||0)+v;return `<td style="${TD};font-weight:700;color:${v>=0?'var(--green)':'var(--red-l)'}">${fmt.brl(isDesp?-Math.abs(v):v)}</td>`;}).join('')}
+      ${meses.map(m=>{const v=sg(gk,m);lucroMes[m]=(lucroMes[m]||0)+v;
+        return `<td style="${TD};font-weight:700;color:${v>=0?'var(--green)':'var(--red-l)'}">${fmt.brl(isDesp?-Math.abs(v):v)}</td>`;}).join('')}
       ${showTot?`<td style="${TD};font-weight:700;color:${totG>=0?'var(--green)':'var(--red-l)'}">${fmt.brl(isDesp?-Math.abs(totG):totG)}</td>`:''}
     </tr><tr><td colspan="${meses.length+(showTot?2:1)}" style="height:3px;background:var(--border)"></td></tr>`;
   }
@@ -709,84 +854,108 @@ function _buildDRE(el,full){
   const lucroTot=Object.values(lucroMes).reduce((s,v)=>s+v,0);
   h+=`<tr style="background:#1a1a1a">
     <td style="padding:10px 14px;color:#fff;font-weight:700;font-size:13px">💰 LUCRO / PREJUÍZO</td>
-    ${meses.map(m=>{const v=lucroMes[m]||0;return `<td style="padding:10px;text-align:right;color:${v>=0?'#2ecc71':'#e74c3c'};font-family:'DM Mono',monospace;font-weight:700;font-size:13px;border-right:1px solid rgba(255,255,255,.1)">${v>=0?'+':''}${fmt.brl(v)}</td>`;}).join('')}
+    ${meses.map(m=>{const v=lucroMes[m]||0;
+      return `<td style="padding:10px;text-align:right;color:${v>=0?'#2ecc71':'#e74c3c'};font-family:'DM Mono',monospace;font-weight:700;font-size:13px;border-right:1px solid rgba(255,255,255,.1)">${v>=0?'+':''}${fmt.brl(v)}</td>`;}).join('')}
     ${showTot?`<td style="padding:10px;text-align:right;color:${lucroTot>=0?'#2ecc71':'#e74c3c'};font-family:'DM Mono',monospace;font-weight:700;font-size:13px;background:#2d2d2d">${lucroTot>=0?'+':''}${fmt.brl(lucroTot)}</td>`:''}
   </tr></tbody></table></div>`;
 
-  document.getElementById('dre-mes').textContent=meses.map(fmtMes).join(' · ');
+  document.getElementById('dre-mes-label').textContent=meses.map(fmtMes).join(' · ');
   el.innerHTML=h;
 }
 
-
-function toggleDRE(){const p=document.getElementById('dre-p');p.classList.toggle('hid');document.getElementById('btn-dre').textContent=p.classList.contains('hid')?'📊 DRE':'📊 Fechar';}
-
+// ─── MANUAL ───────────────────────────────────────────────────────────────────
 function abrirManual(){document.getElementById('ml-m').value=mesRef;document.getElementById('ml-mc').value=mesRef;document.getElementById('m-manual').classList.add('open');}
-function fecharManual(){document.getElementById('m-manual').classList.remove('open');}
 function salvarManual(){
-  const d=document.getElementById('ml-d').value.trim();
-  if(!d){toast('Descrição obrigatória');return;}
+  const d=document.getElementById('ml-d').value.trim(); if (!d){toast('Descrição obrigatória');return;}
   const v=parseFloat(document.getElementById('ml-v').value)||0;
   const dt=document.getElementById('ml-dt').value;
   const cat=document.getElementById('ml-c').value;
   const mes=document.getElementById('ml-m').value||mesRef;
   const cx=document.getElementById('ml-mc').value||mes;
   TXS.push({id:'m_'+Date.now(),lancamento:d,valor:v,data:dt,mes,mesCaixa:cx,categoria:cat,fonte:'MANUAL'});
-  toast('✅ Adicionado'); fecharManual();
+  toast('✅ Adicionado'); fecharModal('m-manual');
   showTable(); updMesFiltro(); render(); updStats(); renderDRE(); autoSv();
 }
 
+// ─── BOLETOS ──────────────────────────────────────────────────────────────────
 async function importBoletos(){
   const d=await api.get(`/api/boletos/classificador?mes=${mesRef}`);
-  if(!d.ok){toast('Erro: '+d.erro);return;}
-  addLancs(d.data,`Boletos ${mesRef}`);
+  if(!d.ok){toast('Erro: '+(d.erro||'falha'));return;}
+  if(!d.data?.length){toast('Nenhum boleto para este mês');return;}
+  addLancs(d.data, `Boletos ${mesRef}`);
 }
 
-function limpar(){if(!confirm('Limpar todos os lançamentos?'))return;TXS=[];files=[];document.getElementById('dz-area').style.display='';document.getElementById('tbl-area').style.display='none';document.getElementById('stats').style.display='none';document.getElementById('prog-w').style.display='none';document.getElementById('banner').classList.remove('show');render();updStats();renderDRE();}
+// ─── LIMPAR ───────────────────────────────────────────────────────────────────
+function limpar(){
+  if(!confirm('Limpar todos os lançamentos?'))return;
+  TXS=[];files=[];
+  document.getElementById('dz-area').style.display='';
+  document.getElementById('tbl-area').style.display='none';
+  document.getElementById('stats-grid').style.display='none';
+  document.getElementById('totals-row').style.display='none';
+  document.getElementById('prog-w').style.display='none';
+  document.getElementById('banner').classList.remove('show');
+  render(); updStats(); renderDRE();
+}
 
+// ─── EXPORTAR EXCEL ───────────────────────────────────────────────────────────
 function exportXLS(){
   if(!TXS.length){toast('Sem dados');return;}
-  const rows=TXS.filter(t=>!t.ignorar).map(t=>({'Data':t.data,'Mês DRE':t.mes,'Mês Caixa':t.mesCaixa||t.mes,'Fonte':t.fonte,'Lançamento':t.lancamento,'Categoria':t.categoria||'','Grupo':catGrupo(t.categoria)||'','Valor':parseFloat(t.valor||0)}));
+  const rows=TXS.filter(t=>!t.ignorar).map(t=>({
+    'Data Compra':t.data,'Mês DRE':t.mes,'Mês Caixa':t.mesCaixa||t.mes,
+    'Fonte':t.fonte,'Estabelecimento':t.lancamento,'Portador/Razão':t.razaoSocial||t.portador||'',
+    'Parcela':t.parcela||'','Valor (R$)':parseFloat(t.valor||0),
+    'Categoria DRE':t.categoria||'','Grupo DRE':catGrupo(t.categoria)||''
+  }));
   const ws=XLSX.utils.json_to_sheet(rows);
-  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'DRE');
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Extrato Classificado');
   XLSX.writeFile(wb,`DRE_${mesRef.replace('/','_')}.xlsx`);
   toast('📤 Excel exportado!');
 }
 
+// ─── SALVAR / SESSÕES ────────────────────────────────────────────────────────
 function autoSv(){clearTimeout(_sv);_sv=setTimeout(()=>salvar(true),8000);}
 
 async function salvar(silent=false){
   setSt('load');
-  const d=await api.post('/api/dre/salvar',{sessao_id:sessId,mes_ref:mesRef,descricao:`Sessão ${mesRef} — ${TXS.length} lanç.`,dados_json:{transactions:TXS,loadedFiles:files,supplierMem:supMem,_savedAt:new Date().toISOString()}});
+  const d=await api.post('/api/dre/salvar',{
+    sessao_id:sessId, mes_ref:mesRef,
+    descricao:`Sessão ${mesRef} — ${TXS.length} lançamentos`,
+    dados_json:{transactions:TXS,loadedFiles:files,supplierMem:supMem,_savedAt:new Date().toISOString()}
+  });
   if(d.ok){sessId=d.sessao_id;if(!silent)toast('💾 Salvo!');setSt('ok');}
-  else{if(!silent)toast('❌ '+d.erro);setSt('err');}
+  else{if(!silent)toast('❌ '+(d.erro||'Erro ao salvar'));setSt('err');}
 }
 
 async function abrirSessoes(){
   document.getElementById('m-sess').classList.add('open');
   const d=await api.get('/api/dre/sessoes');
   const el=document.getElementById('sess-lst');
-  if(!d.ok||!d.data.length){el.innerHTML='<div style="padding:16px;text-align:center;color:var(--muted)">Nenhuma sessão salva</div>';return;}
+  if(!d.ok||!d.data?.length){el.innerHTML='<div style="padding:16px;text-align:center;color:var(--muted)">Nenhuma sessão salva</div>';return;}
   el.innerHTML=d.data.slice(0,10).map(s=>`
     <div class="si" onclick="loadSessao(${s.id})">
-      <div><div style="font-weight:600">${s.mes_ref}</div><div style="color:var(--muted);font-size:11px">${s.total_lancamentos||0} lançamentos</div></div>
-      <button onclick="event.stopPropagation();delSessao(${s.id})" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:16px">×</button>
+      <div><div style="font-weight:600">${s.mes_ref}</div>
+      <div style="color:var(--muted);font-size:11px">${s.total_lancamentos||0} lançamentos</div></div>
+      <button onclick="event.stopPropagation();delSessao(${s.id})" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:18px">×</button>
     </div>`).join('');
 }
 
 async function loadSessao(id){
-  document.getElementById('m-sess').classList.remove('open');
-  const d=await api.get(`/api/dre/sessoes/${id}`);
-  if(!d.ok){toast('Erro');return;}
+  fecharModal('m-sess');
+  const d=await api.get(`/api/dre/sessoes/${id}`); if(!d.ok){toast('Erro');return;}
   sessId=d.data.id; mesRef=d.data.mes_ref;
   TXS=d.data.dados_json?.transactions||[]; files=d.data.dados_json?.loadedFiles||[]; supMem=d.data.dados_json?.supplierMem||{};
   const[m,y]=mesRef.split('/'); document.getElementById('f-mesref').value=`${y}-${m}`;
-  document.getElementById('dre-mes').textContent=mesRef;
+  document.getElementById('dre-mes-label').textContent=mesRef;
   if(TXS.length)showTable();
   updMesFiltro(); render(); updStats(); renderDRE();
-  toast(`📂 ${mesRef} carregada`);
+  toast(`📂 ${mesRef} — ${TXS.length} lançamentos`);
 }
 
-async function delSessao(id){if(!confirm('Remover?'))return;await api.delete(`/api/dre/sessoes/${id}`);abrirSessoes();}
+async function delSessao(id){if(!confirm('Remover sessão?'))return;await api.delete(`/api/dre/sessoes/${id}`);abrirSessoes();}
+
+// ─── UTILS ────────────────────────────────────────────────────────────────────
+function fecharModal(id){document.getElementById(id).classList.remove('open');}
 
 function setSt(s){
   const d=document.getElementById('sd'),t=document.getElementById('st');
