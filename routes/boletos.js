@@ -31,11 +31,12 @@ module.exports = function (pool) {
 
   // ── Init tabela ────────────────────────────────────────────────────────────
   async function initTable() {
+    // Cria tabela se não existir
     await pool.query(`
       CREATE TABLE IF NOT EXISTS boletos (
         id              SERIAL PRIMARY KEY,
         frontend_id     INTEGER,
-        fornecedor      TEXT NOT NULL,
+        fornecedor      TEXT,
         produto         TEXT,
         dt_nota         TEXT,
         nf              TEXT,
@@ -45,12 +46,10 @@ module.exports = function (pool) {
         plano           TEXT,
         vencimento      DATE,
         valor           NUMERIC(14,2) NOT NULL DEFAULT 0,
-        status          TEXT NOT NULL DEFAULT 'avencer'
-                        CHECK (status IN ('avencer','pago','vencido','cancelado')),
+        status          TEXT NOT NULL DEFAULT 'avencer',
         dt_pagamento    DATE,
         observacao      TEXT,
-        origem          TEXT DEFAULT 'manual'
-                        CHECK (origem IN ('manual','nfe','pdf','csv','bulk')),
+        origem          TEXT DEFAULT 'manual',
         codigo_barras   TEXT,
         nf_id           INTEGER,
         usuario_id      INTEGER,
@@ -58,12 +57,32 @@ module.exports = function (pool) {
         atualizado_em   TIMESTAMPTZ DEFAULT NOW()
       )
     `);
+    // Adiciona colunas novas sem quebrar tabela existente
+    const colunas = [
+      ['fornecedor',     'TEXT'],
+      ['chave_nfe',      'TEXT'],
+      ['total_parcelas', 'INTEGER DEFAULT 1'],
+      ['codigo_barras',  'TEXT'],
+      ['atualizado_em',  'TIMESTAMPTZ DEFAULT NOW()'],
+    ];
+    for (const [col, def] of colunas) {
+      await pool.query(
+        `ALTER TABLE boletos ADD COLUMN IF NOT EXISTS ${col} ${def}`
+      ).catch(() => {});
+    }
+    // Recria constraint de status de forma segura
+    await pool.query(`
+      ALTER TABLE boletos DROP CONSTRAINT IF EXISTS boletos_status_check
+    `).catch(() => {});
+    await pool.query(`
+      ALTER TABLE boletos ADD CONSTRAINT boletos_status_check
+        CHECK (status IN ('avencer','pago','vencido','cancelado'))
+    `).catch(() => {});
     await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_boletos_vencimento  ON boletos(vencimento);
       CREATE INDEX IF NOT EXISTS idx_boletos_status      ON boletos(status);
       CREATE INDEX IF NOT EXISTS idx_boletos_frontend    ON boletos(frontend_id);
-      CREATE INDEX IF NOT EXISTS idx_boletos_fornecedor  ON boletos(fornecedor);
-    `);
+    `).catch(() => {});
   }
   initTable().catch(e => console.error('[boletos] initTable:', e.message));
 

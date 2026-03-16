@@ -166,41 +166,98 @@ module.exports = function (pool) {
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
-  // ── POST /import ── importa planilha PDV ───────────────────────────────────
+  // ── POST /import ── importa planilha PDV (XLSX, CSV padrão, CSV ChefWeb UTF-16) ─
   r.post('/import', upload.single('arquivo'), async (req, res) => {
     if (!req.file) return res.status(400).json({ ok: false, erro: 'Arquivo não enviado' });
 
     try {
-      const wb    = XLSX.read(req.file.buffer, { type: 'buffer', cellDates: true });
-      const sheet = wb.Sheets[wb.SheetNames[0]];
-      const rows  = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+      const ext = (req.file.originalname || '').split('.').pop().toLowerCase();
+      let rows = [];
 
-      if (rows.length < 2) return res.status(422).json({ ok: false, erro: 'Planilha vazia ou sem cabeçalho' });
+      // ── Detecta se é CSV UTF-16 (ChefWeb / TOTVS) ─────────────────────────
+      const isUtf16 = req.file.buffer[0] === 0xFF && req.file.buffer[1] === 0xFE;
+      const isChefweb = isUtf16 || (ext === 'csv' && req.file.buffer.toString('latin1', 0, 50).includes(';'));
+
+      if (isChefweb || (ext === 'csv' && !isUtf16)) {
+        // Parse CSV manual — suporta UTF-16 LE e UTF-8
+        let txt;
+        if (isUtf16) {
+          txt = req.file.buffer.toString('utf16le');
+        } else {
+          txt = req.file.buffer.toString('utf8');
+        }
+
+        const lines = txt.split(/\r?\n/);
+
+        // Detecta separador
+        const sep = lines.find(l => l.includes(';')) ? ';' : ',';
+
+        // Encontra linha de cabeçalho real (que contém 'codigo' ou 'produto' ou 'nome')
+        let headerIdx = -1;
+        for (let i = 0; i < Math.min(lines.length, 15); i++) {
+          const l = lines[i].toLowerCase();
+          if (l.includes('codigoproduto') || l.includes('código') || l.includes('codigo') || l.includes('nomeproduto')) {
+            headerIdx = i;
+            break;
+          }
+        }
+        if (headerIdx < 0) headerIdx = 0;
+
+        const header = lines[headerIdx].split(sep).map(c => c.replace(/^"|"$/g, '').trim());
+        rows.push(header);
+
+        for (let i = headerIdx + 1; i < lines.length; i++) {
+          const line = lines[i].trim();
+          if (!line) continue;
+          const cols = line.split(sep).map(c => c.replace(/^"|"$/g, '').trim());
+          rows.push(cols);
+        }
+      } else {
+        // XLSX / XLS
+        const wb    = XLSX.read(req.file.buffer, { type: 'buffer', cellDates: true });
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+      }
+
+      if (rows.length < 2) {
+        return res.status(422).json({ ok: false, erro: 'Planilha vazia ou sem cabeçalho' });
+      }
 
       const header = rows[0].map(c => String(c).toLowerCase().trim());
+
+      // Mapeamento de colunas — suporta ChefWeb (CodigoProduto, NomeProduto, PrecoVenda, PrecoCompra)
+      // e planilhas genéricas
       const col = (nomes) => {
         for (const n of nomes) {
-          const i = header.findIndex(h => h.includes(n));
+          const i = header.findIndex(h => h === n || h.includes(n));
           if (i >= 0) return i;
         }
         return -1;
       };
 
-      const colCod   = col(['código', 'codigo', 'cod', 'sku', 'id']);
-      const colDesc  = col(['descrição', 'descricao', 'desc', 'produto', 'item', 'nome']);
+      const colCod   = col(['codigoproduto', 'código', 'codigo', 'cod ', 'sku', ' id']);
+      const colDesc  = col(['nomeproduto', 'descrição', 'descricao', 'desc', 'produto', 'item', 'nome']);
       const colForn  = col(['fornecedor', 'supplier', 'marca']);
-      const colCusto = col(['custo', 'cost', 'preco custo', 'preço custo', 'p. custo']);
-      const colVenda = col(['venda', 'sale', 'preco venda', 'preço venda', 'p. venda', 'pvenda']);
-      const colUnit  = col(['unid', 'unit', 'un']);
-      const colCat   = col(['categoria', 'category', 'grupo', 'depart']);
+      const colCusto = col(['precocompra', 'custo', 'cost', 'preco custo', 'preço custo', 'p. custo', 'precodecompra']);
+      const colVenda = col(['precovenda', 'venda', 'sale', 'preco venda', 'preço venda', 'p. venda']);
+      const colUnit  = col(['unidade', 'unid', 'unit', 'un']);
+      const colCat   = col(['categoria', 'category', 'grupo', 'depart', 'subcategoria']);
+
+      console.log('[produtos/import] header:', header);
+      console.log('[produtos/import] cols:', { colCod, colDesc, colForn, colCusto, colVenda, colUnit, colCat });
 
       if (colCod < 0 || colDesc < 0) {
         return res.status(422).json({
           ok: false,
-          erro: 'Não foi possível identificar colunas de código e descrição. Verifique o cabeçalho da planilha.',
+          erro: `Não foi possível identificar colunas de código e descrição.\nCabeçalho detectado: ${header.slice(0,8).join(' | ')}`,
           cabecalho: header,
         });
       }
+
+      const parseNum = v => {
+        if (typeof v === 'number') return v;
+        return parseFloat(String(v).replace(/[^\d.,]/g, '').replace(',', '.')) || 0;
+      };
 
       const client = await pool.connect();
       let inseridos = 0, atualizados = 0, erros = 0;
@@ -211,18 +268,20 @@ module.exports = function (pool) {
 
         for (let i = 1; i < rows.length; i++) {
           const row = rows[i];
-          const codigo   = String(row[colCod] ?? '').trim();
+          const codigo    = String(row[colCod]  ?? '').trim();
           const descricao = String(row[colDesc] ?? '').trim();
           if (!codigo || !descricao) continue;
+          // Pula linhas de totais ou cabeçalhos repetidos
+          if (descricao.toLowerCase().includes('total') && isNaN(parseInt(codigo))) continue;
 
           const fornecedor = colForn >= 0 ? String(row[colForn] ?? '').trim() || null : null;
-          const custo      = colCusto >= 0 ? parseFloat(String(row[colCusto] ?? '0').replace(/[^\d.,]/g, '').replace(',', '.')) || 0 : 0;
-          const venda      = colVenda >= 0 ? parseFloat(String(row[colVenda] ?? '0').replace(/[^\d.,]/g, '').replace(',', '.')) || 0 : 0;
-          const unidade    = colUnit  >= 0 ? String(row[colUnit] ?? 'un').trim() || 'un' : 'un';
+          const custo      = colCusto >= 0 ? parseNum(row[colCusto]) : 0;
+          const venda      = colVenda >= 0 ? parseNum(row[colVenda]) : 0;
+          const unidade    = colUnit  >= 0 ? String(row[colUnit] ?? 'un').trim().toUpperCase() || 'UN' : 'UN';
           const categoria  = colCat   >= 0 ? String(row[colCat]  ?? '').trim() || null : null;
 
           try {
-            const { rowCount } = await client.query(`
+            await client.query(`
               INSERT INTO produtos (codigo, descricao, fornecedor, preco_custo, preco_venda, unidade, categoria, origem)
               VALUES ($1, $2, $3, $4, $5, $6, $7, 'pdv')
               ON CONFLICT (codigo) DO UPDATE SET
@@ -235,8 +294,9 @@ module.exports = function (pool) {
                 atualizado_em = NOW()
             `, [codigo, descricao, fornecedor, custo, venda, unidade, categoria]);
 
-            // rowCount = 1 em ambos os casos para INSERT/UPDATE, checar via xmax
-            const chk = await client.query(`SELECT xmin = xmax AS is_update FROM produtos WHERE codigo = $1`, [codigo]);
+            const chk = await client.query(
+              `SELECT (xmin::text::bigint != xmax::text::bigint) AS is_update FROM produtos WHERE codigo = $1`, [codigo]
+            );
             if (chk.rows[0]?.is_update) atualizados++;
             else inseridos++;
           } catch (e) {
