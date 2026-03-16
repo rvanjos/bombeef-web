@@ -25,9 +25,144 @@ pool.on('error', (err) => {
   console.error('[pool] erro inesperado:', err.message);
 });
 
-// Testa conexão na inicialização
-pool.query('SELECT NOW()').then(r => {
+// ── Auto-migração na inicialização ────────────────────────────────────────────
+// Roda sempre que o servidor inicia — ADD COLUMN IF NOT EXISTS é idempotente
+async function autoMigrate() {
+  console.log('[migrate] iniciando migração automática...');
+
+  const addCol = async (table, col, def) => {
+    await pool.query(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS ${col} ${def}`)
+      .catch(() => {});
+  };
+
+  // Descobre colunas reais da tabela boletos e renomeia se necessário
+  const boletosExists = await pool.query(
+    `SELECT to_regclass('public.boletos') AS e`
+  ).then(r => !!r.rows[0].e).catch(() => false);
+
+  if (boletosExists) {
+    const { rows: bCols } = await pool.query(`
+      SELECT column_name FROM information_schema.columns
+      WHERE table_schema='public' AND table_name='boletos'
+    `).catch(() => ({ rows: [] }));
+    const bColSet = new Set(bCols.map(r => r.column_name));
+
+    // Renomeia colunas do sistema anterior → novo nome
+    const renames = [
+      ['data_vencimento',   'vencimento'],
+      ['dt_vencimento',     'vencimento'],
+      ['data_nota',         'dt_nota'],
+      ['numero_nota',       'nf'],
+      ['nota_fiscal',       'nf'],
+      ['data_pagamento',    'dt_pagamento'],
+      ['cod_barras',        'codigo_barras'],
+      ['num_parcela',       'parcela'],
+      ['total_parc',        'total_parcelas'],
+      ['plano_contas',      'plano'],
+      ['fornecedor_nome',   'fornecedor'],
+      ['produto_descricao', 'produto'],
+    ];
+    for (const [old, novo] of renames) {
+      if (bColSet.has(old) && !bColSet.has(novo)) {
+        await pool.query(`ALTER TABLE boletos RENAME COLUMN ${old} TO ${novo}`)
+          .catch(() => {});
+        bColSet.add(novo);
+        bColSet.delete(old);
+      }
+    }
+
+    // Garante todas as colunas necessárias
+    const needed = [
+      ['frontend_id','INTEGER'], ['fornecedor','TEXT'], ['produto','TEXT'],
+      ['dt_nota','TEXT'], ['nf','TEXT'], ['chave_nfe','TEXT'],
+      ['parcela',"TEXT DEFAULT '1'"], ['total_parcelas','INTEGER DEFAULT 1'],
+      ['plano','TEXT'], ['vencimento','DATE'], ['dt_pagamento','DATE'],
+      ['observacao','TEXT'], ['origem',"TEXT DEFAULT 'manual'"],
+      ['codigo_barras','TEXT'], ['nf_id','INTEGER'], ['usuario_id','INTEGER'],
+      ['mes_competencia','TEXT'], ['mes_caixa','TEXT'],
+      ['vinculado_extrato','BOOLEAN DEFAULT false'],
+      ['extrato_lancamento','TEXT'], ['atualizado_em','TIMESTAMPTZ DEFAULT NOW()'],
+    ];
+    for (const [col, def] of needed) await addCol('boletos', col, def);
+
+    // Remove constraints problemáticas
+    await pool.query(`ALTER TABLE boletos DROP CONSTRAINT IF EXISTS boletos_status_check`).catch(() => {});
+    await pool.query(`ALTER TABLE boletos DROP CONSTRAINT IF EXISTS boletos_origem_check`).catch(() => {});
+
+    // Corrige status inválidos
+    await pool.query(`
+      UPDATE boletos SET status='avencer'
+      WHERE status NOT IN ('avencer','pago','vencido','cancelado')
+    `).catch(() => {});
+
+    // Popula mes_competencia e mes_caixa
+    await pool.query(`
+      UPDATE boletos
+      SET mes_competencia = TO_CHAR(
+        COALESCE(NULLIF(dt_nota,'')::date, vencimento), 'MM/YYYY'
+      )
+      WHERE mes_competencia IS NULL AND (dt_nota IS NOT NULL OR vencimento IS NOT NULL)
+    `).catch(() => {});
+
+    await pool.query(`
+      UPDATE boletos
+      SET mes_caixa = TO_CHAR(COALESCE(dt_pagamento, vencimento), 'MM/YYYY')
+      WHERE mes_caixa IS NULL AND (dt_pagamento IS NOT NULL OR vencimento IS NOT NULL)
+    `).catch(() => {});
+  }
+
+  // Kits
+  await addCol('kits','codigo','TEXT').catch(()=>{});
+  await addCol('kits','descricao','TEXT').catch(()=>{});
+  await addCol('kits','margem','NUMERIC(5,2) DEFAULT 0').catch(()=>{});
+  await addCol('kits','ativo','BOOLEAN DEFAULT true').catch(()=>{});
+  await addCol('kit_itens','codigo_produto','TEXT').catch(()=>{});
+  await addCol('kit_itens','descricao_produto','TEXT').catch(()=>{});
+  await addCol('kit_itens','preco_custo_unitario','NUMERIC(10,4) DEFAULT 0').catch(()=>{});
+
+  // Perdas — garante coluna mes
+  await addCol('perdas','mes','TEXT').catch(()=>{});
+  await addCol('perdas','motivo',"TEXT DEFAULT 'vencimento'").catch(()=>{});
+  await addCol('perdas','qtd_unidades','INTEGER DEFAULT 0').catch(()=>{});
+  await addCol('perdas','valor_perda','NUMERIC(10,2) DEFAULT 0').catch(()=>{});
+  await pool.query(`
+    UPDATE perdas SET mes = TO_CHAR(dt_perda, 'MM/YYYY')
+    WHERE mes IS NULL AND dt_perda IS NOT NULL
+  `).catch(() => {});
+
+  // Retiradas
+  await addCol('retiradas','mes','TEXT').catch(()=>{});
+  await addCol('retiradas','valor_total','NUMERIC(10,2) DEFAULT 0').catch(()=>{});
+  await pool.query(`
+    UPDATE retiradas SET mes = TO_CHAR(dt_retirada, 'MM/YYYY')
+    WHERE mes IS NULL AND dt_retirada IS NOT NULL
+  `).catch(() => {});
+
+  // DRE sessões
+  await addCol('dre_sessoes','atualizado_em','TIMESTAMPTZ DEFAULT NOW()').catch(()=>{});
+  await addCol('dre_sessoes','total_lancamentos','INTEGER DEFAULT 0').catch(()=>{});
+  await pool.query(`
+    UPDATE dre_sessoes
+    SET total_lancamentos = COALESCE(jsonb_array_length(dados_json->'transactions'), 0)
+    WHERE dados_json IS NOT NULL
+      AND (total_lancamentos IS NULL OR total_lancamentos = 0)
+  `).catch(() => {});
+
+  // validade_items
+  await addCol('validade_items','dias_alerta','INTEGER DEFAULT 7').catch(()=>{});
+  await addCol('validade_items','qtd_unidades','INTEGER DEFAULT 1').catch(()=>{});
+
+  // usuarios
+  await addCol('usuarios','ultimo_login','TIMESTAMPTZ').catch(()=>{});
+  await addCol('usuarios','atualizado_em','TIMESTAMPTZ DEFAULT NOW()').catch(()=>{});
+
+  console.log('[migrate] ✅ migração automática concluída');
+}
+
+// Testa conexão e roda migração na inicialização
+pool.query('SELECT NOW()').then(async r => {
   console.log('[db] conectado:', r.rows[0].now);
+  await autoMigrate();
 }).catch(e => {
   console.error('[db] FALHA na conexão:', e.message);
   process.exit(1);
