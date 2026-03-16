@@ -386,6 +386,7 @@ async function confirmarXML(){
   if(!d.ok){ toast('Erro: '+d.erro); return; }
   toast(`✅ ${d.count} boleto(s) importado(s)!`);
   fecharXML(); carregar(); carregarKPIs();
+  try { window.parent.postMessage({ type: 'bb_refresh_kpis' }, '*'); } catch(_) {}
 }
 
 // ── Import PDF ─────────────────────────────────────────────────────────────

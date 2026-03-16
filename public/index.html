@@ -7,20 +7,26 @@
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root{
-  --red:#8B0000;--red-d:#5C0000;--red-m:#7B1010;--red-l:#C0392B;
+  --red:#8B0000;--red-d:#5C0000;--red-l:#C0392B;
   --gold:#C9A044;--green:#1a7a4a;--orange:#c76b00;--blue:#1a5c8a;--purple:#6c3483;
   --bg:#f7f4f0;--white:#fff;--text:#1a1a1a;--muted:#7a7068;
   --border:#e8e0d8;--shadow:0 2px 12px rgba(0,0,0,.08);
 }
 *{box-sizing:border-box;margin:0;padding:0;}
-html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
-.screen{display:none;position:fixed;inset:0;z-index:10;overflow:hidden;flex-direction:column;}
+html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);overflow:hidden;}
+
+/* ── SCREENS ──────────────────────────────────────────────────────────── */
+.screen{display:none;position:fixed;inset:0;z-index:10;flex-direction:column;}
 .screen.active{display:flex;}
 
 /* ── LOGIN ─────────────────────────────────────────────────────────────── */
-#scr-login{background:var(--red);background-image:repeating-linear-gradient(45deg,transparent,transparent 10px,rgba(255,255,255,.03) 10px,rgba(255,255,255,.03) 20px);align-items:center;justify-content:center;}
-.login-wrap{width:400px;max-width:94vw;background:var(--white);border-radius:18px;padding:40px 36px;box-shadow:0 20px 60px rgba(0,0,0,.35);position:relative;}
-.login-wrap::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg,var(--red-d),var(--gold),var(--red-d));border-radius:18px 18px 0 0;}
+#scr-login{
+  background:var(--red);
+  background-image:repeating-linear-gradient(45deg,transparent,transparent 10px,rgba(255,255,255,.03) 10px,rgba(255,255,255,.03) 20px);
+  align-items:center;justify-content:center;
+}
+.lw{width:400px;max-width:94vw;background:var(--white);border-radius:18px;padding:40px 36px;box-shadow:0 20px 60px rgba(0,0,0,.35);position:relative;}
+.lw::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg,var(--red-d),var(--gold),var(--red-d));border-radius:18px 18px 0 0;}
 .lw-logo{text-align:center;margin-bottom:28px;}
 .lw-emblem{width:70px;height:70px;background:var(--red);border-radius:50%;margin:0 auto 14px;display:flex;align-items:center;justify-content:center;font-size:32px;}
 .lw-title{font-family:'Playfair Display',serif;font-size:21px;color:var(--red);font-weight:700;}
@@ -35,102 +41,150 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
 .lw-err{color:var(--red-l);font-size:12px;text-align:center;margin-top:8px;min-height:16px;}
 
 /* ── PORTAL ────────────────────────────────────────────────────────────── */
-.ph{background:var(--red);background-image:repeating-linear-gradient(45deg,transparent,transparent 10px,rgba(255,255,255,.03) 10px,rgba(255,255,255,.03) 20px);height:60px;padding:0 24px;display:flex;align-items:center;gap:12px;flex-shrink:0;box-shadow:0 3px 16px rgba(139,0,0,.4);}
-.ph-logo{width:36px;height:36px;background:var(--gold);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;}
-.ph-brand h1{font-family:'Playfair Display',serif;font-size:16px;color:#fff;font-weight:700;}
-.ph-brand p{font-size:10px;color:rgba(255,255,255,.6);letter-spacing:1.2px;text-transform:uppercase;margin-top:1px;}
-.ph-space{flex:1;}
-.ph-sync{display:flex;align-items:center;gap:5px;font-size:11px;color:rgba(255,255,255,.55);margin-right:8px;}
-.ph-dot{width:7px;height:7px;border-radius:50%;background:#4ecdc4;animation:dot-p 2s infinite;}
-.ph-dot.warn{background:#f39c12;}
-.ph-dot.err{background:#c0392b;animation:none;}
-@keyframes dot-p{0%,100%{opacity:1;}50%{opacity:.3;}}
-.ph-user{display:flex;align-items:center;gap:8px;}
-.ph-av{width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.15);border:2px solid rgba(255,255,255,.3);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;font-family:'DM Mono',monospace;}
-.ph-uname{font-size:13px;font-weight:600;color:#fff;}
-.ph-role-pill{background:rgba(255,255,255,.15);color:rgba(255,255,255,.85);border:1px solid rgba(255,255,255,.25);padding:2px 8px;border-radius:8px;font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;}
-.ph-logout{padding:6px 14px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:7px;color:rgba(255,255,255,.8);cursor:pointer;font-size:12px;font-weight:600;transition:all .15s;margin-left:6px;}
-.ph-logout:hover{background:rgba(255,255,255,.22);color:#fff;}
+#scr-portal{overflow:hidden;}
 
-/* ── TABS ──────────────────────────────────────────────────────────────── */
-.pnav{background:var(--white);border-bottom:2px solid var(--border);display:flex;padding:0 20px;flex-shrink:0;overflow-x:auto;box-shadow:var(--shadow);}
-.pnav-tab{padding:11px 16px;font-size:12px;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .15s;white-space:nowrap;letter-spacing:.2px;background:none;border-top:none;border-left:none;border-right:none;font-family:'DM Sans',sans-serif;}
+/* Header */
+.ph{
+  background:var(--red);
+  background-image:repeating-linear-gradient(45deg,transparent,transparent 10px,rgba(255,255,255,.03) 10px,rgba(255,255,255,.03) 20px);
+  height:56px;padding:0 20px;display:flex;align-items:center;gap:10px;
+  flex-shrink:0;box-shadow:0 3px 16px rgba(139,0,0,.4);z-index:20;
+}
+.ph-logo{width:34px;height:34px;background:var(--gold);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0;}
+.ph-brand h1{font-family:'Playfair Display',serif;font-size:15px;color:#fff;font-weight:700;}
+.ph-brand p{font-size:9px;color:rgba(255,255,255,.55);letter-spacing:1.2px;text-transform:uppercase;margin-top:1px;}
+.ph-space{flex:1;}
+.ph-sync{display:flex;align-items:center;gap:5px;font-size:11px;color:rgba(255,255,255,.5);margin-right:6px;}
+.ph-dot{width:7px;height:7px;border-radius:50%;background:#4ecdc4;animation:dot-p 2s infinite;flex-shrink:0;}
+.ph-dot.warn{background:#f39c12;} .ph-dot.err{background:#c0392b;animation:none;}
+@keyframes dot-p{0%,100%{opacity:1;}50%{opacity:.3;}}
+.ph-user{display:flex;align-items:center;gap:7px;}
+.ph-av{width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,.15);border:2px solid rgba(255,255,255,.3);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;}
+.ph-uname{font-size:12px;font-weight:600;color:#fff;}
+.ph-role{background:rgba(255,255,255,.15);color:rgba(255,255,255,.85);border:1px solid rgba(255,255,255,.2);padding:2px 7px;border-radius:7px;font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;}
+.ph-logout{padding:5px 12px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:6px;color:rgba(255,255,255,.8);cursor:pointer;font-size:11px;font-weight:600;transition:.15s;}
+.ph-logout:hover{background:rgba(255,255,255,.22);}
+
+/* Nav tabs */
+.pnav{background:var(--white);border-bottom:2px solid var(--border);display:flex;padding:0 16px;flex-shrink:0;overflow-x:auto;box-shadow:var(--shadow);scrollbar-width:none;}
+.pnav::-webkit-scrollbar{display:none;}
+.pnav-tab{padding:10px 14px;font-size:12px;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px;transition:.15s;white-space:nowrap;background:none;border-top:none;border-left:none;border-right:none;font-family:'DM Sans',sans-serif;}
 .pnav-tab:hover{color:var(--red);}
 .pnav-tab.active{color:var(--red);border-bottom-color:var(--red);}
-.portal-body{flex:1;overflow:hidden;background:var(--bg);display:flex;flex-direction:column;min-height:0;}
-.portal-page{display:none;padding:28px 24px;max-width:1280px;margin:0 auto;overflow-y:auto;}
-.portal-page.active{display:block;height:100%;}
 
-/* ── CARDS KPI ─────────────────────────────────────────────────────────── */
-.pg-header{margin-bottom:24px;}
-.pg-title{font-family:'Playfair Display',serif;font-size:22px;color:var(--red);margin-bottom:5px;}
-.pg-sub{font-size:13px;color:var(--muted);}
-.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:14px;margin-bottom:24px;}
-.kpi-card{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:16px 18px;border-left:4px solid var(--red);box-shadow:var(--shadow);transition:transform .15s;}
+/* Portal body — ocupa todo o espaço restante */
+.portal-body{
+  flex:1;
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+  min-height:0;
+  position:relative;
+}
+
+/* Dashboard page — scrollável */
+.portal-page{
+  display:none;
+  position:absolute;
+  inset:0;
+  overflow-y:auto;
+  padding:24px 22px;
+  background:var(--bg);
+}
+.portal-page.active{display:block;}
+
+/* Módulos — iframe ocupa tudo */
+.frame-container{
+  display:none;
+  position:absolute;
+  inset:0;
+}
+.frame-container.active{display:flex;flex-direction:column;}
+.module-frame{
+  flex:1;
+  width:100%;
+  border:none;
+  min-height:0;
+  display:block;
+}
+
+/* ── KPIs ──────────────────────────────────────────────────────────────── */
+.dash-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px;}
+.dash-title{font-family:'Playfair Display',serif;font-size:22px;color:var(--red);}
+.dash-sub{font-size:12px;color:var(--muted);margin-top:2px;}
+.dash-mes-sel{display:flex;align-items:center;gap:8px;}
+.dash-mes-sel select{padding:6px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;background:var(--white);font-family:'DM Sans',sans-serif;cursor:pointer;}
+.btn-refresh{padding:6px 12px;background:var(--white);border:1px solid var(--border);border-radius:7px;cursor:pointer;font-size:12px;font-weight:600;font-family:'DM Sans',sans-serif;transition:.15s;}
+.btn-refresh:hover{border-color:var(--red);color:var(--red);}
+
+/* Progress */
+.prog-wrap{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:16px 18px;margin-bottom:20px;box-shadow:var(--shadow);}
+.prog-wrap.hidden{display:none;}
+.prog-label{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;}
+.prog-bar-bg{background:#f0ebe4;border-radius:8px;height:12px;overflow:hidden;}
+.prog-bar{height:100%;border-radius:8px;background:var(--green);transition:width .6s ease;}
+.prog-bar.warn{background:var(--orange);}
+.prog-bar.danger{background:var(--red-l);}
+.prog-bar.ok{background:var(--green);}
+.prog-info{display:flex;justify-content:space-between;margin-top:6px;font-size:12px;color:var(--muted);}
+
+/* KPI grid */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-bottom:22px;}
+.kpi-card{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:15px 16px;border-left:4px solid var(--red);box-shadow:var(--shadow);transition:transform .15s;cursor:default;}
 .kpi-card:hover{transform:translateY(-2px);}
 .kpi-card.green{border-left-color:var(--green);}
 .kpi-card.orange{border-left-color:var(--orange);}
 .kpi-card.blue{border-left-color:var(--blue);}
 .kpi-card.purple{border-left-color:var(--purple);}
 .kpi-card.gold{border-left-color:var(--gold);}
-.kpi-label{font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);font-weight:600;margin-bottom:6px;}
-.kpi-icon{font-size:18px;margin-bottom:4px;}
-.kpi-val{font-size:22px;font-weight:700;font-family:'DM Mono',monospace;line-height:1;}
+.kpi-icon{font-size:17px;margin-bottom:5px;}
+.kpi-label{font-size:9px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);font-weight:700;margin-bottom:5px;}
+.kpi-val{font-size:20px;font-weight:700;font-family:'DM Mono',monospace;line-height:1;}
 .kpi-sub{font-size:11px;color:var(--muted);margin-top:4px;}
-.kpi-alert{color:var(--red-l);}
-.kpi-ok{color:var(--green);}
+.kpi-loading{opacity:.4;}
+.c-red{color:var(--red-l)!important;}
+.c-green{color:var(--green)!important;}
+.c-orange{color:var(--orange)!important;}
 
-/* ── PROGRESS ──────────────────────────────────────────────────────────── */
-.prog-wrap{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:18px 20px;margin-bottom:24px;box-shadow:var(--shadow);}
-.prog-label{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;}
-.prog-bar-bg{background:#f0ebe4;border-radius:8px;height:12px;overflow:hidden;}
-.prog-bar{height:100%;border-radius:8px;background:var(--green);transition:width .6s ease;}
-.prog-bar.warn{background:var(--orange);}
-.prog-bar.danger{background:var(--red-l);}
-.prog-info{display:flex;justify-content:space-between;margin-top:6px;font-size:12px;color:var(--muted);}
+/* Alertas banner */
+.alert-banner{border-radius:9px;padding:11px 14px;font-size:13px;font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:10px;border:1px solid;}
+.alert-banner.danger{background:#fff0f0;border-color:#f5c6c6;color:var(--red-l);}
+.alert-banner.warn{background:#fff8e6;border-color:#f5c842;color:var(--orange);}
+.alert-banner.ok{background:#f0faf4;border-color:#a8d5bc;color:var(--green);}
 
-/* ── SYSTEM CARDS ──────────────────────────────────────────────────────── */
-.sys-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px;margin-bottom:28px;}
-.sys-card{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:22px 20px;cursor:pointer;transition:all .2s;position:relative;overflow:hidden;display:flex;flex-direction:column;gap:9px;box-shadow:var(--shadow);}
+/* System cards */
+.sys-section-title{font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:12px;margin-top:4px;}
+.sys-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px;margin-bottom:24px;}
+.sys-card{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:20px 18px;cursor:pointer;transition:all .2s;position:relative;overflow:hidden;display:flex;flex-direction:column;gap:8px;box-shadow:var(--shadow);}
 .sys-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--c,var(--red));}
 .sys-card:hover{border-color:var(--c,var(--red));transform:translateY(-3px);box-shadow:0 8px 28px rgba(0,0,0,.12);}
-.sys-icon{font-size:28px;}
-.sys-title{font-family:'Playfair Display',serif;font-size:15px;font-weight:700;color:var(--text);}
+.sys-icon{font-size:26px;}
+.sys-title{font-family:'Playfair Display',serif;font-size:14px;font-weight:700;color:var(--text);}
 .sys-desc{font-size:12px;color:var(--muted);line-height:1.5;}
-.sys-badge{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:3px 9px;border-radius:8px;background:rgba(0,0,0,.05);color:var(--muted);}
+.sys-badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:3px 8px;border-radius:7px;background:rgba(0,0,0,.05);color:var(--muted);width:fit-content;}
 .sys-badge.alert{background:rgba(199,107,0,.12);color:var(--orange);}
-.sys-badge.danger{background:rgba(139,0,0,.12);color:var(--red);}
+.sys-badge.danger{background:rgba(139,0,0,.12);color:var(--red-l);}
 .sys-badge.ok{background:rgba(26,122,74,.12);color:var(--green);}
 
-/* ── IFRAME ────────────────────────────────────────────────────────────── */
-.module-frame{width:100%;flex:1;border:none;display:block;min-height:0;}
-.frame-container{flex:1;display:none;overflow:hidden;min-height:0;}
-.frame-container.active{display:flex;flex-direction:column;}
-
-/* ── TOAST ─────────────────────────────────────────────────────────────── */
-#toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:#333;color:#fff;padding:10px 22px;border-radius:10px;font-size:13px;z-index:9999;transition:transform .3s ease;pointer-events:none;}
+/* Toast */
+#toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(70px);background:#1a1a1a;color:#fff;padding:9px 20px;border-radius:9px;font-size:13px;z-index:9999;transition:transform .3s ease;pointer-events:none;box-shadow:0 4px 20px rgba(0,0,0,.25);}
 #toast.show{transform:translateX(-50%) translateY(0);}
-
-/* ── LOADING ───────────────────────────────────────────────────────────── */
-.spin{display:inline-block;width:18px;height:18px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;}
+.spin{display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;}
 @keyframes spin{to{transform:rotate(360deg)}}
-.loading-overlay{position:fixed;inset:0;background:rgba(247,244,240,.7);display:flex;align-items:center;justify-content:center;z-index:100;backdrop-filter:blur(2px);}
-.loading-box{background:var(--white);border-radius:12px;padding:28px 36px;box-shadow:0 8px 40px rgba(0,0,0,.15);text-align:center;}
 
-/* ── RESPONSIVE ─────────────────────────────────────────────────────────── */
 @media(max-width:600px){
   .kpi-grid{grid-template-columns:1fr 1fr;}
   .sys-grid{grid-template-columns:1fr;}
-  .portal-page{padding:16px 14px;}
-  .ph-uname,.ph-role-pill{display:none;}
+  .portal-page{padding:14px 12px;}
+  .ph-uname,.ph-role{display:none;}
 }
 </style>
 </head>
 <body>
 
-<!-- ── TELA DE LOGIN ──────────────────────────────────────────────────── -->
+<!-- ── LOGIN ──────────────────────────────────────────────────────────────── -->
 <div id="scr-login" class="screen active">
-  <div class="login-wrap">
+  <div class="lw">
     <div class="lw-logo">
       <div class="lw-emblem">🥩</div>
       <div class="lw-title">Bom Beef</div>
@@ -149,7 +203,7 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
   </div>
 </div>
 
-<!-- ── TELA PORTAL ────────────────────────────────────────────────────── -->
+<!-- ── PORTAL ──────────────────────────────────────────────────────────────── -->
 <div id="scr-portal" class="screen">
 
   <!-- Header -->
@@ -167,12 +221,12 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
     <div class="ph-user">
       <div class="ph-av" id="ph-av">?</div>
       <span class="ph-uname" id="ph-uname"></span>
-      <span class="ph-role-pill" id="ph-role"></span>
+      <span class="ph-role" id="ph-role"></span>
       <button class="ph-logout" onclick="fazerLogout()">Sair</button>
     </div>
   </div>
 
-  <!-- Tabs de navegação -->
+  <!-- Nav tabs -->
   <div class="pnav" id="pnav">
     <button class="pnav-tab active" onclick="showTab('dashboard')" data-tab="dashboard">🏠 Dashboard</button>
     <button class="pnav-tab" onclick="showTab('boletos')"   data-tab="boletos"   data-perfil="admin,gestor,financeiro">📄 Boletos</button>
@@ -183,101 +237,117 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
     <button class="pnav-tab" onclick="showTab('config')"    data-tab="config"    data-perfil="admin,gestor">⚙️ Config</button>
   </div>
 
-  <!-- Corpo do portal -->
+  <!-- Portal body -->
   <div class="portal-body">
 
-    <!-- ── DASHBOARD ─────────────────────────────────────────────────── -->
+    <!-- DASHBOARD -->
     <div class="portal-page active" id="page-dashboard">
-      <div class="pg-header">
-        <div class="pg-title">Dashboard</div>
-        <div class="pg-sub" id="dash-mes-label">Carregando dados...</div>
+
+      <div class="dash-header">
+        <div>
+          <div class="dash-title">Dashboard</div>
+          <div class="dash-sub" id="dash-sub">Carregando dados...</div>
+        </div>
+        <div class="dash-mes-sel">
+          <input type="month" id="dash-mes" style="padding:6px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px" onchange="carregarKPIs()">
+          <button class="btn-refresh" onclick="carregarKPIs()">↺ Atualizar</button>
+        </div>
       </div>
 
-      <!-- Faturamento -->
-      <div class="prog-wrap" id="prog-fat" style="display:none">
-        <div class="prog-label">🎯 Meta de Faturamento — <span id="prog-mes"></span></div>
+      <!-- Alertas dinâmicos -->
+      <div id="dash-alertas"></div>
+
+      <!-- Barra de faturamento -->
+      <div class="prog-wrap hidden" id="prog-fat">
+        <div class="prog-label">
+          <span>🎯 Meta de Faturamento — <span id="prog-mes"></span></span>
+          <span id="prog-pct" style="font-size:14px;font-weight:700;color:var(--text)">0%</span>
+        </div>
         <div class="prog-bar-bg"><div class="prog-bar" id="prog-bar" style="width:0%"></div></div>
         <div class="prog-info">
           <span>Real: <strong id="prog-real">R$ 0</strong></span>
-          <span id="prog-pct">0%</span>
           <span>Meta: <strong id="prog-meta">R$ 0</strong></span>
         </div>
       </div>
 
-      <!-- KPIs grid -->
-      <div class="kpi-grid" id="kpi-grid">
-        <div class="kpi-card">
+      <!-- KPIs -->
+      <div class="kpi-grid">
+        <!-- Boletos a vencer -->
+        <div class="kpi-card" onclick="showTab('boletos')">
           <div class="kpi-icon">📄</div>
           <div class="kpi-label">Boletos Vencendo (7d)</div>
-          <div class="kpi-val" id="k-vence7d">—</div>
+          <div class="kpi-val kpi-loading" id="k-vence7d">—</div>
           <div class="kpi-sub" id="k-vence7d-val">—</div>
         </div>
-        <div class="kpi-card orange">
+        <!-- Boletos vencidos -->
+        <div class="kpi-card orange" onclick="showTab('boletos')">
           <div class="kpi-icon">⚠️</div>
           <div class="kpi-label">Boletos Vencidos</div>
-          <div class="kpi-val kpi-alert" id="k-vencidos">—</div>
+          <div class="kpi-val kpi-loading" id="k-vencidos">—</div>
           <div class="kpi-sub" id="k-aberto">—</div>
         </div>
-        <div class="kpi-card blue">
+        <!-- DRE resultado -->
+        <div class="kpi-card blue" onclick="showTab('dre')">
           <div class="kpi-icon">📊</div>
           <div class="kpi-label">Resultado DRE</div>
-          <div class="kpi-val" id="k-resultado">—</div>
+          <div class="kpi-val kpi-loading" id="k-resultado">—</div>
           <div class="kpi-sub" id="k-resultado-sub">—</div>
         </div>
-        <div class="kpi-card orange">
+        <!-- Validade -->
+        <div class="kpi-card orange" onclick="showTab('validade')">
           <div class="kpi-icon">🗓</div>
           <div class="kpi-label">Validade — Alertas</div>
-          <div class="kpi-val" id="k-val-alerta">—</div>
+          <div class="kpi-val kpi-loading" id="k-val-alerta">—</div>
           <div class="kpi-sub" id="k-val-venc">—</div>
         </div>
-        <div class="kpi-card red">
+        <!-- Perdas -->
+        <div class="kpi-card" onclick="showTab('validade')">
           <div class="kpi-icon">🗑️</div>
           <div class="kpi-label">Perdas do Mês</div>
-          <div class="kpi-val" id="k-perdas">—</div>
+          <div class="kpi-val kpi-loading" id="k-perdas">—</div>
           <div class="kpi-sub" id="k-perdas-meta">—</div>
         </div>
-        <div class="kpi-card purple">
+        <!-- Retiradas -->
+        <div class="kpi-card purple" onclick="showTab('retiradas')">
           <div class="kpi-icon">👥</div>
           <div class="kpi-label">Retiradas do Mês</div>
-          <div class="kpi-val" id="k-retiradas">—</div>
+          <div class="kpi-val kpi-loading" id="k-retiradas">—</div>
           <div class="kpi-sub">funcionários</div>
         </div>
       </div>
 
-      <!-- Cards de acesso rápido -->
-      <div class="pg-header" style="margin-top:8px">
-        <div class="pg-title" style="font-size:17px">Acesso Rápido</div>
-      </div>
+      <!-- Acesso Rápido -->
+      <div class="sys-section-title">Acesso Rápido</div>
       <div class="sys-grid">
         <div class="sys-card" style="--c:var(--red)" onclick="showTab('boletos')">
           <div class="sys-icon">📄</div>
           <div class="sys-title">Boletos & NF-e</div>
-          <div class="sys-desc">Controle de boletos, importação de XML/PDF, baixas e vencimentos</div>
-          <div class="sys-badge" id="badge-boletos">Carregando...</div>
+          <div class="sys-desc">Importação de XML/PDF, baixas, vencimentos e integração DRE</div>
+          <div class="sys-badge" id="badge-boletos">—</div>
         </div>
         <div class="sys-card" style="--c:var(--blue)" onclick="showTab('dre')">
           <div class="sys-icon">📊</div>
           <div class="sys-title">DRE & Classificador</div>
-          <div class="sys-desc">Importação de extratos bancários, categorização e relatório DRE</div>
+          <div class="sys-desc">Extratos bancários, fatura cartão e relatório DRE completo</div>
           <div class="sys-badge" id="badge-dre">—</div>
         </div>
         <div class="sys-card" style="--c:var(--green)" onclick="showTab('produtos')">
           <div class="sys-icon">📦</div>
           <div class="sys-title">Produtos & Kits</div>
-          <div class="sys-desc">Catálogo de produtos, montagem de kits e precificação</div>
-          <div class="sys-badge" id="badge-produtos">Carregando...</div>
+          <div class="sys-desc">Catálogo, kits com custo operacional, royalties e precificação</div>
+          <div class="sys-badge" id="badge-produtos">—</div>
         </div>
         <div class="sys-card" style="--c:var(--orange)" onclick="showTab('validade')">
           <div class="sys-icon">🗓</div>
           <div class="sys-title">Controle de Validade</div>
-          <div class="sys-desc">Validades, alertas, conferências e registro de perdas</div>
-          <div class="sys-badge" id="badge-validade">Carregando...</div>
+          <div class="sys-desc">Alertas de vencimento, conferências e registro de perdas</div>
+          <div class="sys-badge" id="badge-validade">—</div>
         </div>
         <div class="sys-card" style="--c:var(--purple)" onclick="showTab('retiradas')">
           <div class="sys-icon">👥</div>
           <div class="sys-title">Retiradas Funcionários</div>
-          <div class="sys-desc">Controle de retiradas com desconto, limites e relatórios</div>
-          <div class="sys-badge" id="badge-retiradas">Carregando...</div>
+          <div class="sys-desc">Controle de benefícios, limites mensais e relatórios</div>
+          <div class="sys-badge" id="badge-retiradas">—</div>
         </div>
         <div class="sys-card" style="--c:var(--gold)" onclick="showTab('config')">
           <div class="sys-icon">⚙️</div>
@@ -286,9 +356,10 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
           <div class="sys-badge ok">Admin</div>
         </div>
       </div>
+
     </div><!-- /dashboard -->
 
-    <!-- ── MÓDULOS (iframes) ──────────────────────────────────────────── -->
+    <!-- IFRAMES dos módulos -->
     <div class="frame-container" id="frame-boletos">
       <iframe class="module-frame" id="iframe-boletos" src="boletos.html"></iframe>
     </div>
@@ -314,18 +385,19 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
 <div id="toast"></div>
 
 <script>
-// ── Estado global ──────────────────────────────────────────────────────────
+// ── Estado ─────────────────────────────────────────────────────────────────
 const API = '';
 let usuario = null;
 let kpiTimer = null;
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
-const fmtBRL = v => 'R$ ' + parseFloat(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmtBRL = v => 'R$\u00a0' + parseFloat(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
 const fmtN   = v => parseInt(v||0).toLocaleString('pt-BR');
 
 function toast(msg, ms=2500) {
-  const el = $('toast'); el.textContent = msg;
+  const el = $('toast');
+  el.textContent = msg;
   el.classList.add('show');
   setTimeout(() => el.classList.remove('show'), ms);
 }
@@ -333,11 +405,21 @@ function toast(msg, ms=2500) {
 function token() { return sessionStorage.getItem('bb_token'); }
 
 async function apiFetch(path, opts={}) {
-  const res = await fetch(API + path, {
-    ...opts,
-    headers: { 'Content-Type':'application/json', 'Authorization':'Bearer '+token(), ...(opts.headers||{}) }
-  });
-  return res.json();
+  try {
+    const res = await fetch(API + path, {
+      ...opts,
+      headers: {
+        'Content-Type':'application/json',
+        'Authorization':'Bearer ' + (token()||''),
+        ...(opts.headers||{})
+      }
+    });
+    if (res.status === 401) { fazerLogout(); return { ok: false }; }
+    return res.json();
+  } catch(e) {
+    console.error('[fetch]', path, e.message);
+    return { ok: false, erro: e.message };
+  }
 }
 
 // ── Login ──────────────────────────────────────────────────────────────────
@@ -345,8 +427,8 @@ $('inp-senha').addEventListener('keydown', e => { if(e.key==='Enter') fazerLogin
 $('inp-email').addEventListener('keydown', e => { if(e.key==='Enter') $('inp-senha').focus(); });
 
 async function fazerLogin() {
-  const btn = $('btn-login');
-  const err = $('lw-err');
+  const btn  = $('btn-login');
+  const err  = $('lw-err');
   const email = $('inp-email').value.trim();
   const senha = $('inp-senha').value;
   err.textContent = '';
@@ -355,30 +437,39 @@ async function fazerLogin() {
   btn.innerHTML = '<span class="spin"></span> Entrando...';
   try {
     const data = await fetch('/auth/login', {
-      method:'POST', headers:{'Content-Type':'application/json'},
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ email, senha })
-    }).then(r=>r.json());
-    if (!data.ok) { err.textContent = data.erro || 'Erro ao fazer login'; return; }
+    }).then(r => r.json());
+    if (!data.ok) { err.textContent = data.erro || 'Credenciais incorretas'; return; }
     sessionStorage.setItem('bb_token', data.token);
     usuario = data.usuario;
     entrarNoPortal();
   } catch(e) {
     err.textContent = 'Não foi possível conectar ao servidor';
   } finally {
-    btn.disabled = false; btn.textContent = 'Entrar';
+    btn.disabled = false;
+    btn.textContent = 'Entrar';
   }
 }
 
 function entrarNoPortal() {
   $('scr-login').classList.remove('active');
   $('scr-portal').classList.add('active');
-  $('ph-av').textContent    = (usuario.nome||'?')[0].toUpperCase();
+  $('ph-av').textContent   = (usuario.nome||'?')[0].toUpperCase();
   $('ph-uname').textContent = usuario.nome;
   $('ph-role').textContent  = usuario.perfil;
+
+  // Define mês atual no seletor
+  const hoje = new Date();
+  $('dash-mes').value = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
+
   filtrarTabs();
-  carregarConfig();
+  carregarNomeEmpresa();
   carregarKPIs();
-  kpiTimer = setInterval(carregarKPIs, 60000);
+
+  // Atualiza KPIs a cada 90 segundos
+  kpiTimer = setInterval(carregarKPIs, 90000);
 }
 
 function fazerLogout() {
@@ -394,126 +485,181 @@ function fazerLogout() {
 // ── Tabs ───────────────────────────────────────────────────────────────────
 function filtrarTabs() {
   document.querySelectorAll('.pnav-tab[data-perfil]').forEach(tab => {
-    const perfis = tab.dataset.perfil.split(',');
+    const perfis = (tab.dataset.perfil||'').split(',');
     tab.style.display = perfis.includes(usuario?.perfil) ? '' : 'none';
   });
 }
 
 function showTab(tab) {
-  // Desativa todos
   document.querySelectorAll('.pnav-tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.portal-page, .frame-container').forEach(p => p.classList.remove('active'));
 
-  // Ativa o selecionado
   const tabBtn = document.querySelector(`[data-tab="${tab}"]`);
   if(tabBtn) tabBtn.classList.add('active');
 
   if (tab === 'dashboard') {
     $('page-dashboard').classList.add('active');
+    // Atualiza KPIs ao voltar ao dashboard
+    carregarKPIs();
   } else {
     const fc = $(`frame-${tab}`);
-    if(fc) {
+    if (fc) {
       fc.classList.add('active');
-      // Passa token para o iframe
+      // Envia token para o iframe
       const iframe = fc.querySelector('iframe');
-      if(iframe) {
-        iframe.onload = () => {
-          try { iframe.contentWindow.postMessage({type:'bb_token',token:token(),usuario}, '*'); } catch(_) {}
+      if (iframe) {
+        const enviarToken = () => {
+          try {
+            iframe.contentWindow.postMessage(
+              { type:'bb_token', token:token(), usuario },
+              '*'
+            );
+          } catch(_) {}
         };
-        // Se já carregou
-        try { iframe.contentWindow.postMessage({type:'bb_token',token:token(),usuario}, '*'); } catch(_) {}
+        // Se o iframe ainda não carregou, aguarda o load
+        if (!iframe.dataset.loaded) {
+          iframe.addEventListener('load', () => {
+            iframe.dataset.loaded = '1';
+            enviarToken();
+          }, { once: true });
+        }
+        enviarToken();
       }
     }
   }
 }
 
-// ── KPIs Dashboard ─────────────────────────────────────────────────────────
+// ── KPIs ───────────────────────────────────────────────────────────────────
 async function carregarKPIs() {
   setSyncStatus('loading');
+
+  // Pega o mês selecionado
+  const mesVal = $('dash-mes').value;
+  let mes = '';
+  if (mesVal) {
+    const [y,m] = mesVal.split('-');
+    mes = `${m}/${y}`;
+  }
+
+  // Marca todos os KPIs como carregando
+  ['k-vence7d','k-vencidos','k-resultado','k-val-alerta','k-perdas','k-retiradas'].forEach(id => {
+    const el = $(id);
+    if (el) { el.classList.add('kpi-loading'); el.textContent = '—'; }
+  });
+
   try {
-    const data = await apiFetch('/api/dashboard/kpis');
-    if(!data.ok) { setSyncStatus('err'); return; }
+    const url = mes ? `/api/dashboard/kpis?mes=${encodeURIComponent(mes)}` : '/api/dashboard/kpis';
+    const data = await apiFetch(url);
+
+    if (!data.ok) {
+      setSyncStatus('err');
+      $('dash-sub').textContent = 'Erro ao carregar dados — verifique a conexão';
+      return;
+    }
+
     const d = data.data;
+    const mesTxt = data.mes || mes;
+    $('dash-sub').textContent = `Referência: ${mesTxt} · Atualizado: ${new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`;
 
-    $('dash-mes-label').textContent = `Referência: ${data.mes}`;
+    // Remove loading
+    ['k-vence7d','k-vencidos','k-resultado','k-val-alerta','k-perdas','k-retiradas'].forEach(id => {
+      $(id)?.classList.remove('kpi-loading');
+    });
 
-    // Boletos
-    $('k-vence7d').textContent = fmtN(d.boletosVence7d);
+    // ── Boletos ──────────────────────────────────────────────────────────
+    $('k-vence7d').textContent   = fmtN(d.boletosVence7d);
     $('k-vence7d-val').textContent = fmtBRL(d.boletosValorVence7d);
-    $('k-vencidos').textContent = fmtN(d.boletosVencidos);
-    $('k-aberto').textContent = 'Total aberto: ' + fmtBRL(d.boletosAberto);
-    if(d.boletosVencidos>0) $('k-vencidos').classList.add('kpi-alert');
+    $('k-vencidos').textContent  = fmtN(d.boletosVencidos);
+    $('k-vencidos').className    = 'kpi-val' + (d.boletosVencidos > 0 ? ' c-red' : '');
+    $('k-aberto').textContent    = 'Total aberto: ' + fmtBRL(d.boletosAberto);
 
-    // DRE
-    const res = d.dreResultado;
+    // ── DRE ──────────────────────────────────────────────────────────────
+    const res = d.dreResultado || 0;
     $('k-resultado').textContent = fmtBRL(res);
-    $('k-resultado').style.color = res >= 0 ? 'var(--green)' : 'var(--red-l)';
-    $('k-resultado-sub').textContent = `Rec: ${fmtBRL(d.dreReceitas)} | Desp: ${fmtBRL(d.dreDespesas)}`;
+    $('k-resultado').className   = 'kpi-val ' + (res >= 0 ? 'c-green' : 'c-red');
+    $('k-resultado-sub').textContent = `Rec: ${fmtBRL(d.dreReceitas||0)} | Desp: ${fmtBRL(d.dreDespesas||0)}`;
 
-    // Validade
+    // ── Validade ──────────────────────────────────────────────────────────
     $('k-val-alerta').textContent = fmtN(d.validadeAlerta);
-    $('k-val-venc').textContent = `${fmtN(d.validadeVencidos)} vencidos`;
-    if(d.validadeAlerta>0) $('k-val-alerta').classList.add('kpi-alert');
+    $('k-val-alerta').className   = 'kpi-val' + (d.validadeAlerta > 0 ? ' c-orange' : '');
+    $('k-val-venc').textContent   = `${fmtN(d.validadeVencidos)} vencido(s)`;
 
-    // Perdas
-    $('k-perdas').textContent = fmtBRL(d.perdasMes);
+    // ── Perdas ────────────────────────────────────────────────────────────
+    $('k-perdas').textContent     = fmtBRL(d.perdasMes);
+    $('k-perdas').className       = 'kpi-val' + (d.perdasDentroMeta === false ? ' c-red' : '');
     $('k-perdas-meta').textContent = d.perdasMeta > 0
       ? `Meta: ${fmtBRL(d.perdasMeta)} ${d.perdasDentroMeta ? '✅' : '⚠️'}`
       : 'Meta não definida';
 
-    // Retiradas
-    $('k-retiradas').textContent = fmtBRL(d.retiradasMes);
+    // ── Retiradas ─────────────────────────────────────────────────────────
+    $('k-retiradas').textContent  = fmtBRL(d.retiradasMes);
 
-    // Progresso faturamento
-    if(d.faturamentoMeta > 0) {
-      $('prog-fat').style.display = '';
-      $('prog-mes').textContent = data.mes;
-      $('prog-real').textContent = fmtBRL(d.faturamentoReal);
-      $('prog-meta').textContent = fmtBRL(d.faturamentoMeta);
-      const pct = Math.min(100, d.faturamentoPct);
-      $('prog-pct').textContent = d.faturamentoPct + '%';
+    // ── Faturamento progress bar ──────────────────────────────────────────
+    if (d.faturamentoMeta > 0) {
+      $('prog-fat').classList.remove('hidden');
+      $('prog-mes').textContent   = mesTxt;
+      $('prog-real').textContent  = fmtBRL(d.faturamentoReal);
+      $('prog-meta').textContent  = fmtBRL(d.faturamentoMeta);
+      const pct = Math.min(100, d.faturamentoPct || 0);
+      $('prog-pct').textContent   = (d.faturamentoPct||0) + '%';
       const bar = $('prog-bar');
       bar.style.width = pct + '%';
-      bar.className = 'prog-bar' + (pct>=100?' ok' : pct>=70?'' : pct>=50?' warn':' danger');
+      bar.className   = 'prog-bar' + (pct >= 100 ? ' ok' : pct >= 70 ? '' : pct >= 50 ? ' warn' : ' danger');
+    } else {
+      $('prog-fat').classList.add('hidden');
     }
 
-    // Badges dos cards
+    // ── Alertas ───────────────────────────────────────────────────────────
+    let alertasHtml = '';
+    if (d.validadeVencidos > 0) {
+      alertasHtml += `<div class="alert-banner danger">🔴 <span><strong>${d.validadeVencidos} produto(s) VENCIDO(S)</strong> — retirar imediatamente. <button onclick="showTab('validade')" style="margin-left:8px;padding:3px 9px;background:var(--red-l);color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:12px">Ver validade</button></span></div>`;
+    }
+    if (d.boletosVencidos > 0) {
+      alertasHtml += `<div class="alert-banner warn">⚠️ <span><strong>${d.boletosVencidos} boleto(s) vencido(s)</strong> — total: ${fmtBRL(d.boletosAberto)}. <button onclick="showTab('boletos')" style="margin-left:8px;padding:3px 9px;background:var(--orange);color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:12px">Ver boletos</button></span></div>`;
+    }
+    if (d.perdasDentroMeta === false) {
+      alertasHtml += `<div class="alert-banner warn">📉 <span><strong>Meta de perdas ultrapassada</strong> — ${fmtBRL(d.perdasMes)} de ${fmtBRL(d.perdasMeta)} permitido.</span></div>`;
+    }
+    $('dash-alertas').innerHTML = alertasHtml;
+
+    // ── Badges dos cards ──────────────────────────────────────────────────
     $('badge-boletos').textContent = d.boletosVencidos > 0
       ? `⚠️ ${d.boletosVencidos} vencido(s)`
-      : `✅ ${d.boletosVence7d} vence em 7d`;
-    $('badge-boletos').className = 'sys-badge ' + (d.boletosVencidos>0?'danger':'ok');
+      : d.boletosVence7d > 0 ? `📅 ${d.boletosVence7d} vence em 7d` : '✅ Em dia';
+    $('badge-boletos').className = 'sys-badge ' + (d.boletosVencidos > 0 ? 'danger' : d.boletosVence7d > 0 ? 'alert' : 'ok');
 
     $('badge-dre').textContent = res >= 0 ? `✅ ${fmtBRL(res)}` : `⚠️ ${fmtBRL(res)}`;
-    $('badge-dre').className = 'sys-badge ' + (res>=0?'ok':'danger');
+    $('badge-dre').className   = 'sys-badge ' + (res >= 0 ? 'ok' : 'danger');
 
     $('badge-validade').textContent = d.validadeVencidos > 0
-      ? `⚠️ ${d.validadeVencidos} vencido(s)`
-      : `✅ ${d.validadeAlerta} em alerta`;
-    $('badge-validade').className = 'sys-badge ' + (d.validadeVencidos>0?'danger':d.validadeAlerta>0?'alert':'ok');
+      ? `🔴 ${d.validadeVencidos} vencido(s)`
+      : d.validadeAlerta > 0 ? `⚠️ ${d.validadeAlerta} em alerta` : '✅ OK';
+    $('badge-validade').className = 'sys-badge ' + (d.validadeVencidos > 0 ? 'danger' : d.validadeAlerta > 0 ? 'alert' : 'ok');
 
-    $('badge-retiradas').textContent = fmtBRL(d.retiradasMes) + ' usado';
-    $('badge-retiradas').className = 'sys-badge';
+    $('badge-retiradas').textContent = fmtBRL(d.retiradasMes);
+    $('badge-retiradas').className   = 'sys-badge';
 
     setSyncStatus('ok');
   } catch(e) {
     setSyncStatus('err');
     console.error('[kpis]', e);
+    $('dash-sub').textContent = 'Erro ao carregar dados';
   }
 }
 
-async function carregarConfig() {
+async function carregarNomeEmpresa() {
   try {
     const data = await apiFetch('/api/config/sistema');
-    if(data.ok && data.data.nome_empresa) {
-      $('ph-empresa').textContent = data.data.nome_empresa;
-      document.title = data.data.nome_empresa + ' — Gestão';
+    if (data.ok && data.data) {
+      const nome = data.data.nome_empresa || 'Bom Beef';
+      $('ph-empresa').textContent = nome;
+      document.title = nome + ' — Gestão';
     }
-
-    // Carregar badges de produtos
+    // Badge de produtos
     const prods = await apiFetch('/api/produtos/kpis');
-    if(prods.ok) {
-      $('badge-produtos').textContent = `${fmtN(prods.data.ativos)} produtos ativos`;
-      $('badge-produtos').className = 'sys-badge ok';
+    if (prods.ok) {
+      $('badge-produtos').textContent = `${fmtN(prods.data.ativos)} produtos`;
+      $('badge-produtos').className   = 'sys-badge ok';
     }
   } catch(_) {}
 }
@@ -521,26 +667,33 @@ async function carregarConfig() {
 function setSyncStatus(st) {
   const dot = $('sync-dot');
   const txt = $('sync-txt');
-  if(st==='ok')      { dot.className='ph-dot'; txt.textContent='online'; }
-  else if(st==='err'){ dot.className='ph-dot err'; txt.textContent='offline'; }
-  else               { dot.className='ph-dot warn'; txt.textContent='sync...'; }
+  if (st === 'ok')       { dot.className = 'ph-dot';     txt.textContent = 'online'; }
+  else if (st === 'err') { dot.className = 'ph-dot err'; txt.textContent = 'offline'; }
+  else                   { dot.className = 'ph-dot warn'; txt.textContent = 'sync...'; }
 }
 
-// ── Auto-login se token existir ────────────────────────────────────────────
+// ── Auto-login ─────────────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', async () => {
   const tk = token();
-  if(!tk) return;
+  if (!tk) return;
   try {
     const data = await apiFetch('/auth/me');
-    if(data.ok) { usuario = data.data; entrarNoPortal(); }
+    if (data.ok) { usuario = data.data; entrarNoPortal(); }
     else sessionStorage.removeItem('bb_token');
   } catch(_) { sessionStorage.removeItem('bb_token'); }
 });
 
-// ── Recebe mensagens dos iframes (logout, etc) ─────────────────────────────
+// ── Mensagens dos iframes ──────────────────────────────────────────────────
 window.addEventListener('message', e => {
-  if(e.data?.type === 'bb_logout') fazerLogout();
-  if(e.data?.type === 'bb_navigate') showTab(e.data.tab);
+  if (!e.data) return;
+  // Logout do iframe
+  if (e.data.type === 'bb_logout') fazerLogout();
+  // Navegação do iframe
+  if (e.data.type === 'bb_navigate') showTab(e.data.tab);
+  // Iframe avisa que fez importação → atualiza KPIs
+  if (e.data.type === 'bb_refresh_kpis') {
+    setTimeout(carregarKPIs, 500);
+  }
 });
 </script>
 </body>

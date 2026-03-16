@@ -13,12 +13,25 @@ module.exports = function (pool) {
   r.use(autenticar());
 
   r.get('/kpis', async (req, res) => {
-    const mes = req.query.mes || (() => {
+    // Aceita mes como MM/YYYY ou MM-YYYY (query string encode converte / em %2F)
+    const mesRaw = req.query.mes || '';
+    const mes = mesRaw.replace(/-(\d{4})$/, '/$1') || (() => {
       const d = new Date();
       return `${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
     })();
 
     try {
+      // Atualiza status de validade antes de consultar
+      await pool.query(`
+        UPDATE validade_items SET
+          status = CASE
+            WHEN data_validade < CURRENT_DATE THEN 'vencido'
+            WHEN data_validade <= CURRENT_DATE + (COALESCE(dias_alerta,7) || ' days')::INTERVAL THEN 'alerta'
+            ELSE 'ok'
+          END
+        WHERE status NOT IN ('descartado') AND data_validade IS NOT NULL
+      `).catch(() => {}); // silencia erro se tabela não existir ainda
+
       const [boletos, validade, perdas, retiradas, dre, meta] = await Promise.all([
         // M1: Boletos
         pool.query(`
