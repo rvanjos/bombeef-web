@@ -827,14 +827,20 @@ function _buildDRE(el, full) {
     const isDesp=gk!=='RECEITAS';
     const totG=sgt(gk);
     const ghBg=gk==='RECEITAS'?'#1a5c2a':gk==='CMV'?'#5a2020':'#2d2d2d';
+    const gid=`dreg-${full?'f':'s'}-${gk}`;
 
-    h+=`<tr><td colspan="${meses.length+(showTot?2:1)}" style="padding:7px 14px;background:${ghBg};color:#fff;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.5px">
-      ${g?g.l:gk}${full?`<span style="float:right;font-size:10px;font-weight:400;opacity:.6">CLIQUE PARA RECOLHER</span>`:''}
-    </td></tr>`;
+    // Header clicável — toggle ao clicar
+    h+=`<tr style="cursor:pointer" onclick="toggleDREGrupo('${gid}')">
+      <td colspan="${meses.length+(showTot?2:1)}" style="padding:7px 14px;background:${ghBg};color:#fff;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.5px">
+        <span id="${gid}-ico">▼</span> ${g?g.l:gk}
+        <span style="float:right;font-size:10px;font-weight:400;opacity:.6">CLIQUE PARA RECOLHER</span>
+      </td>
+    </tr>`;
 
+    // Linhas de categorias — marcadas com classe para o toggle
     for (const [cat,mD] of Object.entries(data[gk])) {
       const totC=Object.values(mD).reduce((s,v)=>s+v,0);
-      h+=`<tr>
+      h+=`<tr class="${gid}-row">
         <td style="${TDL};padding-left:${full?'22':'18'}px;color:var(--muted)">· ${cat}</td>
         ${meses.map(m=>`<td style="${TD}">${fv(mD[m]||0,isDesp)}</td>`).join('')}
         ${showTot?`<td style="${TD};font-weight:600">${fv(totC,isDesp)}</td>`:''}
@@ -843,12 +849,13 @@ function _buildDRE(el, full) {
 
     const stBg=gk==='RECEITAS'?'#e8f7ef':gk==='CMV'?'#fff0f0':'#f0ebe4';
     const stCol=gk==='RECEITAS'?'var(--green)':'var(--red-l)';
-    h+=`<tr style="background:${stBg}">
+    h+=`<tr class="${gid}-row" style="background:${stBg}">
       <td style="${TDL};font-weight:700;color:${stCol}">▶ SUBTOTAL ${g?g.l:gk}</td>
       ${meses.map(m=>{const v=sg(gk,m);lucroMes[m]=(lucroMes[m]||0)+v;
         return `<td style="${TD};font-weight:700;color:${v>=0?'var(--green)':'var(--red-l)'}">${fmt.brl(isDesp?-Math.abs(v):v)}</td>`;}).join('')}
       ${showTot?`<td style="${TD};font-weight:700;color:${totG>=0?'var(--green)':'var(--red-l)'}">${fmt.brl(isDesp?-Math.abs(totG):totG)}</td>`:''}
-    </tr><tr><td colspan="${meses.length+(showTot?2:1)}" style="height:3px;background:var(--border)"></td></tr>`;
+    </tr>
+    <tr><td colspan="${meses.length+(showTot?2:1)}" style="height:3px;background:var(--border)"></td></tr>`;
   }
 
   const lucroTot=Object.values(lucroMes).reduce((s,v)=>s+v,0);
@@ -962,6 +969,16 @@ function setSt(s){
   if(s==='ok'){d.style.background='#4ecdc4';t.textContent='online';}
   else if(s==='err'){d.style.background='#c0392b';t.textContent='offline';}
   else{d.style.background='#f39c12';t.textContent='sync...';}
+}
+
+// Toggle recolher/expandir grupo na DRE
+function toggleDREGrupo(gid) {
+  const rows = document.querySelectorAll(`.${gid}-row`);
+  const ico  = document.getElementById(`${gid}-ico`);
+  if (!rows.length) return;
+  const hidden = rows[0].style.display === 'none';
+  rows.forEach(r => r.style.display = hidden ? '' : 'none');
+  if (ico) ico.textContent = hidden ? '▼' : '▶';
 }
 </script>
 </body>
