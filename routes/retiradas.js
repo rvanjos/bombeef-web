@@ -22,8 +22,8 @@ module.exports = function (pool) {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS retiradas (
         id                SERIAL PRIMARY KEY,
-        funcionario_id    INTEGER NOT NULL REFERENCES funcionarios(id),
-        produto_id        INTEGER REFERENCES produtos(id),
+        funcionario_id    INTEGER NOT NULL,
+        produto_id        INTEGER,
         descricao         TEXT NOT NULL,
         qtd               NUMERIC(10,3) DEFAULT 1,
         preco_unitario    NUMERIC(10,4) DEFAULT 0,
@@ -32,15 +32,22 @@ module.exports = function (pool) {
         mes               TEXT NOT NULL,
         dt_retirada       DATE DEFAULT CURRENT_DATE,
         observacao        TEXT,
-        autorizado_por    INTEGER REFERENCES usuarios(id),
+        autorizado_por    INTEGER,
         usuario_id        INTEGER,
         criado_em         TIMESTAMPTZ DEFAULT NOW()
       )
     `);
-    await pool.query(`
-      CREATE INDEX IF NOT EXISTS idx_ret_funcionario  ON retiradas(funcionario_id);
-      CREATE INDEX IF NOT EXISTS idx_ret_mes          ON retiradas(mes);
-    `);
+    // Garante colunas
+    const needed = [
+      ['mes','TEXT'],['valor_total','NUMERIC(10,2) DEFAULT 0'],
+      ['desconto_pct','NUMERIC(5,2) DEFAULT 100'],
+      ['qtd','NUMERIC(10,3) DEFAULT 1'],
+      ['preco_unitario','NUMERIC(10,4) DEFAULT 0'],
+    ];
+    for(const[c,d]of needed) await pool.query(`ALTER TABLE retiradas ADD COLUMN IF NOT EXISTS ${c} ${d}`).catch(()=>{});
+    await pool.query(`UPDATE retiradas SET mes=TO_CHAR(dt_retirada,'MM/YYYY') WHERE mes IS NULL AND dt_retirada IS NOT NULL`).catch(()=>{});
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_ret_funcionario ON retiradas(funcionario_id)`).catch(()=>{});
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_ret_mes ON retiradas(mes)`).catch(()=>{});
   }
   initTable().catch(e => console.error('[retiradas] initTable:', e.message));
 

@@ -57,12 +57,12 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
 <div class="layout">
   <div class="sidebar">
     <div class="sb-sec">Principal</div>
-    <div class="nav-item active" onclick="showPage('sistema')">⚙️ Sistema</div>
-    <div class="nav-item" onclick="showPage('usuarios')">👤 Usuários</div>
-    <div class="nav-item" onclick="showPage('funcionarios')">👥 Funcionários</div>
+    <div class="nav-item active" onclick="showPage('sistema',this)">⚙️ Sistema</div>
+    <div class="nav-item" onclick="showPage('usuarios',this)">👤 Usuários</div>
+    <div class="nav-item" onclick="showPage('funcionarios',this)">👥 Funcionários</div>
     <div class="sb-sec">Financeiro</div>
-    <div class="nav-item" onclick="showPage('metas')">🎯 Metas</div>
-    <div class="nav-item" onclick="showPage('categorias')">📊 Categorias DRE</div>
+    <div class="nav-item" onclick="showPage('metas',this)">🎯 Metas</div>
+    <div class="nav-item" onclick="showPage('categorias',this)">📊 Categorias DRE</div>
   </div>
 
   <div class="content">
@@ -240,11 +240,13 @@ async function init(){
   carregarMetas();
 }
 
-function showPage(p){
+function showPage(p, el){
   document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));
-  document.getElementById(`page-${p}`).classList.add('active');
-  event.currentTarget.classList.add('active');
+  const pg = document.getElementById(`page-${p}`);
+  if(pg) pg.classList.add('active');
+  if(el) el.classList.add('active');
+  else document.querySelectorAll(`.nav-item`).forEach(n=>{ if(n.getAttribute('onclick')?.includes(`'${p}'`)) n.classList.add('active'); });
   if(p==='usuarios') carregarUsuarios();
   if(p==='funcionarios') carregarFuncionarios();
   if(p==='categorias') carregarCategorias();

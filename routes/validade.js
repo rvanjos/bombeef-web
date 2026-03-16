@@ -30,7 +30,7 @@ module.exports = function (pool) {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS validade_items (
         id                  SERIAL PRIMARY KEY,
-        produto_id          INTEGER REFERENCES produtos(id),
+        produto_id          INTEGER,
         codigo              TEXT,
         descricao           TEXT NOT NULL,
         data_validade       DATE,
@@ -39,20 +39,36 @@ module.exports = function (pool) {
         ultima_conferencia  DATE,
         responsavel         TEXT,
         qtd_unidades        INTEGER DEFAULT 0,
-        status              TEXT DEFAULT 'ok'
-                            CHECK (status IN ('ok','alerta','vencido','descartado')),
+        preco_custo         NUMERIC(10,4) DEFAULT 0,
+        status              TEXT DEFAULT 'ok',
         dias_alerta         INTEGER DEFAULT 7,
         localizacao         TEXT,
         observacao          TEXT,
         criado_em           TIMESTAMPTZ DEFAULT NOW(),
         atualizado_em       TIMESTAMPTZ DEFAULT NOW()
       )
-    `);
+    `).catch(() => {});
+
+    // Garante colunas novas
+    const needed = [
+      ['preco_custo',   'NUMERIC(10,4) DEFAULT 0'],
+      ['localizacao',   'TEXT'],
+      ['qtd_unidades',  'INTEGER DEFAULT 0'],
+      ['dias_alerta',   'INTEGER DEFAULT 7'],
+      ['atualizado_em', 'TIMESTAMPTZ DEFAULT NOW()'],
+    ];
+    for (const [col, def] of needed) {
+      await pool.query(`ALTER TABLE validade_items ADD COLUMN IF NOT EXISTS ${col} ${def}`).catch(() => {});
+    }
+
+    // Remove constraint de status que pode conflitar
+    await pool.query(`ALTER TABLE validade_items DROP CONSTRAINT IF EXISTS validade_items_status_check`).catch(() => {});
+
     await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_val_codigo    ON validade_items(codigo);
       CREATE INDEX IF NOT EXISTS idx_val_validade  ON validade_items(data_validade);
       CREATE INDEX IF NOT EXISTS idx_val_status    ON validade_items(status);
-    `);
+    `).catch(() => {});
   }
   initTable().catch(e => console.error('[validade] initTable:', e.message));
 
@@ -196,15 +212,18 @@ module.exports = function (pool) {
     if (!codigo) return res.status(400).json({ ok: false, erro: 'codigo obrigatório' });
     try {
       const { rows: prod } = await pool.query(
-        `SELECT id, descricao FROM produtos WHERE codigo = $1`, [codigo.trim()]
+        `SELECT id, descricao, preco_custo, preco_venda FROM produtos WHERE codigo = $1`, [codigo.trim()]
       );
       if (!prod.length) return res.status(404).json({ ok: false, erro: 'Produto não encontrado com este código' });
 
       await pool.query(`
-        UPDATE validade_items SET produto_id = $1, codigo = $2, atualizado_em = NOW() WHERE id = $3
-      `, [prod[0].id, codigo.trim(), parseInt(req.params.id)]);
+        UPDATE validade_items
+        SET produto_id=$1, codigo=$2, descricao=COALESCE(NULLIF(descricao,''),$3),
+            preco_custo=$4, atualizado_em=NOW()
+        WHERE id=$5
+      `, [prod[0].id, codigo.trim(), prod[0].descricao, parseFloat(prod[0].preco_custo||0), parseInt(req.params.id)]);
 
-      res.json({ ok: true, produto: prod[0] });
+      res.json({ ok: true, produto: { ...prod[0], codigo: codigo.trim() } });
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 

@@ -99,9 +99,19 @@ module.exports = function (pool) {
   // ── GET /:id ───────────────────────────────────────────────────────────────
   r.get('/:id', async (req, res) => {
     try {
-      const { rows } = await pool.query(
-        `SELECT * FROM produtos WHERE id = $1 OR codigo = $1`, [req.params.id]
-      );
+      const id = req.params.id;
+      // Tenta por id numérico primeiro, depois por código texto
+      const numId = parseInt(id);
+      let rows;
+      if (!isNaN(numId)) {
+        ({ rows } = await pool.query(
+          `SELECT * FROM produtos WHERE id = $1 OR codigo = $2`, [numId, id]
+        ));
+      } else {
+        ({ rows } = await pool.query(
+          `SELECT * FROM produtos WHERE codigo = $1`, [id]
+        ));
+      }
       if (!rows.length) return res.status(404).json({ ok: false, erro: 'Produto não encontrado' });
       res.json({ ok: true, data: rows[0] });
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
@@ -131,6 +141,10 @@ module.exports = function (pool) {
   r.put('/:id', async (req, res) => {
     const p = req.body;
     try {
+      const numId = parseInt(req.params.id);
+      const idClause = !isNaN(numId)
+        ? `(id = ${numId} OR codigo = $8)`
+        : `codigo = $8`;
       const { rowCount } = await pool.query(`
         UPDATE produtos SET
           descricao     = COALESCE($1, descricao),
@@ -141,7 +155,7 @@ module.exports = function (pool) {
           categoria     = COALESCE($6, categoria),
           ativo         = COALESCE($7, ativo),
           atualizado_em = NOW()
-        WHERE id = $8 OR codigo = $8
+        WHERE ${idClause}
       `, [
         p.descricao || null, p.fornecedor || null,
         p.precoCusto !== undefined ? parseFloat(p.precoCusto) : null,
@@ -158,10 +172,12 @@ module.exports = function (pool) {
   // ── DELETE /:id ────────────────────────────────────────────────────────────
   r.delete('/:id', async (req, res) => {
     try {
-      await pool.query(
-        `UPDATE produtos SET ativo = false, atualizado_em = NOW() WHERE id = $1 OR codigo = $1`,
-        [req.params.id]
-      );
+      const numId = parseInt(req.params.id);
+      if (!isNaN(numId)) {
+        await pool.query(`UPDATE produtos SET ativo=false, atualizado_em=NOW() WHERE id=$1 OR codigo=$2`, [numId, req.params.id]);
+      } else {
+        await pool.query(`UPDATE produtos SET ativo=false, atualizado_em=NOW() WHERE codigo=$1`, [req.params.id]);
+      }
       res.json({ ok: true });
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });

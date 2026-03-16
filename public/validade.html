@@ -6,106 +6,172 @@
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="/js/api.js"></script>
 <style>
-:root{--red:#8B0000;--red-l:#C0392B;--gold:#C9A044;--green:#1a7a4a;--orange:#c76b00;--blue:#1a5c8a;
-  --bg:#f7f4f0;--white:#fff;--text:#1a1a1a;--muted:#7a7068;--border:#e8e0d8;--shadow:0 2px 12px rgba(0,0,0,.08);}
+:root{--red:#8B0000;--red-l:#C0392B;--green:#1a7a4a;--orange:#c76b00;--blue:#1a5c8a;
+  --bg:#f7f4f0;--white:#fff;--text:#1a1a1a;--muted:#7a7068;--border:#e8e0d8;--shadow:0 2px 12px rgba(0,0,0,.08);
+  /* Cores de urgência — igual ao sistema anterior */
+  --c-vencido:#8B0000; --c-critico:#C0392B; --c-alerta:#c76b00; --c-ok:#1a7a4a;
+}
 *{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
-.ph{background:var(--orange);padding:12px 22px;display:flex;align-items:center;gap:10px;box-shadow:0 2px 12px rgba(199,107,0,.3);}
+.ph{background:var(--orange);background-image:repeating-linear-gradient(45deg,transparent,transparent 10px,rgba(255,255,255,.03) 10px,rgba(255,255,255,.03) 20px);padding:12px 22px;display:flex;align-items:center;gap:10px;box-shadow:0 2px 12px rgba(199,107,0,.3);}
 .ph h2{font-family:'Playfair Display',serif;font-size:17px;color:#fff;font-weight:700;}
 .ph-sub{font-size:11px;color:rgba(255,255,255,.7);margin-left:auto;}
-.body{padding:22px 20px;max-width:1300px;margin:0 auto;}
-.kpi-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:20px;}
-.kc{background:var(--white);border:1px solid var(--border);border-radius:10px;padding:14px;border-left:4px solid var(--orange);box-shadow:var(--shadow);}
-.kc.g{border-left-color:var(--green);} .kc.r{border-left-color:var(--red-l);} .kc.b{border-left-color:var(--blue);}
-.kc-l{font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);font-weight:600;margin-bottom:4px;}
-.kc-v{font-size:20px;font-weight:700;font-family:'DM Mono',monospace;}
-.tabs{display:flex;background:var(--white);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:16px;box-shadow:var(--shadow);}
-.tab{flex:1;padding:10px;text-align:center;cursor:pointer;font-size:13px;font-weight:600;color:var(--muted);border:none;background:none;font-family:'DM Sans',sans-serif;}
+.body{padding:18px 18px;max-width:1400px;margin:0 auto;}
+
+/* ── KPI CARDS ── */
+.kpi-row{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px;}
+.kc{background:var(--white);border:1px solid var(--border);border-radius:10px;padding:13px 14px;border-left:4px solid var(--orange);box-shadow:var(--shadow);cursor:default;}
+.kc.g{border-left-color:var(--green);} .kc.r{border-left-color:var(--red-l);} .kc.b{border-left-color:var(--blue);} .kc.d{border-left-color:#666;}
+.kc-l{font-size:9px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);font-weight:700;margin-bottom:3px;}
+.kc-v{font-size:22px;font-weight:700;font-family:'DM Mono',monospace;}
+.kc-s{font-size:10px;color:var(--muted);margin-top:2px;}
+
+/* ── ALERTAS BANNER ── (idêntico ao sistema anterior) */
+.sb{border-radius:9px;padding:11px 16px;margin-bottom:10px;display:flex;align-items:center;gap:10px;font-size:13px;font-weight:600;border:1px solid;}
+.sb-danger{background:#fff0f0;border-color:#f5c6c6;color:var(--c-vencido);}
+.sb-warn{background:#fff8e6;border-color:#f5c842;color:var(--c-alerta);}
+.sb-ok{background:#f0faf4;border-color:#a8d5bc;color:var(--c-ok);}
+.sb-neutral{background:#f5f5f5;border-color:#ddd;color:var(--muted);}
+.sb-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+.dot-danger{background:var(--c-vencido);} .dot-warn{background:var(--c-alerta);} .dot-ok{background:var(--c-ok);} .dot-neutral{background:#bbb;}
+
+/* ── TABS ── */
+.tabs{display:flex;background:var(--white);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:14px;box-shadow:var(--shadow);}
+.tab{flex:1;padding:10px;text-align:center;cursor:pointer;font-size:13px;font-weight:600;color:var(--muted);border:none;background:none;font-family:'DM Sans',sans-serif;transition:.15s;}
 .tab.active{background:var(--orange);color:#fff;}
-.toolbar{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px;align-items:center;}
-.btn{padding:8px 16px;border-radius:8px;border:none;cursor:pointer;font-size:13px;font-weight:600;font-family:'DM Sans',sans-serif;transition:all .15s;display:inline-flex;align-items:center;gap:6px;}
+
+/* ── TOOLBAR ── */
+.toolbar{display:flex;flex-wrap:wrap;gap:9px;margin-bottom:12px;align-items:center;}
+.btn{padding:8px 15px;border-radius:8px;border:none;cursor:pointer;font-size:12px;font-weight:600;font-family:'DM Sans',sans-serif;transition:.15s;display:inline-flex;align-items:center;gap:5px;white-space:nowrap;}
 .btn-p{background:var(--orange);color:#fff;} .btn-p:hover{filter:brightness(1.1);}
 .btn-s{background:var(--white);color:var(--text);border:1px solid var(--border);} .btn-s:hover{border-color:var(--orange);}
 .btn-r{background:var(--red-l);color:#fff;} .btn-r:hover{filter:brightness(1.1);}
-.search-wrap{flex:1;min-width:180px;position:relative;}
-.search-wrap input{width:100%;padding:8px 12px 8px 34px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--white);}
-.search-wrap::before{content:'🔍';position:absolute;left:10px;top:50%;transform:translateY(-50%);}
-select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--white);cursor:pointer;}
+.search-w{flex:1;min-width:180px;position:relative;}
+.search-w input{width:100%;padding:8px 12px 8px 34px;border:1px solid var(--border);border-radius:8px;font-size:12px;background:var(--white);}
+.search-w::before{content:'🔍';position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:13px;}
+select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px;background:var(--white);cursor:pointer;}
+
+/* ── TABELA COM CORES POR URGÊNCIA ── */
 .card{background:var(--white);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);overflow:hidden;}
 .tbl{width:100%;border-collapse:collapse;}
-.tbl th{background:#fdf6ee;font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:700;padding:10px 12px;text-align:left;border-bottom:2px solid var(--border);}
-.tbl td{padding:10px 12px;font-size:13px;border-bottom:1px solid #f5efe8;vertical-align:middle;}
-.tbl tr:hover td{background:#fefaf4;}
-.act-btn{padding:4px 10px;border:1px solid var(--border);border-radius:6px;background:var(--white);cursor:pointer;font-size:12px;margin-right:3px;}
-.pill{display:inline-block;padding:2px 9px;border-radius:8px;font-size:11px;font-weight:600;}
-.pill-ok{background:#d1e7dd;color:#0a4a22;} .pill-al{background:#fff3cd;color:#856404;}
-.pill-ve{background:#f8d7da;color:#721c24;} .pill-ds{background:#e2e3e5;color:#555;}
-.sem-cod{background:#fff3cd;color:#856404;font-size:11px;padding:2px 6px;border-radius:4px;}
-/* modal */
-.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;align-items:center;justify-content:center;padding:16px;}
+.tbl th{background:#fdf6ee;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700;padding:9px 12px;text-align:left;border-bottom:2px solid var(--border);}
+.tbl td{padding:8px 12px;font-size:12px;border-bottom:1px solid #f5efe8;vertical-align:middle;}
+/* Linhas coloridas por urgência — igual ao sistema anterior */
+.tbl tr.row-vencido td{background:#fff0f0!important;}
+.tbl tr.row-vencido:hover td{background:#ffe8e8!important;}
+.tbl tr.row-critico td{background:#fff5f5!important;}
+.tbl tr.row-alerta td{background:#fffbf0!important;}
+.tbl tr.row-alerta:hover td{background:#fff5e0!important;}
+.tbl tr.row-ok:hover td{background:#f5fdf8!important;}
+.tbl tr.row-descartado td{opacity:.5;text-decoration:line-through;}
+
+/* ── BADGES URGÊNCIA ── */
+.urg{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;}
+.urg-vencido{background:#ffd6d6;color:var(--c-vencido);}
+.urg-critico{background:#ffd6d6;color:var(--c-vencido);}
+.urg-alerta{background:#fff0cc;color:var(--c-alerta);}
+.urg-ok{background:#d4f0df;color:var(--c-ok);}
+.urg-descartado{background:#e8e8e8;color:#777;}
+
+/* Badge sem código */
+.sem-cod{background:#fff3cd;color:#856404;font-size:10px;font-weight:700;padding:2px 7px;border-radius:5px;}
+
+/* Badge dias */
+.dias-badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;white-space:nowrap;}
+.dias-venc{background:#ffd6d6;color:var(--c-vencido);}
+.dias-crit{background:#ffd6d6;color:var(--c-vencido);}
+.dias-al{background:#fff0cc;color:var(--c-alerta);}
+.dias-ok{background:#d4f0df;color:var(--c-ok);}
+
+.act-btn{padding:3px 8px;border:1px solid var(--border);border-radius:5px;background:var(--white);cursor:pointer;font-size:11px;margin-right:2px;transition:.1s;}
+.act-btn:hover{background:#f5f0e8;}
+
+/* ── MODALS ── */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:300;align-items:center;justify-content:center;padding:14px;}
 .modal-bg.open{display:flex;}
-.modal{background:var(--white);border-radius:14px;width:100%;max-width:560px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3);}
-.modal-head{padding:18px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
-.modal-head h3{font-family:'Playfair Display',serif;font-size:16px;color:var(--orange);}
-.modal-close{background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);}
-.modal-body{padding:20px 22px;}
-.fg{margin-bottom:12px;}
-.fg label{display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);margin-bottom:5px;}
-.fg input,.fg select,.fg textarea{width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:'DM Sans',sans-serif;}
+.modal{background:var(--white);border-radius:14px;width:100%;max-width:560px;max-height:92vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3);}
+.modal-head{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+.modal-head h3{font-family:'Playfair Display',serif;font-size:15px;color:var(--orange);}
+.modal-close{background:none;border:none;font-size:19px;cursor:pointer;color:var(--muted);}
+.modal-body{padding:18px 20px;}
+.fg{margin-bottom:11px;}
+.fg label{display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);margin-bottom:4px;}
+.fg input,.fg select,.fg textarea{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:'DM Sans',sans-serif;background:var(--white);}
 .fg input:focus,.fg select:focus{outline:none;border-color:var(--orange);}
-.fg-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
-.modal-foot{padding:14px 22px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end;}
-.upload-zone{border:2px dashed var(--border);border-radius:10px;padding:24px;text-align:center;cursor:pointer;transition:.2s;margin-bottom:12px;}
+.fg-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.fg-info{font-size:11px;color:var(--green);margin-top:3px;font-weight:600;}
+.modal-foot{padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:9px;justify-content:flex-end;}
+.alerta-box{background:#fff8e6;border:1px solid #f5c842;border-radius:8px;padding:11px;font-size:12px;margin-bottom:10px;}
+.upload-zone{border:2px dashed var(--border);border-radius:9px;padding:20px;text-align:center;cursor:pointer;transition:.2s;margin-bottom:10px;}
 .upload-zone:hover{border-color:var(--orange);}
-.alerta-box{background:#fff8e6;border:1px solid #f5c842;border-radius:8px;padding:12px;font-size:13px;margin-bottom:12px;}
-.empty{text-align:center;padding:40px;color:var(--muted);}
+.empty{text-align:center;padding:36px;color:var(--muted);}
+@media(max-width:700px){.kpi-row{grid-template-columns:1fr 1fr;}}
 </style>
 </head>
 <body>
 <div class="ph"><span style="font-size:20px">🗓</span><h2>Validade & Perdas</h2><div class="ph-sub" id="ph-sub">—</div></div>
 <div class="body">
+
+  <!-- KPIs -->
   <div class="kpi-row">
     <div class="kc g"><div class="kc-l">OK</div><div class="kc-v" id="k-ok">—</div></div>
-    <div class="kc"><div class="kc-l">Em Alerta</div><div class="kc-v" id="k-alerta" style="color:var(--orange)">—</div></div>
+    <div class="kc"><div class="kc-l">Em Alerta</div><div class="kc-v" id="k-alerta" style="color:var(--orange)">—</div><div class="kc-s" id="k-alerta-s"></div></div>
     <div class="kc r"><div class="kc-l">Vencidos</div><div class="kc-v" id="k-vencidos" style="color:var(--red-l)">—</div></div>
-    <div class="kc b"><div class="kc-l">Sem Código</div><div class="kc-v" id="k-semcod">—</div><div style="font-size:10px;color:var(--muted)">pendentes</div></div>
-    <div class="kc r"><div class="kc-l">Perdas/Mês</div><div class="kc-v" id="k-perdas">—</div></div>
+    <div class="kc b"><div class="kc-l">Sem Código</div><div class="kc-v" id="k-semcod">—</div><div class="kc-s">pendentes</div></div>
+    <div class="kc r"><div class="kc-l">Perdas / Mês</div><div class="kc-v" id="k-perdas">—</div><div class="kc-s" id="k-perdas-s"></div></div>
   </div>
+
+  <!-- Banners de alerta -->
+  <div id="banners-area"></div>
 
   <div class="tabs">
-    <button class="tab active" onclick="showSection('validade')">🗓 Validade</button>
-    <button class="tab" onclick="showSection('perdas')">🗑️ Perdas</button>
+    <button class="tab active" onclick="showSection('validade',this)">🗓 Validade</button>
+    <button class="tab" onclick="showSection('perdas',this)">🗑️ Perdas</button>
   </div>
 
-  <!-- VALIDADE -->
+  <!-- ── VALIDADE ── -->
   <div id="sec-validade">
     <div class="toolbar">
       <button class="btn btn-p" onclick="abrirModal()">＋ Novo Item</button>
       <button class="btn btn-s" onclick="abrirImport()">📥 Importar Planilha</button>
-      <div class="search-wrap"><input type="text" id="busca-val" placeholder="Buscar produto, código, lote..." oninput="filtrarVal()"></div>
+      <div class="search-w"><input type="text" id="busca-val" placeholder="Buscar produto, código, lote..." oninput="filtrarVal()"></div>
       <select class="flt" id="flt-status" onchange="carregar()">
         <option value="todos">Todos</option>
         <option value="alerta">Em Alerta</option>
         <option value="vencido">Vencidos</option>
         <option value="ok">OK</option>
       </select>
-      <button class="btn btn-s" id="btn-semcod" onclick="mostrarSemCodigo()" style="display:none">⚠️ Vincular Códigos</button>
+      <button class="btn btn-s" id="btn-semcod" onclick="filtrarSemCod()" style="display:none">⚠️ Sem código</button>
     </div>
     <div class="card">
       <table class="tbl">
-        <thead><tr><th>Código</th><th>Descrição</th><th>Lote</th><th>Validade</th><th>Ação Prev.</th><th>Última Conf.</th><th>Responsável</th><th>Status</th><th>Ações</th></tr></thead>
+        <thead><tr>
+          <th style="width:90px">Código</th>
+          <th>Descrição</th>
+          <th>Lote</th>
+          <th>Validade</th>
+          <th>Dias</th>
+          <th>Ação Prevista</th>
+          <th>Última Conf.</th>
+          <th>Responsável</th>
+          <th style="width:90px">Status</th>
+          <th>Ações</th>
+        </tr></thead>
         <tbody id="tbody-val"></tbody>
       </table>
-      <div class="empty" id="empty-val" style="display:none"><p>Nenhum item encontrado</p></div>
+      <div class="empty" id="empty-val" style="display:none">
+        <div style="font-size:32px;margin-bottom:8px">📦</div>
+        <p>Nenhum item encontrado</p>
+      </div>
     </div>
   </div>
 
-  <!-- PERDAS -->
+  <!-- ── PERDAS ── -->
   <div id="sec-perdas" style="display:none">
     <div class="toolbar">
       <button class="btn btn-r" onclick="abrirPerda()">＋ Registrar Perda</button>
       <input type="month" id="flt-mes-perdas" class="flt" style="padding:7px 10px" onchange="carregarPerdas()">
-      <div style="margin-left:auto" id="meta-perdas-info"></div>
+      <div style="margin-left:auto;font-size:13px" id="meta-perdas-info"></div>
     </div>
     <div class="card">
       <table class="tbl">
@@ -115,16 +181,21 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
       <div class="empty" id="empty-perdas" style="display:none"><p>Nenhuma perda registrada</p></div>
     </div>
   </div>
+
 </div>
 
 <!-- Modal Validade -->
 <div class="modal-bg" id="modal-val">
   <div class="modal">
-    <div class="modal-head"><h3 id="val-title">Novo Item</h3><button class="modal-close" onclick="fecharModal()">×</button></div>
+    <div class="modal-head"><h3 id="val-title">Novo Item de Validade</h3><button class="modal-close" onclick="fecharModal('modal-val')">×</button></div>
     <div class="modal-body">
       <input type="hidden" id="v-id">
       <div class="fg-row">
-        <div class="fg"><label>Código do Produto</label><input id="v-cod" placeholder="Deixe vazio se não souber" oninput="buscarProdVal()"><div id="v-cod-info" style="font-size:11px;color:var(--green);margin-top:4px"></div></div>
+        <div class="fg">
+          <label>Código do Produto</label>
+          <input id="v-cod" placeholder="Código do PDV" oninput="buscarProdVal()">
+          <div class="fg-info" id="v-cod-info"></div>
+        </div>
         <div class="fg"><label>Qtd Unidades</label><input type="number" id="v-qtd" value="0" min="0"></div>
       </div>
       <div class="fg"><label>Descrição *</label><input id="v-desc" placeholder="Nome do produto"></div>
@@ -132,7 +203,8 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
         <div class="fg"><label>Data de Validade *</label><input type="date" id="v-val"></div>
         <div class="fg"><label>Lote</label><input id="v-lote" placeholder="Número do lote"></div>
       </div>
-      <div class="fg"><label>Ação Antes de Vencer</label>
+      <div class="fg">
+        <label>Ação Antes de Vencer</label>
         <select id="v-acao">
           <option value="">— Selecione —</option>
           <option>Promover com 30% de desconto</option>
@@ -140,20 +212,53 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
           <option>Doação para funcionários</option>
           <option>Retirar de circulação</option>
           <option>Verificar com fornecedor</option>
+          <option>Descarte imediato</option>
         </select>
       </div>
       <div class="fg-row">
-        <div class="fg"><label>Responsável</label><input id="v-resp" placeholder="Nome do responsável"></div>
+        <div class="fg">
+          <label>Responsável</label>
+          <!-- select preenchido com funcionários -->
+          <select id="v-resp"><option value="">— Selecione —</option></select>
+        </div>
         <div class="fg"><label>Última Conferência</label><input type="date" id="v-conf"></div>
       </div>
       <div class="fg-row">
         <div class="fg"><label>Localização</label><input id="v-local" placeholder="Câmara 1, Prateleira A..."></div>
         <div class="fg"><label>Dias p/ Alerta</label><input type="number" id="v-alerta" value="7" min="1"></div>
       </div>
+      <!-- Preços do produto (preenchidos automaticamente ao vincular) -->
+      <div id="v-preco-wrap" style="display:none;background:#f0faf4;border-radius:8px;padding:10px 12px;font-size:12px;margin-top:6px">
+        <div style="font-weight:600;margin-bottom:4px;color:var(--green)">💰 Valores do Produto (PDV)</div>
+        <div style="display:flex;gap:20px">
+          <span>Custo: <b id="v-preco-custo">—</b></span>
+          <span>Venda: <b id="v-preco-venda">—</b></span>
+        </div>
+        <input type="hidden" id="v-preco-custo-val">
+      </div>
     </div>
     <div class="modal-foot">
-      <button class="btn btn-s" onclick="fecharModal()">Cancelar</button>
+      <button class="btn btn-s" onclick="fecharModal('modal-val')">Cancelar</button>
       <button class="btn btn-p" onclick="salvarVal()">💾 Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Vincular (substitui prompt()) -->
+<div class="modal-bg" id="modal-vincular">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-head"><h3>🔗 Vincular Produto</h3><button class="modal-close" onclick="fecharModal('modal-vincular')">×</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="vinc-id">
+      <div class="fg">
+        <label>Código do Produto *</label>
+        <input id="vinc-cod" placeholder="Digite o código do PDV" oninput="previewVincular()">
+        <div class="fg-info" id="vinc-info"></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-s" onclick="fecharModal('modal-vincular')">Cancelar</button>
+      <button class="btn btn-p" onclick="confirmarVincular()">🔗 Vincular</button>
     </div>
   </div>
 </div>
@@ -161,11 +266,13 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
 <!-- Modal Perda -->
 <div class="modal-bg" id="modal-perda">
   <div class="modal" style="max-width:480px">
-    <div class="modal-head"><h3>Registrar Perda</h3><button class="modal-close" onclick="fecharPerda()">×</button></div>
+    <div class="modal-head"><h3>🗑️ Registrar Perda</h3><button class="modal-close" onclick="fecharModal('modal-perda')">×</button></div>
     <div class="modal-body">
+      <input type="hidden" id="pd-vid">
       <div class="fg"><label>Descrição / Produto *</label><input id="pd-desc" placeholder="Nome do produto perdido"></div>
       <div class="fg-row">
-        <div class="fg"><label>Motivo</label>
+        <div class="fg">
+          <label>Motivo</label>
           <select id="pd-motivo">
             <option value="vencimento">Vencimento</option>
             <option value="avaria">Avaria</option>
@@ -177,16 +284,25 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
         <div class="fg"><label>Data</label><input type="date" id="pd-dt"></div>
       </div>
       <div class="fg-row">
-        <div class="fg"><label>Qtd Unidades</label><input type="number" id="pd-qtd" value="0" min="0"></div>
-        <div class="fg"><label>Valor da Perda (R$)</label><input type="number" id="pd-valor" step="0.01" placeholder="0,00"></div>
+        <div class="fg"><label>Qtd Unidades</label><input type="number" id="pd-qtd" value="0" min="0" oninput="calcPerda()"></div>
+        <div class="fg">
+          <label>Custo Unitário (R$)</label>
+          <input type="number" id="pd-custo" step="0.0001" placeholder="0,00" oninput="calcPerda()">
+        </div>
       </div>
-      <div class="fg"><label>Funcionário Responsável</label>
+      <div class="fg">
+        <label>Valor Total da Perda (R$)</label>
+        <input type="number" id="pd-valor" step="0.01" placeholder="0,00" style="font-weight:700;font-size:15px;color:var(--red-l)">
+        <div style="font-size:11px;color:var(--muted);margin-top:3px">Calculado automaticamente · pode editar</div>
+      </div>
+      <div class="fg">
+        <label>Funcionário Responsável</label>
         <select id="pd-func"><option value="">— Selecione —</option></select>
       </div>
-      <div class="fg"><label>Observação</label><textarea id="pd-obs" rows="2"></textarea></div>
+      <div class="fg"><label>Observação</label><textarea id="pd-obs" rows="2" style="resize:none"></textarea></div>
     </div>
     <div class="modal-foot">
-      <button class="btn btn-s" onclick="fecharPerda()">Cancelar</button>
+      <button class="btn btn-s" onclick="fecharModal('modal-perda')">Cancelar</button>
       <button class="btn btn-r" onclick="salvarPerda()">🗑️ Registrar Perda</button>
     </div>
   </div>
@@ -195,22 +311,22 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
 <!-- Modal Import -->
 <div class="modal-bg" id="modal-import">
   <div class="modal" style="max-width:460px">
-    <div class="modal-head"><h3>Importar Planilha de Validades</h3><button class="modal-close" onclick="document.getElementById('modal-import').classList.remove('open')">×</button></div>
+    <div class="modal-head"><h3>📥 Importar Planilha de Validades</h3><button class="modal-close" onclick="fecharModal('modal-import')">×</button></div>
     <div class="modal-body">
       <div class="alerta-box">⚠️ Itens sem código serão importados como "pendentes". Você poderá vincular o código depois.</div>
-      <div class="upload-zone" onclick="document.getElementById('file-val').click()">
-        <div style="font-size:36px">📥</div>
-        <p style="font-size:13px;color:var(--muted);margin-top:8px">Clique para selecionar a planilha XLSX</p>
-        <p style="font-size:11px;color:var(--muted);margin-top:4px">Colunas: Código, Descrição, Validade, Lote, Ação, Responsável</p>
+      <div class="upload-zone" onclick="document.getElementById('f-import').click()">
+        <div style="font-size:30px;margin-bottom:8px">📊</div>
+        <p style="font-size:13px;color:var(--muted)">Clique para selecionar a planilha XLSX</p>
+        <p style="font-size:11px;color:var(--muted);margin-top:4px">Colunas: Código, Descrição, Data Validade, Lote, Qtd</p>
       </div>
-      <input type="file" id="file-val" accept=".xlsx,.xls,.csv" style="display:none" onchange="processarImport(this)">
-      <div id="import-result" style="display:none;padding:12px;background:#f0faf4;border-radius:8px;font-size:13px"></div>
+      <input type="file" id="f-import" accept=".xlsx,.xls,.csv" style="display:none" onchange="processarImport(this)">
+      <div id="import-result" style="display:none;padding:10px;background:#f0faf4;border-radius:7px;font-size:13px"></div>
     </div>
   </div>
 </div>
 
 <script>
-const {api,fmt,toast} = BB;
+const {api, fmt, toast} = BB;
 let itens=[], perdas=[], funcionarios=[];
 
 window.onBBReady = () => { init(); };
@@ -218,50 +334,85 @@ if(api.token()) init();
 
 async function init(){
   await carregarFuncionarios();
-  carregarKPIs(); carregar();
+  carregarKPIs();
+  carregar();
   const hoje = new Date();
   document.getElementById('flt-mes-perdas').value = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
+  // Tenta notificar parent quando há novos dados
+  try { window.parent.postMessage({type:'bb_refresh_kpis'}, '*'); } catch(_) {}
 }
 
-function showSection(s){
+function showSection(s, btn){
   document.getElementById('sec-validade').style.display = s==='validade'?'':'none';
-  document.getElementById('sec-perdas').style.display = s==='perdas'?'':'none';
-  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',(s==='validade'&&i===0)||(s==='perdas'&&i===1)));
+  document.getElementById('sec-perdas').style.display   = s==='perdas'?'':'none';
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  if(btn) btn.classList.add('active');
   if(s==='perdas') carregarPerdas();
 }
 
+function fecharModal(id){ document.getElementById(id).classList.remove('open'); }
+
+// ── KPIs ──────────────────────────────────────────────────────────────────────
 async function carregarKPIs(){
   const d = await api.get('/api/validade/kpis');
-  if(!d.ok) return;
-  document.getElementById('k-ok').textContent      = fmt.n(d.data.ok);
-  document.getElementById('k-alerta').textContent  = fmt.n(d.data.alerta);
-  document.getElementById('k-vencidos').textContent= fmt.n(d.data.vencidos);
-  document.getElementById('k-semcod').textContent  = fmt.n(d.data.semCodigo);
-  document.getElementById('ph-sub').textContent    = `${d.data.alerta} em alerta · ${d.data.vencidos} vencidos`;
-  if(d.data.semCodigo>0) document.getElementById('btn-semcod').style.display='';
+  if(d.ok){
+    document.getElementById('k-ok').textContent      = fmt.n(d.data.ok);
+    document.getElementById('k-alerta').textContent  = fmt.n(d.data.alerta);
+    document.getElementById('k-vencidos').textContent= fmt.n(d.data.vencidos);
+    document.getElementById('k-semcod').textContent  = fmt.n(d.data.semCodigo);
+    document.getElementById('ph-sub').textContent    = `${d.data.alerta} em alerta · ${d.data.vencidos} vencidos`;
+    if(d.data.semCodigo>0) document.getElementById('btn-semcod').style.display='';
+  }
 
+  // Perdas do mês
   const mes = fmt.mesAtual();
   const pd = await api.get(`/api/perdas/meta/${mes}`);
   if(pd.ok){
-    document.getElementById('k-perdas').textContent = fmt.brl(pd.data.totalPerdas);
-    document.getElementById('k-perdas').style.color = pd.data.dentroMeta===false?'var(--red-l)':'var(--text)';
+    const m = pd.data;
+    document.getElementById('k-perdas').textContent  = fmt.brl(m.totalPerdas);
+    document.getElementById('k-perdas').style.color  = m.dentroMeta===false?'var(--red-l)':'var(--text)';
+    document.getElementById('k-perdas-s').textContent= m.metaValor>0?(m.dentroMeta===false?'⚠️ Acima':'✅ OK'):fmt.n(0);
   }
+
+  // Banners de alerta
+  renderBanners(d.data || {});
 }
 
+function renderBanners(data){
+  const el = document.getElementById('banners-area');
+  let html = '';
+  if(data.vencidos>0)
+    html+=`<div class="sb sb-danger"><div class="sb-dot dot-danger"></div><strong>${data.vencidos} produto(s) VENCIDO(S)</strong> — retirar imediatamente. <button onclick="filtrarStatus('vencido')" style="margin-left:8px;padding:3px 10px;background:var(--c-vencido);color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:12px">Ver vencidos</button></div>`;
+  if(data.alerta>0)
+    html+=`<div class="sb sb-warn"><div class="sb-dot dot-warn"></div><strong>${data.alerta} produto(s) próximo(s) do vencimento</strong> — atenção necessária.</div>`;
+  if(data.semCodigo>0)
+    html+=`<div class="sb sb-neutral"><div class="sb-dot dot-neutral"></div><strong>${data.semCodigo} produto(s) sem código</strong> — vincule para obter valores automáticos. <button onclick="filtrarSemCod()" style="margin-left:8px;padding:3px 10px;background:var(--orange);color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:12px">Vincular</button></div>`;
+  if(!html && data.ok>=0)
+    html='';
+  el.innerHTML = html;
+}
+
+// ── Funcionários ──────────────────────────────────────────────────────────────
 async function carregarFuncionarios(){
   const d = await api.get('/api/config/funcionarios');
   if(!d.ok) return;
   funcionarios = d.data.filter(f=>f.ativo);
-  const sel = document.getElementById('pd-func');
-  funcionarios.forEach(f=>{
-    const o=document.createElement('option'); o.value=f.id; o.textContent=f.nome; sel.appendChild(o);
-  });
+  // Preenche selects
+  const sels = ['pd-func','v-resp'];
+  for(const sid of sels){
+    const sel = document.getElementById(sid);
+    if(!sel) continue;
+    // v-resp usa select agora
+    funcionarios.forEach(f=>{
+      const o=document.createElement('option'); o.value=f.nome; o.textContent=f.nome; sel.appendChild(o);
+    });
+  }
 }
 
+// ── Carregar itens ────────────────────────────────────────────────────────────
 async function carregar(){
   const status = document.getElementById('flt-status').value;
-  const url = `/api/validade?status=${status}`;
-  const d = await api.get(url);
+  const d = await api.get(`/api/validade?status=${status}`);
   if(!d.ok) return;
   itens = d.data;
   renderVal(itens);
@@ -276,52 +427,100 @@ function filtrarVal(){
   ));
 }
 
+function filtrarStatus(status){
+  document.getElementById('flt-status').value = status;
+  carregar();
+}
+
+function filtrarSemCod(){
+  document.getElementById('busca-val').value = '';
+  renderVal(itens.filter(i=>!i.codigo));
+}
+
+// ── Calcular dias ─────────────────────────────────────────────────────────────
+function calcDias(dataValidade){
+  if(!dataValidade) return null;
+  const val = new Date(dataValidade+'T00:00:00');
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+  return Math.floor((val - hoje) / 86400000);
+}
+
+function getUrgencia(dias, diasAlerta=7){
+  if(dias===null) return 'ok';
+  if(dias < 0) return 'vencido';
+  if(dias <= 3) return 'critico';
+  if(dias <= diasAlerta) return 'alerta';
+  return 'ok';
+}
+
+// ── Render tabela ─────────────────────────────────────────────────────────────
 function renderVal(lista){
   const tb = document.getElementById('tbody-val');
   const em = document.getElementById('empty-val');
   if(!lista.length){ tb.innerHTML=''; em.style.display=''; return; }
   em.style.display='none';
-  const hoje = new Date(); hoje.setHours(0,0,0,0);
-  tb.innerHTML = lista.map(v=>{
-    const pill = v.status==='ok'
-      ? '<span class="pill pill-ok">OK</span>'
-      : v.status==='alerta'
-        ? '<span class="pill pill-al">⚠️ Alerta</span>'
-        : v.status==='vencido'
-          ? '<span class="pill pill-ve">Vencido</span>'
-          : '<span class="pill pill-ds">Descartado</span>';
+
+  // Ordena: vencidos → criticos → alerta → ok
+  const urgOrd = {vencido:0, critico:1, alerta:2, ok:3, descartado:4};
+  const sorted = [...lista].sort((a,b)=>{
+    const da=calcDias(a.data_validade), db=calcDias(b.data_validade);
+    const ua=a.status==='descartado'?'descartado':getUrgencia(da,a.dias_alerta||7);
+    const ub=b.status==='descartado'?'descartado':getUrgencia(db,b.dias_alerta||7);
+    const oi=(urgOrd[ua]??3)-(urgOrd[ub]??3);
+    if(oi!==0) return oi;
+    // dentro do mesmo grupo, ordena pelos dias restantes
+    return (da??9999)-(db??9999);
+  });
+
+  tb.innerHTML = sorted.map(v=>{
+    const dias = calcDias(v.data_validade);
+    const urg  = v.status==='descartado'?'descartado':getUrgencia(dias, v.dias_alerta||7);
+
+    // Badge de urgência
+    const urgLabels={vencido:'🔴 Vencido',critico:'🔴 Crítico',alerta:'⚠️ Alerta',ok:'✅ OK',descartado:'Descartado'};
+    const urgBadge=`<span class="urg urg-${urg}">${urgLabels[urg]||urg}</span>`;
+
+    // Badge de dias
+    let diasBadge='';
+    if(dias!==null && v.status!=='descartado'){
+      const cls=dias<0?'dias-venc':dias<=3?'dias-crit':dias<=(v.dias_alerta||7)?'dias-al':'dias-ok';
+      const txt=dias<0?`${Math.abs(dias)}d vencido`:dias===0?'Hoje!':dias===1?'Amanhã':`${dias}d`;
+      diasBadge=`<span class="dias-badge ${cls}">${txt}</span>`;
+    }
+
+    // Célula de código
     const codCell = v.codigo
-      ? `<span style="font-family:'DM Mono',monospace;font-size:12px">${v.codigo}</span>`
-      : `<span class="sem-cod">⚠️ Pendente</span>`;
-    return `<tr>
+      ? `<span style="font-family:'DM Mono',monospace;font-size:12px;font-weight:600">${v.codigo}</span>`
+      : `<span class="sem-cod">Pendente</span>`;
+
+    return `<tr class="row-${urg}">
       <td>${codCell}</td>
-      <td><b>${v.descricao}</b>${v.qtd_unidades?`<br><small style="color:var(--muted)">${v.qtd_unidades} un.</small>`:''}</td>
-      <td style="font-size:12px">${v.lote||'—'}</td>
-      <td style="font-weight:600;color:${v.status==='vencido'?'var(--red-l)':v.status==='alerta'?'var(--orange)':'inherit'}">${fmt.date(v.data_validade)}</td>
-      <td style="font-size:12px">${v.acao_antes_vencer||'—'}</td>
-      <td style="font-size:12px">${fmt.date(v.ultima_conferencia)||'—'}</td>
-      <td style="font-size:12px">${v.responsavel||'—'}</td>
-      <td>${pill}</td>
       <td>
+        <b style="font-size:13px">${v.descricao}</b>
+        ${v.qtd_unidades?`<br><small style="color:var(--muted)">${v.qtd_unidades} unidades</small>`:''}
+        ${v.localizacao?`<br><small style="color:var(--blue)">📍 ${v.localizacao}</small>`:''}
+      </td>
+      <td style="font-size:11px">${v.lote||'—'}</td>
+      <td style="font-weight:700;color:${urg==='vencido'?'var(--c-vencido)':urg==='critico'?'var(--c-critico)':urg==='alerta'?'var(--c-alerta)':'inherit'}">${fmt.date(v.data_validade)}</td>
+      <td>${diasBadge||'—'}</td>
+      <td style="font-size:11px;max-width:140px;overflow:hidden;text-overflow:ellipsis">${v.acao_antes_vencer||'—'}</td>
+      <td style="font-size:11px">${fmt.date(v.ultima_conferencia)||'—'}</td>
+      <td style="font-size:12px;font-weight:600">${v.responsavel||'—'}</td>
+      <td>${urgBadge}</td>
+      <td style="white-space:nowrap">
         <button class="act-btn" onclick="abrirModal(${v.id})">✏️</button>
-        ${!v.codigo?`<button class="act-btn" onclick="vincular(${v.id})" title="Vincular código">🔗</button>`:''}
-        ${v.status!=='descartado'?`<button class="act-btn" onclick="registrarPerdaRapida(${v.id},'${v.descricao.replace(/'/g,"\\'")}',${v.preco_custo||0})" style="color:var(--red-l)" title="Registrar perda">🗑️</button>`:''}
-        <button class="act-btn" onclick="excluirItem(${v.id})" style="color:var(--muted)">×</button>
+        ${!v.codigo?`<button class="act-btn" onclick="abrirVincular(${v.id})" title="Vincular código">🔗</button>`:''}
+        ${v.status!=='descartado'?`<button class="act-btn" onclick="perdaRapida(${v.id})" style="color:var(--red-l)" title="Registrar perda">📉</button>`:''}
+        <button class="act-btn" onclick="excluirItem(${v.id})" style="color:var(--muted);font-size:13px" title="Descartar">×</button>
       </td>
     </tr>`;
   }).join('');
 }
 
-function mostrarSemCodigo(){
-  document.getElementById('busca-val').value='';
-  document.getElementById('flt-status').value='todos';
-  renderVal(itens.filter(i=>!i.codigo));
-}
-
-// ── Modal Validade ─────────────────────────────────────────────────────────
+// ── Modal Validade ─────────────────────────────────────────────────────────────
 function abrirModal(id){
   const v = id ? itens.find(x=>x.id===id) : null;
-  document.getElementById('val-title').textContent = v ? 'Editar Item' : 'Novo Item';
+  document.getElementById('val-title').textContent = v?'Editar Item':'Novo Item de Validade';
   document.getElementById('v-id').value    = v?.id||'';
   document.getElementById('v-cod').value   = v?.codigo||'';
   document.getElementById('v-desc').value  = v?.descricao||'';
@@ -329,24 +528,39 @@ function abrirModal(id){
   document.getElementById('v-val').value   = v?.data_validade? fmt.dateInput(v.data_validade):'';
   document.getElementById('v-lote').value  = v?.lote||'';
   document.getElementById('v-acao').value  = v?.acao_antes_vencer||'';
-  document.getElementById('v-resp').value  = v?.responsavel||'';
+  // Responsável como select
+  const respSel = document.getElementById('v-resp');
+  respSel.value = v?.responsavel||'';
   document.getElementById('v-conf').value  = v?.ultima_conferencia? fmt.dateInput(v.ultima_conferencia):'';
   document.getElementById('v-local').value = v?.localizacao||'';
   document.getElementById('v-alerta').value= v?.dias_alerta||7;
   document.getElementById('v-cod-info').textContent = '';
+  document.getElementById('v-preco-wrap').style.display = 'none';
+  document.getElementById('v-preco-custo-val').value = v?.preco_custo||0;
   document.getElementById('modal-val').classList.add('open');
+  if(v?.codigo) buscarProdVal();
 }
-function fecharModal(){ document.getElementById('modal-val').classList.remove('open'); }
 
 async function buscarProdVal(){
   const cod = document.getElementById('v-cod').value.trim();
-  if(cod.length<2) return;
-  const d = await api.get(`/api/produtos/${cod}`);
+  if(cod.length<1) return;
+  const d = await api.get(`/api/produtos/${encodeURIComponent(cod)}`);
   const info = document.getElementById('v-cod-info');
+  const wrap = document.getElementById('v-preco-wrap');
   if(d.ok){
     info.textContent = '✅ ' + d.data.descricao;
-    if(!document.getElementById('v-desc').value) document.getElementById('v-desc').value = d.data.descricao;
-  } else { info.textContent = ''; }
+    if(!document.getElementById('v-desc').value)
+      document.getElementById('v-desc').value = d.data.descricao;
+    const custo = parseFloat(d.data.preco_custo||0);
+    const venda = parseFloat(d.data.preco_venda||0);
+    document.getElementById('v-preco-custo').textContent = fmt.brl(custo);
+    document.getElementById('v-preco-venda').textContent = fmt.brl(venda);
+    document.getElementById('v-preco-custo-val').value   = custo;
+    wrap.style.display = '';
+  } else {
+    info.textContent = '';
+    wrap.style.display = 'none';
+  }
 }
 
 async function salvarVal(){
@@ -362,102 +576,132 @@ async function salvarVal(){
     ultimaConferencia: document.getElementById('v-conf').value,
     localizacao:       document.getElementById('v-local').value,
     diasAlerta:        parseInt(document.getElementById('v-alerta').value)||7,
+    precoCusto:        parseFloat(document.getElementById('v-preco-custo-val').value)||0,
   };
   if(!body.descricao){ toast('Descrição obrigatória'); return; }
   const d = id ? await api.put(`/api/validade/${id}`,body) : await api.post('/api/validade',body);
   if(!d.ok){ toast('Erro: '+d.erro); return; }
-  toast(id?'Item atualizado!':'Item criado!');
-  fecharModal(); carregar(); carregarKPIs();
+  toast(id?'✅ Item atualizado!':'✅ Item criado!');
+  fecharModal('modal-val'); carregar(); carregarKPIs();
+  try { window.parent.postMessage({type:'bb_refresh_kpis'},'*'); } catch(_) {}
 }
 
-async function vincular(id){
-  const cod = prompt('Digite o código do produto para vincular:');
-  if(!cod) return;
-  const d = await api.post(`/api/validade/${id}/vincular`,{codigo:cod.trim()});
-  if(d.ok){ toast('✅ Produto vinculado: '+d.produto.descricao); carregar(); carregarKPIs(); }
-  else toast('Erro: '+d.erro);
+// ── Vincular código (modal próprio em vez de prompt) ──────────────────────────
+function abrirVincular(id){
+  document.getElementById('vinc-id').value = id;
+  document.getElementById('vinc-cod').value = '';
+  document.getElementById('vinc-info').textContent = '';
+  document.getElementById('modal-vincular').classList.add('open');
+}
+
+async function previewVincular(){
+  const cod = document.getElementById('vinc-cod').value.trim();
+  if(cod.length<1){ document.getElementById('vinc-info').textContent=''; return; }
+  const d = await api.get(`/api/produtos/${encodeURIComponent(cod)}`);
+  document.getElementById('vinc-info').textContent = d.ok ? '✅ '+d.data.descricao : '⚠️ Produto não encontrado no catálogo';
+}
+
+async function confirmarVincular(){
+  const id  = document.getElementById('vinc-id').value;
+  const cod = document.getElementById('vinc-cod').value.trim();
+  if(!cod){ toast('Informe o código'); return; }
+  const d = await api.post(`/api/validade/${id}/vincular`,{codigo:cod});
+  if(d.ok){
+    toast('✅ Produto vinculado: '+d.produto.descricao);
+    fecharModal('modal-vincular'); carregar(); carregarKPIs();
+  } else toast('Erro: '+d.erro);
 }
 
 async function excluirItem(id){
   if(!confirm('Descartar este item?')) return;
   const d = await api.delete(`/api/validade/${id}`);
-  if(d.ok){ toast('Item descartado'); carregar(); carregarKPIs(); }
+  if(d.ok){ toast('Descartado'); carregar(); carregarKPIs(); }
   else toast('Erro: '+d.erro);
 }
 
-// ── Perdas ─────────────────────────────────────────────────────────────────
-async function carregarPerdas(){
-  const mesVal = document.getElementById('flt-mes-perdas').value;
-  let url = '/api/perdas';
-  let mes = '';
-  if(mesVal){ const [y,m]=mesVal.split('-'); mes=`${m}/${y}`; url+=`?mes=${mes}`; }
-  const d = await api.get(url);
-  if(!d.ok) return;
-  perdas = d.data;
-
-  // Meta
-  if(mes){
-    const mt = await api.get(`/api/perdas/meta/${mes}`);
-    if(mt.ok){
-      const info = document.getElementById('meta-perdas-info');
-      const md = mt.data;
-      info.innerHTML = `Total: <b>${fmt.brl(md.totalPerdas)}</b> · Meta: ${fmt.brl(md.metaValor)} (${md.metaPct}%) · <span style="color:${md.dentroMeta===false?'var(--red-l)':'var(--green)'}">${md.dentroMeta===false?'⚠️ Acima da meta':'✅ Dentro da meta'}</span>`;
-    }
-  }
-
-  renderPerdas(perdas);
-}
-
-function renderPerdas(lista){
-  const tb = document.getElementById('tbody-perdas');
-  const em = document.getElementById('empty-perdas');
-  if(!lista.length){ tb.innerHTML=''; em.style.display=''; return; }
-  em.style.display='none';
-  const motivos={vencimento:'Vencimento',avaria:'Avaria',furto:'Furto',doacao:'Doação',outros:'Outros'};
-  tb.innerHTML = lista.map(p=>`<tr>
-    <td>${fmt.date(p.dt_perda)}</td>
-    <td><b>${p.descricao}</b>${p.produto_descricao&&p.produto_descricao!==p.descricao?`<br><small style="color:var(--muted)">${p.produto_descricao}</small>`:''}</td>
-    <td><span class="pill" style="background:#f8d7da;color:#721c24">${motivos[p.motivo]||p.motivo}</span></td>
-    <td style="font-family:'DM Mono',monospace">${p.qtd_unidades||0}</td>
-    <td style="font-family:'DM Mono',monospace;font-weight:600;color:var(--red-l)">${fmt.brl(p.valor_perda)}</td>
-    <td>${p.funcionario_nome||'—'}</td>
-    <td><button class="act-btn" onclick="excluirPerda(${p.id})" style="color:var(--red-l)">🗑</button></td>
-  </tr>`).join('');
+// ── Perda rápida (a partir de item de validade) ────────────────────────────────
+async function perdaRapida(validadeItemId){
+  const v = itens.find(x=>x.id===validadeItemId);
+  if(!v) return;
+  document.getElementById('pd-vid').value   = validadeItemId;
+  document.getElementById('pd-desc').value  = v.descricao;
+  document.getElementById('pd-qtd').value   = v.qtd_unidades||1;
+  document.getElementById('pd-custo').value = v.preco_custo||'';
+  document.getElementById('pd-dt').value    = new Date().toISOString().slice(0,10);
+  document.getElementById('pd-obs').value   = '';
+  document.getElementById('pd-motivo').value= 'vencimento';
+  calcPerda();
+  document.getElementById('modal-perda').classList.add('open');
 }
 
 function abrirPerda(){
-  document.getElementById('pd-dt').value = new Date().toISOString().slice(0,10);
-  document.getElementById('pd-desc').value=''; document.getElementById('pd-qtd').value=0;
-  document.getElementById('pd-valor').value=''; document.getElementById('pd-obs').value='';
+  document.getElementById('pd-vid').value = '';
+  document.getElementById('pd-dt').value  = new Date().toISOString().slice(0,10);
+  document.getElementById('pd-desc').value=document.getElementById('pd-qtd').value='';
+  document.getElementById('pd-custo').value=document.getElementById('pd-valor').value='';
+  document.getElementById('pd-obs').value='';
   document.getElementById('modal-perda').classList.add('open');
 }
-function fecharPerda(){ document.getElementById('modal-perda').classList.remove('open'); }
 
-function registrarPerdaRapida(validadeItemId, desc, custo){
-  document.getElementById('pd-desc').value = desc;
-  document.getElementById('pd-dt').value = new Date().toISOString().slice(0,10);
-  document.getElementById('pd-motivo').value = 'vencimento';
-  document.getElementById('modal-perda').classList.add('open');
-  document.getElementById('modal-perda')._validadeItemId = validadeItemId;
+function calcPerda(){
+  const qtd   = parseFloat(document.getElementById('pd-qtd').value)||0;
+  const custo = parseFloat(document.getElementById('pd-custo').value)||0;
+  if(qtd>0 && custo>0)
+    document.getElementById('pd-valor').value = (qtd*custo).toFixed(2);
 }
 
 async function salvarPerda(){
+  const validadeItemId = document.getElementById('pd-vid').value;
   const body = {
-    descricao:    document.getElementById('pd-desc').value.trim(),
-    motivo:       document.getElementById('pd-motivo').value,
-    dtPerda:      document.getElementById('pd-dt').value,
-    qtdUnidades:  parseInt(document.getElementById('pd-qtd').value)||0,
-    valorPerda:   parseFloat(document.getElementById('pd-valor').value)||0,
-    funcionarioId:document.getElementById('pd-func').value||null,
-    observacao:   document.getElementById('pd-obs').value,
-    validadeItemId: document.getElementById('modal-perda')._validadeItemId||null,
+    descricao:       document.getElementById('pd-desc').value.trim(),
+    motivo:          document.getElementById('pd-motivo').value,
+    qtdUnidades:     parseInt(document.getElementById('pd-qtd').value)||0,
+    valorPerda:      parseFloat(document.getElementById('pd-valor').value)||0,
+    funcionarioId:   document.getElementById('pd-func').value||null,
+    dtPerda:         document.getElementById('pd-dt').value,
+    observacao:      document.getElementById('pd-obs').value,
+    validadeItemId:  validadeItemId||null,
   };
   if(!body.descricao){ toast('Descrição obrigatória'); return; }
   const d = await api.post('/api/perdas', body);
   if(!d.ok){ toast('Erro: '+d.erro); return; }
   toast('🗑️ Perda registrada!');
-  document.getElementById('modal-perda')._validadeItemId = null;
-  fecharPerda(); carregarPerdas(); carregar(); carregarKPIs();
+  fecharModal('modal-perda'); carregarPerdas(); carregar(); carregarKPIs();
+  try { window.parent.postMessage({type:'bb_refresh_kpis'},'*'); } catch(_) {}
+}
+
+// ── Perdas ────────────────────────────────────────────────────────────────────
+async function carregarPerdas(){
+  const mesVal = document.getElementById('flt-mes-perdas').value;
+  let url='/api/perdas', mes='';
+  if(mesVal){ const[y,m]=mesVal.split('-'); mes=`${m}/${y}`; url+=`?mes=${mes}`; }
+  const d = await api.get(url); if(!d.ok) return;
+  perdas = d.data;
+
+  if(mes){
+    const mt = await api.get(`/api/perdas/meta/${mes}`);
+    if(mt.ok){
+      const md=mt.data;
+      const cor=md.dentroMeta===false?'var(--red-l)':'var(--green)';
+      document.getElementById('meta-perdas-info').innerHTML =
+        `Total: <b>${fmt.brl(md.totalPerdas)}</b> · Meta: ${fmt.brl(md.metaValor)} (${md.metaPct}%) · <span style="color:${cor}">${md.dentroMeta===false?'⚠️ Acima da meta':'✅ Dentro da meta'}</span>`;
+    }
+  }
+
+  const tb=document.getElementById('tbody-perdas');
+  const em=document.getElementById('empty-perdas');
+  if(!perdas.length){ tb.innerHTML=''; em.style.display=''; return; }
+  em.style.display='none';
+  const motivos={vencimento:'Vencimento',avaria:'Avaria',furto:'Furto',doacao:'Doação',outros:'Outros'};
+  tb.innerHTML = perdas.map(p=>`<tr>
+    <td>${fmt.date(p.dt_perda)}</td>
+    <td><b>${p.descricao}</b>${p.produto_descricao&&p.produto_descricao!==p.descricao?`<br><small style="color:var(--muted)">${p.produto_descricao}</small>`:''}</td>
+    <td><span class="urg urg-vencido" style="font-size:10px">${motivos[p.motivo]||p.motivo}</span></td>
+    <td style="font-family:'DM Mono',monospace">${p.qtd_unidades||0}</td>
+    <td style="font-family:'DM Mono',monospace;font-weight:700;color:var(--red-l)">${fmt.brl(p.valor_perda)}</td>
+    <td>${p.funcionario_nome||'—'}</td>
+    <td><button class="act-btn" onclick="excluirPerda(${p.id})" style="color:var(--red-l)">🗑</button></td>
+  </tr>`).join('');
 }
 
 async function excluirPerda(id){
@@ -467,21 +711,20 @@ async function excluirPerda(id){
   else toast('Erro: '+d.erro);
 }
 
-// ── Importar ───────────────────────────────────────────────────────────────
+// ── Importar ──────────────────────────────────────────────────────────────────
 function abrirImport(){ document.getElementById('modal-import').classList.add('open'); }
 
 async function processarImport(inp){
-  const f = inp.files[0]; if(!f) return;
-  const fd = new FormData(); fd.append('arquivo',f);
+  const f=inp.files[0]; if(!f) return;
+  const fd=new FormData(); fd.append('arquivo',f);
   toast('Importando...');
-  const d = await api.upload('/api/validade/import', fd);
-  const el = document.getElementById('import-result');
+  const d=await api.upload('/api/validade/import',fd);
+  const el=document.getElementById('import-result');
   el.style.display='';
-  if(!d.ok){ el.innerHTML=`❌ ${d.erro}`; return; }
-  el.innerHTML = `✅ <b>${d.inseridos} itens importados!</b> · Erros: ${d.erros}`;
+  if(!d.ok){ el.style.background='#fdf2f2';el.innerHTML=`❌ ${d.erro}`;return;}
+  el.innerHTML=`✅ <b>${d.inseridos} itens importados!</b> · Erros: ${d.erros}`;
   carregar(); carregarKPIs();
-  // Notifica o dashboard para atualizar KPIs
-  try { window.parent.postMessage({ type: 'bb_refresh_kpis' }, '*'); } catch(_) {}
+  try { window.parent.postMessage({type:'bb_refresh_kpis'},'*'); } catch(_) {}
 }
 </script>
 </body>
