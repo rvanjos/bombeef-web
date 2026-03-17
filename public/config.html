@@ -493,6 +493,25 @@ async function excluirCat(id){
   if(d.ok){ toast('Removida'); carregarCategorias(); }
   else toast('Erro: '+d.erro);
 }
+
+function showPage(page, el){
+
+  // remove active das páginas
+  document.querySelectorAll('.page').forEach(p=>{
+    p.classList.remove('active')
+  })
+
+  // ativa página
+  const pageEl = document.getElementById('page-'+page)
+  if(pageEl) pageEl.classList.add('active')
+
+  // remove active do menu
+  document.querySelectorAll('.nav-item').forEach(n=>{
+    n.classList.remove('active')
+  })
+
+  if(el) el.classList.add('active')
+}
 </script>
 </body>
 </html>
