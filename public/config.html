@@ -434,7 +434,7 @@ async function carregarMetas(){
       <td style="font-weight:600">${m.mes}</td>
       <td>${fmt.brl(m.faturamento_meta)}</td>
       <td>${fmt.brl(m.faturamento_real)}</td>
-      <td style="color:${parseFloat(pct)>=100?'var(--green)':'var(--orange)';font-weight:600}">${pct}%</td>
+<td style="color:${parseFloat(pct)>=100?'var(--green)':'var(--orange)'};font-weight:600">${pct}%</td>
       <td>${m.meta_perda_pct}%</td>
       <td>${fmt.brl(m.meta_retiradas)}</td>
     </tr>`;

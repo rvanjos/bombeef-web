@@ -328,7 +328,7 @@ async function abrirRelatorio(){
         <td>${f.qtd_itens}</td>
         <td style="font-family:'DM Mono',monospace;font-weight:600">${fmt.brl(f.total_retirado)}</td>
         <td style="font-family:'DM Mono',monospace">${fmt.brl(f.limite_retirada)}</td>
-        <td style="color:${parseFloat(f.saldo||0)>=0?'var(--green)':'var(--red-l)';font-weight:600}">${fmt.brl(f.saldo||0)}</td>
+	<td style="color:${parseFloat(f.saldo||0)>=0?'var(--green)':'var(--red-l)'};font-weight:600">${fmt.brl(f.saldo||0)}</td>
       </tr>`).join('')}</tbody>
     </table>`;
 }
