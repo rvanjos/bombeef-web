@@ -21,6 +21,22 @@ const autenticar = require('../middleware/auth');
 module.exports = function (pool) {
   const r = express.Router();
 
+// ── PUT /usuarios/:id/reativar ──────────────────────────────────────────────
+r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+
+    await pool.query(
+      `UPDATE usuarios SET ativo = true, atualizado_em = NOW() WHERE id = $1`,
+      [id]
+    );
+
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ ok: false, erro: e.message });
+  }
+});
+
   // ── Init tabela ────────────────────────────────────────────────────────────
   async function initTable() {
     await pool.query(`
@@ -180,21 +196,59 @@ module.exports = function (pool) {
   });
 
   // ── DELETE /usuarios/:id ───────────────────────────────────────────────────
-  r.delete('/usuarios/:id', autenticar('admin'), async (req, res) => {
-    try {
-      // Não permite inativar o próprio usuário
-      if (parseInt(req.params.id) === req.user.id) {
-        return res.status(400).json({ ok: false, erro: 'Não é possível inativar o próprio usuário' });
-      }
-      await pool.query(
-        `UPDATE usuarios SET ativo = false, atualizado_em = NOW() WHERE id = $1`,
-        [parseInt(req.params.id)]
-      );
-      res.json({ ok: true });
-    } catch (e) {
-      res.status(500).json({ ok: false, erro: e.message });
+r.delete('/usuarios/:id', autenticar('admin'), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+
+    if (id === req.user.id) {
+      return res.status(400).json({ ok: false, erro: 'Não é possível inativar o próprio usuário' });
     }
-  });
+
+    await pool.query(
+      `UPDATE usuarios SET ativo = false, atualizado_em = NOW() WHERE id = $1`,
+      [id]
+    );
+
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ ok: false, erro: e.message });
+  }
+});
+
+// ── DELETE /usuarios/:id/permanente → excluir definitivamente ──────────────
+r.delete('/usuarios/:id/permanente', autenticar('admin'), async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    const id = parseInt(req.params.id);
+
+    if (id === req.user.id) {
+      return res.status(400).json({ ok: false, erro: 'Não é possível excluir o próprio usuário' });
+    }
+
+    await client.query('BEGIN');
+
+    // desvincula referências conhecidas
+    await client.query(
+      `UPDATE funcionarios SET usuario_id = NULL WHERE usuario_id = $1`,
+      [id]
+    );
+
+    await client.query(
+      `DELETE FROM usuarios WHERE id = $1`,
+      [id]
+    );
+
+    await client.query('COMMIT');
+
+    res.json({ ok: true });
+  } catch (e) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ ok: false, erro: e.message });
+  } finally {
+    client.release();
+  }
+});
 
   // ── PUT /senha ─────────────────────────────────────────────────────────────
   r.put('/senha', autenticar(), async (req, res) => {

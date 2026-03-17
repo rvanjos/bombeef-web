@@ -287,11 +287,48 @@ async function carregarUsuarios(){
     <td style="font-size:12px">${u.email}</td>
     <td><span class="pill" style="background:#e8e0ff;color:#4a2080">${perfis[u.perfil]||u.perfil}</span></td>
     <td><span class="pill ${u.ativo?'pill-ok':'pill-off'}">${u.ativo?'Ativo':'Inativo'}</span></td>
-    <td>
-      <button class="act-btn" onclick="abrirUsuario(${u.id})">✏️</button>
-      ${u.ativo?`<button class="act-btn" onclick="inativarUsr(${u.id})" style="color:var(--red-l)">🗑</button>`:''}
-    </td>
+   <td>
+  <button class="act-btn" onclick="abrirUsuario(${u.id})">✏️</button>
+  ${
+    u.ativo
+      ? `<button class="act-btn" onclick="inativarUsr(${u.id}, '${(u.nome || '').replace(/'/g, "\\'")}')" style="color:var(--orange)">⏸</button>`
+      : `<button class="act-btn" onclick="reativarUsr(${u.id})" style="color:var(--green)">↩</button>`
+  }
+  <button class="act-btn" onclick="excluirUsr(${u.id}, '${(u.nome || '').replace(/'/g, "\\'")}')" style="color:var(--red-l)">🗑</button>
+</td>
   </tr>`).join('');
+}
+
+async function inativarUsr(id, nome){
+  if(!confirm(`Inativar o usuário "${nome}"?`)) return;
+  const d = await api.delete(`/auth/usuarios/${id}`);
+  if(d.ok){
+    toast('Usuário inativado');
+    carregarUsuarios();
+  }else{
+    toast('Erro: '+d.erro);
+  }
+}
+
+async function reativarUsr(id){
+  const d = await api.put(`/auth/usuarios/${id}/reativar`, {});
+  if(d.ok){
+    toast('Usuário reativado');
+    carregarUsuarios();
+  }else{
+    toast('Erro: '+d.erro);
+  }
+}
+
+async function excluirUsr(id, nome){
+  if(!confirm(`Excluir permanentemente o usuário "${nome}"?\n\nEssa ação é definitiva.`)) return;
+  const d = await api.delete(`/auth/usuarios/${id}/permanente`);
+  if(d.ok){
+    toast('Usuário excluído');
+    carregarUsuarios();
+  }else{
+    toast('Erro: '+d.erro);
+  }
 }
 
 function abrirUsuario(id){
@@ -330,6 +367,17 @@ async function inativarUsr(id){
   const d = await api.delete(`/auth/usuarios/${id}`);
   if(d.ok){ toast('Usuário inativado'); carregarUsuarios(); }
   else toast('Erro: '+d.erro);
+}
+
+async function reativarUsr(id){
+  const d = await api.put(`/auth/usuarios/${id}/reativar`, {});
+  if(!d.ok){
+    toast('Erro: ' + d.erro);
+    return;
+  }
+
+  toast('Usuário reativado!');
+  carregarUsuarios();
 }
 
 // ── Funcionários ───────────────────────────────────────────────────────────
@@ -511,6 +559,35 @@ function showPage(page, el){
   })
 
   if(el) el.classList.add('active')
+}
+
+async function inativarUsr(id, nome){
+  if(!confirm(`Inativar o usuário "${nome}"?`)) return;
+
+  const d = await api.delete(`/auth/usuarios/${id}`);
+  if(!d.ok){
+    toast('Erro: ' + d.erro);
+    return;
+  }
+
+  toast('Usuário inativado!');
+  carregarUsuarios();
+}
+
+async function excluirUsr(id, nome){
+  const ok = confirm(
+    `Excluir permanentemente o usuário "${nome}"?\n\nEssa ação é definitiva e deve ser usada apenas para usuários de teste.`
+  );
+  if(!ok) return;
+
+  const d = await api.delete(`/auth/usuarios/${id}/permanente`);
+  if(!d.ok){
+    toast('Erro: ' + d.erro);
+    return;
+  }
+
+  toast('Usuário excluído permanentemente!');
+  carregarUsuarios();
 }
 </script>
 </body>
