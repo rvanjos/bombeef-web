@@ -396,7 +396,7 @@ async function carregarMeta(){
   const [y,m] = mesVal.split('-');
   const mes = `${m}/${y}`;
   document.getElementById('meta-mes-label').textContent = mes;
-  const d = await api.get(`/api/config/metas/${mes}`);
+  const d = await api.get(`/api/config/metas/${encodeURIComponent(mes)}`);
   if(!d.ok) return;
   const mt = d.data;
   document.getElementById('meta-fat').value       = mt.faturamento_meta||0;
