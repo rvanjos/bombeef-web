@@ -241,10 +241,10 @@ async function init(){
   carregarMeta();
   carregarMetas();
 
-  const paginaAtiva = document.querySelector('.page.active');
-  if (paginaAtiva?.id === 'page-usuarios') carregarUsuarios();
-  if (paginaAtiva?.id === 'page-funcionarios') carregarFuncionarios();
-  if (paginaAtiva?.id === 'page-categorias') carregarCategorias();
+  // 🔥 FORÇA carregamento independente da página
+  carregarUsuarios();
+  carregarFuncionarios();
+  carregarCategorias();
 }
 
 function showPage(p, el){
