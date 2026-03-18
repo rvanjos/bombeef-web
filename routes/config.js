@@ -65,9 +65,10 @@ module.exports = function (pool) {
 
     // Sincroniza categorias DRE com o CATS real do classificador
     // Usa TRUNCATE + INSERT para garantir que o banco reflete o padrão atual
-    const catsExist = await pool.query(`SELECT COUNT(*) FROM categorias_dre`).then(r=>parseInt(r.rows[0].count)).catch(()=>0);
-    if (catsExist < 20) {
-      // Só insere se banco estiver vazio ou desatualizado
+    // Sempre sincroniza o banco com o CATS canônico do DRE
+    // Verifica se as categorias corretas já existem pela presença de 'VENDAS DE MERCADORIAS'
+    const catsOk = await pool.query(`SELECT COUNT(*) FROM categorias_dre WHERE subgrupo='VENDAS DE MERCADORIAS'`).then(r=>parseInt(r.rows[0].count)).catch(()=>0);
+    if (!catsOk) {
       await pool.query(`TRUNCATE categorias_dre RESTART IDENTITY`).catch(()=>{});
       await pool.query(`
         INSERT INTO categorias_dre (grupo, subgrupo, label_exibicao, ordem) VALUES
@@ -157,7 +158,7 @@ module.exports = function (pool) {
         ('IMPOSTOS','ISS / ISSQN','ISS / ISSQN',105)
         ON CONFLICT DO NOTHING
       `).catch(e => console.error('[config] seed categorias:', e.message));
-    }
+    } // fim if (!catsOk)
 
     // Config padrão
     await pool.query(`

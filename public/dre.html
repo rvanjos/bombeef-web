@@ -556,12 +556,31 @@ async function init() {
 }
 
 async function carregarCategorias() {
+  // CATS canônico — fallback se o banco não tiver os dados corretos
+  const CATS_FALLBACK = {
+    RECEITAS:   {l:'RECEITAS',s:['VENDAS DE MERCADORIAS','Juros de aplicacoes financeiras','Descontos financeiros obtidos','Delivery','Outros Créditos','Transferência entre contas','Outros (não classificar)']},
+    CMV:        {l:'CUSTO DA MERCADORIA VENDIDA',s:['COMPRAS - REVENDA','Bovino','Suíno','Cordeiro','Aves','Outras Proteínas','Carvão','Empório (Diversos)','Bebidas','Acessórios','Embalagens','Acompanhamentos','Gelo','Sorvete','Pães']},
+    PESSOAL:    {l:'DESPESA COM PESSOAL',s:['Salarios e ordenados','FGTS','Vale transporte','Vale alimentação','Provisão 13º Salario','Provisão Férias','Provisão Fgts s/ 13º','Provisão Fgts s/ Férias','Sindicato','INSS empresa']},
+    VENDAS_CAT: {l:'DESPESAS COM VENDAS',s:['Fretes com vendas','Royalties','Embalagens para delivery','Marketing','Publicidade']},
+    CONSUMO:    {l:'DESPESAS DE CONSUMO',s:['Alugueis de imoveis','Alugueis de Equipamentos','Energia eletrica','Agua e esgoto','Telefone','Internet','Gás']},
+    TERCEIROS:  {l:'SERVIÇOS PRESTADOS POR TERCEIROS',s:['Assistencia Contábil','Serviços com Segurança','Serviços de Manutenção e Higiene','Serviços com Internet/Software','Serviços prestados por terceiros','Serviços de Consultoria de Alimentos','Advocacia','RH / Recrutamento']},
+    MATERIAL:   {l:'MATERIAL DE USO/CONSUMO',s:['Material de Embalagens','Material de Higiene e Limpeza','Material de Copa e cozinha','Materiais diversos','EPI / Uniformes']},
+    FINANCEIRAS:{l:'DESPESAS FINANCEIRAS',s:['Juros de mora','Juros e comissoes bancarias','Multa de Mora','Tarifas Bancarias','IOF S/ Imp. S/ Oper. Financeiras','Tarifa de Administração de Cartões','Empréstimo','Antecipação de Recebíveis']},
+    OUTRAS:     {l:'OUTRAS DESPESAS OPERACIONAIS',s:['Depreciação e Amortização','Seguro','Outras Despesas']},
+    IMPOSTOS:   {l:'IMPOSTOS, TAXAS E CONTRIBUIÇÕES',s:['IPTU','TFE','Simples Nacional','ICMS Sobre Diferencial de Aliquota','DARF','ISS / ISSQN']},
+  };
   try {
     const d = await api.get('/api/dre/categorias');
-    if (d.ok && d.data.length) {
+    // Só usa banco se tiver as categorias certas (verifica presença de 'VENDAS DE MERCADORIAS')
+    if (d.ok && d.data.length && d.data.some(r => r.subgrupo === 'VENDAS DE MERCADORIAS')) {
       CATS = buildCATSFromDB(d.data);
+    } else {
+      CATS = CATS_FALLBACK;
     }
-  } catch(e) { console.warn('[DRE] categorias fallback:', e.message); }
+  } catch(e) {
+    console.warn('[DRE] usando categorias fallback:', e.message);
+    CATS = CATS_FALLBACK;
+  }
   preencherSels();
 }
 
