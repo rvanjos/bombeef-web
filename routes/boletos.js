@@ -257,7 +257,8 @@ module.exports = function (pool) {
       const params = [];
       if (mes) {
         params.push(mes);
-        where += ` AND COALESCE(mes_caixa, TO_CHAR(COALESCE(dt_pagamento,vencimento),'MM/YYYY')) = $1`;
+        // Usa mes_competencia (data da NF) para provisão DRE — é a data de competência
+        where += ` AND COALESCE(mes_competencia, TO_CHAR(COALESCE(NULLIF(dt_nota,'')::date, vencimento), 'MM/YYYY')) = $1`;
       }
       const { rows } = await pool.query(
         `SELECT * FROM boletos ${where} ORDER BY vencimento ASC NULLS LAST`, params

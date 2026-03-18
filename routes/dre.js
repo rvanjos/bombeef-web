@@ -231,6 +231,33 @@ module.exports = function (pool) {
   // ── Helpers ────────────────────────────────────────────────────────────────
 
   function parseOFX(text) {
+    // Prefixos de operação bancária — o que vem após é o favorecido
+    const OFX_PREF = [
+      'PAGAMENTOS PIX QR-CODE','PAGAMENTOS PIX','PAGAMENTOS TRANSF CC ITAU','PAGAMENTOS TRANSF CC',
+      'PAGAMENTOS TRANSF','PAGAMENTOS BOLETO','PAGAMENTOS ',
+      'PIX RECEBIDO','PIX ENVIADO','PIX QR CODE RECEBIDO','PIX QR CODE',
+      'TED RECEBIDA','TED ENVIADA','DOC RECEBIDO','DOC ENVIADO',
+      'RECEBIMENTO REDE','RECEBIMENTOS','RECEBIMENTO',
+      'DEBITO AUTOMATICO','DEBITO EM CONTA',
+      'TRANSFERENCIA ENTRE CONTAS','TRANSFERENCIA',
+    ];
+    function splitMemo(memo) {
+      // 1. CNPJ/CPF no final
+      const docRe = /^(.*?)\s+([A-Z][A-Z0-9 .&'\/\-]{3,}?)\s+(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}|\d{3}\.\d{3}\.\d{3}-\d{2})\s*$/;
+      const dm = docRe.exec(memo);
+      if (dm) return { lancamento: dm[1].trim(), razaoSocial: dm[2].trim() + ' ' + dm[3] };
+      // 2. Prefixo bancário conhecido
+      const up = memo.toUpperCase();
+      for (const p of OFX_PREF) {
+        if (up.startsWith(p)) {
+          const resto = memo.slice(p.length).trim();
+          if (resto.length > 2) return { lancamento: p.trim(), razaoSocial: resto };
+          break;
+        }
+      }
+      return { lancamento: memo, razaoSocial: '' };
+    }
+
     const txRegex = /<STMTTRN>([\s\S]*?)<\/STMTTRN>/gi;
     const result  = [];
     let m;
@@ -238,13 +265,13 @@ module.exports = function (pool) {
       const bloco = m[1];
       const get   = tag => { const r = bloco.match(new RegExp(`<${tag}>([^<\\n\\r]+)`)); return r ? r[1].trim() : ''; };
       const dtRaw = get('DTPOSTED');
-      // Converte YYYYMMDD → YYYY-MM-DD
       const dt    = dtRaw.length >= 8 ? `${dtRaw.slice(0,4)}-${dtRaw.slice(4,6)}-${dtRaw.slice(6,8)}` : '';
       const val   = parseFloat(get('TRNAMT').replace(',', '.')) || 0;
       const memo  = get('MEMO') || get('NAME') || 'Lançamento';
       if (!val) continue;
-      const mes   = dt ? dt.slice(5,7) + '/' + dt.slice(0,4) : '';
-      result.push({ lancamento: memo, valor: val, data: dt, mes, mesCaixa: mes, fonte: 'EXTRATO', categoria: '' });
+      const mes = dt ? dt.slice(5,7) + '/' + dt.slice(0,4) : '';
+      const { lancamento, razaoSocial } = splitMemo(memo);
+      result.push({ lancamento, razaoSocial, valor: val, data: dt, mes, mesCaixa: mes, fonte: 'EXTRATO', categoria: '' });
     }
     return result;
   }

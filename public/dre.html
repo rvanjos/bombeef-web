@@ -158,13 +158,14 @@ td{padding:5px 9px;vertical-align:middle;}
   <select id="f-mes" onchange="render()"><option value="">Todos os meses</option></select>
   <select id="f-fonte" onchange="render()">
     <option value="">Todas as fontes</option>
-    <option>OFX</option><option>CC</option><option>BOLETO</option><option>MANUAL</option>
+    <option>OFX</option><option>CC</option><option>BOLETO</option><option>BOLETO_PREV</option><option>MANUAL</option>
   </select>
   <label style="font-size:12px;display:flex;align-items:center;gap:4px;white-space:nowrap">
     <input type="checkbox" class="chk" id="f-pend" onchange="render()"> Só pendentes
   </label>
   <button class="btn bp" onclick="abrirDZ()">📥 Importar</button>
   <button class="btn bs" onclick="abrirManual()">＋ Manual</button>
+  <button class="btn bs" onclick="abrirProvisao()" title="Provisão recorrente para múltiplos meses">📅 Provisão</button>
   <button class="btn br" onclick="abrirDREModal()">📊 Ver DRE</button>
   <button class="btn bg" onclick="salvar()">💾 Salvar</button>
   <button class="btn bs" onclick="exportXLS()">📤 Excel</button>
@@ -269,6 +270,31 @@ td{padding:5px 9px;vertical-align:middle;}
 <input type="file" id="f-cc" accept=".csv,.xlsx,.xls" style="display:none" onchange="loadFile(this,'cc')">
 
 <!-- Modal Manual -->
+<!-- Modal Provisão Múltiplos Meses -->
+<div class="mbg" id="m-provisao">
+  <div class="md" style="max-width:520px">
+    <div class="mdh"><h3>📅 Provisão de Despesa</h3><button class="mdx" onclick="fecharModal('m-provisao')">×</button></div>
+    <div class="mdb">
+      <div class="fg"><label>Descrição *</label><input id="pv-d" placeholder="Ex: Aluguel depósito, MDK Royalties..."></div>
+      <div class="fg-r">
+        <div class="fg"><label>Valor mensal (neg=saída) *</label><input type="number" id="pv-v" step="0.01" placeholder="-3500.00"></div>
+        <div class="fg"><label>Data referência</label><input type="date" id="pv-dt"></div>
+      </div>
+      <div class="fg"><label>Categoria DRE</label><select id="pv-c"><option value="">— Sem categoria —</option></select></div>
+      <div class="fg-r">
+        <div class="fg"><label>Mês inicial *</label><input id="pv-m1" placeholder="03/2026"></div>
+        <div class="fg"><label>Mês final *</label><input id="pv-m2" placeholder="12/2026"></div>
+      </div>
+      <div id="pv-preview" style="background:#f5f0eb;border-radius:8px;padding:10px 12px;font-size:12px;color:var(--muted);margin-top:8px;display:none"></div>
+    </div>
+    <div class="mdf">
+      <button class="btn bn" onclick="fecharModal('m-provisao')">Cancelar</button>
+      <button class="btn bs" onclick="previewProvisao()">👁 Visualizar</button>
+      <button class="btn bg" onclick="salvarProvisao()">＋ Adicionar todos</button>
+    </div>
+  </div>
+</div>
+
 <div class="mbg" id="m-manual">
   <div class="md" style="max-width:440px">
     <div class="mdh"><h3>Lançamento Manual</h3><button class="mdx" onclick="fecharModal('m-manual')">×</button></div>
@@ -910,6 +936,85 @@ function salvarManual(){
   const cx=document.getElementById('ml-mc').value||mes;
   TXS.push({id:'m_'+Date.now(),lancamento:d,valor:v,data:dt,mes,mesCaixa:cx,categoria:cat,fonte:'MANUAL'});
   toast('✅ Adicionado'); fecharModal('m-manual');
+  showTable(); updMesFiltro(); render(); updStats(); renderDRE(); autoSv();
+}
+
+// ─── PROVISÃO MÚLTIPLOS MESES ────────────────────────────────────────────────
+function abrirProvisao(){
+  const hoje = new Date().toISOString().slice(0,10);
+  document.getElementById('pv-dt').value = hoje;
+  document.getElementById('pv-m1').value = mesRef;
+  document.getElementById('pv-m2').value = mesRef;
+  document.getElementById('pv-preview').style.display='none';
+  // Preenche categorias
+  const sel = document.getElementById('pv-c');
+  sel.innerHTML = '<option value="">— Sem categoria —</option>' + catOptsHtml('');
+  document.getElementById('m-provisao').classList.add('open');
+}
+
+function _parseMes(m) {
+  if (!m) return null;
+  const [mm, yy] = m.split('/');
+  if (!mm||!yy) return null;
+  return { m: parseInt(mm), y: parseInt(yy) };
+}
+function _mesStr(m, y) { return String(m).padStart(2,'0')+'/'+y; }
+function _nextMes(m, y) { return m===12 ? {m:1,y:y+1} : {m:m+1,y}; }
+function _listMeses(m1str, m2str) {
+  const s = _parseMes(m1str), e = _parseMes(m2str);
+  if (!s||!e) return [];
+  const meses = [];
+  let cur = s;
+  let guard = 0;
+  while ((cur.y < e.y || (cur.y===e.y && cur.m<=e.m)) && guard++ < 60) {
+    meses.push(_mesStr(cur.m, cur.y));
+    const n = _nextMes(cur.m, cur.y);
+    cur = n;
+  }
+  return meses;
+}
+
+function previewProvisao() {
+  const desc = document.getElementById('pv-d').value.trim();
+  const val  = parseFloat(document.getElementById('pv-v').value)||0;
+  const m1   = document.getElementById('pv-m1').value.trim();
+  const m2   = document.getElementById('pv-m2').value.trim();
+  if (!desc||!val||!m1||!m2) { toast('Preencha descrição, valor, mês inicial e final'); return; }
+  const meses = _listMeses(m1, m2);
+  if (!meses.length) { toast('Intervalo de meses inválido'); return; }
+  const total = val * meses.length;
+  const pv = document.getElementById('pv-preview');
+  pv.style.display = '';
+  pv.innerHTML = `<strong>${meses.length} lançamento(s)</strong> de ${fmt.brl(val)} cada &nbsp;·&nbsp; Total: <strong>${fmt.brl(total)}</strong><br>
+    <span style="color:var(--muted)">Meses: ${meses.join(', ')}</span>`;
+}
+
+function salvarProvisao() {
+  const desc = document.getElementById('pv-d').value.trim();
+  const val  = parseFloat(document.getElementById('pv-v').value)||0;
+  const dt   = document.getElementById('pv-dt').value;
+  const cat  = document.getElementById('pv-c').value;
+  const m1   = document.getElementById('pv-m1').value.trim();
+  const m2   = document.getElementById('pv-m2').value.trim();
+  if (!desc||!val||!m1||!m2) { toast('Preencha todos os campos obrigatórios'); return; }
+  const meses = _listMeses(m1, m2);
+  if (!meses.length) { toast('Intervalo de meses inválido'); return; }
+  let adicionados = 0;
+  meses.forEach(mes => {
+    TXS.push({
+      id: 'prov_'+Date.now()+'_'+adicionados,
+      lancamento: desc,
+      valor: val,
+      data: dt || '',
+      mes,
+      mesCaixa: mes,
+      categoria: cat,
+      fonte: 'MANUAL',
+    });
+    adicionados++;
+  });
+  toast(`✅ ${adicionados} lançamento(s) adicionado(s)`);
+  fecharModal('m-provisao');
   showTable(); updMesFiltro(); render(); updStats(); renderDRE(); autoSv();
 }
 
