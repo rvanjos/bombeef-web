@@ -63,26 +63,101 @@ module.exports = function (pool) {
       )
     `);
 
-    // Insere categorias DRE padrão
-    await pool.query(`
-      INSERT INTO categorias_dre (grupo, subgrupo, label_exibicao, ordem) VALUES
-        ('RECEITAS',   'Faturamento Bruto',              'Faturamento Bruto', 1),
-        ('RECEITAS',   'Outros Créditos',                'Outros Créditos', 2),
-        ('CMV',        'COMPRAS - REVENDA',              'Compras para Revenda', 10),
-        ('CMV',        'Material de Embalagens',         'Embalagens', 11),
-        ('DESPESAS',   'Salários e Encargos',            'Salários', 20),
-        ('DESPESAS',   'Aluguel',                        'Aluguel', 21),
-        ('DESPESAS',   'Energia e Água',                 'Energia e Água', 22),
-        ('DESPESAS',   'Marketing e Publicidade',        'Marketing', 23),
-        ('DESPESAS',   'Serviços prestados por terceiros','Terceiros', 24),
-        ('DESPESAS',   'Materiais diversos',             'Materiais', 25),
-        ('DESPESAS',   'Taxas e Impostos',               'Taxas/Impostos', 26),
-        ('DESPESAS',   'Manutenção',                     'Manutenção', 27),
-        ('DESPESAS',   'Outras Despesas',                'Outras Desp.', 28),
-        ('FINANCEIRO', 'Empréstimos e Financiamentos',   'Empréstimos', 30),
-        ('FINANCEIRO', 'Juros e Tarifas Bancárias',      'Juros/Tarifas', 31)
-      ON CONFLICT DO NOTHING
-    `);
+    // Sincroniza categorias DRE com o CATS real do classificador
+    // Usa TRUNCATE + INSERT para garantir que o banco reflete o padrão atual
+    const catsExist = await pool.query(`SELECT COUNT(*) FROM categorias_dre`).then(r=>parseInt(r.rows[0].count)).catch(()=>0);
+    if (catsExist < 20) {
+      // Só insere se banco estiver vazio ou desatualizado
+      await pool.query(`TRUNCATE categorias_dre RESTART IDENTITY`).catch(()=>{});
+      await pool.query(`
+        INSERT INTO categorias_dre (grupo, subgrupo, label_exibicao, ordem) VALUES
+        -- RECEITAS
+        ('RECEITAS','VENDAS DE MERCADORIAS','VENDAS DE MERCADORIAS',1),
+        ('RECEITAS','Juros de aplicacoes financeiras','Juros de aplicações financeiras',2),
+        ('RECEITAS','Descontos financeiros obtidos','Descontos financeiros obtidos',3),
+        ('RECEITAS','Delivery','Delivery',4),
+        ('RECEITAS','Outros Créditos','Outros Créditos',5),
+        ('RECEITAS','Transferência entre contas','Transferência entre contas',6),
+        ('RECEITAS','Outros (não classificar)','Outros (não classificar)',7),
+        -- CMV
+        ('CMV','COMPRAS - REVENDA','COMPRAS - REVENDA',10),
+        ('CMV','Bovino','Bovino',11),
+        ('CMV','Suíno','Suíno',12),
+        ('CMV','Cordeiro','Cordeiro',13),
+        ('CMV','Aves','Aves',14),
+        ('CMV','Outras Proteínas','Outras Proteínas',15),
+        ('CMV','Carvão','Carvão',16),
+        ('CMV','Empório (Diversos)','Empório (Diversos)',17),
+        ('CMV','Bebidas','Bebidas',18),
+        ('CMV','Acessórios','Acessórios',19),
+        ('CMV','Embalagens','Embalagens',20),
+        ('CMV','Acompanhamentos','Acompanhamentos',21),
+        ('CMV','Gelo','Gelo',22),
+        ('CMV','Sorvete','Sorvete',23),
+        ('CMV','Pães','Pães',24),
+        -- PESSOAL
+        ('PESSOAL','Salarios e ordenados','Salários e ordenados',30),
+        ('PESSOAL','FGTS','FGTS',31),
+        ('PESSOAL','Vale transporte','Vale transporte',32),
+        ('PESSOAL','Vale alimentação','Vale alimentação',33),
+        ('PESSOAL','Provisão 13º Salario','Provisão 13º Salário',34),
+        ('PESSOAL','Provisão Férias','Provisão Férias',35),
+        ('PESSOAL','Provisão Fgts s/ 13º','Provisão FGTS s/ 13º',36),
+        ('PESSOAL','Provisão Fgts s/ Férias','Provisão FGTS s/ Férias',37),
+        ('PESSOAL','Sindicato','Sindicato',38),
+        ('PESSOAL','INSS empresa','INSS empresa',39),
+        -- VENDAS
+        ('VENDAS_CAT','Fretes com vendas','Fretes com vendas',40),
+        ('VENDAS_CAT','Royalties','Royalties',41),
+        ('VENDAS_CAT','Embalagens para delivery','Embalagens para delivery',42),
+        ('VENDAS_CAT','Marketing','Marketing',43),
+        ('VENDAS_CAT','Publicidade','Publicidade',44),
+        -- CONSUMO
+        ('CONSUMO','Alugueis de imoveis','Aluguéis de imóveis',50),
+        ('CONSUMO','Alugueis de Equipamentos','Aluguéis de Equipamentos',51),
+        ('CONSUMO','Energia eletrica','Energia elétrica',52),
+        ('CONSUMO','Agua e esgoto','Água e esgoto',53),
+        ('CONSUMO','Telefone','Telefone',54),
+        ('CONSUMO','Internet','Internet',55),
+        ('CONSUMO','Gás','Gás',56),
+        -- TERCEIROS
+        ('TERCEIROS','Assistencia Contábil','Assistência Contábil',60),
+        ('TERCEIROS','Serviços com Segurança','Serviços com Segurança',61),
+        ('TERCEIROS','Serviços de Manutenção e Higiene','Serviços de Manutenção e Higiene',62),
+        ('TERCEIROS','Serviços com Internet/Software','Serviços com Internet/Software',63),
+        ('TERCEIROS','Serviços prestados por terceiros','Serviços prestados por terceiros',64),
+        ('TERCEIROS','Serviços de Consultoria de Alimentos','Consultoria de Alimentos',65),
+        ('TERCEIROS','Advocacia','Advocacia',66),
+        ('TERCEIROS','RH / Recrutamento','RH / Recrutamento',67),
+        -- MATERIAL
+        ('MATERIAL','Material de Embalagens','Material de Embalagens',70),
+        ('MATERIAL','Material de Higiene e Limpeza','Material de Higiene e Limpeza',71),
+        ('MATERIAL','Material de Copa e cozinha','Material de Copa e cozinha',72),
+        ('MATERIAL','Materiais diversos','Materiais diversos',73),
+        ('MATERIAL','EPI / Uniformes','EPI / Uniformes',74),
+        -- FINANCEIRAS
+        ('FINANCEIRAS','Juros de mora','Juros de mora',80),
+        ('FINANCEIRAS','Juros e comissoes bancarias','Juros e comissões bancárias',81),
+        ('FINANCEIRAS','Multa de Mora','Multa de Mora',82),
+        ('FINANCEIRAS','Tarifas Bancarias','Tarifas Bancárias',83),
+        ('FINANCEIRAS','IOF S/ Imp. S/ Oper. Financeiras','IOF',84),
+        ('FINANCEIRAS','Tarifa de Administração de Cartões','Tarifa de Adm. de Cartões',85),
+        ('FINANCEIRAS','Empréstimo','Empréstimo',86),
+        ('FINANCEIRAS','Antecipação de Recebíveis','Antecipação de Recebíveis',87),
+        -- OUTRAS
+        ('OUTRAS','Depreciação e Amortização','Depreciação e Amortização',90),
+        ('OUTRAS','Seguro','Seguro',91),
+        ('OUTRAS','Outras Despesas','Outras Despesas',92),
+        -- IMPOSTOS
+        ('IMPOSTOS','IPTU','IPTU',100),
+        ('IMPOSTOS','TFE','TFE',101),
+        ('IMPOSTOS','Simples Nacional','Simples Nacional',102),
+        ('IMPOSTOS','ICMS Sobre Diferencial de Aliquota','ICMS Diferencial de Alíquota',103),
+        ('IMPOSTOS','DARF','DARF',104),
+        ('IMPOSTOS','ISS / ISSQN','ISS / ISSQN',105)
+        ON CONFLICT DO NOTHING
+      `).catch(e => console.error('[config] seed categorias:', e.message));
+    }
 
     // Config padrão
     await pool.query(`

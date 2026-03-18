@@ -70,9 +70,43 @@ module.exports = function (pool) {
   r.get('/categorias', async (req, res) => {
     try {
       const { rows } = await pool.query(
-        `SELECT * FROM categorias_dre ORDER BY grupo ASC, ordem ASC, subgrupo ASC`
+        `SELECT * FROM categorias_dre WHERE ativo=true ORDER BY grupo ASC, ordem ASC, subgrupo ASC`
       );
       res.json({ ok: true, data: rows });
+    } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ── POST /categorias — cria nova categoria ─────────────────────────────────
+  r.post('/categorias', async (req, res) => {
+    const { grupo, subgrupo, label_exibicao, ordem } = req.body;
+    if (!grupo || !subgrupo) return res.status(400).json({ ok: false, erro: 'grupo e subgrupo obrigatórios' });
+    try {
+      const { rows } = await pool.query(
+        `INSERT INTO categorias_dre (grupo, subgrupo, label_exibicao, ordem)
+         VALUES ($1,$2,$3,$4) RETURNING *`,
+        [grupo, subgrupo, label_exibicao || subgrupo, parseInt(ordem) || 0]
+      );
+      res.json({ ok: true, data: rows[0] });
+    } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ── PUT /categorias/:id — atualiza categoria ───────────────────────────────
+  r.put('/categorias/:id', async (req, res) => {
+    const { grupo, subgrupo, label_exibicao, ordem } = req.body;
+    try {
+      await pool.query(
+        `UPDATE categorias_dre SET grupo=$1, subgrupo=$2, label_exibicao=$3, ordem=$4 WHERE id=$5`,
+        [grupo, subgrupo, label_exibicao || subgrupo, parseInt(ordem) || 0, parseInt(req.params.id)]
+      );
+      res.json({ ok: true });
+    } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ── DELETE /categorias/:id — desativa categoria ────────────────────────────
+  r.delete('/categorias/:id', async (req, res) => {
+    try {
+      await pool.query(`UPDATE categorias_dre SET ativo=false WHERE id=$1`, [parseInt(req.params.id)]);
+      res.json({ ok: true });
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 

@@ -222,7 +222,7 @@ let boletos=[], xmlPreview=[], pdfPreview=null;
 
 // ── Init ───────────────────────────────────────────────────────────────────
 window.onBBReady = () => { carregar(); carregarKPIs(); };
-if(api.token()) { carregar(); carregarKPIs(); }
+if(api.token()) { carregarCategorias().then(()=>{ carregar(); carregarKPIs(); }); }
 
 // Mês atual no filtro
 const hoje = new Date();
@@ -369,14 +369,38 @@ async function confirmarBaixa(){
 function abrirImportXML(){ document.getElementById('modal-xml').classList.add('open'); }
 function fecharXML(){ document.getElementById('modal-xml').classList.remove('open'); xmlPreview=[]; document.getElementById('xml-preview').style.display='none'; document.getElementById('btn-confirm-xml').style.display='none'; }
 
-const PLANOS_XML = [
-  'Fornec - Proteínas','Fornec - Acompanhamentos','Fornec - Bebidas/Gelo/Sorvete',
-  'Fornec - Empório (outros)','Fornec - Empório (carvão)','Fornec - Embalagens',
-  'Fornec - Acessórios','Fornec - Royalties','Fornec - Contabilidade',
-  'Fornec - Segurança','Fornec - Manutenção','Fornec - Software/Internet',
-  'Fornec - Aluguel','Fornec - Energia','Fornec - Água','Fornec - Telefone',
-  'Fornec - Frete','Fornec - Impostos','Fornec - Outras Desp',
-];
+// Categorias carregadas do banco (mesmas do DRE)
+let _dreCategoriasOpts = ''; // HTML de options para reusar
+let _dreCategorias = [];     // array de rows do banco
+
+async function carregarCategorias() {
+  try {
+    const d = await api.get('/api/dre/categorias');
+    if (!d.ok || !d.data.length) return;
+    _dreCategorias = d.data;
+    // Agrupa por grupo para optgroup
+    const grupos = {};
+    for (const r of d.data) {
+      if (!grupos[r.grupo]) grupos[r.grupo] = { label: r.grupo, subs: [] };
+      grupos[r.grupo].subs.push(r.subgrupo);
+    }
+    const GRUPO_LABELS = {
+      RECEITAS:'RECEITAS', CMV:'CUSTO DA MERCADORIA VENDIDA',
+      PESSOAL:'DESPESA COM PESSOAL', VENDAS_CAT:'DESPESAS COM VENDAS',
+      CONSUMO:'DESPESAS DE CONSUMO', TERCEIROS:'SERVIÇOS PRESTADOS POR TERCEIROS',
+      MATERIAL:'MATERIAL DE USO/CONSUMO', FINANCEIRAS:'DESPESAS FINANCEIRAS',
+      OUTRAS:'OUTRAS DESPESAS OPERACIONAIS', IMPOSTOS:'IMPOSTOS, TAXAS E CONTRIBUIÇÕES',
+    };
+    _dreCategoriasOpts = Object.entries(grupos).map(([k,g]) =>
+      `<optgroup label="${GRUPO_LABELS[k]||k}">${g.subs.map(s=>`<option value="${s}">${s}</option>`).join('')}</optgroup>`
+    ).join('');
+  } catch(e) { console.warn('[boletos] categorias:', e.message); }
+}
+
+function catOptsHtmlBoleto(sel='') {
+  if (!_dreCategoriasOpts) return '';
+  return _dreCategoriasOpts.replace(`value="${sel}"`, `value="${sel}" selected`);
+}
 
 async function processarXML(inp){
   const f = inp.files[0]; if(!f) return;
@@ -392,9 +416,7 @@ async function processarXML(inp){
     `<b>${d.fornecedor}</b> &nbsp;·&nbsp; NF ${d.nf} &nbsp;·&nbsp; `+
     `${d.totalParcelas} boleto(s) &nbsp;·&nbsp; Total: <b>${fmt.brl(d.valorTotal)}</b>`;
   document.getElementById('xml-list').innerHTML = d.preview.map((p,i)=> {
-    const planoOpts = PLANOS_XML.map(pl =>
-      `<option value="${pl}" ${pl===p.plano?'selected':''}>${pl}</option>`
-    ).join('');
+    const planoOpts = catOptsHtmlBoleto(p.plano || '');
     return `<div class="preview-item">
       <div class="pi-left">
         <div style="font-weight:600">${p.fornecedor}${origemLabel(p)}</div>
@@ -457,8 +479,7 @@ async function processarPDF(inp){
     <div class="fg"><label>Plano DRE</label>
       <select id="pdf-plano">
         <option value="">— Selecione —</option>
-        <option>Fornec - Proteínas</option><option>Fornec - Acompanhamentos</option>
-        <option>Fornec - Embalagens</option><option>Fornec - Outras Desp</option>
+        ${_dreCategoriasOpts}
       </select>
     </div>
   `;
