@@ -139,9 +139,24 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
     <div class="page" id="page-categorias">
       <div class="pg-title">Categorias DRE</div>
       <div class="pg-sub">Grupos e subgrupos para classificação dos lançamentos</div>
-      <div style="margin-bottom:14px"><button class="btn btn-p" onclick="abrirCat()">＋ Nova Categoria</button></div>
+      <div style="margin-bottom:14px">
+  <button class="btn btn-p" onclick="abrirCat()">＋ Nova Categoria</button>
+  <button class="btn btn-s" onclick="excluirSelecionadosCats()">🗑️ Excluir Selecionados</button>
+</div>
+
+<div class="card" style="padding:0;overflow:hidden">
       <div class="card" style="padding:0;overflow:hidden">
-        <table class="tbl"><thead><tr><th>Grupo</th><th>Subgrupo</th><th>Rótulo</th><th>Ordem</th><th>Ações</th></tr></thead>
+        <table class="tbl">
+<thead>
+<tr>
+<th><input type="checkbox" id="check-all-cats"></th>
+<th>Grupo</th>
+<th>Subgrupo</th>
+<th>Rótulo</th>
+<th>Ordem</th>
+<th>Ações</th>
+</tr>
+</thead>
         <tbody id="tbody-cats"></tbody></table>
       </div>
     </div>
@@ -511,18 +526,22 @@ async function carregarCategorias(){
       if(oa !== ob) return oa - ob;
       return (a.subgrupo || '').localeCompare(b.subgrupo || '');
     })
-    .map(c => `
-      <tr>
-        <td><b>${c.grupo || ''}</b></td>
-        <td>${c.subgrupo || ''}</td>
-        <td>${c.label_exibicao || c.subgrupo || ''}</td>
-        <td>${c.ordem ?? 99}</td>
-        <td>
-          <button class="act-btn" onclick="abrirCat(${c.id})">✏️</button>
-          <button class="act-btn" onclick="excluirCat(${c.id})" style="color:var(--red-l)">🗑️</button>
-        </td>
-      </tr>
-    `).join('');
+ .map(c => `
+  <tr>
+    <td>
+      <input type="checkbox" class="check-cat" value="${c.id}">
+    </td>
+    <td><b>${c.grupo || ''}</b></td>
+    <td>${c.subgrupo || ''}</td>
+    <td>${c.label_exibicao || c.subgrupo || ''}</td>
+    <td>${c.ordem ?? 99}</td>
+    <td>
+      <button class="act-btn" onclick="abrirCat(${c.id})">✏️</button>
+      <button class="act-btn" onclick="excluirCat(${c.id})" style="color:var(--red-l)">🗑️</button>
+    </td>
+  </tr>
+`)
+.join('');
 }
 function abrirCat(id=null){
   document.getElementById('modal-cat').classList.add('open');
@@ -558,6 +577,32 @@ function fecharCat(){
   document.getElementById('c-subgrupo').value = '';
   document.getElementById('c-label').value = '';
   document.getElementById('c-ordem').value = 99;
+}
+
+document.addEventListener('change', function(e){
+  if(e.target.id === 'check-all-cats'){
+    const checked = e.target.checked;
+    document.querySelectorAll('.check-cat').forEach(c => c.checked = checked);
+  }
+});
+
+async function excluirSelecionadosCats(){
+  const selecionados = [...document.querySelectorAll('.check-cat:checked')]
+    .map(el => el.value);
+
+  if(selecionados.length === 0){
+    toast('Selecione pelo menos um item');
+    return;
+  }
+
+  if(!confirm(`Excluir ${selecionados.length} categorias?`)) return;
+
+  for(const id of selecionados){
+    await api.delete(`/api/config/categorias/${id}`);
+  }
+
+  toast('Categorias excluídas!');
+  carregarCategorias();
 }
 async function salvarCat(){
   const id = document.getElementById('c-id').value;
@@ -600,36 +645,6 @@ async function salvarCat(){
   carregarCategorias();
 }
 
-async function carregarCategorias(){
-  const d = await api.get('/api/config/categorias');
-  if(!d.ok) return;
-
-  categorias = d.data || [];
-  const tb = document.getElementById('tbody-cats');
-  if(!tb) return;
-
-  tb.innerHTML = categorias
-    .sort((a,b) => {
-      const g = (a.grupo || '').localeCompare(b.grupo || '');
-      if(g !== 0) return g;
-      const oa = Number(a.ordem ?? 99);
-      const ob = Number(b.ordem ?? 99);
-      if(oa !== ob) return oa - ob;
-      return (a.subgrupo || '').localeCompare(b.subgrupo || '');
-    })
-    .map(c => `
-      <tr>
-        <td><b>${c.grupo || ''}</b></td>
-        <td>${c.subgrupo || ''}</td>
-        <td>${c.label_exibicao || c.subgrupo || ''}</td>
-        <td>${c.ordem ?? 99}</td>
-        <td>
-          <button class="act-btn" onclick="abrirCat(${c.id})">✏️</button>
-          <button class="act-btn" onclick="excluirCat(${c.id})" style="color:var(--red-l)">🗑️</button>
-        </td>
-      </tr>
-    `).join('');
-}
 
 function showPage(page, el){
 
