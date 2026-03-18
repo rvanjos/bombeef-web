@@ -148,8 +148,9 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
 const {api,fmt,toast} = BB;
 let retiradas=[], funcionarios=[], mesAtual='';
 
-window.onBBReady = () => { init(); };
-if(api.token()) init();
+let _initDone = false;
+window.onBBReady = () => { if(!_initDone){ _initDone=true; init(); } };
+if(api.token() && !_initDone) { _initDone=true; init(); }
 
 async function init(){
   const hoje = new Date();
@@ -167,6 +168,10 @@ async function carregarFuncionarios(){
   if(!d.ok) return;
   funcionarios = d.data.filter(f=>f.ativo);
   const sels = [document.getElementById('flt-func'), document.getElementById('r-func')];
+  // Limpa selects antes de preencher para evitar duplicação
+  sels.forEach(sel => {
+    while(sel.options.length > 1) sel.remove(1); // mantém o "— Selecione —" / "Todos"
+  });
   funcionarios.forEach(f=>{
     sels.forEach(sel=>{
       const o=document.createElement('option'); o.value=f.id; o.textContent=f.nome; sel.appendChild(o);

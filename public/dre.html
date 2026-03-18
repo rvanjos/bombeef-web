@@ -845,6 +845,17 @@ function bulkIgn() {
 }
 
 // ─── EDIÇÃO DE MÊS ───────────────────────────────────────────────────────────
+function applyMes(id, field, val) {
+  const t = TXS.find(x => x.id === id);
+  if (!t || !val) return;
+  if (field === 'mes') {
+    t.mes = val;
+  } else {
+    t.mesCaixa = val;
+  }
+  render(); updStats(); renderDRE(); autoSv();
+}
+
 function editMes(id, field, td) {
   const t = TXS.find(x => x.id === id);
   if (!t) return;

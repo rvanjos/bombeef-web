@@ -288,24 +288,32 @@ module.exports = function (pool) {
   // ── GET / ──────────────────────────────────────────────────────────────────
   r.get('/', async (req, res) => {
     try {
-      const { status, mes, vencimento_mes } = req.query;
+      const { status, mes, de, ate } = req.query;
       const conds = [], params = [];
 
       if (status === 'avencer') {
         conds.push(`(status = 'avencer' AND (vencimento IS NULL OR vencimento >= CURRENT_DATE))`);
       } else if (status === 'vencido') {
         conds.push(`(status = 'vencido' OR (status='avencer' AND vencimento IS NOT NULL AND vencimento < CURRENT_DATE))`);
-      } else if (status) {
+      } else if (status && status !== 'todos') {
         params.push(status); conds.push(`status = $${params.length}`);
       }
 
       if (mes) {
-        // Filtra pelo mês do vencimento
         const [mm, yyyy] = mes.split('/');
         if (mm && yyyy) {
           params.push(parseInt(mm), parseInt(yyyy));
           conds.push(`(vencimento IS NULL OR (EXTRACT(MONTH FROM vencimento)=$${params.length-1} AND EXTRACT(YEAR FROM vencimento)=$${params.length}))`);
         }
+      }
+
+      if (de) {
+        params.push(de);
+        conds.push(`(vencimento IS NULL OR vencimento >= $${params.length}::date)`);
+      }
+      if (ate) {
+        params.push(ate);
+        conds.push(`(vencimento IS NULL OR vencimento <= $${params.length}::date)`);
       }
 
       conds.push(`status != 'cancelado'`);

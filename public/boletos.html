@@ -95,10 +95,15 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
     <button class="btn btn-s" onclick="abrirImportPDF()">📄 Importar PDF</button>
     <div class="search-wrap"><input type="text" id="busca" placeholder="Buscar fornecedor, NF..." oninput="filtrar()"></div>
     <select class="flt" id="flt-status" onchange="carregar()">
-      <option value="todos">Todos</option><option value="avencer" selected>A Vencer</option>
+      <option value="todos" selected>Todos</option><option value="avencer">A Vencer</option>
       <option value="pago">Pagos</option><option value="vencido">Vencidos</option>
     </select>
-    <input type="month" id="flt-mes" class="flt" style="padding:7px 10px" onchange="carregar()">
+    <span style="font-size:11px;color:var(--muted)">Venc. de:</span>
+    <input type="date" id="flt-de" class="flt" style="padding:7px 10px" onchange="carregar()" title="Vencimento de">
+    <span style="font-size:11px;color:var(--muted)">até:</span>
+    <input type="date" id="flt-ate" class="flt" style="padding:7px 10px" onchange="carregar()" title="Vencimento até">
+    <input type="month" id="flt-mes" class="flt" style="padding:7px 10px" onchange="carregar()" title="Filtrar por mês">
+    <button class="btn btn-s" style="padding:6px 10px;font-size:11px" onclick="limparFiltros()">✕ Limpar</button>
   </div>
   <!-- Tabela -->
   <div class="card">
@@ -245,11 +250,23 @@ async function carregarKPIs(){
 }
 
 // ── Carregar lista ─────────────────────────────────────────────────────────
+function limparFiltros(){
+  document.getElementById('flt-status').value='todos';
+  document.getElementById('flt-mes').value='';
+  document.getElementById('flt-de').value='';
+  document.getElementById('flt-ate').value='';
+  carregar();
+}
+
 async function carregar(){
   const status = document.getElementById('flt-status').value;
   const mesVal = document.getElementById('flt-mes').value;
+  const de     = document.getElementById('flt-de').value;
+  const ate    = document.getElementById('flt-ate').value;
   let url = `/api/boletos?status=${status}`;
   if(mesVal){ const [y,m]=mesVal.split('-'); url+=`&mes=${m}/${y}`; }
+  if(de)  url+=`&de=${de}`;
+  if(ate) url+=`&ate=${ate}`;
   const d = await api.get(url);
   if(!d.ok){ toast('Erro ao carregar boletos'); return; }
   boletos = d.data;
