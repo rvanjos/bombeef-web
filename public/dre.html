@@ -688,20 +688,46 @@ function bulkIgn() {
 
 // ─── EDIÇÃO DE MÊS ───────────────────────────────────────────────────────────
 function editMes(id, field, td) {
-  const t=TXS.find(x=>x.id===id); if (!t) return;
-  const cur=field==='mes'?(t.mes||''):(t.mesCaixa||t.mes||'');
-  const anos=[...new Set(TXS.map(x=>(x.mes||'').split('/')[1]||'2026'))];
-  const opts=new Set(); anos.forEach(y=>MO.forEach((_,i)=>opts.add(`${String(i+1).padStart(2,'0')}/${y}`)));
+  const t = TXS.find(x => x.id === id);
+  if (!t) return;
+
+  const cur = field === 'mes' ? (t.mes || '') : (t.mesCaixa || t.mes || '');
+  const anos = [...new Set(TXS.map(x => (x.mes || '').split('/')[1] || '2026'))];
+
+  const opts = new Set();
+  anos.forEach(y => MO.forEach((_, i) => opts.add(`${String(i + 1).padStart(2, '0')}/${y}`)));
   if (cur) opts.add(cur);
-  const sorted=[...opts].sort((a,b)=>{const p=s=>{const[m,y]=s.split('/');return(+y)*12+(+m);};return p(a)-p(b);});
-  td.innerHTML=`<select style="font-size:11px;padding:2px 5px;border-radius:4px;border:1px solid var(--purple)"
-    onchange="applyMes('${id}','${field}',this.value)">
-    ${sorted.map(m=>`<option value="${m}"${m===cur?' selected':''}>${fmtMes(m)}</option>`).join('')}
-  </select>`;
-  td.querySelector('select').focus();
-  td.querySelector('select').addEventListener('blur',()=>setTimeout(()=>render(),150));
+
+  const sorted = [...opts].sort((a, b) => {
+    const p = s => {
+      const [m, y] = s.split('/');
+      return (+y) * 12 + (+m);
+    };
+    return p(a) - p(b);
+  });
+
+  td.innerHTML = `
+    <select id="sel-mes-temp" style="font-size:11px;padding:2px 5px;border-radius:4px;border:1px solid var(--purple)">
+      ${sorted.map(m => `<option value="${m}"${m === cur ? ' selected' : ''}>${fmtMes(m)}</option>`).join('')}
+    </select>
+  `;
+
+  const sel = td.querySelector('#sel-mes-temp');
+  sel.focus();
+
+  sel.addEventListener('change', function () {
+    applyMes(id, field, this.value);
+  });
+
+  sel.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') {
+      applyMes(id, field, this.value);
+    }
+    if (e.key === 'Escape') {
+      render();
+    }
+  });
 }
-function applyMes(id,field,val){const t=TXS.find(x=>x.id===id);if(t){t[field]=val;}updMesFiltro();renderDRE();autoSv();setTimeout(()=>render(),50);}
 
 function abrirBulkMes() {
   if (!selIds.size){toast('Selecione lançamentos');return;}

@@ -510,8 +510,9 @@ async function carregarMetas(){
 
 // ── Categorias DRE ─────────────────────────────────────────────────────────
 async function carregarCategorias(){
-  const d = await api.get('/api/config/categorias');
-  if(!d.ok) return;
+ const d = await api.get('/api/config/categorias');
+if(!d.ok) return;
+categorias = (d.data || []).filter(c => c.ativo !== false);
 
   categorias = d.data || [];
   const tb = document.getElementById('tbody-cats');
