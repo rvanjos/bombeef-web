@@ -264,7 +264,8 @@ module.exports = function (pool) {
         return {
           id:           'boleto_'+b.id,
           boletoId:     b.id,
-          lancamento:   `${v.fornecedor}${v.produto?' — '+v.produto:''} (NF ${v.nf||'s/n'}, Parc. ${v.parcela||'1'})`,
+          lancamento:   `${isPago?'BOLETO PAGO':'BOLETO PREV'} (NF ${v.nf||'s/n'}, Parc. ${v.parcela||'1'})`,
+          razaoSocial:  v.fornecedor || '',
           valor:        -Math.abs(v.valor),
           data:         v.dtPagamento || v.vencimento,
           mes:          v.mesCompetencia,
