@@ -202,14 +202,11 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
     <div class="modal-head"><h3>Nova Categoria DRE</h3><button class="modal-close" onclick="fecharCat()">×</button></div>
     <div class="modal-body">
       <input type="hidden" id="c-id">
-      <div class="fg"><label>Grupo *</label>
-        <select id="c-grupo">
-          <option value="RECEITAS">RECEITAS</option>
-          <option value="CMV">CMV (Custo Mercadoria)</option>
-          <option value="DESPESAS">DESPESAS</option>
-          <option value="FINANCEIRO">FINANCEIRO</option>
-        </select>
-      </div>
+     <div class="fg">
+  <label>Grupo *</label>
+  <input id="c-grupo" list="lista-grupos-dre" placeholder="Ex: RECEITAS, CMV, DESPESAS, FINANCEIRO, OUTRAS">
+  <datalist id="lista-grupos-dre"></datalist>
+</div>
       <div class="fg"><label>Subgrupo *</label><input id="c-subgrupo" placeholder="Ex: Fornec - Proteínas"></div>
       <div class="fg-row">
         <div class="fg"><label>Rótulo de Exibição</label><input id="c-label" placeholder="Deixe vazio para usar o subgrupo"></div>
@@ -500,53 +497,138 @@ async function carregarMetas(){
 async function carregarCategorias(){
   const d = await api.get('/api/config/categorias');
   if(!d.ok) return;
-  categorias = d.data;
+
+  categorias = d.data || [];
   const tb = document.getElementById('tbody-cats');
-  tb.innerHTML = categorias.map(c=>`<tr>
-    <td><span class="pill" style="background:#e8f4fd;color:#1a5c8a">${c.grupo}</span></td>
-    <td>${c.subgrupo}</td>
-    <td style="font-size:12px;color:var(--muted)">${c.label_exibicao||c.subgrupo}</td>
-    <td style="font-family:'DM Mono',monospace;font-size:12px">${c.ordem}</td>
-    <td>
-      <button class="act-btn" onclick="abrirCat(${c.id})">✏️</button>
-      <button class="act-btn" onclick="excluirCat(${c.id})" style="color:var(--red-l)">🗑</button>
-    </td>
-  </tr>`).join('');
-}
+  if(!tb) return;
 
-function abrirCat(id){
-  const c = id ? categorias.find(x=>x.id===id) : null;
-  document.getElementById('c-id').value      = c?.id||'';
-  document.getElementById('c-grupo').value   = c?.grupo||'DESPESAS';
-  document.getElementById('c-subgrupo').value= c?.subgrupo||'';
-  document.getElementById('c-label').value   = c?.label_exibicao||'';
-  document.getElementById('c-ordem').value   = c?.ordem||99;
+  tb.innerHTML = categorias
+    .sort((a,b) => {
+      const g = (a.grupo || '').localeCompare(b.grupo || '');
+      if(g !== 0) return g;
+      const oa = Number(a.ordem ?? 99);
+      const ob = Number(b.ordem ?? 99);
+      if(oa !== ob) return oa - ob;
+      return (a.subgrupo || '').localeCompare(b.subgrupo || '');
+    })
+    .map(c => `
+      <tr>
+        <td><b>${c.grupo || ''}</b></td>
+        <td>${c.subgrupo || ''}</td>
+        <td>${c.label_exibicao || c.subgrupo || ''}</td>
+        <td>${c.ordem ?? 99}</td>
+        <td>
+          <button class="act-btn" onclick="abrirCat(${c.id})">✏️</button>
+          <button class="act-btn" onclick="excluirCat(${c.id})" style="color:var(--red-l)">🗑️</button>
+        </td>
+      </tr>
+    `).join('');
+}
+function abrirCat(id=null){
   document.getElementById('modal-cat').classList.add('open');
-}
-function fecharCat(){ document.getElementById('modal-cat').classList.remove('open'); }
 
+  const grupos = [...new Set((categorias || []).map(c => (c.grupo || '').trim()).filter(Boolean))].sort();
+  const dl = document.getElementById('lista-grupos-dre');
+  if (dl) {
+    dl.innerHTML = grupos.map(g => `<option value="${g}">`).join('');
+  }
+
+  if(!id){
+    document.getElementById('c-id').value = '';
+    document.getElementById('c-grupo').value = '';
+    document.getElementById('c-subgrupo').value = '';
+    document.getElementById('c-label').value = '';
+    document.getElementById('c-ordem').value = 99;
+    return;
+  }
+
+  const cat = (categorias || []).find(c => String(c.id) === String(id));
+  if(!cat) return;
+
+  document.getElementById('c-id').value = cat.id || '';
+  document.getElementById('c-grupo').value = cat.grupo || '';
+  document.getElementById('c-subgrupo').value = cat.subgrupo || '';
+  document.getElementById('c-label').value = cat.label_exibicao || '';
+  document.getElementById('c-ordem').value = cat.ordem ?? 99;
+}
+function fecharCat(){
+  document.getElementById('modal-cat').classList.remove('open');
+  document.getElementById('c-id').value = '';
+  document.getElementById('c-grupo').value = '';
+  document.getElementById('c-subgrupo').value = '';
+  document.getElementById('c-label').value = '';
+  document.getElementById('c-ordem').value = 99;
+}
 async function salvarCat(){
   const id = document.getElementById('c-id').value;
+  const grupo = document.getElementById('c-grupo').value.trim();
+  const subgrupo = document.getElementById('c-subgrupo').value.trim();
+  const labelExibicao = document.getElementById('c-label').value.trim();
+  const ordem = parseInt(document.getElementById('c-ordem').value || '99', 10);
+
+  if(!grupo){
+    toast('Informe o grupo');
+    return;
+  }
+
+  if(!subgrupo){
+    toast('Informe a subcategoria');
+    return;
+  }
+
   const body = {
-    grupo:         document.getElementById('c-grupo').value,
-    subgrupo:      document.getElementById('c-subgrupo').value.trim(),
-    labelExibicao: document.getElementById('c-label').value.trim(),
-    ordem:         parseInt(document.getElementById('c-ordem').value)||99,
+    grupo,
+    subgrupo,
+    labelExibicao: labelExibicao || subgrupo,
+    ordem
   };
-  if(!body.subgrupo){ toast('Subgrupo obrigatório'); return; }
-  const d = id
-    ? await api.put(`/api/config/categorias/${id}`, body)
-    : await api.post('/api/config/categorias', body);
-  if(!d.ok){ toast('Erro: '+d.erro); return; }
-  toast(id?'Categoria atualizada!':'Categoria criada!');
-  fecharCat(); carregarCategorias();
+
+  let d;
+  if(id){
+    d = await api.put(`/api/config/categorias/${id}`, body);
+  } else {
+    d = await api.post('/api/config/categorias', body);
+  }
+
+  if(!d.ok){
+    toast('Erro: ' + d.erro);
+    return;
+  }
+
+  toast(id ? 'Categoria atualizada!' : 'Categoria criada!');
+  fecharCat();
+  carregarCategorias();
 }
 
-async function excluirCat(id){
-  if(!confirm('Remover esta categoria?')) return;
-  const d = await api.delete(`/api/config/categorias/${id}`);
-  if(d.ok){ toast('Removida'); carregarCategorias(); }
-  else toast('Erro: '+d.erro);
+async function carregarCategorias(){
+  const d = await api.get('/api/config/categorias');
+  if(!d.ok) return;
+
+  categorias = d.data || [];
+  const tb = document.getElementById('tbody-cats');
+  if(!tb) return;
+
+  tb.innerHTML = categorias
+    .sort((a,b) => {
+      const g = (a.grupo || '').localeCompare(b.grupo || '');
+      if(g !== 0) return g;
+      const oa = Number(a.ordem ?? 99);
+      const ob = Number(b.ordem ?? 99);
+      if(oa !== ob) return oa - ob;
+      return (a.subgrupo || '').localeCompare(b.subgrupo || '');
+    })
+    .map(c => `
+      <tr>
+        <td><b>${c.grupo || ''}</b></td>
+        <td>${c.subgrupo || ''}</td>
+        <td>${c.label_exibicao || c.subgrupo || ''}</td>
+        <td>${c.ordem ?? 99}</td>
+        <td>
+          <button class="act-btn" onclick="abrirCat(${c.id})">✏️</button>
+          <button class="act-btn" onclick="excluirCat(${c.id})" style="color:var(--red-l)">🗑️</button>
+        </td>
+      </tr>
+    `).join('');
 }
 
 function showPage(page, el){
