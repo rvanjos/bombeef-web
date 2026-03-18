@@ -764,7 +764,11 @@ function render() {
       <td class="${v>=0?'vp':'vn'}" style="white-space:nowrap;text-align:right">${fmt.brl(v)}</td>
       <td style="text-align:center"><button title="${t.ignorar?'Reativar':'Ignorar'}" onclick="togIgn('${t.id}')" style="background:none;border:none;cursor:pointer;font-size:13px;opacity:${t.ignorar?1:.4}">${t.ignorar?'↩️':'🚫'}</button></td>
       <td style="text-align:center;white-space:nowrap">
-        ${(t.fonte==='MANUAL'||t.fonte==='BOLETO_PREV')?`
+        ${t.fonte==='BOLETO_PREV'?`
+          <button onclick="pagarBoleto('${t.id}')" title="Marcar como pago" style="background:none;border:none;cursor:pointer;font-size:13px" title="Marcar como pago no sistema de boletos">✅</button>
+          <button onclick="editarLanc('${t.id}')" title="Editar" style="background:none;border:none;cursor:pointer;font-size:12px;opacity:.7">✏️</button>
+          <button onclick="excluirLanc('${t.id}')" title="Excluir" style="background:none;border:none;cursor:pointer;font-size:12px;opacity:.7">🗑️</button>
+        `:t.fonte==='MANUAL'?`
           <button onclick="editarLanc('${t.id}')" title="Editar" style="background:none;border:none;cursor:pointer;font-size:12px;opacity:.7">✏️</button>
           <button onclick="excluirLanc('${t.id}')" title="Excluir" style="background:none;border:none;cursor:pointer;font-size:12px;opacity:.7">🗑️</button>
         `:''}
@@ -1255,6 +1259,25 @@ function excluirLanc(id) {
   TXS = TXS.filter(x => x.id !== id);
   render(); updStats(); renderDRE(); autoSv();
   toast('🗑️ Lançamento removido');
+}
+
+async function pagarBoleto(id) {
+  const t = TXS.find(x => x.id === id);
+  if (!t) return;
+  const dtPag = prompt('Data de pagamento (AAAA-MM-DD):', new Date().toISOString().slice(0,10));
+  if (!dtPag) return;
+  // Dá baixa no boleto no backend se tiver boletoId
+  if (t.boletoId) {
+    const d = await api.post(`/api/boletos/baixa/${t.boletoId}`, { dtPagamento: dtPag });
+    if (!d.ok) { toast('Erro ao dar baixa no boleto: ' + d.erro); return; }
+  }
+  // Atualiza o lançamento no DRE: muda fonte de BOLETO_PREV para BOLETO e registra data
+  t.fonte = 'BOLETO';
+  t.data  = dtPag;
+  t.mesCaixa = dtPag.slice(5,7) + '/' + dtPag.slice(0,4);
+  t.needsReview = false;
+  render(); updStats(); renderDRE(); autoSv();
+  toast('✅ Boleto marcado como pago!');
 }
 
 // ─── BOLETOS ──────────────────────────────────────────────────────────────────

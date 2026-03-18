@@ -413,6 +413,8 @@ async function carregarCategorias() {
       `<optgroup label="${GRUPO_LABELS[k]||k}">${g.subs.map(s=>`<option value="${s}">${s}</option>`).join('')}</optgroup>`
     ).join('');
   } catch(e) { console.warn('[boletos] categorias:', e.message); }
+  // Preenche selects imediatamente após carregar
+  _preencherSelectsCats();
 }
 
 function catOptsHtmlBoleto(sel='') {

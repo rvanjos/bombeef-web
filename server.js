@@ -188,17 +188,25 @@ app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 app.use(express.json({ limit: '20mb' }));
 app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 
-// ── Arquivos estáticos ─────────────────────────────────────────────────────────
+// ── Arquivos estáticos — sem cache para garantir versão mais recente ──────────
 app.use((req, res, next) => {
-  if (req.path.endsWith('.html')) {
+  // Desabilita cache para HTML e JS (os mais críticos para atualizações)
+  if (req.path.endsWith('.html') || req.path.endsWith('.js')) {
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
+    res.setHeader('Surrogate-Control', 'no-store');
+  } else {
+    // CSS e imagens: cache curto (1 hora)
+    res.setHeader('Cache-Control', 'public, max-age=3600');
   }
   next();
 });
 
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'), {
+  etag: false,
+  lastModified: false,
+}));
 
 // ── Rotas API ──────────────────────────────────────────────────────────────────
 app.use('/auth',             require('./routes/auth')(pool));
