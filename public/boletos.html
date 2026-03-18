@@ -109,8 +109,11 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
   <div class="card">
     <table class="tbl">
       <thead><tr>
-        <th>Fornecedor / Produto</th><th>NF</th><th>Vencimento</th>
-        <th>Parcela</th><th>Plano / Categoria</th><th>Valor</th><th>Status</th><th>Ações</th>
+        <th>Fornecedor / Produto</th>
+        <th title="Número da Nota Fiscal">NF-e Nº</th>
+        <th>Vencimento</th>
+        <th title="Parcela / Total de parcelas">Parcela</th>
+        <th>Categoria</th><th>Valor</th><th>Status</th><th>Ações</th>
       </tr></thead>
       <tbody id="tbody"></tbody>
     </table>
@@ -303,9 +306,13 @@ function renderizar(lista){
     const vencClass = isVenc ? 'val-r' : '';
     return `<tr>
       <td><div style="font-weight:600">${b.fornecedor}</div><div style="font-size:11px;color:var(--muted)">${b.produto||''}</div></td>
-      <td>${b.nf||'—'}</td>
+      <td style="font-family:'DM Mono',monospace;font-size:12px">${b.nf ? `<span title="NF-e ${b.nf}">${b.nf}</span>` : '<span style="color:var(--muted)">—</span>'}</td>
       <td class="${vencClass}">${vencStr}</td>
-      <td style="font-family:'DM Mono',monospace">${b.parcela||'1'}</td>
+      <td style="font-family:'DM Mono',monospace;text-align:center">
+        ${b.totalParcelas > 1
+          ? `<span style="font-weight:600">${b.parcela}</span><span style="color:var(--muted);font-size:11px">/${b.totalParcelas}</span>`
+          : `<span style="color:var(--muted)">—</span>`}
+      </td>
       <td style="font-size:12px">${b.plano||'—'}</td>
       <td style="font-family:'DM Mono',monospace;font-weight:600">${fmt.brl(b.valor)}</td>
       <td>${pill}</td>
