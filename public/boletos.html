@@ -135,13 +135,9 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
       </div>
       <div class="fg-row">
         <div class="fg"><label>Parcela</label><input id="f-parc" placeholder="1/1" value="1"></div>
-        <div class="fg"><label>Plano DRE</label>
+        <div class="fg"><label>Categoria DRE</label>
           <select id="f-plano">
-            <option value="">— Selecione —</option>
-            <option>Fornec - Proteínas</option><option>Fornec - Acompanhamentos</option>
-            <option>Fornec - Bebidas/Gelo/Sorvete</option><option>Fornec - Empório (outros)</option>
-            <option>Fornec - Empório (carvão)</option><option>Fornec - Embalagens</option>
-            <option>Fornec - Acessórios</option><option>Fornec - Outras Desp</option>
+            <option value="">— Carregando categorias... —</option>
           </select>
         </div>
       </div>
@@ -221,8 +217,13 @@ const {api,fmt,toast} = BB;
 let boletos=[], xmlPreview=[], pdfPreview=null;
 
 // ── Init ───────────────────────────────────────────────────────────────────
-window.onBBReady = () => { carregar(); carregarKPIs(); };
-if(api.token()) { carregarCategorias().then(()=>{ carregar(); carregarKPIs(); }); }
+async function init() {
+  await carregarCategorias();
+  carregar();
+  carregarKPIs();
+}
+window.onBBReady = () => { init(); };
+if(api.token()) { init(); }
 
 // Mês atual no filtro
 const hoje = new Date();
@@ -479,12 +480,12 @@ async function processarPDF(inp){
     <div class="fg"><label>Plano DRE</label>
       <select id="pdf-plano">
         <option value="">— Selecione —</option>
-        ${_dreCategoriasOpts}
       </select>
     </div>
   `;
   document.getElementById('pdf-preview').style.display='';
   document.getElementById('btn-confirm-pdf').style.display='';
+  _preencherSelectsCats(); // garante categorias no select de PDF
 }
 
 async function confirmarPDF(){

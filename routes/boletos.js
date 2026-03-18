@@ -110,39 +110,24 @@ module.exports = function (pool) {
   initTable().catch(e => console.error('[boletos] initTable:', e.message));
 
   // ── Helpers ────────────────────────────────────────────────────────────────
-  // Sugere Plano de Contas pelo nome do fornecedor (usado no import XML/PDF)
-  // Alinhado com MAPPINGS do dre.html
+  // Sugere categoria DRE pelo nome do fornecedor — retorna diretamente a categoria DRE
   function guessPlano(nome) {
     const n = (nome||'').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
-    // Carvão
-    if (/CARVAO|BRASA/.test(n))                                              return 'Fornec - Empório (carvão)';
-    // Embalagens
-    if (/EMBALA|SACOLA|ETIQUETA|ADESIVO|GRAFICA|ALPACK|LABELBEER|SR GRAV/.test(n)) return 'Fornec - Embalagens';
-    // Bebidas / Gelo / Sorvete
-    if (/SPAL|COCA.COLA|AMBEV|BEBIDA|CERVEJA|GELATO|SORVETE|FRONERI|GELO|MISTER GELO|FG7|LAGOA AZUL/.test(n)) return 'Fornec - Bebidas/Gelo/Sorvete';
-    // Acompanhamentos (frios, laticínios, pães, etc.)
-    if (/QUEIJO|CAMBUIENSE|CAMPO VERDE|MIOTTO|PRONI|GUIDARA|BRASEIRO|CICERO|NOVA MIX|VALLE FOODS|LATICINIO|DISTRIBUIDORA MIOTTO|SABOR MOR|QBRAZA/.test(n)) return 'Fornec - Acompanhamentos';
-    // Royalties / Franquia
-    if (/MDK FRANCHISING|ROYALTIES|FRANQUIA/.test(n))                        return 'Fornec - Royalties';
-    // Contabilidade
-    if (/CONTAB|M M M SERV/.test(n))                                         return 'Fornec - Contabilidade';
-    // Segurança
-    if (/SEGURANCA|SECURITY|ASI CAMPINAS/.test(n))                           return 'Fornec - Segurança';
-    // Manutenção / Higiene
-    if (/DEDETIZ|MANUTENCAO|HIGIENE|LIMPEZA|PORTO SEGURO/.test(n))           return 'Fornec - Manutenção';
-    // Software / Internet
-    if (/SOFTWARE|INTERNET|TRADEMASTER|V4 COMPANY/.test(n))                  return 'Fornec - Software/Internet';
-    // Aluguel
-    if (/ALUGUEL|CREDCAMP/.test(n))                                          return 'Fornec - Aluguel';
-    // Energia
-    if (/CPFL|ENERGIA|ELETRICA/.test(n))                                     return 'Fornec - Energia';
-    // Água
-    if (/AGUA|ESGOTO|SABESP|SANASA|DAE /.test(n))                            return 'Fornec - Água';
-    // Telefone
-    if (/VIVO|CLARO|TIM|OI |TELEFONE|TELEFONICA/.test(n))                    return 'Fornec - Telefone';
-    // Proteínas (default para frigoríficos, abatedouros, pecuária)
-    if (/FRIGO|FRIGOL|MINERVA|AURORA|CARNES|PROTEINA|BOVINO|SUINO|AVES|FRANGO|BOVINA|AGROPECUARIA|INTERLAGOS|CABANHA|WEW|ALSSABAK|HUMAITA|SPECIALLI|FABENE|CANTAGALLO|BARRA MANSA|COMERCIAL TUDO/.test(n)) return 'Fornec - Proteínas';
-    return 'Fornec - Proteínas'; // default NF-e
+    if (/CARVAO|BRASA/.test(n))                                              return 'Carvão';
+    if (/EMBALA|SACOLA|ETIQUETA|ADESIVO|GRAFICA|ALPACK|LABELBEER|SR GRAV/.test(n)) return 'Material de Embalagens';
+    if (/SPAL|COCA.COLA|AMBEV|BEBIDA|CERVEJA|GELATO|SORVETE|FRONERI|GELO|MISTER GELO/.test(n)) return 'Bebidas';
+    if (/QUEIJO|CAMBUIENSE|CAMPO VERDE|MIOTTO|PRONI|GUIDARA|BRASEIRO|CICERO|NOVA MIX|LATICINIO|SABOR MOR|QBRAZA/.test(n)) return 'Acompanhamentos';
+    if (/MDK FRANCHISING|ROYALTIES|FRANQUIA/.test(n))                        return 'Royalties';
+    if (/CONTAB|M M M SERV/.test(n))                                         return 'Assistencia Contábil';
+    if (/SEGURANCA|SECURITY|ASI CAMPINAS/.test(n))                           return 'Serviços com Segurança';
+    if (/DEDETIZ|MANUTENCAO|HIGIENE|LIMPEZA|PORTO SEGURO/.test(n))           return 'Serviços de Manutenção e Higiene';
+    if (/SOFTWARE|INTERNET|TRADEMASTER|V4 COMPANY/.test(n))                  return 'Serviços com Internet/Software';
+    if (/ALUGUEL|CREDCAMP/.test(n))                                          return 'Alugueis de imoveis';
+    if (/CPFL|ENERGIA|ELETRICA/.test(n))                                     return 'Energia eletrica';
+    if (/AGUA|ESGOTO|SABESP|SANASA|DAE /.test(n))                            return 'Agua e esgoto';
+    if (/VIVO|CLARO|TIM|OI |TELEFONE|TELEFONICA/.test(n))                    return 'Telefone';
+    if (/FRIGO|FRIGOL|MINERVA|AURORA|CARNES|BOVINO|SUINO|AVES|FRANGO|AGROPECUARIA|INTERLAGOS|CABANHA|WEW|ALSSABAK|HUMAITA|SPECIALLI|FABENE|CANTAGALLO|BARRA MANSA|COMERCIAL TUDO/.test(n)) return 'COMPRAS - REVENDA';
+    return 'COMPRAS - REVENDA'; // default para NF-e de fornecedores
   }
 
   const fmtDate = v => {
@@ -186,8 +171,10 @@ module.exports = function (pool) {
   }
 
   // Mapeamento Plano de Contas → Categoria DRE (alinhado com dre.html CATS)
+  // Mapeia plano de contas (campo plano do boleto) → categoria DRE
+  // Aceita tanto os nomes antigos ("Fornec - Proteínas") quanto categorias DRE diretas
   const PLANO_TO_DRE = {
-    // CMV — CUSTO DA MERCADORIA VENDIDA
+    // Nomes antigos → DRE
     'Fornec - Proteínas':            'COMPRAS - REVENDA',
     'Fornec - Acompanhamentos':      'COMPRAS - REVENDA',
     'Fornec - Bebidas/Gelo/Sorvete': 'COMPRAS - REVENDA',
@@ -195,11 +182,9 @@ module.exports = function (pool) {
     'Fornec - Gelo/Sorvete':         'COMPRAS - REVENDA',
     'Fornec - Empório (outros)':     'COMPRAS - REVENDA',
     'Fornec - Empório (carvão)':     'COMPRAS - REVENDA',
-    // MATERIAL
     'Fornec - Embalagens':           'Material de Embalagens',
     'Fornec - Acessórios':           'Materiais diversos',
     'Fornec - EPI/Uniformes':        'EPI / Uniformes',
-    // TERCEIROS / CONSUMO
     'Fornec - Outras Desp':          'Serviços prestados por terceiros',
     'Fornec - Contabilidade':        'Assistencia Contábil',
     'Fornec - Segurança':            'Serviços com Segurança',
@@ -209,12 +194,18 @@ module.exports = function (pool) {
     'Fornec - Energia':              'Energia eletrica',
     'Fornec - Água':                 'Agua e esgoto',
     'Fornec - Telefone':             'Telefone',
-    // VENDAS
     'Fornec - Royalties':            'Royalties',
     'Fornec - Frete':                'Fretes com vendas',
-    // IMPOSTOS
     'Fornec - Impostos':             'Simples Nacional',
   };
+
+  // Se o plano já é uma categoria DRE direta, usa direto; senão tenta mapear
+  function resolveCategoria(plano) {
+    if (!plano) return 'COMPRAS - REVENDA';
+    if (PLANO_TO_DRE[plano]) return PLANO_TO_DRE[plano];
+    // Se não está no mapa, assume que já é uma categoria DRE direta
+    return plano;
+  }
 
   // ── GET /kpis ──────────────────────────────────────────────────────────────
   r.get('/kpis', async (req, res) => {
@@ -279,7 +270,7 @@ module.exports = function (pool) {
           mes:          v.mesCompetencia,
           mesCaixa:     v.mesCaixa,
           fonte:        isPago ? 'BOLETO' : 'BOLETO_PREV',
-          categoria:    PLANO_TO_DRE[v.plano] || 'COMPRAS - REVENDA',
+          categoria:    resolveCategoria(v.plano),
           plano:        v.plano || '',
           vinculado:    v.vinculadoExtrato,
           needsReview,  // true = vencido sem baixa → sinalizar no DRE
