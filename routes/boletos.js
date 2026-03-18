@@ -485,15 +485,14 @@ module.exports = function (pool) {
 
       res.json({
         ok: true,
-        preview: {
-          emitente,
-          nNF,
-          dtNota,
-          chaveNfe,
-          total: vNF,
-          parcelas: parcelas.length,
-        },
-        boletos: parcelas,
+        // Campos esperados pelo frontend (boletos.html)
+        fornecedor:    emitente,
+        nf:            nNF,
+        totalParcelas: parcelas.length,
+        valorTotal:    vNF,
+        preview:       parcelas,   // array — d.preview.map() no frontend
+        // Mantém também o formato anterior para compatibilidade
+        boletos:       parcelas,
       });
     } catch (e) {
       console.error('[boletos/import-xml]', e.message);
