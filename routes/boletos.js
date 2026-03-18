@@ -531,13 +531,15 @@ module.exports = function (pool) {
           INSERT INTO boletos
             (fornecedor,produto,dt_nota,nf,chave_nfe,parcela,total_parcelas,plano,
              vencimento,valor,status,origem,mes_competencia,mes_caixa,usuario_id,atualizado_em)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'avencer','nfe',$11,$12,$13,NOW())
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::date,$10,'avencer','nfe',$11,$12,$13,NOW())
           RETURNING id
         `, [
           b.fornecedor||null, b.produto||null, dtNota, b.nf||null,
           b.chaveNfe||b.chave_nfe||null,
           b.parcela||'1', parseInt(b.totalParcelas||1),
-          b.plano||null, venc||null, parseFloat(b.valor)||0,
+          b.plano||null,
+          venc || dtNota || null,   // fallback: usa dtNota se vencimento for null
+          parseFloat(b.valor)||0,
           mesComp, mesCaixa, req.user.id,
         ]);
         ids.push(rows[0].id);

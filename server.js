@@ -89,6 +89,12 @@ async function autoMigrate() {
     await pool.query(`ALTER TABLE boletos DROP CONSTRAINT IF EXISTS boletos_status_check`).catch(() => {});
     await pool.query(`ALTER TABLE boletos DROP CONSTRAINT IF EXISTS boletos_origem_check`).catch(() => {});
 
+    // Remove NOT NULL de colunas que podem chegar nulas na importação
+    const nullableCols = ['vencimento', 'data_vencimento', 'dt_nota', 'valor', 'fornecedor'];
+    for (const col of nullableCols) {
+      await pool.query(`ALTER TABLE boletos ALTER COLUMN ${col} DROP NOT NULL`).catch(() => {});
+    }
+
     // Corrige status inválidos
     await pool.query(`
       UPDATE boletos SET status='avencer'
