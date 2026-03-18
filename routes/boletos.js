@@ -649,13 +649,151 @@ module.exports = function (pool) {
     }
   });
 
-  // ── POST /import-pdf — PDF OCR simplificado ────────────────────────────────
+  // ── POST /import-pdf — Extrai boleto de PDF via IA (Anthropic proxy) ─────────
   r.post('/import-pdf', upload.single('arquivo'), async (req, res) => {
-    // Por ora retorna orientação ao usuário
-    res.json({
-      ok: false,
-      erro: 'Importação de PDF de boleto não disponível. Use a planilha CSV ou importe o XML da NF-e.',
-    });
+    if (!req.file) return res.status(400).json({ ok: false, erro: 'Arquivo não enviado' });
+
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) {
+      return res.status(503).json({
+        ok: false,
+        erro: 'ANTHROPIC_API_KEY não configurada no servidor. Configure a variável de ambiente.',
+      });
+    }
+
+    try {
+      const base64 = req.file.buffer.toString('base64');
+
+      const prompt = `Você é um sistema de extração de dados de boletos bancários brasileiros.
+Analise o PDF e extraia os dados do boleto.
+Retorne APENAS JSON válido, sem texto adicional, sem markdown.
+Formato esperado (objeto único):
+{
+  "fornecedor": "Nome do beneficiário/credor",
+  "cnpj": "CNPJ do beneficiário ou vazio",
+  "vencimento": "AAAA-MM-DD",
+  "valor": 1234.56,
+  "codigoBarras": "linha digitável ou código de barras numérico",
+  "obs": "observações relevantes ou número do documento"
+}
+Se não encontrar dados suficientes, retorne {}.
+Datas no formato ISO AAAA-MM-DD. Valores como número decimal sem símbolo.`;
+
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 1024,
+          messages: [{
+            role: 'user',
+            content: [
+              { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } },
+              { type: 'text', text: prompt },
+            ],
+          }],
+        }),
+      });
+
+      const data = await response.json();
+      if (data.error) throw new Error(data.error.message);
+
+      const text = (data.content || []).map(c => c.text || '').join('');
+      const clean = text.replace(/```json|```/g, '').trim();
+      const preview = JSON.parse(clean || '{}');
+
+      if (!preview.fornecedor && !preview.valor) {
+        return res.status(422).json({ ok: false, erro: 'Não foi possível extrair dados do PDF.' });
+      }
+
+      // Verifica duplicata por código de barras
+      let duplicata = false;
+      if (preview.codigoBarras) {
+        const { rows } = await pool.query(
+          `SELECT id FROM boletos WHERE codigo_barras=$1 LIMIT 1`,
+          [preview.codigoBarras]
+        );
+        duplicata = rows.length > 0;
+      }
+
+      res.json({ ok: true, preview, duplicata });
+    } catch (e) {
+      console.error('[boletos/import-pdf]', e.message);
+      res.status(500).json({ ok: false, erro: e.message });
+    }
+  });
+
+  // ── POST /nfe-extract-pdf — Extrai NF-e/boletos de PDF via IA (usado pelo nfe_boletos_bombeef.html) ──
+  r.post('/nfe-extract-pdf', upload.single('arquivo'), async (req, res) => {
+    if (!req.file) return res.status(400).json({ ok: false, erro: 'Arquivo não enviado' });
+
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) {
+      return res.status(503).json({
+        ok: false,
+        erro: 'ANTHROPIC_API_KEY não configurada no servidor. Configure a variável de ambiente no Railway.',
+      });
+    }
+
+    try {
+      const base64 = req.file.buffer.toString('base64');
+
+      const prompt = `Você é um sistema de extração de dados de notas fiscais e boletos brasileiros.
+Analise o documento PDF e extraia TODAS as notas fiscais, boletos ou cobranças presentes.
+Retorne APENAS JSON válido, sem texto adicional, sem markdown.
+Formato esperado (array):
+[
+  {
+    "emitente": "Nome do emitente/fornecedor",
+    "cnpj": "CNPJ formatado ou vazio",
+    "numero": "Número da NF ou boleto",
+    "emissao": "AAAA-MM-DD",
+    "vencimento": "AAAA-MM-DD",
+    "valor": 1234.56,
+    "status": "pendente",
+    "obs": "observações relevantes",
+    "itens": [{"desc":"descrição","qtd":1,"un":"UN","vunit":100.00,"vtotal":100.00}]
+  }
+]
+Se não encontrar dados suficientes, retorne [].
+Datas no formato ISO AAAA-MM-DD. Valores como número decimal.`;
+
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 2000,
+          messages: [{
+            role: 'user',
+            content: [
+              { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } },
+              { type: 'text', text: prompt },
+            ],
+          }],
+        }),
+      });
+
+      const data = await response.json();
+      if (data.error) throw new Error(data.error.message);
+
+      const text = (data.content || []).map(c => c.text || '').join('');
+      const clean = text.replace(/```json|```/g, '').trim();
+      const notas = JSON.parse(clean || '[]');
+
+      res.json({ ok: true, notas: Array.isArray(notas) ? notas : [] });
+    } catch (e) {
+      console.error('[boletos/nfe-extract-pdf]', e.message);
+      res.status(500).json({ ok: false, erro: e.message });
+    }
   });
 
   return r;
