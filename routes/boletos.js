@@ -110,7 +110,21 @@ module.exports = function (pool) {
   initTable().catch(e => console.error('[boletos] initTable:', e.message));
 
   // ── Helpers ────────────────────────────────────────────────────────────────
-  const fmtDate = v => v ? String(v).slice(0, 10) : '';
+  function guessPlano(nome) {
+    const n = (nome||'').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+    if (/CARVAO|BRASA/.test(n))                                              return 'Fornec - Empório (carvão)';
+    if (/EMBALA|SACOLA|ETIQUETA|ADESIVO|GRAFICA|ALPACK|LABELBEER/.test(n))   return 'Fornec - Embalagens';
+    if (/COCA|BEBIDA|CERVEJA|SPAL|GELATO|SORVETE|FRONERI|GELO/.test(n))      return 'Fornec - Bebidas/Gelo/Sorvete';
+    if (/QUEIJO|CAMBUIENSE|CAMPO VERDE|MIOTTO|PRONI|GUIDARA|BRASEIRO/.test(n)) return 'Fornec - Acompanhamentos';
+    if (/FREEZER|REFRIGER|DUFRIO|MANUTENCAO|SOFTWARE|INTERNET/.test(n))      return 'Fornec - Outras Desp';
+    return 'Fornec - Proteínas';
+  }
+
+  const fmtDate = v => {
+    if (!v) return '';
+    if (v instanceof Date) return v.toISOString().slice(0, 10);
+    return String(v).slice(0, 10);
+  };
 
   function rowToFrontend(b) {
     const dtNota = fmtDate(b.dt_nota);
@@ -537,7 +551,7 @@ module.exports = function (pool) {
           b.fornecedor||null, b.produto||null, dtNota, b.nf||null,
           b.chaveNfe||b.chave_nfe||null,
           b.parcela||'1', parseInt(b.totalParcelas||1),
-          b.plano||null,
+          b.plano||guessPlano(b.fornecedor),
           venc || dtNota || null,   // fallback: usa dtNota se vencimento for null
           parseFloat(b.valor)||0,
           mesComp, mesCaixa, req.user.id,
