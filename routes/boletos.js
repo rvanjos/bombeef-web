@@ -110,14 +110,39 @@ module.exports = function (pool) {
   initTable().catch(e => console.error('[boletos] initTable:', e.message));
 
   // ── Helpers ────────────────────────────────────────────────────────────────
+  // Sugere Plano de Contas pelo nome do fornecedor (usado no import XML/PDF)
+  // Alinhado com MAPPINGS do dre.html
   function guessPlano(nome) {
     const n = (nome||'').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+    // Carvão
     if (/CARVAO|BRASA/.test(n))                                              return 'Fornec - Empório (carvão)';
-    if (/EMBALA|SACOLA|ETIQUETA|ADESIVO|GRAFICA|ALPACK|LABELBEER/.test(n))   return 'Fornec - Embalagens';
-    if (/COCA|BEBIDA|CERVEJA|SPAL|GELATO|SORVETE|FRONERI|GELO/.test(n))      return 'Fornec - Bebidas/Gelo/Sorvete';
-    if (/QUEIJO|CAMBUIENSE|CAMPO VERDE|MIOTTO|PRONI|GUIDARA|BRASEIRO/.test(n)) return 'Fornec - Acompanhamentos';
-    if (/FREEZER|REFRIGER|DUFRIO|MANUTENCAO|SOFTWARE|INTERNET/.test(n))      return 'Fornec - Outras Desp';
-    return 'Fornec - Proteínas';
+    // Embalagens
+    if (/EMBALA|SACOLA|ETIQUETA|ADESIVO|GRAFICA|ALPACK|LABELBEER|SR GRAV/.test(n)) return 'Fornec - Embalagens';
+    // Bebidas / Gelo / Sorvete
+    if (/SPAL|COCA.COLA|AMBEV|BEBIDA|CERVEJA|GELATO|SORVETE|FRONERI|GELO|MISTER GELO|FG7|LAGOA AZUL/.test(n)) return 'Fornec - Bebidas/Gelo/Sorvete';
+    // Acompanhamentos (frios, laticínios, pães, etc.)
+    if (/QUEIJO|CAMBUIENSE|CAMPO VERDE|MIOTTO|PRONI|GUIDARA|BRASEIRO|CICERO|NOVA MIX|VALLE FOODS|LATICINIO|DISTRIBUIDORA MIOTTO|SABOR MOR|QBRAZA/.test(n)) return 'Fornec - Acompanhamentos';
+    // Royalties / Franquia
+    if (/MDK FRANCHISING|ROYALTIES|FRANQUIA/.test(n))                        return 'Fornec - Royalties';
+    // Contabilidade
+    if (/CONTAB|M M M SERV/.test(n))                                         return 'Fornec - Contabilidade';
+    // Segurança
+    if (/SEGURANCA|SECURITY|ASI CAMPINAS/.test(n))                           return 'Fornec - Segurança';
+    // Manutenção / Higiene
+    if (/DEDETIZ|MANUTENCAO|HIGIENE|LIMPEZA|PORTO SEGURO/.test(n))           return 'Fornec - Manutenção';
+    // Software / Internet
+    if (/SOFTWARE|INTERNET|TRADEMASTER|V4 COMPANY/.test(n))                  return 'Fornec - Software/Internet';
+    // Aluguel
+    if (/ALUGUEL|CREDCAMP/.test(n))                                          return 'Fornec - Aluguel';
+    // Energia
+    if (/CPFL|ENERGIA|ELETRICA/.test(n))                                     return 'Fornec - Energia';
+    // Água
+    if (/AGUA|ESGOTO|SABESP|SANASA|DAE /.test(n))                            return 'Fornec - Água';
+    // Telefone
+    if (/VIVO|CLARO|TIM|OI |TELEFONE|TELEFONICA/.test(n))                    return 'Fornec - Telefone';
+    // Proteínas (default para frigoríficos, abatedouros, pecuária)
+    if (/FRIGO|FRIGOL|MINERVA|AURORA|CARNES|PROTEINA|BOVINO|SUINO|AVES|FRANGO|BOVINA|AGROPECUARIA|INTERLAGOS|CABANHA|WEW|ALSSABAK|HUMAITA|SPECIALLI|FABENE|CANTAGALLO|BARRA MANSA|COMERCIAL TUDO/.test(n)) return 'Fornec - Proteínas';
+    return 'Fornec - Proteínas'; // default NF-e
   }
 
   const fmtDate = v => {
@@ -160,15 +185,35 @@ module.exports = function (pool) {
     };
   }
 
+  // Mapeamento Plano de Contas → Categoria DRE (alinhado com dre.html CATS)
   const PLANO_TO_DRE = {
-    'Fornec - Proteínas':           'COMPRAS - REVENDA',
-    'Fornec - Acompanhamentos':     'COMPRAS - REVENDA',
-    'Fornec - Bebidas/Gelo/Sorvete':'COMPRAS - REVENDA',
-    'Fornec - Empório (outros)':    'COMPRAS - REVENDA',
-    'Fornec - Empório (carvão)':    'COMPRAS - REVENDA',
-    'Fornec - Embalagens':          'Material de Embalagens',
-    'Fornec - Acessórios':          'Materiais diversos',
-    'Fornec - Outras Desp':         'Serviços prestados por terceiros',
+    // CMV — CUSTO DA MERCADORIA VENDIDA
+    'Fornec - Proteínas':            'COMPRAS - REVENDA',
+    'Fornec - Acompanhamentos':      'COMPRAS - REVENDA',
+    'Fornec - Bebidas/Gelo/Sorvete': 'COMPRAS - REVENDA',
+    'Fornec - Bebidas':              'COMPRAS - REVENDA',
+    'Fornec - Gelo/Sorvete':         'COMPRAS - REVENDA',
+    'Fornec - Empório (outros)':     'COMPRAS - REVENDA',
+    'Fornec - Empório (carvão)':     'COMPRAS - REVENDA',
+    // MATERIAL
+    'Fornec - Embalagens':           'Material de Embalagens',
+    'Fornec - Acessórios':           'Materiais diversos',
+    'Fornec - EPI/Uniformes':        'EPI / Uniformes',
+    // TERCEIROS / CONSUMO
+    'Fornec - Outras Desp':          'Serviços prestados por terceiros',
+    'Fornec - Contabilidade':        'Assistencia Contábil',
+    'Fornec - Segurança':            'Serviços com Segurança',
+    'Fornec - Manutenção':           'Serviços de Manutenção e Higiene',
+    'Fornec - Software/Internet':    'Serviços com Internet/Software',
+    'Fornec - Aluguel':              'Alugueis de imoveis',
+    'Fornec - Energia':              'Energia eletrica',
+    'Fornec - Água':                 'Agua e esgoto',
+    'Fornec - Telefone':             'Telefone',
+    // VENDAS
+    'Fornec - Royalties':            'Royalties',
+    'Fornec - Frete':                'Fretes com vendas',
+    // IMPOSTOS
+    'Fornec - Impostos':             'Simples Nacional',
   };
 
   // ── GET /kpis ──────────────────────────────────────────────────────────────
@@ -217,18 +262,28 @@ module.exports = function (pool) {
       const { rows } = await pool.query(
         `SELECT * FROM boletos ${where} ORDER BY vencimento ASC NULLS LAST`, params
       );
+      const hoje = new Date(); hoje.setHours(0,0,0,0);
       const lancamentos = rows.map(b => {
         const v = rowToFrontend(b);
+        const isPago   = v.status === 'pago';
+        const vencDate = v.vencimento ? new Date(v.vencimento + 'T12:00:00') : null;
+        // needsReview: boleto não pago, vencido, sem vinculação com extrato
+        const needsReview = !isPago && vencDate && vencDate < hoje && !v.vinculadoExtrato;
         return {
-          id:         'boleto_'+b.id,
-          lancamento: `${v.fornecedor}${v.produto?' — '+v.produto:''} (NF ${v.nf||'s/n'})`,
-          valor:      -Math.abs(v.valor),
-          data:       v.dtPagamento || v.vencimento,
-          mes:        v.mesCompetencia,
-          mesCaixa:   v.mesCaixa,
-          fonte:      v.status === 'pago' ? 'BOLETO' : 'BOLETO_PREV',
-          categoria:  PLANO_TO_DRE[v.plano] || 'COMPRAS - REVENDA',
-          vinculado:  v.vinculadoExtrato,
+          id:           'boleto_'+b.id,
+          boletoId:     b.id,
+          lancamento:   `${v.fornecedor}${v.produto?' — '+v.produto:''} (NF ${v.nf||'s/n'}, Parc. ${v.parcela||'1'})`,
+          valor:        -Math.abs(v.valor),
+          data:         v.dtPagamento || v.vencimento,
+          mes:          v.mesCompetencia,
+          mesCaixa:     v.mesCaixa,
+          fonte:        isPago ? 'BOLETO' : 'BOLETO_PREV',
+          categoria:    PLANO_TO_DRE[v.plano] || 'COMPRAS - REVENDA',
+          plano:        v.plano || '',
+          vinculado:    v.vinculadoExtrato,
+          needsReview,  // true = vencido sem baixa → sinalizar no DRE
+          parcela:      v.parcela || '1',
+          totalParcelas:v.totalParcelas || 1,
         };
       });
       res.json({ ok: true, data: lancamentos });
@@ -446,11 +501,23 @@ module.exports = function (pool) {
       const dtNota     = dhEmi ? dhEmi.slice(0, 10) : '';
       const mesComp    = dtNota ? dtNota.slice(5,7)+'/'+dtNota.slice(0,4) : '';
 
-      // Parcelas (cobr/dup)
+      // ── Parcelas: tenta <cobr/dup>, depois infCpl, depois parcela única ───────
       const dupBlocks = [...xml.matchAll(/<dup>([\s\S]*?)<\/dup>/gi)];
       let parcelas = [];
 
+      // Helper: parseia data no formato DD/MM/YYYY ou YYYY-MM-DD → YYYY-MM-DD
+      const parseDateStr = s => {
+        if (!s) return '';
+        s = s.trim();
+        if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) {
+          const [d,m,y] = s.split('/'); return `${y}-${m}-${d}`;
+        }
+        if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0,10);
+        return '';
+      };
+
       if (dupBlocks.length > 0) {
+        // Fonte 1: tag <cobr><dup> — mais confiável
         for (const [, block] of dupBlocks) {
           const nDup  = getTag('nDup', block);
           const dVenc = getTag('dVenc', block);
@@ -458,24 +525,64 @@ module.exports = function (pool) {
           if (vDup > 0) {
             const mesC = dVenc ? dVenc.slice(5,7)+'/'+dVenc.slice(0,4) : mesComp;
             parcelas.push({
-              fornecedor:      emitente,
-              produto:         '',
+              fornecedor:     emitente,
+              produto:        '',
               dtNota,
-              nf:              nNF,
+              nf:             nNF,
               chaveNfe,
-              parcela:         nDup || '1',
-              totalParcelas:   dupBlocks.length,
-              vencimento:      dVenc || dtNota,
-              valor:           vDup,
-              mesCompetencia:  mesComp,
-              mesCaixa:        mesC,
-              status:          'avencer',
-              origem:          'nfe',
+              parcela:        nDup || String(parcelas.length + 1),
+              totalParcelas:  dupBlocks.length,
+              vencimento:     dVenc || dtNota,
+              valor:          vDup,
+              mesCompetencia: mesComp,
+              mesCaixa:       mesC,
+              status:         'avencer',
+              origem:         'nfe',
             });
           }
         }
-      } else {
-        // Sem parcelas — uma única
+      }
+
+      // Fonte 2: infCpl / infAdFisco — informações complementares
+      // Padrões comuns: "VENCTO 20/03/2026 R$ 502,00" ou "PARC 1/2: 20/03/26 R$250,00"
+      if (parcelas.length === 0) {
+        const infCpl = getTag('infCpl') || getTag('infAdFisco') || '';
+        if (infCpl) {
+          // Padrão: data seguida de valor (ou valor seguido de data)
+          const reVenc = /(?:venc(?:imento)?|vto|parc\.?\s*\d+[^\/]*\/\d+)[:\s.-]*([\d]{2}[\/\-][\d]{2}[\/\-][\d]{2,4})[^\d]*(R\$)?\s*([\d]{1,3}(?:[.,][\d]{3})*(?:[.,][\d]{2}))/gi;
+          let m;
+          const fromCpl = [];
+          while ((m = reVenc.exec(infCpl)) !== null) {
+            const dt  = parseDateStr(m[1]);
+            const val = parseFloat((m[3]||'0').replace(/\./g,'').replace(',','.'));
+            if (dt && val > 0) fromCpl.push({ dt, val });
+          }
+          if (fromCpl.length > 0) {
+            fromCpl.forEach((p, i) => {
+              const mesC = p.dt.slice(5,7)+'/'+p.dt.slice(0,4);
+              parcelas.push({
+                fornecedor:     emitente,
+                produto:        '',
+                dtNota,
+                nf:             nNF,
+                chaveNfe,
+                parcela:        String(i+1)+'/'+fromCpl.length,
+                totalParcelas:  fromCpl.length,
+                vencimento:     p.dt,
+                valor:          p.val,
+                mesCompetencia: mesComp,
+                mesCaixa:       mesC,
+                status:         'avencer',
+                origem:         'nfe',
+                origemParcela:  'infCpl',
+              });
+            });
+          }
+        }
+      }
+
+      // Fonte 3: parcela única com valor total da NF
+      if (parcelas.length === 0) {
         parcelas = [{
           fornecedor:     emitente,
           produto:        '',

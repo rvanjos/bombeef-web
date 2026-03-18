@@ -64,6 +64,8 @@ tbody tr.uncat{background:#fff8e6!important;}
 tbody tr.ign{opacity:.4;}
 tbody tr.cc-row{background:#f0f5fb!important;}
 tbody tr.boleto-row{background:#f5fff5!important;}
+tbody tr.boleto-review{background:#fff8e1!important;border-left:3px solid #f59e0b!important;}
+.needs-review-badge{display:inline-block;background:#f59e0b;color:#fff;border-radius:4px;padding:1px 6px;font-size:9px;font-weight:700;letter-spacing:.5px;vertical-align:middle;margin-left:4px;}
 td{padding:5px 9px;vertical-align:middle;}
 .badge{display:inline-block;padding:1px 6px;border-radius:8px;font-weight:600;font-size:10px;}
 .bofx{background:#e8f7ef;color:var(--green);}.bcc{background:#e8f0f7;color:var(--blue);}
@@ -595,7 +597,8 @@ function render() {
   tb.innerHTML = lista.map(t => {
     const v   = parseFloat(t.valor||0);
     const isCat = !!t.categoria;
-    const rowCls= t.ignorar?'ign':!isCat?'uncat':t.fonte==='CC'?'cc-row':t.fonte?.startsWith('BOLETO')?'boleto-row':'';
+    const isReview = !t.ignorar && t.needsReview;
+    const rowCls= t.ignorar?'ign':!isCat?'uncat':t.fonte==='CC'?'cc-row':isReview?'boleto-review':t.fonte?.startsWith('BOLETO')?'boleto-row':'';
     const badge = bads[t.fonte]||`<span class="badge bman">${t.fonte||'?'}</span>`;
     return `<tr class="${rowCls}" id="tr-${t.id}">
       <td style="text-align:center"><input type="checkbox" class="chk tcb" data-id="${t.id}" ${selIds.has(t.id)?'checked':''} onchange="togSel('${t.id}',this.checked)"></td>
@@ -603,7 +606,7 @@ function render() {
       <td style="font-size:11px;white-space:nowrap;cursor:pointer;color:var(--blue);text-decoration:underline dotted" onclick="editMes('${t.id}','mes',this)">${fmtMes(t.mes)}</td>
       <td style="font-size:11px;white-space:nowrap;cursor:pointer;color:var(--muted);text-decoration:underline dotted" onclick="editMes('${t.id}','mesCaixa',this)">${fmtMes(t.mesCaixa||t.mes)}</td>
       <td>${badge}</td>
-      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500" title="${t.lancamento}">${t.lancamento}</td>
+      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500" title="${t.lancamento}">${t.lancamento}${isReview?needsReviewBadge:''}</td>
       <td style="font-size:11px;color:var(--muted);max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.razaoSocial||t.portador||'—'}</td>
       <td><select class="csel${isCat?'':' u'}" onchange="setCat('${t.id}',this.value)">
         <option value=""${!isCat?' selected':''}>— Sem categoria —</option>
@@ -637,7 +640,7 @@ function setCat(id, cat) {
     });
   }
   const row = document.getElementById('tr-'+id);
-  if (row) row.className = t.ignorar?'ign':cat?t.fonte==='CC'?'cc-row':t.fonte?.startsWith('BOLETO')?'boleto-row':'':'uncat';
+  if (row) row.className = t.ignorar?'ign':cat?t.fonte==='CC'?'cc-row':t.needsReview?'boleto-review':t.fonte?.startsWith('BOLETO')?'boleto-row':'':'uncat';
   updStats(); renderDRE(); autoSv();
 }
 

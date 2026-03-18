@@ -62,9 +62,16 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
 .upload-zone:hover,.upload-zone.drag{border-color:var(--red);background:#fff5f5;}
 .upload-zone p{font-size:13px;color:var(--muted);margin-top:8px;}
 /* preview */
-.preview-list{max-height:280px;overflow-y:auto;}
-.preview-item{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);font-size:13px;}
+.preview-list{max-height:360px;overflow-y:auto;}
+.preview-item{display:flex;justify-content:space-between;align-items:flex-start;padding:10px 12px;border-bottom:1px solid var(--border);font-size:13px;gap:10px;flex-wrap:wrap;}
 .preview-item:last-child{border-bottom:none;}
+.preview-item .pi-left{flex:1;min-width:180px;}
+.preview-item .pi-right{display:flex;flex-direction:column;align-items:flex-end;gap:4px;min-width:140px;}
+.preview-item .pi-valor{font-weight:700;color:var(--red);font-family:'DM Mono',monospace;}
+.preview-item .pi-venc{font-size:11px;color:var(--muted);}
+.preview-item select{width:100%;padding:4px 7px;border:1px solid var(--border);border-radius:6px;font-size:11px;background:var(--white);font-family:'DM Sans',sans-serif;margin-top:4px;}
+.preview-header{background:#fdf9f5;padding:8px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);border-bottom:1px solid var(--border);}
+.origin-badge{display:inline-block;background:#e8f0f7;color:var(--blue);border-radius:4px;padding:1px 6px;font-size:10px;font-weight:600;margin-left:6px;}
 .empty{text-align:center;padding:48px 20px;color:var(--muted);}
 .empty-icon{font-size:42px;margin-bottom:12px;}
 @media(max-width:600px){.fg-row{grid-template-columns:1fr;}.tbl th:nth-child(3),.tbl td:nth-child(3),.tbl th:nth-child(5),.tbl td:nth-child(5){display:none;}}
@@ -149,17 +156,18 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
 
 <!-- Modal Importar XML -->
 <div class="modal-bg" id="modal-xml">
-  <div class="modal">
+  <div class="modal" style="max-width:640px">
     <div class="modal-head"><h3>Importar NF-e (XML)</h3><button class="modal-close" onclick="fecharXML()">×</button></div>
     <div class="modal-body">
-      <div class="upload-zone" id="zone-xml" onclick="document.getElementById('file-xml').click()" ondragover="ev.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')">
+      <div class="upload-zone" id="zone-xml" onclick="document.getElementById('file-xml').click()" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')">
         <div style="font-size:36px">📥</div>
         <p>Clique ou arraste o arquivo XML da NF-e aqui</p>
         <p style="font-size:11px;margin-top:4px">Formato: NF-e SEFAZ (.xml)</p>
       </div>
       <input type="file" id="file-xml" accept=".xml" style="display:none" onchange="processarXML(this)">
       <div id="xml-preview" style="display:none">
-        <div style="font-size:13px;font-weight:600;margin-bottom:10px" id="xml-info"></div>
+        <div style="font-size:13px;font-weight:600;margin:0 0 10px" id="xml-info"></div>
+        <div class="preview-header">Boletos a gerar — edite o plano de contas se necessário</div>
         <div class="preview-list" id="xml-list"></div>
       </div>
     </div>
@@ -361,6 +369,15 @@ async function confirmarBaixa(){
 function abrirImportXML(){ document.getElementById('modal-xml').classList.add('open'); }
 function fecharXML(){ document.getElementById('modal-xml').classList.remove('open'); xmlPreview=[]; document.getElementById('xml-preview').style.display='none'; document.getElementById('btn-confirm-xml').style.display='none'; }
 
+const PLANOS_XML = [
+  'Fornec - Proteínas','Fornec - Acompanhamentos','Fornec - Bebidas/Gelo/Sorvete',
+  'Fornec - Empório (outros)','Fornec - Empório (carvão)','Fornec - Embalagens',
+  'Fornec - Acessórios','Fornec - Royalties','Fornec - Contabilidade',
+  'Fornec - Segurança','Fornec - Manutenção','Fornec - Software/Internet',
+  'Fornec - Aluguel','Fornec - Energia','Fornec - Água','Fornec - Telefone',
+  'Fornec - Frete','Fornec - Impostos','Fornec - Outras Desp',
+];
+
 async function processarXML(inp){
   const f = inp.files[0]; if(!f) return;
   const fd = new FormData(); fd.append('arquivo', f);
@@ -368,20 +385,43 @@ async function processarXML(inp){
   const d = await api.upload('/api/boletos/import-xml', fd);
   if(!d.ok){ toast('Erro: '+d.erro); return; }
   xmlPreview = d.preview;
-  document.getElementById('xml-info').innerHTML = `<b>${d.fornecedor}</b> — NF ${d.nf} — ${d.totalParcelas} parcela(s) — Total: <b>${fmt.brl(d.valorTotal)}</b>`;
-  document.getElementById('xml-list').innerHTML = d.preview.map((p,i)=>`
-    <div class="preview-item">
-      <span>${p.fornecedor} — Parc. ${p.parcela}/${p.totalParcelas}</span>
-      <span>${fmt.date(p.vencimento)} — <b>${fmt.brl(p.valor)}</b></span>
-    </div>`).join('');
+  const origemLabel = (p) => p.origemParcela==='infCpl'
+    ? '<span class="origin-badge">infCpl</span>'
+    : p.totalParcelas>1 ? '<span class="origin-badge">cobr/dup</span>' : '';
+  document.getElementById('xml-info').innerHTML =
+    `<b>${d.fornecedor}</b> &nbsp;·&nbsp; NF ${d.nf} &nbsp;·&nbsp; `+
+    `${d.totalParcelas} boleto(s) &nbsp;·&nbsp; Total: <b>${fmt.brl(d.valorTotal)}</b>`;
+  document.getElementById('xml-list').innerHTML = d.preview.map((p,i)=> {
+    const planoOpts = PLANOS_XML.map(pl =>
+      `<option value="${pl}" ${pl===p.plano?'selected':''}>${pl}</option>`
+    ).join('');
+    return `<div class="preview-item">
+      <div class="pi-left">
+        <div style="font-weight:600">${p.fornecedor}${origemLabel(p)}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">
+          NF ${p.nf||'—'} &nbsp;·&nbsp; Parcela ${p.parcela} de ${p.totalParcelas}
+          &nbsp;·&nbsp; Competência: ${p.mesCompetencia||'—'}
+        </div>
+        <select onchange="xmlPreview[${i}].plano=this.value" style="width:100%;padding:4px 7px;border:1px solid var(--border);border-radius:6px;font-size:11px;background:#fff;margin-top:6px">
+          <option value="">— Plano de Contas —</option>${planoOpts}
+        </select>
+      </div>
+      <div class="pi-right">
+        <div class="pi-valor">${fmt.brl(p.valor)}</div>
+        <div class="pi-venc">Venc: ${fmt.date(p.vencimento)}</div>
+      </div>
+    </div>`;
+  }).join('');
   document.getElementById('xml-preview').style.display='';
   document.getElementById('btn-confirm-xml').style.display='';
 }
 
 async function confirmarXML(){
-  // Pede plano para todos
-  const plano = prompt('Plano DRE (ex: Fornec - Proteínas):\nDeixe em branco para definir depois.') || '';
-  const boletos = xmlPreview.map(p=>({...p, plano}));
+  // Cada parcela já tem seu plano editado pelo usuário no preview
+  const boletos = xmlPreview.map(p => ({
+    ...p,
+    plano: p.plano || '',  // backend faz guessPlano se vier vazio
+  }));
   const d = await api.post('/api/boletos/import-xml/confirmar',{boletos});
   if(!d.ok){ toast('Erro: '+d.erro); return; }
   toast(`✅ ${d.count} boleto(s) importado(s)!`);
