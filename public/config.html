@@ -587,6 +587,13 @@ document.addEventListener('change', function(e){
   }
 });
 
+async function excluirCat(id) {
+  if(!confirm('Excluir esta categoria?')) return;
+  const d = await api.delete(`/api/config/categorias/${id}`);
+  if(d.ok){ toast('Categoria excluída!'); carregarCategorias(); }
+  else toast('Erro: ' + d.erro);
+}
+
 async function excluirSelecionadosCats(){
   const selecionados = [...document.querySelectorAll('.check-cat:checked')]
     .map(el => el.value);

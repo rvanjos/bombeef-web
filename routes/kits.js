@@ -98,12 +98,12 @@ module.exports = function (pool) {
       // Carrega itens de cada kit
       const ids = kits.map(k => k.id);
       let itens = [];
-      if (ids.length) {
+      if (ids.length > 0) {
         const { rows } = await pool.query(`
-          SELECT ki.*, p.descricao AS prod_desc, p.unidade
+          SELECT ki.*, p.descricao AS prod_desc, p.unidade, p.preco_venda AS preco_venda_atual
           FROM kit_itens ki
           LEFT JOIN produtos p ON p.id = ki.produto_id
-          WHERE ki.kit_id = ANY($1)
+          WHERE ki.kit_id = ANY($1::int[])
         `, [ids]);
         itens = rows;
       }
