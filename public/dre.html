@@ -218,6 +218,16 @@ td{padding:5px 9px;vertical-align:middle;}
 
     <!-- TABELA de lançamentos -->
     <div id="tbl-area" style="display:none;flex:1;overflow-y:auto">
+      <!-- Mini-barra de importação (sempre visível na tela de lançamentos) -->
+      <div style="display:flex;gap:6px;flex-wrap:wrap;padding:8px 14px;background:var(--white);border-bottom:1px solid var(--border);align-items:center">
+        <span style="font-size:11px;color:var(--muted);font-weight:600;margin-right:4px">Adicionar:</span>
+        <button class="btn bs" style="padding:4px 10px;font-size:11px" onclick="document.getElementById('f-ofx').click()">🏦 OFX/XLSX</button>
+        <button class="btn bs" style="padding:4px 10px;font-size:11px" onclick="document.getElementById('f-cc').click()">💳 Fatura CC</button>
+        <button class="btn bs" style="padding:4px 10px;font-size:11px" onclick="importBoletos()">📄 Boletos DB</button>
+        <button class="btn bs" style="padding:4px 10px;font-size:11px" onclick="abrirManual()">＋ Manual</button>
+        <button class="btn bs" style="padding:4px 10px;font-size:11px" onclick="abrirProvisao()">📅 Provisão</button>
+        <button class="btn bs" style="padding:4px 10px;font-size:11px" onclick="abrirSessoes()">📂 Sessões</button>
+      </div>
       <table>
         <thead><tr>
           <th style="width:26px;text-align:center"><input type="checkbox" class="chk" id="chk-all" onchange="selAll(this)"></th>
@@ -226,6 +236,7 @@ td{padding:5px 9px;vertical-align:middle;}
           <th style="min-width:200px">Categoria DRE</th>
           <th style="text-align:right">Valor</th>
           <th style="text-align:center;width:28px" title="Ignorar">🚫</th>
+          <th style="text-align:center;width:50px">Ações</th>
         </tr></thead>
         <tbody id="tbody"></tbody>
       </table>
@@ -270,6 +281,30 @@ td{padding:5px 9px;vertical-align:middle;}
 <input type="file" id="f-cc" accept=".csv,.xlsx,.xls" style="display:none" onchange="loadFile(this,'cc')">
 
 <!-- Modal Manual -->
+<!-- Modal Editar Lançamento -->
+<div class="mbg" id="m-edit-lanc">
+  <div class="md" style="max-width:480px">
+    <div class="mdh"><h3>✏️ Editar Lançamento</h3><button class="mdx" onclick="fecharModal('m-edit-lanc')">×</button></div>
+    <div class="mdb">
+      <input type="hidden" id="el-id">
+      <div class="fg"><label>Descrição *</label><input id="el-d" placeholder="Descrição do lançamento"></div>
+      <div class="fg-r">
+        <div class="fg"><label>Valor (neg=saída) *</label><input type="number" id="el-v" step="0.01"></div>
+        <div class="fg"><label>Data</label><input type="date" id="el-dt"></div>
+      </div>
+      <div class="fg"><label>Categoria DRE</label><select id="el-c"><option value="">— Sem categoria —</option></select></div>
+      <div class="fg-r">
+        <div class="fg"><label>Mês DRE</label><input id="el-m" placeholder="03/2026"></div>
+        <div class="fg"><label>Mês Caixa</label><input id="el-mc" placeholder="03/2026"></div>
+      </div>
+    </div>
+    <div class="mdf">
+      <button class="btn bn" onclick="fecharModal('m-edit-lanc')">Cancelar</button>
+      <button class="btn bg" onclick="salvarEditLanc()">💾 Salvar</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal Provisão Múltiplos Meses -->
 <div class="mbg" id="m-provisao">
   <div class="md" style="max-width:520px">
@@ -436,7 +471,7 @@ function catOptsHtml(sel='') {
 }
 
 function preencherSels() {
-  ['ml-c','bulk-cat-sel'].forEach(id => {
+  ['ml-c','bulk-cat-sel','el-c','pv-c'].forEach(id => {
     const el = document.getElementById(id); if (!el) return;
     el.innerHTML = '<option value="">— Sem categoria —</option>' + catOptsHtml();
   });
@@ -612,6 +647,7 @@ function render() {
   const bads = {OFX:'<span class="badge bofx">OFX</span>',CC:'<span class="badge bcc">CC</span>',
     BOLETO:'<span class="badge bbol">Boleto</span>',BOLETO_PREV:'<span class="badge bbolp">Prev.</span>',
     MANUAL:'<span class="badge bman">Manual</span>'};
+  const needsReviewBadge = '<span class="needs-review-badge">⚠️ VERIFICAR</span>';
 
   const tb = document.getElementById('tbody');
   if (!lista.length) {
@@ -640,6 +676,12 @@ function render() {
       </select></td>
       <td class="${v>=0?'vp':'vn'}" style="white-space:nowrap;text-align:right">${fmt.brl(v)}</td>
       <td style="text-align:center"><button title="${t.ignorar?'Reativar':'Ignorar'}" onclick="togIgn('${t.id}')" style="background:none;border:none;cursor:pointer;font-size:13px;opacity:${t.ignorar?1:.4}">${t.ignorar?'↩️':'🚫'}</button></td>
+      <td style="text-align:center;white-space:nowrap">
+        ${(t.fonte==='MANUAL'||t.fonte==='BOLETO_PREV')?`
+          <button onclick="editarLanc('${t.id}')" title="Editar" style="background:none;border:none;cursor:pointer;font-size:12px;opacity:.7">✏️</button>
+          <button onclick="excluirLanc('${t.id}')" title="Excluir" style="background:none;border:none;cursor:pointer;font-size:12px;opacity:.7">🗑️</button>
+        `:''}
+      </td>
     </tr>`;
   }).join('');
 
@@ -1018,12 +1060,52 @@ function salvarProvisao() {
   showTable(); updMesFiltro(); render(); updStats(); renderDRE(); autoSv();
 }
 
+// ─── EDITAR / EXCLUIR LANÇAMENTOS MANUAIS ────────────────────────────────────
+function editarLanc(id) {
+  const t = TXS.find(x => x.id === id); if (!t) return;
+  document.getElementById('el-id').value = id;
+  document.getElementById('el-d').value  = t.lancamento || '';
+  document.getElementById('el-v').value  = t.valor || '';
+  document.getElementById('el-dt').value = t.data || '';
+  document.getElementById('el-m').value  = t.mes || mesRef;
+  document.getElementById('el-mc').value = t.mesCaixa || t.mes || mesRef;
+  // Preenche categorias
+  const sel = document.getElementById('el-c');
+  sel.innerHTML = '<option value="">— Sem categoria —</option>' + catOptsHtml(t.categoria);
+  document.getElementById('m-edit-lanc').classList.add('open');
+}
+
+function salvarEditLanc() {
+  const id  = document.getElementById('el-id').value;
+  const t   = TXS.find(x => x.id === id); if (!t) return;
+  const desc = document.getElementById('el-d').value.trim();
+  if (!desc) { toast('Descrição obrigatória'); return; }
+  t.lancamento = desc;
+  t.valor      = parseFloat(document.getElementById('el-v').value) || t.valor;
+  t.data       = document.getElementById('el-dt').value || t.data;
+  t.categoria  = document.getElementById('el-c').value;
+  t.mes        = document.getElementById('el-m').value || t.mes;
+  t.mesCaixa   = document.getElementById('el-mc').value || t.mesCaixa;
+  fecharModal('m-edit-lanc');
+  render(); updStats(); renderDRE(); autoSv();
+  toast('✅ Lançamento atualizado');
+}
+
+function excluirLanc(id) {
+  if (!confirm('Excluir este lançamento?')) return;
+  TXS = TXS.filter(x => x.id !== id);
+  render(); updStats(); renderDRE(); autoSv();
+  toast('🗑️ Lançamento removido');
+}
+
 // ─── BOLETOS ──────────────────────────────────────────────────────────────────
 async function importBoletos(){
   const d=await api.get(`/api/boletos/classificador?mes=${mesRef}`);
   if(!d.ok){toast('Erro: '+(d.erro||'falha'));return;}
-  if(!d.data?.length){toast('Nenhum boleto para este mês');return;}
+  if(!d.data?.length){toast('Nenhum boleto/provisão para '+mesRef);return;}
   addLancs(d.data, `Boletos ${mesRef}`);
+  // Garante que a tabela é exibida (mesmo se chamado da tela inicial)
+  showTable();
 }
 
 // ─── LIMPAR ───────────────────────────────────────────────────────────────────
@@ -1055,7 +1137,11 @@ function exportXLS(){
 }
 
 // ─── SALVAR / SESSÕES ────────────────────────────────────────────────────────
-function autoSv(){clearTimeout(_sv);_sv=setTimeout(()=>salvar(true),8000);}
+function autoSv(){
+  setSt('load');
+  clearTimeout(_sv);
+  _sv=setTimeout(()=>salvar(true),5000); // 5s debounce
+}
 
 async function salvar(silent=false){
   setSt('load');
