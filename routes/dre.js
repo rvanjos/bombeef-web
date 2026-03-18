@@ -276,10 +276,16 @@ module.exports = function (pool) {
       'TRANSFERENCIA ENTRE CONTAS','TRANSFERENCIA',
     ];
     function splitMemo(memo) {
-      // 1. CNPJ/CPF no final
+      // 1. CNPJ/CPF no final — extrai razão social do bloco antes do doc
       const docRe = /^(.*?)\s+([A-Z][A-Z0-9 .&'\/\-]{3,}?)\s+(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}|\d{3}\.\d{3}\.\d{3}-\d{2})\s*$/;
       const dm = docRe.exec(memo);
-      if (dm) return { lancamento: dm[1].trim(), razaoSocial: dm[2].trim() + ' ' + dm[3] };
+      if (dm) {
+        const lancamento = dm[1].trim();
+        // Remove prefixo de operação da razão social (ex: "PAGO FRIGOL" → "FRIGOL")
+        const razaoRaw = dm[2].trim();
+        const razaoSocial = razaoRaw.replace(/^(PAGO|ENVIADO|DEVOLVIDO|RECEBIDO|DA)\s+/i, '').trim();
+        return { lancamento, razaoSocial };
+      }
       // 2. Prefixo bancário conhecido
       const up = memo.toUpperCase();
       for (const p of OFX_PREF) {

@@ -467,53 +467,121 @@ function buildCATSFromDB(rows) {
 
 // ─── Mapeamentos de auto-classificação (fornecedores conhecidos) ─────────────
 const MAPPINGS=[
+  // ── COMPRAS - REVENDA (fornecedores de produtos) ──────────────────────────
   ['WEW IMPORTACAO','COMPRAS - REVENDA'],['CABANHA INTERLAGOS','COMPRAS - REVENDA'],
-  ['FRIGOL','COMPRAS - REVENDA'],['MINERVA FUNDO','COMPRAS - REVENDA'],
-  ['AURORA ALIMENTOS','COMPRAS - REVENDA'],['PRONI E SUZUKI','COMPRAS - REVENDA'],
-  ['FABENE ALIMENTOS','COMPRAS - REVENDA'],['COMERCIAL TUDO EM CARNES','COMPRAS - REVENDA'],
-  ['SPECIALLI','COMPRAS - REVENDA'],['SPAL IND','COMPRAS - REVENDA'],
+  ['FRIGOL','COMPRAS - REVENDA'],['MINERVA','COMPRAS - REVENDA'],
+  ['AURORA ALIMENTOS','COMPRAS - REVENDA'],['COOPERATIVA CENTRAL AURORA','COMPRAS - REVENDA'],
+  ['COOP CENT AURORA','COMPRAS - REVENDA'],
+  ['PRONI','COMPRAS - REVENDA'],['FABENE ALIMENTOS','COMPRAS - REVENDA'],
+  ['COMERCIAL TUDO EM CARNES','COMPRAS - REVENDA'],
+  ['SPECIALLI','COMPRAS - REVENDA'],['EMPORIO SPECIALLI','COMPRAS - REVENDA'],
+  ['SPAL IND','COMPRAS - REVENDA'],['AMBEV','COMPRAS - REVENDA'],
   ['SABOR MOR','COMPRAS - REVENDA'],['AGROPECUARIA MFL','COMPRAS - REVENDA'],
   ['DISTRIBUIDORA MIOTTO','COMPRAS - REVENDA'],['CAMPO VERDE ALIMENTOS','COMPRAS - REVENDA'],
   ['CANTAGALLO','COMPRAS - REVENDA'],['BARRA MANSA COMERCIO DE CARNES','COMPRAS - REVENDA'],
   ['FRIGORIFICO HUMAITA','COMPRAS - REVENDA'],['ALSSABAK','COMPRAS - REVENDA'],
   ['INTERLAGOS GOURMET','COMPRAS - REVENDA'],['GUIDARA COMERCIO','COMPRAS - REVENDA'],
-  ['NOVA MIX INDL','COMPRAS - REVENDA'],['LATICINIO CAMBUIENSE','COMPRAS - REVENDA'],
+  ['NOVA MIX INDL','COMPRAS - REVENDA'],['NOVA MIX','COMPRAS - REVENDA'],
+  ['LATICINIO CAMBUIENSE','COMPRAS - REVENDA'],
+  ['FG7 COMERCIO','COMPRAS - REVENDA'],['MISTER GELO','COMPRAS - REVENDA'],
+  ['CACO COMERCIAL DE FRUTAS','COMPRAS - REVENDA'],
+  ['IND COM PROD ALIM CEPERA','COMPRAS - REVENDA'],['CEPERA','COMPRAS - REVENDA'],
+  ['SAO JOAO EL HAJI','COMPRAS - REVENDA'],['EL HAJI BEEF','COMPRAS - REVENDA'],
+  ['CICERO FERREIRA LIMA','COMPRAS - REVENDA'],
+  ['BATALHA FABRICA DE PAES','COMPRAS - REVENDA'],['BATALHA FABRICA','COMPRAS - REVENDA'],
+  ['AGROTAN BRIQUETES','Carvão'],['QBRAZA','Carvão'],
+  // ── RECEITAS ──────────────────────────────────────────────────────────────
   ['REDECARD','VENDAS DE MERCADORIAS'],['ALELO','VENDAS DE MERCADORIAS'],
   ['TICKET SERVICOS','VENDAS DE MERCADORIAS'],['VR BENEFICIOS','VENDAS DE MERCADORIAS'],
   ['VR BENEFCIOS','VENDAS DE MERCADORIAS'],['VEROCHEQUE','VENDAS DE MERCADORIAS'],
   ['PLUXEE','VENDAS DE MERCADORIAS'],['SWILE DO BRASIL','VENDAS DE MERCADORIAS'],
-  ['AR BOUTIQUE DE CARNES','VENDAS DE MERCADORIAS'],['CASA DE CARNES MOTA','VENDAS DE MERCADORIAS'],
-  ['PAGCERTO','Tarifa de Administração de Cartões'],['ZOOP BRASIL','Tarifa de Administração de Cartões'],
+  ['AR BOUTIQUE DE CARNES','VENDAS DE MERCADORIAS'],['AR BOUT','VENDAS DE MERCADORIAS'],
+  ['CASA DE CARNES MOTA','VENDAS DE MERCADORIAS'],
+  ['CALU GASTRONOMIA','VENDAS DE MERCADORIAS'],
+  ['DIEGO RODRIGUEZ','VENDAS DE MERCADORIAS'],['MAYARA CRISTINA','VENDAS DE MERCADORIAS'],
+  // ── PESSOAL ───────────────────────────────────────────────────────────────
   ['LUIZ FERRAROTTO','Salarios e ordenados'],['DANIELA APARECIDA DE FARIA','Salarios e ordenados'],
-  ['JIUSCELENE DE LOURDES','Salarios e ordenados'],['TIAGO LOPES ISCARO','Salarios e ordenados'],
-  ['PAULO HENRIQUE RIBEIRO','Salarios e ordenados'],['RAFAEL VIEIRA DOS ANJOS','Salarios e ordenados'],
+  ['DANIELA APA','Salarios e ordenados'],
+  ['JIUSCELENE DE LOURDES','Salarios e ordenados'],['JIUSCEL','Salarios e ordenados'],
+  ['TIAGO LOPES ISCARO','Salarios e ordenados'],['PAULO HENRIQUE RIBEIRO','Salarios e ordenados'],
+  ['RAFAEL VIEIRA DOS ANJOS','Salarios e ordenados'],
   ['BRUNA CRISTINA KOHLMANN','Salarios e ordenados'],['ANNA LUIZA ALONSO','Salarios e ordenados'],
   ['LEANDRO NORBERTO','Salarios e ordenados'],['JOSE AUGUSTO CARMONA','Salarios e ordenados'],
-  ['M M M SERV CONTABEIS','Assistencia Contábil'],['CREDCAMP','Alugueis de Equipamentos'],
-  ['MDK FRANCHISING','Royalties'],['ASI CAMPINAS','Serviços com Segurança'],
-  ['DEDETIZI','Serviços de Manutenção e Higiene'],['V4 COMPANY','Serviços com Internet/Software'],
-  ['TRADEMASTER','Serviços com Internet/Software'],['SR GRAFICA','Material de Embalagens'],
-  ['ALPACK INDUSTRIA','Material de Embalagens'],['QBRAZA','Material de Copa e cozinha'],
-  ['MISTER GELO','Gelo'],['PORTO SEGURO','Serviços prestados por terceiros'],
-  ['CPFL','Energia eletrica'],['VIVO FIXO','Telefone'],['CLARO','Telefone'],
-  ['DEPARTAMENTO DE AGUAS','Agua e esgoto'],['BANCO C6','Juros e comissoes bancarias'],
+  ['ROBSON MOREIRA JUNIOR','Salarios e ordenados'],
+  ['GRAZIELA ADMIN','Salarios e ordenados'],
+  // ── FINANCEIRAS ───────────────────────────────────────────────────────────
+  ['PAGCERTO','Tarifa de Administração de Cartões'],['ZOOP BRASIL','Tarifa de Administração de Cartões'],
+  ['BANCO C6','Juros e comissoes bancarias'],
+  ['FIDC GARSON','Antecipação de Recebíveis'],
+  ['CONSORCIO RZ','Empréstimo'],
+  // ── TERCEIROS ─────────────────────────────────────────────────────────────
+  ['M M M SERV CONTABEIS','Assistencia Contábil'],
+  ['MDK FRANCHISING','Royalties'],
+  ['ASI CAMPINAS','Serviços com Segurança'],
+  ['DEDETIZI','Serviços de Manutenção e Higiene'],
+  ['STEPPENWOOD','Serviços de Manutenção e Higiene'],['GRILAZER','Serviços de Manutenção e Higiene'],
+  ['V4 COMPANY','Serviços com Internet/Software'],['TRADEMASTER','Serviços com Internet/Software'],
+  ['PORTO SEGURO','Serviços prestados por terceiros'],
+  ['TOKIO MARINE','Serviços prestados por terceiros'],
+  ['ABC COMUNICACAO VISUAL','Marketing'],
+  ['GRUPO ALTAMED','Serviços de Consultoria de Alimentos'],
+  ['RENATA FARHAT','Serviços prestados por terceiros'],
+  // ── MATERIAL ──────────────────────────────────────────────────────────────
+  ['SR GRAFICA','Material de Embalagens'],['ALPACK INDUSTRIA','Material de Embalagens'],
+  // ── CONSUMO ───────────────────────────────────────────────────────────────
+  ['CREDCAMP','Alugueis de Equipamentos'],
+  ['CPFL','Energia eletrica'],['CONCESSIONARIA DAEV','Agua e esgoto'],
+  ['DEPARTAMENTO DE AGUAS','Agua e esgoto'],
+  ['VIVO FIXO','Telefone'],['CLARO','Telefone'],
+  // ── IMPOSTOS ──────────────────────────────────────────────────────────────
   ['RECEITA FEDERAL','Simples Nacional'],['PREFEITURA','IPTU'],
+  ['CEF MATRIZ','Simples Nacional'],
 ];
 
-function autoClassificar(lancamento) {
+function autoClassificar(lancamento, razaoSocial='') {
   if (!lancamento) return '';
-  const up = lancamento.toUpperCase();
-  // Memória de fornecedor
+  // Combina lancamento + razaoSocial para busca (remove prefixos como "PAGO ", "ENVIADO ")
+  const razaoLimpa = (razaoSocial||'').replace(/^(PAGO|ENVIADO|DEVOLVIDO|RECEBIDO)\s+/i,'').trim();
+  const textoCompleto = (lancamento + ' ' + razaoLimpa).toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  const up = textoCompleto;
+
+  // 1. Memória de fornecedor (aprendizado do usuário)
   for (const [k,v] of Object.entries(supMem)) { if (up.includes(k.toUpperCase())) return v; }
-  // Mapeamentos fixos
-  for (const [k,v] of MAPPINGS) { if (up.includes(k.toUpperCase())) return v; }
-  // Heurísticas
+
+  // 2. Mapeamentos fixos
+  for (const [k,v] of MAPPINGS) { if (up.includes(k.toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,''))) return v; }
+
+  // 3. Heurísticas por padrão do lançamento
   if (/RENDIMENTO|APLIC AUT MAIS/.test(up)) return 'Juros de aplicacoes financeiras';
-  if (/^IOF\s*$/.test(up.trim())) return 'IOF S/ Imp. S/ Oper. Financeiras';
-  if (/BUSINESS /.test(up)) return 'Tarifas Bancarias';
+  if (/^IOF(\s|$)/.test(up.trim())) return 'IOF S/ Imp. S/ Oper. Financeiras';
+  if (/BUSINESS\s/.test(up)) return 'Tarifas Bancarias';
   if (/PARCELA GIRO/.test(up)) return 'Juros e comissoes bancarias';
-  if (/PIX RECEBIDO|RECEBIMENTO REDE|TED RECEBIDA|PIX QR CODE RECEBIDO/.test(up)) return 'VENDAS DE MERCADORIAS';
+  if (/JUROS LIMITE/.test(up)) return 'Juros e comissoes bancarias';
+
+  // 4. Heurísticas por tipo de operação
+  if (/RECEBIMENTO REDE|RECEBIMENTO VISA|RECEBIMENTO MAST|RECEBIMENTO ELO/.test(up)) return 'VENDAS DE MERCADORIAS';
+  if (/PIX RECEBIDO|TED RECEBIDA|PIX QR CODE RECEBIDO/.test(up)) return 'VENDAS DE MERCADORIAS';
   if (/^RECEBIMENTOS/.test(up)) return 'VENDAS DE MERCADORIAS';
+
+  // 5. Heurísticas por palavras-chave na razão social
+  if (/FRIGORIF|FRIGOL|FRIGORII/.test(up)) return 'COMPRAS - REVENDA';
+  if (/ALIMENTOS|CARNES|FRANGO|BOVINO|SUINO|AVES|LATICINIO|LATICINIOS/.test(up)) return 'COMPRAS - REVENDA';
+  if (/BEBIDAS|CERVEJA|GELATO|SORVETE|REFRIGERANTE/.test(up)) return 'Bebidas';
+  if (/EMBALA|SACOLA|ETIQUETA/.test(up)) return 'Material de Embalagens';
+  if (/SEGURANCA|SECURITY|VIGILANCIA/.test(up)) return 'Serviços com Segurança';
+  if (/CONTAB|ESCRITORIO CONTABIL/.test(up)) return 'Assistencia Contábil';
+  if (/DEDETIZ|CONTROLE DE PRAGAS|SANITIZACAO/.test(up)) return 'Serviços de Manutenção e Higiene';
+  if (/SOFTWARE|SISTEMA|TECNOLOGIA|INFORMATICA/.test(up)) return 'Serviços com Internet/Software';
+  if (/FRANQUIA|ROYALT/.test(up)) return 'Royalties';
+  if (/SEGURO|INSURANCE|SEGURADO/.test(up)) return 'Serviços prestados por terceiros';
+  if (/CONSORCIO|FINANCIAMENTO|LEASING/.test(up)) return 'Empréstimo';
+  if (/ENERGIA|ELETRIC|CELESC|CEMIG|ENEL|CPFL/.test(up)) return 'Energia eletrica';
+  if (/AGUA|SANEAMENTO|SABESP|SANASA|DAEV|ESGOTO/.test(up)) return 'Agua e esgoto';
+  if (/RECEITA FED|IMPOSTO|TRIBUTO|SIMPLES/.test(up)) return 'Simples Nacional';
+  if (/PREFEITURA|IPTU|ISS|ISSQN/.test(up)) return 'IPTU';
+  if (/ALUGUEL|IMOBILI/.test(up)) return 'Alugueis de imoveis';
+  if (/MARKETING|PUBLICIDADE|PROPAGANDA/.test(up)) return 'Marketing';
+
   return '';
 }
 
@@ -631,7 +699,7 @@ async function procExt(file) {
   // Auto-classifica com mapeamentos
   const lancs = (d.lancamentos||[]).map(l => ({
     ...l,
-    categoria: l.categoria || autoClassificar(l.lancamento)
+    categoria: l.categoria || autoClassificar(l.lancamento, l.razaoSocial||'')
   }));
   addLancs(lancs, file.name);
 }
@@ -672,7 +740,7 @@ function parseCCRows(rows) {
     const mes = dt ? dt.slice(5,7)+'/'+dt.slice(0,4) : mesRef;
     const parc = cP>=0 ? String(row[cP]||'') : '';
     result.push({id:'cc_'+Date.now()+'_'+i, lancamento:parc?`${nome} (${parc})`:nome,
-      valor:v, data:dt, mes, mesCaixa:mes, categoria:autoClassificar(nome), fonte:'CC'});
+      valor:v, data:dt, mes, mesCaixa:mes, categoria:autoClassificar(nome,''), fonte:'CC'});
   }
   return result;
 }
@@ -685,7 +753,7 @@ function addLancs(novos, fileName) {
     if (!ex.has(k)) {
       if (!l.categoria && l.lancamento) {
         const ch=l.lancamento.toUpperCase().slice(0,30);
-        l.categoria = supMem[ch] || autoClassificar(l.lancamento);
+        l.categoria = supMem[ch] || autoClassificar(l.lancamento, l.razaoSocial||'');
       }
       TXS.push({...l, id:l.id||(Date.now()+'_'+Math.random())});
       n++;
