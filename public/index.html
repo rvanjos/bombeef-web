@@ -286,8 +286,8 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
           <div class="kpi-val kpi-loading" id="k-vencidos">—</div>
           <div class="kpi-sub" id="k-aberto">—</div>
         </div>
-        <!-- DRE resultado -->
-        <div class="kpi-card blue" onclick="showTab('dre')">
+        <!-- DRE resultado — só para quem tem acesso ao DRE -->
+        <div class="kpi-card blue" onclick="showTab('dre')" id="kpi-card-dre" style="display:none">
           <div class="kpi-icon">📊</div>
           <div class="kpi-label">Resultado DRE</div>
           <div class="kpi-val kpi-loading" id="k-resultado">—</div>
@@ -325,7 +325,7 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
           <div class="sys-desc">Importação de XML/PDF, baixas, vencimentos e integração DRE</div>
           <div class="sys-badge" id="badge-boletos">—</div>
         </div>
-        <div class="sys-card" style="--c:var(--blue)" onclick="showTab('dre')">
+        <div class="sys-card" style="--c:var(--blue)" onclick="showTab('dre')" id="card-acesso-dre" style="display:none">
           <div class="sys-icon">📊</div>
           <div class="sys-title">DRE & Classificador</div>
           <div class="sys-desc">Extratos bancários, fatura cartão e relatório DRE completo</div>
@@ -488,6 +488,17 @@ function filtrarTabs() {
     const perfis = (tab.dataset.perfil||'').split(',');
     tab.style.display = perfis.includes(usuario?.perfil) ? '' : 'none';
   });
+
+  // Perfis com acesso ao DRE
+  const temDRE = ['admin','gestor','financeiro'].includes(usuario?.perfil);
+
+  // KPI card do DRE
+  const kpiDre = document.getElementById('kpi-card-dre');
+  if (kpiDre) kpiDre.style.display = temDRE ? '' : 'none';
+
+  // Card de acesso rápido do DRE
+  const cardDre = document.getElementById('card-acesso-dre');
+  if (cardDre) cardDre.style.display = temDRE ? '' : 'none';
 }
 
 function showTab(tab) {
@@ -573,11 +584,13 @@ async function carregarKPIs() {
     $('k-vencidos').className    = 'kpi-val' + (d.boletosVencidos > 0 ? ' c-red' : '');
     $('k-aberto').textContent    = 'Total aberto: ' + fmtBRL(d.boletosAberto);
 
-    // ── DRE ──────────────────────────────────────────────────────────────
-    const res = d.dreResultado || 0;
-    $('k-resultado').textContent = fmtBRL(res);
-    $('k-resultado').className   = 'kpi-val ' + (res >= 0 ? 'c-green' : 'c-red');
-    $('k-resultado-sub').textContent = `Rec: ${fmtBRL(d.dreReceitas||0)} | Desp: ${fmtBRL(d.dreDespesas||0)}`;
+    // ── DRE — só para perfis com acesso ─────────────────────────────────
+    if (['admin','gestor','financeiro'].includes(usuario?.perfil)) {
+      const res = d.dreResultado || 0;
+      $('k-resultado').textContent = fmtBRL(res);
+      $('k-resultado').className   = 'kpi-val ' + (res >= 0 ? 'c-green' : 'c-red');
+      $('k-resultado-sub').textContent = `Rec: ${fmtBRL(d.dreReceitas||0)} | Desp: ${fmtBRL(d.dreDespesas||0)}`;
+    }
 
     // ── Validade ──────────────────────────────────────────────────────────
     $('k-val-alerta').textContent = fmtN(d.validadeAlerta);
@@ -628,8 +641,11 @@ async function carregarKPIs() {
       : d.boletosVence7d > 0 ? `📅 ${d.boletosVence7d} vence em 7d` : '✅ Em dia';
     $('badge-boletos').className = 'sys-badge ' + (d.boletosVencidos > 0 ? 'danger' : d.boletosVence7d > 0 ? 'alert' : 'ok');
 
-    $('badge-dre').textContent = res >= 0 ? `✅ ${fmtBRL(res)}` : `⚠️ ${fmtBRL(res)}`;
-    $('badge-dre').className   = 'sys-badge ' + (res >= 0 ? 'ok' : 'danger');
+    if (['admin','gestor','financeiro'].includes(usuario?.perfil)) {
+      const res = d.dreResultado || 0;
+      $('badge-dre').textContent = res >= 0 ? `✅ ${fmtBRL(res)}` : `⚠️ ${fmtBRL(res)}`;
+      $('badge-dre').className   = 'sys-badge ' + (res >= 0 ? 'ok' : 'danger');
+    }
 
     $('badge-validade').textContent = d.validadeVencidos > 0
       ? `🔴 ${d.validadeVencidos} vencido(s)`
