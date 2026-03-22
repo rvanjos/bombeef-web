@@ -102,6 +102,38 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
 .fg-info{font-size:11px;color:var(--green);margin-top:3px;font-weight:600;}
 .modal-foot{padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:9px;justify-content:flex-end;}
 .alerta-box{background:#fff8e6;border:1px solid #f5c842;border-radius:8px;padding:11px;font-size:12px;margin-bottom:10px;}
+
+/* Dashboard de validade */
+.dash-kpi-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px;}
+.dash-kpi{background:var(--white);border-radius:11px;padding:14px 16px;box-shadow:var(--shadow);border-top:4px solid #ddd;cursor:pointer;transition:transform .12s,box-shadow .12s;}
+.dash-kpi:hover{transform:translateY(-2px);box-shadow:0 4px 18px rgba(0,0,0,.13);}
+.dash-kpi.vencido{border-top-color:#8B0000;}.dash-kpi.critico{border-top-color:#C0392B;}
+.dash-kpi.alerta{border-top-color:var(--c-alerta);}.dash-kpi.atencao{border-top-color:#1a5c8a;}
+.dash-kpi.ok{border-top-color:var(--c-ok);}
+.dk-ico{font-size:24px;margin-bottom:4px;}
+.dk-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);font-weight:700;}
+.dk-val{font-size:26px;font-weight:700;line-height:1.1;margin:3px 0;}
+.dk-sub{font-size:11px;color:var(--muted);}
+.dk-val.vencido{color:#8B0000;}.dk-val.critico{color:#C0392B;}
+.dk-val.alerta{color:var(--c-alerta);}.dk-val.atencao{color:#1a5c8a;}.dk-val.ok{color:var(--c-ok);}
+.crit-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px;margin-bottom:14px;}
+.crit-card{background:var(--white);border-radius:9px;box-shadow:var(--shadow);padding:12px 14px;border-left:4px solid #ddd;cursor:pointer;transition:transform .12s;}
+.crit-card:hover{transform:translateY(-2px);}
+.crit-card.vencido{border-left-color:#8B0000;background:#fffafa;}
+.crit-card.critico{border-left-color:#C0392B;background:#fffcfc;}
+.crit-card.alerta{border-left-color:var(--c-alerta);background:#fffdf5;}
+.cc-nome{font-weight:700;font-size:13px;margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.cc-info{display:flex;gap:8px;align-items:center;margin-top:4px;}
+.cc-dias{font-size:11px;font-weight:700;padding:2px 7px;border-radius:4px;}
+.cc-dias.vencido{background:#ffd0d0;color:#8B0000;}
+.cc-dias.critico{background:#ffe0e0;color:#C0392B;}
+.cc-dias.alerta{background:#fff3cc;color:#b35c00;}
+.cc-loc{font-size:10px;color:var(--muted);}
+.dash-prog{background:var(--white);border-radius:9px;padding:11px 14px;box-shadow:var(--shadow);margin-bottom:14px;}
+.dp-lbl{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:6px;}
+.dp-bg{background:#ede8e0;border-radius:4px;height:8px;}
+.dp-fill{border-radius:4px;height:100%;transition:width .4s;}
+@media(max-width:700px){.dash-kpi-grid{grid-template-columns:1fr 1fr;}.kpi-row{grid-template-columns:1fr 1fr;}}
 .upload-zone{border:2px dashed var(--border);border-radius:9px;padding:20px;text-align:center;cursor:pointer;transition:.2s;margin-bottom:10px;}
 .upload-zone:hover{border-color:var(--orange);}
 .empty{text-align:center;padding:36px;color:var(--muted);}
@@ -125,12 +157,76 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
   <div id="banners-area"></div>
 
   <div class="tabs">
-    <button class="tab active" onclick="showSection('validade',this)">🗓 Validade</button>
+    <button class="tab active" id="tab-dash" onclick="showSection('dashboard',this)">📊 Dashboard</button>
+    <button class="tab" onclick="showSection('validade',this)">🗓 Validade</button>
     <button class="tab" onclick="showSection('perdas',this)">🗑️ Perdas</button>
   </div>
 
+  <!-- ── DASHBOARD ── -->
+  <div id="sec-dashboard">
+    <!-- KPI cards grandes clicáveis -->
+    <div class="dash-kpi-grid">
+      <div class="dash-kpi vencido" onclick="goFiltro('vencido')">
+        <div class="dk-ico">💀</div>
+        <div class="dk-lbl">Vencidos</div>
+        <div class="dk-val vencido" id="dk-vencido">—</div>
+        <div class="dk-sub">Retirar imediatamente</div>
+      </div>
+      <div class="dash-kpi critico" onclick="goFiltro('critico')">
+        <div class="dk-ico">🔴</div>
+        <div class="dk-lbl">Crítico</div>
+        <div class="dk-val critico" id="dk-critico">—</div>
+        <div class="dk-sub" id="dk-critico-sub">≤ 3 dias</div>
+      </div>
+      <div class="dash-kpi alerta" onclick="goFiltro('alerta')">
+        <div class="dk-ico">⚠️</div>
+        <div class="dk-lbl">Alerta</div>
+        <div class="dk-val alerta" id="dk-alerta">—</div>
+        <div class="dk-sub" id="dk-alerta-sub">≤ 7 dias</div>
+      </div>
+      <div class="dash-kpi atencao" onclick="goFiltro('atencao')">
+        <div class="dk-ico">👁</div>
+        <div class="dk-lbl">Atenção</div>
+        <div class="dk-val atencao" id="dk-atencao">—</div>
+        <div class="dk-sub" id="dk-atencao-sub">≤ 30 dias</div>
+      </div>
+      <div class="dash-kpi ok" onclick="goFiltro('ok')">
+        <div class="dk-ico">✅</div>
+        <div class="dk-lbl">OK</div>
+        <div class="dk-val ok" id="dk-ok2">—</div>
+        <div class="dk-sub">Dentro do prazo</div>
+      </div>
+    </div>
+
+    <!-- Barra de progresso geral -->
+    <div class="dash-prog" id="dash-prog-wrap" style="display:none">
+      <div class="dp-lbl">
+        <span>Saúde do estoque</span>
+        <span id="dp-pct-txt"></span>
+      </div>
+      <div class="dp-bg"><div class="dp-fill" id="dp-fill" style="width:0%"></div></div>
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:4px">
+        <span id="dp-lbl-l"></span><span id="dp-lbl-r"></span>
+      </div>
+    </div>
+
+    <!-- Cards de produtos críticos -->
+    <div id="dash-crit-section" style="display:none">
+      <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px">
+        🚨 Produtos que precisam de atenção imediata
+      </div>
+      <div class="crit-grid" id="dash-crit-grid"></div>
+    </div>
+
+    <div id="dash-empty" style="display:none;padding:40px;text-align:center;color:var(--muted)">
+      <div style="font-size:40px;margin-bottom:12px">✅</div>
+      <div style="font-weight:700;font-size:16px">Tudo OK!</div>
+      <div style="font-size:13px;margin-top:6px">Nenhum produto com validade crítica no momento.</div>
+    </div>
+  </div>
+
   <!-- ── VALIDADE ── -->
-  <div id="sec-validade">
+  <div id="sec-validade" style="display:none">
     <div class="toolbar">
       <button class="btn btn-p" onclick="abrirModal()">＋ Novo Item</button>
       <button class="btn btn-s" onclick="abrirImport()">📥 Importar Planilha</button>
@@ -343,11 +439,108 @@ async function init(){
 }
 
 function showSection(s, btn){
-  document.getElementById('sec-validade').style.display = s==='validade'?'':'none';
-  document.getElementById('sec-perdas').style.display   = s==='perdas'?'':'none';
+  document.getElementById('sec-dashboard').style.display = s==='dashboard'?'':'none';
+  document.getElementById('sec-validade').style.display  = s==='validade'?'':'none';
+  document.getElementById('sec-perdas').style.display    = s==='perdas'?'':'none';
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   if(btn) btn.classList.add('active');
   if(s==='perdas') carregarPerdas();
+  if(s==='dashboard') renderDashboard();
+}
+
+function goFiltro(status){
+  // Vai para aba Validade com filtro aplicado
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  const tabVal = document.querySelector('[onclick*="validade"]');
+  if(tabVal) tabVal.classList.add('active');
+  document.getElementById('sec-dashboard').style.display='none';
+  document.getElementById('sec-validade').style.display='';
+  document.getElementById('sec-perdas').style.display='none';
+  if(status==='critico'||status==='vencido'){
+    document.getElementById('flt-status').value='vencido';
+  } else {
+    document.getElementById('flt-status').value=status==='ok'?'ok':'alerta';
+  }
+  carregar();
+}
+
+function renderDashboard(){
+  if(!itens.length){ carregar().then(()=>_renderDash()); return; }
+  _renderDash();
+}
+
+function _renderDash(){
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+  let counts = {vencido:0, critico:0, alerta:0, atencao:0, ok:0};
+  let criticos = []; // para os cards
+
+  itens.forEach(v => {
+    if(v.status==='descartado') return;
+    const dias = calcDias(v.data_validade);
+    const urg  = getUrgencia(dias, v.dias_alerta||7);
+    const urg4 = dias!==null&&dias<=30&&urg==='ok'?'atencao':urg;
+    if(urg4==='vencido') counts.vencido++;
+    else if(urg4==='critico') counts.critico++;
+    else if(urg4==='alerta') counts.alerta++;
+    else if(urg4==='atencao') counts.atencao++;
+    else counts.ok++;
+    if(['vencido','critico','alerta'].includes(urg4)){
+      criticos.push({...v, dias, urg: urg4});
+    }
+  });
+
+  const total = Object.values(counts).reduce((s,v)=>s+v,0);
+  document.getElementById('dk-vencido').textContent = counts.vencido;
+  document.getElementById('dk-critico').textContent = counts.critico;
+  document.getElementById('dk-alerta').textContent  = counts.alerta;
+  document.getElementById('dk-atencao').textContent = counts.atencao;
+  document.getElementById('dk-ok2').textContent     = counts.ok;
+
+  // Barra de progresso
+  const progWrap = document.getElementById('dash-prog-wrap');
+  if(total>0){
+    progWrap.style.display='';
+    const pctOk = Math.round((counts.ok+counts.atencao)/total*100);
+    const fill = document.getElementById('dp-fill');
+    fill.style.width = pctOk+'%';
+    fill.style.background = pctOk>=80?'var(--c-ok)':pctOk>=50?'var(--c-alerta)':'var(--c-vencido)';
+    document.getElementById('dp-pct-txt').textContent = pctOk+'% OK';
+    document.getElementById('dp-lbl-l').textContent   = `${counts.vencido+counts.critico} críticos`;
+    document.getElementById('dp-lbl-r').textContent   = `${total} itens no total`;
+  }
+
+  // Cards de produtos críticos (máx 12)
+  const critSection = document.getElementById('dash-crit-section');
+  const critGrid    = document.getElementById('dash-crit-grid');
+  const dashEmpty   = document.getElementById('dash-empty');
+
+  if(criticos.length===0){
+    critSection.style.display='none';
+    dashEmpty.style.display='';
+  } else {
+    dashEmpty.style.display='none';
+    critSection.style.display='';
+    const URG_ORD = {vencido:0,critico:1,alerta:2};
+    criticos.sort((a,b)=>(URG_ORD[a.urg]??9)-(URG_ORD[b.urg]??9)||(a.dias??9999)-(b.dias??9999));
+    critGrid.innerHTML = criticos.slice(0,12).map(v=>{
+      const diasTxt = v.dias<0 ? `${Math.abs(v.dias)}d vencido`
+                    : v.dias===0? 'Vence hoje!'
+                    : v.dias===1? 'Vence amanhã'
+                    : `${v.dias}d restantes`;
+      const acaoTxt = v.acao_antes_vencer ? `<div style="font-size:10px;color:var(--muted);margin-top:3px">📋 ${v.acao_antes_vencer}</div>` : '';
+      const locTxt  = v.localizacao ? `<span class="cc-loc">📍 ${v.localizacao}</span>` : '';
+      const qtdTxt  = v.qtd_unidades ? `<span style="font-size:10px;color:var(--muted)">${v.qtd_unidades} un.</span>` : '';
+      return `<div class="crit-card ${v.urg}" onclick="abrirModal(${v.id})">
+        <div class="cc-nome" title="${v.descricao}">${v.descricao}</div>
+        <div style="font-size:10px;color:var(--muted)">${v.codigo||'Sem código'}</div>
+        <div class="cc-info">
+          <span class="cc-dias ${v.urg}">${diasTxt}</span>
+          ${qtdTxt}${locTxt}
+        </div>
+        ${acaoTxt}
+      </div>`;
+    }).join('');
+  }
 }
 
 function fecharModal(id){ document.getElementById(id).classList.remove('open'); }
@@ -416,6 +609,10 @@ async function carregar(){
   if(!d.ok) return;
   itens = d.data;
   renderVal(itens);
+  // Re-renderiza dashboard se estiver ativo
+  if(document.getElementById('sec-dashboard').style.display !== 'none'){
+    _renderDash();
+  }
 }
 
 function filtrarVal(){
