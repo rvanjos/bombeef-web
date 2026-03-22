@@ -59,6 +59,7 @@ module.exports = function (pool) {
     `);
     // ALTER TABLE separados — PostgreSQL não aceita múltiplos DDL num único query
     for (const [col, def] of [
+      ['produto_id',           'INTEGER'],
       ['codigo_produto',       'TEXT'],
       ['descricao_produto',    'TEXT'],
       ['preco_custo_unitario', 'NUMERIC(10,4) DEFAULT 0'],
