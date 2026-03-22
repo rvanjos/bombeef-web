@@ -545,8 +545,12 @@ function autoClassificar(lancamento, razaoSocial='') {
   const textoCompleto = (lancamento + ' ' + razaoLimpa).toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
   const up = textoCompleto;
 
-  // 1. Memória de fornecedor (aprendizado do usuário)
-  for (const [k,v] of Object.entries(supMem)) { if (up.includes(k.toUpperCase())) return v; }
+  // 1. Memória de fornecedor (aprendizado do usuário) — busca em razaoSocial e lancamento
+  const razaoUp = (razaoSocial||'').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  for (const [k,v] of Object.entries(supMem)) {
+    const ku = k.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+    if (razaoUp.includes(ku) || up.includes(ku)) return v;
+  }
 
   // 2. Mapeamentos fixos
   for (const [k,v] of MAPPINGS) { if (up.includes(k.toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,''))) return v; }
@@ -855,16 +859,26 @@ function fmtMes(m) {
 }
 
 // ─── CATEGORIAS ───────────────────────────────────────────────────────────────
+function _chaveFornecedor(t) {
+  // Usa razaoSocial (nome do fornecedor) como chave, não a operação bancária
+  const razo = (t.razaoSocial||t.portador||'').trim();
+  const lanc = (t.lancamento||'').trim();
+  const chave = razo.length >= 4 ? razo : lanc;
+  return chave.toUpperCase().slice(0,40);
+}
+
 function setCat(id, cat) {
   const t = TXS.find(x => x.id===id); if (!t) return;
   t.categoria = cat;
-  if (cat && t.lancamento) {
-    const k = t.lancamento.toUpperCase().slice(0,30);
-    supMem[k] = cat;
-    // Aplica a outros do mesmo fornecedor sem categoria
-    TXS.forEach(tx => {
-      if (!tx.categoria && tx.lancamento?.toUpperCase().slice(0,30)===k) tx.categoria=cat;
-    });
+  if (cat) {
+    const k = _chaveFornecedor(t);
+    if (k) {
+      supMem[k] = cat;
+      // Aplica apenas ao mesmo fornecedor (razaoSocial), não a todos sem categoria
+      TXS.forEach(tx => {
+        if (!tx.categoria && _chaveFornecedor(tx) === k) tx.categoria = cat;
+      });
+    }
   }
   const row = document.getElementById('tr-'+id);
   if (row) row.className = t.ignorar?'ign':cat?t.fonte==='CC'?'cc-row':t.needsReview?'boleto-review':t.fonte?.startsWith('BOLETO')?'boleto-row':'':'uncat';
@@ -899,11 +913,16 @@ function aplicarBulk() {
   let n=0;
   const fornecedores=new Set();
   TXS.forEach(t=>{
-    if (selIds.has(t.id)){t.categoria=cat;n++;if(t.lancamento)fornecedores.add(t.lancamento.toUpperCase().slice(0,30));}
+    if (selIds.has(t.id)){
+      t.categoria=cat; n++;
+      const k=_chaveFornecedor(t);
+      if(k) fornecedores.add(k);
+    }
   });
   if (applySupplier) {
+    // Aplica apenas aos lançamentos do mesmo fornecedor (razaoSocial), não a todos sem categoria
     TXS.forEach(t=>{
-      if (!selIds.has(t.id)&&t.lancamento&&fornecedores.has(t.lancamento.toUpperCase().slice(0,30))){t.categoria=cat;n++;}
+      if (!selIds.has(t.id) && fornecedores.has(_chaveFornecedor(t))){t.categoria=cat;n++;}
     });
     fornecedores.forEach(k=>supMem[k]=cat);
   }
@@ -1374,16 +1393,81 @@ function limpar(){
 // ─── EXPORTAR EXCEL ───────────────────────────────────────────────────────────
 function exportXLS(){
   if(!TXS.length){toast('Sem dados');return;}
-  const rows=TXS.filter(t=>!t.ignorar).map(t=>({
-    'Data Compra':t.data,'Mês DRE':t.mes,'Mês Caixa':t.mesCaixa||t.mes,
-    'Fonte':t.fonte,'Estabelecimento':t.lancamento,'Portador/Razão':t.razaoSocial||t.portador||'',
-    'Parcela':t.parcela||'','Valor (R$)':parseFloat(t.valor||0),
-    'Categoria DRE':t.categoria||'','Grupo DRE':catGrupo(t.categoria)||''
+  const wb = XLSX.utils.book_new();
+
+  // ── Aba 1: DRE estruturado por categoria ────────────────────────────────────
+  const at = TXS.filter(t=>!t.ignorar && t.categoria);
+  const mesesSet = new Set(at.map(t=>getMesTx(t)));
+  const meses = [...mesesSet].sort((a,b)=>{
+    const p=s=>{const[m,y]=s.split('/');return(+y)*12+(+m);}; return p(a)-p(b);
+  });
+
+  // Agrupa dados
+  const data={};
+  for (const t of at) {
+    const g = catGrupo(t.categoria)||'OUTROS';
+    const m = getMesTx(t);
+    const v = parseFloat(t.valor||0);
+    if(!data[g])data[g]={};
+    if(!data[g][t.categoria])data[g][t.categoria]={};
+    data[g][t.categoria][m]=(data[g][t.categoria][m]||0)+v;
+  }
+
+  const sg=(gk,m)=>Object.values(data[gk]||{}).reduce((s,c)=>s+(c[m]||0),0);
+
+  // Monta array de linhas para o DRE
+  const dreRows = [];
+  // Cabeçalho
+  dreRows.push(['Descrição', ...meses, 'TOTAL']);
+
+  const ORDEM=['RECEITAS','CMV','PESSOAL','VENDAS_CAT','CONSUMO','TERCEIROS','MATERIAL','FINANCEIRAS','OUTRAS','IMPOSTOS'];
+  let lucroMes = Object.fromEntries(meses.map(m=>[m,0]));
+
+  for (const gk of ORDEM) {
+    if (!data[gk]) continue;
+    const g = CATS[gk];
+    const isDesp = gk !== 'RECEITAS';
+    // Linha de grupo (header)
+    dreRows.push(['', ...meses.map(()=>''), '']); // linha em branco
+    const totG = meses.reduce((s,m)=>s+sg(gk,m),0);
+    dreRows.push([g?g.l:gk, ...meses.map(m=>sg(gk,m)||''), totG||'']);
+
+    // Linhas de categorias
+    for (const [cat, mD] of Object.entries(data[gk])) {
+      const totC = Object.values(mD).reduce((s,v)=>s+v,0);
+      dreRows.push([`  ${cat}`, ...meses.map(m=>mD[m]||''), totC||'']);
+    }
+
+    // Subtotal
+    dreRows.push([`${g?g.l:gk} Total:`, ...meses.map(m=>sg(gk,m)||''), totG||'']);
+
+    // Acumula no lucro
+    meses.forEach(m=>{ lucroMes[m]=(lucroMes[m]||0)+sg(gk,m); });
+  }
+
+  // Linha de resultado
+  dreRows.push(['']); // separador
+  const lucroTotal = meses.reduce((s,m)=>s+(lucroMes[m]||0),0);
+  dreRows.push(['RESULTADO (LUCRO/PREJUÍZO)', ...meses.map(m=>lucroMes[m]||''), lucroTotal||'']);
+
+  const wsDRE = XLSX.utils.aoa_to_sheet(dreRows);
+  wsDRE['!cols'] = [{wch:40}, ...meses.map(()=>({wch:14})), {wch:14}];
+  XLSX.utils.book_append_sheet(wb, wsDRE, `DRE ${mesRef}`);
+
+  // ── Aba 2: Lançamentos detalhados ────────────────────────────────────────────
+  const detRows = TXS.filter(t=>!t.ignorar).map(t=>({
+    'Data':t.data, 'Mês DRE':t.mes, 'Mês Caixa':t.mesCaixa||t.mes,
+    'Fonte':t.fonte, 'Operação':t.lancamento,
+    'Fornecedor/Razão Social':t.razaoSocial||t.portador||'',
+    'Valor (R$)':parseFloat(t.valor||0),
+    'Categoria DRE':t.categoria||'', 'Grupo DRE':catGrupo(t.categoria)||''
   }));
-  const ws=XLSX.utils.json_to_sheet(rows);
-  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Extrato Classificado');
-  XLSX.writeFile(wb,`DRE_${mesRef.replace('/','_')}.xlsx`);
-  toast('📤 Excel exportado!');
+  const wsDetalhe = XLSX.utils.json_to_sheet(detRows);
+  wsDetalhe['!cols'] = [{wch:12},{wch:10},{wch:10},{wch:12},{wch:30},{wch:35},{wch:14},{wch:35},{wch:20}];
+  XLSX.utils.book_append_sheet(wb, wsDetalhe, 'Lançamentos');
+
+  XLSX.writeFile(wb, `DRE_${mesRef.replace('/','_')}.xlsx`);
+  toast('📤 Excel exportado com DRE estruturado!');
 }
 
 // ─── SALVAR / SESSÕES ────────────────────────────────────────────────────────
