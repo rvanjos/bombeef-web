@@ -515,7 +515,7 @@ function abrirKit(id){
   document.getElementById('k-nome').value=k?.nome||'';
   document.getElementById('k-desc').value=k?.descricao||'';
   document.getElementById('k-pvenda').value=k?.preco_venda||'';
-  kitItems=k?.itens?k.itens.map(i=>({codigo:i.codigo_produto||'',descricao:i.descricao_produto||i.prod_desc||'',quantidade:i.quantidade||1,precoCusto:i.preco_custo_unitario||0,ignorarMargem:!!i.ignorar_margem})):[];
+  kitItems=k?.itens?k.itens.map(i=>({codigo:i.codigo_produto||'',descricao:i.descricao_produto||i.prod_desc||'',quantidade:i.quantidade||1,precoCusto:i.preco_custo_unitario||0,ignorarMargem:!!i.ignorar_margem,custoKit:i.custo_kit!=null?parseFloat(i.custo_kit):null})):[];
   atualizarCfgKit();
   renderKitItems();
   document.getElementById('m-kit').classList.add('open');
@@ -544,8 +544,16 @@ function renderKitItems(){
       <input placeholder="Código" value="${item.codigo||''}" oninput="kitItems[${i}].codigo=this.value;buscarProdKit(${i},this.value)" style="font-size:11px">
       <input placeholder="Descrição" value="${item.descricao||''}" oninput="kitItems[${i}].descricao=this.value" style="font-size:11px">
       <input type="number" placeholder="Qtd" value="${item.quantidade||1}" min="0.001" step="0.001" oninput="kitItems[${i}].quantidade=parseFloat(this.value)||1;recalcKit()">
-      <input type="number" placeholder="Custo" value="${item.precoCusto||''}" step="0.0001" oninput="kitItems[${i}].precoCusto=parseFloat(this.value)||0;recalcKit()" style="${item.ignorarMargem?'opacity:.5;text-decoration:line-through':''}">
-      <label title="Produto próximo do vencimento — custo desconsiderado no cálculo de margem" style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;white-space:nowrap;${item.ignorarMargem?'color:var(--orange);font-weight:700':'color:var(--muted)'}">
+      <div style="display:flex;flex-direction:column;gap:2px">
+        <input type="number" placeholder="Custo orig." value="${item.precoCusto||''}" step="0.0001"
+          oninput="kitItems[${i}].precoCusto=parseFloat(this.value)||0;recalcKit()"
+          title="Preço de custo original do produto">
+        ${item.ignorarMargem ? `<input type="number" placeholder="Custo kit" value="${item.custoKit!=null?item.custoKit:''}" step="0.0001"
+          oninput="kitItems[${i}].custoKit=parseFloat(this.value)||0;recalcKit()"
+          style="font-size:10px;border-color:var(--orange);background:#fff8f0"
+          title="Custo que entra no kit (pode ser menor — ex: produto próx. vencimento)">` : ''}
+      </div>
+      <label title="Produto próximo do vencimento — margem e fixos desconsiderados para este item" style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;white-space:nowrap;${item.ignorarMargem?'color:var(--orange);font-weight:700':'color:var(--muted)'}">
         <input type="checkbox" ${item.ignorarMargem?'checked':''} onchange="kitItems[${i}].ignorarMargem=this.checked;renderKitItems()" style="accent-color:var(--orange)">
         ${item.ignorarMargem?'<span>⏱ Venc.</span>':'<span>Normal</span>'}
       </label>
@@ -565,11 +573,20 @@ async function buscarProdKit(i,cod){
 }
 
 function recalcKit(){
-  // Custo real = todos os itens; Custo efetivo = só itens sem flag de vencimento
+  // matReal = custo total de todos os itens (usado para mostrar custo total)
+  // matMargem = custo para cálculo de margem (exclui itens próx. vencimento)
   const matReal=kitItems.reduce((s,i)=>s+(parseFloat(i.quantidade||1)*parseFloat(i.precoCusto||0)),0);
-  const matEfetivo=kitItems.filter(i=>!i.ignorarMargem).reduce((s,i)=>s+(parseFloat(i.quantidade||1)*parseFloat(i.precoCusto||0)),0);
-  const matDescartado=matReal-matEfetivo;
-  const mat=matEfetivo; // cálculo de margem usa só itens sem flag
+  const matMargem=kitItems.reduce((s,i)=>{
+    const qtd=parseFloat(i.quantidade||1);
+    if(i.ignorarMargem){
+      // Usa custoKit se definido (venda anti-desperdício), caso contrário 0 no cálculo de margem
+      const ck=i.custoKit!=null&&i.custoKit>0?parseFloat(i.custoKit):0;
+      return s+(qtd*ck);
+    }
+    return s+(qtd*parseFloat(i.precoCusto||0));
+  },0);
+  const matDescartado=matReal-matMargem;
+  const mat=matMargem; // preço mínimo calculado sem os itens próx. vencimento
   const pv=parseFloat(document.getElementById('k-pvenda').value)||0;
   const op=CFG.cartao+CFG.royalties+CFG.desperdicio+CFG.imposto+CFG.fixos;
   const mkOp=1/(1-op/100);
@@ -580,9 +597,10 @@ function recalcKit(){
   const lucroR=pv>0?pv-mat-pv*(op/100):0;
   const margR=pv>0?(lucroR/pv*100):0;
 
+  // Custo materiais: sempre mostra o total real, com nota de itens vencendo
   document.getElementById('kc-mat').textContent=
     matDescartado>0
-      ? fmt.brl(matEfetivo)+` (+${fmt.brl(matDescartado)} ⏱ venc.)`
+      ? fmt.brl(matReal)+` (⏱ ${fmt.brl(matDescartado)} s/ margem)`
       : fmt.brl(matReal);
   if(pv>0){
     document.getElementById('kc-cartao').textContent=fmt.brl(pv*CFG.cartao/100);
@@ -632,7 +650,7 @@ async function salvarKit(){
     nome:document.getElementById('k-nome').value.trim(),
     descricao:document.getElementById('k-desc').value.trim(),
     precoVenda:parseFloat(document.getElementById('k-pvenda').value)||0,
-    itens:kitItems.map(i=>({codigo:i.codigo,descricao:i.descricao,quantidade:parseFloat(i.quantidade||1),precoCusto:parseFloat(i.precoCusto||0),ignorarMargem:!!i.ignorarMargem}))
+    itens:kitItems.map(i=>({codigo:i.codigo,descricao:i.descricao,quantidade:parseFloat(i.quantidade||1),precoCusto:parseFloat(i.precoCusto||0),ignorarMargem:!!i.ignorarMargem,custoKit:i.custoKit!=null?parseFloat(i.custoKit):null}))
   };
   if(!body.codigo||!body.nome){toast('Código e nome obrigatórios');return;}
   const d=id?await api.put(`/api/kits/${id}`,body):await api.post('/api/kits',body);

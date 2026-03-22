@@ -64,6 +64,7 @@ module.exports = function (pool) {
       ['descricao_produto',    'TEXT'],
       ['preco_custo_unitario', 'NUMERIC(10,4) DEFAULT 0'],
       ['ignorar_margem',       'BOOLEAN DEFAULT false'],
+      ['custo_kit',            'NUMERIC(10,4)'],
     ]) {
       await pool.query(`ALTER TABLE kit_itens ADD COLUMN IF NOT EXISTS ${col} ${def}`).catch(() => {});
     }

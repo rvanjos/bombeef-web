@@ -1120,7 +1120,7 @@ function _buildDRE(el, full) {
 
   const TH=`padding:8px 10px;text-align:right;font-size:10px;color:#fff;font-weight:700;text-transform:uppercase;background:var(--red);white-space:nowrap;border-right:1px solid rgba(255,255,255,.1)`;
   const THL=`padding:8px 14px;text-align:left;font-size:10px;color:#fff;font-weight:700;text-transform:uppercase;background:var(--red)`;
-  const TD=`padding:5px 10px;text-align:right;font-size:12px;border-bottom:1px solid #f5efe8;border-right:1px solid #f5efe8`;
+  const TD=`padding:5px 10px;text-align:right;font-size:12px;border-bottom:1px solid #f5efe8;border-right:1px solid #f5efe8;transition:background .15s`;
   const TDL=`padding:5px ${full?'14':'10'}px;text-align:left;font-size:12px;border-bottom:1px solid #f5efe8`;
 
   let h=`<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
@@ -1154,7 +1154,9 @@ function _buildDRE(el, full) {
       const totC=Object.values(mD).reduce((s,v)=>s+v,0);
       h+=`<tr class="${gid}-row">
         <td style="${TDL};padding-left:${full?'22':'18'}px;color:var(--muted)">· ${cat}</td>
-        ${meses.map(m=>`<td style="${TD}">${fv(mD[m]||0,isDesp)}</td>`).join('')}
+        ${meses.map(m=>`<td style="${TD};${mD[m]?'cursor:pointer':''}" title="${mD[m]?'Duplo clique para ver lançamentos':''}" ondblclick="${mD[m]?`drillDown('${cat.replace(/'/g,"\\'")}','${m}')`:''}">
+          ${fv(mD[m]||0,isDesp)}
+        </td>`).join('')}
         ${showTot?`<td style="${TD};font-weight:600">${fv(totC,isDesp)}</td>`:''}
       </tr>`;
     }
@@ -1417,6 +1419,59 @@ function limpar(){
 }
 
 // ─── EXPORTAR EXCEL ───────────────────────────────────────────────────────────
+function drillDown(cat, mes) {
+  // Filtra lançamentos da categoria e mês clicados
+  const modo = getModo();
+  const lancs = TXS.filter(t => {
+    if (t.ignorar || !t.categoria) return false;
+    if (t.categoria !== cat) return false;
+    const mTx = modo === 'caixa' ? (t.mesCaixa || t.mes || mesRef) : (t.mes || mesRef);
+    return mTx === mes;
+  });
+
+  // Preenche modal
+  const el = document.getElementById('m-drill');
+  const tbody = document.getElementById('drill-tbody');
+  const empty = document.getElementById('drill-empty');
+  document.getElementById('drill-title').textContent = `${cat}`;
+  document.getElementById('drill-sub').textContent = `${fmtMes(mes)} · ${modo === 'caixa' ? 'Mês Caixa' : 'Mês Competência'}`;
+
+  if (!lancs.length) {
+    tbody.innerHTML = '';
+    empty.style.display = '';
+  } else {
+    empty.style.display = 'none';
+    const total = lancs.reduce((s, t) => s + parseFloat(t.valor || 0), 0);
+    const FONTE_BADGE = {
+      EXTRATO: '<span style="background:#e8f0ff;color:#1a5c8a;padding:1px 6px;border-radius:4px;font-size:10px">Extrato</span>',
+      BOLETO: '<span style="background:#fff0e0;color:#b35c00;padding:1px 6px;border-radius:4px;font-size:10px">Boleto</span>',
+      BOLETO_PREV: '<span style="background:#fff8e0;color:#b39000;padding:1px 6px;border-radius:4px;font-size:10px">Prev.</span>',
+      MANUAL: '<span style="background:#f0f0ff;color:#6040c0;padding:1px 6px;border-radius:4px;font-size:10px">Manual</span>',
+      CC: '<span style="background:#ffe8f0;color:#c02060;padding:1px 6px;border-radius:4px;font-size:10px">Cartão</span>',
+    };
+
+    tbody.innerHTML = lancs
+      .sort((a,b) => (a.data||'').localeCompare(b.data||''))
+      .map(t => {
+        const v = parseFloat(t.valor || 0);
+        const vCol = v >= 0 ? 'var(--green)' : 'var(--red-l)';
+        const badge = FONTE_BADGE[t.fonte] || `<span style="font-size:10px">${t.fonte||'—'}</span>`;
+        return `<tr style="border-bottom:1px solid #f5efe8">
+          <td style="padding:7px 12px;font-family:'DM Mono',monospace;font-size:11px;white-space:nowrap">${t.data ? t.data.slice(0,10) : '—'}</td>
+          <td style="padding:7px 12px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${t.lancamento||''}">${t.lancamento||'—'}</td>
+          <td style="padding:7px 12px;font-size:11px;color:var(--muted);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${t.razaoSocial||''}">${t.razaoSocial||t.portador||'—'}</td>
+          <td style="padding:7px 12px">${badge}</td>
+          <td style="padding:7px 12px;text-align:right;font-family:'DM Mono',monospace;font-weight:600;color:${vCol};white-space:nowrap">${fmt.brl(v)}</td>
+        </tr>`;
+      }).join('');
+
+    document.getElementById('drill-total').textContent = `Total: ${fmt.brl(total)}`;
+    document.getElementById('drill-count').textContent = `${lancs.length} lançamento(s)`;
+  }
+
+  el.style.display = 'flex';
+}
+
 function exportXLS(){
   if(!TXS.length){toast('Sem dados');return;}
   const wb = XLSX.utils.book_new();
@@ -1557,7 +1612,12 @@ async function loadSessao(id){
 async function delSessao(id){if(!confirm('Remover sessão?'))return;await api.delete(`/api/dre/sessoes/${id}`);abrirSessoes();}
 
 // ─── UTILS ────────────────────────────────────────────────────────────────────
-function fecharModal(id){document.getElementById(id).classList.remove('open');}
+function fecharModal(id){
+  const el=document.getElementById(id);
+  if(!el) return;
+  if(id==='m-drill') el.style.display='none';
+  else el.classList.remove('open');
+}
 
 function setSt(s){
   const d=document.getElementById('sd'),t=document.getElementById('st');
@@ -1576,5 +1636,37 @@ function toggleDREGrupo(gid) {
   if (ico) ico.textContent = hidden ? '▼' : '▶';
 }
 </script>
+<!-- Modal Drill-Down DRE -->
+<div class="mbg" id="m-drill" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center">
+  <div style="background:var(--white);border-radius:13px;width:100%;max-width:700px;max-height:88vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.35)">
+    <div style="background:var(--red);padding:14px 20px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
+      <div>
+        <div id="drill-title" style="color:#fff;font-weight:700;font-size:15px"></div>
+        <div id="drill-sub" style="color:rgba(255,255,255,.7);font-size:11px;margin-top:2px"></div>
+      </div>
+      <button onclick="fecharModal('m-drill')" style="background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:6px;padding:4px 12px;cursor:pointer;font-size:18px">×</button>
+    </div>
+    <div style="overflow-y:auto;flex:1">
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead>
+          <tr style="background:#f8f4f0;position:sticky;top:0">
+            <th style="padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--muted);border-bottom:2px solid var(--border)">Data</th>
+            <th style="padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--muted);border-bottom:2px solid var(--border)">Operação</th>
+            <th style="padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--muted);border-bottom:2px solid var(--border)">Fornecedor / Razão</th>
+            <th style="padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--muted);border-bottom:2px solid var(--border)">Fonte</th>
+            <th style="padding:8px 12px;text-align:right;font-size:10px;text-transform:uppercase;color:var(--muted);border-bottom:2px solid var(--border)">Valor</th>
+          </tr>
+        </thead>
+        <tbody id="drill-tbody"></tbody>
+      </table>
+      <div id="drill-empty" style="display:none;padding:24px;text-align:center;color:var(--muted)">Nenhum lançamento encontrado</div>
+    </div>
+    <div style="padding:10px 16px;border-top:1px solid var(--border);background:#fafafa;display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
+      <span id="drill-total" style="font-weight:700;font-size:13px"></span>
+      <span id="drill-count" style="font-size:11px;color:var(--muted)"></span>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>

@@ -190,14 +190,14 @@ app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 
 // ── Arquivos estáticos — sem cache para garantir versão mais recente ──────────
 app.use((req, res, next) => {
-  // Desabilita cache para HTML e JS (os mais críticos para atualizações)
-  if (req.path.endsWith('.html') || req.path.endsWith('.js')) {
+  const p = req.path;
+  const isNoCache = p === '/' || p.endsWith('.html') || p.endsWith('.js') || !p.includes('.');
+  if (isNoCache) {
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
     res.setHeader('Surrogate-Control', 'no-store');
   } else {
-    // CSS e imagens: cache curto (1 hora)
     res.setHeader('Cache-Control', 'public, max-age=3600');
   }
   next();
