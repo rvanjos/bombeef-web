@@ -53,7 +53,8 @@ module.exports = function (pool) {
         codigo_produto        TEXT,
         descricao_produto     TEXT,
         quantidade            NUMERIC(10,3) DEFAULT 1,
-        preco_custo_unitario  NUMERIC(10,4) DEFAULT 0
+        preco_custo_unitario  NUMERIC(10,4) DEFAULT 0,
+        ignorar_margem        BOOLEAN DEFAULT false
       )
     `);
     // ALTER TABLE separados — PostgreSQL não aceita múltiplos DDL num único query
@@ -61,6 +62,7 @@ module.exports = function (pool) {
       ['codigo_produto',       'TEXT'],
       ['descricao_produto',    'TEXT'],
       ['preco_custo_unitario', 'NUMERIC(10,4) DEFAULT 0'],
+      ['ignorar_margem',       'BOOLEAN DEFAULT false'],
     ]) {
       await pool.query(`ALTER TABLE kit_itens ADD COLUMN IF NOT EXISTS ${col} ${def}`).catch(() => {});
     }

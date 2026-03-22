@@ -54,7 +54,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
 .fgr3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px;}
 /* KIT PRECIFICAÇÃO */
 .kit-two{display:grid;grid-template-columns:1fr 320px;gap:16px;align-items:start;}
-.kit-item-row{display:grid;grid-template-columns:1fr 1fr 80px 90px 26px;gap:6px;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);}
+.kit-item-row{display:grid;grid-template-columns:1fr 1fr 80px 90px 70px 26px;gap:6px;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);}
 .kit-item-row input{padding:5px 7px;border:1px solid var(--border);border-radius:5px;font-size:12px;font-family:'DM Sans',sans-serif;}
 .kit-del{background:none;border:none;cursor:pointer;font-size:15px;color:var(--red-l);}
 /* CUSTO BREAKDOWN */
@@ -217,8 +217,10 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
             <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px">Itens do Kit</div>
             <button class="btn btn-s" style="padding:4px 10px;font-size:11px" onclick="addKitItem()">＋ Item</button>
           </div>
-          <div style="font-size:10px;color:var(--muted);display:grid;grid-template-columns:1fr 1fr 80px 90px 26px;gap:6px;padding:4px 0;border-bottom:2px solid var(--border);font-weight:700;text-transform:uppercase;letter-spacing:.5px">
-            <span>Código</span><span>Descrição</span><span>Qtd</span><span>Custo Un.</span><span></span>
+          <div style="font-size:10px;color:var(--muted);display:grid;grid-template-columns:1fr 1fr 80px 90px 70px 26px;gap:6px;padding:4px 0;border-bottom:2px solid var(--border);font-weight:700;text-transform:uppercase;letter-spacing:.5px">
+            <span>Código</span><span>Descrição</span><span>Qtd</span><span>Custo Un.</span>
+            <span title="Produto próximo do vencimento — desconsiderar na margem" style="color:var(--orange)">⏱ Venc.</span>
+            <span></span>
           </div>
           <div id="kit-itens"></div>
           <div style="margin-top:10px">
@@ -513,7 +515,7 @@ function abrirKit(id){
   document.getElementById('k-nome').value=k?.nome||'';
   document.getElementById('k-desc').value=k?.descricao||'';
   document.getElementById('k-pvenda').value=k?.preco_venda||'';
-  kitItems=k?.itens?k.itens.map(i=>({codigo:i.codigo_produto||'',descricao:i.descricao_produto||i.prod_desc||'',quantidade:i.quantidade||1,precoCusto:i.preco_custo_unitario||0})):[];
+  kitItems=k?.itens?k.itens.map(i=>({codigo:i.codigo_produto||'',descricao:i.descricao_produto||i.prod_desc||'',quantidade:i.quantidade||1,precoCusto:i.preco_custo_unitario||0,ignorarMargem:!!i.ignorar_margem})):[];
   atualizarCfgKit();
   renderKitItems();
   document.getElementById('m-kit').classList.add('open');
@@ -542,7 +544,11 @@ function renderKitItems(){
       <input placeholder="Código" value="${item.codigo||''}" oninput="kitItems[${i}].codigo=this.value;buscarProdKit(${i},this.value)" style="font-size:11px">
       <input placeholder="Descrição" value="${item.descricao||''}" oninput="kitItems[${i}].descricao=this.value" style="font-size:11px">
       <input type="number" placeholder="Qtd" value="${item.quantidade||1}" min="0.001" step="0.001" oninput="kitItems[${i}].quantidade=parseFloat(this.value)||1;recalcKit()">
-      <input type="number" placeholder="Custo" value="${item.precoCusto||''}" step="0.0001" oninput="kitItems[${i}].precoCusto=parseFloat(this.value)||0;recalcKit()">
+      <input type="number" placeholder="Custo" value="${item.precoCusto||''}" step="0.0001" oninput="kitItems[${i}].precoCusto=parseFloat(this.value)||0;recalcKit()" style="${item.ignorarMargem?'opacity:.5;text-decoration:line-through':''}">
+      <label title="Produto próximo do vencimento — custo desconsiderado no cálculo de margem" style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;white-space:nowrap;${item.ignorarMargem?'color:var(--orange);font-weight:700':'color:var(--muted)'}">
+        <input type="checkbox" ${item.ignorarMargem?'checked':''} onchange="kitItems[${i}].ignorarMargem=this.checked;renderKitItems()" style="accent-color:var(--orange)">
+        ${item.ignorarMargem?'<span>⏱ Venc.</span>':'<span>Normal</span>'}
+      </label>
       <button class="kit-del" onclick="kitItems.splice(${i},1);renderKitItems()">×</button>
     </div>`).join('');
   recalcKit();
@@ -559,7 +565,11 @@ async function buscarProdKit(i,cod){
 }
 
 function recalcKit(){
-  const mat=kitItems.reduce((s,i)=>s+(parseFloat(i.quantidade||1)*parseFloat(i.precoCusto||0)),0);
+  // Custo real = todos os itens; Custo efetivo = só itens sem flag de vencimento
+  const matReal=kitItems.reduce((s,i)=>s+(parseFloat(i.quantidade||1)*parseFloat(i.precoCusto||0)),0);
+  const matEfetivo=kitItems.filter(i=>!i.ignorarMargem).reduce((s,i)=>s+(parseFloat(i.quantidade||1)*parseFloat(i.precoCusto||0)),0);
+  const matDescartado=matReal-matEfetivo;
+  const mat=matEfetivo; // cálculo de margem usa só itens sem flag
   const pv=parseFloat(document.getElementById('k-pvenda').value)||0;
   const op=CFG.cartao+CFG.royalties+CFG.desperdicio+CFG.imposto+CFG.fixos;
   const mkOp=1/(1-op/100);
@@ -570,7 +580,10 @@ function recalcKit(){
   const lucroR=pv>0?pv-mat-pv*(op/100):0;
   const margR=pv>0?(lucroR/pv*100):0;
 
-  document.getElementById('kc-mat').textContent=fmt.brl(mat);
+  document.getElementById('kc-mat').textContent=
+    matDescartado>0
+      ? fmt.brl(matEfetivo)+` (+${fmt.brl(matDescartado)} ⏱ venc.)`
+      : fmt.brl(matReal);
   if(pv>0){
     document.getElementById('kc-cartao').textContent=fmt.brl(pv*CFG.cartao/100);
     document.getElementById('kc-roy').textContent=fmt.brl(pv*CFG.royalties/100);
@@ -590,6 +603,7 @@ function recalcKit(){
   if(pv>0){
     if(pv>=precoIdeal){rc.className='result-box ok';st.textContent='✅ Margem excelente!';st.style.color='var(--green)';}
     else if(pv>=precoMin){rc.className='result-box warn';st.textContent='⚠️ Margem mínima — viável mas sem o lucro alvo';st.style.color='var(--orange)';}
+    else if(matDescartado>0){rc.className='result-box warn';st.textContent='⏱ Kit Anti-Desperdício — margem calculada sem itens próx. do vencimento';st.style.color='var(--orange)';}
     else{rc.className='result-box bad';st.textContent='❌ Preço abaixo do mínimo — prejuízo';st.style.color='var(--red-l)';}
     dt.textContent=`Lucro real: ${fmt.brl(lucroR)} (${margR.toFixed(1)}%) · Custo total: ${fmt.pct(op)}`;
   } else {
@@ -618,7 +632,7 @@ async function salvarKit(){
     nome:document.getElementById('k-nome').value.trim(),
     descricao:document.getElementById('k-desc').value.trim(),
     precoVenda:parseFloat(document.getElementById('k-pvenda').value)||0,
-    itens:kitItems.map(i=>({codigo:i.codigo,descricao:i.descricao,quantidade:parseFloat(i.quantidade||1),precoCusto:parseFloat(i.precoCusto||0)}))
+    itens:kitItems.map(i=>({codigo:i.codigo,descricao:i.descricao,quantidade:parseFloat(i.quantidade||1),precoCusto:parseFloat(i.precoCusto||0),ignorarMargem:!!i.ignorarMargem}))
   };
   if(!body.codigo||!body.nome){toast('Código e nome obrigatórios');return;}
   const d=id?await api.put(`/api/kits/${id}`,body):await api.post('/api/kits',body);
