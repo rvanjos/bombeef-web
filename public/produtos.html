@@ -260,8 +260,9 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
     <div class="mdb">
       <div class="upload-z" onclick="document.getElementById('f-import').click()">
         <div style="font-size:32px;margin-bottom:8px">📊</div>
-        <p style="font-size:13px;color:var(--muted)">Clique para selecionar a planilha XLSX</p>
-        <p style="font-size:11px;color:var(--muted);margin-top:4px">Colunas: Código, Descrição, Fornecedor, Custo, Venda</p>
+        <p style="font-size:13px;color:var(--muted)">Clique para selecionar o arquivo</p>
+        <p style="font-size:11px;color:var(--muted);margin-top:4px">Aceita <b>XLSX</b> ou <b>CSV</b> (ChefWeb / TOTVS)</p>
+        <p style="font-size:11px;color:var(--muted);margin-top:2px">Colunas: Código, Descrição, Fornecedor, Custo, Venda</p>
       </div>
       <input type="file" id="f-import" accept=".xlsx,.xls,.csv" style="display:none" onchange="procImport(this)">
       <div id="import-res" style="display:none;padding:10px;background:#f0faf4;border-radius:7px;font-size:13px"></div>

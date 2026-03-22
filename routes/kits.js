@@ -132,8 +132,8 @@ module.exports = function (pool) {
 
       res.json({ ok: true, data, total: data.length });
     } catch (e) {
-      console.error('[kits/GET]', e.message);
-      res.status(500).json({ ok: false, erro: e.message });
+      console.error('[kits/GET] ERRO COMPLETO:', e.message, e.stack?.split('\n')[1]);
+      res.status(500).json({ ok: false, erro: e.message, detalhe: e.detail || e.hint || '' });
     }
   });
 
