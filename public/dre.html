@@ -48,6 +48,14 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
 /* LAYOUT SPLIT */
 .split{display:flex;flex:1;overflow:hidden;min-height:0;}
 .main{flex:1;overflow-y:auto;display:flex;flex-direction:column;}
+/* Modo expandido — colapsa barras superiores */
+body.modo-expandido .stats-grid,
+body.modo-expandido .totals-row,
+body.modo-expandido .prog,
+body.modo-expandido .banner.show { display:none !important; }
+body.modo-expandido .ctrl { padding:4px 12px; }
+#btn-expand { transition: all .15s; }
+body.modo-expandido #btn-expand { background: var(--blue); color:#fff; border-color:var(--blue); }
 /* BULK BAR — igual ao sistema anterior */
 #bulk-bar{display:none;position:sticky;bottom:0;z-index:50;background:var(--red);color:#fff;padding:9px 16px;align-items:center;gap:10px;flex-wrap:wrap;box-shadow:0 -4px 16px rgba(139,0,0,.35);flex-shrink:0;}
 #bulk-bar.show{display:flex;}
@@ -168,6 +176,7 @@ td{padding:5px 9px;vertical-align:middle;}
   <button class="btn bs" onclick="abrirProvisao()" title="Provisão recorrente para múltiplos meses">📅 Provisão</button>
   <button class="btn br" onclick="abrirDREModal()">📊 Ver DRE</button>
   <button class="btn bn" onclick="abrirCategorias()" title="Gerenciar categorias DRE">⚙️ Categorias</button>
+  <button class="btn bs" id="btn-expand" onclick="toggleExpandido()" title="Expandir área da tabela (oculta os cards de estatísticas)">⤢ Expandir</button>
   <button class="btn bg" onclick="salvar()">💾 Salvar</button>
   <button class="btn bs" onclick="exportXLS()">📤 Excel</button>
   <button class="btn bs" onclick="abrirSessoes()">📂 Sessões</button>
@@ -228,6 +237,7 @@ td{padding:5px 9px;vertical-align:middle;}
         <button class="btn bs" style="padding:4px 10px;font-size:11px" onclick="abrirManual()">＋ Manual</button>
         <button class="btn bs" style="padding:4px 10px;font-size:11px" onclick="abrirProvisao()">📅 Provisão</button>
         <button class="btn bs" style="padding:4px 10px;font-size:11px" onclick="abrirSessoes()">📂 Sessões</button>
+        <button class="btn bs" style="padding:4px 10px;font-size:11px" onclick="toggleExpandido()" title="Expandir/compactar área da tabela">⤢</button>
       </div>
       <table>
         <thead><tr>
@@ -622,6 +632,14 @@ async function init() {
   document.getElementById('ml-m').value = mesRef;
   document.getElementById('ml-mc').value = mesRef;
   document.getElementById('dre-mes-label').textContent = mesRef;
+  // Restaura modo expandido
+  try {
+    if (localStorage.getItem('dre_expandido') === '1') {
+      document.body.classList.add('modo-expandido');
+      const btn = document.getElementById('btn-expand');
+      if (btn) btn.textContent = '⤡ Compactar';
+    }
+  } catch(_) {}
   // Carrega categorias do banco (fonte única de verdade)
   await carregarCategorias();
   await carregarSessao();
@@ -936,6 +954,14 @@ function bulkIgn() {
 }
 
 // ─── EDIÇÃO DE MÊS ───────────────────────────────────────────────────────────
+function toggleExpandido() {
+  const expandido = document.body.classList.toggle('modo-expandido');
+  const btn = document.getElementById('btn-expand');
+  if (btn) btn.textContent = expandido ? '⤡ Compactar' : '⤢ Expandir';
+  // Persiste preferência
+  try { localStorage.setItem('dre_expandido', expandido ? '1' : '0'); } catch(_) {}
+}
+
 function applyMes(id, field, val) {
   const t = TXS.find(x => x.id === id);
   if (!t || !val) return;
