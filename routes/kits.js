@@ -56,11 +56,14 @@ module.exports = function (pool) {
         preco_custo_unitario  NUMERIC(10,4) DEFAULT 0
       )
     `);
-    await pool.query(`
-      ALTER TABLE kit_itens ADD COLUMN IF NOT EXISTS codigo_produto TEXT;
-      ALTER TABLE kit_itens ADD COLUMN IF NOT EXISTS descricao_produto TEXT;
-      ALTER TABLE kit_itens ADD COLUMN IF NOT EXISTS preco_custo_unitario NUMERIC(10,4) DEFAULT 0;
-    `).catch(() => {});
+    // ALTER TABLE separados — PostgreSQL não aceita múltiplos DDL num único query
+    for (const [col, def] of [
+      ['codigo_produto',       'TEXT'],
+      ['descricao_produto',    'TEXT'],
+      ['preco_custo_unitario', 'NUMERIC(10,4) DEFAULT 0'],
+    ]) {
+      await pool.query(`ALTER TABLE kit_itens ADD COLUMN IF NOT EXISTS ${col} ${def}`).catch(() => {});
+    }
     await pool.query(
       `CREATE INDEX IF NOT EXISTS idx_kit_itens_kit ON kit_itens(kit_id)`
     ).catch(() => {});
@@ -81,6 +84,8 @@ module.exports = function (pool) {
   // ── GET / ──────────────────────────────────────────────────────────────────
   r.get('/', async (req, res) => {
     try {
+      // Garante tabelas existem (caso o deploy tenha rodado antes da migration)
+      await initTable().catch(() => {});
       const { busca, ativo = 'true' } = req.query;
       const conds = [], params = [];
       if (ativo !== 'todos') { params.push(ativo !== 'false'); conds.push(`k.ativo = $${params.length}`); }
