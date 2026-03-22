@@ -1500,18 +1500,33 @@ function exportXLS(){
 function autoSv(){
   setSt('load');
   clearTimeout(_sv);
-  _sv=setTimeout(()=>salvar(true),5000); // 5s debounce
+  _sv=setTimeout(()=>salvar(true),2000); // 2s debounce
 }
 
 async function salvar(silent=false){
+  if(!mesRef){ if(!silent) toast('❌ Sem mês de referência'); return; }
+  if(!TXS.length){ if(!silent) toast('⚠️ Sem lançamentos para salvar'); return; }
   setSt('load');
-  const d=await api.post('/api/dre/salvar',{
-    sessao_id:sessId, mes_ref:mesRef,
-    descricao:`Sessão ${mesRef} — ${TXS.length} lançamentos`,
-    dados_json:{transactions:TXS,loadedFiles:files,supplierMem:supMem,_savedAt:new Date().toISOString()}
-  });
-  if(d.ok){sessId=d.sessao_id;if(!silent)toast('💾 Salvo!');setSt('ok');}
-  else{if(!silent)toast('❌ '+(d.erro||'Erro ao salvar'));setSt('err');}
+  try {
+    const d=await api.post('/api/dre/salvar',{
+      sessao_id:sessId, mes_ref:mesRef,
+      descricao:`Sessão ${mesRef} — ${TXS.length} lançamentos`,
+      dados_json:{transactions:TXS,loadedFiles:files,supplierMem:supMem,_savedAt:new Date().toISOString()}
+    });
+    if(d.ok){
+      sessId=d.sessao_id;
+      if(!silent) toast('💾 Salvo! ' + TXS.length + ' lançamentos');
+      setSt('ok');
+    } else {
+      console.error('[DRE/salvar] erro:', d.erro);
+      if(!silent) toast('❌ Erro ao salvar: '+(d.erro||'desconhecido'));
+      setSt('err');
+    }
+  } catch(e) {
+    console.error('[DRE/salvar] exception:', e);
+    if(!silent) toast('❌ Falha de conexão ao salvar');
+    setSt('err');
+  }
 }
 
 async function abrirSessoes(){

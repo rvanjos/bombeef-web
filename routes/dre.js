@@ -495,16 +495,37 @@ module.exports = function (pool) {
     const { sessao_id, mes_ref, descricao, dados_json } = req.body;
     if (!mes_ref) return res.status(400).json({ ok: false, erro: 'mes_ref obrigatório' });
     try {
-      const { rows } = await pool.query(`
-        INSERT INTO dre_sessoes (mes_ref, descricao, dados_json, usuario_id)
-        VALUES ($1, $2, $3, $4)
-        ON CONFLICT (mes_ref, usuario_id) DO UPDATE SET
-          descricao     = EXCLUDED.descricao,
-          dados_json    = EXCLUDED.dados_json,
-          atualizado_em = NOW()
-        RETURNING id
-      `, [mes_ref, descricao || `Sessão ${mes_ref}`, JSON.stringify(dados_json), req.user.id]);
-      res.json({ ok: true, sessao_id: rows[0].id });
+      const uid = req.user?.id || null;
+      // Tenta atualizar sessão existente do mesmo mês/usuário primeiro
+      let rows;
+      if (sessao_id) {
+        const upd = await pool.query(`
+          UPDATE dre_sessoes SET descricao=$1, dados_json=$2, atualizado_em=NOW()
+          WHERE id=$3 RETURNING id
+        `, [descricao || `Sessão ${mes_ref}`, JSON.stringify(dados_json), sessao_id]);
+        if (upd.rows.length) { rows = upd.rows; }
+      }
+      if (!rows || !rows.length) {
+        // Busca sessão existente para este mês e usuário
+        const existing = await pool.query(
+          `SELECT id FROM dre_sessoes WHERE mes_ref=$1 AND (usuario_id=$2 OR usuario_id IS NULL) ORDER BY atualizado_em DESC LIMIT 1`,
+          [mes_ref, uid]
+        );
+        if (existing.rows.length) {
+          const upd = await pool.query(`
+            UPDATE dre_sessoes SET descricao=$1, dados_json=$2, usuario_id=$3, atualizado_em=NOW()
+            WHERE id=$4 RETURNING id
+          `, [descricao || `Sessão ${mes_ref}`, JSON.stringify(dados_json), uid, existing.rows[0].id]);
+          rows = upd.rows;
+        } else {
+          const ins = await pool.query(`
+            INSERT INTO dre_sessoes (mes_ref, descricao, dados_json, usuario_id)
+            VALUES ($1, $2, $3, $4) RETURNING id
+          `, [mes_ref, descricao || `Sessão ${mes_ref}`, JSON.stringify(dados_json), uid]);
+          rows = ins.rows;
+        }
+      }
+      res.json({ ok: true, sessao_id: rows[0]?.id });
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
