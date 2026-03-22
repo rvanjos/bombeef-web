@@ -84,13 +84,23 @@ module.exports = function (pool) {
       const { busca, ativo = 'true' } = req.query;
       const conds = [], params = [];
       if (ativo !== 'todos') { params.push(ativo !== 'false'); conds.push(`k.ativo = $${params.length}`); }
-      if (busca) { params.push(`%${busca}%`); conds.push(`(k.codigo ILIKE $${params.length} OR k.nome ILIKE $${params.length})`); }
+      if (busca) {
+        params.push(`%${busca}%`);
+        const idx = params.length;
+        conds.push(`(k.codigo ILIKE $${idx} OR k.nome ILIKE $${idx})`);
+      }
       const where = conds.length ? 'WHERE ' + conds.join(' AND ') : '';
 
       const { rows: kits } = await pool.query(
         `SELECT k.*, (
-          SELECT COALESCE(SUM(ki.quantidade * COALESCE(ki.preco_custo_unitario, p.preco_custo, 0)), 0)
-          FROM kit_itens ki LEFT JOIN produtos p ON p.id = ki.produto_id WHERE ki.kit_id = k.id
+          SELECT COALESCE(SUM(ki.quantidade * COALESCE(
+            NULLIF(ki.preco_custo_unitario, 0),
+            p.preco_custo,
+            0
+          )), 0)
+          FROM kit_itens ki
+          LEFT JOIN produtos p ON p.id = ki.produto_id
+          WHERE ki.kit_id = k.id
         ) AS custo_total
         FROM kits k ${where} ORDER BY k.nome ASC`, params
       );
@@ -116,7 +126,10 @@ module.exports = function (pool) {
       }));
 
       res.json({ ok: true, data, total: data.length });
-    } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
+    } catch (e) {
+      console.error('[kits/GET]', e.message);
+      res.status(500).json({ ok: false, erro: e.message });
+    }
   });
 
   // ── GET /:id ───────────────────────────────────────────────────────────────
