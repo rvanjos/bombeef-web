@@ -92,17 +92,42 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
 
   <!-- PRODUTOS -->
   <div id="sec-prod">
-    <div class="toolbar">
+    <div class="toolbar" style="flex-wrap:wrap;gap:6px">
       <button class="btn btn-g" onclick="abrirProd()">＋ Novo Produto</button>
       <button class="btn btn-s" onclick="abrirImport()">📥 Importar PDV</button>
       <div class="search-w"><input type="text" id="busca-p" placeholder="Código, descrição, fornecedor..." oninput="filtrarP()"></div>
       <select id="f-cat" style="padding:6px 9px;border:1px solid var(--border);border-radius:7px;font-size:12px" onchange="filtrarP()">
         <option value="">Todas as categorias</option>
       </select>
+      <select id="f-margem" style="padding:6px 9px;border:1px solid var(--border);border-radius:7px;font-size:12px" onchange="filtrarP()">
+        <option value="">Todas as margens</option>
+        <option value="negativa">⚠️ Margem negativa</option>
+        <option value="zerada">Sem custo/venda</option>
+        <option value="baixa">Margem baixa (&lt;25%)</option>
+        <option value="ok">Margem OK (≥25%)</option>
+      </select>
+      <select id="f-sort" style="padding:6px 9px;border:1px solid var(--border);border-radius:7px;font-size:12px" onchange="filtrarP()">
+        <option value="">Ordenar por...</option>
+        <option value="margem_asc">Margem ↑ (menor primeiro)</option>
+        <option value="margem_desc">Margem ↓ (maior primeiro)</option>
+        <option value="venda_asc">Preço Venda ↑</option>
+        <option value="venda_desc">Preço Venda ↓</option>
+        <option value="desc_asc">Descrição A→Z</option>
+      </select>
+      <span id="badge-margem-neg" style="display:none;background:#fff0f0;color:var(--red-l);border:1px solid #f5c6c6;border-radius:7px;padding:4px 10px;font-size:11px;font-weight:700"></span>
     </div>
     <div class="card">
       <table class="tbl">
-        <thead><tr><th>Código</th><th>Descrição</th><th>Categoria</th><th>Fornecedor</th><th>Custo</th><th>Venda</th><th>Margem</th><th>Un.</th><th>Status</th><th>Ações</th></tr></thead>
+        <thead><tr>
+          <th>Código</th>
+          <th style="cursor:pointer" onclick="sortBy('desc_asc')" title="Ordenar por nome">Descrição ⇅</th>
+          <th>Categoria</th>
+          <th>Fornecedor</th>
+          <th style="cursor:pointer" onclick="sortBy('custo_desc')" title="Ordenar por custo">Custo ⇅</th>
+          <th style="cursor:pointer" onclick="sortBy('venda_desc')" title="Ordenar por venda">Venda ⇅</th>
+          <th style="cursor:pointer" onclick="sortBy('margem_asc')" title="Ordenar por margem — clique para ver menor primeiro">Margem ⇅</th>
+          <th>Un.</th><th>Status</th><th>Ações</th>
+        </tr></thead>
         <tbody id="tbody-p"></tbody>
       </table>
       <div class="empty" id="empty-p" style="display:none"><p>Nenhum produto. Importe a planilha do PDV.</p></div>
@@ -316,13 +341,45 @@ async function carregarProd(){
   filtrarP();
 }
 
+function _calcMarg(p) {
+  const c=parseFloat(p.preco_custo||0), v=parseFloat(p.preco_venda||0);
+  if (c>0 && v>0) return (v-c)/v*100;
+  if (v>0 && c===0) return 100; // sem custo cadastrado
+  return null;
+}
+
+function sortBy(val) {
+  document.getElementById('f-sort').value = val;
+  filtrarP();
+}
+
 function filtrarP(){
-  const q=document.getElementById('busca-p').value.toLowerCase();
-  const cat=document.getElementById('f-cat').value;
-  const lista=prods.filter(p=>{
-    if(cat&&p.categoria!==cat)return false;
-    return !q||(p.codigo||'').toLowerCase().includes(q)||p.descricao.toLowerCase().includes(q)||(p.fornecedor||'').toLowerCase().includes(q);
+  const q       = document.getElementById('busca-p').value.toLowerCase();
+  const cat     = document.getElementById('f-cat').value;
+  const fMargem = document.getElementById('f-margem').value;
+  const fSort   = document.getElementById('f-sort').value;
+
+  let lista = prods.filter(p => {
+    if (cat && p.categoria !== cat) return false;
+    if (q && !(p.codigo||'').toLowerCase().includes(q) &&
+             !p.descricao.toLowerCase().includes(q) &&
+             !(p.fornecedor||'').toLowerCase().includes(q)) return false;
+    const m = _calcMarg(p);
+    if (fMargem === 'negativa' && !(m !== null && m < 0)) return false;
+    if (fMargem === 'zerada'   && !(!parseFloat(p.preco_custo) || !parseFloat(p.preco_venda))) return false;
+    if (fMargem === 'baixa'    && !(m !== null && m >= 0 && m < 25)) return false;
+    if (fMargem === 'ok'       && !(m !== null && m >= 25)) return false;
+    return true;
   });
+
+  // Ordenação
+  if (fSort === 'margem_asc')  lista.sort((a,b) => (_calcMarg(a)??999) - (_calcMarg(b)??999));
+  if (fSort === 'margem_desc') lista.sort((a,b) => (_calcMarg(b)??-999) - (_calcMarg(a)??-999));
+  if (fSort === 'venda_asc')   lista.sort((a,b) => parseFloat(a.preco_venda||0) - parseFloat(b.preco_venda||0));
+  if (fSort === 'venda_desc')  lista.sort((a,b) => parseFloat(b.preco_venda||0) - parseFloat(a.preco_venda||0));
+  if (fSort === 'custo_desc')  lista.sort((a,b) => parseFloat(b.preco_custo||0) - parseFloat(a.preco_custo||0));
+  if (fSort === 'desc_asc')    lista.sort((a,b) => a.descricao.localeCompare(b.descricao));
+
   renderP(lista);
 }
 
@@ -334,7 +391,11 @@ function renderP(lista){
   tb.innerHTML=lista.map(p=>{
     const c=parseFloat(p.preco_custo||0),v=parseFloat(p.preco_venda||0);
     const marg=c>0&&v>0?((v-c)/v*100).toFixed(1):null;
-    const margCls=marg&&parseFloat(marg)>=(CFG.margensMinimas[p.categoria]||25)?'color:var(--green)':'color:var(--red-l)';
+    const margNum = marg ? parseFloat(marg) : null;
+    const margMin = CFG.margensMinimas?.[p.categoria] || 25;
+    const margCls = margNum === null ? 'color:var(--muted)' :
+                    margNum < 0     ? 'color:var(--red-l);font-weight:700;background:#fff0f0;border-radius:4px;padding:1px 5px' :
+                    margNum >= margMin ? 'color:var(--green)' : 'color:var(--orange)';
     return`<tr>
       <td style="font-family:'DM Mono',monospace;font-size:11px">${p.codigo}</td>
       <td><b>${p.descricao}</b></td>
@@ -342,7 +403,7 @@ function renderP(lista){
       <td style="font-size:11px">${p.fornecedor||'—'}</td>
       <td style="font-family:'DM Mono',monospace">${fmt.brl(c)}</td>
       <td style="font-family:'DM Mono',monospace;font-weight:600">${fmt.brl(v)}</td>
-      <td style="font-family:'DM Mono',monospace;font-weight:600;${margCls}">${marg?marg+'%':'—'}</td>
+      <td style="font-family:'DM Mono',monospace;font-weight:600;${margCls}">${marg !== null ? marg+'%' : '—'}</td>
       <td style="font-size:11px">${p.unidade||'un'}</td>
       <td><span class="pill ${p.ativo?'pill-ok':'pill-no'}">${p.ativo?'Ativo':'Inativo'}</span></td>
       <td>
