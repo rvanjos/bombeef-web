@@ -5,6 +5,7 @@
 <title>Validade & Perdas — Bom Beef</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="/js/api.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 :root{--red:#8B0000;--red-l:#C0392B;--green:#1a7a4a;--orange:#c76b00;--blue:#1a5c8a;
   --bg:#f7f4f0;--white:#fff;--text:#1a1a1a;--muted:#7a7068;--border:#e8e0d8;--shadow:0 2px 12px rgba(0,0,0,.08);
@@ -134,6 +135,16 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
 .dp-bg{background:#ede8e0;border-radius:4px;height:8px;}
 .dp-fill{border-radius:4px;height:100%;transition:width .4s;}
 @media(max-width:700px){.dash-kpi-grid{grid-template-columns:1fr 1fr;}.kpi-row{grid-template-columns:1fr 1fr;}}
+
+/* Modo expandido do histórico — ocupa tela toda */
+body.hist-expandido .ph,
+body.hist-expandido .kpi-row,
+body.hist-expandido #banners-area,
+body.hist-expandido .tabs { display:none !important; }
+body.hist-expandido .body { padding:0; }
+body.hist-expandido #sec-historico { padding:0; }
+#hist-expand-btn { transition:.15s; }
+body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;border-color:var(--orange); }
 .upload-zone{border:2px dashed var(--border);border-radius:9px;padding:20px;text-align:center;cursor:pointer;transition:.2s;margin-bottom:10px;}
 .upload-zone:hover{border-color:var(--orange);}
 .empty{text-align:center;padding:36px;color:var(--muted);}
@@ -363,6 +374,9 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
     <span style="font-size:11px;color:var(--muted)">até:</span>
     <input type="date" id="flt-hist-ate" class="flt" style="padding:6px 9px;border:1px solid var(--border);border-radius:7px;font-size:12px" onchange="carregarHistorico()">
     <button class="btn btn-s" onclick="limparFiltrosHist()">✕ Limpar</button>
+    <button class="btn btn-s" id="hist-expand-btn" onclick="toggleHistExpand()" title="Expandir / compactar visualização">⤢ Expandir</button>
+    <button class="btn btn-s" onclick="exportarHistXLS()" title="Exportar para Excel formatado" style="background:#217346;color:#fff;border-color:#217346">📊 Excel</button>
+    <span id="hist-count" style="font-size:11px;color:var(--muted);margin-left:4px"></span>
   </div>
   <div class="card">
     <table class="tbl">
@@ -1102,6 +1116,9 @@ async function carregarHistorico(){
     acao:       '<span style="background:#fff3cd;color:#856404;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700">📋 Ação</span>',
     outro:      '<span style="background:#e2e3e5;color:#383d41;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700">🔄 Outro</span>',
   };
+  _histData = d.data; // cacheia para exportação
+  const countEl = document.getElementById('hist-count');
+  if(countEl) countEl.textContent = `${d.data.length} registro(s)`;
   tbody.innerHTML = d.data.map(v=>`<tr>
     <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted)">${v.codigo||'—'}</td>
     <td style="font-weight:600;font-size:12px">${v.descricao}</td>
@@ -1120,6 +1137,101 @@ function limparFiltrosHist(){
   if(document.getElementById('flt-hist-ate'))  document.getElementById('flt-hist-ate').value='';
   if(document.getElementById('busca-hist'))    document.getElementById('busca-hist').value='';
   carregarHistorico();
+}
+
+// ── Expandir / compactar histórico ────────────────────────────────────────────
+function toggleHistExpand(){
+  const expandido = document.body.classList.toggle('hist-expandido');
+  const btn = document.getElementById('hist-expand-btn');
+  if(btn) btn.textContent = expandido ? '⤡ Compactar' : '⤢ Expandir';
+  try { localStorage.setItem('hist_expandido', expandido?'1':'0'); } catch(_){}
+}
+
+// ── Exportar histórico como Excel formatado ───────────────────────────────────
+let _histData = []; // cache dos dados carregados
+
+function exportarHistXLS(){
+  if(!_histData.length){ toast('Nenhum dado para exportar'); return; }
+
+  const wb = XLSX.utils.book_new();
+  const ws_data = [];
+
+  // Título e informações
+  const hoje = new Date().toLocaleDateString('pt-BR');
+  const resolucao = document.getElementById('flt-resolucao')?.value||'todos';
+  const de  = document.getElementById('flt-hist-de')?.value||'';
+  const ate = document.getElementById('flt-hist-ate')?.value||'';
+  const periodo = de||ate ? `${de||'início'} até ${ate||'hoje'}` : 'Todo o período';
+
+  const MOTIVOS = {vendido:'Vendido',vencimento:'Vencido/Descarte',acao:'Ação Realizada',outro:'Outro'};
+
+  ws_data.push(['BOM BEEF — Histórico de Validade']);
+  ws_data.push([`Gerado em: ${hoje}  |  Período: ${periodo}  |  Filtro: ${MOTIVOS[resolucao]||'Todos'}`]);
+  ws_data.push([]); // linha em branco
+
+  // Cabeçalho
+  ws_data.push([
+    'Código','Produto','Localização','Data Validade','Encerrado em',
+    'Motivo','Ação Prevista','Qtd Unidades','Custo Unit. (R$)',
+    'Valor Perda (R$)','Observação','Responsável'
+  ]);
+
+  // Dados
+  _histData.forEach(v => {
+    ws_data.push([
+      v.codigo||'',
+      v.descricao||'',
+      v.localizacao||'',
+      v.data_validade||'',
+      v.dt_resolucao||'',
+      MOTIVOS[v.resolucao]||v.resolucao||'',
+      v.acao_antes_vencer||'',
+      v.qtd_unidades||0,
+      parseFloat(v.preco_custo||0),
+      v.qtd_unidades>0&&v.preco_custo>0 ? parseFloat(v.qtd_unidades)*parseFloat(v.preco_custo) : 0,
+      v.obs_resolucao||'',
+      v.encerrado_por||'',
+    ]);
+  });
+
+  // Linha de total
+  ws_data.push([]);
+  const totalPerda = _histData.reduce((s,v)=>s+(v.qtd_unidades>0&&v.preco_custo>0?parseFloat(v.qtd_unidades)*parseFloat(v.preco_custo):0),0);
+  const totalVencidos = _histData.filter(v=>v.resolucao==='vencimento').length;
+  const totalVendidos = _histData.filter(v=>v.resolucao==='vendido').length;
+  ws_data.push([`Total: ${_histData.length} itens  |  Vencidos: ${totalVencidos}  |  Vendidos: ${totalVendidos}  |  Perda estimada: R$ ${totalPerda.toFixed(2).replace('.',',')}`]);
+
+  const ws = XLSX.utils.aoa_to_sheet(ws_data);
+
+  // Larguras de colunas
+  ws['!cols'] = [
+    {wch:10}, // Código
+    {wch:45}, // Produto
+    {wch:18}, // Localização
+    {wch:13}, // Data Validade
+    {wch:13}, // Encerrado em
+    {wch:18}, // Motivo
+    {wch:30}, // Ação Prevista
+    {wch:12}, // Qtd
+    {wch:14}, // Custo
+    {wch:16}, // Valor Perda
+    {wch:35}, // Observação
+    {wch:25}, // Responsável
+  ];
+
+  // Mesclar células do título (colunas A até L = 0 a 11)
+  ws['!merges'] = [
+    { s:{r:0,c:0}, e:{r:0,c:11} }, // título
+    { s:{r:1,c:0}, e:{r:1,c:11} }, // subtítulo
+    { s:{r:ws_data.length-1,c:0}, e:{r:ws_data.length-1,c:11} }, // totais
+  ];
+
+  XLSX.utils.book_append_sheet(wb, ws, 'Histórico de Validade');
+
+  // Nome do arquivo com data
+  const dataArq = new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb, `Historico_Validade_${dataArq}.xlsx`);
+  toast('📊 Excel exportado!');
 }
 
 // ── Perda rápida (a partir de item de validade) ────────────────────────────────
