@@ -61,7 +61,7 @@
     get:    (path)         => apiFetch(path),
     post:   (path, body)   => apiFetch(path, { method: 'POST',   body: JSON.stringify(body) }),
     put:    (path, body)   => apiFetch(path, { method: 'PUT',    body: JSON.stringify(body) }),
-    delete: (path)         => apiFetch(path, { method: 'DELETE' }),
+    delete: (path, body)   => apiFetch(path, { method: 'DELETE', ...(body ? { headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getToken() }, body: JSON.stringify(body) } : {}) }),
     upload: apiUpload,
   };
 

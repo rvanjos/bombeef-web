@@ -55,7 +55,11 @@ module.exports = function (pool) {
       ['localizacao',   'TEXT'],
       ['qtd_unidades',  'INTEGER DEFAULT 0'],
       ['dias_alerta',   'INTEGER DEFAULT 7'],
-      ['atualizado_em', 'TIMESTAMPTZ DEFAULT NOW()'],
+      ['atualizado_em',  'TIMESTAMPTZ DEFAULT NOW()'],
+      ['resolucao',      'TEXT'],
+      ['dt_resolucao',   'DATE'],
+      ['obs_resolucao',  'TEXT'],
+      ['encerrado_por',  'TEXT'],
     ];
     for (const [col, def] of needed) {
       await pool.query(`ALTER TABLE validade_items ADD COLUMN IF NOT EXISTS ${col} ${def}`).catch(() => {});
@@ -237,14 +241,49 @@ module.exports = function (pool) {
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
-  // ── DELETE /:id ────────────────────────────────────────────────────────────
+  // ── DELETE /:id — encerra com motivo ──────────────────────────────────────
   r.delete('/:id', async (req, res) => {
+    const { resolucao, obs_resolucao, encerrado_por, dt_resolucao } = req.body || {};
     try {
       await pool.query(
-        `UPDATE validade_items SET status = 'descartado', atualizado_em = NOW() WHERE id = $1`,
-        [parseInt(req.params.id)]
+        `UPDATE validade_items SET
+           status='descartado', resolucao=$1, obs_resolucao=$2,
+           encerrado_por=$3, dt_resolucao=COALESCE($4::date,CURRENT_DATE),
+           atualizado_em=NOW()
+         WHERE id=$5`,
+        [resolucao||'outro', obs_resolucao||null, encerrado_por||null,
+         dt_resolucao||null, parseInt(req.params.id)]
       );
       res.json({ ok: true });
+    } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ── GET /historico ─────────────────────────────────────────────────────────
+  r.get('/historico', async (req, res) => {
+    try {
+      const { resolucao, de, ate, busca } = req.query;
+      const conds = [`status='descartado'`], params = [];
+      if (resolucao && resolucao !== 'todos') {
+        params.push(resolucao); conds.push(`resolucao=$${params.length}`);
+      }
+      if (de)  { params.push(de);  conds.push(`dt_resolucao>=$${params.length}::date`); }
+      if (ate) { params.push(ate); conds.push(`dt_resolucao<=$${params.length}::date`); }
+      if (busca) {
+        params.push(`%${busca}%`);
+        conds.push(`(descricao ILIKE $${params.length} OR COALESCE(codigo,'') ILIKE $${params.length})`);
+      }
+      const { rows } = await pool.query(
+        `SELECT * FROM validade_items WHERE ${conds.join(' AND ')}
+         ORDER BY dt_resolucao DESC NULLS LAST, atualizado_em DESC`, params
+      );
+      const fmt = v => v instanceof Date ? v.toISOString().slice(0,10) : v ? String(v).slice(0,10) : null;
+      const data = rows.map(r => ({
+        ...r,
+        data_validade: fmt(r.data_validade),
+        dt_resolucao:  fmt(r.dt_resolucao),
+        ultima_conferencia: fmt(r.ultima_conferencia),
+      }));
+      res.json({ ok: true, data, total: data.length });
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 

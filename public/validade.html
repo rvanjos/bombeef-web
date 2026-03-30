@@ -160,6 +160,7 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
     <button class="tab active" id="tab-dash" onclick="showSection('dashboard',this)">📊 Dashboard</button>
     <button class="tab" onclick="showSection('validade',this)">🗓 Validade</button>
     <button class="tab" onclick="showSection('perdas',this)">🗑️ Perdas</button>
+    <button class="tab" onclick="showSection('historico',this)">📂 Histórico</button>
   </div>
 
   <!-- ── DASHBOARD ── -->
@@ -346,6 +347,65 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
   </div>
 </div>
 
+<!-- ── HISTÓRICO ── -->
+<div id="sec-historico" style="display:none">
+  <div class="toolbar" style="flex-wrap:wrap;gap:6px">
+    <div class="search-w"><input type="text" id="busca-hist" placeholder="Código, produto..." oninput="carregarHistorico()"></div>
+    <select id="flt-resolucao" class="flt" onchange="carregarHistorico()" style="padding:6px 9px;border:1px solid var(--border);border-radius:7px;font-size:12px">
+      <option value="todos">Todos os motivos</option>
+      <option value="vendido">✅ Vendido</option>
+      <option value="vencimento">💀 Vencido/Descarte</option>
+      <option value="acao">📋 Ação realizada</option>
+      <option value="outro">Outro</option>
+    </select>
+    <span style="font-size:11px;color:var(--muted)">De:</span>
+    <input type="date" id="flt-hist-de" class="flt" style="padding:6px 9px;border:1px solid var(--border);border-radius:7px;font-size:12px" onchange="carregarHistorico()">
+    <span style="font-size:11px;color:var(--muted)">até:</span>
+    <input type="date" id="flt-hist-ate" class="flt" style="padding:6px 9px;border:1px solid var(--border);border-radius:7px;font-size:12px" onchange="carregarHistorico()">
+    <button class="btn btn-s" onclick="limparFiltrosHist()">✕ Limpar</button>
+  </div>
+  <div class="card">
+    <table class="tbl">
+      <thead><tr>
+        <th>Código</th><th>Produto</th><th>Validade</th>
+        <th>Encerrado em</th><th>Motivo</th><th>Ação Prev.</th><th>Observação</th><th>Responsável</th>
+      </tr></thead>
+      <tbody id="tbody-hist"></tbody>
+    </table>
+    <div class="empty" id="empty-hist" style="display:none"><p>Nenhum item no histórico.</p></div>
+  </div>
+</div>
+
+<!-- Modal Encerrar Item -->
+<div class="modal-bg" id="modal-encerrar">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-head"><h3>📦 Encerrar Item</h3><button class="modal-close" onclick="fecharModal('modal-encerrar')">×</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="enc-id">
+      <div id="enc-produto" style="background:#f8f4f0;border-radius:7px;padding:10px 12px;font-weight:600;margin-bottom:12px;font-size:13px"></div>
+      <div class="fg">
+        <label>O que aconteceu com este item? *</label>
+        <select id="enc-resolucao">
+          <option value="vendido">✅ Vendido — esgotou antes do vencimento</option>
+          <option value="vencimento">💀 Vencido — descartado após vencimento</option>
+          <option value="acao">📋 Ação realizada — kit, promoção, doação...</option>
+          <option value="outro">🔄 Outro motivo</option>
+        </select>
+      </div>
+      <div class="fg"><label>Data de encerramento</label><input type="date" id="enc-data"></div>
+      <div class="fg"><label>Observação (opcional)</label><textarea id="enc-obs" rows="2" placeholder="Detalhe o que foi feito..."></textarea></div>
+      <div class="fg">
+        <label>Responsável</label>
+        <select id="enc-resp"><option value="">— Selecione —</option></select>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-s" onclick="fecharModal('modal-encerrar')">Cancelar</button>
+      <button class="btn btn-p" onclick="confirmarEncerrar()">✅ Encerrar Item</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal Vincular (substitui prompt()) -->
 <div class="modal-bg" id="modal-vincular">
   <div class="modal" style="max-width:420px">
@@ -445,9 +505,21 @@ async function carregarAcoesValidade(){
   if(cur) sel.value = cur;
 }
 
+async function carregarAcoesValidade(){
+  const d = await api.get('/api/config/acoes-validade');
+  if(!d.ok) return;
+  const sel = document.getElementById('v-acao');
+  const cur = sel.value;
+  // Mantém o option vazio e adiciona as ações do banco
+  sel.innerHTML = '<option value="">— Selecione —</option>' +
+    d.data.map(a=>`<option value="${a.descricao}">${a.descricao}</option>`).join('');
+  if(cur) sel.value = cur;
+}
+
 async function init(){
   await carregarFuncionarios();
   carregarKPIs();
+  await carregarAcoesValidade(); // carrega ações do banco no select
   await carregarAcoesValidade(); // carrega ações do banco no select
   await carregar();   // await garante que itens esteja pronto antes do dashboard
   const hoje = new Date();
@@ -465,6 +537,9 @@ function showSection(s, btn){
   if(btn) btn.classList.add('active');
   if(s==='perdas') carregarPerdas();
   if(s==='dashboard') renderDashboard();
+  if(s==='historico') carregarHistorico();
+  if(document.getElementById('sec-historico'))
+    document.getElementById('sec-historico').style.display = s==='historico'?'':'none';
 }
 
 function goFiltro(status){
@@ -888,11 +963,77 @@ async function confirmarVincular(){
   } else toast('Erro: '+d.erro);
 }
 
-async function excluirItem(id){
-  if(!confirm('Descartar este item?')) return;
-  const d = await api.delete(`/api/validade/${id}`);
-  if(d.ok){ toast('Descartado'); carregar(); carregarKPIs(); }
-  else toast('Erro: '+d.erro);
+function excluirItem(id){ abrirEncerrar(id); }
+
+function abrirEncerrar(id){
+  const v = itens.find(x=>x.id===id);
+  if(!v) return;
+  document.getElementById('enc-id').value = id;
+  document.getElementById('enc-produto').textContent = v.descricao + (v.codigo?` (${v.codigo})`:'');
+  document.getElementById('enc-data').value = new Date().toISOString().slice(0,10);
+  document.getElementById('enc-obs').value = '';
+  const dias = calcDias(v.data_validade);
+  const urg  = getUrgencia(dias, v.dias_alerta||7);
+  document.getElementById('enc-resolucao').value = urg==='vencido'?'vencimento':'vendido';
+  const sel = document.getElementById('enc-resp');
+  sel.innerHTML = '<option value="">— Selecione —</option>' +
+    funcionarios.map(f=>`<option value="${f.nome}">${f.nome}</option>`).join('');
+  document.getElementById('modal-encerrar').classList.add('open');
+}
+
+async function confirmarEncerrar(){
+  const id  = document.getElementById('enc-id').value;
+  const res = document.getElementById('enc-resolucao').value;
+  const dt  = document.getElementById('enc-data').value;
+  const obs = document.getElementById('enc-obs').value.trim();
+  const rep = document.getElementById('enc-resp').value;
+  const d = await api.delete(`/api/validade/${id}`, {
+    resolucao:res, dt_resolucao:dt||null, obs_resolucao:obs||null, encerrado_por:rep||null
+  });
+  if(d.ok){
+    toast(res==='vendido'?'✅ Vendido!':res==='acao'?'📋 Ação registrada!':'📦 Item encerrado!');
+    fecharModal('modal-encerrar'); carregar(); carregarKPIs();
+  } else toast('Erro: '+d.erro);
+}
+
+async function carregarHistorico(){
+  const resolucao = document.getElementById('flt-resolucao')?.value||'todos';
+  const de   = document.getElementById('flt-hist-de')?.value||'';
+  const ate  = document.getElementById('flt-hist-ate')?.value||'';
+  const busca= document.getElementById('busca-hist')?.value||'';
+  let url = `/api/validade/historico?resolucao=${resolucao}`;
+  if(de)    url+=`&de=${de}`;
+  if(ate)   url+=`&ate=${ate}`;
+  if(busca) url+=`&busca=${encodeURIComponent(busca)}`;
+  const d = await api.get(url);
+  const tbody = document.getElementById('tbody-hist');
+  const empty = document.getElementById('empty-hist');
+  if(!d.ok||!d.data.length){ tbody.innerHTML=''; empty.style.display=''; return; }
+  empty.style.display='none';
+  const RL = {
+    vendido:    '<span style="background:#d4edda;color:#155724;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700">✅ Vendido</span>',
+    vencimento: '<span style="background:#ffd6d6;color:#8B0000;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700">💀 Vencido</span>',
+    acao:       '<span style="background:#fff3cd;color:#856404;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700">📋 Ação</span>',
+    outro:      '<span style="background:#e2e3e5;color:#383d41;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700">🔄 Outro</span>',
+  };
+  tbody.innerHTML = d.data.map(v=>`<tr>
+    <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted)">${v.codigo||'—'}</td>
+    <td style="font-weight:600;font-size:12px">${v.descricao}</td>
+    <td style="font-size:11px;white-space:nowrap">${v.data_validade||'—'}</td>
+    <td style="font-size:11px;white-space:nowrap">${v.dt_resolucao||'—'}</td>
+    <td>${RL[v.resolucao]||v.resolucao||'—'}</td>
+    <td style="font-size:11px;color:var(--muted)">${v.acao_antes_vencer||'—'}</td>
+    <td style="font-size:11px;color:var(--muted);max-width:160px;overflow:hidden;text-overflow:ellipsis">${v.obs_resolucao||'—'}</td>
+    <td style="font-size:11px">${v.encerrado_por||'—'}</td>
+  </tr>`).join('');
+}
+
+function limparFiltrosHist(){
+  if(document.getElementById('flt-resolucao')) document.getElementById('flt-resolucao').value='todos';
+  if(document.getElementById('flt-hist-de'))   document.getElementById('flt-hist-de').value='';
+  if(document.getElementById('flt-hist-ate'))  document.getElementById('flt-hist-ate').value='';
+  if(document.getElementById('busca-hist'))    document.getElementById('busca-hist').value='';
+  carregarHistorico();
 }
 
 // ── Perda rápida (a partir de item de validade) ────────────────────────────────
