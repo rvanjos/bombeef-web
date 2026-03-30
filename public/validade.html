@@ -382,10 +382,11 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
     <div class="modal-head"><h3>📦 Encerrar Item</h3><button class="modal-close" onclick="fecharModal('modal-encerrar')">×</button></div>
     <div class="modal-body">
       <input type="hidden" id="enc-id">
+      <input type="hidden" id="enc-custo-val">
       <div id="enc-produto" style="background:#f8f4f0;border-radius:7px;padding:10px 12px;font-weight:600;margin-bottom:12px;font-size:13px"></div>
       <div class="fg">
         <label>O que aconteceu com este item? *</label>
-        <select id="enc-resolucao">
+        <select id="enc-resolucao" onchange="toggleEncPerda()">
           <option value="vendido">✅ Vendido — esgotou antes do vencimento</option>
           <option value="vencimento">💀 Vencido — descartado após vencimento</option>
           <option value="acao">📋 Ação realizada — kit, promoção, doação...</option>
@@ -393,7 +394,32 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
         </select>
       </div>
       <div class="fg"><label>Data de encerramento</label><input type="date" id="enc-data"></div>
-      <div class="fg"><label>Observação (opcional)</label><textarea id="enc-obs" rows="2" placeholder="Detalhe o que foi feito..."></textarea></div>
+
+      <!-- Seção de perda — aparece só quando "Vencido" -->
+      <div id="enc-perda-wrap" style="display:none;background:#fff5f5;border:1px solid #f5c6c6;border-radius:8px;padding:12px;margin:8px 0">
+        <div style="font-size:11px;font-weight:700;color:var(--c-vencido);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">
+          🗑️ Registrar perda vinculada
+        </div>
+        <div class="fg-row">
+          <div class="fg">
+            <label>Qtd. unidades perdidas</label>
+            <input type="number" id="enc-qtd" min="0" step="1" value="0" oninput="calcEncPerda()">
+          </div>
+          <div class="fg">
+            <label>Custo unitário (R$)</label>
+            <input type="number" id="enc-custo" min="0" step="0.0001" placeholder="0,00" oninput="calcEncPerda()">
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:#fff;border-radius:6px;margin-top:4px">
+          <span style="font-size:12px;color:var(--muted)">Valor total da perda:</span>
+          <span id="enc-valor-perda" style="font-weight:700;font-size:15px;color:var(--c-vencido)">R$ 0,00</span>
+        </div>
+        <div style="font-size:10px;color:var(--muted);margin-top:4px">
+          Deixe qtd = 0 para não registrar perda financeira (apenas encerrar o item)
+        </div>
+      </div>
+
+      <div class="fg"><label>Observação</label><textarea id="enc-obs" rows="2" placeholder="Detalhe o que foi feito..."></textarea></div>
       <div class="fg">
         <label>Responsável</label>
         <select id="enc-resp"><option value="">— Selecione —</option></select>
@@ -401,7 +427,7 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
     </div>
     <div class="modal-foot">
       <button class="btn btn-s" onclick="fecharModal('modal-encerrar')">Cancelar</button>
-      <button class="btn btn-p" onclick="confirmarEncerrar()">✅ Encerrar Item</button>
+      <button class="btn btn-p" id="btn-confirmar-enc" onclick="confirmarEncerrar()">✅ Encerrar Item</button>
     </div>
   </div>
 </div>
@@ -968,17 +994,45 @@ function excluirItem(id){ abrirEncerrar(id); }
 function abrirEncerrar(id){
   const v = itens.find(x=>x.id===id);
   if(!v) return;
-  document.getElementById('enc-id').value = id;
+  document.getElementById('enc-id').value   = id;
+  document.getElementById('enc-custo-val').value = v.preco_custo||0;
   document.getElementById('enc-produto').textContent = v.descricao + (v.codigo?` (${v.codigo})`:'');
   document.getElementById('enc-data').value = new Date().toISOString().slice(0,10);
-  document.getElementById('enc-obs').value = '';
+  document.getElementById('enc-obs').value  = '';
+  // Pré-preenche campos de perda com dados do item
+  document.getElementById('enc-qtd').value   = v.qtd_unidades||0;
+  document.getElementById('enc-custo').value = v.preco_custo>0 ? parseFloat(v.preco_custo).toFixed(4) : '';
+  calcEncPerda();
+  // Sugere motivo pela urgência
   const dias = calcDias(v.data_validade);
   const urg  = getUrgencia(dias, v.dias_alerta||7);
   document.getElementById('enc-resolucao').value = urg==='vencido'?'vencimento':'vendido';
+  toggleEncPerda();
+  // Responsável
   const sel = document.getElementById('enc-resp');
   sel.innerHTML = '<option value="">— Selecione —</option>' +
     funcionarios.map(f=>`<option value="${f.nome}">${f.nome}</option>`).join('');
   document.getElementById('modal-encerrar').classList.add('open');
+}
+
+function toggleEncPerda(){
+  const res  = document.getElementById('enc-resolucao').value;
+  const wrap = document.getElementById('enc-perda-wrap');
+  const btn  = document.getElementById('btn-confirmar-enc');
+  if(res === 'vencimento'){
+    wrap.style.display = '';
+    btn.textContent = '💀 Encerrar e registrar perda';
+  } else {
+    wrap.style.display = 'none';
+    btn.textContent = '✅ Encerrar Item';
+  }
+}
+
+function calcEncPerda(){
+  const qtd   = parseFloat(document.getElementById('enc-qtd').value)||0;
+  const custo = parseFloat(document.getElementById('enc-custo').value)||0;
+  const total = qtd * custo;
+  document.getElementById('enc-valor-perda').textContent = fmt.brl(total);
 }
 
 async function confirmarEncerrar(){
@@ -987,13 +1041,45 @@ async function confirmarEncerrar(){
   const dt  = document.getElementById('enc-data').value;
   const obs = document.getElementById('enc-obs').value.trim();
   const rep = document.getElementById('enc-resp').value;
+
+  // 1. Encerra o item de validade
   const d = await api.delete(`/api/validade/${id}`, {
     resolucao:res, dt_resolucao:dt||null, obs_resolucao:obs||null, encerrado_por:rep||null
   });
-  if(d.ok){
+  if(!d.ok){ toast('Erro: '+d.erro); return; }
+
+  // 2. Se vencimento: registrar perda automaticamente
+  if(res === 'vencimento'){
+    const qtd   = parseFloat(document.getElementById('enc-qtd').value)||0;
+    const custo = parseFloat(document.getElementById('enc-custo').value)||0;
+    const valor = qtd * custo;
+    const item  = itens.find(x=>x.id==id);
+    if(qtd > 0 || valor > 0){
+      const perdaBody = {
+        descricao:      item?.descricao || '',
+        motivo:         'vencimento',
+        qtdUnidades:    qtd,
+        valorPerda:     valor,
+        funcionarioId:  funcionarios.find(f=>f.nome===rep)?.id || null,
+        dtPerda:        dt || new Date().toISOString().slice(0,10),
+        observacao:     obs || 'Registrado automaticamente ao encerrar item de validade',
+        validadeItemId: parseInt(id),
+      };
+      const pd = await api.post('/api/perdas', perdaBody);
+      if(pd.ok){
+        toast('💀 Item encerrado e perda de ' + fmt.brl(valor) + ' registrada!');
+      } else {
+        toast('⚠️ Item encerrado mas erro ao registrar perda: '+pd.erro);
+      }
+    } else {
+      toast('💀 Item vencido encerrado (sem valor de perda)');
+    }
+  } else {
     toast(res==='vendido'?'✅ Vendido!':res==='acao'?'📋 Ação registrada!':'📦 Item encerrado!');
-    fecharModal('modal-encerrar'); carregar(); carregarKPIs();
-  } else toast('Erro: '+d.erro);
+  }
+
+  fecharModal('modal-encerrar'); carregar(); carregarKPIs();
+  try { window.parent.postMessage({type:'bb_refresh_kpis'},'*'); } catch(_) {}
 }
 
 async function carregarHistorico(){
