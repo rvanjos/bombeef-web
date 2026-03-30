@@ -687,14 +687,30 @@ function filtrarStatus(status){
 }
 
 function filtrarSemCod(){
+  // Muda para aba Validade
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  const tabVal = document.querySelector('[onclick*="validade"]');
+  if(tabVal) tabVal.classList.add('active');
+  document.getElementById('sec-dashboard').style.display='none';
+  document.getElementById('sec-validade').style.display='';
+  document.getElementById('sec-perdas').style.display='none';
   document.getElementById('busca-val').value = '';
+  document.getElementById('flt-status').value = 'todos';
   renderVal(itens.filter(i=>!i.codigo));
 }
 
 // ── Calcular dias ─────────────────────────────────────────────────────────────
 function calcDias(dataValidade){
   if(!dataValidade) return null;
-  const val = new Date(dataValidade+'T00:00:00');
+  let val;
+  if(dataValidade instanceof Date){
+    val = new Date(dataValidade); val.setHours(0,0,0,0);
+  } else {
+    // Garante string YYYY-MM-DD sem conversão de timezone
+    const s = String(dataValidade).slice(0,10);
+    val = new Date(s + 'T00:00:00');
+  }
+  if(isNaN(val.getTime())) return null;
   const hoje = new Date(); hoje.setHours(0,0,0,0);
   return Math.floor((val - hoje) / 86400000);
 }

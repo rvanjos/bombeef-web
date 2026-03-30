@@ -134,7 +134,17 @@ module.exports = function (pool) {
          ${where} ORDER BY vi.data_validade ASC NULLS LAST, vi.descricao ASC`,
         params
       );
-      res.json({ ok: true, data: rows, total: rows.length });
+      // Serializa datas como strings YYYY-MM-DD para o frontend
+      const data = rows.map(r => ({
+        ...r,
+        data_validade: r.data_validade instanceof Date
+          ? r.data_validade.toISOString().slice(0, 10)
+          : r.data_validade ? String(r.data_validade).slice(0, 10) : null,
+        ultima_conferencia: r.ultima_conferencia instanceof Date
+          ? r.ultima_conferencia.toISOString().slice(0, 10)
+          : r.ultima_conferencia ? String(r.ultima_conferencia).slice(0, 10) : null,
+      }));
+      res.json({ ok: true, data, total: data.length });
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
