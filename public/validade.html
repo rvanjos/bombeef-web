@@ -737,12 +737,13 @@ async function carregarFuncionarios(){
   const d = await api.get('/api/config/funcionarios');
   if(!d.ok) return;
   funcionarios = d.data.filter(f=>f.ativo);
-  // Preenche selects
+  // Preenche selects — limpa antes para evitar duplicação
   const sels = ['pd-func','v-resp'];
   for(const sid of sels){
     const sel = document.getElementById(sid);
     if(!sel) continue;
-    // v-resp usa select agora
+    // Mantém só o option vazio e substitui o resto
+    sel.innerHTML = '<option value="">— Selecione —</option>';
     funcionarios.forEach(f=>{
       const o=document.createElement('option'); o.value=f.nome; o.textContent=f.nome; sel.appendChild(o);
     });
@@ -888,6 +889,9 @@ function renderVal(lista){
       <td>${codCell}</td>
       <td>
         <b style="font-size:13px">${v.descricao}</b>
+        ${v.desc_original && v.desc_original !== v.descricao
+          ? `<br><small style="color:var(--orange);font-size:10px" title="Nome antes da vinculação">📎 ${v.desc_original}</small>`
+          : ''}
         ${v.qtd_unidades?`<br><small style="color:var(--muted)">${v.qtd_unidades} unidades</small>`:''}
         ${v.localizacao?`<br><small style="color:var(--blue)">📍 ${v.localizacao}</small>`:''}
       </td>
@@ -987,9 +991,21 @@ function abrirVincular(id){
 
 async function previewVincular(){
   const cod = document.getElementById('vinc-cod').value.trim();
-  if(cod.length<1){ document.getElementById('vinc-info').textContent=''; return; }
+  const info = document.getElementById('vinc-info');
+  if(cod.length<1){ info.innerHTML=''; return; }
   const d = await api.get(`/api/produtos/${encodeURIComponent(cod)}`);
-  document.getElementById('vinc-info').textContent = d.ok ? '✅ '+d.data.descricao : '⚠️ Produto não encontrado no catálogo';
+  if(d.ok){
+    // Mostra nome do produto que será vinculado + nome atual para comparação
+    const id = document.getElementById('vinc-id').value;
+    const itemAtual = itens.find(x=>x.id==id);
+    const nomeAtual = itemAtual?.descricao||'';
+    const nomeProd  = d.data.descricao;
+    const muda = nomeAtual && nomeAtual.toUpperCase() !== nomeProd.toUpperCase();
+    info.innerHTML = `<span style="color:var(--green)">✅ <b>${nomeProd}</b></span>` +
+      (muda ? `<br><span style="font-size:10px;color:var(--orange)">📎 Nome atual: "${nomeAtual}" → será atualizado para o nome do cadastro</span>` : '');
+  } else {
+    info.innerHTML = '<span style="color:var(--red-l)">⚠️ Produto não encontrado no catálogo</span>';
+  }
 }
 
 async function confirmarVincular(){

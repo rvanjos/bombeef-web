@@ -60,6 +60,7 @@ module.exports = function (pool) {
       ['dt_resolucao',   'DATE'],
       ['obs_resolucao',  'TEXT'],
       ['encerrado_por',  'TEXT'],
+      ['desc_original',  'TEXT'],
     ];
     for (const [col, def] of needed) {
       await pool.query(`ALTER TABLE validade_items ADD COLUMN IF NOT EXISTS ${col} ${def}`).catch(() => {});
@@ -230,14 +231,25 @@ module.exports = function (pool) {
       );
       if (!prod.length) return res.status(404).json({ ok: false, erro: 'Produto não encontrado com este código' });
 
+      // Busca descrição atual para salvar como original (auditoria)
+      const { rows: cur } = await pool.query(
+        `SELECT descricao FROM validade_items WHERE id=$1`, [parseInt(req.params.id)]
+      );
+      const descAtual = cur[0]?.descricao || null;
+
       await pool.query(`
         UPDATE validade_items
-        SET produto_id=$1, codigo=$2, descricao=COALESCE(NULLIF(descricao,''),$3),
-            preco_custo=$4, atualizado_em=NOW()
-        WHERE id=$5
-      `, [prod[0].id, codigo.trim(), prod[0].descricao, parseFloat(prod[0].preco_custo||0), parseInt(req.params.id)]);
+        SET produto_id    = $1,
+            codigo        = $2,
+            descricao     = $3,
+            desc_original = COALESCE(desc_original, $4),
+            preco_custo   = $5,
+            atualizado_em = NOW()
+        WHERE id = $6
+      `, [prod[0].id, codigo.trim(), prod[0].descricao,
+          descAtual, parseFloat(prod[0].preco_custo||0), parseInt(req.params.id)]);
 
-      res.json({ ok: true, produto: { ...prod[0], codigo: codigo.trim() } });
+      res.json({ ok: true, produto: { ...prod[0], codigo: codigo.trim(), desc_original: descAtual } });
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
