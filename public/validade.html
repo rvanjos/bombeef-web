@@ -167,61 +167,73 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
     <!-- KPI cards grandes clicáveis -->
     <div class="dash-kpi-grid">
       <div class="dash-kpi vencido" onclick="goFiltro('vencido')">
-        <div class="dk-ico">💀</div>
-        <div class="dk-lbl">Vencidos</div>
+        <div class="dk-ico">💀</div><div class="dk-lbl">Vencidos</div>
         <div class="dk-val vencido" id="dk-vencido">—</div>
         <div class="dk-sub">Retirar imediatamente</div>
       </div>
       <div class="dash-kpi critico" onclick="goFiltro('critico')">
-        <div class="dk-ico">🔴</div>
-        <div class="dk-lbl">Crítico</div>
+        <div class="dk-ico">🔴</div><div class="dk-lbl">Crítico</div>
         <div class="dk-val critico" id="dk-critico">—</div>
-        <div class="dk-sub" id="dk-critico-sub">≤ 3 dias</div>
+        <div class="dk-sub">≤ 3 dias</div>
       </div>
       <div class="dash-kpi alerta" onclick="goFiltro('alerta')">
-        <div class="dk-ico">⚠️</div>
-        <div class="dk-lbl">Alerta</div>
+        <div class="dk-ico">⚠️</div><div class="dk-lbl">Alerta</div>
         <div class="dk-val alerta" id="dk-alerta">—</div>
-        <div class="dk-sub" id="dk-alerta-sub">≤ 7 dias</div>
+        <div class="dk-sub">≤ 7 dias</div>
       </div>
       <div class="dash-kpi atencao" onclick="goFiltro('atencao')">
-        <div class="dk-ico">👁</div>
-        <div class="dk-lbl">Atenção</div>
+        <div class="dk-ico">👁</div><div class="dk-lbl">Atenção</div>
         <div class="dk-val atencao" id="dk-atencao">—</div>
-        <div class="dk-sub" id="dk-atencao-sub">≤ 30 dias</div>
+        <div class="dk-sub">≤ 30 dias</div>
       </div>
       <div class="dash-kpi ok" onclick="goFiltro('ok')">
-        <div class="dk-ico">✅</div>
-        <div class="dk-lbl">OK</div>
+        <div class="dk-ico">✅</div><div class="dk-lbl">OK</div>
         <div class="dk-val ok" id="dk-ok2">—</div>
         <div class="dk-sub">Dentro do prazo</div>
       </div>
     </div>
 
-    <!-- Barra de progresso geral -->
+    <!-- Barra de progresso -->
     <div class="dash-prog" id="dash-prog-wrap" style="display:none">
-      <div class="dp-lbl">
-        <span>Saúde do estoque</span>
-        <span id="dp-pct-txt"></span>
-      </div>
+      <div class="dp-lbl"><span>Saúde do estoque</span><span id="dp-pct-txt"></span></div>
       <div class="dp-bg"><div class="dp-fill" id="dp-fill" style="width:0%"></div></div>
       <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:4px">
         <span id="dp-lbl-l"></span><span id="dp-lbl-r"></span>
       </div>
     </div>
 
-    <!-- Cards de produtos críticos -->
-    <div id="dash-crit-section" style="display:none">
-      <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px">
-        🚨 Produtos que precisam de atenção imediata
+    <!-- Lista de produtos críticos direta na tela -->
+    <div id="dash-lista-wrap">
+      <!-- Seção Vencidos -->
+      <div id="dash-sec-vencido" style="display:none;margin-bottom:16px">
+        <div style="background:#8B0000;color:#fff;padding:8px 14px;border-radius:9px 9px 0 0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;display:flex;justify-content:space-between;align-items:center">
+          <span>💀 VENCIDOS — Retirar imediatamente</span>
+          <span id="dash-cnt-vencido" style="background:rgba(255,255,255,.2);padding:1px 8px;border-radius:10px"></span>
+        </div>
+        <div id="dash-tbl-vencido"></div>
       </div>
-      <div class="crit-grid" id="dash-crit-grid"></div>
-    </div>
-
-    <div id="dash-empty" style="display:none;padding:40px;text-align:center;color:var(--muted)">
-      <div style="font-size:40px;margin-bottom:12px">✅</div>
-      <div style="font-weight:700;font-size:16px">Tudo OK!</div>
-      <div style="font-size:13px;margin-top:6px">Nenhum produto com validade crítica no momento.</div>
+      <!-- Seção Crítico -->
+      <div id="dash-sec-critico" style="display:none;margin-bottom:16px">
+        <div style="background:#C0392B;color:#fff;padding:8px 14px;border-radius:9px 9px 0 0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;display:flex;justify-content:space-between;align-items:center">
+          <span>🔴 CRÍTICO — Vence em até 3 dias</span>
+          <span id="dash-cnt-critico" style="background:rgba(255,255,255,.2);padding:1px 8px;border-radius:10px"></span>
+        </div>
+        <div id="dash-tbl-critico"></div>
+      </div>
+      <!-- Seção Alerta -->
+      <div id="dash-sec-alerta" style="display:none;margin-bottom:16px">
+        <div style="background:var(--c-alerta);color:#fff;padding:8px 14px;border-radius:9px 9px 0 0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;display:flex;justify-content:space-between;align-items:center">
+          <span>⚠️ ALERTA — Vence em breve</span>
+          <span id="dash-cnt-alerta" style="background:rgba(255,255,255,.2);padding:1px 8px;border-radius:10px"></span>
+        </div>
+        <div id="dash-tbl-alerta"></div>
+      </div>
+      <!-- Tudo OK -->
+      <div id="dash-empty" style="display:none;padding:32px;text-align:center;color:var(--muted);background:var(--white);border-radius:9px;box-shadow:var(--shadow)">
+        <div style="font-size:40px;margin-bottom:10px">✅</div>
+        <div style="font-weight:700;font-size:15px;color:var(--c-ok)">Tudo OK!</div>
+        <div style="font-size:12px;margin-top:5px">Nenhum produto com validade crítica.</div>
+      </div>
     </div>
   </div>
 
@@ -431,10 +443,11 @@ if(api.token()) init();
 async function init(){
   await carregarFuncionarios();
   carregarKPIs();
-  carregar();
+  await carregar();   // await garante que itens esteja pronto antes do dashboard
   const hoje = new Date();
   document.getElementById('flt-mes-perdas').value = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
-  // Tenta notificar parent quando há novos dados
+  // Abre direto no dashboard já com dados
+
   try { window.parent.postMessage({type:'bb_refresh_kpis'}, '*'); } catch(_) {}
 }
 
@@ -469,78 +482,99 @@ function renderDashboard(){
   _renderDash();
 }
 
+function _mkDashRow(v) {
+  const dias = v.dias;
+  const diasTxt = dias===null?'—':dias<0?`${Math.abs(dias)}d vencido`:dias===0?'Hoje!':dias===1?'Amanhã':`${dias}d`;
+  const dCls = dias===null?'':dias<0?'dias-venc':dias<=3?'dias-crit':dias<=(v.dias_alerta||7)?'dias-al':'dias-ok';
+  const bgRow = v.urg==='vencido'?'#fff8f8':v.urg==='critico'?'#fffafa':'#fffdf5';
+  const acao = v.acao_antes_vencer?`<span style="font-size:10px;color:var(--muted);margin-left:8px">📋 ${v.acao_antes_vencer}</span>`:'';
+  const loc  = v.localizacao?`<span style="font-size:10px;color:var(--blue);margin-left:8px">📍 ${v.localizacao}</span>`:'';
+  const qtd  = v.qtd_unidades?`<span style="font-size:11px;color:var(--muted)">${v.qtd_unidades} un.</span>`:'';
+  return `<tr style="background:${bgRow};border-bottom:1px solid #f0e8e0;cursor:pointer" onclick="abrirModal(${v.id})">
+    <td style="padding:7px 12px;font-family:'DM Mono',monospace;font-size:11px;color:var(--muted)">${v.codigo||'—'}</td>
+    <td style="padding:7px 12px;font-weight:600;font-size:13px">${v.descricao}${acao}${loc}</td>
+    <td style="padding:7px 12px;font-size:11px;text-align:center">${qtd}</td>
+    <td style="padding:7px 12px;font-weight:700;font-size:12px;color:${v.urg==='vencido'?'#8B0000':v.urg==='critico'?'#C0392B':'var(--c-alerta)'}">${fmt.date(v.data_validade)}</td>
+    <td style="padding:7px 12px;text-align:center"><span class="dias-badge ${dCls}">${diasTxt}</span></td>
+    <td style="padding:7px 12px;font-size:11px;color:var(--muted)">${v.lote||'—'}</td>
+    <td style="padding:7px 6px;text-align:center">
+      <button onclick="event.stopPropagation();abrirModal(${v.id})" class="act-btn" title="Editar">✏️</button>
+      <button onclick="event.stopPropagation();perdaRapida(${v.id})" class="act-btn" style="color:var(--red-l)" title="Registrar perda">📉</button>
+    </td>
+  </tr>`;
+}
+
+function _mkDashTable(lista) {
+  if(!lista.length) return '';
+  return `<div style="background:var(--white);border-radius:0 0 9px 9px;box-shadow:var(--shadow);overflow:hidden">
+    <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead><tr style="background:#f8f4f0">
+        <th style="padding:6px 12px;font-size:10px;text-transform:uppercase;color:var(--muted);text-align:left;border-bottom:1px solid var(--border)">Código</th>
+        <th style="padding:6px 12px;font-size:10px;text-transform:uppercase;color:var(--muted);text-align:left;border-bottom:1px solid var(--border)">Produto</th>
+        <th style="padding:6px 12px;font-size:10px;text-transform:uppercase;color:var(--muted);text-align:center;border-bottom:1px solid var(--border)">Qtd</th>
+        <th style="padding:6px 12px;font-size:10px;text-transform:uppercase;color:var(--muted);text-align:left;border-bottom:1px solid var(--border)">Validade</th>
+        <th style="padding:6px 12px;font-size:10px;text-transform:uppercase;color:var(--muted);text-align:center;border-bottom:1px solid var(--border)">Dias</th>
+        <th style="padding:6px 12px;font-size:10px;text-transform:uppercase;color:var(--muted);text-align:left;border-bottom:1px solid var(--border)">Lote</th>
+        <th style="padding:6px 12px;border-bottom:1px solid var(--border)"></th>
+      </tr></thead>
+      <tbody>${lista.map(_mkDashRow).join('')}</tbody>
+    </table>
+  </div>`;
+}
+
 function _renderDash(){
-  const hoje = new Date(); hoje.setHours(0,0,0,0);
   let counts = {vencido:0, critico:0, alerta:0, atencao:0, ok:0};
-  let criticos = []; // para os cards
+  let grupos  = {vencido:[], critico:[], alerta:[]};
 
   itens.forEach(v => {
     if(v.status==='descartado') return;
     const dias = calcDias(v.data_validade);
     const urg  = getUrgencia(dias, v.dias_alerta||7);
-    const urg4 = dias!==null&&dias<=30&&urg==='ok'?'atencao':urg;
-    if(urg4==='vencido') counts.vencido++;
-    else if(urg4==='critico') counts.critico++;
-    else if(urg4==='alerta') counts.alerta++;
-    else if(urg4==='atencao') counts.atencao++;
-    else counts.ok++;
-    if(['vencido','critico','alerta'].includes(urg4)){
-      criticos.push({...v, dias, urg: urg4});
-    }
+    const urg4 = dias!==null && dias<=30 && urg==='ok' ? 'atencao' : urg;
+    counts[urg4]=(counts[urg4]||0)+1;
+    if(grupos[urg]) grupos[urg].push({...v, dias, urg});
   });
 
+  // Ordena cada grupo por dias (mais urgente primeiro)
+  Object.keys(grupos).forEach(k => grupos[k].sort((a,b)=>(a.dias??9999)-(b.dias??9999)));
+
+  // KPI cards
   const total = Object.values(counts).reduce((s,v)=>s+v,0);
-  document.getElementById('dk-vencido').textContent = counts.vencido;
-  document.getElementById('dk-critico').textContent = counts.critico;
-  document.getElementById('dk-alerta').textContent  = counts.alerta;
-  document.getElementById('dk-atencao').textContent = counts.atencao;
-  document.getElementById('dk-ok2').textContent     = counts.ok;
+  document.getElementById('dk-vencido').textContent = counts.vencido||0;
+  document.getElementById('dk-critico').textContent = counts.critico||0;
+  document.getElementById('dk-alerta').textContent  = counts.alerta||0;
+  document.getElementById('dk-atencao').textContent = counts.atencao||0;
+  document.getElementById('dk-ok2').textContent     = counts.ok||0;
 
   // Barra de progresso
   const progWrap = document.getElementById('dash-prog-wrap');
   if(total>0){
     progWrap.style.display='';
-    const pctOk = Math.round((counts.ok+counts.atencao)/total*100);
-    const fill = document.getElementById('dp-fill');
-    fill.style.width = pctOk+'%';
+    const pctOk = Math.round(((counts.ok||0)+(counts.atencao||0))/total*100);
+    const fill  = document.getElementById('dp-fill');
+    fill.style.width      = pctOk+'%';
     fill.style.background = pctOk>=80?'var(--c-ok)':pctOk>=50?'var(--c-alerta)':'var(--c-vencido)';
     document.getElementById('dp-pct-txt').textContent = pctOk+'% OK';
-    document.getElementById('dp-lbl-l').textContent   = `${counts.vencido+counts.critico} críticos`;
+    document.getElementById('dp-lbl-l').textContent   = `${(counts.vencido||0)+(counts.critico||0)} críticos`;
     document.getElementById('dp-lbl-r').textContent   = `${total} itens no total`;
   }
 
-  // Cards de produtos críticos (máx 12)
-  const critSection = document.getElementById('dash-crit-section');
-  const critGrid    = document.getElementById('dash-crit-grid');
-  const dashEmpty   = document.getElementById('dash-empty');
+  // Seções de lista
+  const temCriticos = grupos.vencido.length+grupos.critico.length+grupos.alerta.length > 0;
+  document.getElementById('dash-empty').style.display = temCriticos?'none':'';
 
-  if(criticos.length===0){
-    critSection.style.display='none';
-    dashEmpty.style.display='';
-  } else {
-    dashEmpty.style.display='none';
-    critSection.style.display='';
-    const URG_ORD = {vencido:0,critico:1,alerta:2};
-    criticos.sort((a,b)=>(URG_ORD[a.urg]??9)-(URG_ORD[b.urg]??9)||(a.dias??9999)-(b.dias??9999));
-    critGrid.innerHTML = criticos.slice(0,12).map(v=>{
-      const diasTxt = v.dias<0 ? `${Math.abs(v.dias)}d vencido`
-                    : v.dias===0? 'Vence hoje!'
-                    : v.dias===1? 'Vence amanhã'
-                    : `${v.dias}d restantes`;
-      const acaoTxt = v.acao_antes_vencer ? `<div style="font-size:10px;color:var(--muted);margin-top:3px">📋 ${v.acao_antes_vencer}</div>` : '';
-      const locTxt  = v.localizacao ? `<span class="cc-loc">📍 ${v.localizacao}</span>` : '';
-      const qtdTxt  = v.qtd_unidades ? `<span style="font-size:10px;color:var(--muted)">${v.qtd_unidades} un.</span>` : '';
-      return `<div class="crit-card ${v.urg}" onclick="abrirModal(${v.id})">
-        <div class="cc-nome" title="${v.descricao}">${v.descricao}</div>
-        <div style="font-size:10px;color:var(--muted)">${v.codigo||'Sem código'}</div>
-        <div class="cc-info">
-          <span class="cc-dias ${v.urg}">${diasTxt}</span>
-          ${qtdTxt}${locTxt}
-        </div>
-        ${acaoTxt}
-      </div>`;
-    }).join('');
-  }
+  ['vencido','critico','alerta'].forEach(k => {
+    const sec = document.getElementById(`dash-sec-${k}`);
+    const tbl = document.getElementById(`dash-tbl-${k}`);
+    const cnt = document.getElementById(`dash-cnt-${k}`);
+    if(grupos[k].length){
+      sec.style.display='';
+      cnt.textContent = grupos[k].length+' produto(s)';
+      tbl.innerHTML   = _mkDashTable(grupos[k]);
+    } else {
+      sec.style.display='none';
+    }
+  });
 }
 
 function fecharModal(id){ document.getElementById(id).classList.remove('open'); }
