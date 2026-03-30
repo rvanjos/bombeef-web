@@ -100,17 +100,19 @@ module.exports = function (pool) {
   r.get('/:id', async (req, res) => {
     try {
       const id = req.params.id;
-      // Tenta por id numérico primeiro, depois por código texto
-      const numId = parseInt(id);
-      let rows;
-      if (!isNaN(numId)) {
-        ({ rows } = await pool.query(
-          `SELECT * FROM produtos WHERE id = $1 OR codigo = $2`, [numId, id]
-        ));
-      } else {
-        ({ rows } = await pool.query(
-          `SELECT * FROM produtos WHERE codigo = $1`, [id]
-        ));
+      // Busca por CÓDIGO primeiro (código PDV tem prioridade sobre id interno)
+      // Resolve o bug: código '49' retornava produto com id=49 (errado)
+      let { rows } = await pool.query(
+        `SELECT * FROM produtos WHERE codigo = $1 AND ativo = true LIMIT 1`, [id]
+      );
+      if (!rows.length) {
+        // Fallback: busca por id interno numérico
+        const numId = parseInt(id);
+        if (!isNaN(numId)) {
+          ({ rows } = await pool.query(
+            `SELECT * FROM produtos WHERE id = $1`, [numId]
+          ));
+        }
       }
       if (!rows.length) return res.status(404).json({ ok: false, erro: 'Produto não encontrado' });
       res.json({ ok: true, data: rows[0] });
