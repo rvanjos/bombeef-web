@@ -31,7 +31,7 @@ module.exports = function (pool) {
         criado_em     TIMESTAMPTZ DEFAULT NOW(),
         atualizado_em TIMESTAMPTZ DEFAULT NOW()
       )
-    `);
+    `).catch(e => console.error('[kits] CREATE TABLE kits:', e.message));
     // Adiciona colunas novas sem quebrar tabela existente
     const cols = [
       ['codigo',        'TEXT'],
@@ -56,7 +56,7 @@ module.exports = function (pool) {
         preco_custo_unitario  NUMERIC(10,4) DEFAULT 0,
         ignorar_margem        BOOLEAN DEFAULT false
       )
-    `);
+    `).catch(e => console.error('[kits] CREATE TABLE kit_itens:', e.message));
     // ALTER TABLE separados — PostgreSQL não aceita múltiplos DDL num único query
     for (const [col, def] of [
       ['produto_id',           'INTEGER'],
@@ -90,7 +90,7 @@ module.exports = function (pool) {
   r.get('/', async (req, res) => {
     try {
       // Garante tabelas existem e colunas novas foram adicionadas
-      await initTable();
+      await initTable().catch(e => console.error('[kits] initTable no GET:', e.message));
       const { busca, ativo = 'true' } = req.query;
       const conds = [], params = [];
       if (ativo !== 'todos') { params.push(ativo !== 'false'); conds.push(`k.ativo = $${params.length}`); }
@@ -145,7 +145,14 @@ module.exports = function (pool) {
   // ── GET /:id ───────────────────────────────────────────────────────────────
   r.get('/:id', async (req, res) => {
     try {
-      const { rows } = await pool.query(`SELECT * FROM kits WHERE id = $1 OR codigo = $1`, [req.params.id]);
+      const idParam = req.params.id;
+      const numId = parseInt(idParam);
+      const { rows } = await pool.query(
+        isNaN(numId)
+          ? `SELECT * FROM kits WHERE codigo = $1`
+          : `SELECT * FROM kits WHERE id = $1 OR codigo = $2`,
+        isNaN(numId) ? [idParam] : [numId, idParam]
+      );
       if (!rows.length) return res.status(404).json({ ok: false, erro: 'Kit não encontrado' });
       const kit = rows[0];
 
