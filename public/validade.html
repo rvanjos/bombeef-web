@@ -315,12 +315,6 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
         <label>Ação Antes de Vencer</label>
         <select id="v-acao">
           <option value="">— Selecione —</option>
-          <option>Promover com 30% de desconto</option>
-          <option>Promover com 50% de desconto</option>
-          <option>Doação para funcionários</option>
-          <option>Retirar de circulação</option>
-          <option>Verificar com fornecedor</option>
-          <option>Descarte imediato</option>
         </select>
       </div>
       <div class="fg-row">
@@ -440,9 +434,21 @@ let itens=[], perdas=[], funcionarios=[];
 window.onBBReady = () => { init(); };
 if(api.token()) init();
 
+async function carregarAcoesValidade(){
+  const d = await api.get('/api/config/acoes-validade');
+  if(!d.ok) return;
+  const sel = document.getElementById('v-acao');
+  const cur = sel.value;
+  // Mantém o option vazio e adiciona as ações do banco
+  sel.innerHTML = '<option value="">— Selecione —</option>' +
+    d.data.map(a=>`<option value="${a.descricao}">${a.descricao}</option>`).join('');
+  if(cur) sel.value = cur;
+}
+
 async function init(){
   await carregarFuncionarios();
   carregarKPIs();
+  await carregarAcoesValidade(); // carrega ações do banco no select
   await carregar();   // await garante que itens esteja pronto antes do dashboard
   const hoje = new Date();
   document.getElementById('flt-mes-perdas').value = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;

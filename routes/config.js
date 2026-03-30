@@ -18,6 +18,31 @@ module.exports = function (pool) {
 
   // ── Init tabelas ───────────────────────────────────────────────────────────
   async function initTable() {
+    // Tabela de ações antes de vencer (gerenciada pelo admin)
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS validade_acoes (
+        id        SERIAL PRIMARY KEY,
+        descricao TEXT NOT NULL,
+        ativo     BOOLEAN DEFAULT true,
+        ordem     INTEGER DEFAULT 99,
+        criado_em TIMESTAMPTZ DEFAULT NOW()
+      )
+    `).catch(()=>{});
+    // Seed inicial se vazia
+    const cnt = await pool.query('SELECT COUNT(*) FROM validade_acoes').then(r=>parseInt(r.rows[0].count)).catch(()=>0);
+    if(cnt === 0){
+      await pool.query(`
+        INSERT INTO validade_acoes (descricao, ordem) VALUES
+        ('Promover com 30% de desconto', 1),
+        ('Promover com 50% de desconto', 2),
+        ('Montar kit anti-desperdício', 3),
+        ('Doação para funcionários', 4),
+        ('Verificar com fornecedor', 5),
+        ('Retirar de circulação', 6),
+        ('Descarte imediato', 7)
+      `).catch(()=>{});
+    }
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS funcionarios (
         id                SERIAL PRIMARY KEY,
@@ -352,6 +377,44 @@ module.exports = function (pool) {
       }
       res.json({ ok: true });
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ── GET /acoes-validade ───────────────────────────────────────────────────
+  r.get('/acoes-validade', async (req, res) => {
+    try {
+      const { rows } = await pool.query(`SELECT * FROM validade_acoes WHERE ativo=true ORDER BY ordem, descricao`);
+      res.json({ ok: true, data: rows });
+    } catch(e){ res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  r.post('/acoes-validade', async (req, res) => {
+    const { descricao, ordem } = req.body;
+    if(!descricao) return res.status(400).json({ ok: false, erro: 'descricao obrigatória' });
+    try {
+      const { rows } = await pool.query(
+        `INSERT INTO validade_acoes (descricao, ordem) VALUES ($1, $2) RETURNING *`,
+        [descricao.trim(), parseInt(ordem)||99]
+      );
+      res.json({ ok: true, data: rows[0] });
+    } catch(e){ res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  r.delete('/acoes-validade/:id', async (req, res) => {
+    try {
+      await pool.query(`UPDATE validade_acoes SET ativo=false WHERE id=$1`, [req.params.id]);
+      res.json({ ok: true });
+    } catch(e){ res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  r.put('/acoes-validade/:id', async (req, res) => {
+    const { descricao, ordem } = req.body;
+    try {
+      await pool.query(
+        `UPDATE validade_acoes SET descricao=$1, ordem=$2 WHERE id=$3`,
+        [descricao.trim(), parseInt(ordem)||99, req.params.id]
+      );
+      res.json({ ok: true });
+    } catch(e){ res.status(500).json({ ok: false, erro: e.message }); }
   });
 
   return r;

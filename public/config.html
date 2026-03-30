@@ -63,6 +63,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
     <div class="sb-sec">Financeiro</div>
     <div class="nav-item" onclick="showPage('metas',this)">🎯 Metas</div>
     <div class="nav-item" onclick="showPage('categorias',this)">📊 Categorias DRE</div>
+    <div class="nav-item" onclick="showPage('acoes-validade',this)">📋 Ações de Validade</div>
   </div>
 
   <div class="content">
@@ -269,6 +270,7 @@ function showPage(p, el){
   if(p==='usuarios') carregarUsuarios();
   if(p==='funcionarios') carregarFuncionarios();
   if(p==='categorias') carregarCategorias();
+  if(p==='acoes-validade') carregarAcoes();
 }
 
 // ── Config sistema ─────────────────────────────────────────────────────────
@@ -700,6 +702,62 @@ async function excluirUsr(id, nome){
 
   toast('Usuário excluído permanentemente!');
   carregarUsuarios();
+}
+
+// ── Ações de Validade ──────────────────────────────────────────────────────
+let acoes = [];
+
+async function carregarAcoes(){
+  const d = await api.get('/api/config/acoes-validade');
+  if(!d.ok) return;
+  acoes = d.data;
+  const tbody = document.getElementById('tbody-acoes');
+  const empty = document.getElementById('empty-acoes');
+  if(!acoes.length){ tbody.innerHTML=''; empty.style.display=''; return; }
+  empty.style.display='none';
+  tbody.innerHTML = acoes.map(a=>`<tr>
+    <td style="font-weight:500">${a.descricao}</td>
+    <td style="text-align:center;color:var(--muted);font-size:12px">${a.ordem}</td>
+    <td>
+      <button class="act-btn" onclick="abrirAcao(${a.id})">✏️</button>
+      <button class="act-btn" onclick="excluirAcao(${a.id})" style="color:var(--red-l)">🗑️</button>
+    </td>
+  </tr>`).join('');
+}
+
+function abrirAcao(id=null){
+  const a = id ? acoes.find(x=>x.id===id) : null;
+  document.getElementById('acao-title').textContent = a ? 'Editar Ação' : 'Nova Ação';
+  document.getElementById('acao-id').value    = a?.id||'';
+  document.getElementById('acao-desc').value  = a?.descricao||'';
+  document.getElementById('acao-ordem').value = a?.ordem||99;
+  document.getElementById('modal-acao').classList.add('open');
+}
+
+function fecharAcao(){
+  document.getElementById('modal-acao').classList.remove('open');
+}
+
+async function salvarAcao(){
+  const id   = document.getElementById('acao-id').value;
+  const desc = document.getElementById('acao-desc').value.trim();
+  const ord  = document.getElementById('acao-ordem').value;
+  if(!desc){ toast('Informe a descrição'); return; }
+  const body = { descricao: desc, ordem: parseInt(ord)||99 };
+  const d = id
+    ? await api.put(`/api/config/acoes-validade/${id}`, body)
+    : await api.post('/api/config/acoes-validade', body);
+  if(!d.ok){ toast('Erro: '+d.erro); return; }
+  toast(id ? 'Ação atualizada!' : 'Ação criada!');
+  fecharAcao();
+  carregarAcoes();
+}
+
+async function excluirAcao(id){
+  if(!confirm('Remover esta ação?')) return;
+  const d = await api.delete(`/api/config/acoes-validade/${id}`);
+  if(d.ok){ toast('Removida'); carregarAcoes(); }
+  else toast('Erro: '+d.erro);
 }
 </script>
 </body>
