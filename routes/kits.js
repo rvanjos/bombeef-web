@@ -71,8 +71,9 @@ module.exports = function (pool) {
     await pool.query(
       `CREATE INDEX IF NOT EXISTS idx_kit_itens_kit ON kit_itens(kit_id)`
     ).catch(() => {});
+    console.log('[kits] initTable concluído');
   }
-  initTable().catch(e => console.error('[kits] initTable:', e.message));
+  initTable().catch(e => console.error('[kits] initTable ERRO:', e.message, e.stack?.split('\n')[1]));
 
   // ── Helper: calcula custo total do kit ────────────────────────────────────
   async function calcCustoKit(kitId, client = pool) {
@@ -88,8 +89,8 @@ module.exports = function (pool) {
   // ── GET / ──────────────────────────────────────────────────────────────────
   r.get('/', async (req, res) => {
     try {
-      // Garante tabelas existem (caso o deploy tenha rodado antes da migration)
-      await initTable().catch(() => {});
+      // Garante tabelas existem e colunas novas foram adicionadas
+      await initTable();
       const { busca, ativo = 'true' } = req.query;
       const conds = [], params = [];
       if (ativo !== 'todos') { params.push(ativo !== 'false'); conds.push(`k.ativo = $${params.length}`); }
