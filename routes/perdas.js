@@ -38,7 +38,7 @@ module.exports = function (pool) {
     `);
     // Garante colunas novas
     const cols = [
-      ['descricao',         'TEXT'],              // coluna principal — pode faltar em DBs antigos
+      ['descricao',         'TEXT'],
       ['mes',               'TEXT'],
       ['motivo',            "TEXT DEFAULT 'vencimento'"],
       ['observacao',        'TEXT'],
@@ -48,6 +48,7 @@ module.exports = function (pool) {
       ['qtd_unidades',      'INTEGER DEFAULT 0'],
       ['valor_perda',       'NUMERIC(10,2) DEFAULT 0'],
       ['usuario_id',        'INTEGER'],
+      ['dt_perda',          'DATE DEFAULT CURRENT_DATE'],
     ];
     for (const [col, def] of cols) {
       await pool.query(

@@ -53,7 +53,13 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
 </style>
 </head>
 <body>
-<div class="ph"><span style="font-size:20px">⚙️</span><h2>Configurações do Sistema</h2></div>
+<div class="ph" id="config-ph"><span style="font-size:20px">⚙️</span><h2>Configurações do Sistema</h2></div>
+<script>
+// Se estiver dentro de um iframe, esconde o header próprio (o parent já tem header)
+if(window.self !== window.top){
+  document.getElementById('config-ph').style.display='none';
+}
+</script>
 <div class="layout">
   <div class="sidebar">
     <div class="sb-sec">Principal</div>
