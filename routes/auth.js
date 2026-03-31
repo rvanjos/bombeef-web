@@ -288,5 +288,21 @@ r.delete('/usuarios/:id/permanente', autenticar('admin'), async (req, res) => {
     }
   });
 
+  // ── GET /reset-admin?tk=bb2024reset — reset emergencial da senha admin ──────
+  // Rota temporária — remover após uso
+  r.get('/reset-admin', async (req, res) => {
+    if (req.query.tk !== 'bb2024reset')
+      return res.status(403).send('Token inválido');
+    try {
+      const hash = await bcrypt.hash(req.query.pwd || 'BomBeef@2024', 12);
+      const { rows } = await pool.query(
+        `UPDATE usuarios SET senha_hash=$1, atualizado_em=NOW()
+         WHERE perfil='admin' RETURNING id, nome, email`,
+        [hash]
+      );
+      res.send(`✅ Senha do admin atualizada para: <b>${req.query.pwd || 'BomBeef@2024'}</b><br>Usuários: ${JSON.stringify(rows)}`);
+    } catch(e) { res.status(500).send('Erro: '+e.message); }
+  });
+
   return r;
 };
