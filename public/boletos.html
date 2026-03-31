@@ -75,6 +75,51 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
 .empty{text-align:center;padding:48px 20px;color:var(--muted);}
 .empty-icon{font-size:42px;margin-bottom:12px;}
 @media(max-width:600px){.fg-row{grid-template-columns:1fr;}.tbl th:nth-child(3),.tbl td:nth-child(3),.tbl th:nth-child(5),.tbl td:nth-child(5){display:none;}}
+/* Calendário de boletos */
+.cal-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+.cal-nav-mes{font-size:18px;font-weight:700;color:var(--text);}
+.cal-nav button{padding:6px 14px;border:1px solid var(--border);border-radius:8px;
+  background:var(--white);cursor:pointer;font-size:13px;font-weight:600;transition:.15s;}
+.cal-nav button:hover{background:var(--bg);border-color:var(--red);color:var(--red);}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;}
+.cal-dow{text-align:center;font-size:10px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.5px;color:var(--muted);padding:8px 0;}
+.cal-day{min-height:80px;background:var(--white);border:1px solid var(--border);
+  border-radius:8px;padding:6px;position:relative;transition:.15s;cursor:default;}
+.cal-day:hover{border-color:var(--red-l);box-shadow:0 2px 8px rgba(139,0,0,.1);}
+.cal-day.hoje{border-color:var(--red);background:#fff8f8;}
+.cal-day.outro-mes{background:#faf7f4;opacity:.5;}
+.cal-day.tem-boleto{cursor:pointer;}
+.cal-dn{font-size:11px;font-weight:700;color:var(--muted);margin-bottom:4px;}
+.cal-day.hoje .cal-dn{color:var(--red);background:var(--red);color:#fff;
+  width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;}
+.cal-boleto{font-size:10px;font-weight:700;padding:2px 5px;border-radius:4px;margin-bottom:2px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;}
+.cal-boleto.avencer{background:#fff3cd;color:#856404;}
+.cal-boleto.vencido{background:#f8d7da;color:#721c24;}
+.cal-boleto.pago{background:#d1e7dd;color:#0a4a22;}
+.cal-mais{font-size:10px;color:var(--muted);text-align:center;margin-top:2px;}
+.cal-total-dia{font-size:10px;font-weight:700;color:var(--red-l);margin-top:3px;text-align:right;}
+/* Semanas — linha de total */
+.semana-total{background:#f7f4f0;border:1px solid var(--border);border-radius:8px;
+  padding:8px 12px;display:flex;justify-content:space-between;align-items:center;
+  font-size:12px;margin-bottom:3px;}
+.semana-total span{font-weight:700;color:var(--red-l);font-family:'DM Mono',monospace;}
+/* Tabs boletos */
+.btabs{display:flex;gap:4px;margin-bottom:14px;border-bottom:2px solid var(--border);padding-bottom:0;}
+.btab{padding:8px 16px;border:none;background:none;font-family:'DM Sans',sans-serif;font-size:13px;
+  font-weight:500;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;transition:.15s;}
+.btab.active{color:var(--red);border-bottom-color:var(--red);font-weight:700;}
+/* Painel lateral do calendário */
+.cal-layout{display:grid;grid-template-columns:1fr 320px;gap:16px;}
+.cal-side{background:var(--white);border:1px solid var(--border);border-radius:12px;
+  box-shadow:var(--shadow);overflow:hidden;}
+.cal-side-head{background:var(--red);color:#fff;padding:12px 16px;font-size:13px;font-weight:700;}
+.cal-side-list{padding:12px;max-height:520px;overflow-y:auto;}
+.side-item{padding:8px 10px;border-bottom:1px solid #f5efe8;font-size:12px;}
+.side-item:last-child{border-bottom:none;}
+.side-item .si-forn{font-weight:600;margin-bottom:2px;}
+.side-item .si-val{font-family:'DM Mono',monospace;font-weight:700;color:var(--red-l);}
 </style>
 </head>
 <body>
@@ -88,6 +133,14 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
     <div class="kc b"><div class="kc-l">Total Aberto</div><div class="kc-v" id="k-aberto">—</div><div class="kc-s">em aberto</div></div>
     <div class="kc g"><div class="kc-l">Pago no Mês</div><div class="kc-v" id="k-pago">—</div><div class="kc-s">este mês</div></div>
   </div>
+  <!-- Abas -->
+  <div class="btabs">
+    <button class="btab active" id="btab-lista" onclick="showBTab('lista',this)">📋 Lista</button>
+    <button class="btab" id="btab-cal" onclick="showBTab('calendario',this)">📅 Calendário</button>
+  </div>
+
+  <!-- Seção Lista -->
+  <div id="bsec-lista">
   <!-- Toolbar -->
   <div class="toolbar">
     <button class="btn btn-p" onclick="abrirModal()">＋ Novo Boleto</button>
@@ -123,6 +176,44 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
       <button class="btn btn-p" style="margin-top:12px" onclick="abrirModal()">＋ Adicionar Boleto</button>
     </div>
   </div>
+  </div><!-- /bsec-lista -->
+
+  <!-- Seção Calendário -->
+  <div id="bsec-calendario" style="display:none">
+    <div class="cal-nav">
+      <button onclick="calMes(-1)">← Anterior</button>
+      <div>
+        <div class="cal-nav-mes" id="cal-mes-label">—</div>
+        <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:2px" id="cal-total-mes"></div>
+      </div>
+      <button onclick="calMes(1)">Próximo →</button>
+    </div>
+    <div class="cal-layout">
+      <div>
+        <div class="cal-grid" id="cal-dow-row">
+          <div class="cal-dow">Dom</div><div class="cal-dow">Seg</div>
+          <div class="cal-dow">Ter</div><div class="cal-dow">Qua</div>
+          <div class="cal-dow">Qui</div><div class="cal-dow">Sex</div>
+          <div class="cal-dow">Sáb</div>
+        </div>
+        <div class="cal-grid" id="cal-grid"></div>
+        <!-- Totais por semana -->
+        <div id="cal-semanas" style="margin-top:12px">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px">Total por Semana</div>
+          <div id="cal-semanas-list"></div>
+        </div>
+      </div>
+      <div class="cal-side">
+        <div class="cal-side-head" id="cal-side-title">Selecione um dia</div>
+        <div class="cal-side-list" id="cal-side-list">
+          <div style="text-align:center;padding:24px;color:var(--muted);font-size:13px">
+            Clique em um dia com boletos para ver os detalhes
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <!-- Modal Novo/Editar -->
@@ -232,6 +323,134 @@ async function init() {
 }
 window.onBBReady = () => { init(); };
 if(api.token()) { init(); }
+
+// ── Abas de boletos ──────────────────────────────────────────────────────────
+function showBTab(t, btn){
+  document.getElementById('bsec-lista').style.display      = t==='lista'      ? '' : 'none';
+  document.getElementById('bsec-calendario').style.display = t==='calendario' ? '' : 'none';
+  document.querySelectorAll('.btab').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  if(t==='calendario') renderCalendario();
+}
+
+// ── Calendário ───────────────────────────────────────────────────────────────
+let calAno  = new Date().getFullYear();
+let calMesN = new Date().getMonth();
+
+function calMes(delta){
+  calMesN += delta;
+  if(calMesN < 0){ calMesN=11; calAno--; }
+  if(calMesN > 11){ calMesN=0; calAno++; }
+  renderCalendario();
+}
+
+async function renderCalendario(){
+  const mesStr = String(calMesN+1).padStart(2,'0') + '/' + calAno;
+  const d = await api.get('/api/boletos?status=todos&mes='+mesStr);
+  const todos = d.ok ? d.data : [];
+
+  const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+                 'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  document.getElementById('cal-mes-label').textContent = MESES[calMesN] + ' ' + calAno;
+
+  const porDia = {};
+  for(const b of todos){
+    if(!b.vencimento) continue;
+    const dt = b.vencimento.slice(0,10);
+    const [y,m] = dt.split('-');
+    if(parseInt(y)!==calAno || parseInt(m)!==calMesN+1) continue;
+    if(!porDia[dt]) porDia[dt]=[];
+    porDia[dt].push(b);
+  }
+
+  const totalMes = Object.values(porDia).flat()
+    .filter(b=>b.status!=='pago')
+    .reduce((s,b)=>s+parseFloat(b.valor||0),0);
+  document.getElementById('cal-total-mes').textContent = 'Total em aberto: '+fmt.brl(totalMes);
+
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+  const primeiroDia = new Date(calAno,calMesN,1);
+  const ultimoDia   = new Date(calAno,calMesN+1,0);
+  const inicioPad   = primeiroDia.getDay();
+  const totalCelulas= Math.ceil((inicioPad+ultimoDia.getDate())/7)*7;
+
+  let grid='';
+  const semanas=[];
+  let semAtual={ini:null,fim:null,total:0};
+
+  for(let i=0;i<totalCelulas;i++){
+    const diaN  = i-inicioPad+1;
+    const dtObj = new Date(calAno,calMesN,diaN); dtObj.setHours(0,0,0,0);
+    const fora  = diaN<1 || diaN>ultimoDia.getDate();
+    const dtStr = calAno+'-'+String(calMesN+1).padStart(2,'0')+'-'+String(diaN).padStart(2,'0');
+    const ehHoje= !fora && dtObj.getTime()===hoje.getTime();
+    const bsDia = !fora ? (porDia[dtStr]||[]) : [];
+    const totDia= bsDia.filter(b=>b.status!=='pago').reduce((s,b)=>s+parseFloat(b.valor||0),0);
+
+    if(i%7===0) semAtual={ini:null,fim:null,total:0};
+    if(!fora){ if(semAtual.ini===null) semAtual.ini=diaN; semAtual.fim=diaN; semAtual.total+=totDia; }
+    if(i%7===6) semanas.push({...semAtual});
+
+    const cls=['cal-day',fora?'outro-mes':'',ehHoje?'hoje':'',bsDia.length?'tem-boleto':''].filter(Boolean).join(' ');
+    const onclick = bsDia.length ? 'onclick="calDia(''+dtStr+'')"' : '';
+
+    const dnHtml = ehHoje
+      ? '<div class="cal-dn" style="background:var(--red);color:#fff;width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:10px">'+diaN+'</div>'
+      : '<div class="cal-dn">'+(fora?'':diaN)+'</div>';
+
+    const bsHtml = bsDia.slice(0,2).map(b=>{
+      const cl=b.status==='pago'?'pago':b.status==='vencido'?'vencido':'avencer';
+      const nm=b.fornecedor.length>13?b.fornecedor.slice(0,13)+'…':b.fornecedor;
+      return '<div class="cal-boleto '+cl+'" title="'+b.fornecedor+' — '+fmt.brl(b.valor)+'">'+nm+'</div>';
+    }).join('');
+    const maisHtml = bsDia.length>2?'<div class="cal-mais">+' +(bsDia.length-2)+' mais</div>':'';
+    const totHtml  = totDia>0?'<div class="cal-total-dia">'+fmt.brl(totDia)+'</div>':'';
+
+    grid+='<div class="'+cls+'" '+onclick+'>'+dnHtml+bsHtml+maisHtml+totHtml+'</div>';
+  }
+  document.getElementById('cal-grid').innerHTML=grid;
+
+  const semHtml=semanas.filter(s=>s.total>0||s.ini).map((s,i)=>{
+    if(!s.ini) return '';
+    return '<div class="semana-total"><div>Semana '+(i+1)
+      +' <span style="color:var(--muted);font-weight:400;font-size:11px">('+s.ini+' a '+s.fim+'/'+String(calMesN+1).padStart(2,'0')+')</span></div>'
+      +(s.total>0?'<span>'+fmt.brl(s.total)+'</span>':'<span style="color:var(--muted)">—</span>')
+      +'</div>';
+  }).join('');
+  document.getElementById('cal-semanas-list').innerHTML=semHtml||
+    '<div style="font-size:12px;color:var(--muted);padding:8px">Sem boletos a vencer neste mês</div>';
+}
+
+function calDia(dtStr){
+  const mesStr=String(calMesN+1).padStart(2,'0')+'/'+calAno;
+  api.get('/api/boletos?status=todos&mes='+mesStr).then(d=>{
+    const todos=d.ok?d.data:[];
+    const bsDia=todos.filter(b=>b.vencimento?.slice(0,10)===dtStr);
+    const [y,m,dia]=dtStr.split('-');
+    const totDia=bsDia.filter(b=>b.status!=='pago').reduce((s,b)=>s+parseFloat(b.valor||0),0);
+    document.getElementById('cal-side-title').textContent=
+      dia+'/'+m+'/'+y+' — '+bsDia.length+' boleto(s)'+(totDia>0?' — '+fmt.brl(totDia)+' em aberto':'');
+    if(!bsDia.length){
+      document.getElementById('cal-side-list').innerHTML=
+        '<div style="text-align:center;padding:24px;color:var(--muted)">Sem boletos neste dia</div>';
+      return;
+    }
+    document.getElementById('cal-side-list').innerHTML=bsDia
+      .sort((a,b)=>parseFloat(b.valor)-parseFloat(a.valor))
+      .map(b=>{
+        const cl=b.status==='pago'?'pill-p':b.status==='vencido'?'pill-r':'pill-v';
+        const st={pago:'Pago',vencido:'Vencido',avencer:'A Vencer'}[b.status]||b.status;
+        return '<div class="side-item">'
+          +'<div class="si-forn">'+b.fornecedor+'</div>'
+          +(b.produto?'<div style="font-size:11px;color:var(--muted)">'+b.produto+'</div>':'')
+          +(b.nf?'<div style="font-size:10px;color:var(--blue)">NF-e '+b.nf+'</div>':'')
+          +'<div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">'
+          +'<span class="pill '+cl+'">'+st+'</span>'
+          +'<span class="si-val">'+fmt.brl(b.valor)+'</span>'
+          +'</div></div>';
+      }).join('');
+  });
+}
 
 // Mês atual no filtro
 const hoje = new Date();
