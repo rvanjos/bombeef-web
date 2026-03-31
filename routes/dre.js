@@ -633,7 +633,11 @@ module.exports = function (pool) {
       if (sessao_id) {
         // Ao atualizar, faz merge por FITID para não perder classificações
         const cur = await pool.query(`SELECT dados_json FROM dre_sessoes WHERE id=$1`, [sessao_id]);
-        const dadosMerge = cur.rows.length ? mergeTransacoes(extrairTransacoes(cur.rows[0].dados_json), extrairTransacoes(dados_json)) : dados_json;
+        // Merge apenas das transactions, preserva o objeto completo (loadedFiles, supplierMem, etc.)
+        const txsExist = extrairTransacoes(cur.rows[0]?.dados_json);
+        const txsNovos = extrairTransacoes(dados_json);
+        const txsMerge = txsNovos.length > 0 ? mergeTransacoes(txsExist, txsNovos) : (txsExist.length > 0 ? txsExist : txsNovos);
+        const dadosMerge = { ...(typeof dados_json === 'object' && !Array.isArray(dados_json) ? dados_json : {}), transactions: txsMerge };
         const upd = await pool.query(`
           UPDATE dre_sessoes SET descricao=$1, dados_json=$2, atualizado_em=NOW()
           WHERE id=$3 RETURNING id
@@ -648,7 +652,10 @@ module.exports = function (pool) {
         );
         if (existing.rows.length) {
           const cur2 = await pool.query(`SELECT dados_json FROM dre_sessoes WHERE id=$1`, [existing.rows[0].id]);
-          const dadosMerge2 = cur2.rows.length ? mergeTransacoes(extrairTransacoes(cur2.rows[0].dados_json), extrairTransacoes(dados_json)) : dados_json;
+          const txsExist2 = extrairTransacoes(cur2.rows[0]?.dados_json);
+          const txsNovos2 = extrairTransacoes(dados_json);
+          const txsMerge2 = txsNovos2.length > 0 ? mergeTransacoes(txsExist2, txsNovos2) : (txsExist2.length > 0 ? txsExist2 : txsNovos2);
+          const dadosMerge2 = { ...(typeof dados_json === 'object' && !Array.isArray(dados_json) ? dados_json : {}), transactions: txsMerge2 };
           const upd = await pool.query(`
             UPDATE dre_sessoes SET descricao=$1, dados_json=$2, usuario_id=$3, atualizado_em=NOW()
             WHERE id=$4 RETURNING id
@@ -669,6 +676,65 @@ module.exports = function (pool) {
       }
       res.json({ ok: true, sessao_id: sid });
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ── POST /recuperar/:mes — reconstrói sessão a partir da tabela dre_lancamentos
+  r.post('/recuperar/:mes', async (req, res) => {
+    try {
+      const mes = decodeURIComponent(req.params.mes);
+      // Busca sessão ou cria nova
+      let sessao = await pool.query(
+        `SELECT id, dados_json FROM dre_sessoes WHERE mes_ref=$1 ORDER BY atualizado_em DESC LIMIT 1`, [mes]
+      );
+      let sessaoId;
+      if (!sessao.rows.length) {
+        const ins = await pool.query(
+          `INSERT INTO dre_sessoes (mes_ref, descricao) VALUES ($1,$2) RETURNING id`,
+          [mes, `Sessão ${mes} — recuperada da tabela`]
+        );
+        sessaoId = ins.rows[0].id;
+      } else {
+        sessaoId = sessao.rows[0].id;
+      }
+      // Busca todos os lançamentos salvos na tabela
+      const { rows } = await pool.query(
+        `SELECT * FROM dre_lancamentos WHERE sessao_id=$1 ORDER BY data_lanc ASC, id ASC`,
+        [sessaoId]
+      );
+      if (!rows.length) {
+        // Tenta por mês sem sessão específica
+        const { rows: r2 } = await pool.query(
+          `SELECT dl.* FROM dre_lancamentos dl
+           JOIN dre_sessoes ds ON ds.id=dl.sessao_id
+           WHERE dl.mes=$1 ORDER BY dl.data_lanc ASC, dl.id ASC`, [mes]
+        );
+        if (!r2.length) return res.json({ ok: false, erro: 'Nenhum lançamento encontrado na tabela para este mês' });
+        rows.push(...r2);
+      }
+      // Reconstrói o formato que o frontend espera
+      const transactions = rows.map(r => ({
+        id: r.id,
+        fitid: r.fitid||null,
+        lancamento: r.lancamento,
+        razaoSocial: r.razao_social||'',
+        valor: parseFloat(r.valor||0),
+        data: r.data_lanc||'',
+        mes: r.mes||mes,
+        mesCaixa: r.mes_caixa||r.mes||mes,
+        fonte: r.fonte||'EXTRATO',
+        categoria: r.categoria||'',
+        grupoKey: r.grupo_dre||'',
+        ignorar: r.ignorar||false,
+        portador: r.portador||'',
+      }));
+      // Reconstrói e salva o dados_json
+      const dadosJson = { transactions, loadedFiles:[], supplierMem:{}, _recoveredAt: new Date().toISOString() };
+      await pool.query(
+        `UPDATE dre_sessoes SET dados_json=$1, descricao=$2, atualizado_em=NOW() WHERE id=$3`,
+        [JSON.stringify(dadosJson), `Sessão ${mes} — ${transactions.length} lançamentos (recuperado)`, sessaoId]
+      );
+      res.json({ ok: true, sessao_id: sessaoId, total: transactions.length, transactions });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
   // ── GET /lancamentos/:mes — lançamentos salvos na tabela (backup seguro) ────
@@ -695,9 +761,9 @@ module.exports = function (pool) {
       const descricao = `Sessão ${mes_ref} — auto-save ao fechar`;
       if (sessao_id) {
         const cur = await pool.query(`SELECT dados_json FROM dre_sessoes WHERE id=$1`, [sessao_id]);
-        const merge = cur.rows.length
-          ? mergeTransacoes(JSON.parse(cur.rows[0].dados_json||'[]'), dados_json?.transactions||dados_json)
-          : (dados_json?.transactions || dados_json);
+        const txsB = extrairTransacoes(cur.rows[0]?.dados_json);
+        const txsNovosB = extrairTransacoes(dados_json);
+        const merge = txsNovosB.length > 0 ? mergeTransacoes(txsB, txsNovosB) : (txsB.length > 0 ? txsB : txsNovosB);
         await pool.query(
           `UPDATE dre_sessoes SET dados_json=$1, atualizado_em=NOW() WHERE id=$2`,
           [JSON.stringify({...dados_json, transactions: merge}), sessao_id]

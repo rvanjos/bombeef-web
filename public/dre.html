@@ -181,6 +181,7 @@ td{padding:5px 9px;vertical-align:middle;}
   <button class="btn bg" onclick="salvar()">💾 Salvar</button>
   <button class="btn bs" onclick="exportXLS()">📤 Excel</button>
   <button class="btn bs" onclick="abrirSessoes()">📂 Sessões</button>
+  <button class="btn bs" onclick="recuperarDoBanco()" title="Recupera lançamentos da tabela do banco" style="border-color:var(--orange);color:var(--orange)">🔄 Recuperar</button>
   <input type="month" id="f-mesref" style="padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px" onchange="trocarMes()">
 </div>
 
@@ -1625,6 +1626,22 @@ function fecharModal(id){
   if(!el) return;
   if(id==='m-drill') el.style.display='none';
   else el.classList.remove('open');
+}
+
+async function recuperarDoBanco(){
+  if(!mesRef){ toast('⚠️ Selecione o mês de referência primeiro'); return; }
+  if(!confirm(`Recuperar lançamentos do banco para ${mesRef}?
+
+Isso irá reconstruir a sessão a partir dos dados salvos individualmente na tabela.`)) return;
+  setSt('load');
+  const d = await api.post(`/api/dre/recuperar/${encodeURIComponent(mesRef)}`,{});
+  if(!d.ok){ toast('❌ '+d.erro); setSt('err'); return; }
+  sessId = d.sessao_id;
+  TXS   = d.transactions || [];
+  files = []; supMem = {};
+  if(TXS.length){ showTable(); updMesFiltro(); render(); updStats(); renderDRE(); }
+  toast(`✅ ${d.total} lançamentos recuperados do banco!`);
+  setSt('ok');
 }
 
 function setSt(s){
