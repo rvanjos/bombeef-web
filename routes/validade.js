@@ -360,6 +360,46 @@ module.exports = function (pool) {
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
+  // ── POST /encerrar-multiplos — marca vários como vendido/descartado ─────────
+  r.post('/encerrar-multiplos', async (req, res) => {
+    const { ids, resolucao } = req.body;
+    if (!ids?.length) return res.status(400).json({ ok: false, erro: 'Informe os IDs' });
+    const idsNum = ids.map(Number).filter(n => !isNaN(n) && n > 0);
+    const motivo = resolucao || 'vendido';
+    try {
+      await pool.query(`
+        UPDATE validade_items
+        SET resolucao=$1, dt_resolucao=NOW(), encerrado=true, atualizado_em=NOW()
+        WHERE id=ANY($2::int[])
+      `, [motivo, idsNum]);
+      res.json({ ok: true, atualizados: idsNum.length });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ── DELETE /multiplos — exclui vários itens de uma vez ──────────────────────
+  r.delete('/multiplos', async (req, res) => {
+    const idsRaw = req.body?.ids;
+    if (!idsRaw?.length) return res.status(400).json({ ok: false, erro: 'Informe os IDs' });
+    const ids = idsRaw.map(Number).filter(n => !isNaN(n) && n > 0);
+    if (!ids.length) return res.status(400).json({ ok: false, erro: 'IDs inválidos' });
+    try {
+      await pool.query(`UPDATE perdas SET validade_item_id=NULL WHERE validade_item_id=ANY($1::int[])`, [ids]);
+      const r = await pool.query(`DELETE FROM validade_items WHERE id=ANY($1::int[])`, [ids]);
+      res.json({ ok: true, removidos: r.rowCount });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ── DELETE /limpar-tudo — admin apaga todos os itens de validade ────────────
+  r.delete('/limpar-tudo', async (req, res) => {
+    if (req.user?.perfil !== 'admin')
+      return res.status(403).json({ ok: false, erro: 'Acesso restrito ao administrador' });
+    try {
+      await pool.query(`UPDATE perdas SET validade_item_id=NULL WHERE validade_item_id IS NOT NULL`);
+      const r = await pool.query(`DELETE FROM validade_items`);
+      res.json({ ok: true, removidos: r.rowCount });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
   // ── DELETE /:id — encerra com motivo ──────────────────────────────────────
   r.delete('/:id', async (req, res) => {
     const { resolucao, obs_resolucao, encerrado_por, dt_resolucao } = req.body || {};
@@ -534,30 +574,6 @@ module.exports = function (pool) {
     } catch (e) {
       res.status(500).json({ ok: false, erro: 'Erro ao processar planilha: ' + e.message });
     }
-  });
-
-  // ── DELETE /multiplos — exclui vários itens de uma vez ──────────────────────
-  r.delete('/multiplos', async (req, res) => {
-    const idsRaw = req.body?.ids;
-    if (!idsRaw?.length) return res.status(400).json({ ok: false, erro: 'Informe os IDs' });
-    const ids = idsRaw.map(Number).filter(n => !isNaN(n) && n > 0);
-    if (!ids.length) return res.status(400).json({ ok: false, erro: 'IDs inválidos' });
-    try {
-      await pool.query(`UPDATE perdas SET validade_item_id=NULL WHERE validade_item_id=ANY($1::int[])`, [ids]);
-      const r = await pool.query(`DELETE FROM validade_items WHERE id=ANY($1::int[])`, [ids]);
-      res.json({ ok: true, removidos: r.rowCount });
-    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
-  });
-
-  // ── DELETE /limpar-tudo — admin apaga todos os itens de validade ────────────
-  r.delete('/limpar-tudo', async (req, res) => {
-    if (req.user?.perfil !== 'admin')
-      return res.status(403).json({ ok: false, erro: 'Acesso restrito ao administrador' });
-    try {
-      await pool.query(`UPDATE perdas SET validade_item_id=NULL WHERE validade_item_id IS NOT NULL`);
-      const r = await pool.query(`DELETE FROM validade_items`);
-      res.json({ ok: true, removidos: r.rowCount });
-    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
   return r;

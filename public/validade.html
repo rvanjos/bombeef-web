@@ -286,7 +286,9 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
           <span id="val-sel-count" style="font-weight:700;color:var(--red-l)">0 selecionados</span>
           <button class="btn btn-s" style="padding:4px 10px;font-size:11px" onclick="valSelecionarTodos()">Todos da página</button>
           <button class="btn btn-s" style="padding:4px 10px;font-size:11px" onclick="valLimparSel()">✕ Limpar</button>
-          <button class="btn btn-r" style="padding:4px 10px;font-size:11px" onclick="excluirSelecionadosVal()">🗑️ Excluir selecionados</button>
+          <button class="btn btn-g" style="padding:4px 10px;font-size:11px" onclick="encerrarSelecionados('vendido')">✅ Marcar vendido</button>
+          <button class="btn btn-s" style="padding:4px 10px;font-size:11px" onclick="encerrarSelecionados('descartado')">🗑️ Marcar descartado</button>
+          <button class="btn btn-r" style="padding:4px 10px;font-size:11px" onclick="excluirSelecionadosVal()">✕ Excluir</button>
         </div>
         <thead><tr>
           <th style="width:32px"><input type="checkbox" class="row-sel" id="val-sel-all" onchange="valToggleSelAll(this)" title="Selecionar todos"></th>
@@ -866,6 +868,18 @@ function valLimparSel(){
   valSelecionados.clear();
   document.querySelectorAll('.val-item-sel, #val-sel-all').forEach(el => el.checked = false);
   document.getElementById('val-sel-bar').classList.remove('show');
+}
+
+async function encerrarSelecionados(resolucao){
+  const ids = [...valSelecionados].map(Number).filter(n => !isNaN(n) && n > 0);
+  if(!ids.length){ toast('Selecione ao menos um item'); return; }
+  const label = resolucao === 'vendido' ? 'vendido' : 'descartado';
+  if(!confirm(`Marcar ${ids.length} item(s) como ${label}?`)) return;
+  const d = await api.post('/api/validade/encerrar-multiplos', { ids, resolucao });
+  if(d.ok){
+    toast(`✅ ${d.atualizados} item(s) marcado(s) como ${label}`);
+    valLimparSel(); carregar(); carregarKPIs();
+  } else toast('❌ '+(d.erro||'Erro'));
 }
 
 async function excluirSelecionadosVal(){
