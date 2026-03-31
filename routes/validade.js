@@ -410,33 +410,48 @@ module.exports = function (pool) {
   r.post('/import', upload.single('arquivo'), async (req, res) => {
     if (!req.file) return res.status(400).json({ ok: false, erro: 'Arquivo não enviado' });
     try {
-      const wb    = XLSX.read(req.file.buffer, { type: 'buffer', cellDates: true });
-      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const wb = XLSX.read(req.file.buffer, { type: 'buffer', cellDates: true });
+
+      // Escolhe a aba: preferência para 'Pereciveis', 'Perecíveis', 'Validade', senão a primeira
+      const abaPref = ['Pereciveis','Perecíveis','Perecivel','Perecível','Validade','Ativos'];
+      let sheetName = wb.SheetNames[0];
+      for (const pref of abaPref) {
+        const found = wb.SheetNames.find(n => n.toLowerCase().includes(pref.toLowerCase()));
+        if (found) { sheetName = found; break; }
+      }
+      const sheet = wb.Sheets[sheetName];
       const rows  = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
 
       if (rows.length < 2) return res.status(422).json({ ok: false, erro: 'Planilha vazia' });
 
-      const header = rows[0].map(c => String(c).toLowerCase().trim());
+      const header = rows[0].map(c => String(c).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\n/g,' ').trim());
       const col = (nomes) => {
         for (const n of nomes) {
-          const i = header.findIndex(h => h.includes(n));
+          const i = header.findIndex(h => h.includes(n.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'')));
           if (i >= 0) return i;
         }
         return -1;
       };
 
-      const colDesc    = col(['descrição', 'descricao', 'produto', 'item', 'nome']);
-      const colCod     = col(['código', 'codigo', 'cod', 'sku']);
-      const colVal     = col(['validade', 'vencimento', 'vence', 'exp']);
-      const colLote    = col(['lote', 'batch']);
-      const colAcao    = col(['ação', 'acao', 'action']);
-      const colConf    = col(['conferência', 'conferencia', 'ultima conf', 'última conf']);
-      const colResp    = col(['responsável', 'responsavel', 'resp']);
-      const colQtd     = col(['qtd', 'quantidade', 'qty', 'unid']);
-      const colLocal   = col(['local', 'localização', 'localizacao', 'posição']);
+      // Colunas — compatível com formato Bom Beef (DATA VALIDADE, Produto, CÓDIGO, etc.)
+      const colVal     = col(['data validade','validade','vencimento','vence','exp']);
+      const colDesc    = col(['produto','descrição','descricao','item','nome']);
+      const colCod     = col(['código','codigo','cod','sku']);
+      const colQtdPec  = col(['quantidade de peças','qtd peças','quantidade de pecas','peças (no estoque)','peças']);
+      const colQtdKg   = col(['quantidade estoque (em kg)','quantidade\nestoque','em kg','kg']);
+      const colLocal   = col(['local','localização','localizacao','posição']);
+      const colAcao    = col(['ação antes','acao antes','ação','acao','action']);
+      const colConf    = col(['última conferência','ultima conferencia','conferência','conferencia','ultima conf']);
+      const colLote    = col(['lote','batch']);
+      const colResp    = col(['responsável','responsavel','resp']);
+      // Qtd: usa peças se tiver, senão kg
+      const colQtd     = colQtdPec >= 0 ? colQtdPec : col(['qtd','quantidade','qty','unid']);
 
       if (colDesc < 0) {
-        return res.status(422).json({ ok: false, erro: 'Coluna de descrição não encontrada', cabecalho: header });
+        return res.status(422).json({ ok: false, erro: 'Coluna de descrição/produto não encontrada', cabecalho: header, aba: sheetName });
+      }
+      if (colVal < 0) {
+        return res.status(422).json({ ok: false, erro: 'Coluna de data de validade não encontrada', cabecalho: header, aba: sheetName });
       }
 
       const client = await pool.connect();
@@ -451,7 +466,9 @@ module.exports = function (pool) {
           if (!desc) continue;
 
           const cod   = colCod  >= 0 ? String(row[colCod]  ?? '').trim() || null : null;
-          const qtd   = colQtd  >= 0 ? parseInt(row[colQtd] || 0) || 0 : 0;
+          const qtdRaw = colQtd >= 0 ? row[colQtd] : 0;
+          const qtd = typeof qtdRaw === 'number' ? Math.round(qtdRaw)
+                    : parseInt(String(qtdRaw||'0').replace(',','.')) || 0;
           const resp  = colResp >= 0 ? String(row[colResp]  ?? '').trim() || null : null;
           const acao  = colAcao >= 0 ? String(row[colAcao]  ?? '').trim() || null : null;
           const lote  = colLote >= 0 ? String(row[colLote]  ?? '').trim() || null : null;
@@ -459,13 +476,18 @@ module.exports = function (pool) {
 
           const parseDate = (v) => {
             if (!v) return null;
-            if (v instanceof Date) return v.toISOString().slice(0, 10);
+            if (v instanceof Date && !isNaN(v)) return v.toISOString().slice(0, 10);
             const s = String(v).trim();
             if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
             if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) return s.split('/').reverse().join('-');
-            if (/^\d{2}\/\d{4}$/.test(s)) { // MM/YYYY → último dia do mês
+            if (/^\d{2}\/\d{4}$/.test(s)) {
               const [mm, yyyy] = s.split('/');
-              return `${yyyy}-${mm}-${new Date(parseInt(yyyy), parseInt(mm), 0).getDate()}`;
+              return `${yyyy}-${mm}-${String(new Date(parseInt(yyyy), parseInt(mm), 0).getDate()).padStart(2,'0')}`;
+            }
+            // Excel serial date number
+            if (/^\d{5}$/.test(s)) {
+              const d = new Date((parseInt(s) - 25569) * 86400 * 1000);
+              return d.toISOString().slice(0,10);
             }
             return null;
           };

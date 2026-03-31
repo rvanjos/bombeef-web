@@ -1431,7 +1431,7 @@ async function processarImport(inp){
   const el=document.getElementById('import-result');
   el.style.display='';
   if(!d.ok){ el.style.background='#fdf2f2';el.innerHTML=`❌ ${d.erro}`;return;}
-  el.innerHTML=`✅ <b>${d.inseridos} itens importados!</b> · Erros: ${d.erros}`;
+  el.innerHTML=`✅ <b>${d.inseridos} itens importados</b> da aba '${d.aba||''}' · Erros: ${d.erros}`;
   carregar(); carregarKPIs();
   try { window.parent.postMessage({type:'bb_refresh_kpis'},'*'); } catch(_) {}
 }
