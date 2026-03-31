@@ -265,7 +265,7 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
         <option value="ok">OK</option>
       </select>
       <button class="btn btn-s" id="btn-semcod" onclick="filtrarSemCod()" style="display:none">⚠️ Sem código</button>
-      <button class="btn btn-s" onclick="autoVincular()" title="Vincula automaticamente itens sem código pelo nome" style="background:#e8f4fd;color:#1a5c8a;border-color:#b8d4ec">🔁 Auto-vincular</button>
+
     </div>
     <!-- Barra de seleção múltipla -->
     <div class="sel-bar" id="sel-bar">
@@ -457,29 +457,6 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
     <div class="modal-foot">
       <button class="btn btn-s" onclick="fecharModal('modal-encerrar')">Cancelar</button>
       <button class="btn btn-p" id="btn-confirmar-enc" onclick="confirmarEncerrar()">✅ Encerrar Item</button>
-    </div>
-  </div>
-</div>
-
-<!-- Modal Resultado Auto-Vincular -->
-<div class="modal-bg" id="modal-autovincular">
-  <div class="modal" style="max-width:600px">
-    <div class="modal-head"><h3>🔁 Resultado da Vinculação Automática</h3><button class="modal-close" onclick="fecharModal('modal-autovincular')">×</button></div>
-    <div class="modal-body">
-      <div id="autovincular-resumo" style="margin-bottom:12px"></div>
-      <div style="max-height:320px;overflow-y:auto">
-        <table style="width:100%;border-collapse:collapse;font-size:12px">
-          <thead><tr style="background:#f8f4f0">
-            <th style="padding:6px 10px;text-align:left">Item de Validade</th>
-            <th style="padding:6px 10px;text-align:left">Produto Vinculado</th>
-            <th style="padding:6px 10px;text-align:center">Código</th>
-          </tr></thead>
-          <tbody id="autovincular-tbody"></tbody>
-        </table>
-      </div>
-    </div>
-    <div class="modal-foot">
-      <button class="btn btn-p" onclick="fecharModal('modal-autovincular');carregar();carregarKPIs()">✅ Fechar e atualizar</button>
     </div>
   </div>
 </div>
@@ -905,28 +882,6 @@ async function vincularSelecionados(){
   } else toast('Erro: '+d.erro);
 }
 
-async function autoVincular(){
-  if(!confirm('O sistema tentará vincular automaticamente todos os itens sem código pelo nome. Continuar?')) return;
-  toast('🔁 Processando...'); 
-  const d = await api.post('/api/validade/auto-vincular', {});
-  if(!d.ok){ toast('Erro: '+d.erro); return; }
-  // Mostrar resultado
-  document.getElementById('autovincular-resumo').innerHTML =
-    `<div style="display:flex;gap:12px;margin-bottom:8px">
-      <div style="background:#d4edda;color:#155724;padding:8px 16px;border-radius:8px;font-weight:700">
-        ✅ ${d.vinculados} vinculados
-      </div>
-      <div style="background:#f8d7da;color:#721c24;padding:8px 16px;border-radius:8px;font-weight:700">
-        ❌ ${d.nao_encontrados} não encontrados
-      </div>
-    </div>`;
-  document.getElementById('autovincular-tbody').innerHTML = d.detalhes.map(x=>
-    x.produto
-      ? `<tr style="background:#f0fff4"><td style="padding:5px 10px">${x.item}</td><td style="padding:5px 10px;color:var(--green);font-weight:600">${x.produto}</td><td style="padding:5px 10px;text-align:center;font-family:'DM Mono',monospace">${x.codigo}</td></tr>`
-      : `<tr style="background:#fff5f5"><td style="padding:5px 10px">${x.item}</td><td style="padding:5px 10px;color:var(--muted)">— não encontrado</td><td style="padding:5px 10px"></td></tr>`
-  ).join('');
-  document.getElementById('modal-autovincular').classList.add('open');
-}
 
 function filtrarSemCod(){
   // Muda para aba Validade
