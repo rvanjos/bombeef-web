@@ -79,6 +79,13 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
         </div>
         <button class="btn btn-s" style="padding:6px 14px" onclick="abrirSenhaPropia()">Alterar Senha</button>
       </div>
+      <div style="background:#fff8f8;border:1px solid #f5c6c6;border-radius:10px;padding:14px 16px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div style="font-size:13px;font-weight:600;color:var(--red)">🗑️ Limpar Controle de Validade</div>
+          <div style="font-size:11px;color:var(--muted)">Remove <b>todos</b> os itens de validade. Use antes de importar uma planilha atualizada.</div>
+        </div>
+        <button class="btn" style="padding:6px 14px;background:var(--red);color:#fff" onclick="limparValidade()">Limpar Tudo</button>
+      </div>
       <div style="margin-bottom:16px;background:var(--white);border-radius:10px;padding:16px;box-shadow:0 2px 8px rgba(0,0,0,.06)">
         <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">Logo do Sistema</div>
         <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
@@ -900,6 +907,18 @@ async function salvarSenha(){
 </body>
 </html>
 <script>
+// ── Limpar Validade ──────────────────────────────────────────────────────────
+async function limparValidade(){
+  if(!confirm('⚠️ ATENÇÃO\n\nIsso vai apagar TODOS os itens de validade cadastrados.\nEssa ação não pode ser desfeita.\n\nTem certeza?')) return;
+  if(!confirm('Confirmar limpeza total do controle de validade?')) return;
+  const d = await api.delete('/api/validade/limpar-tudo');
+  if(d.ok){
+    toast(`✅ ${d.removidos} itens removidos. Pode importar a planilha atualizada.`);
+  } else {
+    toast('❌ ' + (d.erro||'Erro ao limpar'));
+  }
+}
+
 // ── Senha própria ────────────────────────────────────────────────────────────
 function abrirSenhaPropia(){
   const user = BB.api.user?.();

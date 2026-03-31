@@ -504,5 +504,18 @@ module.exports = function (pool) {
     }
   });
 
+  // ── DELETE /limpar-tudo — admin apaga todos os itens de validade ────────────
+  r.delete('/limpar-tudo', async (req, res) => {
+    if (req.user?.perfil !== 'admin')
+      return res.status(403).json({ ok: false, erro: 'Acesso restrito ao administrador' });
+    try {
+      const { rows } = await pool.query(`SELECT COUNT(*) AS total FROM validade_items`);
+      const total = parseInt(rows[0].total);
+      await pool.query(`TRUNCATE TABLE validade_items RESTART IDENTITY`);
+      console.log(`[validade] limpar-tudo: ${total} itens removidos por ${req.user.email}`);
+      res.json({ ok: true, removidos: total });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
   return r;
 };
