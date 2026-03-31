@@ -723,6 +723,13 @@ async function procExt(file) {
     ...l,
     categoria: l.categoria || autoClassificar(l.lancamento, l.razaoSocial||'')
   }));
+  // Avisa sobre duplicatas detectadas
+  const dup = d.duplicatasEstimadas || 0;
+  if (dup > 0) {
+    toast(`⚠️ ${d.total} lançamentos importados · ${dup} já existem na sessão e serão ignorados ao salvar`, 5000);
+  } else {
+    toast(`✅ ${d.total} lançamentos carregados`);
+  }
   addLancs(lancs, file.name);
 }
 

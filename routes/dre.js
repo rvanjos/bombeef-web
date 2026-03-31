@@ -490,6 +490,58 @@ module.exports = function (pool) {
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
+  // ── Merge de transações — deduplicação por FITID ─────────────────────────
+  // Preserva classificações existentes, adiciona novos lançamentos
+  function mergeTransacoes(existentes, novos) {
+    if (!Array.isArray(existentes)) existentes = [];
+    if (!Array.isArray(novos)) novos = existentes;
+
+    // Índice dos existentes por FITID (lançamentos já classificados têm prioridade)
+    const porFitid = {};
+    for (const t of existentes) {
+      if (t.fitid) porFitid[t.fitid] = t;
+    }
+
+    // Para lançamentos sem FITID (manuais, XLSX), usa hash data+valor+lancamento
+    function hashSemFitid(t) {
+      return `${t.data||''}_${t.valor||''}_${(t.lancamento||'').slice(0,30)}`;
+    }
+    const porHash = {};
+    for (const t of existentes) {
+      if (!t.fitid) porHash[hashSemFitid(t)] = t;
+    }
+
+    const resultado = [...existentes]; // começa com todos os existentes
+    let novosAdicionados = 0;
+    let duplicatasIgnoradas = 0;
+
+    for (const t of novos) {
+      if (t.fitid) {
+        if (porFitid[t.fitid]) {
+          // Já existe — preserva classificação existente, atualiza campos não classificados
+          duplicatasIgnoradas++;
+        } else {
+          // Novo lançamento
+          resultado.push(t);
+          porFitid[t.fitid] = t;
+          novosAdicionados++;
+        }
+      } else {
+        const h = hashSemFitid(t);
+        if (porHash[h]) {
+          duplicatasIgnoradas++;
+        } else {
+          resultado.push(t);
+          porHash[h] = t;
+          novosAdicionados++;
+        }
+      }
+    }
+
+    console.log(`[dre/merge] ${existentes.length} existentes + ${novos.length} novos → ${resultado.length} total (${novosAdicionados} adicionados, ${duplicatasIgnoradas} duplicatas ignoradas)`);
+    return resultado;
+  }
+
   // ── POST /salvar ───────────────────────────────────────────────────────────
   r.post('/salvar', async (req, res) => {
     const { sessao_id, mes_ref, descricao, dados_json } = req.body;
@@ -499,10 +551,13 @@ module.exports = function (pool) {
       // Tenta atualizar sessão existente do mesmo mês/usuário primeiro
       let rows;
       if (sessao_id) {
+        // Ao atualizar, faz merge por FITID para não perder classificações
+        const cur = await pool.query(`SELECT dados_json FROM dre_sessoes WHERE id=$1`, [sessao_id]);
+        const dadosMerge = cur.rows.length ? mergeTransacoes(JSON.parse(cur.rows[0].dados_json||'[]'), dados_json) : dados_json;
         const upd = await pool.query(`
           UPDATE dre_sessoes SET descricao=$1, dados_json=$2, atualizado_em=NOW()
           WHERE id=$3 RETURNING id
-        `, [descricao || `Sessão ${mes_ref}`, JSON.stringify(dados_json), sessao_id]);
+        `, [descricao || `Sessão ${mes_ref}`, JSON.stringify(dadosMerge), sessao_id]);
         if (upd.rows.length) { rows = upd.rows; }
       }
       if (!rows || !rows.length) {
@@ -512,10 +567,12 @@ module.exports = function (pool) {
           [mes_ref, uid]
         );
         if (existing.rows.length) {
+          const cur2 = await pool.query(`SELECT dados_json FROM dre_sessoes WHERE id=$1`, [existing.rows[0].id]);
+          const dadosMerge2 = cur2.rows.length ? mergeTransacoes(JSON.parse(cur2.rows[0].dados_json||'[]'), dados_json) : dados_json;
           const upd = await pool.query(`
             UPDATE dre_sessoes SET descricao=$1, dados_json=$2, usuario_id=$3, atualizado_em=NOW()
             WHERE id=$4 RETURNING id
-          `, [descricao || `Sessão ${mes_ref}`, JSON.stringify(dados_json), uid, existing.rows[0].id]);
+          `, [descricao || `Sessão ${mes_ref}`, JSON.stringify(dadosMerge2), uid, existing.rows[0].id]);
           rows = upd.rows;
         } else {
           const ins = await pool.query(`
@@ -571,7 +628,21 @@ module.exports = function (pool) {
         return res.status(422).json({ ok: false, erro: 'Nenhum lançamento encontrado no arquivo.' });
       }
 
-      res.json({ ok: true, lancamentos, total: lancamentos.length });
+      // Verifica sessão existente do mês para informar sobre possíveis duplicatas
+      const mesImport = lancamentos[0]?.mes || '';
+      let duplicatasEstimadas = 0;
+      if (mesImport) {
+        const sessaoExist = await pool.query(
+          `SELECT dados_json FROM dre_sessoes WHERE mes_ref=$1 ORDER BY atualizado_em DESC LIMIT 1`,
+          [mesImport]
+        ).catch(()=>({ rows: [] }));
+        if (sessaoExist.rows.length) {
+          const txExist = JSON.parse(sessaoExist.rows[0].dados_json || '[]');
+          const fitidsExist = new Set(txExist.filter(t=>t.fitid).map(t=>t.fitid));
+          duplicatasEstimadas = lancamentos.filter(l => l.fitid && fitidsExist.has(l.fitid)).length;
+        }
+      }
+      res.json({ ok: true, lancamentos, total: lancamentos.length, duplicatasEstimadas });
     } catch (e) {
       console.error('[dre/import-extrato]', e.message);
       res.status(500).json({ ok: false, erro: 'Erro ao processar arquivo: ' + e.message });
@@ -649,7 +720,8 @@ module.exports = function (pool) {
       if (!val) continue;
       const mes = dt ? dt.slice(5,7) + '/' + dt.slice(0,4) : '';
       const { lancamento, razaoSocial, cnpjDoc } = splitMemo(memo);
-      result.push({ lancamento, razaoSocial, cnpjDoc, valor: val, data: dt, mes, mesCaixa: mes, fonte: 'EXTRATO', categoria: '' });
+      const fitid = get('FITID') || get('CHECKNUM') || '';
+      result.push({ lancamento, razaoSocial, cnpjDoc, valor: val, data: dt, mes, mesCaixa: mes, fonte: 'EXTRATO', categoria: '', fitid });
     }
     return result;
   }
