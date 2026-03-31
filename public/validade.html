@@ -772,7 +772,7 @@ async function carregarFuncionarios(){
     // Mantém só o option vazio e substitui o resto
     sel.innerHTML = '<option value="">— Selecione —</option>';
     funcionarios.forEach(f=>{
-      const o=document.createElement('option'); o.value=f.nome; o.textContent=f.nome; sel.appendChild(o);
+      const o=document.createElement('option'); o.value=f.id; o.textContent=f.nome; sel.appendChild(o);
     });
   }
 }
@@ -1191,7 +1191,7 @@ function abrirEncerrar(id){
   // Responsável
   const sel = document.getElementById('enc-resp');
   sel.innerHTML = '<option value="">— Selecione —</option>' +
-    funcionarios.map(f=>`<option value="${f.nome}">${f.nome}</option>`).join('');
+    funcionarios.map(f=>`<option value="${f.id}">${f.nome}</option>`).join('');
   document.getElementById('modal-encerrar').classList.add('open');
 }
 
@@ -1240,7 +1240,7 @@ async function confirmarEncerrar(){
         motivo:         'vencimento',
         qtdUnidades:    qtd,
         valorPerda:     valor,
-        funcionarioId:  funcionarios.find(f=>f.nome===rep)?.id || null,
+        funcionarioId:  document.getElementById('enc-resp').value || null,
         dtPerda:        dt || new Date().toISOString().slice(0,10),
         observacao:     obs || 'Registrado automaticamente ao encerrar item de validade',
         validadeItemId: parseInt(id),
