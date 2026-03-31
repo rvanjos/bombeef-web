@@ -248,6 +248,10 @@ app.use((err, req, res, _next) => {
   res.status(500).json({ ok: false, erro: 'Erro interno do servidor' });
 });
 
+// ── Seed histórico de perdas (executa uma vez, ignora duplicatas) ──────────
+const seedPerdas = require('./seed-perdas');
+seedPerdas(pool).catch(e => console.error('[seed-perdas]', e.message));
+
 // ── Start ──────────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
