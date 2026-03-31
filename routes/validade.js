@@ -267,6 +267,99 @@ module.exports = function (pool) {
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
+  // ── POST /auto-vincular — vincula itens sem código por nome ────────────────
+  // Tenta casar cada item sem código com um produto do catálogo pelo nome
+  r.post('/auto-vincular', async (req, res) => {
+    try {
+      // Busca todos os itens sem código
+      const { rows: semCod } = await pool.query(
+        `SELECT id, descricao FROM validade_items
+         WHERE (codigo IS NULL OR codigo = '') AND status != 'descartado'`
+      );
+      if (!semCod.length) return res.json({ ok: true, vinculados: 0, nao_encontrados: 0, detalhes: [] });
+
+      // Busca todos os produtos ativos para casar
+      const { rows: prods } = await pool.query(
+        `SELECT id, codigo, descricao, preco_custo FROM produtos WHERE ativo = true`
+      );
+
+      // Função de normalização para comparação
+      const norm = s => s.toUpperCase()
+        .normalize('NFD').replace(/[̀-ͯ]/g, '') // remove acentos
+        .replace(/[^A-Z0-9 ]/g, ' ')
+        .replace(/\s+/g, ' ').trim();
+
+      // Índice de produtos pelo nome normalizado
+      const prodIdx = {};
+      for (const p of prods) {
+        prodIdx[norm(p.descricao)] = p;
+      }
+
+      let vinculados = 0;
+      const detalhes = [];
+
+      for (const item of semCod) {
+        const nItem = norm(item.descricao);
+        // 1. Match exato
+        let prod = prodIdx[nItem];
+        // 2. Se não achou, tenta match parcial: produto cujo nome está contido no item ou vice-versa
+        if (!prod) {
+          for (const [nProd, p] of Object.entries(prodIdx)) {
+            if (nItem.includes(nProd) || nProd.includes(nItem)) {
+              // Prefere o match mais longo (mais específico)
+              if (!prod || nProd.length > norm(prod.descricao).length) prod = p;
+            }
+          }
+        }
+        if (prod) {
+          await pool.query(
+            `UPDATE validade_items SET
+               produto_id    = $1, codigo = $2,
+               desc_original = COALESCE(desc_original, descricao),
+               descricao     = $3, preco_custo = $4,
+               atualizado_em = NOW()
+             WHERE id = $5`,
+            [prod.id, prod.codigo, prod.descricao, parseFloat(prod.preco_custo||0), item.id]
+          );
+          vinculados++;
+          detalhes.push({ id: item.id, item: item.descricao, produto: prod.descricao, codigo: prod.codigo });
+        } else {
+          detalhes.push({ id: item.id, item: item.descricao, produto: null, codigo: null });
+        }
+      }
+
+      res.json({ ok: true, vinculados, nao_encontrados: semCod.length - vinculados, detalhes });
+    } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ── POST /vincular-multiplos — vincula lista de ids com mesmo código ────────
+  r.post('/vincular-multiplos', async (req, res) => {
+    const { ids, codigo } = req.body;
+    if (!ids?.length || !codigo) return res.status(400).json({ ok: false, erro: 'ids e codigo obrigatórios' });
+    try {
+      const { rows: prod } = await pool.query(
+        `SELECT id, descricao, preco_custo FROM produtos WHERE codigo = $1 AND ativo = true LIMIT 1`,
+        [codigo.trim()]
+      );
+      if (!prod.length) return res.status(404).json({ ok: false, erro: 'Produto não encontrado' });
+      const p = prod[0];
+      let count = 0;
+      for (const id of ids) {
+        await pool.query(
+          `UPDATE validade_items SET
+             produto_id    = $1, codigo = $2,
+             desc_original = COALESCE(desc_original, descricao),
+             descricao     = $3, preco_custo = $4,
+             atualizado_em = NOW()
+           WHERE id = $5`,
+          [p.id, codigo.trim(), p.descricao, parseFloat(p.preco_custo||0), parseInt(id)]
+        );
+        count++;
+      }
+      res.json({ ok: true, vinculados: count, produto: p.descricao });
+    } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
   // ── DELETE /:id — encerra com motivo ──────────────────────────────────────
   r.delete('/:id', async (req, res) => {
     const { resolucao, obs_resolucao, encerrado_por, dt_resolucao } = req.body || {};

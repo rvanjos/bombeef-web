@@ -76,6 +76,9 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
 
 /* Badge sem código */
 .sem-cod{background:#fff3cd;color:#856404;font-size:10px;font-weight:700;padding:2px 7px;border-radius:5px;}
+.row-sel{accent-color:var(--orange);width:15px;height:15px;cursor:pointer;}
+.sel-bar{background:#fff8e6;border:1px solid #f5d87a;border-radius:8px;padding:8px 14px;margin-bottom:8px;display:none;align-items:center;gap:10px;flex-wrap:wrap;font-size:12px;}
+.sel-bar.show{display:flex;}
 
 /* Badge dias */
 .dias-badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;white-space:nowrap;}
@@ -262,10 +265,22 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
         <option value="ok">OK</option>
       </select>
       <button class="btn btn-s" id="btn-semcod" onclick="filtrarSemCod()" style="display:none">⚠️ Sem código</button>
+      <button class="btn btn-s" onclick="autoVincular()" title="Vincula automaticamente itens sem código pelo nome" style="background:#e8f4fd;color:#1a5c8a;border-color:#b8d4ec">🔁 Auto-vincular</button>
+    </div>
+    <!-- Barra de seleção múltipla -->
+    <div class="sel-bar" id="sel-bar">
+      <span id="sel-count" style="font-weight:700;color:var(--orange)">0 selecionados</span>
+      <button class="btn btn-s" style="padding:4px 10px" onclick="selecionarTodos()">Selecionar todos</button>
+      <button class="btn btn-s" style="padding:4px 10px" onclick="limparSelecao()">Limpar</button>
+      <span style="color:var(--muted)">|</span>
+      <input id="cod-lote" placeholder="Código para vincular todos" style="padding:5px 9px;border:1px solid var(--border);border-radius:6px;font-size:12px;width:180px" oninput="previewLote()">
+      <span id="preview-lote" style="font-size:11px;color:var(--green)"></span>
+      <button class="btn btn-p" style="padding:5px 12px" onclick="vincularSelecionados()">🔗 Vincular selecionados</button>
     </div>
     <div class="card">
       <table class="tbl">
         <thead><tr>
+          <th style="width:32px"><input type="checkbox" class="row-sel" id="sel-all" onchange="toggleSelAll(this)" title="Selecionar todos"></th>
           <th style="width:90px">Código</th>
           <th>Descrição</th>
           <th>Lote</th>
@@ -442,6 +457,29 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
     <div class="modal-foot">
       <button class="btn btn-s" onclick="fecharModal('modal-encerrar')">Cancelar</button>
       <button class="btn btn-p" id="btn-confirmar-enc" onclick="confirmarEncerrar()">✅ Encerrar Item</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Resultado Auto-Vincular -->
+<div class="modal-bg" id="modal-autovincular">
+  <div class="modal" style="max-width:600px">
+    <div class="modal-head"><h3>🔁 Resultado da Vinculação Automática</h3><button class="modal-close" onclick="fecharModal('modal-autovincular')">×</button></div>
+    <div class="modal-body">
+      <div id="autovincular-resumo" style="margin-bottom:12px"></div>
+      <div style="max-height:320px;overflow-y:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:12px">
+          <thead><tr style="background:#f8f4f0">
+            <th style="padding:6px 10px;text-align:left">Item de Validade</th>
+            <th style="padding:6px 10px;text-align:left">Produto Vinculado</th>
+            <th style="padding:6px 10px;text-align:center">Código</th>
+          </tr></thead>
+          <tbody id="autovincular-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-p" onclick="fecharModal('modal-autovincular');carregar();carregarKPIs()">✅ Fechar e atualizar</button>
     </div>
   </div>
 </div>
@@ -808,6 +846,88 @@ function filtrarStatus(status){
   carregar();
 }
 
+// ── Vinculação em lote ───────────────────────────────────────────────────────
+let itensSelecionados = new Set();
+
+function atualizarSelBar(){
+  document.querySelectorAll('.item-sel:checked').forEach(cb => itensSelecionados.add(parseInt(cb.value)));
+  document.querySelectorAll('.item-sel:not(:checked)').forEach(cb => itensSelecionados.delete(parseInt(cb.value)));
+  const n = itensSelecionados.size;
+  const bar = document.getElementById('sel-bar');
+  bar.classList.toggle('show', n > 0);
+  document.getElementById('sel-count').textContent = `${n} selecionado(s)`;
+}
+
+function toggleSelAll(cb){
+  document.querySelectorAll('.item-sel').forEach(el => {
+    el.checked = cb.checked;
+    if(cb.checked) itensSelecionados.add(parseInt(el.value));
+    else itensSelecionados.delete(parseInt(el.value));
+  });
+  atualizarSelBar();
+}
+
+function selecionarTodos(){
+  document.querySelectorAll('.item-sel').forEach(el => {
+    el.checked = true; itensSelecionados.add(parseInt(el.value));
+  });
+  document.getElementById('sel-all').checked = true;
+  atualizarSelBar();
+}
+
+function limparSelecao(){
+  itensSelecionados.clear();
+  document.querySelectorAll('.item-sel, #sel-all').forEach(el => el.checked = false);
+  document.getElementById('sel-bar').classList.remove('show');
+}
+
+async function previewLote(){
+  const cod = document.getElementById('cod-lote').value.trim();
+  const el  = document.getElementById('preview-lote');
+  if(!cod){ el.textContent=''; return; }
+  const d = await api.get(`/api/produtos/${encodeURIComponent(cod)}`);
+  el.textContent = d.ok ? '✅ '+d.data.descricao : '⚠️ não encontrado';
+  el.style.color = d.ok ? 'var(--green)' : 'var(--red-l)';
+}
+
+async function vincularSelecionados(){
+  const ids = [...itensSelecionados];
+  const cod = document.getElementById('cod-lote').value.trim();
+  if(!ids.length){ toast('Selecione ao menos um item'); return; }
+  if(!cod){ toast('Informe o código do produto'); return; }
+  const d = await api.post('/api/validade/vincular-multiplos', {ids, codigo: cod});
+  if(d.ok){
+    toast(`✅ ${d.vinculados} item(s) vinculado(s) a: ${d.produto}`);
+    limparSelecao();
+    document.getElementById('cod-lote').value='';
+    document.getElementById('preview-lote').textContent='';
+    carregar(); carregarKPIs();
+  } else toast('Erro: '+d.erro);
+}
+
+async function autoVincular(){
+  if(!confirm('O sistema tentará vincular automaticamente todos os itens sem código pelo nome. Continuar?')) return;
+  toast('🔁 Processando...'); 
+  const d = await api.post('/api/validade/auto-vincular', {});
+  if(!d.ok){ toast('Erro: '+d.erro); return; }
+  // Mostrar resultado
+  document.getElementById('autovincular-resumo').innerHTML =
+    `<div style="display:flex;gap:12px;margin-bottom:8px">
+      <div style="background:#d4edda;color:#155724;padding:8px 16px;border-radius:8px;font-weight:700">
+        ✅ ${d.vinculados} vinculados
+      </div>
+      <div style="background:#f8d7da;color:#721c24;padding:8px 16px;border-radius:8px;font-weight:700">
+        ❌ ${d.nao_encontrados} não encontrados
+      </div>
+    </div>`;
+  document.getElementById('autovincular-tbody').innerHTML = d.detalhes.map(x=>
+    x.produto
+      ? `<tr style="background:#f0fff4"><td style="padding:5px 10px">${x.item}</td><td style="padding:5px 10px;color:var(--green);font-weight:600">${x.produto}</td><td style="padding:5px 10px;text-align:center;font-family:'DM Mono',monospace">${x.codigo}</td></tr>`
+      : `<tr style="background:#fff5f5"><td style="padding:5px 10px">${x.item}</td><td style="padding:5px 10px;color:var(--muted)">— não encontrado</td><td style="padding:5px 10px"></td></tr>`
+  ).join('');
+  document.getElementById('modal-autovincular').classList.add('open');
+}
+
 function filtrarSemCod(){
   // Muda para aba Validade
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
@@ -885,7 +1005,10 @@ function renderVal(lista){
       ? `<span style="font-family:'DM Mono',monospace;font-size:12px;font-weight:600">${v.codigo}</span>`
       : `<span class="sem-cod">Pendente</span>`;
 
-    return `<tr class="row-${urg}">
+    return `<tr class="row-${urg}" data-id="${v.id}">
+      <td style="padding:4px 8px;text-align:center">
+        <input type="checkbox" class="row-sel item-sel" value="${v.id}" onchange="atualizarSelBar()">
+      </td>
       <td>${codCell}</td>
       <td>
         <b style="font-size:13px">${v.descricao}</b>
