@@ -678,6 +678,39 @@ module.exports = function (pool) {
     } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
+  // ── POST /salvar-beacon — chamado pelo sendBeacon ao fechar a aba ──────────
+  // sendBeacon não envia headers de autenticação facilmente, usamos body
+  r.post('/salvar-beacon', async (req, res) => {
+    try {
+      const { sessao_id, mes_ref, dados_json } = req.body;
+      if (!mes_ref || !dados_json) return res.sendStatus(204);
+      const descricao = `Sessão ${mes_ref} — auto-save ao fechar`;
+      if (sessao_id) {
+        const cur = await pool.query(`SELECT dados_json FROM dre_sessoes WHERE id=$1`, [sessao_id]);
+        const merge = cur.rows.length
+          ? mergeTransacoes(JSON.parse(cur.rows[0].dados_json||'[]'), dados_json?.transactions||dados_json)
+          : (dados_json?.transactions || dados_json);
+        await pool.query(
+          `UPDATE dre_sessoes SET dados_json=$1, atualizado_em=NOW() WHERE id=$2`,
+          [JSON.stringify({...dados_json, transactions: merge}), sessao_id]
+        );
+        espelharLancamentos(sessao_id, merge).catch(()=>{});
+      } else {
+        const existing = await pool.query(
+          `SELECT id FROM dre_sessoes WHERE mes_ref=$1 ORDER BY atualizado_em DESC LIMIT 1`, [mes_ref]
+        );
+        if (existing.rows.length) {
+          await pool.query(
+            `UPDATE dre_sessoes SET dados_json=$1, atualizado_em=NOW() WHERE id=$2`,
+            [JSON.stringify(dados_json), existing.rows[0].id]
+          );
+          espelharLancamentos(existing.rows[0].id, dados_json?.transactions||[]).catch(()=>{});
+        }
+      }
+      res.sendStatus(204);
+    } catch(e) { console.error('[dre/beacon]', e.message); res.sendStatus(204); }
+  });
+
   // ── DELETE /sessoes/:id ────────────────────────────────────────────────────
   r.delete('/sessoes/:id', async (req, res) => {
     try {

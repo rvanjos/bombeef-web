@@ -119,6 +119,7 @@ td{padding:5px 9px;vertical-align:middle;}
   <h2>DRE & Classificador de Extrato</h2>
   <div class="sdot" id="sd"></div>
   <span style="font-size:11px;color:rgba(255,255,255,.6);margin-left:4px" id="st">online</span>
+  <span id="save-ind" style="font-size:10px;color:rgba(255,255,255,.5);margin-left:8px;display:none"></span>
   <span style="font-size:11px;color:rgba(255,255,255,.5);margin-left:auto" id="ph-sub">—</span>
 </div>
 
@@ -1628,10 +1629,44 @@ function fecharModal(id){
 
 function setSt(s){
   const d=document.getElementById('sd'),t=document.getElementById('st');
-  if(s==='ok'){d.style.background='#4ecdc4';t.textContent='online';}
-  else if(s==='err'){d.style.background='#c0392b';t.textContent='offline';}
-  else{d.style.background='#f39c12';t.textContent='sync...';}
+  const ind=document.getElementById('save-ind');
+  if(s==='ok'){
+    d.style.background='#4ecdc4'; t.textContent='online';
+    if(ind){ ind.textContent='✓ Salvo automaticamente'; ind.style.display=''; ind.style.color='rgba(255,255,255,.5)'; }
+    // Oculta o "Salvo" após 3s
+    clearTimeout(setSt._hideTimer);
+    setSt._hideTimer = setTimeout(()=>{ if(ind) ind.style.display='none'; }, 3000);
+  }
+  else if(s==='err'){
+    d.style.background='#c0392b'; t.textContent='offline';
+    if(ind){ ind.textContent='⚠️ Erro ao salvar'; ind.style.display=''; ind.style.color='#ffcc00'; }
+  }
+  else{
+    d.style.background='#f39c12'; t.textContent='online';
+    if(ind){ ind.textContent='💾 Salvando...'; ind.style.display=''; ind.style.color='rgba(255,255,255,.6)'; }
+  }
 }
+
+// Salva ao fechar a aba ou sair da página
+window.addEventListener('beforeunload', (e) => {
+  if(TXS.length && mesRef){
+    // Salva de forma síncrona usando sendBeacon (não bloqueia o fechamento)
+    try {
+      const payload = JSON.stringify({
+        sessao_id: sessId, mes_ref: mesRef,
+        descricao: `Sessão ${mesRef} — ${TXS.length} lançamentos`,
+        dados_json: {transactions:TXS, loadedFiles:files, supplierMem:supMem, _savedAt:new Date().toISOString()}
+      });
+      navigator.sendBeacon('/api/dre/salvar-beacon',
+        new Blob([payload], {type:'application/json'}));
+    } catch(_){}
+  }
+});
+
+// Salva a cada 30s em background (além do debounce de 2s por ação)
+setInterval(() => {
+  if(TXS.length && mesRef) salvar(true);
+}, 30000);
 
 // Toggle recolher/expandir grupo na DRE
 function toggleDREGrupo(gid) {
