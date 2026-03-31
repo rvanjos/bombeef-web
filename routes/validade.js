@@ -60,6 +60,7 @@ module.exports = function (pool) {
       ['dt_resolucao',   'DATE'],
       ['obs_resolucao',  'TEXT'],
       ['encerrado_por',  'TEXT'],
+      ['status',         "TEXT DEFAULT 'ativo'"],
       ['desc_original',  'TEXT'],
     ];
     for (const [col, def] of needed) {
@@ -369,7 +370,7 @@ module.exports = function (pool) {
     try {
       await pool.query(`
         UPDATE validade_items
-        SET resolucao=$1, dt_resolucao=NOW(), encerrado=true, atualizado_em=NOW()
+        SET status=$1, resolucao=$1, dt_resolucao=CURRENT_DATE, atualizado_em=NOW()
         WHERE id=ANY($2::int[])
       `, [motivo, idsNum]);
       res.json({ ok: true, atualizados: idsNum.length });

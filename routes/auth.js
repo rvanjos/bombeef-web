@@ -288,19 +288,43 @@ r.delete('/usuarios/:id/permanente', autenticar('admin'), async (req, res) => {
     }
   });
 
-  // ── GET /reset-admin?tk=bb2024reset — reset emergencial da senha admin ──────
-  // Rota temporária — remover após uso
+  // ── GET /reset-admin — recuperação de senha de emergência ──────────────────
+  // Token: bb@Reset2024! — acesso apenas via URL direta
   r.get('/reset-admin', async (req, res) => {
-    if (req.query.tk !== 'bb2024reset')
-      return res.status(403).send('Token inválido');
+    const TOKEN = 'bb@Reset2024!';
+    const { tk, pwd, email } = req.query;
+    if (tk !== TOKEN)
+      return res.status(403).send('<h2>❌ Token inválido</h2>');
+    // Se não passar pwd, mostra formulário
+    if (!pwd) {
+      return res.send(`<!DOCTYPE html><html><body style="font-family:sans-serif;padding:40px;max-width:400px">
+        <h2>🔑 Reset de Senha — Bom Beef</h2>
+        <form method="GET">
+          <input type="hidden" name="tk" value="${TOKEN}">
+          <p><label>E-mail do admin (opcional):<br>
+          <input name="email" style="width:100%;padding:8px;margin-top:4px"></label></p>
+          <p><label>Nova senha:<br>
+          <input name="pwd" type="password" style="width:100%;padding:8px;margin-top:4px" required minlength="6"></label></p>
+          <button type="submit" style="background:#8B0000;color:#fff;padding:10px 20px;border:none;border-radius:6px;font-size:14px;cursor:pointer">
+            Alterar Senha
+          </button>
+        </form>
+      </body></html>`);
+    }
+    if (pwd.length < 6)
+      return res.send('<h2>❌ Senha deve ter no mínimo 6 caracteres</h2>');
     try {
-      const hash = await bcrypt.hash(req.query.pwd || 'BomBeef@2024', 12);
+      const hash = await bcrypt.hash(pwd, 12);
+      const where = email ? `email=$2` : `perfil='admin'`;
+      const params = email ? [hash, email] : [hash];
       const { rows } = await pool.query(
-        `UPDATE usuarios SET senha_hash=$1, atualizado_em=NOW()
-         WHERE perfil='admin' RETURNING id, nome, email`,
-        [hash]
+        `UPDATE usuarios SET senha_hash=$1, atualizado_em=NOW() WHERE ${where} RETURNING id, nome, email, perfil`,
+        params
       );
-      res.send(`✅ Senha do admin atualizada para: <b>${req.query.pwd || 'BomBeef@2024'}</b><br>Usuários: ${JSON.stringify(rows)}`);
+      if (!rows.length) return res.send('<h2>❌ Usuário não encontrado</h2>');
+      res.send(`<h2>✅ Senha atualizada!</h2><p>Usuário: <b>${rows[0].nome}</b> (${rows[0].email})</p>
+        <p><a href="/auth/reset-admin?tk=${TOKEN}">Alterar outra senha</a></p>
+        <p><a href="/">Voltar ao sistema</a></p>`);
     } catch(e) { res.status(500).send('Erro: '+e.message); }
   });
 
