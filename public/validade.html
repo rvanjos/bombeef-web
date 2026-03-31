@@ -292,7 +292,7 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
           <button class="btn btn-r" style="padding:4px 10px;font-size:11px" onclick="excluirSelecionadosVal()">✕ Excluir</button>
         </div>
         <thead><tr>
-          <th style="width:32px"><input type="checkbox" class="row-sel" id="val-sel-all" onchange="valToggleSelAll(this)" title="Selecionar todos"></th>
+          <th style="width:32px"><input type="checkbox" class="row-sel" id="val-sel-all" id2="sel-all" onchange="valToggleSelAll(this); toggleSelAll(this);" title="Selecionar todos"></th>
           <th style="width:90px">Código</th>
           <th>Descrição</th>
           <th>Lote</th>
@@ -850,10 +850,12 @@ function valAtualizarSelBar(){
 function valToggleSelAll(cb){
   document.querySelectorAll('.val-item-sel').forEach(el => {
     el.checked = cb.checked;
-    if(cb.checked) valSelecionados.add(parseInt(el.value));
-    else valSelecionados.delete(parseInt(el.value));
+    const v = parseInt(el.value);
+    if(cb.checked){ valSelecionados.add(v); itensSelecionados.add(v); }
+    else { valSelecionados.delete(v); itensSelecionados.delete(v); }
   });
   valAtualizarSelBar();
+  atualizarSelBar();
 }
 
 function valSelecionarTodos(){
@@ -867,8 +869,10 @@ function valSelecionarTodos(){
 
 function valLimparSel(){
   valSelecionados.clear();
+  itensSelecionados.clear();
   document.querySelectorAll('.val-item-sel, #val-sel-all').forEach(el => el.checked = false);
   document.getElementById('val-sel-bar').classList.remove('show');
+  document.getElementById('sel-bar').classList.remove('show');
 }
 
 async function encerrarSelecionados(resolucao){
@@ -899,7 +903,7 @@ async function excluirSelecionadosVal(){
 let itensSelecionados = new Set();
 
 function atualizarSelBar(){
-  document.querySelectorAll('.item-sel:checked').forEach(cb => itensSelecionados.add(parseInt(cb.value)));
+  document.querySelectorAll('.item-sel:checked').forEach(cb => { const v=parseInt(cb.value); if(v) itensSelecionados.add(v); });
   document.querySelectorAll('.item-sel:not(:checked)').forEach(cb => itensSelecionados.delete(parseInt(cb.value)));
   const n = itensSelecionados.size;
   const bar = document.getElementById('sel-bar');
@@ -914,6 +918,7 @@ function toggleSelAll(cb){
     else itensSelecionados.delete(parseInt(el.value));
   });
   atualizarSelBar();
+  valAtualizarSelBar();
 }
 
 function selecionarTodos(){
@@ -926,8 +931,10 @@ function selecionarTodos(){
 
 function limparSelecao(){
   itensSelecionados.clear();
-  document.querySelectorAll('.item-sel, #sel-all').forEach(el => el.checked = false);
+  valSelecionados.clear();
+  document.querySelectorAll('.item-sel, #val-sel-all').forEach(el => el.checked = false);
   document.getElementById('sel-bar').classList.remove('show');
+  document.getElementById('val-sel-bar').classList.remove('show');
 }
 
 async function previewLote(){
@@ -1034,7 +1041,7 @@ function renderVal(lista){
 
     return `<tr class="row-${urg}" data-id="${v.id}">
       <td style="padding:4px 8px;text-align:center">
-        <input type="checkbox" class="row-sel val-item-sel" value="${v.id}" onchange="valAtualizarSelBar()">
+        <input type="checkbox" class="row-sel val-item-sel item-sel" value="${v.id}" onchange="valAtualizarSelBar(); atualizarSelBar();">
       </td>
       <td>${codCell}</td>
       <td>
