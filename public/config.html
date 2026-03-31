@@ -72,6 +72,13 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
     <div class="page active" id="page-sistema">
       <div class="pg-title">Configurações Gerais</div>
       <div class="pg-sub">Parâmetros globais do sistema</div>
+      <div style="background:var(--white);border-radius:10px;padding:14px 16px;box-shadow:0 2px 8px rgba(0,0,0,.06);margin-bottom:12px;display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div style="font-size:13px;font-weight:600">🔑 Minha Senha</div>
+          <div style="font-size:11px;color:var(--muted)">Alterar a senha da sua conta</div>
+        </div>
+        <button class="btn btn-s" style="padding:6px 14px" onclick="abrirSenhaPropia()">Alterar Senha</button>
+      </div>
       <div style="margin-bottom:16px;background:var(--white);border-radius:10px;padding:16px;box-shadow:0 2px 8px rgba(0,0,0,.06)">
         <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">Logo do Sistema</div>
         <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
@@ -819,9 +826,91 @@ async function excluirAcao(id){
   </div>
 </div>
 
+<!-- Modal Trocar Senha -->
+<div class="modal-bg" id="modal-senha">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-head"><h3>🔑 Alterar Senha</h3><button class="modal-close" onclick="fecharSenha()">×</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="senha-uid">
+      <div id="senha-user-label" style="background:#f8f4f0;border-radius:7px;padding:8px 12px;font-size:13px;font-weight:600;margin-bottom:12px"></div>
+      <!-- Senha atual só aparece para o próprio usuário (não admin trocando outro) -->
+      <div class="fg" id="senha-atual-wrap">
+        <label>Senha Atual *</label>
+        <input type="password" id="senha-atual" placeholder="Sua senha atual" autocomplete="current-password">
+      </div>
+      <div class="fg">
+        <label>Nova Senha *</label>
+        <input type="password" id="senha-nova" placeholder="Mínimo 6 caracteres" autocomplete="new-password">
+      </div>
+      <div class="fg">
+        <label>Confirmar Nova Senha *</label>
+        <input type="password" id="senha-conf" placeholder="Repita a nova senha" autocomplete="new-password">
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-s" onclick="fecharSenha()">Cancelar</button>
+      <button class="btn btn-p" onclick="salvarSenha()">🔑 Salvar Senha</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Trocar Senha ──────────────────────────────────────────────────────────────
+let _senhaParaOutro = false;
+
+function abrirSenha(userId, userName, ehOutro=false){
+  _senhaParaOutro = ehOutro;
+  document.getElementById('senha-uid').value = userId||'';
+  document.getElementById('senha-user-label').textContent = '👤 ' + (userName||'Usuário');
+  document.getElementById('senha-atual-wrap').style.display = ehOutro ? 'none' : '';
+  document.getElementById('senha-atual').value = '';
+  document.getElementById('senha-nova').value  = '';
+  document.getElementById('senha-conf').value  = '';
+  document.getElementById('modal-senha').classList.add('open');
+}
+function fecharSenha(){ document.getElementById('modal-senha').classList.remove('open'); }
+
+async function salvarSenha(){
+  const uid   = document.getElementById('senha-uid').value;
+  const nova  = document.getElementById('senha-nova').value;
+  const conf  = document.getElementById('senha-conf').value;
+  const atual = document.getElementById('senha-atual').value;
+
+  if(!nova || nova.length < 6){ toast('Senha deve ter no mínimo 6 caracteres'); return; }
+  if(nova !== conf){ toast('As senhas não coincidem'); return; }
+
+  let d;
+  if(_senhaParaOutro && uid){
+    // Admin trocando senha de outro usuário
+    d = await api.put(`/auth/usuarios/${uid}/senha`, { senha_nova: nova });
+  } else {
+    // Próprio usuário trocando sua senha
+    if(!atual){ toast('Informe a senha atual'); return; }
+    d = await api.put('/auth/senha', { senha_atual: atual, senha_nova: nova });
+  }
+
+  if(d.ok){
+    toast('✅ Senha alterada com sucesso!');
+    fecharSenha();
+  } else {
+    toast('❌ ' + (d.erro||'Erro ao alterar senha'));
+  }
+}
+</script>
 </body>
 </html>
 <script>
+// ── Senha própria ────────────────────────────────────────────────────────────
+function abrirSenhaPropia(){
+  const user = BB.api.user?.();
+  abrirSenha(null, user?.nome || 'Minha conta', false);
+}
+// Receber mensagem do parent (index.html)
+window.addEventListener('message', e => {
+  if(e.data?.type === 'bb_abrir_senha') abrirSenhaPropia();
+  if(e.data?.type === 'bb_logo') aplicarLogo(e.data.logo||null);
+});
+
 // ── Logo ──────────────────────────────────────────────────────────────────────
 function uploadLogo(input){
   const file = input.files[0];

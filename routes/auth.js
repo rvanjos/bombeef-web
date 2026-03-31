@@ -250,6 +250,19 @@ r.delete('/usuarios/:id/permanente', autenticar('admin'), async (req, res) => {
   }
 });
 
+  // ── PUT /usuarios/:id/senha — admin troca senha de qualquer usuário ─────────
+  r.put('/usuarios/:id/senha', autenticar('admin'), async (req, res) => {
+    const { senha_nova } = req.body;
+    if (!senha_nova || senha_nova.length < 6)
+      return res.status(400).json({ ok: false, erro: 'Senha deve ter no mínimo 6 caracteres' });
+    try {
+      const hash = await bcrypt.hash(senha_nova, 12);
+      await pool.query(`UPDATE usuarios SET senha_hash=$1, atualizado_em=NOW() WHERE id=$2`,
+        [hash, parseInt(req.params.id)]);
+      res.json({ ok: true });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
   // ── PUT /senha ─────────────────────────────────────────────────────────────
   r.put('/senha', autenticar(), async (req, res) => {
     const { senha_atual, senha_nova } = req.body;
