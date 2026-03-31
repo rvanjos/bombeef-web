@@ -867,13 +867,21 @@ let _senhaParaOutro = false;
 
 function abrirSenha(userId, userName, ehOutro=false){
   _senhaParaOutro = ehOutro;
-  document.getElementById('senha-uid').value = userId||'';
+  // uid só é necessário quando trocando senha de OUTRO usuário
+  document.getElementById('senha-uid').value = ehOutro ? (userId||'') : '';
   document.getElementById('senha-user-label').textContent = '👤 ' + (userName||'Usuário');
   document.getElementById('senha-atual-wrap').style.display = ehOutro ? 'none' : '';
   document.getElementById('senha-atual').value = '';
   document.getElementById('senha-nova').value  = '';
   document.getElementById('senha-conf').value  = '';
   document.getElementById('modal-senha').classList.add('open');
+  // Foca no primeiro campo relevante
+  setTimeout(()=>{
+    const el = ehOutro
+      ? document.getElementById('senha-nova')
+      : document.getElementById('senha-atual');
+    if(el) el.focus();
+  }, 100);
 }
 function fecharSenha(){ document.getElementById('modal-senha').classList.remove('open'); }
 
@@ -884,14 +892,15 @@ async function salvarSenha(){
   const atual = document.getElementById('senha-atual').value;
 
   if(!nova || nova.length < 6){ toast('Senha deve ter no mínimo 6 caracteres'); return; }
-  if(nova !== conf){ toast('As senhas não coincidem'); return; }
+  if(nova !== conf){ toast('❌ As senhas não coincidem'); return; }
 
   let d;
-  if(_senhaParaOutro && uid){
-    // Admin trocando senha de outro usuário
+  if(_senhaParaOutro) {
+    // Admin trocando senha de OUTRO usuário (sem precisar da senha atual)
+    if(!uid){ toast('Erro: ID do usuário não encontrado'); return; }
     d = await api.put(`/auth/usuarios/${uid}/senha`, { senha_nova: nova });
   } else {
-    // Próprio usuário trocando sua senha
+    // Próprio usuário trocando a própria senha (precisa da senha atual)
     if(!atual){ toast('Informe a senha atual'); return; }
     d = await api.put('/auth/senha', { senha_atual: atual, senha_nova: nova });
   }
@@ -900,7 +909,7 @@ async function salvarSenha(){
     toast('✅ Senha alterada com sucesso!');
     fecharSenha();
   } else {
-    toast('❌ ' + (d.erro||'Erro ao alterar senha'));
+    toast('❌ ' + (d.erro || 'Erro ao alterar senha'));
   }
 }
 </script>
@@ -921,8 +930,14 @@ async function limparValidade(){
 
 // ── Senha própria ────────────────────────────────────────────────────────────
 function abrirSenhaPropia(){
-  const user = BB.api.user?.();
-  abrirSenha(null, user?.nome || 'Minha conta', false);
+  // Decodifica o JWT para obter dados do usuário logado
+  try {
+    const token = BB.api.token();
+    const payload = token ? JSON.parse(atob(token.split('.')[1])) : {};
+    abrirSenha(payload.id || null, payload.nome || payload.email || 'Minha conta', false);
+  } catch(_) {
+    abrirSenha(null, 'Minha conta', false);
+  }
 }
 // Receber mensagem do parent (index.html)
 window.addEventListener('message', e => {
