@@ -88,7 +88,7 @@ module.exports = function (pool) {
           ELSE 'ok'
         END,
         atualizado_em = NOW()
-      WHERE status NOT IN ('descartado')
+      WHERE status NOT IN ('descartado','vendido')
         AND data_validade IS NOT NULL
     `);
   }
@@ -105,7 +105,7 @@ module.exports = function (pool) {
           COUNT(*) FILTER (WHERE status = 'descartado' AND data_validade >= DATE_TRUNC('month', NOW())) AS descartados_mes,
           COUNT(*) FILTER (WHERE codigo IS NULL OR codigo = '') AS sem_codigo
         FROM validade_items
-        WHERE status != 'descartado' OR data_validade >= DATE_TRUNC('month', NOW())
+        WHERE status NOT IN ('descartado','vendido') OR data_validade >= DATE_TRUNC('month', NOW())
       `);
       res.json({ ok: true, data: {
         ok:            parseInt(rows[0].ok),
@@ -130,7 +130,7 @@ module.exports = function (pool) {
         params.push(`%${busca}%`);
         conds.push(`(descricao ILIKE $${params.length} OR codigo ILIKE $${params.length} OR lote ILIKE $${params.length})`);
       }
-      conds.push(`status != 'descartado'`);
+      conds.push(`status NOT IN ('descartado','vendido')`);
 
       const where = conds.length ? 'WHERE ' + conds.join(' AND ') : '';
       const { rows } = await pool.query(
@@ -275,7 +275,7 @@ module.exports = function (pool) {
       // Busca todos os itens sem código
       const { rows: semCod } = await pool.query(
         `SELECT id, descricao FROM validade_items
-         WHERE (codigo IS NULL OR codigo = '') AND status != 'descartado'`
+         WHERE (codigo IS NULL OR codigo = '') AND status NOT IN ('descartado','vendido')`
       );
       if (!semCod.length) return res.json({ ok: true, vinculados: 0, nao_encontrados: 0, detalhes: [] });
 
@@ -373,7 +373,7 @@ module.exports = function (pool) {
         SET status=$1, resolucao=$1, dt_resolucao=CURRENT_DATE, atualizado_em=NOW()
         WHERE id=ANY($2::int[])
       `, [motivo, idsNum]);
-      res.json({ ok: true, atualizados: idsNum.length });
+      res.json({ ok: true, atualizados: idsNum.length, motivo });
     } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
@@ -422,7 +422,7 @@ module.exports = function (pool) {
   r.get('/historico', async (req, res) => {
     try {
       const { resolucao, de, ate, busca } = req.query;
-      const conds = [`status='descartado'`], params = [];
+      const conds = [`status IN ('descartado','vendido')`], params = [];
       if (resolucao && resolucao !== 'todos') {
         params.push(resolucao); conds.push(`resolucao=$${params.length}`);
       }
