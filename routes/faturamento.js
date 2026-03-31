@@ -38,6 +38,79 @@ module.exports = function(pool) {
   }
   initTable().catch(e => console.error('[faturamento] initTable:', e.message));
 
+  // ── Detecta formato do arquivo ───────────────────────────────────────────
+  function detectarFormato(buffer) {
+    // XMenu: UTF-16, começa com "Loja :" ou tem header "NumeroCaixa;TotalProdutos"
+    try {
+      const utf16 = buffer.toString('utf16le');
+      if (utf16.includes('NumeroCaixa') || utf16.includes('Loja :')) return 'xmenu';
+    } catch(_) {}
+    const latin = buffer.toString('latin1');
+    if (latin.includes('NumeroCaixa') || latin.includes('Loja :')) return 'xmenu';
+    return 'pdv'; // formato padrão do PDV
+  }
+
+  // ── Parser XMenu (R200 - Vendas Diárias por Caixa) ───────────────────────
+  // Usa apenas: Bruto, Descontos, Liquido — ignora Cancelamento
+  function parseXMenu(buffer) {
+    let text;
+    try { text = buffer.toString('utf16le'); } catch(_) { text = buffer.toString('latin1'); }
+    const lines = text.split('\n');
+    const parseVal = s => parseFloat((s||'0').trim().replace(',','.')) || 0;
+
+    // Extrair período do cabeçalho
+    let dataInicio = '', dataFim = '';
+    for (const l of lines.slice(0, 5)) {
+      const m = l.match(/Data Inicial\s*:\s*(\d{2}\/\d{2}\/\d{4})/);
+      if (m) dataInicio = m[1].split('/').reverse().join('-');
+      const m2 = l.match(/Data Final\s*:\s*(\d{2}\/\d{2}\/\d{4})/);
+      if (m2) dataFim = m2[1].split('/').reverse().join('-');
+    }
+
+    // Encontrar linha do header
+    let headerIdx = -1;
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].includes('NumeroCaixa') && lines[i].includes('Bruto')) {
+        headerIdx = i; break;
+      }
+    }
+    if (headerIdx < 0) throw new Error('Header NumeroCaixa não encontrado');
+
+    const headers = lines[headerIdx].trim().split(';').map(h => h.trim());
+    const iB = headers.indexOf('Bruto');
+    const iL = headers.indexOf('Liquido');
+    const iD = headers.indexOf('Descontos');
+
+    let fat_bruto = 0, fat_liquido = 0, descontos = 0, dias = 0;
+    const diasDetalhes = [];
+
+    for (let i = headerIdx + 1; i < lines.length; i++) {
+      const cols = lines[i].trim().replace(/\r/g,'').split(';');
+      if (cols.length < 4 || !cols[0].trim()) continue;
+      const bruto = iB >= 0 ? parseVal(cols[iB]) : 0;
+      const liq   = iL >= 0 ? parseVal(cols[iL]) : 0;
+      const desc  = iD >= 0 ? parseVal(cols[iD]) : 0;
+      if (bruto === 0 && liq === 0) continue;
+      fat_bruto  += bruto;
+      fat_liquido += liq;
+      descontos  += desc;
+      dias++;
+      diasDetalhes.push({ bruto, liq, desc });
+    }
+
+    return {
+      fonte: 'xmenu',
+      fat_bruto: Math.round(fat_bruto * 100) / 100,
+      fat_liquido: Math.round(fat_liquido * 100) / 100,
+      descontos: Math.round(descontos * 100) / 100,
+      ticket: { total_pessoas: 0, ticket_medio: 0 },
+      categorias: {},
+      pagamentos: {},
+      dias,
+      dataInicio, dataFim, // do cabeçalho do arquivo
+    };
+  }
+
   // ── Helper: parseia o CSV do PDV ──────────────────────────────────────────
   function parseCSV(buffer) {
     const text = buffer.toString('latin1');
@@ -90,11 +163,22 @@ module.exports = function(pool) {
     const { data_inicio, data_fim, label } = req.body;
     if (!data_inicio || !data_fim) return res.status(400).json({ ok: false, erro: 'Informe o período' });
     try {
-      const d = parseCSV(req.file.buffer);
-      // Determina tipo de período
-      const di = new Date(data_inicio), df = new Date(data_fim);
-      const dias = Math.round((df - di) / 86400000) + 1;
-      const tipo = dias === 1 ? 'dia' : dias <= 7 ? 'semana' : dias <= 31 ? 'mes' : 'custom';
+      const formato = detectarFormato(req.file.buffer);
+      const d = formato === 'xmenu'
+        ? parseXMenu(req.file.buffer)
+        : parseCSV(req.file.buffer);
+
+      // XMenu: se não informou datas, usa as do cabeçalho do arquivo
+      const ini = data_inicio || d.dataInicio;
+      const fim = data_fim    || d.dataFim;
+      if (!ini || !fim) return res.status(400).json({ ok: false, erro: 'Informe o período' });
+
+      const di = new Date(ini), df = new Date(fim);
+      const nDias = Math.round((df - di) / 86400000) + 1;
+      const tipo = nDias === 1 ? 'dia' : nDias <= 7 ? 'semana' : nDias <= 31 ? 'mes' : 'custom';
+
+      const labelFinal = label ||
+        (formato === 'xmenu' ? `XMenu ${ini.slice(0,7)}` : null);
 
       const { rows } = await pool.query(`
         INSERT INTO faturamento_periodos
@@ -102,7 +186,7 @@ module.exports = function(pool) {
            total_pessoas, ticket_medio, descontos, categorias, pagamentos, csv_raw)
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
         RETURNING id
-      `, [data_inicio, data_fim, tipo, label || null,
+      `, [ini, fim, tipo, labelFinal,
           d.fat_bruto, d.fat_liquido,
           d.ticket.total_pessoas, d.ticket.ticket_medio,
           d.descontos,
@@ -110,7 +194,7 @@ module.exports = function(pool) {
           JSON.stringify(d.pagamentos),
           req.file.buffer.toString('latin1')]);
 
-      res.json({ ok: true, id: rows[0].id, dados: d });
+      res.json({ ok: true, id: rows[0].id, formato, dados: d });
     } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 

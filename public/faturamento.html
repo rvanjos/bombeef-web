@@ -461,7 +461,8 @@ async function importar(){
   document.getElementById('btn-importar').textContent = '💾 Importar';
 
   if(d.ok){
-    toast(`✅ Importado! Bruto: ${fmt.brl(d.dados.fat_bruto)}`);
+    const fmt_label = d.formato==='xmenu' ? ' [XMenu]' : ' [PDV]';
+    toast(`✅ Importado${fmt_label}! Bruto: ${fmt.brl(d.dados.fat_bruto)} · Líquido: ${fmt.brl(d.dados.fat_liquido)}`);
     fecharModal();
     carregar();
   } else {
