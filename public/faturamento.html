@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Faturamento</title>
+<script src="/js/api.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
+:root{--red:#8B0000;--red-l:#C0392B;--green:#1a7a4a;--orange:#c76b00;--blue:#1a5c8a;
+  --bg:#f7f4f0;--white:#fff;--text:#1a1a1a;--muted:#7a7068;--border:#e8e0d8;
+  --shadow:0 2px 12px rgba(0,0,0,.08);}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
+.ph{background:linear-gradient(135deg,#1a7a4a,#145c38);color:#fff;padding:14px 20px;
+  display:flex;align-items:center;gap:10px;}
+.ph h2{font-size:16px;font-weight:700;}
+.ph-sub{margin-left:auto;font-size:11px;opacity:.7;}
+.body{padding:16px;}
+/* KPIs */
+.kpi-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px;}
+.kpi{background:var(--white);border-radius:10px;padding:13px 15px;box-shadow:var(--shadow);border-top:3px solid var(--border);}
+.kpi.verde{border-top-color:var(--green);}
+.kpi.laranja{border-top-color:var(--orange);}
+.kpi.azul{border-top-color:var(--blue);}
+.kpi.vermelho{border-top-color:var(--red-l);}
+.kpi-l{font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin-bottom:4px;}
+.kpi-v{font-size:22px;font-weight:700;line-height:1;}
+.kpi-s{font-size:11px;color:var(--muted);margin-top:3px;}
+/* Tabs */
+.tabs{display:flex;gap:4px;margin-bottom:12px;border-bottom:2px solid var(--border);padding-bottom:0;}
+.tab{padding:8px 16px;border:none;background:none;font-family:'DM Sans',sans-serif;font-size:13px;
+  font-weight:500;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;}
+.tab.active{color:var(--green);border-bottom-color:var(--green);font-weight:700;}
+/* Cards e tabelas */
+.card{background:var(--white);border-radius:10px;box-shadow:var(--shadow);overflow:hidden;margin-bottom:12px;}
+.tbl{width:100%;border-collapse:collapse;font-size:12px;}
+.tbl thead tr{background:#f8f4f0;}
+.tbl th{padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;
+  letter-spacing:.6px;color:var(--muted);border-bottom:2px solid var(--border);white-space:nowrap;}
+.tbl td{padding:8px 12px;border-bottom:1px solid #f5efe8;}
+.tbl tr:hover td{background:#fafaf8;}
+.tbl tr:last-child td{border-bottom:none;}
+/* Toolbar */
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px;}
+.btn{padding:7px 14px;border:none;border-radius:7px;cursor:pointer;font-family:'DM Sans',sans-serif;
+  font-size:12px;font-weight:600;transition:.15s;white-space:nowrap;}
+.btn:hover{transform:translateY(-1px);}
+.btn-g{background:var(--green);color:#fff;}.btn-g:hover{background:#1d8f56;}
+.btn-s{background:#f0ebe4;color:var(--text);border:1px solid var(--border);}
+.btn-s:hover{background:#e8e0d8;}
+.btn-r{background:var(--red-l);color:#fff;}
+.flt{padding:6px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;
+  background:var(--white);font-family:'DM Sans',sans-serif;}
+/* Charts */
+.charts-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;}
+.chart-card{background:var(--white);border-radius:10px;box-shadow:var(--shadow);padding:16px;}
+.chart-title{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;
+  letter-spacing:.6px;margin-bottom:12px;}
+/* Categorias */
+.cat-bar{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:12px;}
+.cat-bar-fill{height:8px;border-radius:4px;background:var(--green);transition:.3s;}
+.cat-bar-label{min-width:130px;color:var(--text);}
+.cat-bar-val{margin-left:auto;font-family:'DM Mono',monospace;font-weight:600;color:var(--text);}
+.cat-bar-pct{color:var(--muted);font-size:11px;min-width:40px;text-align:right;}
+/* Upload zone */
+.upload-zone{border:2px dashed var(--border);border-radius:10px;padding:32px;text-align:center;
+  cursor:pointer;background:var(--white);transition:.2s;}
+.upload-zone:hover{border-color:var(--green);background:#f0fff8;}
+/* Modal */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;
+  display:none;align-items:center;justify-content:center;}
+.modal-bg.open{display:flex;}
+.modal{background:var(--white);border-radius:13px;width:100%;max-width:480px;
+  box-shadow:0 20px 60px rgba(0,0,0,.3);overflow:hidden;}
+.modal-head{background:var(--green);padding:14px 20px;display:flex;
+  justify-content:space-between;align-items:center;}
+.modal-head h3{color:#fff;font-size:15px;font-weight:700;}
+.modal-close{background:none;border:none;color:rgba(255,255,255,.8);font-size:22px;cursor:pointer;}
+.modal-body{padding:18px 20px;}
+.modal-foot{padding:12px 20px;border-top:1px solid var(--border);
+  display:flex;justify-content:flex-end;gap:8px;}
+.fg{margin-bottom:12px;}
+.fg label{display:block;font-size:11px;font-weight:600;color:var(--muted);
+  text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;}
+.fg input,.fg select{width:100%;padding:8px 10px;border:1px solid var(--border);
+  border-radius:7px;font-family:'DM Sans',sans-serif;font-size:13px;}
+.fg-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.empty{padding:32px;text-align:center;color:var(--muted);}
+/* Badge pagamento */
+.pag-badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;}
+.pag-cred{background:#e8f0ff;color:#1a5c8a;}.pag-deb{background:#e8fff0;color:#1a7a4a;}
+.pag-pix{background:#f0ffe8;color:#2d7a00;}.pag-din{background:#fff8e0;color:#b35c00;}
+.pag-vou{background:#f5e8ff;color:#6040c0;}.pag-out{background:#f0f0f0;color:#555;}
+@media(max-width:700px){.kpi-grid{grid-template-columns:1fr 1fr;}.charts-row{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+<div class="ph">
+  <span style="font-size:20px">💰</span>
+  <h2>Faturamento</h2>
+  <div class="ph-sub" id="ph-sub">—</div>
+</div>
+<div class="body">
+
+  <!-- KPIs -->
+  <div class="kpi-grid">
+    <div class="kpi verde"><div class="kpi-l">Fat. Bruto (período)</div><div class="kpi-v" id="k-bruto">—</div><div class="kpi-s" id="k-bruto-s"></div></div>
+    <div class="kpi verde"><div class="kpi-l">Fat. Líquido</div><div class="kpi-v" id="k-liq">—</div><div class="kpi-s" id="k-liq-s"></div></div>
+    <div class="kpi laranja"><div class="kpi-l">Ticket Médio</div><div class="kpi-v" id="k-ticket">—</div><div class="kpi-s" id="k-ticket-s">por atendimento</div></div>
+    <div class="kpi azul"><div class="kpi-l">Atendimentos</div><div class="kpi-v" id="k-pessoas">—</div><div class="kpi-s">pessoas</div></div>
+    <div class="kpi vermelho"><div class="kpi-l">Descontos</div><div class="kpi-v" id="k-desc">—</div><div class="kpi-s" id="k-desc-s"></div></div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" id="tab-visao" onclick="showTab('visao',this)">📊 Visão Geral</button>
+    <button class="tab" onclick="showTab('periodos',this)">📅 Períodos</button>
+    <button class="tab" onclick="showTab('mensal',this)">📆 Mensal</button>
+  </div>
+
+  <!-- ── VISÃO GERAL ── -->
+  <div id="sec-visao">
+    <div class="toolbar">
+      <select class="flt" id="flt-tipo" onchange="carregar()">
+        <option value="todos">Todos os períodos</option>
+        <option value="dia">Diário</option>
+        <option value="semana">Semanal</option>
+        <option value="mes">Mensal</option>
+      </select>
+      <select class="flt" id="flt-ano" onchange="carregar()"></select>
+      <button class="btn btn-g" onclick="abrirImport()">📥 Importar CSV</button>
+      <button class="btn btn-s" onclick="exportarXLS()">📊 Excel</button>
+    </div>
+
+    <div class="charts-row">
+      <div class="chart-card">
+        <div class="chart-title">Faturamento por Período</div>
+        <canvas id="chart-fat" height="200"></canvas>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Formas de Pagamento</div>
+        <canvas id="chart-pag" height="200"></canvas>
+      </div>
+    </div>
+
+    <div class="charts-row">
+      <div class="chart-card" style="grid-column:1/-1">
+        <div class="chart-title">Vendas por Categoria</div>
+        <div id="cat-bars"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── PERÍODOS ── -->
+  <div id="sec-periodos" style="display:none">
+    <div class="toolbar">
+      <select class="flt" id="flt-tipo2" onchange="carregarPeriodos()">
+        <option value="todos">Todos</option>
+        <option value="dia">Diário</option>
+        <option value="semana">Semanal</option>
+        <option value="mes">Mensal</option>
+      </select>
+      <button class="btn btn-g" onclick="abrirImport()">📥 Importar CSV</button>
+    </div>
+    <div class="card">
+      <table class="tbl">
+        <thead><tr>
+          <th>Período</th><th>Tipo</th><th>Pessoas</th><th>Ticket Médio</th>
+          <th>Descontos</th><th>Fat. Bruto</th><th>Fat. Líquido</th><th></th>
+        </tr></thead>
+        <tbody id="tbody-periodos"></tbody>
+      </table>
+      <div class="empty" id="empty-periodos" style="display:none">Nenhum período importado ainda.</div>
+    </div>
+  </div>
+
+  <!-- ── MENSAL ── -->
+  <div id="sec-mensal" style="display:none">
+    <div class="card">
+      <table class="tbl">
+        <thead><tr>
+          <th>Mês</th><th>Períodos</th><th>Atendimentos</th><th>Ticket Médio</th>
+          <th>Descontos</th><th>Fat. Bruto</th><th>Fat. Líquido</th>
+        </tr></thead>
+        <tbody id="tbody-mensal"></tbody>
+      </table>
+      <div class="empty" id="empty-mensal" style="display:none">Nenhum dado mensal disponível.</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Modal Importar CSV -->
+<div class="modal-bg" id="modal-import">
+  <div class="modal">
+    <div class="modal-head"><h3>📥 Importar Movimento do PDV</h3><button class="modal-close" onclick="fecharModal()">×</button></div>
+    <div class="modal-body">
+      <div class="fg-row" style="margin-bottom:12px">
+        <div class="fg"><label>Data Início *</label><input type="date" id="imp-ini"></div>
+        <div class="fg"><label>Data Fim *</label><input type="date" id="imp-fim"></div>
+      </div>
+      <div class="fg">
+        <label>Label (opcional)</label>
+        <input id="imp-label" placeholder="Ex: Semana 1 março, Feriado...">
+      </div>
+      <div class="upload-zone" id="upload-zone" onclick="document.getElementById('f-csv').click()">
+        <div style="font-size:36px;margin-bottom:8px">📄</div>
+        <div style="font-weight:600;color:var(--green)">Clique para selecionar o CSV</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">Arquivo .CSV exportado do seu sistema de PDV</div>
+        <div id="f-nome" style="margin-top:8px;font-size:12px;color:var(--blue)"></div>
+      </div>
+      <input type="file" id="f-csv" accept=".csv,.CSV" style="display:none" onchange="selecionarArq(this)">
+      <div id="imp-preview" style="display:none;margin-top:12px;background:#f0fff8;border-radius:8px;padding:12px;font-size:12px"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-s" onclick="fecharModal()">Cancelar</button>
+      <button class="btn btn-g" id="btn-importar" onclick="importar()">💾 Importar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const {api, fmt, toast} = BB;
+let periodos = [], chartFat = null, chartPag = null;
+
+window.onBBReady = () => init();
+if(api.token()) init();
+
+function init(){
+  const ano = new Date().getFullYear();
+  const sel = document.getElementById('flt-ano');
+  sel.innerHTML = '';
+  for(let y = ano; y >= ano-3; y--){
+    sel.innerHTML += `<option value="${y}"${y===ano?' selected':''}>${y}</option>`;
+  }
+  carregar();
+}
+
+function showTab(t, btn){
+  ['sec-visao','sec-periodos','sec-mensal'].forEach(s => document.getElementById(s).style.display='none');
+  document.getElementById('sec-'+t).style.display='';
+  document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  if(t==='periodos') carregarPeriodos();
+  if(t==='mensal') carregarMensal();
+}
+
+// ── Carregar visão geral ──────────────────────────────────────────────────────
+async function carregar(){
+  const tipo = document.getElementById('flt-tipo').value;
+  const ano  = document.getElementById('flt-ano').value;
+  const d = await api.get(`/api/faturamento?tipo=${tipo}&ano=${ano}&limit=100`);
+  if(!d.ok) return;
+  periodos = d.data;
+  renderKPIs();
+  renderCharts();
+  renderCatBars();
+}
+
+function renderKPIs(){
+  const totBruto  = periodos.reduce((s,p)=>s+parseFloat(p.fat_bruto||0),0);
+  const totLiq    = periodos.reduce((s,p)=>s+parseFloat(p.fat_liquido||0),0);
+  const totPessoas= periodos.reduce((s,p)=>s+parseInt(p.total_pessoas||0),0);
+  const totDesc   = periodos.reduce((s,p)=>s+parseFloat(p.descontos||0),0);
+  const ticketMed = totPessoas>0 ? totBruto/totPessoas : 0;
+
+  document.getElementById('k-bruto').textContent   = fmt.brl(totBruto);
+  document.getElementById('k-liq').textContent     = fmt.brl(totLiq);
+  document.getElementById('k-ticket').textContent  = fmt.brl(ticketMed);
+  document.getElementById('k-pessoas').textContent = fmt.n(totPessoas);
+  document.getElementById('k-desc').textContent    = fmt.brl(totDesc);
+  document.getElementById('k-bruto-s').textContent = `${periodos.length} período(s)`;
+  document.getElementById('ph-sub').textContent    = `${periodos.length} importações`;
+}
+
+function renderCharts(){
+  // Gráfico de faturamento por período (últimos 12)
+  const ultimos = [...periodos].reverse().slice(-12);
+  const labels  = ultimos.map(p => {
+    const di = p.data_inicio?.slice(0,10);
+    const df = p.data_fim?.slice(0,10);
+    return di === df ? fmtDt(di) : `${fmtDt(di)} — ${fmtDt(df)}`;
+  });
+  const brutos  = ultimos.map(p => parseFloat(p.fat_bruto||0));
+  const liqs    = ultimos.map(p => parseFloat(p.fat_liquido||0));
+
+  if(chartFat) chartFat.destroy();
+  const ctxF = document.getElementById('chart-fat').getContext('2d');
+  chartFat = new Chart(ctxF, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label:'Bruto', data:brutos, backgroundColor:'rgba(26,122,74,.7)', borderRadius:4 },
+        { label:'Líquido', data:liqs, backgroundColor:'rgba(26,122,74,.3)', borderRadius:4 },
+      ]
+    },
+    options: { responsive:true, plugins:{ legend:{ position:'bottom', labels:{ font:{size:11} } } },
+      scales:{ y:{ ticks:{ callback: v=>'R$ '+fmt.brl(v).replace('R$ ','') } } } }
+  });
+
+  // Gráfico de pagamentos (pizza) — soma de todos os períodos
+  const pagTotais = {};
+  for(const p of periodos){
+    const pags = typeof p.pagamentos==='string' ? JSON.parse(p.pagamentos||'{}') : (p.pagamentos||{});
+    for(const [k,v] of Object.entries(pags)){
+      pagTotais[k] = (pagTotais[k]||0) + parseFloat(v||0);
+    }
+  }
+  const pagLabels = Object.keys(pagTotais);
+  const pagVals   = pagLabels.map(k => pagTotais[k]);
+  const CORES = ['#1a7a4a','#1a5c8a','#c76b00','#8B0000','#6040c0','#2d7a00','#b35c00','#555'];
+
+  if(chartPag) chartPag.destroy();
+  const ctxP = document.getElementById('chart-pag').getContext('2d');
+  chartPag = new Chart(ctxP, {
+    type: 'doughnut',
+    data: { labels: pagLabels, datasets:[{ data:pagVals, backgroundColor:CORES, borderWidth:2 }] },
+    options: { responsive:true, plugins:{
+      legend:{ position:'right', labels:{ font:{size:11}, boxWidth:12 } },
+      tooltip:{ callbacks:{ label: ctx => ` R$ ${fmt.brl(ctx.parsed).replace('R$ ','')}` } }
+    }}
+  });
+}
+
+function renderCatBars(){
+  // Agrega categorias de todos os períodos
+  const catTotais = {};
+  for(const p of periodos){
+    const cats = typeof p.categorias==='string' ? JSON.parse(p.categorias||'{}') : (p.categorias||{});
+    for(const [k,v] of Object.entries(cats)){
+      catTotais[k] = (catTotais[k]||0) + parseFloat(v||0);
+    }
+  }
+  const sorted = Object.entries(catTotais).sort((a,b)=>b[1]-a[1]);
+  const maxVal = sorted[0]?.[1] || 1;
+  const total  = sorted.reduce((s,[,v])=>s+v,0);
+
+  const CORES_CAT = ['#1a7a4a','#1a5c8a','#c76b00','#8B0000','#2d7a00','#6040c0','#b35c00','#555','#2d5a8a','#7a4a1a','#4a7a2a','#5a2d6e'];
+
+  document.getElementById('cat-bars').innerHTML = sorted.map(([cat,val],i) => `
+    <div class="cat-bar">
+      <div class="cat-bar-label">${cat}</div>
+      <div style="flex:1;background:#f0ebe4;border-radius:4px;height:8px;overflow:hidden">
+        <div style="width:${(val/maxVal*100).toFixed(1)}%;height:100%;background:${CORES_CAT[i%CORES_CAT.length]};border-radius:4px;transition:.4s"></div>
+      </div>
+      <div class="cat-bar-pct">${total>0?(val/total*100).toFixed(1):'0'}%</div>
+      <div class="cat-bar-val">${fmt.brl(val)}</div>
+    </div>
+  `).join('') || '<div class="empty">Nenhum dado de categoria</div>';
+}
+
+// ── Períodos ──────────────────────────────────────────────────────────────────
+async function carregarPeriodos(){
+  const tipo = document.getElementById('flt-tipo2').value;
+  const d = await api.get(`/api/faturamento?tipo=${tipo}&limit=100`);
+  if(!d.ok) return;
+  const tb = document.getElementById('tbody-periodos');
+  const em = document.getElementById('empty-periodos');
+  if(!d.data.length){ tb.innerHTML=''; em.style.display=''; return; }
+  em.style.display='none';
+  const TIPO_LABEL = {dia:'Diário',semana:'Semanal',mes:'Mensal',custom:'Período'};
+  tb.innerHTML = d.data.map(p => {
+    const di = p.data_inicio?.slice(0,10), df = p.data_fim?.slice(0,10);
+    const periodo = di===df ? fmtDt(di) : `${fmtDt(di)} a ${fmtDt(df)}`;
+    return `<tr>
+      <td style="font-weight:600">${periodo}${p.label?`<br><small style="color:var(--muted)">${p.label}</small>`:''}</td>
+      <td><span style="background:#f0ebe4;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700">${TIPO_LABEL[p.tipo_periodo]||p.tipo_periodo}</span></td>
+      <td style="text-align:right">${fmt.n(p.total_pessoas)}</td>
+      <td style="text-align:right;font-family:'DM Mono',monospace">${fmt.brl(p.ticket_medio)}</td>
+      <td style="text-align:right;color:var(--red-l)">${fmt.brl(p.descontos)}</td>
+      <td style="text-align:right;font-family:'DM Mono',monospace;font-weight:700;color:var(--green)">${fmt.brl(p.fat_bruto)}</td>
+      <td style="text-align:right;font-family:'DM Mono',monospace">${fmt.brl(p.fat_liquido)}</td>
+      <td><button class="btn btn-s" style="padding:3px 8px;font-size:11px;color:var(--red-l)" onclick="excluir(${p.id})">🗑️</button></td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Mensal ────────────────────────────────────────────────────────────────────
+async function carregarMensal(){
+  const d = await api.get('/api/faturamento/resumo');
+  if(!d.ok) return;
+  const tb = document.getElementById('tbody-mensal');
+  const em = document.getElementById('empty-mensal');
+  if(!d.data.length){ tb.innerHTML=''; em.style.display=''; return; }
+  em.style.display='none';
+  tb.innerHTML = d.data.map(m => `<tr>
+    <td style="font-weight:700">${m.mes}</td>
+    <td style="text-align:center;color:var(--muted)">${m.periodos}</td>
+    <td style="text-align:right">${fmt.n(m.total_pessoas)}</td>
+    <td style="text-align:right;font-family:'DM Mono',monospace">${fmt.brl(m.ticket_medio_avg)}</td>
+    <td style="text-align:right;color:var(--red-l)">${fmt.brl(m.descontos)}</td>
+    <td style="text-align:right;font-family:'DM Mono',monospace;font-weight:700;color:var(--green)">${fmt.brl(m.fat_bruto)}</td>
+    <td style="text-align:right;font-family:'DM Mono',monospace">${fmt.brl(m.fat_liquido)}</td>
+  </tr>`).join('');
+}
+
+// ── Import ────────────────────────────────────────────────────────────────────
+let arquivoSel = null;
+function abrirImport(){
+  const hoje = new Date().toISOString().slice(0,10);
+  document.getElementById('imp-ini').value = hoje;
+  document.getElementById('imp-fim').value = hoje;
+  document.getElementById('imp-label').value = '';
+  document.getElementById('f-nome').textContent = '';
+  document.getElementById('imp-preview').style.display = 'none';
+  arquivoSel = null;
+  document.getElementById('modal-import').classList.add('open');
+}
+function fecharModal(){ document.getElementById('modal-import').classList.remove('open'); }
+
+function selecionarArq(input){
+  const file = input.files[0];
+  if(!file) return;
+  arquivoSel = file;
+  document.getElementById('f-nome').textContent = '✅ ' + file.name;
+  // Preview rápido
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const txt = e.target.result;
+      const lines = txt.split(/\r?\n/);
+      let bruto = 0, liq = 0, pessoas = 0;
+      let secao = '';
+      for(const line of lines){
+        const cols = line.split(';');
+        const desc = cols[0]?.trim();
+        const val  = parseFloat((cols[3]||'0').replace('.','').replace(',','.')) || 0;
+        if(desc?.startsWith('Tipo:')) { secao = desc; continue; }
+        if(secao.includes('0.Ticket') && !desc) pessoas = parseInt(cols[1])||0;
+        if(secao.includes('4.Faturamento') && desc === 'RECEBIMENTOS BRUTO') bruto = val;
+        if(secao.includes('4.Faturamento') && !desc) liq = val;
+      }
+      document.getElementById('imp-preview').style.display = '';
+      document.getElementById('imp-preview').innerHTML =
+        `<b>Preview:</b> Fat. Bruto: <b>${fmt.brl(bruto)}</b> · Líquido: <b>${fmt.brl(liq)}</b> · ${pessoas} pessoa(s)`;
+    } catch(_){}
+  };
+  reader.readAsText(file, 'latin1');
+}
+
+async function importar(){
+  if(!arquivoSel){ toast('Selecione o arquivo CSV'); return; }
+  const ini = document.getElementById('imp-ini').value;
+  const fim = document.getElementById('imp-fim').value;
+  if(!ini||!fim){ toast('Informe o período'); return; }
+
+  const fd = new FormData();
+  fd.append('arquivo', arquivoSel);
+  fd.append('data_inicio', ini);
+  fd.append('data_fim', fim);
+  fd.append('label', document.getElementById('imp-label').value);
+
+  document.getElementById('btn-importar').textContent = '⏳ Importando...';
+  const resp = await fetch('/api/faturamento/import', {
+    method:'POST', headers:{ Authorization: 'Bearer '+api.token() }, body: fd
+  });
+  const d = await resp.json();
+  document.getElementById('btn-importar').textContent = '💾 Importar';
+
+  if(d.ok){
+    toast(`✅ Importado! Bruto: ${fmt.brl(d.dados.fat_bruto)}`);
+    fecharModal();
+    carregar();
+  } else {
+    toast('Erro: ' + d.erro);
+  }
+}
+
+async function excluir(id){
+  if(!confirm('Excluir este período?')) return;
+  const d = await api.delete(`/api/faturamento/${id}`);
+  if(d.ok){ toast('Excluído'); carregarPeriodos(); carregar(); }
+}
+
+// ── Exportar Excel ────────────────────────────────────────────────────────────
+function exportarXLS(){
+  if(!periodos.length){ toast('Nenhum dado para exportar'); return; }
+  const wb = XLSX.utils.book_new();
+  const rows = [['Período','Tipo','Pessoas','Ticket Médio','Fat. Bruto','Fat. Líquido','Descontos']];
+  for(const p of periodos){
+    const di = p.data_inicio?.slice(0,10), df = p.data_fim?.slice(0,10);
+    rows.push([
+      di===df ? di : `${di} a ${df}`,
+      p.tipo_periodo, p.total_pessoas,
+      parseFloat(p.ticket_medio), parseFloat(p.fat_bruto),
+      parseFloat(p.fat_liquido), parseFloat(p.descontos),
+    ]);
+  }
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [{wch:22},{wch:10},{wch:10},{wch:14},{wch:14},{wch:14},{wch:12}];
+  XLSX.utils.book_append_sheet(wb, ws, 'Faturamento');
+  XLSX.writeFile(wb, `Faturamento_BomBeef_${new Date().toISOString().slice(0,10)}.xlsx`);
+  toast('📊 Excel exportado!');
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function fmtDt(s){
+  if(!s) return '—';
+  const [y,m,d] = s.split('-');
+  return `${d}/${m}/${y}`;
+}
+</script>
+</body>
+</html>

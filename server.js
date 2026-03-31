@@ -211,6 +211,7 @@ app.use(express.static(path.join(__dirname, 'public'), {
 // ── Rotas API ──────────────────────────────────────────────────────────────────
 app.use('/auth',             require('./routes/auth')(pool));
 app.use('/api/boletos',      require('./routes/boletos')(pool));
+app.use('/api/faturamento',  require('./routes/faturamento')(pool));
 app.use('/api/dre',          require('./routes/dre')(pool));
 app.use('/api/produtos',     require('./routes/produtos')(pool));
 app.use('/api/kits',         require('./routes/kits')(pool));
