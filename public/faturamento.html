@@ -212,7 +212,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
         <div style="font-size:11px;color:var(--muted);margin-top:4px">Arquivo .CSV exportado do seu sistema de PDV</div>
         <div id="f-nome" style="margin-top:8px;font-size:12px;color:var(--blue)"></div>
       </div>
-      <input type="file" id="f-csv" accept=".csv,.CSV" style="display:none" onchange="selecionarArq(this)">
+      <input type="file" id="f-csv" accept=".csv,.CSV,.txt" style="display:none" onchange="selecionarArq(this)">
       <div id="imp-preview" style="display:none;margin-top:12px;background:#f0fff8;border-radius:8px;padding:12px;font-size:12px"></div>
     </div>
     <div class="modal-foot">
@@ -408,6 +408,8 @@ function abrirImport(){
   document.getElementById('f-nome').textContent = '';
   document.getElementById('imp-preview').style.display = 'none';
   arquivoSel = null;
+  const fc = document.getElementById('f-csv');
+  if(fc) fc.value = ''; // reseta para onchange disparar mesmo arquivo
   document.getElementById('modal-import').classList.add('open');
 }
 function fecharModal(){ document.getElementById('modal-import').classList.remove('open'); }
@@ -439,7 +441,7 @@ function selecionarArq(input){
         `<b>Preview:</b> Fat. Bruto: <b>${fmt.brl(bruto)}</b> · Líquido: <b>${fmt.brl(liq)}</b> · ${pessoas} pessoa(s)`;
     } catch(_){}
   };
-  reader.readAsText(file, 'latin1');
+  reader.readAsArrayBuffer(file);
 }
 
 async function importar(){
