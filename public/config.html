@@ -212,6 +212,27 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
   </div>
 </div>
 
+
+  <!-- Ações de Validade -->
+  <div class="page" id="page-acoes-validade">
+    <div class="pg-title">📋 Ações de Validade</div>
+    <div class="pg-sub">Ações disponíveis para os funcionários selecionarem ao cadastrar um item de validade. Somente administradores podem adicionar ou remover ações.</div>
+    <div style="margin-bottom:14px">
+      <button class="btn btn-p" onclick="abrirAcao()">＋ Nova Ação</button>
+    </div>
+    <div class="card">
+      <table class="tbl">
+        <thead><tr>
+          <th>Descrição</th>
+          <th style="width:80px;text-align:center">Ordem</th>
+          <th style="width:120px">Ações</th>
+        </tr></thead>
+        <tbody id="tbody-acoes"></tbody>
+      </table>
+      <div class="empty" id="empty-acoes" style="display:none"><p>Nenhuma ação cadastrada.</p></div>
+    </div>
+  </div>
+
 <!-- Modal Categoria -->
 <div class="modal-bg" id="modal-cat">
   <div class="modal">
@@ -760,5 +781,21 @@ async function excluirAcao(id){
   else toast('Erro: '+d.erro);
 }
 </script>
+<!-- Modal Ação de Validade -->
+<div class="modal-bg" id="modal-acao">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-head"><h3 id="acao-title">Nova Ação</h3><button class="modal-close" onclick="fecharAcao()">×</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="acao-id">
+      <div class="fg"><label>Descrição *</label><input id="acao-desc" placeholder="Ex: Promover com 30% de desconto"></div>
+      <div class="fg"><label>Ordem (menor = aparece primeiro)</label><input type="number" id="acao-ordem" value="99" min="1"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-s" onclick="fecharAcao()">Cancelar</button>
+      <button class="btn btn-p" onclick="salvarAcao()">💾 Salvar</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
