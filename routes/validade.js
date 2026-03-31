@@ -534,7 +534,9 @@ module.exports = function (pool) {
     try {
       const { rows } = await pool.query(`SELECT COUNT(*) AS total FROM validade_items`);
       const total = parseInt(rows[0].total);
-      await pool.query(`TRUNCATE TABLE validade_items RESTART IDENTITY`);
+      // Limpa referências nas tabelas filhas antes de truncar
+      await pool.query(`UPDATE perdas SET validade_item_id = NULL WHERE validade_item_id IS NOT NULL`);
+      await pool.query(`TRUNCATE TABLE validade_items RESTART IDENTITY CASCADE`);
       console.log(`[validade] limpar-tudo: ${total} itens removidos por ${req.user.email}`);
       res.json({ ok: true, removidos: total });
     } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
