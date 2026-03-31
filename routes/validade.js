@@ -467,8 +467,9 @@ module.exports = function (pool) {
 
           const cod   = colCod  >= 0 ? String(row[colCod]  ?? '').trim() || null : null;
           const qtdRaw = colQtd >= 0 ? row[colQtd] : 0;
-          const qtd = typeof qtdRaw === 'number' ? Math.round(qtdRaw)
-                    : parseInt(String(qtdRaw||'0').replace(',','.')) || 0;
+          const qtdNum = typeof qtdRaw === 'number' ? qtdRaw
+                       : parseFloat(String(qtdRaw||'0').replace(',','.'));
+          const qtd = isNaN(qtdNum) ? 0 : Math.round(qtdNum);
           const resp  = colResp >= 0 ? String(row[colResp]  ?? '').trim() || null : null;
           const acao  = colAcao >= 0 ? String(row[colAcao]  ?? '').trim() || null : null;
           const lote  = colLote >= 0 ? String(row[colLote]  ?? '').trim() || null : null;
