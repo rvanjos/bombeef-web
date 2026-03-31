@@ -50,14 +50,17 @@ module.exports = function (pool) {
       ['usuario_id',        'INTEGER'],
       ['dt_perda',          'DATE DEFAULT CURRENT_DATE'],
       ['codigo_produto',    'TEXT'],
+      ['quantidade',         'INTEGER DEFAULT 0'],
     ];
     for (const [col, def] of cols) {
       await pool.query(
         `ALTER TABLE perdas ADD COLUMN IF NOT EXISTS ${col} ${def}`
       ).catch(() => {});
     }
-    // Garante que codigo_produto aceita NULL (pode ter sido criada como NOT NULL)
-    await pool.query(`ALTER TABLE perdas ALTER COLUMN codigo_produto DROP NOT NULL`).catch(()=>{});
+    // Garante que colunas problemáticas aceitam NULL
+    for(const col of ['codigo_produto','quantidade','descricao_produto','nome_produto','produto','cod_produto']){
+      await pool.query(`ALTER TABLE perdas ALTER COLUMN ${col} DROP NOT NULL`).catch(()=>{});
+    }
     // Popula coluna mes nos registros antigos que não têm
     await pool.query(`
       UPDATE perdas SET mes = TO_CHAR(dt_perda, 'MM/YYYY')
