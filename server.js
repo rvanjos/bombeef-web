@@ -220,6 +220,7 @@ app.use('/api/perdas',       require('./routes/perdas')(pool));
 app.use('/api/retiradas',    require('./routes/retiradas')(pool));
 app.use('/api/config',       require('./routes/config')(pool));
 app.use('/api/dashboard',    require('./routes/dashboard')(pool));
+app.use('/api/fornecedores', require('./routes/fornecedores')(pool));
 
 // ── Health check ───────────────────────────────────────────────────────────────
 app.get('/health', async (req, res) => {

@@ -4,6 +4,25 @@ const autenticar = require('../middleware/auth');
 module.exports = (pool) => {
   const router = express.Router();
 
+  // Garante tabela
+  pool.query(`
+    CREATE TABLE IF NOT EXISTS fornecedores (
+      id               SERIAL PRIMARY KEY,
+      cnpj_fornecedor  TEXT UNIQUE,
+      razao_social     TEXT NOT NULL,
+      nome_fantasia    TEXT,
+      contato          TEXT,
+      telefone         TEXT,
+      email            TEXT,
+      endereco         TEXT,
+      categoria_padrao TEXT,
+      observacao       TEXT,
+      ativo            BOOLEAN DEFAULT true,
+      criado_em        TIMESTAMPTZ DEFAULT NOW(),
+      atualizado_em    TIMESTAMPTZ DEFAULT NOW()
+    )
+  `).catch(()=>{});
+
   // ── GET /api/fornecedores ────────────────────────────────
   router.get('/', autenticar(), async (req, res) => {
     const { q, ativo = 'true' } = req.query;
@@ -43,7 +62,7 @@ module.exports = (pool) => {
   });
 
   // ── POST /api/fornecedores ───────────────────────────────
-  router.post('/', autenticar(['admin','gerente','financeiro']), async (req, res) => {
+  router.post('/', autenticar(), async (req, res) => {
     const {
       cnpj_fornecedor, razao_social, nome_fantasia,
       contato, telefone, email, endereco, categoria_padrao, observacao
@@ -75,7 +94,7 @@ module.exports = (pool) => {
   });
 
   // ── PUT /api/fornecedores/:cnpj ──────────────────────────
-  router.put('/:cnpj', autenticar(['admin','gerente','financeiro']), async (req, res) => {
+  router.put('/:cnpj', autenticar(), async (req, res) => {
     const {
       razao_social, nome_fantasia, contato, telefone,
       email, endereco, categoria_padrao, observacao, ativo

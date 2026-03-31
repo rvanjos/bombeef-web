@@ -74,7 +74,18 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
 .origin-badge{display:inline-block;background:#e8f0f7;color:var(--blue);border-radius:4px;padding:1px 6px;font-size:10px;font-weight:600;margin-left:6px;}
 .empty{text-align:center;padding:48px 20px;color:var(--muted);}
 .empty-icon{font-size:42px;margin-bottom:12px;}
-@media(max-width:600px){.fg-row{grid-template-columns:1fr;}.tbl th:nth-child(3),.tbl td:nth-child(3),.tbl th:nth-child(5),.tbl td:nth-child(5){display:none;}}
+.forn-wrap{position:relative;}
+.forn-drop{position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid var(--border);
+  border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:300;max-height:220px;overflow-y:auto;}
+.forn-item{padding:9px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid #f5efe8;}
+.forn-item:last-child{border-bottom:none;}
+.forn-item:hover{background:#fdf9f4;}
+.forn-item .fi-nome{font-weight:600;}
+.forn-item .fi-cnpj{font-size:11px;color:var(--muted);}
+.forn-cnpj-row{display:flex;gap:8px;align-items:flex-end;margin-top:-6px;margin-bottom:10px;}
+.forn-cnpj-row input{flex:1;}
+.forn-cnpj-row button{padding:8px 12px;white-space:nowrap;}
+@media(max-width:600px)@media(max-width:600px){.fg-row{grid-template-columns:1fr;}.tbl th:nth-child(3),.tbl td:nth-child(3),.tbl th:nth-child(5),.tbl td:nth-child(5){display:none;}}
 /* Calendário de boletos */
 .cal-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
 .cal-nav-mes{font-size:18px;font-weight:700;color:var(--text);}
@@ -223,7 +234,22 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
     <div class="modal-head"><h3 id="modal-title">Novo Boleto</h3><button class="modal-close" onclick="fecharModal()">×</button></div>
     <div class="modal-body">
       <input type="hidden" id="f-dbid">
-      <div class="fg"><label>Fornecedor *</label><input id="f-forn" placeholder="Nome do fornecedor"></div>
+      <div class="fg">
+        <label>Fornecedor *</label>
+        <div class="forn-wrap">
+          <input id="f-forn" placeholder="Digite o nome para buscar..." autocomplete="off"
+            oninput="buscaFornAuto(this.value)" onblur="setTimeout(()=>fecharDropForn(),200)">
+          <div class="forn-drop" id="forn-drop" style="display:none"></div>
+        </div>
+      </div>
+      <div class="forn-cnpj-row">
+        <div class="fg" style="margin:0;flex:1">
+          <label>CNPJ (busca automática)</label>
+          <input id="f-cnpj" placeholder="00.000.000/0000-00" oninput="mascaraCNPJ(this)"
+            onblur="buscarPorCNPJ(this.value)">
+        </div>
+        <button class="btn btn-s" onclick="abrirCadastroForn()" title="Cadastrar novo fornecedor" style="padding:8px 12px;font-size:12px">＋ Novo</button>
+      </div>
       <div class="fg"><label>Produto / Descrição</label><input id="f-prod" placeholder="Descrição opcional"></div>
       <div class="fg-row">
         <div class="fg"><label>Nº NF-e</label><input id="f-nf" placeholder="000000"></div>
@@ -246,6 +272,23 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
     <div class="modal-foot">
       <button class="btn btn-s" onclick="fecharModal()">Cancelar</button>
       <button class="btn btn-p" onclick="salvar()">💾 Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Cadastro Fornecedor -->
+<div class="modal-bg" id="modal-forn">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-head"><h3>🏭 Cadastrar Fornecedor</h3><button class="modal-close" onclick="document.getElementById('modal-forn').classList.remove('open')">×</button></div>
+    <div class="modal-body">
+      <div class="fg"><label>CNPJ</label><input id="mf-cnpj" placeholder="00.000.000/0000-00" oninput="mascaraCNPJ(this)"></div>
+      <div class="fg"><label>Razão Social *</label><input id="mf-razao" placeholder="Nome oficial da empresa"></div>
+      <div class="fg"><label>Nome Fantasia</label><input id="mf-fantasia" placeholder="Como é conhecido (opcional)"></div>
+      <div class="fg"><label>Telefone</label><input id="mf-tel" placeholder="(19) 99999-9999"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-s" onclick="document.getElementById('modal-forn').classList.remove('open')">Cancelar</button>
+      <button class="btn btn-p" onclick="salvarForn()">💾 Salvar Fornecedor</button>
     </div>
   </div>
 </div>
@@ -324,6 +367,99 @@ async function init() {
 }
 window.onBBReady = () => { init(); };
 if(api.token()) { init(); }
+
+// ── Fornecedores — autocomplete e CNPJ ──────────────────────────────────────
+let _fornTimer = null;
+let fornSelecionado = null;
+
+function mascaraCNPJ(el){
+  let v = el.value.replace(/\D/g,'').slice(0,14);
+  v = v.replace(/^(\d{2})(\d)/,'$1.$2');
+  v = v.replace(/^(\d{2})\.(\d{3})(\d)/,'$1.$2.$3');
+  v = v.replace(/\.(\d{3})(\d)/,'.$1/$2');
+  v = v.replace(/(\d{4})(\d)/,'$1-$2');
+  el.value = v;
+}
+
+async function buscaFornAuto(q){
+  clearTimeout(_fornTimer);
+  const drop = document.getElementById('forn-drop');
+  if(!q || q.length < 2){ drop.style.display='none'; return; }
+  _fornTimer = setTimeout(async ()=>{
+    const d = await api.get(`/api/fornecedores?q=${encodeURIComponent(q)}`);
+    const lista = Array.isArray(d) ? d : (d.data||[]);
+    if(!lista.length){ drop.style.display='none'; return; }
+    drop.innerHTML = lista.slice(0,8).map(f=>`
+      <div class="forn-item" onmousedown="selecionarForn(${f.id},'${(f.nome_fantasia||f.razao_social).replace(/'/g,"\'")}','${f.cnpj_fornecedor||''}')">
+        <div class="fi-nome">${f.nome_fantasia||f.razao_social}</div>
+        <div class="fi-cnpj">${f.razao_social}${f.cnpj_fornecedor?' · CNPJ: '+fmtCNPJ(f.cnpj_fornecedor):''}</div>
+      </div>`).join('');
+    drop.style.display='';
+  }, 300);
+}
+
+function selecionarForn(id, nome, cnpj){
+  document.getElementById('f-forn').value = nome;
+  document.getElementById('f-cnpj').value = fmtCNPJ(cnpj);
+  document.getElementById('forn-drop').style.display='none';
+  fornSelecionado = { id, nome, cnpj };
+}
+
+function fecharDropForn(){
+  document.getElementById('forn-drop').style.display='none';
+}
+
+async function buscarPorCNPJ(cnpjMask){
+  const cnpj = cnpjMask.replace(/\D/g,'');
+  if(cnpj.length !== 14) return;
+  const d = await api.get(`/api/fornecedores/${cnpj}`);
+  const f = d.id ? d : null;
+  if(f){
+    document.getElementById('f-forn').value = f.nome_fantasia || f.razao_social;
+    fornSelecionado = { id: f.id, nome: f.nome_fantasia||f.razao_social, cnpj };
+    toast(`✅ ${f.razao_social}`);
+  } else {
+    // CNPJ não cadastrado — preenche o campo nome para o usuário completar
+    toast('⚠️ CNPJ não cadastrado. Preencha o nome e salve o boleto.');
+  }
+}
+
+function fmtCNPJ(cnpj){
+  if(!cnpj) return '';
+  const c = String(cnpj).replace(/\D/g,'').padStart(14,'0');
+  return c.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/,'$1.$2.$3/$4-$5');
+}
+
+function abrirCadastroForn(){
+  document.getElementById('modal-forn').classList.add('open');
+  document.getElementById('mf-cnpj').value = document.getElementById('f-cnpj').value||'';
+  document.getElementById('mf-razao').value = document.getElementById('f-forn').value||'';
+  document.getElementById('mf-fantasia').value = '';
+  document.getElementById('mf-tel').value = '';
+}
+
+async function salvarForn(){
+  const cnpj = document.getElementById('mf-cnpj').value.replace(/\D/g,'');
+  const razao = document.getElementById('mf-razao').value.trim();
+  if(!razao){ toast('Razão social obrigatória'); return; }
+  const body = {
+    cnpj_fornecedor: cnpj||null, razao_social: razao,
+    nome_fantasia: document.getElementById('mf-fantasia').value.trim()||null,
+    telefone: document.getElementById('mf-tel').value.trim()||null,
+  };
+  const d = await fetch('/api/fornecedores',{
+    method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+api.token()},
+    body: JSON.stringify(body)
+  }).then(r=>r.json());
+  if(d.id||d.ok){
+    toast('✅ Fornecedor cadastrado!');
+    document.getElementById('f-forn').value = d.nome_fantasia||d.razao_social||razao;
+    document.getElementById('f-cnpj').value = fmtCNPJ(cnpj);
+    document.getElementById('modal-forn').classList.remove('open');
+  } else {
+    toast('❌ '+(d.erro||'Erro ao cadastrar'));
+  }
+}
 
 // ── Abas de boletos ──────────────────────────────────────────────────────────
 function showBTab(t, btn){
@@ -552,6 +688,8 @@ function abrirModal(dbId){
   const b = dbId ? boletos.find(x=>x.dbId===dbId) : null;
   document.getElementById('f-dbid').value  = b?.dbId||'';
   document.getElementById('f-forn').value  = b?.fornecedor||'';
+  document.getElementById('f-cnpj').value  = b?.cnpj_fornecedor ? fmtCNPJ(b.cnpj_fornecedor) : '';
+  fornSelecionado = null;
   document.getElementById('f-prod').value  = b?.produto||'';
   document.getElementById('f-nf').value    = b?.nf||'';
   document.getElementById('f-dtnota').value= b?.dtNota||'';
