@@ -455,7 +455,7 @@ module.exports = function (pool) {
       }
 
       const client = await pool.connect();
-      let inseridos = 0, erros = 0;
+      let inseridos = 0, erros = 0, duplicatas = 0;
       const detalheErros = [];
 
       try {
@@ -503,6 +503,15 @@ module.exports = function (pool) {
             if (p.rows.length) prodId = p.rows[0].id;
           }
 
+          // Verifica duplicata: mesmo produto (desc ou codigo) + mesma data de validade
+          const dupCheck = await client.query(`
+            SELECT id FROM validade_items
+            WHERE data_validade=$1::date
+              AND (descricao=$2 OR ($3::text IS NOT NULL AND codigo=$3))
+            LIMIT 1
+          `, [dataVal, desc, cod||null]);
+          if(dupCheck.rows.length){ duplicatas++; continue; }
+
           try {
             await client.query(`
               INSERT INTO validade_items
@@ -527,6 +536,17 @@ module.exports = function (pool) {
     }
   });
 
+  // ── DELETE /multiplos — exclui vários itens de uma vez ──────────────────────
+  r.delete('/multiplos', async (req, res) => {
+    const { ids } = req.body;
+    if (!ids?.length) return res.status(400).json({ ok: false, erro: 'Informe os IDs' });
+    try {
+      await pool.query(`UPDATE perdas SET validade_item_id=NULL WHERE validade_item_id=ANY($1)`, [ids]);
+      await pool.query(`DELETE FROM validade_items WHERE id=ANY($1)`, [ids]);
+      res.json({ ok: true, removidos: ids.length });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
   // ── DELETE /limpar-tudo — admin apaga todos os itens de validade ────────────
   r.delete('/limpar-tudo', async (req, res) => {
     if (req.user?.perfil !== 'admin')
@@ -534,10 +554,9 @@ module.exports = function (pool) {
     try {
       const { rows } = await pool.query(`SELECT COUNT(*) AS total FROM validade_items`);
       const total = parseInt(rows[0].total);
-      // Limpa referências nas tabelas filhas antes de truncar
       await pool.query(`UPDATE perdas SET validade_item_id = NULL WHERE validade_item_id IS NOT NULL`);
-      await pool.query(`TRUNCATE TABLE validade_items RESTART IDENTITY CASCADE`);
-      console.log(`[validade] limpar-tudo: ${total} itens removidos por ${req.user.email}`);
+      await pool.query(`DELETE FROM validade_items`);
+      console.log(`[validade] limpar-tudo: ${total} itens removidos`);
       res.json({ ok: true, removidos: total });
     } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
   });

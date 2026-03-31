@@ -79,6 +79,8 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
 .row-sel{accent-color:var(--orange);width:15px;height:15px;cursor:pointer;}
 .sel-bar{background:#fff8e6;border:1px solid #f5d87a;border-radius:8px;padding:8px 14px;margin-bottom:8px;display:none;align-items:center;gap:10px;flex-wrap:wrap;font-size:12px;}
 .sel-bar.show{display:flex;}
+.val-sel-bar{background:#fff0f0;border:1px solid #f5c6c6;border-radius:8px;padding:8px 14px;margin-bottom:8px;display:none;align-items:center;gap:10px;flex-wrap:wrap;font-size:12px;}
+.val-sel-bar.show{display:flex;}
 
 /* Badge dias */
 .dias-badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;white-space:nowrap;}
@@ -279,8 +281,15 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
     </div>
     <div class="card">
       <table class="tbl">
+        <!-- Barra de seleção múltipla validade -->
+        <div class="val-sel-bar" id="val-sel-bar">
+          <span id="val-sel-count" style="font-weight:700;color:var(--red-l)">0 selecionados</span>
+          <button class="btn btn-s" style="padding:4px 10px;font-size:11px" onclick="valSelecionarTodos()">Todos da página</button>
+          <button class="btn btn-s" style="padding:4px 10px;font-size:11px" onclick="valLimparSel()">✕ Limpar</button>
+          <button class="btn btn-r" style="padding:4px 10px;font-size:11px" onclick="excluirSelecionadosVal()">🗑️ Excluir selecionados</button>
+        </div>
         <thead><tr>
-          <th style="width:32px"><input type="checkbox" class="row-sel" id="sel-all" onchange="toggleSelAll(this)" title="Selecionar todos"></th>
+          <th style="width:32px"><input type="checkbox" class="row-sel" id="val-sel-all" onchange="valToggleSelAll(this)" title="Selecionar todos"></th>
           <th style="width:90px">Código</th>
           <th>Descrição</th>
           <th>Lote</th>
@@ -823,6 +832,54 @@ function filtrarStatus(status){
   carregar();
 }
 
+// ── Seleção múltipla na tabela de validade ──────────────────────────────────
+let valSelecionados = new Set();
+
+function valAtualizarSelBar(){
+  document.querySelectorAll('.val-item-sel:checked').forEach(cb => valSelecionados.add(parseInt(cb.value)));
+  document.querySelectorAll('.val-item-sel:not(:checked)').forEach(cb => valSelecionados.delete(parseInt(cb.value)));
+  const n = valSelecionados.size;
+  const bar = document.getElementById('val-sel-bar');
+  bar.classList.toggle('show', n > 0);
+  document.getElementById('val-sel-count').textContent = `${n} selecionado(s)`;
+}
+
+function valToggleSelAll(cb){
+  document.querySelectorAll('.val-item-sel').forEach(el => {
+    el.checked = cb.checked;
+    if(cb.checked) valSelecionados.add(parseInt(el.value));
+    else valSelecionados.delete(parseInt(el.value));
+  });
+  valAtualizarSelBar();
+}
+
+function valSelecionarTodos(){
+  document.querySelectorAll('.val-item-sel').forEach(el => {
+    el.checked = true; valSelecionados.add(parseInt(el.value));
+  });
+  const allCb = document.getElementById('val-sel-all');
+  if(allCb) allCb.checked = true;
+  valAtualizarSelBar();
+}
+
+function valLimparSel(){
+  valSelecionados.clear();
+  document.querySelectorAll('.val-item-sel, #val-sel-all').forEach(el => el.checked = false);
+  document.getElementById('val-sel-bar').classList.remove('show');
+}
+
+async function excluirSelecionadosVal(){
+  const ids = [...valSelecionados];
+  if(!ids.length){ toast('Selecione ao menos um item'); return; }
+  if(!confirm(`Excluir ${ids.length} item(s) selecionado(s)?`)) return;
+  const d = await api.delete('/api/validade/multiplos', { ids });
+  if(d.ok){
+    toast(`✅ ${d.removidos} item(s) excluído(s)`);
+    valLimparSel();
+    carregar(); carregarKPIs();
+  } else toast('Erro: '+d.erro);
+}
+
 // ── Vinculação em lote ───────────────────────────────────────────────────────
 let itensSelecionados = new Set();
 
@@ -962,7 +1019,7 @@ function renderVal(lista){
 
     return `<tr class="row-${urg}" data-id="${v.id}">
       <td style="padding:4px 8px;text-align:center">
-        <input type="checkbox" class="row-sel item-sel" value="${v.id}" onchange="atualizarSelBar()">
+        <input type="checkbox" class="row-sel val-item-sel" value="${v.id}" onchange="valAtualizarSelBar()">
       </td>
       <td>${codCell}</td>
       <td>
@@ -1431,7 +1488,9 @@ async function processarImport(inp){
   const el=document.getElementById('import-result');
   el.style.display='';
   if(!d.ok){ el.style.background='#fdf2f2';el.innerHTML=`❌ ${d.erro}`;return;}
-  el.innerHTML=`✅ <b>${d.inseridos} itens importados</b> da aba '${d.aba||''}' · Erros: ${d.erros}`;
+  let msg = `✅ <b>${d.inseridos} itens importados</b> da aba '${d.aba||''}' · Erros: ${d.erros}`;
+  if(d.duplicatas > 0) msg += ` · <span style="color:var(--orange)">⚠️ ${d.duplicatas} duplicados ignorados</span>`;
+  el.innerHTML = msg;
   carregar(); carregarKPIs();
   try { window.parent.postMessage({type:'bb_refresh_kpis'},'*'); } catch(_) {}
 }
