@@ -186,7 +186,10 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
 <div id="scr-login" class="screen active">
   <div class="lw">
     <div class="lw-logo">
-      <div class="lw-emblem">🥩</div>
+      <div class="lw-emblem" id="lw-emblem-wrap" style="overflow:hidden;padding:0;display:flex;align-items:center;justify-content:center">
+        <img id="lw-logo-img" src="" style="display:none;width:100%;height:100%;object-fit:cover;border-radius:50%">
+        <span id="lw-logo-emoji">🥩</span>
+      </div>
       <div class="lw-title">Bom Beef</div>
       <div class="lw-sub">Sistema de Gestão Integrado</div>
     </div>
@@ -208,7 +211,10 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
 
   <!-- Header -->
   <div class="ph">
-    <div class="ph-logo">🥩</div>
+    <div class="ph-logo" id="ph-logo-wrap" style="overflow:hidden;padding:0">
+      <img id="ph-logo-img" src="" style="display:none;width:100%;height:100%;object-fit:cover;border-radius:50%">
+      <span id="ph-logo-emoji" style="font-size:17px">🥩</span>
+    </div>
     <div class="ph-brand">
       <h1 id="ph-empresa">Bom Beef</h1>
       <p>Sistema de Gestão</p>

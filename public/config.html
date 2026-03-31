@@ -72,6 +72,24 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
     <div class="page active" id="page-sistema">
       <div class="pg-title">Configurações Gerais</div>
       <div class="pg-sub">Parâmetros globais do sistema</div>
+      <div style="margin-bottom:16px;background:var(--white);border-radius:10px;padding:16px;box-shadow:0 2px 8px rgba(0,0,0,.06)">
+        <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">Logo do Sistema</div>
+        <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+          <div id="logo-preview-wrap" style="width:72px;height:72px;border-radius:50%;background:#f0ebe4;border:2px solid var(--border);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0">
+            <img id="logo-preview" src="" style="display:none;width:100%;height:100%;object-fit:cover;border-radius:50%">
+            <span id="logo-placeholder" style="font-size:28px">🥩</span>
+          </div>
+          <div>
+            <div style="font-size:13px;font-weight:600;margin-bottom:6px">Logo circular (aparece no canto superior esquerdo)</div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:8px">PNG ou JPG · Recomendado: 200×200px</div>
+            <label style="cursor:pointer;display:inline-block;padding:6px 14px;background:var(--red);color:#fff;border-radius:7px;font-size:12px;font-weight:600">
+              📷 Escolher imagem
+              <input type="file" accept="image/*" style="display:none" onchange="uploadLogo(this)">
+            </label>
+            <button class="btn btn-s" style="margin-left:6px;padding:6px 12px;font-size:12px" onclick="removerLogo()">✕ Remover</button>
+          </div>
+        </div>
+      </div>
       <div class="card">
         <div class="card-title">Identidade</div>
         <div class="fg"><label>Nome da Empresa</label><input id="cfg-nome" placeholder="Bom Beef"></div>
@@ -213,25 +231,28 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
 </div>
 
 
-  <!-- Ações de Validade -->
-  <div class="page" id="page-acoes-validade">
-    <div class="pg-title">📋 Ações de Validade</div>
-    <div class="pg-sub">Ações disponíveis para os funcionários selecionarem ao cadastrar um item de validade. Somente administradores podem adicionar ou remover ações.</div>
-    <div style="margin-bottom:14px">
-      <button class="btn btn-p" onclick="abrirAcao()">＋ Nova Ação</button>
+    <!-- Ações de Validade -->
+    <div class="page" id="page-acoes-validade">
+      <div class="pg-title">📋 Ações de Validade</div>
+      <div class="pg-sub">Ações disponíveis para os funcionários selecionarem ao cadastrar um item de validade. Somente administradores podem adicionar ou remover ações.</div>
+      <div style="margin-bottom:14px">
+        <button class="btn btn-p" onclick="abrirAcao()">＋ Nova Ação</button>
+      </div>
+      <div class="card">
+        <table class="tbl">
+          <thead><tr>
+            <th>Descrição</th>
+            <th style="width:80px;text-align:center">Ordem</th>
+            <th style="width:120px">Ações</th>
+          </tr></thead>
+          <tbody id="tbody-acoes"></tbody>
+        </table>
+        <div class="empty" id="empty-acoes" style="display:none"><p>Nenhuma ação cadastrada.</p></div>
+      </div>
     </div>
-    <div class="card">
-      <table class="tbl">
-        <thead><tr>
-          <th>Descrição</th>
-          <th style="width:80px;text-align:center">Ordem</th>
-          <th style="width:120px">Ações</th>
-        </tr></thead>
-        <tbody id="tbody-acoes"></tbody>
-      </table>
-      <div class="empty" id="empty-acoes" style="display:none"><p>Nenhuma ação cadastrada.</p></div>
-    </div>
-  </div>
+
+  </div><!-- /content -->
+</div><!-- /layout -->
 
 <!-- Modal Categoria -->
 <div class="modal-bg" id="modal-cat">
@@ -799,3 +820,48 @@ async function excluirAcao(id){
 
 </body>
 </html>
+<script>
+// ── Logo ──────────────────────────────────────────────────────────────────────
+function uploadLogo(input){
+  const file = input.files[0];
+  if(!file) return;
+  if(file.size > 2*1024*1024){ toast('Imagem muito grande (máx 2MB)'); return; }
+  const reader = new FileReader();
+  reader.onload = e => {
+    const b64 = e.target.result;
+    // Salva no localStorage e aplica
+    try { localStorage.setItem('bb_logo', b64); } catch(_){}
+    aplicarLogo(b64);
+    // Tenta notificar o parent (index.html) para atualizar o logo lá também
+    try { window.parent.postMessage({type:'bb_logo', logo: b64}, '*'); } catch(_){}
+    toast('✅ Logo atualizado!');
+  };
+  reader.readAsDataURL(file);
+}
+
+function removerLogo(){
+  if(!confirm('Remover o logo?')) return;
+  try { localStorage.removeItem('bb_logo'); } catch(_){}
+  aplicarLogo(null);
+  try { window.parent.postMessage({type:'bb_logo', logo: null}, '*'); } catch(_){}
+  toast('Logo removido');
+}
+
+function aplicarLogo(b64){
+  const img = document.getElementById('logo-preview');
+  const ph  = document.getElementById('logo-placeholder');
+  if(b64){
+    img.src = b64; img.style.display=''; ph.style.display='none';
+  } else {
+    img.src=''; img.style.display='none'; ph.style.display='';
+  }
+}
+
+// Carregar logo salvo ao abrir
+(function(){
+  try {
+    const saved = localStorage.getItem('bb_logo');
+    if(saved) aplicarLogo(saved);
+  } catch(_){}
+})();
+</script>
