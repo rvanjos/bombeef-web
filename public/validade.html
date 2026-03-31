@@ -276,7 +276,14 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
       <button class="btn btn-s" style="padding:4px 10px" onclick="selecionarTodos()">Selecionar todos</button>
       <button class="btn btn-s" style="padding:4px 10px" onclick="limparSelecao()">Limpar</button>
       <span style="color:var(--muted)">|</span>
-      <input id="cod-lote" placeholder="Código para vincular todos" style="padding:5px 9px;border:1px solid var(--border);border-radius:6px;font-size:12px;width:180px" oninput="previewLote()">
+      <div style="position:relative;display:inline-block">
+        <input id="cod-lote" placeholder="Buscar por nome ou código..." 
+          style="padding:5px 9px;border:1px solid var(--border);border-radius:6px;font-size:12px;width:230px"
+          oninput="buscaLote()" autocomplete="off">
+        <div id="lote-dropdown" style="display:none;position:absolute;top:100%;left:0;width:320px;background:#fff;
+          border:1px solid var(--border);border-radius:7px;box-shadow:0 4px 16px rgba(0,0,0,.15);
+          z-index:999;max-height:220px;overflow-y:auto;margin-top:3px"></div>
+      </div>
       <span id="preview-lote" style="font-size:11px;color:var(--green)"></span>
       <button class="btn btn-p" style="padding:5px 12px" onclick="vincularSelecionados()">🔗 Vincular selecionados</button>
     </div>
@@ -937,24 +944,63 @@ function limparSelecao(){
   document.getElementById('val-sel-bar').classList.remove('show');
 }
 
-async function previewLote(){
-  const cod = document.getElementById('cod-lote').value.trim();
-  const el  = document.getElementById('preview-lote');
-  if(!cod){ el.textContent=''; return; }
-  const d = await api.get(`/api/produtos/${encodeURIComponent(cod)}`);
-  el.textContent = d.ok ? '✅ '+d.data.descricao : '⚠️ não encontrado';
-  el.style.color = d.ok ? 'var(--green)' : 'var(--red-l)';
+// Código selecionado para vincular
+let _codigoLoteSel = null;
+let _buscaLoteTimer = null;
+
+async function buscaLote(){
+  const q = document.getElementById('cod-lote').value.trim();
+  const dd = document.getElementById('lote-dropdown');
+  const prev = document.getElementById('preview-lote');
+  _codigoLoteSel = null;
+  prev.textContent = '';
+  if(q.length < 2){ dd.style.display='none'; return; }
+  clearTimeout(_buscaLoteTimer);
+  _buscaLoteTimer = setTimeout(async () => {
+    const d = await api.get(`/api/produtos?busca=${encodeURIComponent(q)}&limit=8`);
+    const lista = d.ok ? (d.data||d.produtos||[]) : [];
+    if(!lista.length){
+      dd.innerHTML = '<div style="padding:10px 12px;color:var(--muted);font-size:12px">Nenhum produto encontrado</div>';
+      dd.style.display = '';
+      return;
+    }
+    dd.innerHTML = lista.map(p => `
+      <div onclick="selecionarLoteProd('${p.codigo}','${(p.descricao||'').replace(/'/g,"\'")}','${p.id}')"
+        style="padding:8px 12px;cursor:pointer;border-bottom:1px solid #f5efe8;font-size:12px"
+        onmouseover="this.style.background='#f8f4f0'" onmouseout="this.style.background=''">
+        <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--blue);margin-right:6px">${p.codigo||'—'}</span>
+        <b>${p.descricao}</b>
+        ${p.preco_custo?`<span style="float:right;color:var(--muted);font-size:10px">Custo: R$ ${parseFloat(p.preco_custo).toFixed(2)}</span>`:''}
+      </div>`).join('');
+    dd.style.display = '';
+  }, 250);
 }
+
+function selecionarLoteProd(codigo, descricao, id){
+  _codigoLoteSel = codigo;
+  document.getElementById('cod-lote').value = descricao + (codigo ? ' ('+codigo+')' : '');
+  document.getElementById('lote-dropdown').style.display = 'none';
+  const prev = document.getElementById('preview-lote');
+  prev.textContent = '✅ ' + descricao;
+  prev.style.color = 'var(--green)';
+}
+
+// Fechar dropdown ao clicar fora
+document.addEventListener('click', e => {
+  if(!e.target.closest('#cod-lote') && !e.target.closest('#lote-dropdown'))
+    document.getElementById('lote-dropdown').style.display='none';
+});
 
 async function vincularSelecionados(){
   const ids = [...itensSelecionados];
-  const cod = document.getElementById('cod-lote').value.trim();
   if(!ids.length){ toast('Selecione ao menos um item'); return; }
-  if(!cod){ toast('Informe o código do produto'); return; }
+  const cod = _codigoLoteSel || document.getElementById('cod-lote').value.trim();
+  if(!cod){ toast('Busque e selecione um produto'); return; }
   const d = await api.post('/api/validade/vincular-multiplos', {ids, codigo: cod});
   if(d.ok){
     toast(`✅ ${d.vinculados} item(s) vinculado(s) a: ${d.produto}`);
     limparSelecao();
+    _codigoLoteSel = null;
     document.getElementById('cod-lote').value='';
     document.getElementById('preview-lote').textContent='';
     carregar(); carregarKPIs();

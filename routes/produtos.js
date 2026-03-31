@@ -90,7 +90,7 @@ module.exports = function (pool) {
 
       const where = conds.length ? 'WHERE ' + conds.join(' AND ') : '';
       const { rows } = await pool.query(
-        `SELECT * FROM produtos ${where} ORDER BY descricao ASC`, params
+        `SELECT * FROM produtos ${where} ORDER BY descricao ASC${busca ? ' LIMIT 12' : ''}`, params
       );
       res.json({ ok: true, data: rows, total: rows.length });
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
