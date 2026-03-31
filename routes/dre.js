@@ -560,11 +560,21 @@ module.exports = function (pool) {
     }
   }
 
+  // Helper: extrai array de transações de qualquer formato (string, objeto, array)
+  function extrairTransacoes(dados) {
+    if (!dados) return [];
+    // PostgreSQL JSONB já retorna objeto JS — não precisa de JSON.parse
+    const obj = typeof dados === 'string' ? (() => { try { return JSON.parse(dados); } catch(_){ return []; } })() : dados;
+    if (Array.isArray(obj)) return obj;
+    if (obj && Array.isArray(obj.transactions)) return obj.transactions;
+    return [];
+  }
+
   // ── Merge de transações — deduplicação por FITID ─────────────────────────
   // Preserva classificações existentes, adiciona novos lançamentos
   function mergeTransacoes(existentes, novos) {
     if (!Array.isArray(existentes)) existentes = [];
-    if (!Array.isArray(novos)) novos = existentes;
+    if (!Array.isArray(novos)) return existentes; // sem novos, retorna o que tem
 
     // Índice dos existentes por FITID (lançamentos já classificados têm prioridade)
     const porFitid = {};
@@ -623,7 +633,7 @@ module.exports = function (pool) {
       if (sessao_id) {
         // Ao atualizar, faz merge por FITID para não perder classificações
         const cur = await pool.query(`SELECT dados_json FROM dre_sessoes WHERE id=$1`, [sessao_id]);
-        const dadosMerge = cur.rows.length ? mergeTransacoes(JSON.parse(cur.rows[0].dados_json||'[]'), dados_json) : dados_json;
+        const dadosMerge = cur.rows.length ? mergeTransacoes(extrairTransacoes(cur.rows[0].dados_json), extrairTransacoes(dados_json)) : dados_json;
         const upd = await pool.query(`
           UPDATE dre_sessoes SET descricao=$1, dados_json=$2, atualizado_em=NOW()
           WHERE id=$3 RETURNING id
@@ -638,7 +648,7 @@ module.exports = function (pool) {
         );
         if (existing.rows.length) {
           const cur2 = await pool.query(`SELECT dados_json FROM dre_sessoes WHERE id=$1`, [existing.rows[0].id]);
-          const dadosMerge2 = cur2.rows.length ? mergeTransacoes(JSON.parse(cur2.rows[0].dados_json||'[]'), dados_json) : dados_json;
+          const dadosMerge2 = cur2.rows.length ? mergeTransacoes(extrairTransacoes(cur2.rows[0].dados_json), extrairTransacoes(dados_json)) : dados_json;
           const upd = await pool.query(`
             UPDATE dre_sessoes SET descricao=$1, dados_json=$2, usuario_id=$3, atualizado_em=NOW()
             WHERE id=$4 RETURNING id
@@ -654,10 +664,8 @@ module.exports = function (pool) {
       }
       // Espelha na tabela dre_lancamentos para persistência garantida
       const sid = rows[0]?.id;
-      if (sid && Array.isArray(dados_json)) {
-        espelharLancamentos(sid, dados_json).catch(()=>{});
-      } else if (sid && dados_json?.transactions) {
-        espelharLancamentos(sid, dados_json.transactions).catch(()=>{});
+      if (sid) {
+        espelharLancamentos(sid, extrairTransacoes(dados_json)).catch(()=>{});
       }
       res.json({ ok: true, sessao_id: sid });
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
@@ -762,7 +770,7 @@ module.exports = function (pool) {
           [mesImport]
         ).catch(()=>({ rows: [] }));
         if (sessaoExist.rows.length) {
-          const txExist = JSON.parse(sessaoExist.rows[0].dados_json || '[]');
+          const txExist = extrairTransacoes(sessaoExist.rows[0].dados_json);
           const fitidsExist = new Set(txExist.filter(t=>t.fitid).map(t=>t.fitid));
           duplicatasEstimadas = lancamentos.filter(l => l.fitid && fitidsExist.has(l.fitid)).length;
         }
