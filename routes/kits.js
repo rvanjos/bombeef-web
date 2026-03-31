@@ -59,6 +59,7 @@ module.exports = function (pool) {
     `).catch(e => console.error('[kits] CREATE TABLE kit_itens:', e.message));
     // ALTER TABLE separados — PostgreSQL não aceita múltiplos DDL num único query
     for (const [col, def] of [
+      ['kit_id',               'INTEGER'],   // coluna principal — pode não existir em DBs antigos
       ['produto_id',           'INTEGER'],
       ['codigo_produto',       'TEXT'],
       ['descricao_produto',    'TEXT'],

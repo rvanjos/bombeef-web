@@ -185,11 +185,24 @@ module.exports = function (pool) {
   r.put('/:id', async (req, res) => {
     const v = req.body;
     try {
-      // Se foi fornecido código, tenta vincular automaticamente
+      // Se tem código, busca produto para obter nome oficial e produto_id
       let prodId = v.produtoId || null;
-      if (v.codigo && !prodId) {
-        const p = await pool.query(`SELECT id FROM produtos WHERE codigo = $1`, [v.codigo.trim()]);
-        if (p.rows.length) prodId = p.rows[0].id;
+      let descFinal = v.descricao || null;
+      let descOriginal = null;
+      if (v.codigo) {
+        const p = await pool.query(
+          `SELECT id, descricao FROM produtos WHERE codigo = $1 AND ativo = true LIMIT 1`,
+          [v.codigo.trim()]
+        );
+        if (p.rows.length) {
+          prodId = p.rows[0].id;
+          // Salva nome original antes de sobrescrever (só se ainda não foi salvo)
+          const cur = await pool.query(`SELECT descricao, desc_original FROM validade_items WHERE id=$1`, [parseInt(req.params.id)]);
+          if (cur.rows.length && !cur.rows[0].desc_original) {
+            descOriginal = cur.rows[0].descricao; // nome atual vira original
+          }
+          descFinal = p.rows[0].descricao; // sempre usa nome do cadastro
+        }
       }
 
       await pool.query(`
@@ -197,6 +210,7 @@ module.exports = function (pool) {
           produto_id          = COALESCE($1, produto_id),
           codigo              = COALESCE($2, codigo),
           descricao           = COALESCE($3, descricao),
+          desc_original       = COALESCE(desc_original, $14),
           data_validade       = COALESCE($4, data_validade),
           lote                = COALESCE($5, lote),
           acao_antes_vencer   = COALESCE($6, acao_antes_vencer),
@@ -209,13 +223,13 @@ module.exports = function (pool) {
           atualizado_em       = NOW()
         WHERE id = $13
       `, [
-        prodId, v.codigo?.trim() || null, v.descricao || null,
+        prodId, v.codigo?.trim() || null, descFinal,
         v.dataValidade || null, v.lote || null, v.acaoAntesVencer || null,
         v.ultimaConferencia || null, v.responsavel || null,
         v.qtdUnidades !== undefined ? parseInt(v.qtdUnidades) : null,
         v.diasAlerta !== undefined ? parseInt(v.diasAlerta) : null,
         v.localizacao || null, v.observacao || null,
-        parseInt(req.params.id),
+        parseInt(req.params.id), descOriginal,
       ]);
       res.json({ ok: true });
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
