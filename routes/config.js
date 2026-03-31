@@ -43,31 +43,6 @@ module.exports = function (pool) {
       `).catch(()=>{});
     }
 
-    // Tabela de ações antes de vencer (gerenciada pelo admin)
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS validade_acoes (
-        id        SERIAL PRIMARY KEY,
-        descricao TEXT NOT NULL,
-        ativo     BOOLEAN DEFAULT true,
-        ordem     INTEGER DEFAULT 99,
-        criado_em TIMESTAMPTZ DEFAULT NOW()
-      )
-    `).catch(()=>{});
-    // Seed inicial se vazia
-    const cnt = await pool.query('SELECT COUNT(*) FROM validade_acoes').then(r=>parseInt(r.rows[0].count)).catch(()=>0);
-    if(cnt === 0){
-      await pool.query(`
-        INSERT INTO validade_acoes (descricao, ordem) VALUES
-        ('Promover com 30% de desconto', 1),
-        ('Promover com 50% de desconto', 2),
-        ('Montar kit anti-desperdício', 3),
-        ('Doação para funcionários', 4),
-        ('Verificar com fornecedor', 5),
-        ('Retirar de circulação', 6),
-        ('Descarte imediato', 7)
-      `).catch(()=>{});
-    }
-
     await pool.query(`
       CREATE TABLE IF NOT EXISTS funcionarios (
         id                SERIAL PRIMARY KEY,
