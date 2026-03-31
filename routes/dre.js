@@ -363,11 +363,21 @@ module.exports = function (pool) {
         criado_em     TIMESTAMPTZ DEFAULT NOW()
       )
     `);
-    await pool.query(`
-      CREATE INDEX IF NOT EXISTS idx_dre_sessoes_mes  ON dre_sessoes(mes_ref);
-      CREATE INDEX IF NOT EXISTS idx_dre_lanc_sessao  ON dre_lancamentos(sessao_id);
-      CREATE INDEX IF NOT EXISTS idx_dre_lanc_mes     ON dre_lancamentos(mes);
-    `);
+    // Garante colunas extras na dre_lancamentos
+    for (const [col, def] of [
+      ['fitid',       'TEXT'],
+      ['razao_social','TEXT'],
+      ['portador',    'TEXT'],
+      ['mes_caixa',   'TEXT'],
+      ['atualizado_em','TIMESTAMPTZ DEFAULT NOW()'],
+    ]) {
+      await pool.query(`ALTER TABLE dre_lancamentos ADD COLUMN IF NOT EXISTS ${col} ${def}`).catch(()=>{});
+    }
+    // Índice por fitid para deduplicação rápida
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_dre_lanc_fitid ON dre_lancamentos(fitid) WHERE fitid IS NOT NULL`).catch(()=>{});
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_dre_sessoes_mes  ON dre_sessoes(mes_ref)`).catch(()=>{});
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_dre_lanc_sessao  ON dre_lancamentos(sessao_id)`).catch(()=>{});
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_dre_lanc_mes     ON dre_lancamentos(mes)`).catch(()=>{});
   }
   initTable().catch(e => console.error('[dre] initTable:', e.message));
 
@@ -490,6 +500,66 @@ module.exports = function (pool) {
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
+  // ── Espelha lançamentos do JSON na tabela dre_lancamentos ────────────────
+  // Garante que os dados nunca se percam — tabela é a fonte de verdade para backup
+  async function espelharLancamentos(sessaoId, transacoes) {
+    if (!sessaoId || !Array.isArray(transacoes)) return;
+    try {
+      for (const t of transacoes) {
+        if (!t.lancamento || t.valor === undefined) continue;
+        const fitid = t.fitid || null;
+        // Se tem fitid, upsert por fitid+sessao_id
+        if (fitid) {
+          await pool.query(`
+            INSERT INTO dre_lancamentos
+              (sessao_id, fitid, fonte, lancamento, razao_social, valor, data_lanc, mes, mes_caixa,
+               categoria, grupo_dre, ignorar, portador, atualizado_em)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,NOW())
+            ON CONFLICT DO NOTHING
+          `, [sessaoId, fitid, t.fonte||'EXTRATO', t.lancamento||'',
+              t.razaoSocial||null, parseFloat(t.valor||0),
+              t.data||null, t.mes||null, t.mesCaixa||null,
+              t.categoria||null, t.grupoKey||null,
+              t.ignorar||false, t.portador||null]);
+          // Atualiza categoria se foi classificado depois
+          if (t.categoria) {
+            await pool.query(`
+              UPDATE dre_lancamentos SET categoria=$1, grupo_dre=$2, atualizado_em=NOW()
+              WHERE sessao_id=$3 AND fitid=$4
+            `, [t.categoria, t.grupoKey||null, sessaoId, fitid]);
+          }
+        } else {
+          // Sem fitid — usa hash para evitar duplicata
+          const hash = `${t.data||''}_${String(t.valor||'')}`.replace(/\./g,'_');
+          await pool.query(`
+            INSERT INTO dre_lancamentos
+              (sessao_id, fonte, lancamento, razao_social, valor, data_lanc, mes, mes_caixa,
+               categoria, grupo_dre, ignorar, portador, atualizado_em)
+            SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW()
+            WHERE NOT EXISTS (
+              SELECT 1 FROM dre_lancamentos
+              WHERE sessao_id=$1 AND data_lanc=$6 AND valor=$5
+                AND lancamento=$3
+            )
+          `, [sessaoId, t.fonte||'MANUAL', t.lancamento||'',
+              t.razaoSocial||null, parseFloat(t.valor||0),
+              t.data||null, t.mes||null, t.mesCaixa||null,
+              t.categoria||null, t.grupoKey||null,
+              t.ignorar||false, t.portador||null]);
+        }
+      }
+      // Atualiza categorias de lançamentos existentes (classificações feitas pelo usuário)
+      for (const t of transacoes.filter(t => t.fitid && t.categoria)) {
+        await pool.query(`
+          UPDATE dre_lancamentos SET categoria=$1, grupo_dre=$2, ignorar=$3, atualizado_em=NOW()
+          WHERE sessao_id=$4 AND fitid=$5
+        `, [t.categoria, t.grupoKey||null, t.ignorar||false, sessaoId, t.fitid]);
+      }
+    } catch(e) {
+      console.error('[dre/espelhar]', e.message);
+    }
+  }
+
   // ── Merge de transações — deduplicação por FITID ─────────────────────────
   // Preserva classificações existentes, adiciona novos lançamentos
   function mergeTransacoes(existentes, novos) {
@@ -582,8 +652,30 @@ module.exports = function (pool) {
           rows = ins.rows;
         }
       }
-      res.json({ ok: true, sessao_id: rows[0]?.id });
+      // Espelha na tabela dre_lancamentos para persistência garantida
+      const sid = rows[0]?.id;
+      if (sid && Array.isArray(dados_json)) {
+        espelharLancamentos(sid, dados_json).catch(()=>{});
+      } else if (sid && dados_json?.transactions) {
+        espelharLancamentos(sid, dados_json.transactions).catch(()=>{});
+      }
+      res.json({ ok: true, sessao_id: sid });
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ── GET /lancamentos/:mes — lançamentos salvos na tabela (backup seguro) ────
+  r.get('/lancamentos/:mes', async (req, res) => {
+    try {
+      const mes = decodeURIComponent(req.params.mes); // ex: "03/2026"
+      const { rows } = await pool.query(`
+        SELECT dl.*, ds.mes_ref, ds.descricao AS sessao_desc
+        FROM dre_lancamentos dl
+        JOIN dre_sessoes ds ON ds.id = dl.sessao_id
+        WHERE dl.mes = $1
+        ORDER BY dl.data_lanc ASC, dl.id ASC
+      `, [mes]);
+      res.json({ ok: true, data: rows, total: rows.length });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
   // ── DELETE /sessoes/:id ────────────────────────────────────────────────────
