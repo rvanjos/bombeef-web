@@ -869,7 +869,7 @@ function valLimparSel(){
 }
 
 async function excluirSelecionadosVal(){
-  const ids = [...valSelecionados];
+  const ids = [...valSelecionados].map(Number).filter(n => !isNaN(n) && n > 0);
   if(!ids.length){ toast('Selecione ao menos um item'); return; }
   if(!confirm(`Excluir ${ids.length} item(s) selecionado(s)?`)) return;
   const d = await api.delete('/api/validade/multiplos', { ids });
@@ -877,7 +877,7 @@ async function excluirSelecionadosVal(){
     toast(`✅ ${d.removidos} item(s) excluído(s)`);
     valLimparSel();
     carregar(); carregarKPIs();
-  } else toast('Erro: '+d.erro);
+  } else toast('❌ ' + (d.erro||'Erro ao excluir'));
 }
 
 // ── Vinculação em lote ───────────────────────────────────────────────────────

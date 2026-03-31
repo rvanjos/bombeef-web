@@ -538,12 +538,14 @@ module.exports = function (pool) {
 
   // ── DELETE /multiplos — exclui vários itens de uma vez ──────────────────────
   r.delete('/multiplos', async (req, res) => {
-    const { ids } = req.body;
-    if (!ids?.length) return res.status(400).json({ ok: false, erro: 'Informe os IDs' });
+    const idsRaw = req.body?.ids;
+    if (!idsRaw?.length) return res.status(400).json({ ok: false, erro: 'Informe os IDs' });
+    const ids = idsRaw.map(Number).filter(n => !isNaN(n) && n > 0);
+    if (!ids.length) return res.status(400).json({ ok: false, erro: 'IDs inválidos' });
     try {
-      await pool.query(`UPDATE perdas SET validade_item_id=NULL WHERE validade_item_id=ANY($1)`, [ids]);
-      await pool.query(`DELETE FROM validade_items WHERE id=ANY($1)`, [ids]);
-      res.json({ ok: true, removidos: ids.length });
+      await pool.query(`UPDATE perdas SET validade_item_id=NULL WHERE validade_item_id=ANY($1::int[])`, [ids]);
+      const r = await pool.query(`DELETE FROM validade_items WHERE id=ANY($1::int[])`, [ids]);
+      res.json({ ok: true, removidos: r.rowCount });
     } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
@@ -552,12 +554,9 @@ module.exports = function (pool) {
     if (req.user?.perfil !== 'admin')
       return res.status(403).json({ ok: false, erro: 'Acesso restrito ao administrador' });
     try {
-      const { rows } = await pool.query(`SELECT COUNT(*) AS total FROM validade_items`);
-      const total = parseInt(rows[0].total);
-      await pool.query(`UPDATE perdas SET validade_item_id = NULL WHERE validade_item_id IS NOT NULL`);
-      await pool.query(`DELETE FROM validade_items`);
-      console.log(`[validade] limpar-tudo: ${total} itens removidos`);
-      res.json({ ok: true, removidos: total });
+      await pool.query(`UPDATE perdas SET validade_item_id=NULL WHERE validade_item_id IS NOT NULL`);
+      const r = await pool.query(`DELETE FROM validade_items`);
+      res.json({ ok: true, removidos: r.rowCount });
     } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
