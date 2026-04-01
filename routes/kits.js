@@ -35,6 +35,7 @@ module.exports = function (pool) {
     // Adiciona colunas novas sem quebrar tabela existente
     const cols = [
       ['codigo',        'TEXT'],
+      ['nome',          'TEXT'],
       ['descricao',     'TEXT'],
       ['margem',        'NUMERIC(5,2) DEFAULT 0'],
       ['ativo',         'BOOLEAN DEFAULT true'],
@@ -45,6 +46,9 @@ module.exports = function (pool) {
         `ALTER TABLE kits ADD COLUMN IF NOT EXISTS ${col} ${def}`
       ).catch(() => {});
     }
+    // Se a coluna nome existia como 'titulo' ou 'name', migra o valor
+    await pool.query(`UPDATE kits SET nome=titulo WHERE nome IS NULL AND titulo IS NOT NULL`).catch(()=>{});
+    await pool.query(`UPDATE kits SET nome=name  WHERE nome IS NULL AND name  IS NOT NULL`).catch(()=>{});
     await pool.query(`
       CREATE TABLE IF NOT EXISTS kit_itens (
         id                    SERIAL PRIMARY KEY,
