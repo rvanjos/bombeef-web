@@ -574,15 +574,15 @@ module.exports = function (pool) {
   // Preserva classificações existentes, adiciona novos lançamentos
   function mergeTransacoes(existentes, novos) {
     if (!Array.isArray(existentes)) existentes = [];
-    if (!Array.isArray(novos)) return existentes; // sem novos, retorna o que tem
+    if (!Array.isArray(novos)) return existentes;
 
-    // Índice dos existentes por FITID (lançamentos já classificados têm prioridade)
+    // Índice dos existentes por FITID
     const porFitid = {};
     for (const t of existentes) {
       if (t.fitid) porFitid[t.fitid] = t;
     }
 
-    // Para lançamentos sem FITID (manuais, XLSX), usa hash data+valor+lancamento
+    // Hash para lançamentos sem FITID
     function hashSemFitid(t) {
       return `${t.data||''}_${t.valor||''}_${(t.lancamento||'').slice(0,30)}`;
     }
@@ -591,25 +591,41 @@ module.exports = function (pool) {
       if (!t.fitid) porHash[hashSemFitid(t)] = t;
     }
 
-    const resultado = [...existentes]; // começa com todos os existentes
-    let novosAdicionados = 0;
-    let duplicatasIgnoradas = 0;
+    // Começa com existentes mas atualiza com novos que têm classificação
+    // REGRA: novo com categoria > existente sem categoria (preserva classificações feitas)
+    const resultado = [...existentes];
+    let novosAdicionados = 0, atualizados = 0, duplicatasIgnoradas = 0;
 
     for (const t of novos) {
       if (t.fitid) {
-        if (porFitid[t.fitid]) {
-          // Já existe — preserva classificação existente, atualiza campos não classificados
-          duplicatasIgnoradas++;
+        const idx = resultado.findIndex(x => x.fitid === t.fitid);
+        if (idx >= 0) {
+          // Já existe — atualiza categoria/ignorar se o novo tiver classificação
+          if (t.categoria && !resultado[idx].categoria) {
+            resultado[idx] = { ...resultado[idx], categoria: t.categoria, grupoKey: t.grupoKey, ignorar: t.ignorar };
+            atualizados++;
+          } else if (t.categoria && resultado[idx].categoria !== t.categoria) {
+            // Usuário mudou a classificação — novo tem prioridade
+            resultado[idx] = { ...resultado[idx], categoria: t.categoria, grupoKey: t.grupoKey };
+            atualizados++;
+          } else {
+            duplicatasIgnoradas++;
+          }
         } else {
-          // Novo lançamento
           resultado.push(t);
           porFitid[t.fitid] = t;
           novosAdicionados++;
         }
       } else {
         const h = hashSemFitid(t);
-        if (porHash[h]) {
-          duplicatasIgnoradas++;
+        const idx = resultado.findIndex(x => !x.fitid && hashSemFitid(x) === h);
+        if (idx >= 0) {
+          if (t.categoria && resultado[idx].categoria !== t.categoria) {
+            resultado[idx] = { ...resultado[idx], categoria: t.categoria, grupoKey: t.grupoKey };
+            atualizados++;
+          } else {
+            duplicatasIgnoradas++;
+          }
         } else {
           resultado.push(t);
           porHash[h] = t;
@@ -618,7 +634,7 @@ module.exports = function (pool) {
       }
     }
 
-    console.log(`[dre/merge] ${existentes.length} existentes + ${novos.length} novos → ${resultado.length} total (${novosAdicionados} adicionados, ${duplicatasIgnoradas} duplicatas ignoradas)`);
+    console.log(`[dre/merge] ${existentes.length} exist + ${novos.length} novos → ${resultado.length} total (${novosAdicionados} add, ${atualizados} atualiz, ${duplicatasIgnoradas} dup)`);
     return resultado;
   }
 
