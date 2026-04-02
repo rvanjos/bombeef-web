@@ -1428,24 +1428,27 @@ async function pagarBoleto(id) {
 
   // Preenche modal
   document.getElementById('pb-id').value = id;
-  document.getElementById('pb-dt').value = new Date().toISOString().slice(0,10);
+  document.getElementById('pb-dt').value = t.data || new Date().toISOString().slice(0,10);
   document.getElementById('pb-info').innerHTML =
     `<b>${t.lancamento}</b><br>` +
-    `<span style="color:#7a7068">Valor: ${fmt.brl(Math.abs(parseFloat(t.valor||0)))} · Venc: ${t.data?fmt.date(t.data):'—'}</span>`;
+    `<span style="color:#7a7068">Valor: <b>${fmt.brl(Math.abs(parseFloat(t.valor||0)))}</b> · Venc: ${t.data?fmt.date(t.data):'—'}</span>`;
 
-  // Busca lançamentos do extrato com valor próximo para sugerir vinculação
-  const valorBol = Math.abs(parseFloat(t.valor||0));
+  // Busca lançamentos do extrato com VALOR EXATO para sugerir vinculação
+  const valorBol = Math.round(Math.abs(parseFloat(t.valor||0)) * 100); // centavos para evitar float
   const extratos = TXS.filter(x =>
     x.fonte === 'EXTRATO' &&
     !x.boletoId &&
-    Math.abs(Math.abs(parseFloat(x.valor||0)) - valorBol) < 1 // valor igual ou diferença < R$1
-  ).slice(0,10);
+    Math.round(Math.abs(parseFloat(x.valor||0)) * 100) === valorBol // valor exato
+  ).slice(0,15);
 
   const sel = document.getElementById('pb-extrato-sel');
   sel.innerHTML = '<option value="">— Não vincular —</option>' +
     extratos.map(x =>
       `<option value="${x.id}">${fmt.date(x.data)} · ${(x.razaoSocial||x.lancamento||'').slice(0,40)} · ${fmt.brl(Math.abs(parseFloat(x.valor||0)))}</option>`
     ).join('');
+
+  // Auto-seleciona se só tiver uma correspondência
+  if (extratos.length === 1) sel.value = extratos[0].id;
 
   document.getElementById('m-pagar-boleto').style.display = 'flex';
 }
