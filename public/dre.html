@@ -679,14 +679,34 @@ async function carregarCategorias() {
 
 async function carregarSessao() {
   setSt('load');
-  const d = await api.get(`/api/dre/sessoes/${mesRef}`);
+  const d = await api.get(`/api/dre/sessoes/${encodeURIComponent(mesRef)}`);
   if (d.ok && d.data?.dados_json) {
     sessId = d.data.id;
-    TXS   = d.data.dados_json.transactions || [];
-    files = d.data.dados_json.loadedFiles  || [];
-    supMem= d.data.dados_json.supplierMem  || {};
+    const dados = d.data.dados_json;
+    TXS   = (typeof dados === 'object' && !Array.isArray(dados)) ? (dados.transactions || []) : (Array.isArray(dados) ? dados : []);
+    files = dados.loadedFiles  || [];
+    supMem= dados.supplierMem  || {};
     if (TXS.length) { showTable(); toast(`📂 ${TXS.length} lançamentos carregados`); }
-  } else { TXS=[]; files=[]; supMem={}; }
+  } else {
+    // Se não achou pelo mês atual, tenta a sessão mais recente
+    const dr = await api.get('/api/dre/sessoes?limit=1');
+    if (dr.ok && dr.data?.length) {
+      const s = dr.data[0];
+      // Só carrega se for do mesmo mês
+      if (s.mes_ref === mesRef) {
+        sessId = s.id;
+        const dados = s.dados_json;
+        TXS   = (typeof dados === 'object' && !Array.isArray(dados)) ? (dados.transactions || []) : [];
+        files = dados?.loadedFiles || [];
+        supMem= dados?.supplierMem || {};
+        if (TXS.length) { showTable(); toast(`📂 ${TXS.length} lançamentos carregados`); }
+      } else {
+        TXS=[]; files=[]; supMem={};
+      }
+    } else {
+      TXS=[]; files=[]; supMem={};
+    }
+  }
   setSt('ok');
   updMesFiltro(); render(); updStats(); renderDRE();
 }

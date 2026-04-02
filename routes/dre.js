@@ -477,12 +477,14 @@ module.exports = function (pool) {
   // ── GET /sessoes ───────────────────────────────────────────────────────────
   r.get('/sessoes', async (req, res) => {
     try {
+      const limit = parseInt(req.query.limit) || 50;
       const { rows } = await pool.query(`
         SELECT id, mes_ref, descricao, criado_em, atualizado_em,
                jsonb_array_length(dados_json->'transactions') AS total_lancamentos
         FROM dre_sessoes
-        ORDER BY mes_ref DESC
-      `);
+        ORDER BY atualizado_em DESC
+        LIMIT $1
+      `, [limit]);
       res.json({ ok: true, data: rows });
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
@@ -490,11 +492,12 @@ module.exports = function (pool) {
   // ── GET /sessoes/:id ───────────────────────────────────────────────────────
   r.get('/sessoes/:id(*)', async (req, res) => {
     try {
-      const isNum = /^\d+$/.test(req.params.id);
+      const raw = decodeURIComponent(req.params.id);
+      const isNum = /^\d+$/.test(raw);
       const query = isNum
         ? `SELECT * FROM dre_sessoes WHERE id = $1`
         : `SELECT * FROM dre_sessoes WHERE mes_ref = $1 ORDER BY atualizado_em DESC LIMIT 1`;
-      const { rows } = await pool.query(query, [req.params.id]);
+      const { rows } = await pool.query(query, [isNum ? parseInt(raw) : raw]);
       if (!rows.length) return res.status(404).json({ ok: false, erro: 'Sessão não encontrada' });
       res.json({ ok: true, data: rows[0] });
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
