@@ -18,11 +18,12 @@ const pool = new Pool({
     : false,
   max: 10,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 5000,
+  connectionTimeoutMillis: 10000,
 });
 
 pool.on('error', (err) => {
   console.error('[pool] erro inesperado:', err.message);
+  // Não deixa o processo morrer por erro de pool
 });
 
 // ── Auto-migração na inicialização ────────────────────────────────────────────
