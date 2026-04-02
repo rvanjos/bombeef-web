@@ -167,19 +167,29 @@ async function autoMigrate() {
 }
 
 // Testa conexão e roda migração na inicialização — com retry
-async function conectarComRetry(tentativas = 5) {
+const PORT = process.env.PORT || 3000;
+async function conectarComRetry(tentativas = 8) {
   for (let i = 1; i <= tentativas; i++) {
     try {
       const r = await pool.query('SELECT NOW()');
       console.log('[db] conectado:', r.rows[0].now);
       await autoMigrate();
+      // Só inicia o servidor após banco estar pronto
+      app.listen(PORT, () => {
+        console.log(`[server] rodando na porta ${PORT} (${process.env.NODE_ENV || 'development'})`);
+      });
       return;
     } catch(e) {
       console.error(`[db] tentativa ${i}/${tentativas} falhou:`, e.message);
       if (i < tentativas) {
-        await new Promise(r => setTimeout(r, 3000 * i));
+        const delay = Math.min(3000 * i, 15000);
+        console.log(`[db] aguardando ${delay/1000}s...`);
+        await new Promise(r => setTimeout(r, delay));
       } else {
-        console.error('[db] não foi possível conectar após todas as tentativas — continuando mesmo assim');
+        console.error('[db] banco indisponível — iniciando servidor sem migração');
+        app.listen(PORT, () => {
+          console.log(`[server] rodando na porta ${PORT} (sem banco)`);
+        });
       }
     }
   }
@@ -262,10 +272,6 @@ app.use((err, req, res, _next) => {
   res.status(500).json({ ok: false, erro: 'Erro interno do servidor' });
 });
 
-// ── Start ──────────────────────────────────────────────────────────────────────
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`[server] rodando na porta ${PORT} (${process.env.NODE_ENV || 'development'})`);
-});
+// ── Start — movido para dentro de conectarComRetry ─────────────────────────────
 
 module.exports = { app, pool };
