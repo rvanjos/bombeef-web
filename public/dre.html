@@ -688,24 +688,27 @@ async function carregarSessao() {
     supMem= dados.supplierMem  || {};
     if (TXS.length) { showTable(); toast(`📂 ${TXS.length} lançamentos carregados`); }
   } else {
-    // Se não achou pelo mês atual, tenta a sessão mais recente
+    // Sem sessão para este mês — carrega a mais recente disponível
     const dr = await api.get('/api/dre/sessoes?limit=1');
     if (dr.ok && dr.data?.length) {
       const s = dr.data[0];
-      // Só carrega se for do mesmo mês
-      if (s.mes_ref === mesRef) {
-        sessId = s.id;
-        const dados = s.dados_json;
+      sessId = s.id;
+      // Atualiza o mês exibido para o da sessão encontrada
+      mesRef = s.mes_ref;
+      document.getElementById('dre-mes-label').textContent = mesRef;
+      const [mm, yyyy] = mesRef.split('/');
+      if(document.getElementById('f-mesref'))
+        document.getElementById('f-mesref').value = `${yyyy}-${mm}`;
+      // Busca dados completos da sessão
+      const ds = await api.get(`/api/dre/sessoes/${s.id}`);
+      if (ds.ok && ds.data?.dados_json) {
+        const dados = ds.data.dados_json;
         TXS   = (typeof dados === 'object' && !Array.isArray(dados)) ? (dados.transactions || []) : [];
-        files = dados?.loadedFiles || [];
-        supMem= dados?.supplierMem || {};
-        if (TXS.length) { showTable(); toast(`📂 ${TXS.length} lançamentos carregados`); }
-      } else {
-        TXS=[]; files=[]; supMem={};
-      }
-    } else {
-      TXS=[]; files=[]; supMem={};
-    }
+        files = dados.loadedFiles || [];
+        supMem= dados.supplierMem || {};
+        if (TXS.length) { showTable(); toast(`📂 Última sessão: ${mesRef} — ${TXS.length} lançamentos`); }
+      } else { TXS=[]; files=[]; supMem={}; }
+    } else { TXS=[]; files=[]; supMem={}; }
   }
   setSt('ok');
   updMesFiltro(); render(); updStats(); renderDRE();
