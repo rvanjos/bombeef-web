@@ -787,47 +787,49 @@ async function carregarFuncionarios(){
 // ── Carregar itens ────────────────────────────────────────────────────────────
 async function carregar(){
   const statusFiltro = document.getElementById('flt-status').value;
-  // Busca todos e filtra localmente — garante que datas vencidas apareçam mesmo
-  // que o campo status no banco ainda diga 'ok' (status é calculado pela data)
   const d = await api.get('/api/validade?status=todos');
   if(!d.ok) return;
 
-  // Atualiza urgência de cada item com base na data real
   const todos = d.data.map(v => {
     const dias = calcDias(v.data_validade);
     const urg  = v.status==='descartado'?'descartado':getUrgencia(dias, v.dias_alerta||7);
     return {...v, _dias: dias, _urg: urg};
   });
 
-  itens = todos; // guarda todos para o dashboard
+  itens = todos;
 
-  // Filtra para exibição na tabela
-  let lista = todos;
-  if(statusFiltro === 'vencido'){
-    lista = todos.filter(v => v._urg === 'vencido');
-  } else if(statusFiltro === 'alerta'){
-    lista = todos.filter(v => v._urg === 'alerta' || v._urg === 'critico');
-  } else if(statusFiltro === 'ok'){
-    lista = todos.filter(v => v._urg === 'ok');
+  // Se o filtro sem código estava ativo, mantém — senão aplica filtro de status
+  if(_filtroSemCod){
+    filtrarVal(); // respeitará _filtroSemCod + busca por texto
+  } else {
+    let lista = todos;
+    if(statusFiltro === 'vencido'){
+      lista = todos.filter(v => v._urg === 'vencido');
+    } else if(statusFiltro === 'alerta'){
+      lista = todos.filter(v => v._urg === 'alerta' || v._urg === 'critico');
+    } else if(statusFiltro === 'ok'){
+      lista = todos.filter(v => v._urg === 'ok');
+    }
+    renderVal(lista);
   }
-  // 'todos' → sem filtro
 
-  renderVal(lista);
-
-  // Re-renderiza dashboard se estiver ativo
   if(document.getElementById('sec-dashboard') &&
      document.getElementById('sec-dashboard').style.display !== 'none'){
     _renderDash();
   }
 }
 
+let _filtroSemCod = false; // estado do filtro sem código
+
 function filtrarVal(){
   const q = document.getElementById('busca-val').value.toLowerCase();
-  renderVal(itens.filter(i=>
+  let lista = _filtroSemCod ? itens.filter(i=>!i.codigo) : itens;
+  if(q) lista = lista.filter(i=>
     i.descricao.toLowerCase().includes(q)||
     (i.codigo||'').toLowerCase().includes(q)||
     (i.lote||'').toLowerCase().includes(q)
-  ));
+  );
+  renderVal(lista);
 }
 
 function filtrarStatus(status){
@@ -1009,6 +1011,18 @@ async function vincularSelecionados(){
 
 
 function filtrarSemCod(){
+  // Toggle — clica de novo para remover o filtro
+  _filtroSemCod = !_filtroSemCod;
+
+  // Atualizar visual do botão
+  const btn = document.getElementById('btn-semcod');
+  if(btn){
+    btn.style.background   = _filtroSemCod ? 'var(--orange)' : '';
+    btn.style.color        = _filtroSemCod ? '#fff' : '';
+    btn.style.borderColor  = _filtroSemCod ? 'var(--orange)' : '';
+    btn.textContent = _filtroSemCod ? '⚠️ Sem código ✕' : '⚠️ Sem código';
+  }
+
   // Muda para aba Validade
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   const tabVal = document.querySelector('[onclick*="validade"]');
@@ -1016,9 +1030,10 @@ function filtrarSemCod(){
   document.getElementById('sec-dashboard').style.display='none';
   document.getElementById('sec-validade').style.display='';
   document.getElementById('sec-perdas').style.display='none';
-  document.getElementById('busca-val').value = '';
   document.getElementById('flt-status').value = 'todos';
-  renderVal(itens.filter(i=>!i.codigo));
+
+  // Aplica filtro respeitando busca por texto atual
+  filtrarVal();
 }
 
 // ── Calcular dias ─────────────────────────────────────────────────────────────
