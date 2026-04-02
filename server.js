@@ -166,14 +166,25 @@ async function autoMigrate() {
   console.log('[migrate] ✅ migração automática concluída');
 }
 
-// Testa conexão e roda migração na inicialização
-pool.query('SELECT NOW()').then(async r => {
-  console.log('[db] conectado:', r.rows[0].now);
-  await autoMigrate();
-}).catch(e => {
-  console.error('[db] FALHA na conexão:', e.message);
-  process.exit(1);
-});
+// Testa conexão e roda migração na inicialização — com retry
+async function conectarComRetry(tentativas = 5) {
+  for (let i = 1; i <= tentativas; i++) {
+    try {
+      const r = await pool.query('SELECT NOW()');
+      console.log('[db] conectado:', r.rows[0].now);
+      await autoMigrate();
+      return;
+    } catch(e) {
+      console.error(`[db] tentativa ${i}/${tentativas} falhou:`, e.message);
+      if (i < tentativas) {
+        await new Promise(r => setTimeout(r, 3000 * i));
+      } else {
+        console.error('[db] não foi possível conectar após todas as tentativas — continuando mesmo assim');
+      }
+    }
+  }
+}
+conectarComRetry();
 
 // ── App Express ────────────────────────────────────────────────────────────────
 const app = express();
