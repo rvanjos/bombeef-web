@@ -166,35 +166,20 @@ async function autoMigrate() {
   console.log('[migrate] ✅ migração automática concluída');
 }
 
-// Testa conexão e roda migração na inicialização — com retry
-const PORT = process.env.PORT || 3000;
-async function conectarComRetry(tentativas = 8) {
-  for (let i = 1; i <= tentativas; i++) {
+// Conecta ao banco e roda migração — em background, não bloqueia o listen
+async function conectarComRetry() {
+  for (let i = 1; i <= 8; i++) {
     try {
       const r = await pool.query('SELECT NOW()');
       console.log('[db] conectado:', r.rows[0].now);
       await autoMigrate();
-      // Só inicia o servidor após banco estar pronto
-      app.listen(PORT, () => {
-        console.log(`[server] rodando na porta ${PORT} (${process.env.NODE_ENV || 'development'})`);
-      });
       return;
     } catch(e) {
-      console.error(`[db] tentativa ${i}/${tentativas} falhou:`, e.message);
-      if (i < tentativas) {
-        const delay = Math.min(3000 * i, 15000);
-        console.log(`[db] aguardando ${delay/1000}s...`);
-        await new Promise(r => setTimeout(r, delay));
-      } else {
-        console.error('[db] banco indisponível — iniciando servidor sem migração');
-        app.listen(PORT, () => {
-          console.log(`[server] rodando na porta ${PORT} (sem banco)`);
-        });
-      }
+      console.error(`[db] tentativa ${i}/8:`, e.message);
+      if (i < 8) await new Promise(r => setTimeout(r, Math.min(3000 * i, 15000)));
     }
   }
 }
-conectarComRetry();
 
 // ── App Express ────────────────────────────────────────────────────────────────
 const app = express();
@@ -272,6 +257,12 @@ app.use((err, req, res, _next) => {
   res.status(500).json({ ok: false, erro: 'Erro interno do servidor' });
 });
 
-// ── Start — movido para dentro de conectarComRetry ─────────────────────────────
+// ── Start ──────────────────────────────────────────────────────────────────────
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`[server] rodando na porta ${PORT}`);
+  // Conecta ao banco em background após o listen
+  conectarComRetry();
+});
 
 module.exports = { app, pool };
