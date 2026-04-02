@@ -21,6 +21,21 @@ const autenticar = require('../middleware/auth');
 module.exports = function (pool) {
   const r = express.Router();
 
+  // Helper: executa query com retry automático para ECONNRESET/banco reiniciando
+  async function queryComRetry(sql, params = [], tentativas = 3) {
+    for (let i = 1; i <= tentativas; i++) {
+      try {
+        return await pool.query(sql, params);
+      } catch(e) {
+        if (i < tentativas && (e.code === 'ECONNRESET' || e.message?.includes('accepting'))) {
+          await new Promise(r => setTimeout(r, 1500 * i));
+          continue;
+        }
+        throw e;
+      }
+    }
+  }
+
 // ── PUT /usuarios/:id/reativar ──────────────────────────────────────────────
 r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
   try {
@@ -287,21 +302,6 @@ r.delete('/usuarios/:id/permanente', autenticar('admin'), async (req, res) => {
       res.status(500).json({ ok: false, erro: e.message });
     }
   });
-
-  // Helper: executa query com retry automático para ECONNRESET
-  async function queryComRetry(sql, params = [], tentativas = 3) {
-    for (let i = 1; i <= tentativas; i++) {
-      try {
-        return await pool.query(sql, params);
-      } catch(e) {
-        if (i < tentativas && (e.code === 'ECONNRESET' || e.message?.includes('accepting'))) {
-          await new Promise(r => setTimeout(r, 1500 * i));
-          continue;
-        }
-        throw e;
-      }
-    }
-  }
 
   // ── GET /reset-admin — recuperação de senha de emergência ──────────────────
   // Token: bb@Reset2024! — acesso apenas via URL direta
