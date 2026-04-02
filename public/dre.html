@@ -173,16 +173,11 @@ td{padding:5px 9px;vertical-align:middle;}
   <label style="font-size:12px;display:flex;align-items:center;gap:4px;white-space:nowrap">
     <input type="checkbox" class="chk" id="f-pend" onchange="render()"> Só pendentes
   </label>
-  <button class="btn bp" onclick="abrirDZ()">📥 Importar</button>
-  <button class="btn bs" onclick="abrirManual()">＋ Manual</button>
-  <button class="btn bs" onclick="abrirProvisao()" title="Provisão recorrente para múltiplos meses">📅 Provisão</button>
-  <button class="btn br" onclick="abrirDREModal()">📊 Ver DRE</button>
-  <button class="btn bn" onclick="abrirCategorias()" title="Gerenciar categorias DRE">⚙️ Categorias</button>
-  <button class="btn bs" id="btn-expand" onclick="toggleExpandido()" title="Expandir área da tabela (oculta os cards de estatísticas)">⤢ Expandir</button>
-  <button class="btn bg" onclick="salvar()">💾 Salvar</button>
-  <button class="btn bs" onclick="exportXLS()">📤 Excel</button>
-  <button class="btn bs" onclick="abrirSessoes()">📂 Sessões</button>
-  <button class="btn bs" onclick="recuperarDoBanco()" title="Recupera lançamentos da tabela do banco" style="border-color:var(--orange);color:var(--orange)">🔄 Recuperar</button>
+  <button class="btn bp" onclick="abrirDREModal()" title="Ver relatório DRE completo">📊 Ver DRE</button>
+  <button class="btn bg" onclick="salvar()" title="Salvar agora">💾 Salvar</button>
+  <button class="btn bs" onclick="exportXLS()" title="Exportar Excel">📤 Excel</button>
+  <button class="btn bs" onclick="abrirSessoes()" title="Histórico de sessões">📂 Sessões</button>
+  <button class="btn bs" onclick="recuperarDoBanco()" title="Recuperar do banco em caso de perda" style="border-color:var(--orange);color:var(--orange)">🔄 Recuperar</button>
   <input type="month" id="f-mesref" style="padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px" onchange="trocarMes()">
 </div>
 
@@ -233,14 +228,14 @@ td{padding:5px 9px;vertical-align:middle;}
     <div id="tbl-area" style="display:none;flex:1;overflow-y:auto">
       <!-- Mini-barra de importação (sempre visível na tela de lançamentos) -->
       <div style="display:flex;gap:6px;flex-wrap:wrap;padding:8px 14px;background:var(--white);border-bottom:1px solid var(--border);align-items:center">
-        <span style="font-size:11px;color:var(--muted);font-weight:600;margin-right:4px">Adicionar:</span>
-        <button class="btn bs" style="padding:4px 10px;font-size:11px" onclick="document.getElementById('f-ofx').click()">🏦 OFX/XLSX</button>
-        <button class="btn bs" style="padding:4px 10px;font-size:11px" onclick="document.getElementById('f-cc').click()">💳 Fatura CC</button>
-        <button class="btn bs" style="padding:4px 10px;font-size:11px" onclick="importBoletos()">📄 Boletos DB</button>
-        <button class="btn bs" style="padding:4px 10px;font-size:11px" onclick="abrirManual()">＋ Manual</button>
-        <button class="btn bs" style="padding:4px 10px;font-size:11px" onclick="abrirProvisao()">📅 Provisão</button>
-        <button class="btn bs" style="padding:4px 10px;font-size:11px" onclick="abrirSessoes()">📂 Sessões</button>
-        <button class="btn bs" style="padding:4px 10px;font-size:11px" onclick="toggleExpandido()" title="Expandir/compactar área da tabela">⤢</button>
+        <span style="font-size:11px;color:var(--muted);font-weight:600;margin-right:2px">Adicionar:</span>
+        <button class="btn bs" style="padding:4px 10px;font-size:11px" onclick="document.getElementById('f-ofx').click()" title="Importar extrato OFX ou XLSX">🏦 OFX/XLSX</button>
+        <button class="btn bs" style="padding:4px 10px;font-size:11px" onclick="document.getElementById('f-cc').click()" title="Importar fatura do cartão de crédito">💳 Fatura CC</button>
+        <button class="btn bs" style="padding:4px 10px;font-size:11px" onclick="importBoletos()" title="Importar boletos e provisões do sistema">📄 Boletos DB</button>
+        <button class="btn bs" style="padding:4px 10px;font-size:11px" onclick="abrirManual()" title="Adicionar lançamento manual">＋ Manual</button>
+        <button class="btn bs" style="padding:4px 10px;font-size:11px" onclick="abrirProvisao()" title="Provisão recorrente em múltiplos meses">📅 Provisão</button>
+        <button class="btn bs" style="padding:4px 10px;font-size:11px" onclick="abrirCategorias()" title="Gerenciar categorias DRE">⚙️ Categorias</button>
+        <button class="btn bs" style="padding:4px 10px;font-size:11px" id="btn-expand" onclick="toggleExpandido()" title="Expandir/compactar área da tabela">⤢ Expandir</button>
       </div>
       <table>
         <thead><tr>
@@ -1492,8 +1487,9 @@ async function importBoletos(){
   const d=await api.get(`/api/boletos/classificador?mes=${mesRef}`);
   if(!d.ok){toast('Erro: '+(d.erro||'falha'));return;}
   if(!d.data?.length){toast('Nenhum boleto/provisão para '+mesRef);return;}
-  addLancs(d.data, `Boletos ${mesRef}`);
-  // Garante que a tabela é exibida (mesmo se chamado da tela inicial)
+  // Ordena por data de vencimento antes de adicionar
+  const ordenados = [...d.data].sort((a,b)=>(a.data||'').localeCompare(b.data||''));
+  addLancs(ordenados, `Boletos ${mesRef}`);
   showTable();
 }
 
@@ -1650,7 +1646,7 @@ function autoSv(){
   _sv=setTimeout(()=>salvar(true),2000); // 2s debounce
 }
 
-async function salvar(silent=false){
+async function salvar(silent=false, tentativa=1){
   if(!mesRef){ if(!silent) toast('❌ Sem mês de referência'); return; }
   if(!TXS.length){ if(!silent) toast('⚠️ Sem lançamentos para salvar'); return; }
   setSt('load');
@@ -1665,11 +1661,23 @@ async function salvar(silent=false){
       if(!silent) toast('💾 Salvo! ' + TXS.length + ' lançamentos');
       setSt('ok');
     } else {
+      // Retry automático se banco temporariamente indisponível
+      if(tentativa < 3 && d.erro && d.erro.includes('accepting')){
+        setSt('load');
+        setTimeout(()=>salvar(silent, tentativa+1), 3000 * tentativa);
+        if(!silent) toast(`⏳ Banco reiniciando, tentando novamente (${tentativa}/3)...`);
+        return;
+      }
       console.error('[DRE/salvar] erro:', d.erro);
       if(!silent) toast('❌ Erro ao salvar: '+(d.erro||'desconhecido'));
       setSt('err');
     }
   } catch(e) {
+    if(tentativa < 3){
+      setTimeout(()=>salvar(silent, tentativa+1), 3000 * tentativa);
+      if(!silent) toast(`⏳ Falha de conexão, tentando novamente (${tentativa}/3)...`);
+      return;
+    }
     console.error('[DRE/salvar] exception:', e);
     if(!silent) toast('❌ Falha de conexão ao salvar');
     setSt('err');
