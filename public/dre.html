@@ -801,22 +801,35 @@ function parseCCRows(rows) {
 }
 
 function addLancs(novos, fileName) {
-  const ex = new Set(TXS.map(t=>`${t.data}|${t.lancamento}|${t.valor}`));
-  let n = 0;
+  // Chaves de dedup: preferência para fitid ou boletoId, depois data|lancamento|valor
+  const exFitid   = new Set(TXS.filter(t=>t.fitid).map(t=>t.fitid));
+  const exBoleto  = new Set(TXS.filter(t=>t.boletoId).map(t=>String(t.boletoId)));
+  const exHash    = new Set(TXS.map(t=>`${t.data}|${String(t.valor)}|${(t.lancamento||'').slice(0,40)}`));
+
+  let n = 0, dup = 0;
   for (const l of novos) {
-    const k = `${l.data}|${l.lancamento}|${l.valor}`;
-    if (!ex.has(k)) {
-      if (!l.categoria && l.lancamento) {
-        const ch=l.lancamento.toUpperCase().slice(0,30);
-        l.categoria = supMem[ch] || autoClassificar(l.lancamento, l.razaoSocial||'');
-      }
-      TXS.push({...l, id:l.id||(Date.now()+'_'+Math.random())});
-      n++;
+    // Verifica duplicata
+    if (l.fitid && exFitid.has(l.fitid))       { dup++; continue; }
+    if (l.boletoId && exBoleto.has(String(l.boletoId))) { dup++; continue; }
+    const h = `${l.data}|${String(l.valor)}|${(l.lancamento||'').slice(0,40)}`;
+    if (exHash.has(h))                          { dup++; continue; }
+
+    // Auto-classifica se não tiver categoria
+    if (!l.categoria && l.lancamento) {
+      const ch = _chaveFornecedor(l) || l.lancamento.toUpperCase().slice(0,30);
+      l.categoria = supMem[ch] || autoClassificar(l.lancamento, l.razaoSocial||'');
     }
+    TXS.push({...l, id: l.id || (Date.now()+'_'+Math.random())});
+    exFitid.add(l.fitid);
+    exBoleto.add(String(l.boletoId));
+    exHash.add(h);
+    n++;
   }
   if (!files.includes(fileName)) files.push(fileName);
-  const autoC = TXS.filter(t=>t.categoria).length;
-  toast(`✅ ${n} adicionados · ${autoC} classificados automaticamente`);
+  const msg = n > 0
+    ? `✅ ${n} adicionados${dup?' · '+dup+' já existiam':''}`
+    : `ℹ️ Todos os ${dup} lançamentos já estão no extrato`;
+  toast(msg);
   showTable(); updMesFiltro(); render(); updStats(); renderDRE(); autoSv();
 }
 
@@ -1412,20 +1425,63 @@ function excluirLanc(id) {
 async function pagarBoleto(id) {
   const t = TXS.find(x => x.id === id);
   if (!t) return;
-  const dtPag = prompt('Data de pagamento (AAAA-MM-DD):', new Date().toISOString().slice(0,10));
-  if (!dtPag) return;
-  // Dá baixa no boleto no backend se tiver boletoId
+
+  // Preenche modal
+  document.getElementById('pb-id').value = id;
+  document.getElementById('pb-dt').value = new Date().toISOString().slice(0,10);
+  document.getElementById('pb-info').innerHTML =
+    `<b>${t.lancamento}</b><br>` +
+    `<span style="color:#7a7068">Valor: ${fmt.brl(Math.abs(parseFloat(t.valor||0)))} · Venc: ${t.data?fmt.date(t.data):'—'}</span>`;
+
+  // Busca lançamentos do extrato com valor próximo para sugerir vinculação
+  const valorBol = Math.abs(parseFloat(t.valor||0));
+  const extratos = TXS.filter(x =>
+    x.fonte === 'EXTRATO' &&
+    !x.boletoId &&
+    Math.abs(Math.abs(parseFloat(x.valor||0)) - valorBol) < 1 // valor igual ou diferença < R$1
+  ).slice(0,10);
+
+  const sel = document.getElementById('pb-extrato-sel');
+  sel.innerHTML = '<option value="">— Não vincular —</option>' +
+    extratos.map(x =>
+      `<option value="${x.id}">${fmt.date(x.data)} · ${(x.razaoSocial||x.lancamento||'').slice(0,40)} · ${fmt.brl(Math.abs(parseFloat(x.valor||0)))}</option>`
+    ).join('');
+
+  document.getElementById('m-pagar-boleto').style.display = 'flex';
+}
+
+async function confirmarPagamentoBoleto() {
+  const id    = document.getElementById('pb-id').value;
+  const dtPag = document.getElementById('pb-dt').value;
+  const extId = document.getElementById('pb-extrato-sel').value;
+  const t     = TXS.find(x => x.id === id);
+  if (!t || !dtPag) { toast('Informe a data'); return; }
+
+  // Dá baixa no boleto no backend
   if (t.boletoId) {
     const d = await api.post(`/api/boletos/baixa/${t.boletoId}`, { dtPagamento: dtPag });
     if (!d.ok) { toast('Erro ao dar baixa no boleto: ' + d.erro); return; }
   }
-  // Atualiza o lançamento no DRE: muda fonte de BOLETO_PREV para BOLETO e registra data
-  t.fonte = 'BOLETO';
-  t.data  = dtPag;
-  t.mesCaixa = dtPag.slice(5,7) + '/' + dtPag.slice(0,4);
+
+  // Atualiza lançamento do boleto no DRE
+  t.fonte     = 'BOLETO';
+  t.data      = dtPag;
+  t.mesCaixa  = dtPag.slice(5,7) + '/' + dtPag.slice(0,4);
   t.needsReview = false;
+
+  // Se vinculou a um lançamento do extrato, marca o extrato também
+  if (extId) {
+    const ext = TXS.find(x => x.id === extId);
+    if (ext) {
+      ext.boletoId    = t.boletoId;
+      ext.categoria   = ext.categoria || t.categoria;
+      ext.vinculadoA  = t.lancamento;
+    }
+  }
+
+  fecharModal('m-pagar-boleto');
   render(); updStats(); renderDRE(); autoSv();
-  toast('✅ Boleto marcado como pago!');
+  toast('✅ Boleto marcado como pago' + (extId ? ' e vinculado ao extrato!' : '!'));
 }
 
 // ─── BOLETOS ──────────────────────────────────────────────────────────────────
@@ -1753,3 +1809,31 @@ function toggleDREGrupo(gid) {
 
 </body>
 </html>
+<!-- Modal Pagar Boleto / Vincular Extrato -->
+<div class="mbg" id="m-pagar-boleto" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center">
+  <div style="background:var(--white);border-radius:13px;width:100%;max-width:440px;box-shadow:0 20px 60px rgba(0,0,0,.35);overflow:hidden">
+    <div style="background:var(--green,#1a7a4a);padding:14px 20px;display:flex;justify-content:space-between;align-items:center">
+      <h3 style="color:#fff;font-size:15px;font-weight:700">✅ Confirmar Pagamento</h3>
+      <button onclick="fecharModal('m-pagar-boleto')" style="background:none;border:none;color:rgba(255,255,255,.8);font-size:22px;cursor:pointer">×</button>
+    </div>
+    <div style="padding:18px 20px">
+      <div id="pb-info" style="background:#f8f4f0;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:13px"></div>
+      <input type="hidden" id="pb-id">
+      <div style="margin-bottom:12px">
+        <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;color:#7a7068;margin-bottom:4px">Data do Pagamento</label>
+        <input type="date" id="pb-dt" style="width:100%;padding:8px 10px;border:1px solid #e8e0d8;border-radius:7px;font-size:13px">
+      </div>
+      <div id="pb-vinc-wrap" style="margin-bottom:12px">
+        <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;color:#7a7068;margin-bottom:4px">Vincular a lançamento do extrato (opcional)</label>
+        <select id="pb-extrato-sel" style="width:100%;padding:8px 10px;border:1px solid #e8e0d8;border-radius:7px;font-size:12px">
+          <option value="">— Não vincular —</option>
+        </select>
+        <div style="font-size:10px;color:#7a7068;margin-top:3px">Se encontrado no extrato, o boleto é automaticamente marcado como pago</div>
+      </div>
+    </div>
+    <div style="padding:12px 20px;border-top:1px solid #e8e0d8;display:flex;justify-content:flex-end;gap:8px">
+      <button onclick="fecharModal('m-pagar-boleto')" style="padding:7px 14px;border:1px solid #e8e0d8;border-radius:7px;background:#fff;cursor:pointer;font-size:13px">Cancelar</button>
+      <button onclick="confirmarPagamentoBoleto()" style="padding:7px 16px;background:#1a7a4a;color:#fff;border:none;border-radius:7px;font-size:13px;font-weight:700;cursor:pointer">✅ Confirmar Pagamento</button>
+    </div>
+  </div>
+</div>
