@@ -896,9 +896,12 @@ function render() {
       <td style="text-align:center"><button title="${t.ignorar?'Reativar':'Ignorar'}" onclick="togIgn('${t.id}')" style="background:none;border:none;cursor:pointer;font-size:13px;opacity:${t.ignorar?1:.4}">${t.ignorar?'↩️':'🚫'}</button></td>
       <td style="text-align:center;white-space:nowrap">
         ${t.fonte==='BOLETO_PREV'?`
-          <button onclick="pagarBoleto('${t.id}')" title="Marcar como pago" style="background:none;border:none;cursor:pointer;font-size:13px" title="Marcar como pago no sistema de boletos">✅</button>
+          <button onclick="pagarBoleto('${t.id}')" title="Confirmar pagamento e vincular ao extrato" style="background:none;border:none;cursor:pointer;font-size:13px">✅</button>
           <button onclick="editarLanc('${t.id}')" title="Editar" style="background:none;border:none;cursor:pointer;font-size:12px;opacity:.7">✏️</button>
           <button onclick="excluirLanc('${t.id}')" title="Excluir" style="background:none;border:none;cursor:pointer;font-size:12px;opacity:.7">🗑️</button>
+        `:t.fonte==='EXTRATO'?`
+          <button onclick="vincularExtratoABoleto('${t.id}')" title="Vincular este pagamento a um boleto" style="background:none;border:none;cursor:pointer;font-size:13px;opacity:${t.boletoId?1:.4}" title="${t.boletoId?'Vinculado a boleto — clique para alterar':'Vincular a boleto'}">🔗</button>
+          <button onclick="editarLanc('${t.id}')" title="Editar" style="background:none;border:none;cursor:pointer;font-size:12px;opacity:.7">✏️</button>
         `:t.fonte==='MANUAL'?`
           <button onclick="editarLanc('${t.id}')" title="Editar" style="background:none;border:none;cursor:pointer;font-size:12px;opacity:.7">✏️</button>
           <button onclick="excluirLanc('${t.id}')" title="Excluir" style="background:none;border:none;cursor:pointer;font-size:12px;opacity:.7">🗑️</button>
@@ -1482,7 +1485,95 @@ async function confirmarPagamentoBoleto() {
   toast('✅ Boleto marcado como pago' + (extId ? ' e vinculado ao extrato!' : '!'));
 }
 
-// ─── BOLETOS ──────────────────────────────────────────────────────────────────
+// ─── VINCULAR EXTRATO A BOLETO ────────────────────────────────────────────────
+async function vincularExtratoABoleto(extId) {
+  const ext = TXS.find(x => x.id === extId);
+  if (!ext) return;
+
+  const valorExt = Math.round(Math.abs(parseFloat(ext.valor||0)) * 100); // centavos
+
+  // Busca boletos com valor exato (BOLETO_PREV ou BOLETO)
+  const boletos = TXS.filter(t =>
+    (t.fonte === 'BOLETO_PREV' || t.fonte === 'BOLETO') &&
+    Math.round(Math.abs(parseFloat(t.valor||0)) * 100) === valorExt
+  );
+
+  if (!boletos.length) {
+    // Sem match no extrato local — busca no banco pelo valor
+    const d = await api.get(`/api/boletos/classificador?mes=${mesRef}`);
+    const todosB = d.ok ? d.data : [];
+    const matchB = todosB.filter(b => Math.round(Math.abs(parseFloat(b.valor||0))*100) === valorExt);
+
+    if (!matchB.length) {
+      toast(`⚠️ Nenhum boleto com valor ${fmt.brl(Math.abs(parseFloat(ext.valor||0)))} encontrado`);
+      return;
+    }
+    // Usa o primeiro match
+    const b = matchB[0];
+    ext.boletoId   = b.boletoId;
+    ext.categoria  = ext.categoria || b.categoria;
+    ext.vinculadoA = b.lancamento;
+    render(); updStats(); renderDRE(); autoSv();
+    toast(`✅ Extrato vinculado a: ${b.lancamento}`);
+    return;
+  }
+
+  if (boletos.length === 1) {
+    // Match único — vincula direto
+    const b = boletos[0];
+    ext.boletoId   = b.boletoId;
+    ext.categoria  = ext.categoria || b.categoria;
+    ext.vinculadoA = b.lancamento;
+    // Marca o boleto como pago se for PREV
+    if (b.fonte === 'BOLETO_PREV' && b.boletoId) {
+      const dtPag = ext.data || new Date().toISOString().slice(0,10);
+      await api.post(`/api/boletos/baixa/${b.boletoId}`, { dtPagamento: dtPag });
+      b.fonte    = 'BOLETO';
+      b.data     = dtPag;
+      b.mesCaixa = dtPag.slice(5,7)+'/'+dtPag.slice(0,4);
+    }
+    render(); updStats(); renderDRE(); autoSv();
+    toast(`✅ Vinculado a: ${b.lancamento}`);
+    return;
+  }
+
+  // Múltiplos matches — mostra seletor
+  const opcoes = boletos.map(b =>
+    `<div onclick="vincularExtratoConfirmar('${extId}','${b.id}')" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid #f5efe8;font-size:13px" onmouseover="this.style.background='#f8f4f0'" onmouseout="this.style.background=''">
+      <b>${b.lancamento||b.razaoSocial||'—'}</b>
+      <span style="float:right;color:var(--muted);font-size:11px">${fmt.date(b.data)} · ${fmt.brl(Math.abs(parseFloat(b.valor||0)))}</span>
+    </div>`
+  ).join('');
+
+  const dd = document.createElement('div');
+  dd.id = 'vinc-ext-dd';
+  dd.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.3);z-index:9999;min-width:380px;max-height:400px;overflow-y:auto';
+  dd.innerHTML = `<div style="padding:14px 16px;font-weight:700;border-bottom:1px solid #f0e8e0;display:flex;justify-content:space-between">
+    <span>Selecione o boleto correspondente</span>
+    <button onclick="document.getElementById('vinc-ext-dd').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#999">×</button>
+  </div>${opcoes}`;
+  document.body.appendChild(dd);
+}
+
+async function vincularExtratoConfirmar(extId, boletoTxId) {
+  document.getElementById('vinc-ext-dd')?.remove();
+  const ext = TXS.find(x => x.id === extId);
+  const b   = TXS.find(x => x.id === boletoTxId);
+  if (!ext || !b) return;
+
+  ext.boletoId   = b.boletoId;
+  ext.categoria  = ext.categoria || b.categoria;
+  ext.vinculadoA = b.lancamento;
+
+  if (b.fonte === 'BOLETO_PREV' && b.boletoId) {
+    const dtPag = ext.data || new Date().toISOString().slice(0,10);
+    await api.post(`/api/boletos/baixa/${b.boletoId}`, { dtPagamento: dtPag });
+    b.fonte = 'BOLETO'; b.data = dtPag;
+    b.mesCaixa = dtPag.slice(5,7)+'/'+dtPag.slice(0,4);
+  }
+  render(); updStats(); renderDRE(); autoSv();
+  toast(`✅ Vinculado a: ${b.lancamento}`);
+}
 async function importBoletos(){
   const d=await api.get(`/api/boletos/classificador?mes=${mesRef}`);
   if(!d.ok){toast('Erro: '+(d.erro||'falha'));return;}

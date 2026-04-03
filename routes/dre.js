@@ -647,15 +647,35 @@ module.exports = function (pool) {
     if (!mes_ref) return res.status(400).json({ ok: false, erro: 'mes_ref obrigatório' });
     try {
       const uid = req.user?.id || null;
-      // Tenta atualizar sessão existente do mesmo mês/usuário primeiro
+      // ESTRATÉGIA: frontend é a fonte da verdade para classificações.
+      // O banco pode ter lançamentos extras (de outros imports) que o frontend não tem.
+      // Merge: começa com o que o frontend enviou (com todas as classificações),
+      // e adiciona apenas lançamentos do banco que o frontend não conhece.
+      function mergeComFrontendPrioritario(txsDoFrontend, txsDoBanco) {
+        if (!Array.isArray(txsDoBanco) || txsDoBanco.length === 0) return txsDoFrontend;
+        if (!Array.isArray(txsDoFrontend) || txsDoFrontend.length === 0) return txsDoBanco;
+
+        // IDs conhecidos pelo frontend
+        const fitidsFront = new Set(txsDoFrontend.filter(t=>t.fitid).map(t=>t.fitid));
+        function hashT(t){ return `${t.data||''}_${t.valor||''}_${(t.lancamento||'').slice(0,30)}`; }
+        const hashesFront = new Set(txsDoFrontend.filter(t=>!t.fitid).map(t=>hashT(t)));
+
+        // Adiciona do banco apenas o que o frontend não tem
+        const extras = txsDoBanco.filter(t => {
+          if (t.fitid) return !fitidsFront.has(t.fitid);
+          return !hashesFront.has(hashT(t));
+        });
+
+        console.log(`[dre/merge] frontend=${txsDoFrontend.length} banco=${txsDoBanco.length} extras=${extras.length}`);
+        return [...txsDoFrontend, ...extras];
+      }
+
       let rows;
       if (sessao_id) {
-        // Ao atualizar, faz merge por FITID para não perder classificações
         const cur = await pool.query(`SELECT dados_json FROM dre_sessoes WHERE id=$1`, [sessao_id]);
-        // Merge apenas das transactions, preserva o objeto completo (loadedFiles, supplierMem, etc.)
-        const txsExist = extrairTransacoes(cur.rows[0]?.dados_json);
-        const txsNovos = extrairTransacoes(dados_json);
-        const txsMerge = txsNovos.length > 0 ? mergeTransacoes(txsExist, txsNovos) : (txsExist.length > 0 ? txsExist : txsNovos);
+        const txsFront = extrairTransacoes(dados_json);
+        const txsBanco = extrairTransacoes(cur.rows[0]?.dados_json);
+        const txsMerge = mergeComFrontendPrioritario(txsFront, txsBanco);
         const dadosMerge = { ...(typeof dados_json === 'object' && !Array.isArray(dados_json) ? dados_json : {}), transactions: txsMerge };
         const upd = await pool.query(`
           UPDATE dre_sessoes SET descricao=$1, dados_json=$2, atualizado_em=NOW()
@@ -664,16 +684,15 @@ module.exports = function (pool) {
         if (upd.rows.length) { rows = upd.rows; }
       }
       if (!rows || !rows.length) {
-        // Busca sessão existente para este mês e usuário
         const existing = await pool.query(
           `SELECT id FROM dre_sessoes WHERE mes_ref=$1 AND (usuario_id=$2 OR usuario_id IS NULL) ORDER BY atualizado_em DESC LIMIT 1`,
           [mes_ref, uid]
         );
         if (existing.rows.length) {
           const cur2 = await pool.query(`SELECT dados_json FROM dre_sessoes WHERE id=$1`, [existing.rows[0].id]);
-          const txsExist2 = extrairTransacoes(cur2.rows[0]?.dados_json);
-          const txsNovos2 = extrairTransacoes(dados_json);
-          const txsMerge2 = txsNovos2.length > 0 ? mergeTransacoes(txsExist2, txsNovos2) : (txsExist2.length > 0 ? txsExist2 : txsNovos2);
+          const txsFront2 = extrairTransacoes(dados_json);
+          const txsBanco2 = extrairTransacoes(cur2.rows[0]?.dados_json);
+          const txsMerge2 = mergeComFrontendPrioritario(txsFront2, txsBanco2);
           const dadosMerge2 = { ...(typeof dados_json === 'object' && !Array.isArray(dados_json) ? dados_json : {}), transactions: txsMerge2 };
           const upd = await pool.query(`
             UPDATE dre_sessoes SET descricao=$1, dados_json=$2, usuario_id=$3, atualizado_em=NOW()
@@ -688,7 +707,6 @@ module.exports = function (pool) {
           rows = ins.rows;
         }
       }
-      // Espelha na tabela dre_lancamentos para persistência garantida
       const sid = rows[0]?.id;
       if (sid) {
         espelharLancamentos(sid, extrairTransacoes(dados_json)).catch(()=>{});
