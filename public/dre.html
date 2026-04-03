@@ -5,7 +5,14 @@
 <title>DRE & Classificador — Bom Beef</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="/js/api.js"></script>
+<script>
+  if (typeof pdfjsLib !== 'undefined') {
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  }
+</script>
 <style>
 :root{--red:#8B0000;--red-l:#C0392B;--green:#1a7a4a;--orange:#c76b00;--blue:#1a5c8a;--purple:#6c3483;
   --bg:#f7f4f0;--white:#fff;--text:#1a1a1a;--muted:#7a7068;--border:#e8e0d8;--shadow:0 2px 12px rgba(0,0,0,.08);}
@@ -210,7 +217,7 @@ td{padding:5px 9px;vertical-align:middle;}
         <div style="background:var(--white);border:1px solid var(--border);border-radius:9px;padding:14px;cursor:pointer;transition:.2s" onmouseover="this.style.borderColor='var(--blue)'" onmouseout="this.style.borderColor='var(--border)'" onclick="document.getElementById('f-cc').click()">
           <div style="font-size:22px;margin-bottom:6px">💳</div>
           <div style="font-weight:600;font-size:13px">Fatura Cartão de Crédito</div>
-          <div style="font-size:11px;color:var(--muted);margin-top:3px">CSV ou XLSX da fatura</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:3px">PDF ou XLSX (Itaú, C6, Caixa...)</div>
         </div>
         <div style="background:var(--white);border:1px solid var(--border);border-radius:9px;padding:14px;cursor:pointer;transition:.2s" onmouseover="this.style.borderColor='var(--blue)'" onmouseout="this.style.borderColor='var(--border)'" onclick="importBoletos()">
           <div style="font-size:22px;margin-bottom:6px">📄</div>
@@ -287,7 +294,7 @@ td{padding:5px 9px;vertical-align:middle;}
 
 <!-- Inputs ocultos -->
 <input type="file" id="f-ofx" accept=".ofx,.ofc,.xlsx,.xls,.csv" style="display:none" onchange="loadFile(this,'ext')">
-<input type="file" id="f-cc" accept=".csv,.xlsx,.xls" style="display:none" onchange="loadFile(this,'cc')">
+<input type="file" id="f-cc" accept=".csv,.xlsx,.xls,.pdf" style="display:none" onchange="loadFile(this,'cc')">
 
 <!-- Modal Manual -->
 <!-- Modal Editar Lançamento -->
@@ -729,8 +736,9 @@ function abrirDZ() { document.getElementById('f-ofx').click(); }
 function onDrop(e) {
   e.preventDefault(); document.getElementById('dz').classList.remove('drag');
   const f = e.dataTransfer.files[0]; if (!f) return;
-  const isFatura = /fatura|cartao|cc/i.test(f.name);
   const ext = f.name.split('.').pop().toLowerCase();
+  const isFatura = /fatura|cartao|cc|c6|caixa|itau/i.test(f.name);
+  if (ext === 'pdf') { procCC(f); return; }
   if (isFatura && ['csv','xlsx','xls'].includes(ext)) procCC(f);
   else procExt(f);
 }
@@ -762,6 +770,41 @@ async function procExt(file) {
 }
 
 async function procCC(file) {
+  const ext = file.name.split('.').pop().toLowerCase();
+  if (ext === 'pdf') {
+    toast('💳 Lendo fatura PDF...');
+    try {
+      const buf = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+      let fullText = '';
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        // Preserva posições para reconstruir linhas
+        const items = content.items;
+        let lastY = null, lineText = '';
+        for (const item of items) {
+          const y = item.transform[5];
+          if (lastY !== null && Math.abs(y - lastY) > 3) {
+            fullText += lineText + '\n';
+            lineText = '';
+          }
+          lineText += item.str + ' ';
+          lastY = y;
+        }
+        if (lineText.trim()) fullText += lineText + '\n';
+        fullText += '\n--- PAGE ---\n';
+      }
+      const lancs = parseFaturaPDF(fullText, file.name);
+      if (!lancs.length) { toast('⚠️ Nenhum lançamento encontrado no PDF'); return; }
+      addLancs(lancs, file.name);
+    } catch(e) {
+      console.error('[procCC PDF]', e);
+      toast('❌ Erro ao ler PDF: ' + e.message);
+    }
+    return;
+  }
+  // XLSX / CSV
   toast('💳 Processando fatura CC...');
   const buf = await file.arrayBuffer();
   const wb  = XLSX.read(buf, {type:'array', cellDates:true});
@@ -770,6 +813,174 @@ async function procCC(file) {
   const lancs = parseCCRows(rows);
   if (!lancs.length) { toast('⚠️ Nenhum lançamento encontrado na fatura'); return; }
   addLancs(lancs, file.name);
+}
+
+// ─── PARSER PDF FATURAS ───────────────────────────────────────────────────────
+function parseFaturaPDF(text, fileName) {
+  const lower = text.toLowerCase();
+  if (lower.includes('c6bank') || lower.includes('c6 bank') || lower.includes('c6 carbon')) {
+    return parseFaturaC6(text);
+  }
+  if (lower.includes('cartões caixa') || lower.includes('cartoes caixa') || lower.includes('caixa.gov.br')) {
+    return parseFaturaCaixa(text);
+  }
+  // Fallback genérico: tenta extrair linhas com padrão "data descrição valor"
+  return parseFaturaGenerica(text);
+}
+
+function parseFaturaC6(text) {
+  // Extrai ano de vencimento
+  const anoMatch = text.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+  const anoRef = anoMatch ? parseInt(anoMatch[3]) : new Date().getFullYear();
+  const MESES = {jan:'01',fev:'02',mar:'03',abr:'04',mai:'05',jun:'06',
+                 jul:'07',ago:'08',set:'09',out:'10',nov:'11',dez:'12'};
+
+  const result = [];
+  let portadorAtual = '';
+
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    // Detecta cartão/portador: "C6 Carbon Final XXXX - NOME" ou "C6 Carbon Virtual Final XXXX - NOME"
+    const mPortador = line.match(/C6\s+Carbon(?:\s+Virtual)?\s+Final\s+(\d+)\s*[-–]\s*(.+?)(?:Subtotal|$)/i);
+    if (mPortador) {
+      portadorAtual = `C6 ${mPortador[2].trim()} (Final ${mPortador[1]})`;
+      continue;
+    }
+
+    // Lançamento: "DD mmm DESCRIÇÃO ... VALOR"
+    // Formato: "22 dez FRIGORIFICOSILVA 6.384,79" ou "27 nov CONTA AZUL - Parcela 2/3 259,95"
+    const mLanc = line.match(/^(\d{1,2})\s+(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)\s+(.+?)\s+([\d.,]+)\s*$/i);
+    if (mLanc) {
+      const dia = mLanc[1].padStart(2,'0');
+      const mm  = MESES[mLanc[2].toLowerCase()] || '01';
+      // Ajuste de ano: se mês > mês de vencimento, é do ano anterior
+      const mesVenc = anoMatch ? parseInt(anoMatch[2]) : 1;
+      const ano = parseInt(mm) > mesVenc + 1 ? anoRef - 1 : anoRef;
+      const dt  = `${ano}-${mm}-${dia}`;
+
+      const descRaw = mLanc[3].trim();
+      const vRaw    = mLanc[4];
+
+      // Ignora pagamentos de fatura
+      if (/^pag\s+fatura|^pagamento\s+fatura/i.test(descRaw)) continue;
+
+      let v = parseFloat(vRaw.replace(/\./g,'').replace(',','.')) || 0;
+      if (!v) continue;
+      v = -Math.abs(v); // sempre despesa
+
+      const mes = `${mm}/${ano}`;
+      result.push({
+        id: 'cc_'+Date.now()+'_'+i,
+        lancamento: descRaw,
+        valor: v, data: dt, mes, mesCaixa: mes,
+        categoria: autoClassificar(descRaw, ''),
+        fonte: 'CC',
+        portador: portadorAtual,
+        razaoSocial: portadorAtual,
+      });
+    }
+  }
+  return result;
+}
+
+function parseFaturaCaixa(text) {
+  // Ano de vencimento
+  const anoMatch = text.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+  const anoRef = anoMatch ? parseInt(anoMatch[3]) : new Date().getFullYear();
+  const mesVencNum = anoMatch ? parseInt(anoMatch[2]) : 1;
+
+  const result = [];
+  let portadorAtual = '';
+  let emLancamentos = false;
+
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    // Portador: "RAFAEL VIEIRA DOS ANJOS (Cartão 9284)"
+    const mPortador = line.match(/^([A-ZÁÀÃÂÉÊÍÓÔÕÚÇ\s]+)\s*\(Cart[aã]o\s+(\d+)\)/i);
+    if (mPortador) {
+      portadorAtual = `${mPortador[1].trim()} (Caixa ${mPortador[2]})`;
+      emLancamentos = false;
+      continue;
+    }
+
+    // Cabeçalho de seção de lançamentos
+    if (/^(COMPRAS|ANUIDADE|COMPRAS PARCELADAS)/i.test(line)) {
+      emLancamentos = true;
+      continue;
+    }
+
+    // Total — encerra seção
+    if (/^Total\s+(COMPRAS|ANUIDADE|final|de\s+lançamentos)/i.test(line)) {
+      emLancamentos = false;
+      continue;
+    }
+
+    // Ignora linhas de header da tabela
+    if (/^Data\s+Descri/i.test(line)) continue;
+
+    if (!emLancamentos) continue;
+
+    // Lançamento Caixa: "06/12 TENDA ATACADO S A CAMPINAS 10,75D"
+    // ou sem cidade: "22/12 Amazon Kindle Unltd SAO PAULO 24,90D"
+    // Padrão: DD/MM DESCRIÇÃO [CIDADE] VALOR[D|C]
+    const mLanc = line.match(/^(\d{2})\/(\d{2})\s+(.+?)\s+([\d.,]+)\s*([DC])\s*$/i);
+    if (mLanc) {
+      const dia = mLanc[1], mm = mLanc[2];
+      const ano = parseInt(mm) > mesVencNum + 1 ? anoRef - 1 : anoRef;
+      const dt  = `${ano}-${mm}-${dia}`;
+      const descRaw = mLanc[3].trim();
+      const tipo    = mLanc[5].toUpperCase(); // D=débito, C=crédito
+
+      // Ignora créditos (pagamentos, estornos que zero o saldo)
+      // Cashback mantém pois é receita — mas aqui só importamos despesas
+      if (tipo === 'C' && /pagamento|cashback/i.test(descRaw)) continue;
+
+      let v = parseFloat(mLanc[4].replace(/\./g,'').replace(',','.')) || 0;
+      if (!v) continue;
+      v = tipo === 'C' ? Math.abs(v) : -Math.abs(v); // C = crédito/estorno positivo
+
+      const mes = `${mm}/${ano}`;
+      result.push({
+        id: 'cc_'+Date.now()+'_'+i,
+        lancamento: descRaw,
+        valor: v, data: dt, mes, mesCaixa: mes,
+        categoria: autoClassificar(descRaw, ''),
+        fonte: 'CC',
+        portador: portadorAtual,
+        razaoSocial: portadorAtual,
+      });
+    }
+  }
+  return result;
+}
+
+function parseFaturaGenerica(text) {
+  // Tenta pegar linhas com padrão: data + descrição + valor
+  const result = [];
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    // DD/MM/YYYY ou DD/MM - DESCRIÇÃO - VALOR
+    const m = line.match(/(\d{2}\/\d{2}(?:\/\d{4})?)\s+(.+?)\s+([\d.,]+)\s*[DR]?\s*$/);
+    if (!m) continue;
+    const desc = m[2].trim();
+    if (/total|pagamento|saldo|vencimento/i.test(desc)) continue;
+    let v = parseFloat(m[3].replace(/\./g,'').replace(',','.')) || 0;
+    if (!v) continue;
+    result.push({
+      id: 'cc_'+Date.now()+'_'+i,
+      lancamento: desc, valor: -Math.abs(v),
+      data: '', mes: mesRef, mesCaixa: mesRef,
+      categoria: autoClassificar(desc, ''), fonte: 'CC',
+    });
+  }
+  return result;
 }
 
 function parseCCRows(rows) {
