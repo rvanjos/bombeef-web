@@ -922,11 +922,15 @@ function fmtMes(m) {
 
 // ─── CATEGORIAS ───────────────────────────────────────────────────────────────
 function _chaveFornecedor(t) {
-  // Usa razaoSocial (nome do fornecedor) como chave, não a operação bancária
+  // Prioridade: razaoSocial (coluna Fornecedor) > portador > lancamento limpo
   const razo = (t.razaoSocial||t.portador||'').trim();
-  const lanc = (t.lancamento||'').trim();
-  const chave = razo.length >= 4 ? razo : lanc;
-  return chave.toUpperCase().slice(0,40);
+  if (razo.length >= 4) return razo.toUpperCase().slice(0,40);
+
+  // Fallback: limpa prefixos genéricos do lançamento (PIX, BOLETO, TED, etc)
+  const lanc = (t.lancamento||'')
+    .replace(/^(PAGO\s+|ENVIADO\s+|RECEBIDO\s+|TRANSFERENCIA\s+|PIX\s+|TED\s+|DOC\s+|BOLETO\s+|PAGAMENTO\s+)/i,'')
+    .trim();
+  return lanc.toUpperCase().slice(0,40);
 }
 
 function setCat(id, cat) {
