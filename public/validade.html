@@ -395,7 +395,27 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
           <input id="v-cod" placeholder="Código do PDV" oninput="buscarProdVal()">
           <div class="fg-info" id="v-cod-info"></div>
         </div>
-        <div class="fg"><label>Qtd Unidades</label><input type="number" id="v-qtd" value="0" min="0"></div>
+        <div class="fg"><label>Qtd Unidades (peças)</label><input type="number" id="v-qtd" value="0" min="0" oninput="syncPesagem()"></div>
+      </div>
+
+      <!-- Calculadora de pesagem -->
+      <div style="background:#f0faf4;border:1px solid #b2dfcc;border-radius:10px;padding:12px;margin-bottom:12px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <span style="font-size:12px;font-weight:700;color:var(--green)">⚖️ Calculadora de Pesagem</span>
+          <button type="button" onclick="addPesagem()" style="background:var(--green);color:#fff;border:none;border-radius:6px;padding:3px 10px;font-size:12px;cursor:pointer">＋ Peça</button>
+        </div>
+        <div id="pesagem-lista" style="display:flex;flex-direction:column;gap:5px;margin-bottom:8px"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;background:#fff;border-radius:7px;padding:8px 10px">
+          <div style="text-align:center">
+            <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Total Peças</div>
+            <div id="pes-total-pecas" style="font-size:18px;font-weight:700;color:#1a1a1a">0</div>
+          </div>
+          <div style="text-align:center">
+            <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Total kg</div>
+            <div id="pes-total-kg" style="font-size:18px;font-weight:700;color:var(--green)">0,000 kg</div>
+          </div>
+        </div>
+        <div style="font-size:10px;color:var(--muted);margin-top:6px">Qtd Unidades será preenchida automaticamente com o total de peças</div>
       </div>
       <div class="fg"><label>Descrição *</label><input id="v-desc" placeholder="Nome do produto"></div>
       <div class="fg-row">
@@ -1238,7 +1258,6 @@ function abrirModal(id){
   document.getElementById('v-val').value   = v?.data_validade? fmt.dateInput(v.data_validade):'';
   document.getElementById('v-lote').value  = v?.lote||'';
   document.getElementById('v-acao').value  = v?.acao_antes_vencer||'';
-  // Responsável como select
   const respSel = document.getElementById('v-resp');
   respSel.value = v?.responsavel||'';
   document.getElementById('v-conf').value  = v?.ultima_conferencia? fmt.dateInput(v.ultima_conferencia):'';
@@ -1247,8 +1266,69 @@ function abrirModal(id){
   document.getElementById('v-cod-info').textContent = '';
   document.getElementById('v-preco-wrap').style.display = 'none';
   document.getElementById('v-preco-custo-val').value = v?.preco_custo||0;
+  // Reset calculadora
+  resetPesagem(v?.qtd_unidades||0);
   document.getElementById('modal-val').classList.add('open');
   if(v?.codigo) buscarProdVal();
+}
+
+// ── Calculadora de pesagem ─────────────────────────────────────────────────────
+let _pesagens = []; // [{kg: 1.234}]
+
+function resetPesagem(qtdAtual){
+  _pesagens = [];
+  // Se já tem quantidade, pré-popula com N entradas vazias
+  const n = parseInt(qtdAtual)||0;
+  for(let i=0;i<Math.min(n,20);i++) _pesagens.push({kg:''});
+  renderPesagem();
+}
+
+function addPesagem(){
+  _pesagens.push({kg:''});
+  renderPesagem();
+  // Foca no último input
+  setTimeout(()=>{
+    const inputs = document.querySelectorAll('.pes-input');
+    if(inputs.length) inputs[inputs.length-1].focus();
+  }, 50);
+}
+
+function removePesagem(i){
+  _pesagens.splice(i,1);
+  renderPesagem();
+}
+
+function renderPesagem(){
+  const lista = document.getElementById('pesagem-lista');
+  lista.innerHTML = _pesagens.map((p,i)=>`
+    <div style="display:flex;align-items:center;gap:6px">
+      <span style="font-size:11px;color:var(--muted);min-width:20px;text-align:right">${i+1}.</span>
+      <input type="number" class="pes-input" value="${p.kg}" min="0" step="0.001" placeholder="0,000 kg"
+        oninput="_pesagens[${i}].kg=parseFloat(this.value)||0; calcPesagem();"
+        style="flex:1;padding:6px 9px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:'DM Mono',monospace">
+      <span style="font-size:11px;color:var(--muted)">kg</span>
+      <button type="button" onclick="removePesagem(${i})" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:16px;padding:0 4px">×</button>
+    </div>`).join('');
+  calcPesagem();
+}
+
+function calcPesagem(){
+  const totalKg = _pesagens.reduce((s,p)=>s+(parseFloat(p.kg)||0),0);
+  const totalPecas = _pesagens.filter(p=>(parseFloat(p.kg)||0)>0).length;
+  document.getElementById('pes-total-pecas').textContent = totalPecas;
+  document.getElementById('pes-total-kg').textContent = totalKg.toFixed(3)+' kg';
+  // Sincroniza campo Qtd Unidades com total de peças pesadas
+  if(totalPecas > 0) document.getElementById('v-qtd').value = totalPecas;
+}
+
+function syncPesagem(){
+  // Quando o usuário edita qtd manualmente, ajusta a lista
+  const n = parseInt(document.getElementById('v-qtd').value)||0;
+  if(n !== _pesagens.length){
+    while(_pesagens.length < n) _pesagens.push({kg:''});
+    while(_pesagens.length > n) _pesagens.pop();
+    renderPesagem();
+  }
 }
 
 async function buscarProdVal(){
@@ -1275,10 +1355,13 @@ async function buscarProdVal(){
 
 async function salvarVal(){
   const id = document.getElementById('v-id').value;
+  // Calcular total kg da calculadora
+  const totalKg = _pesagens.reduce((s,p)=>s+(parseFloat(p.kg)||0),0);
   const body = {
     codigo:            document.getElementById('v-cod').value.trim()||null,
     descricao:         document.getElementById('v-desc').value.trim(),
     qtdUnidades:       parseInt(document.getElementById('v-qtd').value)||0,
+    pesoTotalKg:       totalKg > 0 ? totalKg : null,
     dataValidade:      document.getElementById('v-val').value,
     lote:              document.getElementById('v-lote').value,
     acaoAntesVencer:   document.getElementById('v-acao').value,

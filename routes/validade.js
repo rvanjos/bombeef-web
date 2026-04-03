@@ -39,6 +39,7 @@ module.exports = function (pool) {
         ultima_conferencia  DATE,
         responsavel         TEXT,
         qtd_unidades        INTEGER DEFAULT 0,
+        peso_total_kg       NUMERIC(8,3),
         preco_custo         NUMERIC(10,4) DEFAULT 0,
         status              TEXT DEFAULT 'ok',
         dias_alerta         INTEGER DEFAULT 7,
@@ -62,6 +63,7 @@ module.exports = function (pool) {
       ['encerrado_por',  'TEXT'],
       ['status',         "TEXT DEFAULT 'ativo'"],
       ['desc_original',  'TEXT'],
+      ['peso_total_kg',  'NUMERIC(8,3)'],
     ];
     for (const [col, def] of needed) {
       await pool.query(`ALTER TABLE validade_items ADD COLUMN IF NOT EXISTS ${col} ${def}`).catch(() => {});
@@ -168,8 +170,8 @@ module.exports = function (pool) {
       const { rows } = await pool.query(`
         INSERT INTO validade_items
           (produto_id, codigo, descricao, data_validade, lote, acao_antes_vencer,
-           ultima_conferencia, responsavel, qtd_unidades, dias_alerta, localizacao, observacao)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+           ultima_conferencia, responsavel, qtd_unidades, dias_alerta, localizacao, observacao, peso_total_kg)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
         RETURNING *
       `, [
         prodId, v.codigo?.trim() || null, v.descricao.trim(),
@@ -177,6 +179,7 @@ module.exports = function (pool) {
         v.ultimaConferencia || null, v.responsavel || null,
         parseInt(v.qtdUnidades || 0), parseInt(v.diasAlerta || 7),
         v.localizacao || null, v.observacao || null,
+        v.pesoTotalKg ? parseFloat(v.pesoTotalKg) : null,
       ]);
       res.json({ ok: true, data: rows[0] });
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
@@ -211,23 +214,25 @@ module.exports = function (pool) {
           produto_id          = COALESCE($1, produto_id),
           codigo              = COALESCE($2, codigo),
           descricao           = COALESCE($3, descricao),
-          desc_original       = COALESCE(desc_original, $14),
+          desc_original       = COALESCE(desc_original, $15),
           data_validade       = COALESCE($4, data_validade),
           lote                = COALESCE($5, lote),
           acao_antes_vencer   = COALESCE($6, acao_antes_vencer),
           ultima_conferencia  = COALESCE($7, ultima_conferencia),
           responsavel         = COALESCE($8, responsavel),
           qtd_unidades        = COALESCE($9, qtd_unidades),
-          dias_alerta         = COALESCE($10, dias_alerta),
-          localizacao         = COALESCE($11, localizacao),
-          observacao          = COALESCE($12, observacao),
+          peso_total_kg       = COALESCE($10, peso_total_kg),
+          dias_alerta         = COALESCE($11, dias_alerta),
+          localizacao         = COALESCE($12, localizacao),
+          observacao          = COALESCE($13, observacao),
           atualizado_em       = NOW()
-        WHERE id = $13
+        WHERE id = $14
       `, [
         prodId, v.codigo?.trim() || null, descFinal,
         v.dataValidade || null, v.lote || null, v.acaoAntesVencer || null,
         v.ultimaConferencia || null, v.responsavel || null,
         v.qtdUnidades !== undefined ? parseInt(v.qtdUnidades) : null,
+        v.pesoTotalKg ? parseFloat(v.pesoTotalKg) : null,
         v.diasAlerta !== undefined ? parseInt(v.diasAlerta) : null,
         v.localizacao || null, v.observacao || null,
         parseInt(req.params.id), descOriginal,
