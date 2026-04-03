@@ -398,24 +398,31 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
         <div class="fg"><label>Qtd Unidades (peças)</label><input type="number" id="v-qtd" value="0" min="0" oninput="syncPesagem()"></div>
       </div>
 
-      <!-- Calculadora de pesagem -->
-      <div style="background:#f0faf4;border:1px solid #b2dfcc;border-radius:10px;padding:12px;margin-bottom:12px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-          <span style="font-size:12px;font-weight:700;color:var(--green)">⚖️ Calculadora de Pesagem</span>
-          <button type="button" onclick="addPesagem()" style="background:var(--green);color:#fff;border:none;border-radius:6px;padding:3px 10px;font-size:12px;cursor:pointer">＋ Peça</button>
+      <!-- Calculadora de pesagem (recolhível) -->
+      <div style="background:#f0faf4;border:1px solid #b2dfcc;border-radius:10px;margin-bottom:12px;overflow:hidden">
+        <div onclick="togglePesagem()" style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;cursor:pointer;user-select:none">
+          <span style="font-size:12px;font-weight:700;color:var(--green)">⚖️ Calculadora de Pesagem <span style="font-weight:400;color:var(--muted)">(opcional — para carnes e itens por kg)</span></span>
+          <span id="pes-toggle-icon" style="font-size:14px;color:var(--green)">▼</span>
         </div>
-        <div id="pesagem-lista" style="display:flex;flex-direction:column;gap:5px;margin-bottom:8px"></div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;background:#fff;border-radius:7px;padding:8px 10px">
-          <div style="text-align:center">
-            <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Total Peças</div>
-            <div id="pes-total-pecas" style="font-size:18px;font-weight:700;color:#1a1a1a">0</div>
+        <div id="pesagem-corpo" style="display:none;padding:0 12px 12px">
+          <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
+            <button type="button" onclick="addPesagem()" style="background:var(--green);color:#fff;border:none;border-radius:6px;padding:4px 12px;font-size:12px;cursor:pointer">＋ Adicionar peça</button>
           </div>
-          <div style="text-align:center">
-            <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Total kg</div>
-            <div id="pes-total-kg" style="font-size:18px;font-weight:700;color:var(--green)">0,000 kg</div>
+          <div id="pesagem-lista" style="display:flex;flex-direction:column;gap:5px;margin-bottom:8px"></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;background:#fff;border-radius:7px;padding:8px 10px">
+            <div style="text-align:center">
+              <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Total Peças</div>
+              <div id="pes-total-pecas" style="font-size:18px;font-weight:700;color:#1a1a1a">0</div>
+            </div>
+            <div style="text-align:center">
+              <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Total kg</div>
+              <div id="pes-total-kg" style="font-size:18px;font-weight:700;color:var(--green)">0,000 kg</div>
+            </div>
+          </div>
+          <div style="font-size:10px;color:var(--muted);margin-top:6px">
+            💡 Para itens por unidade (bebidas, empório): use apenas o campo <b>Qtd Unidades</b> acima, sem expandir aqui.
           </div>
         </div>
-        <div style="font-size:10px;color:var(--muted);margin-top:6px">Qtd Unidades será preenchida automaticamente com o total de peças</div>
       </div>
       <div class="fg"><label>Descrição *</label><input id="v-desc" placeholder="Nome do produto"></div>
       <div class="fg-row">
@@ -1273,13 +1280,25 @@ function abrirModal(id){
 }
 
 // ── Calculadora de pesagem ─────────────────────────────────────────────────────
-let _pesagens = []; // [{kg: 1.234}]
+let _pesagens = [];
+let _pesagemAberta = false;
+
+function togglePesagem(){
+  _pesagemAberta = !_pesagemAberta;
+  document.getElementById('pesagem-corpo').style.display = _pesagemAberta ? '' : 'none';
+  document.getElementById('pes-toggle-icon').textContent = _pesagemAberta ? '▲' : '▼';
+}
 
 function resetPesagem(qtdAtual){
   _pesagens = [];
-  // Se já tem quantidade, pré-popula com N entradas vazias
+  _pesagemAberta = false;
+  document.getElementById('pesagem-corpo').style.display = 'none';
+  document.getElementById('pes-toggle-icon').textContent = '▼';
+  // Se item já tem peso salvo, abre a calculadora com as linhas
   const n = parseInt(qtdAtual)||0;
-  for(let i=0;i<Math.min(n,20);i++) _pesagens.push({kg:''});
+  if(n > 0){
+    for(let i=0;i<Math.min(n,30);i++) _pesagens.push({kg:''});
+  }
   renderPesagem();
 }
 
