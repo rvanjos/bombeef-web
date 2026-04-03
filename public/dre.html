@@ -824,8 +824,63 @@ function parseFaturaPDF(text, fileName) {
   if (lower.includes('cartões caixa') || lower.includes('cartoes caixa') || lower.includes('caixa.gov.br')) {
     return parseFaturaCaixa(text);
   }
-  // Fallback genérico: tenta extrair linhas com padrão "data descrição valor"
+  if (lower.includes('itau') || lower.includes('itaú') || lower.includes('itau empresas')) {
+    return parseFaturaItauPDF(text);
+  }
   return parseFaturaGenerica(text);
+}
+
+function parseFaturaItauPDF(text) {
+  // Extrai data de vencimento para inferir ano
+  const anoMatch = text.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+  const anoRef   = anoMatch ? parseInt(anoMatch[3]) : new Date().getFullYear();
+  const mesVenc  = anoMatch ? parseInt(anoMatch[2]) : 1;
+
+  const result = [];
+  let portadorAtual = '';
+
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    // Portador: "ANA LUIZA MASCHERPE NEVES - FINAL 2961"
+    const mPortador = line.match(/^([A-ZÁÀÃÂÉÊÍÓÔÕÚÇ\s]+)\s*[-–]\s*FINAL\s+(\d+)\s*$/i);
+    if (mPortador) {
+      portadorAtual = `${mPortador[1].trim()} (Final ${mPortador[2]})`;
+      continue;
+    }
+
+    // Ignora linhas de cabeçalho/totais
+    if (/^(data\s+descri|total\s+de\s+lan|lançamentos\s+nacionais|produtos,\s+servi|encargos\s+desta)/i.test(line)) continue;
+
+    // Lançamento: "09/01 ANUIDADE DIFERENCI04/12 R$20,50" ou "05/02 ESTORNO ANUIDADE 04/12 -R$20,50"
+    const mLanc = line.match(/^(\d{2})\/(\d{2})\s+(.+?)\s+(-?R\$[\d.,]+)\s*$/i);
+    if (mLanc) {
+      const dia = mLanc[1], mm = mLanc[2];
+      const ano = parseInt(mm) > mesVenc + 1 ? anoRef - 1 : anoRef;
+      const dt  = `${ano}-${mm}-${dia}`;
+      const desc = mLanc[3].trim();
+      const rawVal = mLanc[4].replace('R$','').replace(/\./g,'').replace(',','.');
+      let v = parseFloat(rawVal) || 0;
+      if (!v) continue;
+      // Negativos no PDF (estornos) ficam positivos no DRE (crédito)
+      // Positivos (despesas) ficam negativos no DRE
+      v = -v; // inverte: R$20,50 → -20.50 (despesa); -R$20,50 → +20.50 (estorno/crédito)
+
+      const mes = `${mm}/${ano}`;
+      result.push({
+        id: 'cc_'+Date.now()+'_'+i,
+        lancamento: desc,
+        valor: v, data: dt, mes, mesCaixa: mes,
+        categoria: autoClassificar(desc, ''),
+        fonte: 'CC',
+        portador: portadorAtual,
+        razaoSocial: portadorAtual,
+      });
+    }
+  }
+  return result;
 }
 
 function parseFaturaC6(text) {
