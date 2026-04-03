@@ -334,8 +334,7 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
       <button class="btn btn-p" style="padding:5px 12px" onclick="vincularSelecionados()">🔗 Vincular selecionados</button>
     </div>
     <div class="card">
-      <table class="tbl">
-        <!-- Barra de seleção múltipla validade -->
+      <table class="tbl" id="tbl-val">
         <div class="val-sel-bar" id="val-sel-bar">
           <span id="val-sel-count" style="font-weight:700;color:var(--red-l)">0 selecionados</span>
           <button class="btn btn-s" style="padding:4px 10px;font-size:11px" onclick="valSelecionarTodos()">Todos da página</button>
@@ -1107,6 +1106,8 @@ function getUrgencia(dias, diasAlerta=7){
 }
 
 // ── Render tabela ─────────────────────────────────────────────────────────────
+function isMobile(){ return window.innerWidth <= 768; }
+
 function renderVal(lista){
   const tb = document.getElementById('tbody-val');
   const em = document.getElementById('empty-val');
@@ -1121,59 +1122,109 @@ function renderVal(lista){
     const ub=b.status==='descartado'?'descartado':getUrgencia(db,b.dias_alerta||7);
     const oi=(urgOrd[ua]??3)-(urgOrd[ub]??3);
     if(oi!==0) return oi;
-    // dentro do mesmo grupo, ordena pelos dias restantes
     return (da??9999)-(db??9999);
   });
 
-  tb.innerHTML = sorted.map(v=>{
-    const dias = calcDias(v.data_validade);
-    const urg  = v.status==='descartado'?'descartado':getUrgencia(dias, v.dias_alerta||7);
+  if(isMobile()){
+    // ── MOBILE: cards ──────────────────────────────────────────────────────
+    // Esconde thead no mobile
+    const thead = document.querySelector('#tbl-val thead');
+    if(thead) thead.style.display='none';
 
-    // Badge de urgência
-    const urgLabels={vencido:'🔴 Vencido',critico:'🔴 Crítico',alerta:'⚠️ Alerta',ok:'✅ OK',descartado:'Descartado'};
-    const urgBadge=`<span class="urg urg-${urg}">${urgLabels[urg]||urg}</span>`;
+    tb.innerHTML = sorted.map(v=>{
+      const dias = calcDias(v.data_validade);
+      const urg  = v.status==='descartado'?'descartado':getUrgencia(dias, v.dias_alerta||7);
+      const urgColors={vencido:'#ffd6d6',critico:'#ffe4e1',alerta:'#fff8e6',ok:'#f0fff4',descartado:'#f5f5f5'};
+      const urgBorderColors={vencido:'#c0392b',critico:'#e74c3c',alerta:'#c76b00',ok:'#1a7a4a',descartado:'#aaa'};
 
-    // Badge de dias
-    let diasBadge='';
-    if(dias!==null && v.status!=='descartado'){
-      const cls=dias<0?'dias-venc':dias<=3?'dias-crit':dias<=(v.dias_alerta||7)?'dias-al':'dias-ok';
-      const txt=dias<0?`${Math.abs(dias)}d vencido`:dias===0?'Hoje!':dias===1?'Amanhã':`${dias}d`;
-      diasBadge=`<span class="dias-badge ${cls}">${txt}</span>`;
-    }
+      let diasTxt='';
+      if(dias!==null){
+        const cls=dias<0?'dias-venc':dias<=3?'dias-crit':dias<=(v.dias_alerta||7)?'dias-al':'dias-ok';
+        const txt=dias<0?`${Math.abs(dias)}d vencido`:dias===0?'Hoje!':dias===1?'Amanhã':`${dias}d`;
+        diasTxt=`<span class="dias-badge ${cls}">${txt}</span>`;
+      }
 
-    // Célula de código
-    const codCell = v.codigo
-      ? `<span style="font-family:'DM Mono',monospace;font-size:12px;font-weight:600">${v.codigo}</span>`
-      : `<span class="sem-cod">Pendente</span>`;
+      return `<tr><td colspan="11" style="padding:0;border:none">
+        <div style="background:${urgColors[urg]};border-left:4px solid ${urgBorderColors[urg]};
+          border-radius:10px;margin:4px 6px;padding:10px 12px;position:relative">
+          <!-- Linha 1: checkbox + código + badge dias -->
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+            <input type="checkbox" class="row-sel val-item-sel item-sel" value="${v.id}"
+              onchange="valAtualizarSelBar(); atualizarSelBar();" style="width:18px;height:18px">
+            ${v.codigo
+              ? `<span style="font-family:'DM Mono',monospace;font-size:13px;font-weight:700;color:#333">${v.codigo}</span>`
+              : `<span class="sem-cod">Sem código</span>`}
+            <span style="margin-left:auto">${diasTxt}</span>
+          </div>
+          <!-- Linha 2: nome do produto -->
+          <div style="font-size:14px;font-weight:700;color:#1a1a1a;margin-bottom:4px;line-height:1.3">${v.descricao}</div>
+          ${v.desc_original && v.desc_original !== v.descricao
+            ? `<div style="font-size:10px;color:var(--orange)">📎 ${v.desc_original}</div>`:''}
+          <!-- Linha 3: infos -->
+          <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:#555;margin-bottom:8px">
+            <span>📅 ${fmt.date(v.data_validade)||'—'}</span>
+            ${v.qtd_unidades?`<span>📦 ${v.qtd_unidades} un.</span>`:''}
+            ${v.localizacao?`<span>📍 ${v.localizacao}</span>`:''}
+            ${v.responsavel?`<span>👤 ${v.responsavel}</span>`:''}
+          </div>
+          <!-- Linha 4: ações -->
+          <div style="display:flex;gap:8px">
+            <button onclick="abrirModal(${v.id})" style="flex:1;padding:7px;background:#fff;border:1px solid #ddd;border-radius:7px;font-size:13px;cursor:pointer">✏️ Editar</button>
+            ${!v.codigo?`<button onclick="abrirVincular(${v.id})" style="flex:1;padding:7px;background:#fff3e0;border:1px solid #f5d87a;border-radius:7px;font-size:13px;cursor:pointer">🔗 Vincular</button>`:''}
+            ${v.status!=='descartado'?`<button onclick="perdaRapida(${v.id})" style="padding:7px 10px;background:#fff0f0;border:1px solid #f5c6c6;border-radius:7px;font-size:13px;cursor:pointer;color:var(--red-l)">📉</button>`:''}
+          </div>
+        </div>
+      </td></tr>`;
+    }).join('');
 
-    return `<tr class="row-${urg}" data-id="${v.id}">
-      <td style="padding:4px 8px;text-align:center">
-        <input type="checkbox" class="row-sel val-item-sel item-sel" value="${v.id}" onchange="valAtualizarSelBar(); atualizarSelBar();">
-      </td>
-      <td>${codCell}</td>
-      <td>
-        <b style="font-size:13px">${v.descricao}</b>
-        ${v.desc_original && v.desc_original !== v.descricao
-          ? `<br><small style="color:var(--orange);font-size:10px" title="Nome antes da vinculação">📎 ${v.desc_original}</small>`
-          : ''}
-        ${v.qtd_unidades?`<br><small style="color:var(--muted)">${v.qtd_unidades} unidades</small>`:''}
-        ${v.localizacao?`<br><small style="color:var(--blue)">📍 ${v.localizacao}</small>`:''}
-      </td>
-      <td style="font-size:11px">${v.lote||'—'}</td>
-      <td style="font-weight:700;color:${urg==='vencido'?'var(--c-vencido)':urg==='critico'?'var(--c-critico)':urg==='alerta'?'var(--c-alerta)':'inherit'}">${fmt.date(v.data_validade)}</td>
-      <td>${diasBadge||'—'}</td>
-      <td style="font-size:11px;max-width:140px;overflow:hidden;text-overflow:ellipsis">${v.acao_antes_vencer||'—'}</td>
-      <td style="font-size:11px">${fmt.date(v.ultima_conferencia)||'—'}</td>
-      <td style="font-size:12px;font-weight:600">${v.responsavel||'—'}</td>
-      <td>${urgBadge}</td>
-      <td style="white-space:nowrap">
-        <button class="act-btn" onclick="abrirModal(${v.id})">✏️</button>
-        ${!v.codigo?`<button class="act-btn" onclick="abrirVincular(${v.id})" title="Vincular código">🔗</button>`:''}
-        ${v.status!=='descartado'?`<button class="act-btn" onclick="perdaRapida(${v.id})" style="color:var(--red-l)" title="Registrar perda">📉</button>`:''}
-        <button class="act-btn" onclick="excluirItem(${v.id})" style="color:var(--muted);font-size:13px" title="Descartar">×</button>
-      </td>
-    </tr>`;
-  }).join('');
+  } else {
+    // ── DESKTOP: tabela normal ──────────────────────────────────────────────
+    const thead = document.querySelector('#tbl-val thead');
+    if(thead) thead.style.display='';
+
+    tb.innerHTML = sorted.map(v=>{
+      const dias = calcDias(v.data_validade);
+      const urg  = v.status==='descartado'?'descartado':getUrgencia(dias, v.dias_alerta||7);
+      const urgLabels={vencido:'🔴 Vencido',critico:'🔴 Crítico',alerta:'⚠️ Alerta',ok:'✅ OK',descartado:'Descartado'};
+      const urgBadge=`<span class="urg urg-${urg}">${urgLabels[urg]||urg}</span>`;
+      let diasBadge='';
+      if(dias!==null && v.status!=='descartado'){
+        const cls=dias<0?'dias-venc':dias<=3?'dias-crit':dias<=(v.dias_alerta||7)?'dias-al':'dias-ok';
+        const txt=dias<0?`${Math.abs(dias)}d vencido`:dias===0?'Hoje!':dias===1?'Amanhã':`${dias}d`;
+        diasBadge=`<span class="dias-badge ${cls}">${txt}</span>`;
+      }
+      const codCell = v.codigo
+        ? `<span style="font-family:'DM Mono',monospace;font-size:12px;font-weight:600">${v.codigo}</span>`
+        : `<span class="sem-cod">Pendente</span>`;
+
+      return `<tr class="row-${urg}" data-id="${v.id}">
+        <td style="padding:4px 8px;text-align:center">
+          <input type="checkbox" class="row-sel val-item-sel item-sel" value="${v.id}" onchange="valAtualizarSelBar(); atualizarSelBar();">
+        </td>
+        <td>${codCell}</td>
+        <td>
+          <b style="font-size:13px">${v.descricao}</b>
+          ${v.desc_original && v.desc_original !== v.descricao
+            ? `<br><small style="color:var(--orange);font-size:10px">📎 ${v.desc_original}</small>`:''}
+          ${v.qtd_unidades?`<br><small style="color:var(--muted)">${v.qtd_unidades} unidades</small>`:''}
+          ${v.localizacao?`<br><small style="color:var(--blue)">📍 ${v.localizacao}</small>`:''}
+        </td>
+        <td style="font-size:11px">${v.lote||'—'}</td>
+        <td style="font-weight:700;color:${urg==='vencido'?'var(--c-vencido)':urg==='critico'?'var(--c-critico)':urg==='alerta'?'var(--c-alerta)':'inherit'}">${fmt.date(v.data_validade)}</td>
+        <td>${diasBadge||'—'}</td>
+        <td style="font-size:11px;max-width:140px;overflow:hidden;text-overflow:ellipsis">${v.acao_antes_vencer||'—'}</td>
+        <td style="font-size:11px">${fmt.date(v.ultima_conferencia)||'—'}</td>
+        <td style="font-size:12px;font-weight:600">${v.responsavel||'—'}</td>
+        <td>${urgBadge}</td>
+        <td style="white-space:nowrap">
+          <button class="act-btn" onclick="abrirModal(${v.id})">✏️</button>
+          ${!v.codigo?`<button class="act-btn" onclick="abrirVincular(${v.id})" title="Vincular código">🔗</button>`:''}
+          ${v.status!=='descartado'?`<button class="act-btn" onclick="perdaRapida(${v.id})" style="color:var(--red-l)" title="Registrar perda">📉</button>`:''}
+          <button class="act-btn" onclick="excluirItem(${v.id})" style="color:var(--muted);font-size:13px" title="Descartar">×</button>
+        </td>
+      </tr>`;
+    }).join('');
+  }
 }
 
 // ── Modal Validade ─────────────────────────────────────────────────────────────
