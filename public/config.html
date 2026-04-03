@@ -49,7 +49,17 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
 .modal-close{background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);}
 .modal-body{padding:18px 20px;}
 .modal-foot{padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end;}
-@media(max-width:640px){.layout{grid-template-columns:1fr;}.sidebar{display:none;}}
+@media(max-width:640px){
+  .layout{grid-template-columns:1fr;}
+  .sidebar{display:none;}
+  .mobile-nav{display:flex!important;}
+  .content{padding:14px;}
+  .fg-row,.fg-row3{grid-template-columns:1fr;}
+}
+.mobile-nav{display:none;overflow-x:auto;background:var(--white);border-bottom:1px solid var(--border);padding:0 8px;gap:2px;scrollbar-width:none;}
+.mobile-nav::-webkit-scrollbar{display:none;}
+.mobile-nav-btn{padding:10px 12px;font-size:11px;font-weight:600;color:var(--muted);cursor:pointer;border:none;background:none;white-space:nowrap;border-bottom:3px solid transparent;font-family:'DM Sans',sans-serif;}
+.mobile-nav-btn.active{color:var(--red);border-bottom-color:var(--red);}
 </style>
 </head>
 <body>
@@ -60,6 +70,15 @@ if(window.self !== window.top){
   document.getElementById('config-ph').style.display='none';
 }
 </script>
+<!-- Menu mobile (visível apenas em telas pequenas) -->
+<div class="mobile-nav" id="mobile-nav">
+  <button class="mobile-nav-btn active" onclick="showPage('sistema',this,true)">⚙️ Sistema</button>
+  <button class="mobile-nav-btn" onclick="showPage('usuarios',this,true)">👤 Usuários</button>
+  <button class="mobile-nav-btn" onclick="showPage('funcionarios',this,true)">👥 Funcionários</button>
+  <button class="mobile-nav-btn" onclick="showPage('metas',this,true)">🎯 Metas</button>
+  <button class="mobile-nav-btn" onclick="showPage('categorias',this,true)">📊 Categorias</button>
+  <button class="mobile-nav-btn" onclick="showPage('acoes-validade',this,true)">📋 Ações</button>
+</div>
 <div class="layout">
   <div class="sidebar">
     <div class="sb-sec">Principal</div>
@@ -719,23 +738,28 @@ async function salvarCat(){
 }
 
 
-function showPage(page, el){
+function showPage(page, el, fromMobile){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  const pageEl = document.getElementById('page-'+page);
+  if(pageEl) pageEl.classList.add('active');
 
-  // remove active das páginas
-  document.querySelectorAll('.page').forEach(p=>{
-    p.classList.remove('active')
-  })
+  // Atualiza sidebar desktop
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  // Atualiza menu mobile
+  document.querySelectorAll('.mobile-nav-btn').forEach(n=>n.classList.remove('active'));
 
-  // ativa página
-  const pageEl = document.getElementById('page-'+page)
-  if(pageEl) pageEl.classList.add('active')
+  if(el) el.classList.add('active');
 
-  // remove active do menu
-  document.querySelectorAll('.nav-item').forEach(n=>{
-    n.classList.remove('active')
-  })
-
-  if(el) el.classList.add('active')
+  // Sincroniza o outro menu
+  if(fromMobile){
+    document.querySelectorAll('.nav-item').forEach(n=>{
+      if(n.getAttribute('onclick')?.includes("'"+page+"'")){n.classList.add('active');}
+    });
+  } else {
+    document.querySelectorAll('.mobile-nav-btn').forEach(n=>{
+      if(n.getAttribute('onclick')?.includes("'"+page+"'")){n.classList.add('active');}
+    });
+  }
 }
 
 async function inativarUsr(id, nome){
