@@ -619,10 +619,19 @@ function preencherSels() {
 }
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
+let _inicializado = false;
 window.onBBReady = () => init();
 if (api.token()) init();
 
 async function init() {
+  // Se já inicializou E já tem dados em memória, não recarrega do banco
+  // (evita perder classificações ao trocar de aba e voltar)
+  if (_inicializado && TXS.length > 0) {
+    render(); updStats(); renderDRE();
+    return;
+  }
+  _inicializado = true;
+
   const hoje = new Date();
   mesRef = fmt.mesAtual();
   document.getElementById('f-mesref').value = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
@@ -630,7 +639,6 @@ async function init() {
   document.getElementById('ml-m').value = mesRef;
   document.getElementById('ml-mc').value = mesRef;
   document.getElementById('dre-mes-label').textContent = mesRef;
-  // Restaura modo expandido
   try {
     if (localStorage.getItem('dre_expandido') === '1') {
       document.body.classList.add('modo-expandido');
@@ -638,7 +646,6 @@ async function init() {
       if (btn) btn.textContent = '⤡ Compactar';
     }
   } catch(_) {}
-  // Carrega categorias do banco (fonte única de verdade)
   await carregarCategorias();
   await carregarSessao();
 }
@@ -881,7 +888,7 @@ function render() {
     const rowCls= t.ignorar?'ign':!isCat?'uncat':t.fonte==='CC'?'cc-row':isReview?'boleto-review':t.fonte?.startsWith('BOLETO')?'boleto-row':'';
     const badge = bads[t.fonte]||`<span class="badge bman">${t.fonte||'?'}</span>`;
     return `<tr class="${rowCls}" id="tr-${t.id}">
-      <td style="text-align:center"><input type="checkbox" class="chk tcb" data-id="${t.id}" ${selIds.has(t.id)?'checked':''} onchange="togSel('${t.id}',this.checked)"></td>
+      <td style="text-align:center"><input type="checkbox" class="chk tcb" data-id="${t.id}" ${selIds.has(String(t.id))?'checked':''} onchange="togSel('${t.id}',this.checked)"></td>
       <td style="font-size:11px;color:var(--muted);white-space:nowrap">${t.data?fmt.date(t.data):'—'}</td>
       <td style="font-size:11px;white-space:nowrap;cursor:pointer;color:var(--blue);text-decoration:underline dotted" onclick="editMes('${t.id}','mes',this)">${fmtMes(t.mes)}</td>
       <td style="font-size:11px;white-space:nowrap;cursor:pointer;color:var(--muted);text-decoration:underline dotted" onclick="editMes('${t.id}','mesCaixa',this)">${fmtMes(t.mesCaixa||t.mes)}</td>
@@ -958,10 +965,10 @@ function togIgn(id) {
 function delLanc(id) { TXS=TXS.filter(x=>x.id!==id); render(); updStats(); renderDRE(); autoSv(); }
 
 // ─── SELEÇÃO / BULK ───────────────────────────────────────────────────────────
-function togSel(id, chk) { chk?selIds.add(id):selIds.delete(id); updBulk(); }
+function togSel(id, chk) { const k=String(id); chk?selIds.add(k):selIds.delete(k); updBulk(); }
 function selAll(el) {
   document.querySelectorAll('.tcb').forEach(c => {
-    c.checked=el.checked; el.checked?selIds.add(c.dataset.id):selIds.delete(c.dataset.id);
+    c.checked=el.checked; el.checked?selIds.add(String(c.dataset.id)):selIds.delete(String(c.dataset.id));
   });
   updBulk();
 }
@@ -979,16 +986,15 @@ function aplicarBulk() {
   let n=0;
   const fornecedores=new Set();
   TXS.forEach(t=>{
-    if (selIds.has(t.id)){
+    if (selIds.has(String(t.id))){
       t.categoria=cat; n++;
       const k=_chaveFornecedor(t);
       if(k) fornecedores.add(k);
     }
   });
   if (applySupplier) {
-    // Aplica apenas aos lançamentos do mesmo fornecedor (razaoSocial), não a todos sem categoria
     TXS.forEach(t=>{
-      if (!selIds.has(t.id) && fornecedores.has(_chaveFornecedor(t))){t.categoria=cat;n++;}
+      if (!selIds.has(String(t.id)) && fornecedores.has(_chaveFornecedor(t))){t.categoria=cat;n++;}
     });
     fornecedores.forEach(k=>supMem[k]=cat);
   }
@@ -997,7 +1003,7 @@ function aplicarBulk() {
 }
 
 function bulkIgn() {
-  TXS.forEach(t=>{if(selIds.has(t.id))t.ignorar=!t.ignorar;});
+  TXS.forEach(t=>{if(selIds.has(String(t.id)))t.ignorar=!t.ignorar;});
   limparSel(); render(); updStats(); renderDRE(); autoSv();
 }
 
@@ -1075,7 +1081,7 @@ function abrirBulkMes() {
 function confirmarBulkMes(){
   const v=document.getElementById('bm-v').value;
   const ac=document.getElementById('bm-c').checked, ax=document.getElementById('bm-cx').checked;
-  TXS.forEach(t=>{if(!selIds.has(t.id))return;if(ac)t.mes=v;if(ax)t.mesCaixa=v;});
+  TXS.forEach(t=>{if(!selIds.has(String(t.id)))return;if(ac)t.mes=v;if(ax)t.mesCaixa=v;});
   fecharModal('m-mes'); limparSel(); updMesFiltro(); render(); renderDRE(); autoSv();
   toast(`📅 Mês atualizado`);
 }
