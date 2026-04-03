@@ -774,6 +774,135 @@ async function procCC(file) {
 
 function parseCCRows(rows) {
   if (rows.length < 2) return [];
+
+  // ── Detecta formato Itaú Empresas (fatura com cabeçalho livre) ──────────────
+  // Heurística: se a linha 0 não tem colunas "data/descrição/valor" padronizadas,
+  // trata como fatura Itaú onde os lançamentos ficam intercalados após linhas de seção.
+  const h0 = rows[0].map(c => String(c).toLowerCase().trim()).join('|');
+  const isGeneric = ['data','descri','valor','lancamento','estabelecimento'].some(k => h0.includes(k));
+
+  if (!isGeneric) {
+    // ── Parser Itaú Empresas XLSX ──────────────────────────────────────────────
+    // Estrutura: linhas de seção (ex: "RAFAEL VIEIRA..."), depois cabeçalho "data | descrição | valor",
+    // depois as linhas de lançamento com data no formato "09/jan" ou "01/fev".
+    const MESES = {jan:'01',fev:'02',mar:'03',abr:'04',mai:'05',jun:'06',
+                   jul:'07',ago:'08',set:'09',out:'10',nov:'11',dez:'12'};
+
+    // Extrai o ano de fechamento do arquivo (procura "vencimento" ou "fechada" nas primeiras linhas)
+    let anoRef = new Date().getFullYear();
+    let mesVenc = null;
+    for (let i=0; i<Math.min(15,rows.length); i++) {
+      for (const cell of rows[i]) {
+        const s = String(cell||'').trim();
+        // Datas no formato DD/MM/YYYY
+        const m = s.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+        if (m) { anoRef = parseInt(m[3]); mesVenc = m[2]; break; }
+        // Datas como objeto Date
+        if (cell instanceof Date) { anoRef = cell.getFullYear(); mesVenc = String(cell.getMonth()+1).padStart(2,'0'); break; }
+      }
+      if (mesVenc) break;
+    }
+
+    const result = [];
+    let portadorAtual = '';
+    let emLancamentos = false;
+    let cD2=-1, cN2=-1, cV2=-1;
+
+    for (let i=0; i<rows.length; i++) {
+      const row = rows[i];
+      // Concatena todas as células não-vazias para detectar linhas de seção
+      const cells = row.map(c => String(c||'').trim());
+      const textos = cells.filter(Boolean);
+      if (!textos.length) { emLancamentos = false; continue; }
+
+      const linha0 = cells[0].toLowerCase();
+      const todasCels = textos.join(' ').toLowerCase();
+
+      // Linha de portador (ex: "RAFAEL VIEIRA DOS ANJOS - FINAL 3983")
+      if (/final\s+\*+\d+|final\s+\d{4}|cartao\s+\d/i.test(textos.join(' '))) {
+        portadorAtual = textos.join(' ').replace(/407505\*+/g,'').trim();
+        emLancamentos = false;
+        continue;
+      }
+
+      // Cabeçalho de lançamentos (linha com "data", "descrição", "valor")
+      if (cells.some(c => c.toLowerCase() === 'data') && cells.some(c => /descri/i.test(c))) {
+        cD2 = cells.findIndex(c => c.toLowerCase() === 'data');
+        cN2 = cells.findIndex(c => /descri/i.test(c));
+        // Valor geralmente é a última coluna não-vazia
+        cV2 = cells.map((c,idx) => ({c,idx})).filter(x => /valor|montante/i.test(x.c)).map(x=>x.idx)[0] ?? cells.length-1;
+        // Se valor não encontrado, pega índice da última célula com "R$" ou número
+        if (cV2 < 0) {
+          for (let k=cells.length-1; k>=0; k--) {
+            if (/R\$|^\-?\d/.test(cells[k])) { cV2=k; break; }
+          }
+        }
+        emLancamentos = true;
+        continue;
+      }
+
+      // Linha de total ou pagamento — encerra bloco
+      if (/^total\s+de|^total\s+da|^pagamento\s+efetu|^saldo\s+da/i.test(cells[0])) {
+        emLancamentos = false;
+        continue;
+      }
+
+      // Lançamento efetivo
+      if (emLancamentos && cN2 >= 0) {
+        const rawDate = cells[cD2] || '';
+        const nome = cells[cN2] || '';
+        const rawVal = cV2 >= 0 ? cells[cV2] : '';
+
+        if (!nome || /^total|^pagamento|^saldo/i.test(nome)) continue;
+
+        // Parse do valor — suporta "R$20,50", "-R$20,50", "20.50", "20,50"
+        let v = parseFloat(rawVal.replace(/[^\d.,-]/g,'').replace(',','.')) || 0;
+        if (!v) continue;
+        // Estornos ficam negativos (crédito), gastos ficam negativos no DRE
+        const isEstorno = /estorno/i.test(nome) || rawVal.includes('-') || rawVal.startsWith('-');
+        v = isEstorno ? Math.abs(v) : -Math.abs(v);
+
+        // Parse da data — formatos: "09/jan", "01/fev", "DD/MM/YYYY", Date object
+        let dt = '';
+        if (rawDate instanceof Date) {
+          dt = rawDate.toISOString().slice(0,10);
+        } else {
+          const ds = String(rawDate).trim();
+          // "09/jan", "01/fev"
+          const mAbrev = ds.match(/^(\d{1,2})\/([a-z]{3})$/i);
+          if (mAbrev) {
+            const mm = MESES[mAbrev[2].toLowerCase()] || '01';
+            // Se o mês abreviado é menor que o mês de vencimento, provavelmente é do ano seguinte (virada de ano)
+            // Ex: vencimento fev/2026, lançamento jan = janeiro/2026
+            let ano = anoRef;
+            if (mesVenc && parseInt(mm) > parseInt(mesVenc) + 1) ano = anoRef - 1;
+            dt = `${ano}-${mm}-${mAbrev[1].padStart(2,'0')}`;
+          } else if (/^\d{2}\/\d{2}\/\d{4}$/.test(ds)) {
+            dt = ds.split('/').reverse().join('-');
+          } else if (/^\d{4}-\d{2}-\d{2}$/.test(ds)) {
+            dt = ds;
+          }
+        }
+        const mes = dt ? dt.slice(5,7)+'/'+dt.slice(0,4) : mesRef;
+
+        result.push({
+          id: 'cc_'+Date.now()+'_'+i,
+          lancamento: nome,
+          valor: v,
+          data: dt,
+          mes,
+          mesCaixa: mes,
+          categoria: autoClassificar(nome, ''),
+          fonte: 'CC',
+          portador: portadorAtual || '',
+          razaoSocial: portadorAtual || '',
+        });
+      }
+    }
+    return result;
+  }
+
+  // ── Parser genérico (formato padrão com cabeçalho na linha 0) ───────────────
   const h = rows[0].map(c => String(c).toLowerCase().trim());
   const ic = ns => { for (const n of ns) { const i = h.findIndex(x => x.includes(n)); if (i>=0) return i; } return -1; };
   const cD=ic(['data','date','dt']), cN=ic(['descri','lancamento','estabelecimento','merchant']),
