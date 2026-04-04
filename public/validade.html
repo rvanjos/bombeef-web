@@ -645,18 +645,6 @@ async function carregarAcoesValidade(){
   if(!d.ok) return;
   const sel = document.getElementById('v-acao');
   const cur = sel.value;
-  // Mantém o option vazio e adiciona as ações do banco
-  sel.innerHTML = '<option value="">— Selecione —</option>' +
-    d.data.map(a=>`<option value="${a.descricao}">${a.descricao}</option>`).join('');
-  if(cur) sel.value = cur;
-}
-
-async function carregarAcoesValidade(){
-  const d = await api.get('/api/config/acoes-validade');
-  if(!d.ok) return;
-  const sel = document.getElementById('v-acao');
-  const cur = sel.value;
-  // Mantém o option vazio e adiciona as ações do banco
   sel.innerHTML = '<option value="">— Selecione —</option>' +
     d.data.map(a=>`<option value="${a.descricao}">${a.descricao}</option>`).join('');
   if(cur) sel.value = cur;
@@ -961,11 +949,19 @@ async function encerrarSelecionados(resolucao){
   if(!ids.length){ toast('Selecione ao menos um item'); return; }
   const label = resolucao === 'vendido' ? 'vendido' : 'descartado';
   if(!confirm(`Marcar ${ids.length} item(s) como ${label}?`)) return;
-  const d = await api.post('/api/validade/encerrar-multiplos', { ids, resolucao });
-  if(d.ok){
-    toast(`✅ ${d.atualizados} item(s) marcado(s) como ${label}`);
-    valLimparSel(); carregar(); carregarKPIs();
-  } else toast('❌ '+(d.erro||'Erro'));
+  try {
+    const d = await api.post('/api/validade/encerrar-multiplos', { ids, resolucao });
+    if(d.ok){
+      toast(`✅ ${d.atualizados} item(s) marcado(s) como ${label}`);
+      valLimparSel(); await carregar(); carregarKPIs();
+    } else {
+      toast('❌ Erro ao encerrar: '+(d.erro||'Resposta inválida do servidor'));
+      console.error('[encerrarSelecionados] erro:', d);
+    }
+  } catch(e) {
+    toast('❌ Falha de conexão ao encerrar');
+    console.error('[encerrarSelecionados] exception:', e);
+  }
 }
 
 async function excluirSelecionadosVal(){

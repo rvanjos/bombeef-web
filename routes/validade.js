@@ -371,14 +371,19 @@ module.exports = function (pool) {
     const { ids, resolucao } = req.body;
     if (!ids?.length) return res.status(400).json({ ok: false, erro: 'Informe os IDs' });
     const idsNum = ids.map(Number).filter(n => !isNaN(n) && n > 0);
+    if (!idsNum.length) return res.status(400).json({ ok: false, erro: 'IDs inválidos' });
     const motivo = resolucao || 'vendido';
     try {
-      await pool.query(`
+      const result = await pool.query(`
         UPDATE validade_items
         SET status=$1, resolucao=$1, dt_resolucao=CURRENT_DATE, atualizado_em=NOW()
         WHERE id=ANY($2::int[])
       `, [motivo, idsNum]);
-      res.json({ ok: true, atualizados: idsNum.length, motivo });
+      console.log(`[validade] encerrar-multiplos: ids=${idsNum} motivo=${motivo} rowCount=${result.rowCount}`);
+      if (result.rowCount === 0) {
+        return res.status(404).json({ ok: false, erro: 'Nenhum item encontrado com esses IDs' });
+      }
+      res.json({ ok: true, atualizados: result.rowCount, motivo });
     } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
