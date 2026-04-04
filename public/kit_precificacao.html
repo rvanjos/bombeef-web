@@ -186,6 +186,7 @@ hr{border:none;border-top:1px solid var(--border);margin:14px 0;}
           <option value="">Unid.</option><option>KG</option><option>UN</option>
         </select>
         <button class="btn btn-outline btn-sm" onclick="carregarProdutos(true)">🔄 Atualizar</button>
+        <span id="prod-ultima-atualizacao" style="font-size:11px;color:rgba(255,255,255,.6);margin-left:6px"></span>
       </div>
     </div>
     <div style="overflow-x:auto;max-height:520px;overflow-y:auto;">
@@ -475,7 +476,24 @@ async function carregarProdutos(mostrarToast = false) {
       rendimento: 1,
       obs: p.descricao_reduzida || ''
     }));
-    setSyncStatus('✅ ' + state.produtos.length + ' produtos');
+
+    // Busca data da última atualização
+    try {
+      const kpis = await apiFetch('/api/produtos/kpis');
+      if (kpis.ok && kpis.data?.ultimaAtualizacao) {
+        const dt = new Date(kpis.data.ultimaAtualizacao);
+        const fmt = dt.toLocaleDateString('pt-BR') + ' ' + dt.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+        setSyncStatus(`✅ ${state.produtos.length} produtos · atualizado em ${fmt}`);
+        // Mostra também no label da seção de produtos
+        const lbl = document.getElementById('prod-ultima-atualizacao');
+        if (lbl) lbl.textContent = `Última atualização: ${fmt}`;
+      } else {
+        setSyncStatus('✅ ' + state.produtos.length + ' produtos');
+      }
+    } catch(_) {
+      setSyncStatus('✅ ' + state.produtos.length + ' produtos');
+    }
+
     if (mostrarToast) showToast('Produtos atualizados: ' + state.produtos.length);
   } catch(e) {
     setSyncStatus('⚠️ ' + e.message);
@@ -1018,20 +1036,23 @@ async function saveKit() {
 
   const c = calcKit();
 
-  // Verifica se todos os produtos existem no banco (produtos_mestre)
-  const itens = state.kitItems.map(i => ({
-    codigo_produto: String(i.prodId),
-    quantidade:     i.qty
-  }));
+  const itens = state.kitItems.map(i => {
+    const prod = state.produtos.find(p => String(p.codigo) === String(i.prodId) || String(p.id) === String(i.prodId));
+    return {
+      codigo:      String(i.prodId),
+      descricao:   prod?.descricao || prod?.xProd || '',
+      quantidade:  i.qty,
+      precoCusto:  parseFloat(prod?.preco_custo || prod?.custoUnit || 0),
+    };
+  });
 
   const payload = {
-    nome_kit:    nome,
+    nome:        nome,
     tipo_kit:    document.getElementById('kit-tipo').value,
     descricao:   document.getElementById('kit-desc').value || null,
-    preco_venda: state.kitPrecoVenda || c.precoIdeal,
-    custo_total: c.custo,
+    precoVenda:  state.kitPrecoVenda || c.precoIdeal,
     margem:      c.mr,
-    itens
+    itens,
   };
 
   try {
@@ -1041,8 +1062,8 @@ async function saveKit() {
     } else {
       r = await apiFetch('/api/kits', { method:'POST', body:JSON.stringify(payload) });
     }
-    // Guarda o id para edições futuras
-    if (r.id_kit) state.kitEditandoId = r.id_kit;
+    // Guarda o id para edições futuras (backend retorna 'id', não 'id_kit')
+    if (r.id || r.id_kit) state.kitEditandoId = r.id || r.id_kit;
     await carregarKits();
     renderKitsSalvos();
     showToast('Kit "' + nome + '" salvo no banco!');
