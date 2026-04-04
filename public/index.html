@@ -646,6 +646,9 @@ async function carregarKPIs() {
     if (d.perdasDentroMeta === false) {
       alertasHtml += `<div class="alert-banner warn">📉 <span><strong>Meta de perdas ultrapassada</strong> — ${fmtBRL(d.perdasMes)} de ${fmtBRL(d.perdasMeta)} permitido.</span></div>`;
     }
+    if (window._alertaProdutos) {
+      alertasHtml += window._alertaProdutos;
+    }
     $('dash-alertas').innerHTML = alertasHtml;
 
     // ── Badges dos cards ──────────────────────────────────────────────────
@@ -689,6 +692,21 @@ async function carregarNomeEmpresa() {
     if (prods.ok) {
       $('badge-produtos').textContent = `${fmtN(prods.data.ativos)} produtos`;
       $('badge-produtos').className   = 'sys-badge ok';
+
+      // Alerta de desatualização no dashboard
+      if (prods.data.ultimaAtualizacao) {
+        const dtProd = new Date(prods.data.ultimaAtualizacao);
+        const diasDesde = Math.floor((Date.now() - dtProd.getTime()) / 86400000);
+        if (diasDesde >= 7) {
+          const fmtDt = dtProd.toLocaleDateString('pt-BR');
+          const icone = diasDesde >= 14 ? '🔴' : '⚠️';
+          const nivel = diasDesde >= 14 ? 'danger' : 'warn';
+          // Injeta no bloco de alertas depois que ele for montado
+          window._alertaProdutos = `<div class="alert-banner ${nivel}">${icone} <span><strong>Produtos desatualizados há ${diasDesde} dias</strong> (última importação: ${fmtDt}). Preços de custo podem estar incorretos. <button onclick="showTab('produtos')" style="margin-left:8px;padding:3px 9px;background:var(--orange);color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:12px">Importar agora</button></span></div>`;
+        } else {
+          window._alertaProdutos = '';
+        }
+      }
     }
   } catch(_) {}
 }

@@ -139,6 +139,13 @@ hr{border:none;border-top:1px solid var(--border);margin:14px 0;}
 
 <div class="content">
 
+<!-- BANNER PRODUTOS DESATUALIZADOS -->
+<div id="banner-produtos-desatualizado" style="display:none;margin-bottom:0;padding:12px 18px;display:none;align-items:center;gap:12px;background:#fff8e1;border-bottom:2px solid #f5c518;font-size:13px;font-weight:600;color:#b8860b;">
+  <span style="font-size:18px">⚠️</span>
+  <span id="banner-produtos-texto"></span>
+  <button onclick="carregarProdutos(true)" style="margin-left:auto;padding:5px 12px;background:#f5c518;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;color:#333">🔄 Atualizar agora</button>
+</div>
+
 <!-- ═══════════════ ABA 1 — PRODUTOS ═══════════════ -->
 <div id="panel-produtos" class="panel active">
   <div class="flex justify-between items-center mb16" style="flex-wrap:wrap;gap:10px;">
@@ -477,18 +484,42 @@ async function carregarProdutos(mostrarToast = false) {
       obs: p.descricao_reduzida || ''
     }));
 
-    // Busca data da última atualização
+    // Busca data da última atualização e exibe alerta se > 7 dias
     try {
       const kpis = await apiFetch('/api/produtos/kpis');
       if (kpis.ok && kpis.data?.ultimaAtualizacao) {
         const dt = new Date(kpis.data.ultimaAtualizacao);
         const fmt = dt.toLocaleDateString('pt-BR') + ' ' + dt.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+        const diasDesde = Math.floor((Date.now() - dt.getTime()) / 86400000);
         setSyncStatus(`✅ ${state.produtos.length} produtos · atualizado em ${fmt}`);
-        // Mostra também no label da seção de produtos
         const lbl = document.getElementById('prod-ultima-atualizacao');
         if (lbl) lbl.textContent = `Última atualização: ${fmt}`;
+
+        // Banner de alerta
+        const banner = document.getElementById('banner-produtos-desatualizado');
+        const texto  = document.getElementById('banner-produtos-texto');
+        if (banner && texto) {
+          if (diasDesde >= 7) {
+            const cor = diasDesde >= 14 ? '#fff0f0' : '#fff8e1';
+            const borda = diasDesde >= 14 ? '#e74c3c' : '#f5c518';
+            const icone = diasDesde >= 14 ? '🔴' : '⚠️';
+            banner.style.background = cor;
+            banner.style.borderBottomColor = borda;
+            texto.textContent = `${icone} Tabela de produtos desatualizada há ${diasDesde} dias (última importação: ${fmt}). Preços de custo e venda podem estar incorretos.`;
+            banner.style.display = 'flex';
+          } else {
+            banner.style.display = 'none';
+          }
+        }
       } else {
         setSyncStatus('✅ ' + state.produtos.length + ' produtos');
+        // Sem data — nunca foi importado
+        const banner = document.getElementById('banner-produtos-desatualizado');
+        const texto  = document.getElementById('banner-produtos-texto');
+        if (banner && texto) {
+          texto.textContent = '⚠️ Nenhuma importação de produtos registrada. Importe o CSV do PDV para manter os preços atualizados.';
+          banner.style.display = 'flex';
+        }
       }
     } catch(_) {
       setSyncStatus('✅ ' + state.produtos.length + ' produtos');
