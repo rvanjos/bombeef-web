@@ -1346,26 +1346,35 @@ function syncPesagem(){
   }
 }
 
-async function buscarProdVal(){
+let _buscarProdTimer = null;
+function buscarProdVal(){
+  clearTimeout(_buscarProdTimer);
   const cod = document.getElementById('v-cod').value.trim();
-  if(cod.length<1) return;
-  const d = await api.get(`/api/produtos/${encodeURIComponent(cod)}`);
   const info = document.getElementById('v-cod-info');
-  const wrap = document.getElementById('v-preco-wrap');
-  if(d.ok){
-    info.textContent = '✅ ' + d.data.descricao;
-    if(!document.getElementById('v-desc').value)
+  if(cod.length < 1){ info.textContent = ''; return; }
+  info.textContent = '🔍 Buscando...';
+  _buscarProdTimer = setTimeout(async () => {
+    const codAtual = document.getElementById('v-cod').value.trim();
+    if(codAtual !== cod) return; // usuário continuou digitando, ignora
+    const d = await api.get(`/api/produtos/${encodeURIComponent(cod)}`);
+    // Verifica de novo — pode ter mudado enquanto a resposta chegava
+    if(document.getElementById('v-cod').value.trim() !== cod) return;
+    const wrap = document.getElementById('v-preco-wrap');
+    if(d.ok){
+      info.innerHTML = `<span style="color:var(--green)">✅ ${d.data.descricao}</span>`;
+      // Sempre atualiza a descrição ao trocar o código
       document.getElementById('v-desc').value = d.data.descricao;
-    const custo = parseFloat(d.data.preco_custo||0);
-    const venda = parseFloat(d.data.preco_venda||0);
-    document.getElementById('v-preco-custo').textContent = fmt.brl(custo);
-    document.getElementById('v-preco-venda').textContent = fmt.brl(venda);
-    document.getElementById('v-preco-custo-val').value   = custo;
-    wrap.style.display = '';
-  } else {
-    info.textContent = '';
-    wrap.style.display = 'none';
-  }
+      const custo = parseFloat(d.data.preco_custo||0);
+      const venda = parseFloat(d.data.preco_venda||0);
+      document.getElementById('v-preco-custo').textContent = fmt.brl(custo);
+      document.getElementById('v-preco-venda').textContent = fmt.brl(venda);
+      document.getElementById('v-preco-custo-val').value   = custo;
+      wrap.style.display = '';
+    } else {
+      info.innerHTML = `<span style="color:var(--muted)">Código não encontrado</span>`;
+      wrap.style.display = 'none';
+    }
+  }, 500); // aguarda 500ms após última tecla
 }
 
 async function salvarVal(){
