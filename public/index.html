@@ -66,7 +66,7 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
 .ph-logout:hover{background:rgba(255,255,255,.22);}
 
 /* Nav tabs */
-.pnav{background:var(--white);border-bottom:2px solid var(--border);display:flex;padding:0 16px;flex-shrink:0;overflow-x:auto;box-shadow:var(--shadow);scrollbar-width:none;}
+.pnav{background:var(--white);border-bottom:2px solid var(--border);display:flex;padding:0 16px;flex-shrink:0;overflow-x:auto;box-shadow:var(--shadow);scrollbar-width:none;-webkit-overflow-scrolling:touch;touch-action:pan-x;}
 .pnav::-webkit-scrollbar{display:none;}
 .pnav-tab{padding:10px 14px;font-size:12px;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px;transition:.15s;white-space:nowrap;background:none;border-top:none;border-left:none;border-right:none;font-family:'DM Sans',sans-serif;}
 .pnav-tab:hover{color:var(--red);}
@@ -98,6 +98,7 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
   display:none;
   position:absolute;
   inset:0;
+  overflow:hidden;
 }
 .frame-container.active{display:flex;flex-direction:column;}
 .module-frame{
@@ -106,6 +107,8 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
   border:none;
   min-height:0;
   display:block;
+  overflow:auto;
+  -webkit-overflow-scrolling:touch;
 }
 
 /* ── KPIs ──────────────────────────────────────────────────────────────── */
