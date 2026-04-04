@@ -80,6 +80,33 @@ module.exports = function (pool) {
   }
   initTable().catch(e => console.error('[kits] initTable ERRO:', e.message, e.stack?.split('\n')[1]));
 
+  // Migration: se o banco antigo tem 'id_kit' em vez de 'id', cria alias
+  pool.query(`
+    DO $$
+    BEGIN
+      -- Se coluna 'id' não existe mas 'id_kit' existe, renomeia
+      IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name='kits' AND column_name='id_kit'
+      ) AND NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name='kits' AND column_name='id'
+      ) THEN
+        ALTER TABLE kits RENAME COLUMN id_kit TO id;
+      END IF;
+      -- Mesma coisa para kit_itens
+      IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name='kit_itens' AND column_name='id_kit'
+      ) AND NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name='kit_itens' AND column_name='kit_id'
+      ) THEN
+        ALTER TABLE kit_itens RENAME COLUMN id_kit TO kit_id;
+      END IF;
+    END $$;
+  `).catch(e => console.warn('[kits] migration id_kit->id:', e.message));
+
   // ── Helper: calcula custo total do kit ────────────────────────────────────
   async function calcCustoKit(kitId, client = pool) {
     const { rows } = await client.query(`
@@ -182,27 +209,32 @@ module.exports = function (pool) {
     try {
       await client.query('BEGIN');
 
-      // Verifica se coluna codigo existe na tabela
-      const colCheck = await client.query(`
+      // Detecta nome da PK (pode ser 'id' ou 'id_kit' em bancos antigos)
+      const pkCheck = await client.query(`
+        SELECT column_name FROM information_schema.columns
+        WHERE table_name='kits' AND column_name IN ('id','id_kit')
+        ORDER BY column_name ASC LIMIT 1
+      `);
+      const pkCol = pkCheck.rows[0]?.column_name || 'id';
+
+      const temCodigo = (await client.query(`
         SELECT column_name FROM information_schema.columns
         WHERE table_name='kits' AND column_name='codigo'
-      `);
-      const temCodigo = colCheck.rows.length > 0;
+      `)).rows.length > 0;
 
       let rows;
       if (temCodigo && codigo) {
         ({ rows } = await client.query(`
           INSERT INTO kits (codigo, nome, descricao, preco_venda, margem)
-          VALUES ($1, $2, $3, $4, $5) RETURNING id
+          VALUES ($1, $2, $3, $4, $5) RETURNING ${pkCol} AS id
         `, [codigo.trim(), nome.trim(), descricao || null, parseFloat(precoVenda || 0), parseFloat(margem || 0)]));
       } else {
         ({ rows } = await client.query(`
           INSERT INTO kits (nome, descricao, preco_venda)
-          VALUES ($1, $2, $3) RETURNING id
+          VALUES ($1, $2, $3) RETURNING ${pkCol} AS id
         `, [nome.trim(), descricao || null, parseFloat(precoVenda || 0)]));
-        // Adiciona codigo depois se a coluna existir
         if (temCodigo && codigo) {
-          await client.query(`UPDATE kits SET codigo=$1 WHERE id=$2`, [codigo.trim(), rows[0].id]).catch(()=>{});
+          await client.query(`UPDATE kits SET codigo=$1 WHERE ${pkCol}=$2`, [codigo.trim(), rows[0].id]).catch(()=>{});
         }
       }
 
@@ -239,19 +271,27 @@ module.exports = function (pool) {
     try {
       await client.query('BEGIN');
 
+      // Detecta PK
+      const pkCheck = await client.query(`
+        SELECT column_name FROM information_schema.columns
+        WHERE table_name='kits' AND column_name IN ('id','id_kit')
+        ORDER BY column_name ASC LIMIT 1
+      `);
+      const pkCol = pkCheck.rows[0]?.column_name || 'id';
+
       await client.query(`
         UPDATE kits SET
           nome = COALESCE($1, nome), descricao = COALESCE($2, descricao),
           preco_venda = COALESCE($3, preco_venda), margem = COALESCE($4, margem),
           atualizado_em = NOW()
-        WHERE id = $5 OR codigo = $5
+        WHERE ${pkCol} = $5 OR codigo = $5
       `, [nome || null, descricao || null,
           precoVenda !== undefined ? parseFloat(precoVenda) : null,
           margem !== undefined ? parseFloat(margem) : null,
           req.params.id]);
 
       if (Array.isArray(itens)) {
-        const kitRow = await client.query(`SELECT id FROM kits WHERE id = $1 OR codigo = $1`, [req.params.id]);
+        const kitRow = await client.query(`SELECT ${pkCol} AS id FROM kits WHERE ${pkCol} = $1 OR codigo = $1`, [req.params.id]);
         if (!kitRow.rows.length) throw new Error('Kit não encontrado');
         const kitId = kitRow.rows[0].id;
 
