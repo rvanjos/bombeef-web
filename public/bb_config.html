@@ -176,6 +176,7 @@ tr:hover td{background:#faf5f0;}
   <div class="sb-section">Sistema</div>
   <div class="nav-item" onclick="go('usuarios')"><span class="ni">🔐</span>Usuários & Perfis</div>
   <div class="nav-item" onclick="go('integracao')"><span class="ni">🔗</span>Integração & Sync</div>
+  <div class="nav-item" onclick="go('backup')"><span class="ni">💾</span>Backup & Segurança</div>
 </nav>
 
 <!-- ═══ CONTENT ═══════════════════════════════════════════════ -->
@@ -593,6 +594,105 @@ tr:hover td{background:#faf5f0;}
 </main>
 </div>
 
+<!-- ── BACKUP ─────────────────────────────────────────────── -->
+<div class="page" id="page-backup" style="display:none">
+  <div class="pg-title">💾 Backup & Segurança</div>
+  <div class="pg-sub">Proteja os dados do sistema fazendo backups regulares.</div>
+
+  <div class="card">
+    <div class="card-title">Status do Banco de Dados</div>
+    <div id="backup-stats" style="color:var(--muted);font-size:13px">Carregando...</div>
+    <button class="btn btn-neutral btn-sm" onclick="carregarStats()" style="margin-top:12px">🔄 Atualizar</button>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📥 Baixar Backup Completo</div>
+    <div class="info-box ib-blue" style="margin-bottom:14px">
+      Exporta <strong>todos os dados</strong> do sistema em formato JSON — boletos, validades, DRE, produtos, perdas e mais.
+      Salve o arquivo em um local seguro (Google Drive, pendrive).
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <button class="btn btn-primary" onclick="baixarBackup()" id="btn-backup">
+        📥 Baixar Backup Agora
+      </button>
+      <span id="backup-status" style="font-size:12px;color:var(--muted)"></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📅 Frequência Recomendada</div>
+    <div style="display:flex;flex-direction:column;gap:10px;font-size:13px">
+      <div style="display:flex;align-items:center;gap:10px;padding:10px;background:#f9f9f9;border-radius:8px">
+        <span style="font-size:20px">🟢</span>
+        <div><strong>Semanal</strong> — mínimo recomendado para operação normal</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;padding:10px;background:#f9f9f9;border-radius:8px">
+        <span style="font-size:20px">🟡</span>
+        <div><strong>Antes de grandes importações</strong> — sempre faça backup antes de subir planilhas novas</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;padding:10px;background:#f9f9f9;border-radius:8px">
+        <span style="font-size:20px">🔵</span>
+        <div><strong>Mensal no fechamento</strong> — backup do mês fechado com DRE e faturamento confirmados</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+async function carregarStats() {
+  const el = document.getElementById('backup-stats');
+  try {
+    const d = await api('GET', '/api/admin/backup/stats');
+    if (!d.ok) { el.textContent = 'Erro ao carregar stats'; return; }
+    const tabelasComDados = d.tabelas.filter(t => t.total > 0);
+    el.innerHTML = `
+      <div style="font-size:15px;font-weight:700;margin-bottom:12px">
+        Tamanho total: <span style="color:var(--red)">${d.banco}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px">
+        ${tabelasComDados.map(t => `
+          <div style="background:#f9f9f9;border-radius:8px;padding:10px;font-size:12px">
+            <div style="font-weight:600;margin-bottom:3px">${t.tabela}</div>
+            <div style="color:var(--muted)">${t.total?.toLocaleString('pt-BR')} registros · ${t.tamanho}</div>
+          </div>
+        `).join('')}
+      </div>`;
+  } catch(e) { el.textContent = 'Erro: ' + e.message; }
+}
+
+async function baixarBackup() {
+  const btn = document.getElementById('btn-backup');
+  const status = document.getElementById('backup-status');
+  btn.disabled = true;
+  btn.textContent = '⏳ Gerando backup...';
+  status.textContent = '';
+  try {
+    const res = await fetch('/api/admin/backup/download', {
+      headers: { 'Authorization': 'Bearer ' + TOKEN }
+    });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      throw new Error(d.erro || 'Erro ' + res.status);
+    }
+    const blob = await res.blob();
+    const data = new Date().toISOString().slice(0,10);
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = `bombeef_backup_${data}.json`; a.click();
+    URL.revokeObjectURL(url);
+    const kb = (blob.size / 1024).toFixed(1);
+    status.innerHTML = `<span style="color:var(--green)">✅ Backup de ${kb} KB baixado com sucesso!</span>`;
+    toast(`✅ Backup salvo: bombeef_backup_${data}.json`);
+  } catch(e) {
+    status.innerHTML = `<span style="color:var(--red)">❌ ${e.message}</span>`;
+    toast('❌ Erro no backup: ' + e.message, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '📥 Baixar Backup Agora';
+  }
+}
+</script>
+
 <script>
 // ══════════════════════════════════════════════════════════
 // TOKEN & API
@@ -656,6 +756,7 @@ const PAGE_INIT = {
   bonus:          loadBonus,
   usuarios:       loadUsuarios,
   integracao:     loadIntegracao,
+  backup:         carregarStats,
 };
 
 function catTab(t) {
