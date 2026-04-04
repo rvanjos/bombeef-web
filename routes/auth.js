@@ -61,7 +61,7 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
         email       TEXT UNIQUE NOT NULL,
         senha_hash  TEXT NOT NULL,
         perfil      TEXT NOT NULL DEFAULT 'caixa'
-                    CHECK (perfil IN ('admin','gestor','financeiro','estoque','caixa')),
+                    CHECK (perfil IN ('admin','gestor','financeiro','estoque','caixa','contabil')),
         ativo       BOOLEAN DEFAULT true,
         ultimo_login TIMESTAMPTZ,
         criado_em   TIMESTAMPTZ DEFAULT NOW(),
@@ -86,6 +86,13 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
     }
   }
   initTable().catch(e => console.error('[auth] initTable:', e.message));
+
+  // Atualiza constraint de perfil para incluir 'contabil' (bancos existentes)
+  pool.query(`
+    ALTER TABLE usuarios DROP CONSTRAINT IF EXISTS usuarios_perfil_check;
+    ALTER TABLE usuarios ADD CONSTRAINT usuarios_perfil_check
+      CHECK (perfil IN ('admin','gestor','financeiro','estoque','caixa','contabil'));
+  `).catch(() => {}); // silencia se tabela ainda não existe
 
   // ── POST /login ────────────────────────────────────────────────────────────
   r.post('/login', async (req, res) => {

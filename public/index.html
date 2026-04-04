@@ -235,12 +235,12 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
   <!-- Nav tabs -->
   <div class="pnav" id="pnav">
     <button class="pnav-tab active" onclick="showTab('dashboard')" data-tab="dashboard">🏠 Dashboard</button>
-    <button class="pnav-tab" onclick="showTab('boletos')"   data-tab="boletos"   data-perfil="admin,gestor,financeiro">📄 Boletos</button>
-    <button class="pnav-tab" onclick="showTab('dre')"       data-tab="dre"       data-perfil="admin,financeiro">📊 DRE</button>
+    <button class="pnav-tab" onclick="showTab('boletos')"   data-tab="boletos"   data-perfil="admin,gestor,financeiro,contabil">📄 Boletos</button>
+    <button class="pnav-tab" onclick="showTab('dre')"       data-tab="dre"       data-perfil="admin,financeiro,contabil">📊 DRE</button>
     <button class="pnav-tab" onclick="showTab('produtos')"  data-tab="produtos"  data-perfil="admin,gestor,estoque">📦 Produtos</button>
     <button class="pnav-tab" onclick="showTab('validade')"  data-tab="validade"  data-perfil="admin,gestor,estoque,caixa">🗓 Validade</button>
     <button class="pnav-tab" onclick="showTab('retiradas')" data-tab="retiradas" data-perfil="admin,gestor,caixa">👥 Retiradas</button>
-    <button class="pnav-tab" onclick="showTab('faturamento')" data-tab="faturamento" data-perfil="admin,gestor,financeiro">💰 Faturamento</button>
+    <button class="pnav-tab" onclick="showTab('faturamento')" data-tab="faturamento" data-perfil="admin,gestor,financeiro,contabil">💰 Faturamento</button>
     <button class="pnav-tab" onclick="showTab('config')"    data-tab="config"    data-perfil="admin,gestor">⚙️ Config</button>
   </div>
 
@@ -500,7 +500,7 @@ function filtrarTabs() {
   });
 
   // Perfis com acesso ao DRE
-  const temDRE = ['admin','financeiro'].includes(usuario?.perfil);
+  const temDRE = ['admin','financeiro','contabil'].includes(usuario?.perfil);
 
   // KPI card do DRE
   const kpiDre = document.getElementById('kpi-card-dre');
@@ -595,7 +595,7 @@ async function carregarKPIs() {
     $('k-aberto').textContent    = 'Total aberto: ' + fmtBRL(d.boletosAberto);
 
     // ── DRE — só para perfis com acesso ─────────────────────────────────
-    if (['admin','financeiro'].includes(usuario?.perfil)) {
+    if (['admin','financeiro','contabil'].includes(usuario?.perfil)) {
       const res = d.dreResultado || 0;
       $('k-resultado').textContent = fmtBRL(res);
       $('k-resultado').className   = 'kpi-val ' + (res >= 0 ? 'c-green' : 'c-red');
@@ -651,7 +651,7 @@ async function carregarKPIs() {
       : d.boletosVence7d > 0 ? `📅 ${d.boletosVence7d} vence em 7d` : '✅ Em dia';
     $('badge-boletos').className = 'sys-badge ' + (d.boletosVencidos > 0 ? 'danger' : d.boletosVence7d > 0 ? 'alert' : 'ok');
 
-    if (['admin','financeiro'].includes(usuario?.perfil)) {
+    if (['admin','financeiro','contabil'].includes(usuario?.perfil)) {
       const res = d.dreResultado || 0;
       $('badge-dre').textContent = res >= 0 ? `✅ ${fmtBRL(res)}` : `⚠️ ${fmtBRL(res)}`;
       $('badge-dre').className   = 'sys-badge ' + (res >= 0 ? 'ok' : 'danger');

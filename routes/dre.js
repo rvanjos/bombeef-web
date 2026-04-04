@@ -26,6 +26,14 @@ module.exports = function (pool) {
   const r = express.Router();
   r.use(autenticar());
 
+  // Perfil contabil: somente leitura — bloqueia qualquer escrita
+  r.use((req, res, next) => {
+    if (req.user?.perfil === 'contabil' && req.method !== 'GET') {
+      return res.status(403).json({ ok: false, erro: 'Perfil contábil tem acesso somente leitura' });
+    }
+    next();
+  });
+
   // ── Init tabelas ───────────────────────────────────────────────────────────
   // Lookup de fornecedores por CNPJ
   async function seedFornecedores(pool) {

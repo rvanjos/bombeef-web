@@ -11,7 +11,7 @@
 
 const jwt = require('jsonwebtoken');
 
-const PERFIS_ORDEM = ['caixa', 'estoque', 'financeiro', 'gestor', 'admin'];
+const PERFIS_ORDEM = ['contabil', 'caixa', 'estoque', 'financeiro', 'gestor', 'admin'];
 
 function autenticar(perfisPermitidos = null) {
   return (req, res, next) => {
