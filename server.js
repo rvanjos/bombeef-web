@@ -127,6 +127,27 @@ async function autoMigrate() {
   await addCol('kit_itens','descricao_produto','TEXT').catch(()=>{});
   await addCol('kit_itens','preco_custo_unitario','NUMERIC(10,4) DEFAULT 0').catch(()=>{});
 
+  // Kits — renomeia colunas legadas (nome_kit→nome, id_kit→id)
+  await pool.query(`
+    DO $$
+    BEGIN
+      IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='kits' AND column_name='nome_kit')
+         AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='kits' AND column_name='nome')
+      THEN ALTER TABLE kits RENAME COLUMN nome_kit TO nome;
+           RAISE NOTICE '[migrate] kits.nome_kit renomeada para nome'; END IF;
+
+      IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='kits' AND column_name='id_kit')
+         AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='kits' AND column_name='id')
+      THEN ALTER TABLE kits RENAME COLUMN id_kit TO id;
+           RAISE NOTICE '[migrate] kits.id_kit renomeada para id'; END IF;
+
+      IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='kit_itens' AND column_name='id_kit')
+         AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='kit_itens' AND column_name='kit_id')
+      THEN ALTER TABLE kit_itens RENAME COLUMN id_kit TO kit_id;
+           RAISE NOTICE '[migrate] kit_itens.id_kit renomeada para kit_id'; END IF;
+    END $$;
+  `).catch(e => console.warn('[migrate] kits rename:', e.message));
+
   // Perdas — garante coluna mes
   await addCol('perdas','mes','TEXT').catch(()=>{});
   await addCol('perdas','motivo',"TEXT DEFAULT 'vencimento'").catch(()=>{});

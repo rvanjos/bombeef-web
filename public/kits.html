@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Kits — Bom Beef</title>
+<script src="/js/api.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --red:#c0392b;--red-l:#e74c3c;--green:#27ae60;--green-l:#2ecc71;
+  --orange:#e67e22;--blue:#2980b9;--gold:#f39c12;
+  --bg:#f7f4f0;--white:#fff;--border:#e8ddd4;--text:#2c2c2c;--muted:#888;
+  --shadow:0 1px 4px rgba(0,0,0,.08);
+  --sans:'DM Sans',sans-serif;--mono:'DM Mono',monospace;--display:'Playfair Display',serif;
+}
+body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:100vh;}
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono&family=Playfair+Display:wght@700&display=swap');
+
+/* ── HEADER ── */
+.hdr{background:linear-gradient(135deg,#1a0a00,#3d1a00);padding:16px 24px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
+.hdr-title{color:#fff;font-family:var(--display);font-size:20px;display:flex;align-items:center;gap:10px;}
+.hdr-actions{display:flex;gap:8px;align-items:center;}
+#sync-status{font-size:11px;color:rgba(255,255,255,.65);font-family:var(--mono);}
+
+/* ── LAYOUT ── */
+.body{padding:20px 24px;max-width:1300px;margin:0 auto;}
+.toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px;}
+
+/* ── KPIS ── */
+.kpi-row{display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap;}
+.kpi{background:var(--white);border:1px solid var(--border);border-radius:10px;padding:14px 18px;border-left:4px solid var(--red);flex:1;min-width:130px;}
+.kpi.green{border-left-color:var(--green);}
+.kpi.blue{border-left-color:var(--blue);}
+.kpi.orange{border-left-color:var(--orange);}
+.kpi-label{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:4px;font-weight:600;}
+.kpi-value{font-family:var(--mono);font-size:22px;font-weight:600;}
+
+/* ── CARDS DE KITS ── */
+.kits-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:16px;}
+.kit-card{background:var(--white);border:1px solid var(--border);border-radius:12px;overflow:hidden;box-shadow:var(--shadow);transition:.2s;}
+.kit-card:hover{box-shadow:0 4px 16px rgba(0,0,0,.12);transform:translateY(-1px);}
+.kit-card-head{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
+.kit-card-nome{font-weight:700;font-size:15px;color:var(--text);}
+.kit-card-cod{font-family:var(--mono);font-size:11px;color:var(--muted);}
+.kit-card-body{padding:14px 16px;}
+.kit-preco-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;font-size:13px;}
+.kit-preco-row:not(:last-child){border-bottom:1px solid var(--border);}
+.kit-preco-label{color:var(--muted);font-size:12px;}
+.kit-preco-val{font-family:var(--mono);font-weight:600;}
+.kit-preco-val.red{color:var(--red);}
+.kit-preco-val.green{color:var(--green);}
+.kit-preco-val.orange{color:var(--orange);}
+.kit-itens-lista{margin-top:10px;padding-top:10px;border-top:1px solid var(--border);}
+.kit-item{display:flex;justify-content:space-between;font-size:12px;padding:3px 0;color:var(--muted);}
+.kit-item-desc{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.kit-card-footer{padding:10px 16px;background:#faf7f4;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;}
+.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;}
+.badge-ok{background:#d4edda;color:#155724;}
+.badge-warn{background:#fff3cd;color:#856404;}
+.badge-bad{background:#f8d7da;color:#721c24;}
+
+/* ── MODAL ── */
+.mbg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;align-items:center;justify-content:center;padding:16px;}
+.mbg.open{display:flex;}
+.md{background:var(--white);border-radius:14px;width:100%;max-width:1100px;max-height:95vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.3);}
+.mdh{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.mdh h3{font-family:var(--display);font-size:18px;color:var(--red);}
+.mdx{background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted);line-height:1;}
+.mdb{padding:20px;overflow-y:auto;flex:1;}
+.mdf{padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end;flex-shrink:0;}
+
+/* ── FORMULÁRIO ── */
+.fg{display:flex;flex-direction:column;gap:5px;margin-bottom:12px;}
+.fg label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);}
+.fg input,.fg select,.fg textarea{padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px;font-family:var(--sans);background:var(--white);}
+.fg input:focus,.fg select:focus{outline:none;border-color:var(--red);}
+.fgr{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+
+/* ── ITENS DO KIT ── */
+.kit-two{display:grid;grid-template-columns:1fr 300px;gap:20px;align-items:start;}
+@media(max-width:900px){.kit-two{grid-template-columns:1fr;}}
+.item-hdr{display:grid;grid-template-columns:110px 1fr 80px 100px 80px 28px;gap:6px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted);padding:4px 0;border-bottom:1px solid var(--border);margin-bottom:6px;}
+.item-row{display:grid;grid-template-columns:110px 1fr 80px 100px 80px 28px;gap:6px;align-items:center;padding:5px 0;border-bottom:1px solid #f0e8e0;}
+.item-row input{padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:var(--sans);width:100%;}
+.item-row input:focus{outline:none;border-color:var(--red);}
+.item-del{background:none;border:none;cursor:pointer;font-size:16px;color:var(--red-l);}
+
+/* ── ANÁLISE ── */
+.analise{background:#faf7f4;border:1px solid var(--border);border-radius:10px;padding:14px;}
+.analise h4{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:10px;}
+.cost-row{display:flex;justify-content:space-between;font-size:13px;padding:5px 0;border-bottom:1px solid var(--border);}
+.cost-row:last-child{border-bottom:none;}
+.cost-total{font-weight:700;font-size:15px;color:var(--red);}
+.result-box{border-radius:9px;padding:12px;margin-top:12px;font-size:13px;}
+.result-box.ok{background:#f0faf4;border:1px solid #a8d5bc;}
+.result-box.warn{background:#fff8e6;border:1px solid #f5c842;}
+.result-box.bad{background:#fff0f0;border:1px solid #f5c6c6;}
+.preco-sugeridos{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;}
+.preco-btn{padding:6px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-family:var(--mono);font-size:13px;cursor:pointer;transition:.15s;}
+.preco-btn:hover{border-color:var(--green);color:var(--green);}
+
+/* ── BUTTONS ── */
+.btn{padding:8px 16px;border-radius:8px;border:none;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--sans);transition:.15s;}
+.btn-p{background:var(--red);color:#fff;} .btn-p:hover{background:var(--red-l);}
+.btn-g{background:var(--green);color:#fff;} .btn-g:hover{background:var(--green-l);}
+.btn-s{background:var(--bg);color:var(--text);border:1px solid var(--border);}
+.btn-s:hover{border-color:var(--muted);}
+.btn-o{background:transparent;border:1px solid var(--border);color:var(--text);}
+
+/* ── TOAST ── */
+#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1a7a4a;color:#fff;
+  padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;z-index:9999;
+  display:none;box-shadow:0 4px 20px rgba(0,0,0,.3);}
+
+.empty-state{text-align:center;padding:60px 20px;color:var(--muted);}
+.empty-state div:first-child{font-size:48px;margin-bottom:12px;}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div class="hdr-title">🥩 Kits & Precificação</div>
+  <div class="hdr-actions">
+    <span id="sync-status"></span>
+    <button class="btn btn-s" style="padding:6px 12px;font-size:12px" onclick="carregarTudo(true)">🔄 Atualizar</button>
+    <button class="btn btn-p" onclick="abrirNovo()">＋ Novo Kit</button>
+  </div>
+</div>
+
+<div class="body">
+  <!-- KPIs -->
+  <div class="kpi-row">
+    <div class="kpi green"><div class="kpi-label">Kits Ativos</div><div class="kpi-value" id="kpi-total">—</div></div>
+    <div class="kpi blue"><div class="kpi-label">Custo Médio</div><div class="kpi-value" id="kpi-custo">—</div></div>
+    <div class="kpi orange"><div class="kpi-label">Preço Médio</div><div class="kpi-value" id="kpi-preco">—</div></div>
+    <div class="kpi"><div class="kpi-label">Margem Média</div><div class="kpi-value" id="kpi-margem">—</div></div>
+  </div>
+
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <input type="text" id="busca" placeholder="🔍 Buscar kit..." style="padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;flex:1;min-width:200px;max-width:350px;" oninput="filtrar()">
+    <select id="filtro-status" onchange="filtrar()" style="padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;">
+      <option value="todos">Todos</option>
+      <option value="ok">✅ Lucrativos</option>
+      <option value="warn">⚠️ Margem apertada</option>
+      <option value="bad">❌ Abaixo do mínimo</option>
+    </select>
+  </div>
+
+  <!-- Grid de cards -->
+  <div class="kits-grid" id="kits-grid"></div>
+  <div class="empty-state" id="empty-state" style="display:none">
+    <div>🧺</div>
+    <div style="font-size:16px;font-weight:600;margin-bottom:8px">Nenhum kit cadastrado</div>
+    <div style="font-size:13px;margin-bottom:16px">Crie kits com múltiplos produtos e calcule o preço ideal</div>
+    <button class="btn btn-p" onclick="abrirNovo()">＋ Criar Primeiro Kit</button>
+  </div>
+</div>
+
+<!-- ── MODAL NOVO/EDITAR KIT ── -->
+<div class="mbg" id="m-kit">
+  <div class="md">
+    <div class="mdh">
+      <h3 id="kit-titulo">Novo Kit</h3>
+      <button class="mdx" onclick="fecharModal()">×</button>
+    </div>
+    <div class="mdb">
+      <input type="hidden" id="k-id">
+      <div class="fgr">
+        <div class="fg"><label>Código *</label><input id="k-cod" placeholder="KIT001"></div>
+        <div class="fg"><label>Nome *</label><input id="k-nome" placeholder="Nome comercial do kit"></div>
+      </div>
+      <div class="fg"><label>Descrição</label><input id="k-desc" placeholder="Opcional"></div>
+
+      <div class="kit-two">
+        <!-- Itens -->
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+            <span style="font-size:12px;font-weight:700;text-transform:uppercase;color:var(--muted)">Itens do Kit</span>
+            <button class="btn btn-s" style="padding:5px 10px;font-size:12px" onclick="addItem()">＋ Item</button>
+          </div>
+          <div class="item-hdr">
+            <span>Código</span><span>Descrição</span><span>Qtd</span><span>Custo Un.</span><span>Venda Un.</span><span></span>
+          </div>
+          <div id="itens-lista"></div>
+
+          <div style="margin-top:14px;">
+            <div class="fg"><label>Preços Sugeridos</label>
+              <div class="preco-sugeridos" id="precos-sugeridos"></div>
+            </div>
+            <div class="fg"><label>Preço de Venda (R$)</label>
+              <input type="number" id="k-pvenda" step="0.01" min="0" placeholder="0,00" oninput="recalc()">
+            </div>
+          </div>
+        </div>
+
+        <!-- Análise de Custos -->
+        <div>
+          <div class="analise">
+            <h4>Análise de Custos</h4>
+            <div class="cost-row"><span>Custo Materiais</span><span id="a-mat" style="font-family:var(--mono);font-weight:600">R$ 0,00</span></div>
+            <div class="cost-row"><span style="color:var(--muted);font-size:12px">↳ Cartão (<span id="p-cartao">3</span>%)</span><span id="a-cartao" style="font-family:var(--mono);font-size:12px;color:var(--muted)">R$ 0,00</span></div>
+            <div class="cost-row"><span style="color:var(--muted);font-size:12px">↳ Royalties (<span id="p-royal">4,875</span>%)</span><span id="a-royal" style="font-family:var(--mono);font-size:12px;color:var(--muted)">R$ 0,00</span></div>
+            <div class="cost-row"><span style="color:var(--muted);font-size:12px">↳ Desperdício (<span id="p-desp">5</span>%)</span><span id="a-desp" style="font-family:var(--mono);font-size:12px;color:var(--muted)">R$ 0,00</span></div>
+            <div class="cost-row"><span style="color:var(--muted);font-size:12px">↳ Impostos (<span id="p-imp">6</span>%)</span><span id="a-imp" style="font-family:var(--mono);font-size:12px;color:var(--muted)">R$ 0,00</span></div>
+            <div class="cost-row"><span style="color:var(--muted);font-size:12px">↳ Fixos (<span id="p-fixos">25</span>%)</span><span id="a-fixos" style="font-family:var(--mono);font-size:12px;color:var(--muted)">R$ 0,00</span></div>
+            <div class="cost-row cost-total"><span>Custo Total Operacional</span><span id="a-total">R$ 0,00</span></div>
+            <div class="cost-row"><span>Preço Mínimo</span><span id="a-min" style="font-family:var(--mono);font-weight:600">R$ 0,00</span></div>
+            <div class="cost-row"><span>Preço Ideal (15% lucro)</span><span id="a-ideal" style="font-family:var(--mono);font-weight:600;color:var(--green)">R$ 0,00</span></div>
+            <div id="a-resultado" class="result-box bad" style="margin-top:10px;font-size:12px;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="mdf">
+      <button class="btn btn-s" onclick="fecharModal()">Cancelar</button>
+      <button class="btn btn-g" id="btn-salvar" onclick="salvarKit()">💾 Salvar Kit</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ── Estado ─────────────────────────────────────────────────────────────────
+let kits = [], produtos = [], kitEditandoId = null;
+let kitItems = []; // [{codigo, descricao, qtd, custUnit, vendaUnit}]
+
+// Parâmetros de custo (editáveis nos Parâmetros do módulo Produtos)
+const CFG = {
+  cartao: 3, royalties: 4.875, desperdicio: 5, imposto: 6, fixos: 25, lucro: 15
+};
+
+// ── Init ───────────────────────────────────────────────────────────────────
+window.onBBReady = () => carregarTudo();
+if (api.token()) carregarTudo();
+
+async function carregarTudo(toast = false) {
+  setSyncStatus('⏳ Carregando...');
+  try {
+    const [rk, rp] = await Promise.all([
+      api.get('/api/kits'),
+      api.get('/api/produtos?limit=5000&ativo=true'),
+    ]);
+    kits     = rk.ok     ? (rk.data   || []) : [];
+    produtos = rp.ok     ? (rp.data   || rp.produtos || rp.rows || []) : [];
+    setSyncStatus(`✅ ${kits.length} kits · ${produtos.length} produtos`);
+    renderKPIs();
+    renderGrid();
+    if (toast) showToast('Dados atualizados!');
+  } catch(e) {
+    setSyncStatus('❌ ' + e.message);
+  }
+}
+
+function setSyncStatus(s) { document.getElementById('sync-status').textContent = s; }
+
+// ── KPIs ───────────────────────────────────────────────────────────────────
+function renderKPIs() {
+  const ativos = kits.filter(k => k.ativo !== false);
+  const custos = ativos.map(k => parseFloat(k.custo_total || k.custoTotal || 0));
+  const precos = ativos.map(k => parseFloat(k.preco_venda || 0));
+  const margens = ativos.map(k => {
+    const c = parseFloat(k.custo_total || k.custoTotal || 0);
+    const p = parseFloat(k.preco_venda || 0);
+    return p > 0 ? (p - c) / p * 100 : 0;
+  });
+  $('kpi-total').textContent = ativos.length;
+  $('kpi-custo').textContent = 'R$ ' + fmtN(custos.reduce((a,b)=>a+b,0)/Math.max(ativos.length,1));
+  $('kpi-preco').textContent = 'R$ ' + fmtN(precos.reduce((a,b)=>a+b,0)/Math.max(ativos.length,1));
+  $('kpi-margem').textContent = fmtN(margens.reduce((a,b)=>a+b,0)/Math.max(ativos.length,1)) + '%';
+}
+
+// ── Grid de cards ──────────────────────────────────────────────────────────
+function filtrar() { renderGrid(); }
+
+function renderGrid() {
+  const q = $('busca').value.toLowerCase();
+  const st = $('filtro-status').value;
+  let lista = kits.filter(k => k.ativo !== false);
+  if (q) lista = lista.filter(k =>
+    (k.nome||'').toLowerCase().includes(q) ||
+    (k.codigo||'').toLowerCase().includes(q) ||
+    (k.descricao||'').toLowerCase().includes(q)
+  );
+
+  const grid = $('kits-grid');
+  const empty = $('empty-state');
+
+  if (!lista.length) { grid.innerHTML=''; empty.style.display=''; return; }
+  empty.style.display = 'none';
+
+  // Filtra por status após calcular
+  const comStatus = lista.map(k => {
+    const custo = parseFloat(k.custo_total || k.custoTotal || 0);
+    const pv    = parseFloat(k.preco_venda || 0);
+    const op    = (CFG.cartao + CFG.royalties + CFG.desperdicio + CFG.imposto + CFG.fixos) / 100;
+    const precoMin   = custo / (1 - op);
+    const precoIdeal = custo / (1 - op - CFG.lucro/100);
+    const margem = pv > 0 ? (pv - custo) / pv * 100 : 0;
+    const status = pv >= precoIdeal ? 'ok' : pv >= precoMin ? 'warn' : 'bad';
+    return { ...k, custo, pv, precoMin, precoIdeal, margem, status };
+  });
+
+  const filtrado = st === 'todos' ? comStatus : comStatus.filter(k => k.status === st);
+  if (!filtrado.length) { grid.innerHTML = '<div class="empty-state"><div>🔍</div><div>Nenhum kit encontrado com esse filtro</div></div>'; return; }
+
+  grid.innerHTML = filtrado.map(k => {
+    const badge = k.status === 'ok'
+      ? `<span class="badge badge-ok">✅ Lucrativo</span>`
+      : k.status === 'warn'
+        ? `<span class="badge badge-warn">⚠️ Mínimo</span>`
+        : `<span class="badge badge-bad">❌ Abaixo</span>`;
+
+    const itensHtml = (k.itens || []).slice(0,4).map(i =>
+      `<div class="kit-item">
+        <span class="kit-item-desc">${i.descricao_produto || i.prod_desc || i.codigo_produto || '—'}</span>
+        <span style="font-family:var(--mono);margin-left:8px;white-space:nowrap">${parseFloat(i.quantidade||1).toFixed(k.unidade==='KG'?3:0)}x</span>
+      </div>`
+    ).join('');
+    const maisItens = (k.itens||[]).length > 4 ? `<div style="font-size:11px;color:var(--muted);margin-top:4px">+${(k.itens||[]).length-4} itens</div>` : '';
+
+    const margemCor = k.margem >= 15 ? 'green' : k.margem >= 0 ? 'orange' : 'red';
+    const desconto = k.pv > 0 && k.custo > 0 ? ((k.custo / k.pv) * 100).toFixed(1) : null;
+
+    return `<div class="kit-card">
+      <div class="kit-card-head">
+        <div>
+          <div class="kit-card-nome">${k.nome || '—'}</div>
+          <div class="kit-card-cod">${k.codigo||''} · ${(k.itens||[]).length} iten(s)</div>
+        </div>
+        ${badge}
+      </div>
+      <div class="kit-card-body">
+        <div class="kit-preco-row">
+          <span class="kit-preco-label">Custo total</span>
+          <span class="kit-preco-val">R$ ${fmtN(k.custo)}</span>
+        </div>
+        <div class="kit-preco-row">
+          <span class="kit-preco-label">Preço mínimo</span>
+          <span class="kit-preco-val orange">R$ ${fmtN(k.precoMin)}</span>
+        </div>
+        <div class="kit-preco-row">
+          <span class="kit-preco-label">Preço ideal (15%)</span>
+          <span class="kit-preco-val green">R$ ${fmtN(k.precoIdeal)}</span>
+        </div>
+        <div class="kit-preco-row" style="background:#f7f4f0;border-radius:6px;padding:6px 8px;margin-top:4px;">
+          <span class="kit-preco-label" style="font-weight:700;color:var(--text)">Preço de venda</span>
+          <span class="kit-preco-val ${margemCor}" style="font-size:16px">R$ ${fmtN(k.pv)}</span>
+        </div>
+        ${desconto ? `<div style="font-size:11px;color:var(--muted);text-align:right;margin-top:3px">Custo = ${desconto}% do preço de venda · Margem real: ${k.margem.toFixed(1)}%</div>` : ''}
+        <div class="kit-itens-lista">${itensHtml}${maisItens}</div>
+      </div>
+      <div class="kit-card-footer">
+        <button class="btn btn-s" style="padding:5px 10px;font-size:12px" onclick="editarKit(${k.id})">✏️ Editar</button>
+        <button class="btn" style="padding:5px 10px;font-size:12px;background:#fff0f0;color:var(--red-l);border:1px solid #f5c6c6" onclick="excluirKit(${k.id},'${(k.nome||'').replace(/'/g,"\\'")}')">🗑</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── Modal ──────────────────────────────────────────────────────────────────
+function abrirNovo() {
+  kitEditandoId = null; kitItems = [];
+  $('kit-titulo').textContent = 'Novo Kit';
+  $('k-id').value = '';
+  $('k-cod').value = ''; $('k-nome').value = '';
+  $('k-desc').value = ''; $('k-pvenda').value = '';
+  renderItens(); recalc();
+  $('m-kit').classList.add('open');
+}
+
+async function editarKit(id) {
+  try {
+    const r = await api.get('/api/kits/' + id);
+    const k = r.data || r;
+    kitEditandoId = k.id || id;
+    kitItems = (k.itens || []).map(i => ({
+      codigo:   i.codigo_produto || '',
+      descricao: i.descricao_produto || i.prod_desc || '',
+      qtd:      parseFloat(i.quantidade || 1),
+      custUnit: parseFloat(i.preco_custo_unitario || 0),
+      vendaUnit: 0, // será preenchido ao buscar produto
+    }));
+    // Tenta buscar preço de venda dos produtos
+    for (const item of kitItems) {
+      const p = produtos.find(p => String(p.codigo||p.codigo_produto) === String(item.codigo));
+      if (p) { item.descricao = item.descricao || p.descricao || p.descricao_produto || ''; item.vendaUnit = parseFloat(p.preco_venda||0); }
+    }
+    $('kit-titulo').textContent = 'Editar Kit';
+    $('k-id').value = kitEditandoId;
+    $('k-cod').value = k.codigo || '';
+    $('k-nome').value = k.nome || '';
+    $('k-desc').value = k.descricao || '';
+    $('k-pvenda').value = k.preco_venda || '';
+    renderItens(); recalc();
+    $('m-kit').classList.add('open');
+  } catch(e) { showToast('Erro ao carregar kit: ' + e.message, '#c0392b'); }
+}
+
+function fecharModal() { $('m-kit').classList.remove('open'); }
+
+// ── Itens ──────────────────────────────────────────────────────────────────
+function addItem() {
+  kitItems.push({ codigo:'', descricao:'', qtd:1, custUnit:0, vendaUnit:0 });
+  renderItens(); recalc();
+}
+
+function removeItem(idx) {
+  kitItems.splice(idx, 1);
+  renderItens(); recalc();
+}
+
+function renderItens() {
+  $('itens-lista').innerHTML = kitItems.map((it, i) => `
+    <div class="item-row">
+      <input value="${it.codigo}" placeholder="Código" onchange="onCodChange(${i},this.value)" oninput="onCodChange(${i},this.value)">
+      <input value="${it.descricao}" placeholder="Descrição" onchange="kitItems[${i}].descricao=this.value">
+      <input type="number" value="${it.qtd}" min="0.001" step="0.001" onchange="kitItems[${i}].qtd=parseFloat(this.value)||1;recalc()">
+      <input type="number" value="${it.custUnit}" min="0" step="0.01" placeholder="Custo" onchange="kitItems[${i}].custUnit=parseFloat(this.value)||0;recalc()">
+      <input type="number" value="${it.vendaUnit||''}" min="0" step="0.01" placeholder="Venda" readonly style="background:#f7f4f0;color:var(--muted);" title="Preço de venda do produto">
+      <button class="item-del" onclick="removeItem(${i})">×</button>
+    </div>
+  `).join('');
+}
+
+function onCodChange(idx, cod) {
+  kitItems[idx].codigo = cod;
+  const p = produtos.find(p => String(p.codigo||p.codigo_produto) === String(cod));
+  if (p) {
+    kitItems[idx].descricao = p.descricao || p.descricao_produto || p.xProd || '';
+    kitItems[idx].custUnit  = parseFloat(p.preco_custo || 0);
+    kitItems[idx].vendaUnit = parseFloat(p.preco_venda || 0);
+    renderItens(); recalc();
+  }
+}
+
+// ── Cálculo ────────────────────────────────────────────────────────────────
+function recalc() {
+  const mat = kitItems.reduce((s,i) => s + (i.qtd||1)*(i.custUnit||0), 0);
+  const op  = (CFG.cartao + CFG.royalties + CFG.desperdicio + CFG.imposto + CFG.fixos) / 100;
+  const total = mat / (1 - op);
+  const precoMin   = total;
+  const precoIdeal = mat / (1 - op - CFG.lucro/100);
+  const pv = parseFloat($('k-pvenda').value) || 0;
+
+  $('a-mat').textContent    = 'R$ ' + fmtN(mat);
+  $('a-cartao').textContent = 'R$ ' + fmtN(mat * CFG.cartao/100);
+  $('a-royal').textContent  = 'R$ ' + fmtN(mat * CFG.royalties/100);
+  $('a-desp').textContent   = 'R$ ' + fmtN(mat * CFG.desperdicio/100);
+  $('a-imp').textContent    = 'R$ ' + fmtN(mat * CFG.imposto/100);
+  $('a-fixos').textContent  = 'R$ ' + fmtN(mat * CFG.fixos/100);
+  $('a-total').textContent  = 'R$ ' + fmtN(total);
+  $('a-min').textContent    = 'R$ ' + fmtN(precoMin);
+  $('a-ideal').textContent  = 'R$ ' + fmtN(precoIdeal);
+
+  // Preços sugeridos
+  const sugs = [
+    Math.ceil(precoMin/10)*10 - 0.10,
+    Math.ceil(precoIdeal/10)*10 - 0.10,
+    Math.ceil(precoIdeal/5)*5 - 0.10,
+    Math.ceil(precoIdeal*1.1/10)*10 - 0.10,
+  ].filter((v,i,a) => v > 0 && a.indexOf(v) === i);
+  $('precos-sugeridos').innerHTML = sugs.map(v =>
+    `<button class="preco-btn" onclick="document.getElementById('k-pvenda').value='${v.toFixed(2)}';recalc()">R$ ${fmtN(v)}</button>`
+  ).join('');
+
+  // Resultado
+  const res = $('a-resultado');
+  if (pv <= 0) {
+    res.className = 'result-box bad'; res.innerHTML = 'Informe o preço de venda para ver a análise.';
+  } else if (pv >= precoIdeal) {
+    const lucro = pv - total; const marg = (lucro/pv*100).toFixed(1);
+    res.className = 'result-box ok';
+    res.innerHTML = `✅ <strong>Kit lucrativo</strong><br>Margem: ${marg}% · Lucro: R$ ${fmtN(lucro)}`;
+  } else if (pv >= precoMin) {
+    const lucro = pv - total; const marg = (lucro/pv*100).toFixed(1);
+    res.className = 'result-box warn';
+    res.innerHTML = `⚠️ <strong>Margem apertada</strong><br>Margem: ${marg}% · Lucro: R$ ${fmtN(lucro)}`;
+  } else {
+    const prej = pv - total;
+    res.className = 'result-box bad';
+    res.innerHTML = `❌ <strong>Abaixo do mínimo</strong><br>Prejuízo: R$ ${fmtN(Math.abs(prej))}`;
+  }
+}
+
+// ── Salvar ─────────────────────────────────────────────────────────────────
+async function salvarKit() {
+  const codigo = $('k-cod').value.trim();
+  const nome   = $('k-nome').value.trim();
+  if (!codigo || !nome) { showToast('Código e nome são obrigatórios', '#c0392b'); return; }
+  if (!kitItems.length) { showToast('Adicione ao menos um item', '#c0392b'); return; }
+
+  const btn = $('btn-salvar');
+  btn.disabled = true; btn.textContent = '⏳ Salvando...';
+
+  const body = {
+    codigo, nome,
+    descricao:  $('k-desc').value.trim() || null,
+    precoVenda: parseFloat($('k-pvenda').value) || 0,
+    margem:     calcMargem(),
+    itens: kitItems.map(i => ({
+      codigo:     i.codigo,
+      descricao:  i.descricao,
+      quantidade: i.qtd,
+      precoCusto: i.custUnit,
+    })),
+  };
+
+  try {
+    const id = $('k-id').value;
+    const r = id
+      ? await api.put('/api/kits/' + id, body)
+      : await api.post('/api/kits', body);
+
+    if (!r.ok && r.erro) throw new Error(r.erro);
+    showToast('✅ Kit "' + nome + '" salvo!');
+    fecharModal();
+    await carregarTudo();
+  } catch(e) {
+    showToast('❌ ' + e.message, '#c0392b');
+  } finally {
+    btn.disabled = false; btn.textContent = '💾 Salvar Kit';
+  }
+}
+
+function calcMargem() {
+  const pv = parseFloat($('k-pvenda').value) || 0;
+  const mat = kitItems.reduce((s,i) => s + (i.qtd||1)*(i.custUnit||0), 0);
+  return pv > 0 ? ((pv - mat) / pv * 100) : 0;
+}
+
+async function excluirKit(id, nome) {
+  if (!confirm(`Excluir o kit "${nome}"?`)) return;
+  try {
+    await api.delete('/api/kits/' + id);
+    showToast('Kit excluído');
+    await carregarTudo();
+  } catch(e) { showToast('Erro: ' + e.message, '#c0392b'); }
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+function $(id) { return document.getElementById(id); }
+function fmtN(v) {
+  return (parseFloat(v)||0).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+let _toastTimer;
+function showToast(msg, bg) {
+  const t = $('toast');
+  t.textContent = msg; t.style.background = bg || '#1a7a4a'; t.style.display = 'block';
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => { t.style.display = 'none'; }, 3500);
+}
+</script>
+</body>
+</html>
