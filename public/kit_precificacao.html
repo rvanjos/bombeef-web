@@ -1097,24 +1097,32 @@ async function saveKit() {
     if (r.id || r.id_kit) state.kitEditandoId = r.id || r.id_kit;
     await carregarKits();
     renderKitsSalvos();
-    showToast('Kit "' + nome + '" salvo no banco!');
+    showToast('✅ Kit "' + nome + '" salvo!');
   } catch(e) {
-    alert('Erro ao salvar kit: ' + e.message);
+    console.error('[saveKit]', e);
+    const msg = e.message || 'Erro desconhecido';
+    if (msg.includes('401') || msg.includes('403')) {
+      showToast('❌ Sem autenticação. Acesse pelo portal principal.', '#c0392b');
+    } else {
+      showToast('❌ Erro ao salvar: ' + msg, '#c0392b');
+    }
   }
 }
 
 async function loadKit(id) {
   // Busca detalhes completos do kit (com itens) direto da API
   try {
-    const k = await apiFetch('/api/kits/' + id);
-    state.kitItems     = (k.itens || k.kit_itens || []).map(i => ({
-      prodId: i.codigo_produto,
+    const resp = await apiFetch('/api/kits/' + id);
+    const k = resp.data || resp;
+    const itens = k.itens || k.kit_itens || [];
+    state.kitItems = itens.map(i => ({
+      prodId: i.codigo_produto || i.codigo,
       qty:    parseFloat(i.quantidade) || 1
     }));
-    state.kitEditandoId = k.id_kit || id;
-    document.getElementById('kit-nome').value      = k.nome_kit  || '';
-    document.getElementById('kit-desc').value      = k.descricao || '';
-    document.getElementById('kit-tipo').value      = k.tipo_kit  || 'Kit Churrasco';
+    state.kitEditandoId = k.id || k.id_kit || id;
+    document.getElementById('kit-nome').value        = k.nome      || k.nome_kit || '';
+    document.getElementById('kit-desc').value        = k.descricao || '';
+    document.getElementById('kit-tipo').value        = k.tipo_kit  || 'Kit Churrasco';
     document.getElementById('kit-preco-venda').value = k.preco_venda || '';
     updateKitHeader(); renderKitItems(); recalcAll(); showTab('kit');
   } catch(e) {
@@ -1123,9 +1131,9 @@ async function loadKit(id) {
     if (!kit) { alert('Kit não encontrado.'); return; }
     state.kitItems = JSON.parse(JSON.stringify(kit.items));
     state.kitEditandoId = kit.id;
-    document.getElementById('kit-nome').value      = kit.nome;
-    document.getElementById('kit-desc').value      = kit.desc;
-    document.getElementById('kit-tipo').value      = kit.tipo || 'Kit Churrasco';
+    document.getElementById('kit-nome').value        = kit.nome;
+    document.getElementById('kit-desc').value        = kit.desc;
+    document.getElementById('kit-tipo').value        = kit.tipo || 'Kit Churrasco';
     document.getElementById('kit-preco-venda').value = kit.precoVenda || '';
     updateKitHeader(); renderKitItems(); recalcAll(); showTab('kit');
   }
@@ -1246,6 +1254,23 @@ document.addEventListener('DOMContentLoaded', async () => {
   } catch(e) {}
 
   const loadMsg = document.getElementById('loading-msg');
+
+  // Se já tem token (acesso direto), carrega imediatamente
+  // Se está em iframe, aguarda postMessage com token (máx 3s)
+  if (!getToken()) {
+    loadMsg.textContent = 'Aguardando autenticação...';
+    await new Promise(resolve => {
+      const t = setTimeout(resolve, 3000); // timeout 3s
+      const handler = (e) => {
+        if (e.data?.type === 'bb_auth' && e.data.token) {
+          clearTimeout(t);
+          window.removeEventListener('message', handler);
+          resolve();
+        }
+      };
+      window.addEventListener('message', handler);
+    });
+  }
 
   // Carrega produtos do banco
   loadMsg.textContent = 'Carregando produtos do banco...';
