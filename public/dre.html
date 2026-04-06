@@ -1868,31 +1868,37 @@ async function confirmarPagamentoBoleto() {
   const t     = TXS.find(x => x.id === id);
   if (!t || !dtPag) { toast('Informe a data'); return; }
 
-  // Dá baixa no boleto no backend
-  if (t.boletoId) {
-    const d = await api.post(`/api/boletos/baixa/${t.boletoId}`, { dtPagamento: dtPag });
-    if (!d.ok) { toast('Erro ao dar baixa no boleto: ' + d.erro); return; }
-  }
-
-  // Atualiza lançamento do boleto no DRE
-  t.fonte     = 'BOLETO';
-  t.data      = dtPag;
-  t.mesCaixa  = dtPag.slice(5,7) + '/' + dtPag.slice(0,4);
-  t.needsReview = false;
-
-  // Se vinculou a um lançamento do extrato, marca o extrato também
-  if (extId) {
-    const ext = TXS.find(x => x.id === extId);
-    if (ext) {
-      ext.boletoId    = t.boletoId;
-      ext.categoria   = ext.categoria || t.categoria;
-      ext.vinculadoA  = t.lancamento;
+  try {
+    // Dá baixa no boleto no backend
+    if (t.boletoId) {
+      const d = await api.post(`/api/boletos/baixa/${t.boletoId}`, { dtPagamento: dtPag });
+      if (!d.ok) { toast('Erro ao dar baixa no boleto: ' + d.erro); }
     }
-  }
 
-  fecharModal('m-pagar-boleto');
-  render(); updStats(); renderDRE(); autoSv();
-  toast('✅ Boleto marcado como pago' + (extId ? ' e vinculado ao extrato!' : '!'));
+    // Atualiza lançamento do boleto no DRE
+    t.fonte     = 'BOLETO';
+    t.data      = dtPag;
+    t.mesCaixa  = dtPag.slice(5,7) + '/' + dtPag.slice(0,4);
+    t.needsReview = false;
+
+    // Se vinculou a um lançamento do extrato, marca o extrato também
+    if (extId) {
+      const ext = TXS.find(x => x.id === extId);
+      if (ext) {
+        ext.boletoId    = t.boletoId;
+        ext.categoria   = ext.categoria || t.categoria;
+        ext.vinculadoA  = t.lancamento;
+      }
+    }
+
+    render(); updStats(); renderDRE(); autoSv();
+    toast('✅ Boleto marcado como pago' + (extId ? ' e vinculado ao extrato!' : '!'));
+  } catch(e) {
+    toast('Erro: ' + e.message);
+  } finally {
+    // Sempre fecha o modal
+    document.getElementById('m-pagar-boleto').style.display = 'none';
+  }
 }
 
 // ─── VINCULAR EXTRATO A BOLETO ────────────────────────────────────────────────
