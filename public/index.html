@@ -741,7 +741,31 @@ window.addEventListener('message', e => {
   if (e.data.type === 'bb_refresh_kpis') {
     setTimeout(carregarKPIs, 500);
   }
+  // Logo atualizado na Config → aplica imediatamente
+  if (e.data.type === 'bb_logo') {
+    aplicarLogoGlobal(e.data.logo || null);
+  }
 });
+
+function aplicarLogoGlobal(b64) {
+  const imgs   = [document.getElementById('ph-logo-img'),  document.getElementById('lw-logo-img')];
+  const emojis = [document.getElementById('ph-logo-emoji'), document.getElementById('lw-logo-emoji')];
+  if (b64) {
+    imgs.forEach(img => { if(img){ img.src = b64; img.style.display = 'block'; }});
+    emojis.forEach(el => { if(el) el.style.display = 'none'; });
+  } else {
+    imgs.forEach(img => { if(img){ img.src = ''; img.style.display = 'none'; }});
+    emojis.forEach(el => { if(el) el.style.display = ''; });
+  }
+}
+
+// Aplica logo salvo no localStorage ao carregar
+(function() {
+  try {
+    const saved = localStorage.getItem('bb_logo');
+    if (saved) aplicarLogoGlobal(saved);
+  } catch(_) {}
+})();
 </script>
 </body>
 </html>

@@ -744,14 +744,11 @@ function showPage(page, el, fromMobile){
   const pageEl = document.getElementById('page-'+page);
   if(pageEl) pageEl.classList.add('active');
 
-  // Atualiza sidebar desktop
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
-  // Atualiza menu mobile
   document.querySelectorAll('.mobile-nav-btn').forEach(n=>n.classList.remove('active'));
 
   if(el) el.classList.add('active');
 
-  // Sincroniza o outro menu
   if(fromMobile){
     document.querySelectorAll('.nav-item').forEach(n=>{
       if(n.getAttribute('onclick')?.includes("'"+page+"'")){n.classList.add('active');}
@@ -761,6 +758,13 @@ function showPage(page, el, fromMobile){
       if(n.getAttribute('onclick')?.includes("'"+page+"'")){n.classList.add('active');}
     });
   }
+
+  // Carrega dados da página
+  if(page==='usuarios')       carregarUsuarios();
+  if(page==='funcionarios')   carregarFuncionarios();
+  if(page==='categorias')     carregarCategorias();
+  if(page==='acoes-validade') carregarAcoes();
+  if(page==='metas')          carregarMetas();
 }
 
 async function inativarUsr(id, nome){
