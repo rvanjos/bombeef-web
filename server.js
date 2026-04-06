@@ -252,6 +252,33 @@ app.use('/api/fornecedores', require('./routes/fornecedores')(pool));
 
 app.use('/api/admin/backup', require('./routes/backup')(pool));
 
+// Rota de migration manual — acessa uma vez para renomear colunas legadas
+app.get('/api/admin/fix-kits', async (req, res) => {
+  try {
+    const results = [];
+    const checks = [
+      { table: 'kits',     from: 'nome_kit', to: 'nome'   },
+      { table: 'kits',     from: 'id_kit',   to: 'id'     },
+      { table: 'kit_itens',from: 'id_kit',   to: 'kit_id' },
+    ];
+    for (const { table, from, to } of checks) {
+      const { rows } = await pool.query(
+        `SELECT column_name FROM information_schema.columns
+         WHERE table_schema='public' AND table_name=$1 AND column_name=$2`, [table, from]
+      );
+      if (rows.length) {
+        await pool.query(`ALTER TABLE ${table} RENAME COLUMN ${from} TO ${to}`);
+        results.push(`✅ ${table}.${from} → ${to}`);
+      } else {
+        results.push(`⏭ ${table}.${from} não existe (já OK)`);
+      }
+    }
+    res.json({ ok: true, results });
+  } catch(e) {
+    res.status(500).json({ ok: false, erro: e.message });
+  }
+});
+
 // ── Health check ───────────────────────────────────────────────────────────────
 app.get('/health', async (req, res) => {
   try {

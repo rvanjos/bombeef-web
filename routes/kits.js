@@ -170,17 +170,20 @@ module.exports = function (pool) {
       );
       const temCodigo = colCheck.length > 0;
 
-      // Helper: tenta INSERT, se falhar com coluna errada tenta o oposto
+      // Helper: tenta INSERT com SAVEPOINT para fallback seguro na transação
       async function insertKit(cols, vals) {
+        await client.query('SAVEPOINT insert_kit');
         try {
           const { rows } = await client.query(
             `INSERT INTO kits (${cols.join(',')}) VALUES (${vals.map((_,i)=>'$'+(i+1)).join(',')}) RETURNING ${pkCol} AS id`,
             vals
           );
+          await client.query('RELEASE SAVEPOINT insert_kit');
           return rows[0].id;
         } catch(e) {
-          if (e.message.includes('nome_kit') || e.message.includes('"nome"')) {
-            // Tenta com o nome oposto
+          await client.query('ROLLBACK TO SAVEPOINT insert_kit');
+          // Se o erro é de coluna errada, tenta com o nome oposto
+          if (e.message.includes('nome_kit') || e.message.includes('"nome"') || e.message.includes('column')) {
             const altNome = nomeCol === 'nome' ? 'nome_kit' : 'nome';
             const idx = cols.indexOf(nomeCol);
             if (idx >= 0) {
