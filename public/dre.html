@@ -2149,6 +2149,7 @@ function exportXLS(){
 
 // ─── SALVAR / SESSÕES ────────────────────────────────────────────────────────
 function autoSv(){
+  if (!_inicializado || !mesRef || !TXS.length) return; // não salva durante init
   setSt('load');
   clearTimeout(_sv);
   _sv=setTimeout(()=>salvar(true),2000); // 2s debounce
