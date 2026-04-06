@@ -54,16 +54,21 @@ module.exports = function (pool) {
   // ── GET /kpis ──────────────────────────────────────────────────────────────
   r.get('/kpis', async (req, res) => {
     try {
+      // Verifica se coluna data_ultima_importacao existe
+      const colCheck = await pool.query(`
+        SELECT column_name FROM information_schema.columns
+        WHERE table_name='produtos' AND column_name='data_ultima_importacao'
+      `);
+      const temDataImport = colCheck.rows.length > 0;
+
       const { rows } = await pool.query(`
         SELECT
           COUNT(*) FILTER (WHERE ativo = true)           AS ativos,
           COUNT(*) FILTER (WHERE ativo = false)          AS inativos,
           COUNT(DISTINCT fornecedor) FILTER (WHERE ativo) AS fornecedores,
           ROUND(AVG(preco_venda) FILTER (WHERE ativo AND preco_venda > 0), 2) AS preco_medio,
-          MAX(GREATEST(
-            COALESCE(data_ultima_importacao, '1970-01-01'),
-            COALESCE(atualizado_em, '1970-01-01')
-          )) AS ultima_atualizacao
+          MAX(COALESCE(atualizado_em, '1970-01-01')) AS ultima_atualizacao
+          ${temDataImport ? `, MAX(GREATEST(COALESCE(data_ultima_importacao,'1970-01-01'::timestamptz), COALESCE(atualizado_em,'1970-01-01'::timestamptz))) AS ultima_import` : ''}
         FROM produtos
       `);
       res.json({ ok: true, data: {
@@ -71,7 +76,7 @@ module.exports = function (pool) {
         inativos:          parseInt(rows[0].inativos),
         fornecedores:      parseInt(rows[0].fornecedores),
         precoMedio:        parseFloat(rows[0].preco_medio || 0),
-        ultimaAtualizacao: rows[0].ultima_atualizacao || null,
+        ultimaAtualizacao: rows[0].ultima_import || rows[0].ultima_atualizacao || null,
       }});
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });

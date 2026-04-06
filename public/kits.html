@@ -4,6 +4,11 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Kits — Bom Beef</title>
 <script src="/js/api.js"></script>
+<script>
+// Alias para compatibilidade — api.js expõe como window.BB.api
+const api = window.BB?.api || window.api;
+const fmt = window.BB?.fmt || window.fmt;
+</script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
 :root{
@@ -233,7 +238,14 @@ const CFG = {
 
 // ── Init ───────────────────────────────────────────────────────────────────
 window.onBBReady = () => carregarTudo();
-if (api.token()) carregarTudo();
+// Espera api estar disponível (carregado via IIFE)
+document.addEventListener('DOMContentLoaded', () => {
+  // Re-aponta api após IIFE executar
+  if (window.BB?.api) {
+    window.api = window.BB.api;
+  }
+  if (window.BB?.api?.token()) carregarTudo();
+});
 
 async function carregarTudo(toast = false) {
   setSyncStatus('⏳ Carregando...');
