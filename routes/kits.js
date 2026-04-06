@@ -14,10 +14,12 @@ module.exports = function (pool) {
     const db = client || pool;
     const { rows } = await db.query(`
       SELECT column_name FROM information_schema.columns
-      WHERE table_name IN ('kits','kit_itens')
+      WHERE table_schema = 'public'
+        AND table_name IN ('kits','kit_itens')
         AND column_name IN ('id','id_kit','nome','nome_kit','kit_id')
     `);
     const cols = rows.map(r => r.column_name);
+    console.log('[kits] detectSchema cols:', cols);
     return {
       pkCol:   cols.includes('id')     ? 'id'     : 'id_kit',
       nomeCol: cols.includes('nome')   ? 'nome'   : 'nome_kit',
@@ -168,19 +170,40 @@ module.exports = function (pool) {
       );
       const temCodigo = colCheck.length > 0;
 
+      // Helper: tenta INSERT, se falhar com coluna errada tenta o oposto
+      async function insertKit(cols, vals) {
+        try {
+          const { rows } = await client.query(
+            `INSERT INTO kits (${cols.join(',')}) VALUES (${vals.map((_,i)=>'$'+(i+1)).join(',')}) RETURNING ${pkCol} AS id`,
+            vals
+          );
+          return rows[0].id;
+        } catch(e) {
+          if (e.message.includes('nome_kit') || e.message.includes('"nome"')) {
+            // Tenta com o nome oposto
+            const altNome = nomeCol === 'nome' ? 'nome_kit' : 'nome';
+            const idx = cols.indexOf(nomeCol);
+            if (idx >= 0) {
+              const altCols = [...cols]; altCols[idx] = altNome;
+              console.log(`[kits] fallback INSERT: trocando ${nomeCol}→${altNome}`);
+              const { rows } = await client.query(
+                `INSERT INTO kits (${altCols.join(',')}) VALUES (${vals.map((_,i)=>'$'+(i+1)).join(',')}) RETURNING ${pkCol} AS id`,
+                vals
+              );
+              return rows[0].id;
+            }
+          }
+          throw e;
+        }
+      }
+
       let kitId;
       if (temCodigo && codigo) {
-        const { rows } = await client.query(`
-          INSERT INTO kits (codigo, ${nomeCol}, descricao, preco_venda, margem)
-          VALUES ($1,$2,$3,$4,$5) RETURNING ${pkCol} AS id
-        `, [codigo.trim(), nome.trim(), descricao||null, parseFloat(precoVenda||0), parseFloat(margem||0)]);
-        kitId = rows[0].id;
+        kitId = await insertKit(['codigo', nomeCol, 'descricao', 'preco_venda', 'margem'],
+          [codigo.trim(), nome.trim(), descricao||null, parseFloat(precoVenda||0), parseFloat(margem||0)]);
       } else {
-        const { rows } = await client.query(`
-          INSERT INTO kits (${nomeCol}, descricao, preco_venda)
-          VALUES ($1,$2,$3) RETURNING ${pkCol} AS id
-        `, [nome.trim(), descricao||null, parseFloat(precoVenda||0)]);
-        kitId = rows[0].id;
+        kitId = await insertKit([nomeCol, 'descricao', 'preco_venda'],
+          [nome.trim(), descricao||null, parseFloat(precoVenda||0)]);
         if (temCodigo && codigo)
           await client.query(`UPDATE kits SET codigo=$1 WHERE ${pkCol}=$2`, [codigo.trim(), kitId]).catch(()=>{});
       }
