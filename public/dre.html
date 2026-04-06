@@ -1342,6 +1342,7 @@ function _chaveFornecedor(t) {
 
 function setCat(id, cat) {
   const t = TXS.find(x => x.id===id); if (!t) return;
+  console.log(`[setCat] id=${id} cat=${cat} sessId=${sessId} mesRef=${mesRef} TXS=${TXS.length}`);
   t.categoria = cat;
   if (cat) {
     const k = _chaveFornecedor(t);
@@ -2164,6 +2165,9 @@ async function salvar(silent=false, tentativa=1){
       dados_json:{transactions:TXS,loadedFiles:files,supplierMem:supMem,_savedAt:new Date().toISOString()}
     });
     if(d.ok){
+      if (sessId && d.sessao_id && sessId !== d.sessao_id) {
+        console.warn('[DRE] sessId mudou:', sessId, '→', d.sessao_id, '— nova sessão criada');
+      }
       sessId=d.sessao_id;
       if(!silent) toast('💾 Salvo! ' + TXS.length + ' lançamentos');
       setSt('ok');
