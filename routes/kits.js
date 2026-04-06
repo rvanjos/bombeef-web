@@ -121,8 +121,16 @@ module.exports = function (pool) {
   // ── GET / ──────────────────────────────────────────────────────────────────
   r.get('/', async (req, res) => {
     try {
-      // Garante tabelas existem e colunas novas foram adicionadas
       await initTable().catch(e => console.error('[kits] initTable no GET:', e.message));
+
+      // Detecta nome real da PK
+      const pkCheck = await pool.query(`
+        SELECT column_name FROM information_schema.columns
+        WHERE table_name='kits' AND column_name IN ('id','id_kit')
+        ORDER BY column_name ASC LIMIT 1
+      `);
+      const pkCol = pkCheck.rows[0]?.column_name || 'id';
+
       const { busca, ativo = 'true' } = req.query;
       const conds = [], params = [];
       if (ativo !== 'todos') { params.push(ativo !== 'false'); conds.push(`k.ativo = $${params.length}`); }
@@ -133,8 +141,16 @@ module.exports = function (pool) {
       }
       const where = conds.length ? 'WHERE ' + conds.join(' AND ') : '';
 
+      // Detecta PK de kit_itens também
+      const kiPkCheck = await pool.query(`
+        SELECT column_name FROM information_schema.columns
+        WHERE table_name='kit_itens' AND column_name IN ('kit_id','id_kit')
+        ORDER BY column_name ASC LIMIT 1
+      `);
+      const kiCol = kiPkCheck.rows[0]?.column_name || 'kit_id';
+
       const { rows: kits } = await pool.query(
-        `SELECT k.*, (
+        `SELECT k.*, k.${pkCol} AS id, (
           SELECT COALESCE(SUM(ki.quantidade * COALESCE(
             NULLIF(ki.preco_custo_unitario, 0),
             p.preco_custo,
@@ -142,29 +158,29 @@ module.exports = function (pool) {
           )), 0)
           FROM kit_itens ki
           LEFT JOIN produtos p ON p.id = ki.produto_id
-          WHERE ki.kit_id = k.id
+          WHERE ki.${kiCol} = k.${pkCol}
         ) AS custo_total
         FROM kits k ${where} ORDER BY k.nome ASC`, params
       );
 
-      // Carrega itens de cada kit
-      const ids = kits.map(k => k.id);
+      const ids = kits.map(k => k.id || k.id_kit);
       let itens = [];
       if (ids.length > 0) {
         const { rows } = await pool.query(`
-          SELECT ki.*, p.descricao AS prod_desc, p.unidade, p.preco_venda AS preco_venda_atual
+          SELECT ki.*, ki.${kiCol} AS kit_id, p.descricao AS prod_desc, p.unidade, p.preco_venda AS preco_venda_atual
           FROM kit_itens ki
           LEFT JOIN produtos p ON p.id = ki.produto_id
-          WHERE ki.kit_id = ANY($1::int[])
+          WHERE ki.${kiCol} = ANY($1::int[])
         `, [ids]);
         itens = rows;
       }
 
       const data = kits.map(k => ({
         ...k,
-        custoTotal: parseFloat(k.custo_total || 0),
+        id:          k.id || k.id_kit,
+        custoTotal:  parseFloat(k.custo_total || 0),
         margemValor: parseFloat(k.preco_venda || 0) - parseFloat(k.custo_total || 0),
-        itens: itens.filter(i => i.kit_id === k.id),
+        itens:       itens.filter(i => i.kit_id === (k.id || k.id_kit)),
       }));
 
       res.json({ ok: true, data, total: data.length });
@@ -173,16 +189,32 @@ module.exports = function (pool) {
       res.status(500).json({ ok: false, erro: e.message, detalhe: e.detail || e.hint || '' });
     }
   });
+      res.status(500).json({ ok: false, erro: e.message, detalhe: e.detail || e.hint || '' });
+    }
+  });
 
   // ── GET /:id ───────────────────────────────────────────────────────────────
   r.get('/:id', async (req, res) => {
     try {
+      const pkCheck = await pool.query(`
+        SELECT column_name FROM information_schema.columns
+        WHERE table_name='kits' AND column_name IN ('id','id_kit')
+        ORDER BY column_name ASC LIMIT 1
+      `);
+      const pkCol = pkCheck.rows[0]?.column_name || 'id';
+      const kiPkCheck = await pool.query(`
+        SELECT column_name FROM information_schema.columns
+        WHERE table_name='kit_itens' AND column_name IN ('kit_id','id_kit')
+        ORDER BY column_name ASC LIMIT 1
+      `);
+      const kiCol = kiPkCheck.rows[0]?.column_name || 'kit_id';
+
       const idParam = req.params.id;
       const numId = parseInt(idParam);
       const { rows } = await pool.query(
         isNaN(numId)
-          ? `SELECT * FROM kits WHERE codigo = $1`
-          : `SELECT * FROM kits WHERE id = $1 OR codigo = $2`,
+          ? `SELECT *, ${pkCol} AS id FROM kits WHERE codigo = $1`
+          : `SELECT *, ${pkCol} AS id FROM kits WHERE ${pkCol} = $1 OR codigo = $2`,
         isNaN(numId) ? [idParam] : [numId, idParam]
       );
       if (!rows.length) return res.status(404).json({ ok: false, erro: 'Kit não encontrado' });
@@ -192,7 +224,7 @@ module.exports = function (pool) {
         SELECT ki.*, p.descricao AS prod_desc, p.unidade, p.preco_custo AS custo_atual
         FROM kit_itens ki
         LEFT JOIN produtos p ON p.id = ki.produto_id
-        WHERE ki.kit_id = $1
+        WHERE ki.${kiCol} = $1
       `, [kit.id]);
 
       const custoTotal = await calcCustoKit(kit.id);
@@ -321,7 +353,9 @@ module.exports = function (pool) {
   // ── DELETE /:id ────────────────────────────────────────────────────────────
   r.delete('/:id', async (req, res) => {
     try {
-      await pool.query(`UPDATE kits SET ativo = false, atualizado_em = NOW() WHERE id = $1 OR codigo = $1`, [req.params.id]);
+      const pkCheck = await pool.query(`SELECT column_name FROM information_schema.columns WHERE table_name='kits' AND column_name IN ('id','id_kit') ORDER BY column_name ASC LIMIT 1`);
+      const pkCol = pkCheck.rows[0]?.column_name || 'id';
+      await pool.query(`UPDATE kits SET ativo = false, atualizado_em = NOW() WHERE ${pkCol} = $1 OR codigo = $1`, [req.params.id]);
       res.json({ ok: true });
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
