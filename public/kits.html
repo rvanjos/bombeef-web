@@ -4,11 +4,6 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Kits — Bom Beef</title>
 <script src="/js/api.js"></script>
-<script>
-// Alias para compatibilidade — api.js expõe como window.BB.api
-const api = window.BB?.api || window.api;
-const fmt = window.BB?.fmt || window.fmt;
-</script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
 :root{
@@ -237,17 +232,65 @@ const CFG = {
 };
 
 // ── Init ───────────────────────────────────────────────────────────────────
-window.onBBReady = () => carregarTudo();
-// Espera api estar disponível (carregado via IIFE)
-document.addEventListener('DOMContentLoaded', () => {
-  // Re-aponta api após IIFE executar
-  if (window.BB?.api) {
-    window.api = window.BB.api;
+// ── Auth & Init ────────────────────────────────────────────────────────────
+// api.js expõe window.BB.api — criamos alias global após load
+let _api = null;
+
+function getApi() {
+  if (_api) return _api;
+  _api = window.BB?.api || null;
+  return _api;
+}
+
+function getToken() {
+  return sessionStorage.getItem('bb_token') || localStorage.getItem('bb_token') || '';
+}
+
+// apiFetch próprio — não depende de api.js estar pronto
+async function apiFetch(path, opts = {}) {
+  const token = getToken();
+  const headers = { 'Content-Type': 'application/json', ...(opts.headers||{}) };
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  const res = await fetch(path, { ...opts, headers });
+  if (!res.ok) {
+    let msg = 'Erro ' + res.status;
+    try { const j = await res.json(); msg = j.erro || j.message || msg; } catch(_) {}
+    throw new Error(msg);
   }
-  if (window.BB?.api?.token()) carregarTudo();
+  return res.json();
+}
+
+// Redefine api com funções simples
+const api = {
+  token: getToken,
+  get:    (path)       => apiFetch(path),
+  post:   (path, body) => apiFetch(path, { method:'POST', body:JSON.stringify(body) }),
+  put:    (path, body) => apiFetch(path, { method:'PUT',  body:JSON.stringify(body) }),
+  delete: (path)       => apiFetch(path, { method:'DELETE' }),
+};
+
+// Escuta token do portal (postMessage)
+window.addEventListener('message', e => {
+  if (e.data?.type === 'bb_auth' && e.data.token) {
+    sessionStorage.setItem('bb_token', e.data.token);
+    carregarTudo();
+  }
+  if (e.data?.type === 'bb_token' && e.data.token) {
+    sessionStorage.setItem('bb_token', e.data.token);
+    carregarTudo();
+  }
 });
 
+// Init: se já tem token (acesso direto), carrega imediatamente
+window.onBBReady = () => carregarTudo();
+document.addEventListener('DOMContentLoaded', () => {
+  if (getToken()) carregarTudo();
+});
+
+let _carregando = false;
 async function carregarTudo(toast = false) {
+  if (_carregando && !toast) return; // evita chamadas duplicadas
+  _carregando = true;
   setSyncStatus('⏳ Carregando...');
   try {
     const [rk, rp] = await Promise.all([
@@ -262,6 +305,8 @@ async function carregarTudo(toast = false) {
     if (toast) showToast('Dados atualizados!');
   } catch(e) {
     setSyncStatus('❌ ' + e.message);
+  } finally {
+    _carregando = false;
   }
 }
 
