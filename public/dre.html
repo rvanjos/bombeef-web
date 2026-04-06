@@ -188,7 +188,7 @@ td{padding:5px 9px;vertical-align:middle;}
   <button class="btn bs" onclick="exportXLS()" title="Exportar Excel">📤 Excel</button>
   <button class="btn bs" onclick="abrirSessoes()" title="Histórico de sessões">📂 Sessões</button>
   <button class="btn bs" onclick="recuperarDoBanco()" title="Recuperar do banco em caso de perda" style="border-color:var(--orange);color:var(--orange)">🔄 Recuperar</button>
-  <input type="month" id="f-mesref" style="padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px" onchange="trocarMes()">
+  <input type="month" id="f-mesref" style="padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px">
 </div>
 
 <!-- SPLIT: tabela + painel DRE -->
@@ -658,6 +658,12 @@ async function init() {
   } catch(_) {}
   await carregarCategorias();
   await carregarSessao();
+  // Só adiciona listener de troca de mês DEPOIS de carregar (evita loop)
+  const fMesEl = document.getElementById('f-mesref');
+  if (!fMesEl._listenerAdded) {
+    fMesEl.addEventListener('change', trocarMes);
+    fMesEl._listenerAdded = true;
+  }
 }
 
 async function carregarCategorias() {
