@@ -691,36 +691,53 @@ async function carregarCategorias() {
 
 async function carregarSessao() {
   setSt('load');
-  const d = await api.get(`/api/dre/sessoes/${encodeURIComponent(mesRef)}`);
-  if (d.ok && d.data?.dados_json) {
-    sessId = d.data.id;
-    const dados = d.data.dados_json;
-    TXS   = (typeof dados === 'object' && !Array.isArray(dados)) ? (dados.transactions || []) : (Array.isArray(dados) ? dados : []);
-    files = dados.loadedFiles  || [];
-    supMem= dados.supplierMem  || {};
-    if (TXS.length) { showTable(); toast(`📂 ${TXS.length} lançamentos carregados`); }
-  } else {
-    // Sem sessão para este mês — carrega a mais recente disponível
-    const dr = await api.get('/api/dre/sessoes?limit=1');
-    if (dr.ok && dr.data?.length) {
-      const s = dr.data[0];
-      sessId = s.id;
-      // Atualiza o mês exibido para o da sessão encontrada
-      mesRef = s.mes_ref;
+  try {
+    // Carrega lista de todas as sessões disponíveis (últimos 24 meses)
+    const lista = await api.get('/api/dre/sessoes?limit=24');
+    if (!lista.ok || !lista.data?.length) {
+      TXS=[]; files=[]; supMem={}; sessId=null;
+      setSt('ok'); updMesFiltro(); render(); updStats(); renderDRE();
+      return;
+    }
+
+    // Carrega dados completos de cada sessão em paralelo
+    const sessoes = await Promise.all(
+      lista.data.map(s => api.get(`/api/dre/sessoes/${s.id}`))
+    );
+
+    // Junta todos os TXS de todos os meses
+    TXS = []; files = []; supMem = {};
+    window._sessoesPorMes = {}; // mapa mes_ref → sessao_id para salvar corretamente
+
+    for (const r of sessoes) {
+      if (!r.ok || !r.data?.dados_json) continue;
+      const dados = r.data.dados_json;
+      const txs = (typeof dados === 'object' && !Array.isArray(dados))
+        ? (dados.transactions || [])
+        : (Array.isArray(dados) ? dados : []);
+      TXS = [...TXS, ...txs];
+      if (dados.loadedFiles?.length) files = [...files, ...dados.loadedFiles];
+      if (dados.supplierMem) supMem = { ...supMem, ...dados.supplierMem };
+      window._sessoesPorMes[r.data.mes_ref] = r.data.id;
+    }
+
+    // sessId aponta para a sessão do mês mais recente (ou mês atual)
+    const sessaoAtual = lista.data.find(s => s.mes_ref === mesRef) || lista.data[0];
+    sessId = sessaoAtual?.id || null;
+    if (sessaoAtual && sessaoAtual.mes_ref !== mesRef) {
+      mesRef = sessaoAtual.mes_ref;
       document.getElementById('dre-mes-label').textContent = mesRef;
       const [mm, yyyy] = mesRef.split('/');
-      if(document.getElementById('f-mesref'))
+      if (document.getElementById('f-mesref'))
         document.getElementById('f-mesref').value = `${yyyy}-${mm}`;
-      // Busca dados completos da sessão
-      const ds = await api.get(`/api/dre/sessoes/${s.id}`);
-      if (ds.ok && ds.data?.dados_json) {
-        const dados = ds.data.dados_json;
-        TXS   = (typeof dados === 'object' && !Array.isArray(dados)) ? (dados.transactions || []) : [];
-        files = dados.loadedFiles || [];
-        supMem= dados.supplierMem || {};
-        if (TXS.length) { showTable(); toast(`📂 Última sessão: ${mesRef} — ${TXS.length} lançamentos`); }
-      } else { TXS=[]; files=[]; supMem={}; }
-    } else { TXS=[]; files=[]; supMem={}; }
+    }
+
+    if (TXS.length) {
+      showTable();
+      toast(`📂 ${TXS.length} lançamentos de ${lista.data.length} mês(es)`);
+    }
+  } catch(e) {
+    console.error('[carregarSessao]', e);
   }
   setSt('ok');
   updMesFiltro(); render(); updStats(); renderDRE();
@@ -2156,34 +2173,55 @@ function autoSv(){
 }
 
 async function salvar(silent=false, tentativa=1){
-  if(!mesRef){ if(!silent) toast('❌ Sem mês de referência'); return; }
   if(!TXS.length){ if(!silent) toast('⚠️ Sem lançamentos para salvar'); return; }
   setSt('load');
   try {
-    const d=await api.post('/api/dre/salvar',{
-      sessao_id:sessId, mes_ref:mesRef,
-      descricao:`Sessão ${mesRef} — ${TXS.length} lançamentos`,
-      dados_json:{transactions:TXS,loadedFiles:files,supplierMem:supMem,_savedAt:new Date().toISOString()}
+    // Agrupa lançamentos por mês e salva cada grupo na sessão correta
+    const porMes = {};
+    TXS.forEach(t => {
+      const m = t.mes || mesRef;
+      if (!porMes[m]) porMes[m] = [];
+      porMes[m].push(t);
     });
-    if(d.ok){
-      if (sessId && d.sessao_id && sessId !== d.sessao_id) {
-        console.warn('[DRE] sessId mudou:', sessId, '→', d.sessao_id, '— nova sessão criada');
+
+    const meses = Object.keys(porMes);
+    let ultimoSessId = sessId;
+
+    for (const mes of meses) {
+      const txsMes = porMes[mes];
+      // Para o mês atual, usa sessId conhecido; outros meses usam null (backend encontra pelo mes_ref)
+      const sid = (window._sessoesPorMes && window._sessoesPorMes[mes]) || (mes === mesRef ? sessId : null);
+      const d = await api.post('/api/dre/salvar', {
+        sessao_id: sid,
+        mes_ref: mes,
+        descricao: `Sessão ${mes} — ${txsMes.length} lançamentos`,
+        dados_json: {
+          transactions: txsMes,
+          loadedFiles: mes === mesRef ? files : [],
+          supplierMem: supMem,
+          _savedAt: new Date().toISOString()
+        }
+      });
+      if (d.ok) {
+        if (mes === mesRef) {
+          if (sessId && d.sessao_id && sessId !== d.sessao_id)
+            console.warn('[DRE] sessId mudou:', sessId, '→', d.sessao_id);
+          ultimoSessId = d.sessao_id;
+        }
+      } else {
+        if (tentativa < 3 && d.erro && d.erro.includes('accepting')){
+          setSt('load');
+          setTimeout(()=>salvar(silent, tentativa+1), 3000 * tentativa);
+          if(!silent) toast(`⏳ Banco reiniciando, tentando novamente (${tentativa}/3)...`);
+          return;
+        }
+        console.error('[DRE/salvar] erro mes', mes, d.erro);
       }
-      sessId=d.sessao_id;
-      if(!silent) toast('💾 Salvo! ' + TXS.length + ' lançamentos');
-      setSt('ok');
-    } else {
-      // Retry automático se banco temporariamente indisponível
-      if(tentativa < 3 && d.erro && d.erro.includes('accepting')){
-        setSt('load');
-        setTimeout(()=>salvar(silent, tentativa+1), 3000 * tentativa);
-        if(!silent) toast(`⏳ Banco reiniciando, tentando novamente (${tentativa}/3)...`);
-        return;
-      }
-      console.error('[DRE/salvar] erro:', d.erro);
-      if(!silent) toast('❌ Erro ao salvar: '+(d.erro||'desconhecido'));
-      setSt('err');
     }
+
+    sessId = ultimoSessId;
+    if(!silent) toast('💾 Salvo! ' + TXS.length + ' lançamentos em ' + meses.length + ' mês(es)');
+    setSt('ok');
   } catch(e) {
     if(tentativa < 3){
       setTimeout(()=>salvar(silent, tentativa+1), 3000 * tentativa);
