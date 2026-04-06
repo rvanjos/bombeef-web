@@ -1844,7 +1844,7 @@ async function pagarBoleto(id) {
   // Busca lançamentos do extrato com VALOR EXATO para sugerir vinculação
   const valorBol = Math.round(Math.abs(parseFloat(t.valor||0)) * 100); // centavos para evitar float
   const extratos = TXS.filter(x =>
-    x.fonte === 'EXTRATO' &&
+    ['EXTRATO','OFX','XLSX','CSV'].includes(x.fonte?.toUpperCase()) &&
     !x.boletoId &&
     Math.round(Math.abs(parseFloat(x.valor||0)) * 100) === valorBol // valor exato
   ).slice(0,15);
@@ -2216,8 +2216,12 @@ async function delSessao(id){if(!confirm('Remover sessão?'))return;await api.de
 function fecharModal(id){
   const el=document.getElementById(id);
   if(!el) return;
-  if(id==='m-drill') el.style.display='none';
-  else el.classList.remove('open');
+  // Modais que usam style.display em vez de classe .open
+  if(id==='m-drill' || id==='m-pagar-boleto' || el.style.display) {
+    el.style.display='none';
+  } else {
+    el.classList.remove('open');
+  }
 }
 
 async function recuperarDoBanco(){
