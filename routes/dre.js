@@ -872,6 +872,49 @@ module.exports = function (pool) {
         return res.status(422).json({ ok: false, erro: 'Nenhum lançamento encontrado no arquivo.' });
       }
 
+      // ── Auto-baixa de boletos: se lançamento do extrato bate com boleto pelo valor ──
+      let boletosQuitados = 0;
+      const lancamentosComBoleto = [];
+      for (const l of lancamentos) {
+        if (!l.valor || parseFloat(l.valor) >= 0) continue; // só débitos
+        const valorCentavos = Math.round(Math.abs(parseFloat(l.valor)) * 100);
+        if (!valorCentavos) continue;
+
+        try {
+          // Busca boletos em aberto com valor próximo (±1 centavo) e data de vencimento próxima
+          const { rows: boletos } = await pool.query(`
+            SELECT id, valor, vencimento, fornecedor
+            FROM boletos
+            WHERE status IN ('avencer','vencido')
+              AND ABS(ROUND(valor::numeric * 100) - $1) <= 1
+              AND (vencimento IS NULL OR vencimento <= CURRENT_DATE + INTERVAL '60 days')
+            ORDER BY ABS(ROUND(valor::numeric * 100) - $1) ASC, vencimento ASC
+            LIMIT 1
+          `, [valorCentavos]);
+
+          if (boletos.length) {
+            const boleto = boletos[0];
+            const dtPag = l.data || new Date().toISOString().slice(0,10);
+            await pool.query(`
+              UPDATE boletos SET
+                status = 'pago',
+                dt_pagamento = $1::date,
+                vinculado_extrato = true,
+                extrato_lancamento = $2,
+                atualizado_em = NOW()
+              WHERE id = $3
+            `, [dtPag, l.lancamento || l.memo || '', boleto.id]);
+            boletosQuitados++;
+            lancamentosComBoleto.push({ lancamento: l, boletoId: boleto.id });
+            // Marca o lançamento com o boletoId para deduplicação no frontend
+            l.boletoId = boleto.id;
+            l.categoria = l.categoria || 'BOLETO PAGO';
+          }
+        } catch(e) {
+          console.warn('[dre/import-extrato] auto-baixa boleto:', e.message);
+        }
+      }
+
       // Verifica sessão existente do mês para informar sobre possíveis duplicatas
       const mesImport = lancamentos[0]?.mes || '';
       let duplicatasEstimadas = 0;
@@ -886,7 +929,7 @@ module.exports = function (pool) {
           duplicatasEstimadas = lancamentos.filter(l => l.fitid && fitidsExist.has(l.fitid)).length;
         }
       }
-      res.json({ ok: true, lancamentos, total: lancamentos.length, duplicatasEstimadas });
+      res.json({ ok: true, lancamentos, total: lancamentos.length, duplicatasEstimadas, boletosQuitados });
     } catch (e) {
       console.error('[dre/import-extrato]', e.message);
       res.status(500).json({ ok: false, erro: 'Erro ao processar arquivo: ' + e.message });

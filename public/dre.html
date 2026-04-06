@@ -764,10 +764,12 @@ async function procExt(file) {
   }));
   // Avisa sobre duplicatas detectadas
   const dup = d.duplicatasEstimadas || 0;
+  const bq  = d.boletosQuitados || 0;
+  const msgExtra = bq > 0 ? ` · 💳 ${bq} boleto(s) marcado(s) como pago` : '';
   if (dup > 0) {
-    toast(`⚠️ ${d.total} lançamentos importados · ${dup} já existem na sessão e serão ignorados ao salvar`, 5000);
+    toast(`⚠️ ${d.total} lançamentos importados · ${dup} já existem${msgExtra}`, 5000);
   } else {
-    toast(`✅ ${d.total} lançamentos carregados`);
+    toast(`✅ ${d.total} lançamentos carregados${msgExtra}`);
   }
   addLancs(lancs, file.name);
 }
