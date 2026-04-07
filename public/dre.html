@@ -699,6 +699,17 @@ async function carregarCategorias() {
   atualizarDatalist();
 }
 
+function atualizarDatalist() {
+  const dl = document.getElementById('cats-dl');
+  if (!dl) return;
+  const cats = new Set();
+  Object.values(CATS).forEach(g => {
+    if (Array.isArray(g.s)) g.s.forEach(s => cats.add(s));
+    else Object.values(g).forEach(v => { if(Array.isArray(v)) v.forEach(s => cats.add(s)); });
+  });
+  dl.innerHTML = [...cats].map(c => `<option value="${c}">`).join('');
+}
+
 async function carregarSessao() {
   setSt('load');
   try {
