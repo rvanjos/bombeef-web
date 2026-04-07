@@ -9,6 +9,24 @@ module.exports = function (pool) {
   r.use(autenticar());
 
   async function initTable() {
+    // Migration PRIMEIRO — renomeia colunas legadas antes de qualquer outra operação
+    await pool.query(`
+      DO $$ BEGIN
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='kits' AND column_name='nome_kit')
+        AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='kits' AND column_name='nome')
+        THEN ALTER TABLE kits RENAME COLUMN nome_kit TO nome;
+        END IF;
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='kits' AND column_name='id_kit')
+        AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='kits' AND column_name='id')
+        THEN ALTER TABLE kits RENAME COLUMN id_kit TO id;
+        END IF;
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='kit_itens' AND column_name='id_kit')
+        AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='kit_itens' AND column_name='kit_id')
+        THEN ALTER TABLE kit_itens RENAME COLUMN id_kit TO kit_id;
+        END IF;
+      END $$;
+    `).catch(e => console.warn('[kits] migration legada:', e.message));
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS kits (
         id SERIAL PRIMARY KEY, codigo TEXT, nome TEXT NOT NULL,
