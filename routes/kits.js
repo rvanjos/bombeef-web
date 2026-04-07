@@ -42,14 +42,26 @@ module.exports = function (pool) {
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS kit_itens (
-        id SERIAL PRIMARY KEY, kit_id INTEGER NOT NULL, produto_id INTEGER,
+        id SERIAL PRIMARY KEY, kit_id INTEGER, produto_id INTEGER,
         codigo_produto TEXT, descricao_produto TEXT,
         quantidade NUMERIC(10,3) DEFAULT 1, preco_custo_unitario NUMERIC(10,4) DEFAULT 0,
         ignorar_margem BOOLEAN DEFAULT false, custo_kit NUMERIC(10,4)
       )
     `).catch(() => {});
+    // Garante que kit_id existe — se só existia id_kit, adiciona kit_id e migra os dados
+    await pool.query(`
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='kit_itens' AND column_name='kit_id')
+        THEN
+          ALTER TABLE kit_itens ADD COLUMN kit_id INTEGER;
+          IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='kit_itens' AND column_name='id_kit')
+          THEN UPDATE kit_itens SET kit_id = id_kit;
+          END IF;
+        END IF;
+      END $$;
+    `).catch(e => console.warn('[kits] migração kit_id:', e.message));
     for (const [col, def] of [
-      ['kit_id','INTEGER'],['produto_id','INTEGER'],['codigo_produto','TEXT'],
+      ['produto_id','INTEGER'],['codigo_produto','TEXT'],
       ['descricao_produto','TEXT'],['preco_custo_unitario','NUMERIC(10,4) DEFAULT 0'],
       ['ignorar_margem','BOOLEAN DEFAULT false'],['custo_kit','NUMERIC(10,4)'],
     ]) await pool.query(`ALTER TABLE kit_itens ADD COLUMN IF NOT EXISTS ${col} ${def}`).catch(() => {});
@@ -165,14 +177,6 @@ module.exports = function (pool) {
       );
       const kitId = r1[0].id;
 
-      // Detecta nome da coluna FK em kit_itens
-      const { rows: kiCols } = await client.query(`
-        SELECT column_name FROM information_schema.columns
-        WHERE table_schema='public' AND table_name='kit_itens'
-          AND column_name IN ('kit_id','id_kit')
-      `);
-      const kiCol = kiCols.some(r=>r.column_name==='kit_id') ? 'kit_id' : 'id_kit';
-
       for (const item of itens) {
         let prodId = null;
         if (item.codigo) {
@@ -180,7 +184,7 @@ module.exports = function (pool) {
           if (p.rows.length) prodId = p.rows[0].id;
         }
         await client.query(`
-          INSERT INTO kit_itens (${kiCol}, produto_id, codigo_produto, descricao_produto, quantidade, preco_custo_unitario)
+          INSERT INTO kit_itens (kit_id, produto_id, codigo_produto, descricao_produto, quantidade, preco_custo_unitario)
           VALUES ($1,$2,$3,$4,$5,$6)
         `, [kitId, prodId, item.codigo||null, item.descricao||null,
             parseFloat(item.quantidade||1), parseFloat(item.precoCusto||0)]);
@@ -231,13 +235,7 @@ module.exports = function (pool) {
         if (!kitRow.length) throw new Error('Kit não encontrado');
         const kitId = kitRow[0].id;
         await client.query(`DELETE FROM kit_itens WHERE kit_id = $1`, [kitId]);
-        // Detecta nome da coluna FK em kit_itens
-        const { rows: kiColsPut } = await client.query(`
-          SELECT column_name FROM information_schema.columns
-          WHERE table_schema='public' AND table_name='kit_itens'
-            AND column_name IN ('kit_id','id_kit')
-        `);
-        const kiColPut = kiColsPut.some(r=>r.column_name==='kit_id') ? 'kit_id' : 'id_kit';
+        const kiColPut = 'kit_id';
 
         for (const item of itens) {
           let prodId = null;
@@ -246,7 +244,7 @@ module.exports = function (pool) {
             if (p.rows.length) prodId = p.rows[0].id;
           }
           await client.query(`
-            INSERT INTO kit_itens (${kiColPut}, produto_id, codigo_produto, descricao_produto, quantidade, preco_custo_unitario)
+            INSERT INTO kit_itens (kit_id, produto_id, codigo_produto, descricao_produto, quantidade, preco_custo_unitario)
             VALUES ($1,$2,$3,$4,$5,$6)
           `, [kitId, prodId, item.codigo||null, item.descricao||null,
               parseFloat(item.quantidade||1), parseFloat(item.precoCusto||0)]);
