@@ -412,6 +412,32 @@ app.get('/api/admin/fix-kits', async (req, res) => {
       `);
       results.push(`FKs restantes em kit_itens: ${allFks.map(r=>r.constraint_name).join(', ') || 'nenhuma'}`);
 
+      // 6. Dropar triggers em kit_itens que referenciam id_kit
+      const { rows: triggers } = await client.query(`
+        SELECT trigger_name, event_object_table
+        FROM information_schema.triggers
+        WHERE event_object_table = 'kit_itens'
+      `);
+      results.push(`Triggers em kit_itens: ${triggers.map(t=>t.trigger_name).join(', ') || 'nenhuma'}`);
+      for (const t of triggers) {
+        await client.query(`DROP TRIGGER IF EXISTS ${t.trigger_name} ON kit_itens CASCADE`);
+        results.push(`✅ Trigger dropada: ${t.trigger_name}`);
+      }
+
+      // 7. Ver funções de trigger que mencionam id_kit
+      const { rows: funcs } = await client.query(`
+        SELECT p.proname, pg_get_functiondef(p.oid) AS def
+        FROM pg_proc p
+        JOIN pg_namespace n ON n.oid = p.pronamespace
+        WHERE n.nspname = 'public'
+          AND pg_get_functiondef(p.oid) ILIKE '%id_kit%'
+      `);
+      results.push(`Funções com id_kit: ${funcs.map(f=>f.proname).join(', ') || 'nenhuma'}`);
+      for (const f of funcs) {
+        await client.query(`DROP FUNCTION IF EXISTS ${f.proname}() CASCADE`);
+        results.push(`✅ Função dropada: ${f.proname}`);
+      }
+
     } finally { client.release(); }
     res.json({ ok: true, results });
   } catch(e) {
