@@ -137,12 +137,24 @@ module.exports = function (pool) {
           const p = await client.query(`SELECT id FROM produtos WHERE codigo = $1`, [item.codigo]);
           if (p.rows.length) prodId = p.rows[0].id;
         }
-        await client.query(`
-          INSERT INTO kit_itens (kit_id, produto_id, codigo_produto, descricao_produto, quantidade, preco_custo_unitario, ignorar_margem, custo_kit)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-        `, [kitId, prodId, item.codigo||null, item.descricao||null,
-            parseFloat(item.quantidade||1), parseFloat(item.precoCusto||0),
-            !!item.ignorarMargem, item.custoKit!=null?parseFloat(item.custoKit):null]);
+        await client.query('SAVEPOINT insert_item');
+        try {
+          await client.query(`
+            INSERT INTO kit_itens (kit_id, produto_id, codigo_produto, descricao_produto, quantidade, preco_custo_unitario, ignorar_margem, custo_kit)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+          `, [kitId, prodId, item.codigo||null, item.descricao||null,
+              parseFloat(item.quantidade||1), parseFloat(item.precoCusto||0),
+              !!item.ignorarMargem, item.custoKit!=null?parseFloat(item.custoKit):null]);
+          await client.query('RELEASE SAVEPOINT insert_item');
+        } catch(eItem) {
+          await client.query('ROLLBACK TO SAVEPOINT insert_item');
+          // Fallback sem colunas opcionais que podem não existir no banco
+          await client.query(`
+            INSERT INTO kit_itens (kit_id, produto_id, codigo_produto, descricao_produto, quantidade, preco_custo_unitario)
+            VALUES ($1,$2,$3,$4,$5,$6)
+          `, [kitId, prodId, item.codigo||null, item.descricao||null,
+              parseFloat(item.quantidade||1), parseFloat(item.precoCusto||0)]);
+        }
       }
 
       const custo = await calcCusto(kitId, client);
@@ -189,12 +201,23 @@ module.exports = function (pool) {
             const p = await client.query(`SELECT id FROM produtos WHERE codigo = $1`, [item.codigo]);
             if (p.rows.length) prodId = p.rows[0].id;
           }
-          await client.query(`
-            INSERT INTO kit_itens (kit_id, produto_id, codigo_produto, descricao_produto, quantidade, preco_custo_unitario, ignorar_margem, custo_kit)
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-          `, [kitId, prodId, item.codigo||null, item.descricao||null,
-              parseFloat(item.quantidade||1), parseFloat(item.precoCusto||0),
-              !!item.ignorarMargem, item.custoKit!=null?parseFloat(item.custoKit):null]);
+          await client.query('SAVEPOINT insert_item_put');
+          try {
+            await client.query(`
+              INSERT INTO kit_itens (kit_id, produto_id, codigo_produto, descricao_produto, quantidade, preco_custo_unitario, ignorar_margem, custo_kit)
+              VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+            `, [kitId, prodId, item.codigo||null, item.descricao||null,
+                parseFloat(item.quantidade||1), parseFloat(item.precoCusto||0),
+                !!item.ignorarMargem, item.custoKit!=null?parseFloat(item.custoKit):null]);
+            await client.query('RELEASE SAVEPOINT insert_item_put');
+          } catch(eItem) {
+            await client.query('ROLLBACK TO SAVEPOINT insert_item_put');
+            await client.query(`
+              INSERT INTO kit_itens (kit_id, produto_id, codigo_produto, descricao_produto, quantidade, preco_custo_unitario)
+              VALUES ($1,$2,$3,$4,$5,$6)
+            `, [kitId, prodId, item.codigo||null, item.descricao||null,
+                parseFloat(item.quantidade||1), parseFloat(item.precoCusto||0)]);
+          }
         }
       }
       await client.query('COMMIT');
