@@ -968,23 +968,26 @@ function uploadLogo(input){
   if(!file) return;
   if(file.size > 2*1024*1024){ toast('Imagem muito grande (máx 2MB)'); return; }
   const reader = new FileReader();
-  reader.onload = e => {
+  reader.onload = async e => {
     const b64 = e.target.result;
-    // Salva no localStorage e aplica
     try { localStorage.setItem('bb_logo', b64); } catch(_){}
     aplicarLogo(b64);
-    // Tenta notificar o parent (index.html) para atualizar o logo lá também
     try { window.parent.postMessage({type:'bb_logo', logo: b64}, '*'); } catch(_){}
-    toast('✅ Logo atualizado!');
+    // Salva no banco para persistir entre browsers/sessões
+    try {
+      await api.put('/api/config/sistema', { logo_base64: b64 });
+      toast('✅ Logo atualizado e salvo!');
+    } catch(_) { toast('✅ Logo atualizado (só local)'); }
   };
   reader.readAsDataURL(file);
 }
 
-function removerLogo(){
+async function removerLogo(){
   if(!confirm('Remover o logo?')) return;
   try { localStorage.removeItem('bb_logo'); } catch(_){}
   aplicarLogo(null);
   try { window.parent.postMessage({type:'bb_logo', logo: null}, '*'); } catch(_){}
+  try { await api.put('/api/config/sistema', { logo_base64: '' }); } catch(_){}
   toast('Logo removido');
 }
 
@@ -998,8 +1001,19 @@ function aplicarLogo(b64){
   }
 }
 
-// Carregar logo salvo ao abrir
-(function(){
+// Carregar logo — banco tem prioridade sobre localStorage
+(async function(){
+  try {
+    const d = await api.get('/api/config/sistema');
+    if(d.ok && d.data?.logo_base64) {
+      const b64 = d.data.logo_base64;
+      localStorage.setItem('bb_logo', b64);
+      aplicarLogo(b64);
+      try { window.parent.postMessage({type:'bb_logo', logo: b64}, '*'); } catch(_){}
+      return;
+    }
+  } catch(_){}
+  // Fallback para localStorage
   try {
     const saved = localStorage.getItem('bb_logo');
     if(saved) aplicarLogo(saved);

@@ -484,6 +484,7 @@ function entrarNoPortal() {
   filtrarTabs();
   carregarNomeEmpresa();
   carregarKPIs();
+  carregarLogoDoServidor(); // carrega logo do banco (persiste entre browsers)
 
   // Atualiza KPIs a cada 90 segundos
   kpiTimer = setInterval(carregarKPIs, 90000);
@@ -763,13 +764,29 @@ function aplicarLogoGlobal(b64) {
   }
 }
 
-// Aplica logo salvo no localStorage ao carregar
+// Aplica logo — localStorage imediato, banco após login
 (function() {
   try {
     const saved = localStorage.getItem('bb_logo');
     if (saved) aplicarLogoGlobal(saved);
   } catch(_) {}
 })();
+
+async function carregarLogoDoServidor() {
+  try {
+    const tk = token();
+    if (!tk) return;
+    const r = await fetch('/api/config/sistema', {
+      headers: { 'Authorization': 'Bearer ' + tk }
+    });
+    const d = await r.json();
+    if (d.ok && d.data?.logo_base64) {
+      const b64 = d.data.logo_base64;
+      try { localStorage.setItem('bb_logo', b64); } catch(_) {}
+      aplicarLogoGlobal(b64);
+    }
+  } catch(_) {}
+}
 </script>
 </body>
 </html>
