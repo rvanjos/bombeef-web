@@ -1415,7 +1415,7 @@ function setCat(id, cat) {
 const _svMes = {}; // debounce por mês
 function salvarMesDebounce(mes) {
   clearTimeout(_svMes[mes]);
-  _svMes[mes] = setTimeout(() => salvarMes(mes, true), 1500);
+  _svMes[mes] = setTimeout(() => salvarMes(mes, true), 800);
 }
 
 async function salvarMes(mes, silent=false) {
@@ -2400,6 +2400,29 @@ function setSt(s){
 }
 
 // Salva ao fechar a aba ou sair da página
+// Salva ao trocar de aba
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden' && TXS.length) {
+    // Dispara saves pendentes imediatamente
+    Object.keys(_svMes).forEach(mes => {
+      clearTimeout(_svMes[mes]);
+      delete _svMes[mes];
+    });
+    // Salva todos os meses com pendências
+    const porMes = {};
+    TXS.forEach(t => { const m = t.mes||mesRef; if(!porMes[m]) porMes[m]=[]; porMes[m].push(t); });
+    Object.keys(porMes).forEach(mes => {
+      const sid = (window._sessoesPorMes||{})[mes] || (mes===mesRef?sessId:null);
+      const payload = JSON.stringify({
+        sessao_id: sid, mes_ref: mes,
+        descricao: `Sessão ${mes} — ${porMes[mes].length} lançamentos`,
+        dados_json: {transactions: porMes[mes], loadedFiles: mes===mesRef?files:[], supplierMem: supMem, _savedAt: new Date().toISOString()}
+      });
+      navigator.sendBeacon('/api/dre/salvar-beacon', new Blob([payload], {type:'application/json'}));
+    });
+  }
+});
+
 window.addEventListener('beforeunload', (e) => {
   if(TXS.length && mesRef){
     // Salva de forma síncrona usando sendBeacon (não bloqueia o fechamento)
