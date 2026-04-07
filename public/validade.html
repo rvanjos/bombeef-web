@@ -1245,6 +1245,7 @@ function renderVal(lista){
           <button class="act-btn" onclick="abrirModal(${v.id})">✏️</button>
           ${!v.codigo?`<button class="act-btn" onclick="abrirVincular(${v.id})" title="Vincular código">🔗</button>`:''}
           ${v.status!=='descartado'?`<button class="act-btn" onclick="perdaRapida(${v.id})" style="color:var(--red-l)" title="Registrar perda">📉</button>`:''}
+          <button class="act-btn" onclick="marcarVendidoRapido(${v.id})" style="color:var(--green)" title="Marcar como vendido">✅</button>
           <button class="act-btn" onclick="excluirItem(${v.id})" style="color:var(--muted);font-size:13px" title="Descartar">×</button>
         </td>
       </tr>`;
@@ -1444,6 +1445,25 @@ async function confirmarVincular(){
 }
 
 function excluirItem(id){ abrirEncerrar(id); }
+
+async function marcarVendidoRapido(id) {
+  const v = itens.find(x => x.id === id);
+  const desc = v?.descricao || 'item';
+  if (!confirm(`Marcar "${desc}" como vendido?`)) return;
+  try {
+    const d = await api.post('/api/validade/encerrar-multiplos', {
+      ids: [id], resolucao: 'vendido'
+    });
+    if (d.ok) {
+      toast('✅ Marcado como vendido!');
+      await carregar(); carregarKPIs();
+    } else {
+      toast('❌ Erro: ' + (d.erro || 'falha'));
+    }
+  } catch(e) {
+    toast('❌ Falha: ' + e.message);
+  }
+}
 
 function abrirEncerrar(id){
   const v = itens.find(x=>x.id===id);

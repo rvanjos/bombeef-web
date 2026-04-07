@@ -414,14 +414,16 @@ module.exports = function (pool) {
   // ── DELETE /:id — encerra com motivo ──────────────────────────────────────
   r.delete('/:id', async (req, res) => {
     const { resolucao, obs_resolucao, encerrado_por, dt_resolucao } = req.body || {};
+    // Usa o resolucao como status se for vendido/descartado, senão descartado
+    const novoStatus = ['vendido','descartado'].includes(resolucao) ? resolucao : 'descartado';
     try {
       await pool.query(
         `UPDATE validade_items SET
-           status='descartado', resolucao=$1, obs_resolucao=$2,
-           encerrado_por=$3, dt_resolucao=COALESCE($4::date,CURRENT_DATE),
+           status=$1, resolucao=$2, obs_resolucao=$3,
+           encerrado_por=$4, dt_resolucao=COALESCE($5::date,CURRENT_DATE),
            atualizado_em=NOW()
-         WHERE id=$5`,
-        [resolucao||'outro', obs_resolucao||null, encerrado_por||null,
+         WHERE id=$6`,
+        [novoStatus, resolucao||'outro', obs_resolucao||null, encerrado_por||null,
          dt_resolucao||null, parseInt(req.params.id)]
       );
       res.json({ ok: true });
