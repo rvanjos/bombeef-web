@@ -338,19 +338,6 @@ async function init(){
   carregarCategorias();
 }
 
-function showPage(p, el){
-  document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));
-  document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));
-  const pg = document.getElementById(`page-${p}`);
-  if(pg) pg.classList.add('active');
-  if(el) el.classList.add('active');
-  else document.querySelectorAll(`.nav-item`).forEach(n=>{ if(n.getAttribute('onclick')?.includes(`'${p}'`)) n.classList.add('active'); });
-  if(p==='usuarios') carregarUsuarios();
-  if(p==='funcionarios') carregarFuncionarios();
-  if(p==='categorias') carregarCategorias();
-  if(p==='acoes-validade') carregarAcoes();
-}
-
 // ── Config sistema ─────────────────────────────────────────────────────────
 async function carregarConfig(){
   const d = await api.get('/api/config/sistema');

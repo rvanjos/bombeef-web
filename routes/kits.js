@@ -150,9 +150,9 @@ module.exports = function (pool) {
       res.json({ ok: true, id: kitId, custoTotal: custo });
     } catch (e) {
       await client.query('ROLLBACK');
-      console.error('[kits/POST]', e.message);
+      console.error('[kits/POST] ERRO:', e.message, '| code:', e.code, '| detail:', e.detail, '| hint:', e.hint);
       if (e.code === '23505') return res.status(409).json({ ok: false, erro: 'Código de kit já existe' });
-      res.status(500).json({ ok: false, erro: e.message });
+      res.status(500).json({ ok: false, erro: e.message, detalhe: e.detail || e.hint || '' });
     } finally { client.release(); }
   });
 
