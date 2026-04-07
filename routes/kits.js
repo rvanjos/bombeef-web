@@ -142,8 +142,16 @@ module.exports = function (pool) {
     try {
       await client.query('BEGIN');
 
+      // Detecta nome da coluna diretamente no banco
+      const colCheck = await client.query(`
+        SELECT column_name FROM information_schema.columns
+        WHERE table_name='kits' AND column_name IN ('nome','nome_kit')
+        ORDER BY CASE column_name WHEN 'nome' THEN 1 ELSE 2 END LIMIT 1
+      `);
+      const nomeCol = colCheck.rows[0]?.column_name || 'nome';
+
       const { rows } = await client.query(`
-        INSERT INTO kits (codigo, nome, descricao, preco_venda, margem)
+        INSERT INTO kits (codigo, ${nomeCol}, descricao, preco_venda, margem)
         VALUES ($1,$2,$3,$4,$5) RETURNING id
       `, [codigo?.trim()||null, nome.trim(), descricao||null,
           parseFloat(precoVenda||0), parseFloat(margem||0)]);
@@ -194,9 +202,16 @@ module.exports = function (pool) {
       await client.query('BEGIN');
       const numId = parseInt(req.params.id);
 
+      // Detecta nome da coluna
+      const nomeColPut = (await client.query(`
+        SELECT column_name FROM information_schema.columns
+        WHERE table_name='kits' AND column_name IN ('nome','nome_kit')
+        ORDER BY CASE column_name WHEN 'nome' THEN 1 ELSE 2 END LIMIT 1
+      `)).rows[0]?.column_name || 'nome';
+
       await client.query(`
         UPDATE kits SET
-          nome = COALESCE($1, nome), descricao = COALESCE($2, descricao),
+          ${nomeColPut} = COALESCE($1, ${nomeColPut}), descricao = COALESCE($2, descricao),
           preco_venda = COALESCE($3, preco_venda), margem = COALESCE($4, margem),
           atualizado_em = NOW()
         WHERE id = $5 OR codigo = $5
