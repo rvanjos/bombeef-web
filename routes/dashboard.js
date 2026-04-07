@@ -29,7 +29,7 @@ module.exports = function (pool) {
             WHEN data_validade <= CURRENT_DATE + (COALESCE(dias_alerta,7) || ' days')::INTERVAL THEN 'alerta'
             ELSE 'ok'
           END
-        WHERE status NOT IN ('descartado') AND data_validade IS NOT NULL
+        WHERE status NOT IN ('descartado','vendido') AND data_validade IS NOT NULL
       `).catch(() => {}); // silencia erro se tabela não existir ainda
 
       // Cada query isolada — se uma falhar, retorna zero sem quebrar o dashboard
