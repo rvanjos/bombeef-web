@@ -452,6 +452,7 @@ td{padding:5px 9px;vertical-align:middle;}
 <script>
 const {api, fmt, toast} = BB;
 let TXS=[], sessId=null, mesRef='', files=[], supMem={}, selIds=new Set(), _sv;
+let _ignorarTrocarMes = false;
 const MO=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
 // ─── Categorias DRE (exatas do sistema anterior) ──────────────────────────────
@@ -749,7 +750,6 @@ async function carregarSessao() {
   updMesFiltro(); render(); updStats(); renderDRE();
 }
 
-let _ignorarTrocarMes = false;
 async function trocarMes() {
   if (_ignorarTrocarMes) return;
   const v = document.getElementById('f-mesref').value; if (!v) return;
