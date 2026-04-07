@@ -426,15 +426,18 @@ app.get('/api/admin/fix-kits', async (req, res) => {
 
       // 7. Ver funções de trigger que mencionam id_kit
       const { rows: funcs } = await client.query(`
-        SELECT p.proname, pg_get_functiondef(p.oid) AS def
+        SELECT p.proname, p.oid
         FROM pg_proc p
         JOIN pg_namespace n ON n.oid = p.pronamespace
         WHERE n.nspname = 'public'
-          AND pg_get_functiondef(p.oid) ILIKE '%id_kit%'
+          AND prosrc ILIKE '%id_kit%'
       `);
       results.push(`Funções com id_kit: ${funcs.map(f=>f.proname).join(', ') || 'nenhuma'}`);
       for (const f of funcs) {
-        await client.query(`DROP FUNCTION IF EXISTS ${f.proname}() CASCADE`);
+        await client.query(`DROP FUNCTION IF EXISTS public.${f.proname}() CASCADE`).catch(async () => {
+          // tenta com CASCADE via oid
+          await client.query(`DROP ROUTINE IF EXISTS public.${f.proname} CASCADE`).catch(()=>{});
+        });
         results.push(`✅ Função dropada: ${f.proname}`);
       }
 
