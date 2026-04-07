@@ -700,7 +700,7 @@ async function carregarSessao() {
   setSt('load');
   try {
     // Carrega lista de todas as sessões disponíveis (últimos 24 meses)
-    const lista = await api.get('/api/dre/sessoes?limit=24');
+    const lista = await api.get('/api/dre/sessoes?limit=6');
     if (!lista.ok || !lista.data?.length) {
       TXS=[]; files=[]; supMem={}; sessId=null;
       setSt('ok'); updMesFiltro(); render(); updStats(); renderDRE();
@@ -1306,7 +1306,15 @@ function render() {
     return;
   }
 
-  tb.innerHTML = lista.map(t => {
+  // Limita renderização a 500 itens para performance
+  const MAX_RENDER = 500;
+  const listaRender = lista.length > MAX_RENDER ? lista.slice(0, MAX_RENDER) : lista;
+  const avisoLimit = lista.length > MAX_RENDER 
+    ? `<tr><td colspan="10" style="text-align:center;padding:8px;background:#fff8e6;font-size:12px;color:#856404">
+        ⚠️ Exibindo ${MAX_RENDER} de ${lista.length} lançamentos. Use filtros para ver os demais.
+       </td></tr>` : '';
+
+  tb.innerHTML = avisoLimit + listaRender.map(t => {
     const v   = parseFloat(t.valor||0);
     const isCat = !!t.categoria;
     const isReview = !t.ignorar && t.needsReview;
@@ -1342,7 +1350,7 @@ function render() {
     </tr>`;
   }).join('');
 
-  document.getElementById('footer-note').textContent = `${lista.length} lançamento(s) exibido(s) de ${TXS.length} total`;
+  document.getElementById('footer-note').textContent = `${listaRender.length} de ${lista.length} lançamento(s) exibido(s) · ${TXS.length} total`;
 }
 
 function fmtMes(m) {
@@ -1379,10 +1387,16 @@ function setCat(id, cat) {
   }
   const row = document.getElementById('tr-'+id);
   if (row) row.className = t.ignorar?'ign':cat?t.fonte==='CC'?'cc-row':t.needsReview?'boleto-review':t.fonte?.startsWith('BOLETO')?'boleto-row':'':'uncat';
-  updStats(); renderDRE();
+  updStats();
   // Salva na sessão correta do mês deste lançamento
   const mesLanc = t.mes || mesRef;
-  salvarMes(mesLanc, true);
+  salvarMesDebounce(mesLanc);
+}
+
+const _svMes = {}; // debounce por mês
+function salvarMesDebounce(mes) {
+  clearTimeout(_svMes[mes]);
+  _svMes[mes] = setTimeout(() => salvarMes(mes, true), 1500);
 }
 
 async function salvarMes(mes, silent=false) {
