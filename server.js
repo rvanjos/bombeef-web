@@ -252,6 +252,42 @@ app.use('/api/fornecedores', require('./routes/fornecedores')(pool));
 
 app.use('/api/admin/backup', require('./routes/backup')(pool));
 
+// Limpa sessões duplicadas do DRE — mantém apenas a mais recente por mês
+app.get('/api/admin/fix-dre-sessions', async (req, res) => {
+  try {
+    // Encontra meses com múltiplas sessões
+    const { rows: dups } = await pool.query(`
+      SELECT mes_ref, COUNT(*) as total, array_agg(id ORDER BY atualizado_em DESC) as ids
+      FROM dre_sessoes GROUP BY mes_ref HAVING COUNT(*) > 1
+    `);
+    const results = [];
+    for (const row of dups) {
+      const [keep, ...remove] = row.ids;
+      // Antes de remover, merge todos os lançamentos na sessão mais recente
+      const allTxs = [];
+      const seenFitid = new Set(), seenHash = new Set();
+      for (const id of row.ids) {
+        const { rows: sr } = await pool.query(`SELECT dados_json FROM dre_sessoes WHERE id=$1`, [id]);
+        const txs = sr[0]?.dados_json?.transactions || [];
+        for (const t of txs) {
+          const key = t.fitid || `${t.data}_${t.valor}_${(t.lancamento||'').slice(0,30)}`;
+          if (seenFitid.has(key)) continue;
+          seenFitid.add(key);
+          allTxs.push(t);
+        }
+      }
+      // Atualiza sessão mais recente com todos os lançamentos únicos
+      await pool.query(`UPDATE dre_sessoes SET dados_json=$1, atualizado_em=NOW() WHERE id=$2`,
+        [JSON.stringify({ transactions: allTxs }), keep]);
+      // Remove duplicatas
+      await pool.query(`DELETE FROM dre_sessoes WHERE id = ANY($1::int[])`, [remove]);
+      results.push(`✅ ${row.mes_ref}: ${allTxs.length} lançamentos únicos, removidas ${remove.length} sessões duplicadas`);
+    }
+    if (!results.length) results.push('✅ Nenhuma sessão duplicada encontrada');
+    res.json({ ok: true, results });
+  } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+});
+
 // Rota de migration manual — acessa uma vez para renomear colunas legadas
 app.get('/api/admin/fix-kits', async (req, res) => {
   try {

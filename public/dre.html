@@ -712,9 +712,12 @@ async function carregarSessao() {
       lista.data.map(s => api.get(`/api/dre/sessoes/${s.id}`))
     );
 
-    // Junta todos os TXS de todos os meses
+    // Junta todos os TXS de todos os meses — deduplicando por fitid ou hash
     TXS = []; files = []; supMem = {};
-    window._sessoesPorMes = {}; // mapa mes_ref → sessao_id para salvar corretamente
+    window._sessoesPorMes = {};
+    const _seenFitid = new Set();
+    const _seenHash  = new Set();
+    function _hashTx(t) { return `${t.data||''}_${t.valor||''}_${(t.lancamento||'').slice(0,30)}_${t.mes||''}`; }
 
     for (const r of sessoes) {
       if (!r.ok || !r.data?.dados_json) continue;
@@ -722,11 +725,25 @@ async function carregarSessao() {
       const txs = (typeof dados === 'object' && !Array.isArray(dados))
         ? (dados.transactions || [])
         : (Array.isArray(dados) ? dados : []);
-      TXS = [...TXS, ...txs];
+      
+      // Deduplicação: só adiciona se não visto ainda
+      for (const t of txs) {
+        if (t.fitid) {
+          if (_seenFitid.has(t.fitid)) continue;
+          _seenFitid.add(t.fitid);
+        } else {
+          const h = _hashTx(t);
+          if (_seenHash.has(h)) continue;
+          _seenHash.add(h);
+        }
+        TXS.push(t);
+      }
+      
       if (dados.loadedFiles?.length) files = [...files, ...dados.loadedFiles];
       if (dados.supplierMem) supMem = { ...supMem, ...dados.supplierMem };
       window._sessoesPorMes[r.data.mes_ref] = r.data.id;
     }
+    console.log(`[carregarSessao] ${TXS.length} lançamentos únicos de ${sessoes.filter(r=>r.ok).length} sessões`);
 
     // sessId aponta para a sessão do mês mais recente (ou mês atual)
     const sessaoAtual = lista.data.find(s => s.mes_ref === mesRef) || lista.data[0];
