@@ -142,13 +142,15 @@ module.exports = function (pool) {
     try {
       await client.query('BEGIN');
 
-      // Detecta nome da coluna diretamente no banco
+      // Detecta nome da coluna — verifica qual existe no banco
       const colCheck = await client.query(`
         SELECT column_name FROM information_schema.columns
-        WHERE table_name='kits' AND column_name IN ('nome','nome_kit')
+        WHERE table_schema='public' AND table_name='kits' 
+          AND column_name IN ('nome','nome_kit')
         ORDER BY CASE column_name WHEN 'nome' THEN 1 ELSE 2 END LIMIT 1
       `);
-      const nomeCol = colCheck.rows[0]?.column_name || 'nome';
+      const nomeCol = colCheck.rows[0]?.column_name || 'nome_kit';
+      console.log('[kits/POST] nomeCol detectado:', nomeCol, '| rows:', colCheck.rows.length);
 
       const { rows } = await client.query(`
         INSERT INTO kits (codigo, ${nomeCol}, descricao, preco_venda, margem)
