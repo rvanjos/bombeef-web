@@ -255,8 +255,10 @@ app.use('/api/admin/backup', require('./routes/backup')(pool));
 // Limpa duplicatas de validade — mantém o mais recente por (descricao, data_validade)
 app.get('/api/admin/fix-validade-duplicatas', async (req, res) => {
   try {
-    // Encontra duplicatas: mesmo descricao + data_validade, status ativo
-    const { rows: dups } = await pool.query(`
+    let removidos = 0;
+
+    // 1. Duplicatas por descricao + data_validade
+    const { rows: dups1 } = await pool.query(`
       SELECT descricao, data_validade, COUNT(*) as total,
              array_agg(id ORDER BY id DESC) as ids
       FROM validade_items
@@ -264,20 +266,41 @@ app.get('/api/admin/fix-validade-duplicatas', async (req, res) => {
       GROUP BY descricao, data_validade
       HAVING COUNT(*) > 1
     `);
-    
-    let removidos = 0;
-    for (const row of dups) {
-      const [keep, ...remove] = row.ids; // mantém o mais recente (maior id)
+    for (const row of dups1) {
+      const [, ...remove] = row.ids;
       if (remove.length) {
         await pool.query(
-          `UPDATE validade_items SET status='descartado', resolucao='duplicata', 
+          `UPDATE validade_items SET status='descartado', resolucao='duplicata',
            dt_resolucao=CURRENT_DATE, atualizado_em=NOW() WHERE id=ANY($1::int[])`,
           [remove]
         );
         removidos += remove.length;
       }
     }
-    res.json({ ok: true, duplicatasEncontradas: dups.length, removidos });
+
+    // 2. Duplicatas por codigo + data_validade (quando codigo não é nulo)
+    const { rows: dups2 } = await pool.query(`
+      SELECT codigo, data_validade, COUNT(*) as total,
+             array_agg(id ORDER BY id DESC) as ids
+      FROM validade_items
+      WHERE status NOT IN ('vendido','descartado')
+        AND codigo IS NOT NULL AND codigo != ''
+      GROUP BY codigo, data_validade
+      HAVING COUNT(*) > 1
+    `);
+    for (const row of dups2) {
+      const [, ...remove] = row.ids;
+      if (remove.length) {
+        await pool.query(
+          `UPDATE validade_items SET status='descartado', resolucao='duplicata',
+           dt_resolucao=CURRENT_DATE, atualizado_em=NOW() WHERE id=ANY($1::int[])`,
+          [remove]
+        );
+        removidos += remove.length;
+      }
+    }
+
+    res.json({ ok: true, duplicatasEncontradas: dups1.length + dups2.length, removidos });
   } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
 });
 
