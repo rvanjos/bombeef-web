@@ -187,7 +187,7 @@ td{padding:5px 9px;vertical-align:middle;}
   <button class="btn bg" onclick="salvar()" title="Salvar agora">💾 Salvar</button>
   <button class="btn bs" onclick="exportXLS()" title="Exportar Excel">📤 Excel</button>
   <button class="btn bs" onclick="abrirSessoes()" title="Histórico de sessões">📂 Sessões</button>
-  <button class="btn bs" onclick="recuperarDoBanco()" title="Recuperar do banco em caso de perda" style="border-color:var(--orange);color:var(--orange)">🔄 Recuperar</button>
+  <button class="btn bs" onclick="recuperarDoBanco()" title="Recuperar: reconstrói sessão a partir do backup no banco de dados. Use apenas se lançamentos sumirem." style="border-color:var(--orange);color:var(--orange)">🔄 Recuperar</button>
   <input type="month" id="f-mesref" style="padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px">
 </div>
 
@@ -1290,7 +1290,7 @@ function render() {
     if (fonte && t.fonte !== fonte) return false;
     if (pend && t.categoria) return false;
     return true;
-  });
+  }).sort((a,b) => (b.data||'').localeCompare(a.data||'')); // mais recente primeiro
 
   const bads = {OFX:'<span class="badge bofx">OFX</span>',CC:'<span class="badge bcc">CC</span>',
     BOLETO:'<span class="badge bbol">Boleto</span>',BOLETO_PREV:'<span class="badge bbolp">Prev.</span>',
@@ -1365,13 +1365,11 @@ function _chaveFornecedor(t) {
 
 function setCat(id, cat) {
   const t = TXS.find(x => x.id===id); if (!t) return;
-  console.log(`[setCat] id=${id} cat=${cat} sessId=${sessId} mesRef=${mesRef} TXS=${TXS.length}`);
   t.categoria = cat;
   if (cat) {
     const k = _chaveFornecedor(t);
     if (k) {
       supMem[k] = cat;
-      // Aplica apenas ao mesmo fornecedor (razaoSocial), não a todos sem categoria
       TXS.forEach(tx => {
         if (!tx.categoria && _chaveFornecedor(tx) === k) tx.categoria = cat;
       });
@@ -1379,7 +1377,42 @@ function setCat(id, cat) {
   }
   const row = document.getElementById('tr-'+id);
   if (row) row.className = t.ignorar?'ign':cat?t.fonte==='CC'?'cc-row':t.needsReview?'boleto-review':t.fonte?.startsWith('BOLETO')?'boleto-row':'':'uncat';
-  updStats(); renderDRE(); autoSv();
+  updStats(); renderDRE();
+  // Salva na sessão correta do mês deste lançamento
+  const mesLanc = t.mes || mesRef;
+  salvarMes(mesLanc, true);
+}
+
+async function salvarMes(mes, silent=false) {
+  const txsMes = TXS.filter(t => (t.mes || mesRef) === mes);
+  if (!txsMes.length) return;
+  const sid = (window._sessoesPorMes && window._sessoesPorMes[mes]) || (mes === mesRef ? sessId : null);
+  try {
+    const d = await api.post('/api/dre/salvar', {
+      sessao_id: sid,
+      mes_ref: mes,
+      descricao: `Sessão ${mes} — ${txsMes.length} lançamentos`,
+      dados_json: {
+        transactions: txsMes,
+        loadedFiles: mes === mesRef ? files : [],
+        supplierMem: supMem,
+        _savedAt: new Date().toISOString()
+      }
+    });
+    if (d.ok) {
+      if (!window._sessoesPorMes) window._sessoesPorMes = {};
+      window._sessoesPorMes[mes] = d.sessao_id;
+      if (mes === mesRef) sessId = d.sessao_id;
+      if (!silent) toast(`💾 Salvo! ${txsMes.length} lançamentos de ${mes}`);
+      setSt('ok');
+    } else {
+      console.error('[salvarMes]', mes, d.erro);
+      setSt('err');
+    }
+  } catch(e) {
+    console.error('[salvarMes] exception:', e);
+    setSt('err');
+  }
 }
 
 function togIgn(id) {
@@ -2172,10 +2205,25 @@ function exportXLS(){
 
 // ─── SALVAR / SESSÕES ────────────────────────────────────────────────────────
 function autoSv(){
-  if (!_inicializado || !mesRef || !TXS.length) return; // não salva durante init
+  if (!_inicializado || !TXS.length) return;
   setSt('load');
   clearTimeout(_sv);
-  _sv=setTimeout(()=>salvar(true),2000); // 2s debounce
+  _sv=setTimeout(()=>salvarTodos(true),2000);
+}
+
+async function salvarTodos(silent=false) {
+  // Agrupa por mês e salva cada sessão
+  const porMes = {};
+  TXS.forEach(t => {
+    const m = t.mes || mesRef;
+    if (!porMes[m]) porMes[m] = [];
+    porMes[m].push(t);
+  });
+  for (const mes of Object.keys(porMes)) {
+    await salvarMes(mes, true);
+  }
+  if (!silent) toast('💾 Salvo! ' + TXS.length + ' lançamentos');
+  setSt('ok');
 }
 
 async function salvar(silent=false, tentativa=1){
