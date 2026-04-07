@@ -67,6 +67,19 @@ module.exports = function (pool) {
     ]) await pool.query(`ALTER TABLE kit_itens ADD COLUMN IF NOT EXISTS ${col} ${def}`).catch(() => {});
 
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_kit_itens_kit ON kit_itens(kit_id)`).catch(() => {});
+
+    // Remove FKs indevidas em kit_itens (codigo_produto não deve ter FK)
+    await pool.query(`
+      DO $$ DECLARE r RECORD; BEGIN
+        FOR r IN
+          SELECT constraint_name FROM information_schema.table_constraints
+          WHERE table_name='kit_itens' AND constraint_type='FOREIGN KEY'
+            AND constraint_name NOT LIKE '%kit_id%' AND constraint_name NOT LIKE '%produto_id%'
+        LOOP
+          EXECUTE 'ALTER TABLE kit_itens DROP CONSTRAINT ' || r.constraint_name;
+        END LOOP;
+      END $$;
+    `).catch(e => console.warn('[kits] drop FKs indevidas:', e.message));
   }
   initTable().catch(e => console.error('[kits] initTable:', e.message));
 

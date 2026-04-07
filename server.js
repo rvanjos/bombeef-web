@@ -393,6 +393,25 @@ app.get('/api/admin/fix-kits', async (req, res) => {
       });
       results.push('✅ kit_itens.kit_id NOT NULL garantido');
 
+      // 4. Remove FK desnecessária em codigo_produto (se existir)
+      const { rows: fks } = await client.query(`
+        SELECT constraint_name FROM information_schema.table_constraints
+        WHERE table_name='kit_itens' AND constraint_type='FOREIGN KEY'
+          AND constraint_name LIKE '%codigo_produto%'
+      `);
+      for (const fk of fks) {
+        await client.query(`ALTER TABLE kit_itens DROP CONSTRAINT ${fk.constraint_name}`);
+        results.push(`✅ FK removida: ${fk.constraint_name}`);
+      }
+      if (!fks.length) results.push('⏭ Nenhuma FK de codigo_produto encontrada');
+
+      // 5. Listar todas as FKs restantes em kit_itens para diagnóstico
+      const { rows: allFks } = await client.query(`
+        SELECT constraint_name FROM information_schema.table_constraints
+        WHERE table_name='kit_itens' AND constraint_type='FOREIGN KEY'
+      `);
+      results.push(`FKs restantes em kit_itens: ${allFks.map(r=>r.constraint_name).join(', ') || 'nenhuma'}`);
+
     } finally { client.release(); }
     res.json({ ok: true, results });
   } catch(e) {
