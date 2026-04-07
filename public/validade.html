@@ -1448,23 +1448,25 @@ async function confirmarVincular(){
 function excluirItem(id){ abrirEncerrar(id); }
 
 async function marcarVendidoRapido(id) {
-  const v = itens.find(x => x.id === id);
+  const v = itens.find(x => String(x.id) === String(id));
   const desc = v?.descricao || 'item';
   if (!confirm(`Marcar "${desc}" como vendido?`)) return;
   try {
+    console.log('[vendido] enviando id:', id, 'tipo:', typeof id, 'item:', v);
     const d = await api.post('/api/validade/encerrar-multiplos', {
-      ids: [id], resolucao: 'vendido'
+      ids: [Number(id)], resolucao: 'vendido'
     });
+    console.log('[vendido] resposta:', d);
     if (d.ok) {
       toast('✅ Marcado como vendido!');
-      // Pequeno delay para garantir que o banco confirmou o UPDATE
       await new Promise(r => setTimeout(r, 300));
       await carregar(); carregarKPIs();
     } else {
-      toast('❌ Erro: ' + (d.erro || 'falha'));
+      toast('❌ Erro: ' + (d.erro || JSON.stringify(d)));
     }
   } catch(e) {
     toast('❌ Falha: ' + e.message);
+    console.error('[vendido] exception:', e);
   }
 }
 
