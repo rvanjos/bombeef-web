@@ -252,6 +252,35 @@ app.use('/api/fornecedores', require('./routes/fornecedores')(pool));
 
 app.use('/api/admin/backup', require('./routes/backup')(pool));
 
+// Limpa duplicatas de validade — mantém o mais recente por (descricao, data_validade)
+app.get('/api/admin/fix-validade-duplicatas', async (req, res) => {
+  try {
+    // Encontra duplicatas: mesmo descricao + data_validade, status ativo
+    const { rows: dups } = await pool.query(`
+      SELECT descricao, data_validade, COUNT(*) as total,
+             array_agg(id ORDER BY id DESC) as ids
+      FROM validade_items
+      WHERE status NOT IN ('vendido','descartado')
+      GROUP BY descricao, data_validade
+      HAVING COUNT(*) > 1
+    `);
+    
+    let removidos = 0;
+    for (const row of dups) {
+      const [keep, ...remove] = row.ids; // mantém o mais recente (maior id)
+      if (remove.length) {
+        await pool.query(
+          `UPDATE validade_items SET status='descartado', resolucao='duplicata', 
+           dt_resolucao=CURRENT_DATE, atualizado_em=NOW() WHERE id=ANY($1::int[])`,
+          [remove]
+        );
+        removidos += remove.length;
+      }
+    }
+    res.json({ ok: true, duplicatasEncontradas: dups.length, removidos });
+  } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+});
+
 // Limpa sessões duplicadas do DRE — mantém apenas a mais recente por mês
 app.get('/api/admin/fix-dre-sessions', async (req, res) => {
   try {
