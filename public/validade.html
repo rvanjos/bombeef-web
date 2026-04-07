@@ -654,7 +654,6 @@ async function init(){
   await carregarFuncionarios();
   carregarKPIs();
   await carregarAcoesValidade(); // carrega ações do banco no select
-  await carregarAcoesValidade(); // carrega ações do banco no select
   await carregar();   // await garante que itens esteja pronto antes do dashboard
   const hoje = new Date();
   document.getElementById('flt-mes-perdas').value = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
@@ -955,7 +954,9 @@ async function encerrarSelecionados(resolucao){
     const d = await api.post('/api/validade/encerrar-multiplos', { ids, resolucao });
     if(d.ok){
       toast(`✅ ${d.atualizados} item(s) marcado(s) como ${label}`);
-      valLimparSel(); await carregar(); carregarKPIs();
+      valLimparSel();
+      await new Promise(r => setTimeout(r, 300));
+      await carregar(); carregarKPIs();
     } else {
       toast('❌ Erro ao encerrar: '+(d.erro||'Resposta inválida do servidor'));
       console.error('[encerrarSelecionados] erro:', d);
@@ -1456,6 +1457,8 @@ async function marcarVendidoRapido(id) {
     });
     if (d.ok) {
       toast('✅ Marcado como vendido!');
+      // Pequeno delay para garantir que o banco confirmou o UPDATE
+      await new Promise(r => setTimeout(r, 300));
       await carregar(); carregarKPIs();
     } else {
       toast('❌ Erro: ' + (d.erro || 'falha'));
