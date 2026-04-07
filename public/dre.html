@@ -644,7 +644,7 @@ async function init() {
 
   const hoje = new Date();
   mesRef = fmt.mesAtual();
-  document.getElementById('f-mesref').value = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
+  _ignorarTrocarMes = true; document.getElementById('f-mesref').value = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`; _ignorarTrocarMes = false;
   document.getElementById('ml-dt').value = hoje.toISOString().slice(0,10);
   document.getElementById('ml-m').value = mesRef;
   document.getElementById('ml-mc').value = mesRef;
@@ -734,8 +734,8 @@ async function carregarSessao() {
       mesRef = sessaoAtual.mes_ref;
       document.getElementById('dre-mes-label').textContent = mesRef;
       const [mm, yyyy] = mesRef.split('/');
-      if (document.getElementById('f-mesref'))
-        document.getElementById('f-mesref').value = `${yyyy}-${mm}`;
+      const el = document.getElementById('f-mesref');
+      if (el) { _ignorarTrocarMes = true; el.value = `${yyyy}-${mm}`; _ignorarTrocarMes = false; }
     }
 
     if (TXS.length) {
@@ -749,7 +749,9 @@ async function carregarSessao() {
   updMesFiltro(); render(); updStats(); renderDRE();
 }
 
+let _ignorarTrocarMes = false;
 async function trocarMes() {
+  if (_ignorarTrocarMes) return;
   const v = document.getElementById('f-mesref').value; if (!v) return;
   const [y,m] = v.split('-'); mesRef = `${m}/${y}`;
   document.getElementById('dre-mes-label').textContent = mesRef;
