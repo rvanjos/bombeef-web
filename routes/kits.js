@@ -142,36 +142,28 @@ module.exports = function (pool) {
     try {
       await client.query('BEGIN');
 
-      // Detecta nome da coluna — verifica qual existe no banco
-      const colCheck = await client.query(`
+      // Detecta colunas de nome disponíveis
+      const { rows: nomeCols } = await client.query(`
         SELECT column_name FROM information_schema.columns
-        WHERE table_schema='public' AND table_name='kits' 
+        WHERE table_schema='public' AND table_name='kits'
           AND column_name IN ('nome','nome_kit')
-        ORDER BY CASE column_name WHEN 'nome' THEN 1 ELSE 2 END LIMIT 1
       `);
-      const nomeCol = colCheck.rows[0]?.column_name || 'nome_kit';
-      // Verifica se ambas as colunas existem (banco com schema misto)
-      const temAmbas = colCheck.rows.length > 0 && (await client.query(`
-        SELECT COUNT(*) as cnt FROM information_schema.columns
-        WHERE table_schema='public' AND table_name='kits' AND column_name IN ('nome','nome_kit')
-      `)).rows[0]?.cnt === '2';
+      const hasNome    = nomeCols.some(r => r.column_name === 'nome');
+      const hasNomeKit = nomeCols.some(r => r.column_name === 'nome_kit');
       
-      let insertRows;
-      if (temAmbas) {
-        // Banco tem ambas: insere em nome E nome_kit para evitar NOT NULL
-        ({ rows: insertRows } = await client.query(`
-          INSERT INTO kits (codigo, nome, nome_kit, descricao, preco_venda, margem)
-          VALUES ($1,$2,$2,$3,$4,$5) RETURNING id
-        `, [codigo?.trim()||null, nome.trim(), descricao||null,
-            parseFloat(precoVenda||0), parseFloat(margem||0)]));
-      } else {
-        ({ rows: insertRows } = await client.query(`
-          INSERT INTO kits (codigo, ${nomeCol}, descricao, preco_venda, margem)
-          VALUES ($1,$2,$3,$4,$5) RETURNING id
-        `, [codigo?.trim()||null, nome.trim(), descricao||null,
-            parseFloat(precoVenda||0), parseFloat(margem||0)]));
-      }
-      const kitId = insertRows[0].id;
+      // Monta INSERT dinamicamente para preencher todas as colunas de nome existentes
+      const nomeColunas = [hasNomeKit && 'nome_kit', hasNome && 'nome'].filter(Boolean);
+      const nomeValues  = nomeColunas.map(() => nome.trim());
+      const allCols     = ['codigo', ...nomeColunas, 'descricao', 'preco_venda', 'margem'];
+      const allVals     = [codigo?.trim()||null, ...nomeValues, descricao||null,
+                           parseFloat(precoVenda||0), parseFloat(margem||0)];
+      const placeholders = allVals.map((_,i) => '$'+(i+1)).join(',');
+      
+      const { rows: r1 } = await client.query(
+        `INSERT INTO kits (${allCols.join(',')}) VALUES (${placeholders}) RETURNING id`,
+        allVals
+      );
+      const kitId = r1[0].id;
 
       for (const item of itens) {
         let prodId = null;
