@@ -82,17 +82,23 @@ module.exports = function (pool) {
 
   // ── Helper: atualiza status baseado na data ────────────────────────────────
   async function atualizarStatus() {
-    await pool.query(`
+    const res = await pool.query(`
       UPDATE validade_items SET
         status = CASE
           WHEN data_validade < CURRENT_DATE THEN 'vencido'
-          WHEN data_validade <= CURRENT_DATE + (dias_alerta || ' days')::INTERVAL THEN 'alerta'
+          WHEN data_validade <= CURRENT_DATE + (COALESCE(dias_alerta, 7) || ' days')::INTERVAL THEN 'alerta'
           ELSE 'ok'
         END,
         atualizado_em = NOW()
       WHERE status NOT IN ('descartado','vendido')
         AND data_validade IS NOT NULL
+      RETURNING id, status
     `);
+    const vendidosSobrescritos = res.rows.filter(r => r.status === 'vendido');
+    if (vendidosSobrescritos.length) {
+      console.error('[atualizarStatus] ⚠️ SOBRESCREVEU vendidos:', vendidosSobrescritos);
+    }
+    console.log(`[atualizarStatus] atualizou ${res.rowCount} itens. statuses: ${JSON.stringify(res.rows.map(r=>r.status).reduce((a,s)=>{a[s]=(a[s]||0)+1;return a},{}))}` );
   }
 
   // ── GET /kpis ──────────────────────────────────────────────────────────────
@@ -378,12 +384,18 @@ module.exports = function (pool) {
         UPDATE validade_items
         SET status=$1, resolucao=$1, dt_resolucao=CURRENT_DATE, atualizado_em=NOW()
         WHERE id=ANY($2::int[])
+        RETURNING id, status, resolucao, atualizado_em
       `, [motivo, idsNum]);
-      console.log(`[validade] encerrar-multiplos: ids=${idsNum} motivo=${motivo} rowCount=${result.rowCount}`);
+      console.log(`[validade] encerrar-multiplos: ids=${idsNum} motivo=${motivo} rowCount=${result.rowCount} returning=${JSON.stringify(result.rows)}`);
       if (result.rowCount === 0) {
         return res.status(404).json({ ok: false, erro: 'Nenhum item encontrado com esses IDs' });
       }
-      res.json({ ok: true, atualizados: result.rowCount, motivo });
+      // Verificação imediata: confirmar que o banco realmente salvou
+      const check = await pool.query(
+        `SELECT id, status FROM validade_items WHERE id=ANY($1::int[])`, [idsNum]
+      );
+      console.log(`[validade] encerrar-multiplos CHECK pós-update: ${JSON.stringify(check.rows)}`);
+      res.json({ ok: true, atualizados: result.rowCount, motivo, check: check.rows });
     } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
