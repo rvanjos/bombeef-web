@@ -1306,12 +1306,13 @@ function render() {
     return;
   }
 
-  // Limita renderização a 500 itens para performance
-  const MAX_RENDER = 500;
+  // Limita a 500 apenas quando não há filtro de mês específico
+  const mesFiltro = document.getElementById('f-mes').value;
+  const MAX_RENDER = mesFiltro ? 9999 : 500;
   const listaRender = lista.length > MAX_RENDER ? lista.slice(0, MAX_RENDER) : lista;
   const avisoLimit = lista.length > MAX_RENDER 
     ? `<tr><td colspan="10" style="text-align:center;padding:8px;background:#fff8e6;font-size:12px;color:#856404">
-        ⚠️ Exibindo ${MAX_RENDER} de ${lista.length} lançamentos. Use filtros para ver os demais.
+        ⚠️ Exibindo ${MAX_RENDER} de ${lista.length} lançamentos. Selecione um mês no filtro para ver todos.
        </td></tr>` : '';
 
   tb.innerHTML = avisoLimit + listaRender.map(t => {
@@ -1374,7 +1375,7 @@ function _chaveFornecedor(t) {
 }
 
 function setCat(id, cat) {
-  const t = TXS.find(x => x.id===id); if (!t) return;
+  const t = TXS.find(x => String(x.id)===String(id)); if (!t) return;
   t.categoria = cat;
   if (cat) t.needsReview = false; // classificação manual remove o aviso de revisão
   if (cat) {
@@ -1402,7 +1403,8 @@ function salvarMesDebounce(mes) {
 
 async function salvarMes(mes, silent=false) {
   const txsMes = TXS.filter(t => (t.mes || mesRef) === mes);
-  if (!txsMes.length) return;
+  console.log(`[salvarMes] mes=${mes} txs=${txsMes.length} sid=${(window._sessoesPorMes||{})[mes]} mesRef=${mesRef}`);
+  if (!txsMes.length) { console.warn('[salvarMes] nenhum lançamento para', mes); return; }
   const sid = (window._sessoesPorMes && window._sessoesPorMes[mes]) || (mes === mesRef ? sessId : null);
   try {
     const d = await api.post('/api/dre/salvar', {
@@ -1868,7 +1870,7 @@ function salvarProvisao() {
 
 // ─── EDITAR / EXCLUIR LANÇAMENTOS MANUAIS ────────────────────────────────────
 function editarLanc(id) {
-  const t = TXS.find(x => x.id === id); if (!t) return;
+  const t = TXS.find(x => String(x.id) === String(id)); if (!t) return;
   document.getElementById('el-id').value = id;
   document.getElementById('el-d').value  = t.lancamento || '';
   document.getElementById('el-v').value  = t.valor || '';
@@ -1883,7 +1885,7 @@ function editarLanc(id) {
 
 function salvarEditLanc() {
   const id  = document.getElementById('el-id').value;
-  const t   = TXS.find(x => x.id === id); if (!t) return;
+  const t   = TXS.find(x => String(x.id) === String(id)); if (!t) return;
   const desc = document.getElementById('el-d').value.trim();
   if (!desc) { toast('Descrição obrigatória'); return; }
   t.lancamento = desc;
