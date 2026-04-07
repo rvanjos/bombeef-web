@@ -344,23 +344,52 @@ app.get('/api/admin/fix-dre-sessions', async (req, res) => {
 app.get('/api/admin/fix-kits', async (req, res) => {
   try {
     const results = [];
-    const checks = [
-      { table: 'kits',     from: 'nome_kit', to: 'nome'   },
-      { table: 'kits',     from: 'id_kit',   to: 'id'     },
-      { table: 'kit_itens',from: 'id_kit',   to: 'kit_id' },
-    ];
-    for (const { table, from, to } of checks) {
-      const { rows } = await pool.query(
-        `SELECT column_name FROM information_schema.columns
-         WHERE table_schema='public' AND table_name=$1 AND column_name=$2`, [table, from]
-      );
-      if (rows.length) {
-        await pool.query(`ALTER TABLE ${table} RENAME COLUMN ${from} TO ${to}`);
-        results.push(`✅ ${table}.${from} → ${to}`);
-      } else {
-        results.push(`⏭ ${table}.${from} não existe (já OK)`);
+    const client = await pool.connect();
+    try {
+      // 1. Rename legados em kits
+      for (const { from, to } of [{from:'nome_kit',to:'nome'},{from:'id_kit',to:'id'}]) {
+        const { rows } = await client.query(
+          `SELECT column_name FROM information_schema.columns
+           WHERE table_schema='public' AND table_name='kits' AND column_name=$1`, [from]
+        );
+        if (rows.length) {
+          await client.query(`ALTER TABLE kits RENAME COLUMN ${from} TO ${to}`);
+          results.push(`✅ kits.${from} → ${to}`);
+        } else {
+          results.push(`⏭ kits.${from} não existe (OK)`);
+        }
       }
-    }
+
+      // 2. Fix kit_itens: garantir que kit_id existe e tem dados corretos
+      const { rows: cols } = await client.query(`
+        SELECT column_name FROM information_schema.columns
+        WHERE table_schema='public' AND table_name='kit_itens'
+          AND column_name IN ('kit_id','id_kit')
+      `);
+      const hasKitId  = cols.some(r => r.column_name === 'kit_id');
+      const hasIdKit  = cols.some(r => r.column_name === 'id_kit');
+      results.push(`kit_itens: kit_id=${hasKitId} id_kit=${hasIdKit}`);
+
+      if (!hasKitId && hasIdKit) {
+        // Só id_kit existe — renomeia
+        await client.query(`ALTER TABLE kit_itens RENAME COLUMN id_kit TO kit_id`);
+        results.push('✅ kit_itens.id_kit → kit_id (rename)');
+      } else if (hasKitId && hasIdKit) {
+        // Ambas existem — copia id_kit → kit_id onde kit_id é nulo, depois dropa id_kit
+        await client.query(`UPDATE kit_itens SET kit_id = id_kit WHERE kit_id IS NULL AND id_kit IS NOT NULL`);
+        await client.query(`ALTER TABLE kit_itens DROP COLUMN id_kit`);
+        results.push('✅ kit_itens: copiou id_kit→kit_id e dropou id_kit');
+      } else if (hasKitId) {
+        results.push('⏭ kit_itens.kit_id já existe sem id_kit (OK)');
+      }
+
+      // 3. Garante NOT NULL em kit_itens.kit_id
+      await client.query(`ALTER TABLE kit_itens ALTER COLUMN kit_id SET NOT NULL`).catch(e => {
+        results.push(`⚠️ NOT NULL falhou: ${e.message}`);
+      });
+      results.push('✅ kit_itens.kit_id NOT NULL garantido');
+
+    } finally { client.release(); }
     res.json({ ok: true, results });
   } catch(e) {
     res.status(500).json({ ok: false, erro: e.message });
