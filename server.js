@@ -346,15 +346,19 @@ app.get('/api/admin/fix-kits', async (req, res) => {
     const results = [];
     const client = await pool.connect();
     try {
-      // 1. Rename legados em kits
+      // 1. Rename legados em kits — cada um isolado
       for (const { from, to } of [{from:'nome_kit',to:'nome'},{from:'id_kit',to:'id'}]) {
-        const { rows } = await client.query(
-          `SELECT column_name FROM information_schema.columns
-           WHERE table_schema='public' AND table_name='kits' AND column_name=$1`, [from]
+        const { rows: hasFrom } = await client.query(
+          `SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='kits' AND column_name=$1`, [from]
         );
-        if (rows.length) {
+        const { rows: hasTo } = await client.query(
+          `SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='kits' AND column_name=$1`, [to]
+        );
+        if (hasFrom.length && !hasTo.length) {
           await client.query(`ALTER TABLE kits RENAME COLUMN ${from} TO ${to}`);
           results.push(`✅ kits.${from} → ${to}`);
+        } else if (hasFrom.length && hasTo.length) {
+          results.push(`⏭ kits: ambas ${from} e ${to} existem — sem rename`);
         } else {
           results.push(`⏭ kits.${from} não existe (OK)`);
         }
