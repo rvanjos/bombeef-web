@@ -1376,6 +1376,7 @@ function _chaveFornecedor(t) {
 function setCat(id, cat) {
   const t = TXS.find(x => x.id===id); if (!t) return;
   t.categoria = cat;
+  if (cat) t.needsReview = false; // classificação manual remove o aviso de revisão
   if (cat) {
     const k = _chaveFornecedor(t);
     if (k) {
