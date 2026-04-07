@@ -555,11 +555,12 @@ module.exports = function (pool) {
           }
 
           // Verifica duplicata: mesmo produto (desc ou codigo) + mesma data de validade
-          // Também ignora se já existe um item encerrado (vendido/descartado) com mesma desc
+          // Ignora itens vendidos/descartados — eles podem ser re-cadastrados
           const dupCheck = await client.query(`
             SELECT id FROM validade_items
             WHERE data_validade=$1::date
               AND (descricao=$2 OR ($3::text IS NOT NULL AND codigo=$3))
+              AND status NOT IN ('vendido','descartado')
             LIMIT 1
           `, [dataVal, desc, cod||null]);
           if(dupCheck.rows.length){ duplicatas++; continue; }
