@@ -370,9 +370,10 @@ async function carregarResumo() {
   document.getElementById('resumo-container').innerHTML = '<div class="loading">Carregando...</div>';
 
   const d = await get(`/api/rh/resumo-mes?mes=${encodeURIComponent(mes)}`);
-  if (!d.ok) { document.getElementById('resumo-container').innerHTML = `<div class="empty"><div class="icon">⚠️</div><p>${d.erro}</p></div>`; return; }
+  console.log('[RH] resumo-mes resposta:', d);
+  if (!d.ok) { document.getElementById('resumo-container').innerHTML = `<div class="empty"><div class="icon">⚠️</div><p>Erro: ${d.erro || JSON.stringify(d)}</p></div>`; return; }
 
-  if (!d.data.length) {
+  if (!d.data || !d.data.length) {
     document.getElementById('resumo-container').innerHTML = '<div class="empty"><div class="icon">👥</div><p>Nenhum funcionário ativo cadastrado</p></div>';
     return;
   }
