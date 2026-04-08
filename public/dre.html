@@ -625,10 +625,13 @@ function preencherSels() {
     const el = document.getElementById(id); if (!el) return;
     el.innerHTML = '<option value="">— Sem categoria —</option>' + catOptsHtml();
   });
-  // Preenche filtro de grupos
+  // Preenche filtro de grupos + categorias
   const fg = document.getElementById('f-grp');
   fg.innerHTML = '<option value="">Todos os grupos</option>' +
-    Object.entries(CATS).map(([k,g]) => `<option value="${k}">${g.l}</option>`).join('');
+    Object.entries(CATS).map(([k,g]) => {
+      const cats = g.s.map(s => `<option value="cat:${s}" style="padding-left:16px">　↳ ${s}</option>`).join('');
+      return `<option value="${k}" style="font-weight:700">📁 ${g.l}</option>${cats}`;
+    }).join('');
 }
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
@@ -1319,7 +1322,15 @@ function render() {
 
   const lista = TXS.filter(t => {
     if (q && !t.lancamento.toLowerCase().includes(q) && !(t.razaoSocial||'').toLowerCase().includes(q)) return false;
-    if (grp && catGrupo(t.categoria) !== grp) return false;
+    if (grp) {
+      if (grp.startsWith('cat:')) {
+        // Filtro por categoria específica
+        if (t.categoria !== grp.slice(4)) return false;
+      } else {
+        // Filtro por grupo
+        if (catGrupo(t.categoria) !== grp) return false;
+      }
+    }
     if (mes && t.mes !== mes) return false;
     if (fonte && t.fonte !== fonte) return false;
     if (pend && t.categoria) return false;
