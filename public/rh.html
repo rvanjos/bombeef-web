@@ -419,7 +419,14 @@ async function carregarResumo() {
     </div>`;
   }
   html += '</div>';
-  document.getElementById('resumo-container').innerHTML = html;
+  const container = document.getElementById('resumo-container');
+  console.log('[RH] container:', container, 'html length:', html.length);
+  if (container) {
+    container.innerHTML = html;
+    console.log('[RH] innerHTML setado, filhos:', container.children.length);
+  } else {
+    console.error('[RH] ERRO: resumo-container não encontrado no DOM!');
+  }
 }
 
 // ── Abrir ficha individual ──────────────────────────────────────────────────
