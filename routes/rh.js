@@ -280,5 +280,149 @@ module.exports = function (pool) {
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
+};
+
+  // ── GET /escalas?mes=MM/YYYY ──────────────────────────────────────────────
+  r.get('/escalas', async (req, res) => {
+    const { mes } = req.query;
+    try {
+      // Busca configurações de escala de todos os funcionários
+      const { rows: configs } = await pool.query(`
+        SELECT e.*, f.nome, f.cargo,
+               CASE WHEN f.cargo ILIKE '%propri%' OR f.cargo ILIKE '%gerente%' OR f.cargo ILIKE '%homem%' OR f.sexo = 'M' THEN 'M' ELSE 'F' END AS sexo_calc
+        FROM rh_escalas e
+        JOIN funcionarios f ON f.id = e.funcionario_id
+        WHERE f.ativo = true
+        ORDER BY f.nome ASC
+      `).catch(() => ({ rows: [] }));
+      res.json({ ok: true, data: configs });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ── GET /escalas/funcionarios ─────────────────────────────────────────────
+  r.get('/escalas/funcionarios', async (req, res) => {
+    try {
+      const { rows } = await pool.query(`
+        SELECT f.id, f.nome, f.cargo,
+               e.data_inicio, e.tipo_escala, e.primeiro_dia
+        FROM funcionarios f
+        LEFT JOIN rh_escalas e ON e.funcionario_id = f.id
+        WHERE f.ativo = true
+        ORDER BY f.nome ASC
+      `).catch(() => ({ rows: [] }));
+      res.json({ ok: true, data: rows });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ── POST /escalas ─────────────────────────────────────────────────────────
+  r.post('/escalas', async (req, res) => {
+    const { funcionario_id, data_inicio, tipo_escala, primeiro_dia } = req.body;
+    if (!funcionario_id || !data_inicio) return res.status(400).json({ ok: false, erro: 'funcionario_id e data_inicio obrigatórios' });
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS rh_escalas (
+          id              SERIAL PRIMARY KEY,
+          funcionario_id  INTEGER NOT NULL UNIQUE,
+          data_inicio     DATE NOT NULL,
+          tipo_escala     TEXT DEFAULT 'F',  -- F=1trabalha/1folga, M=2trabalha/1folga
+          primeiro_dia    TEXT DEFAULT 'trabalho',  -- 'trabalho' ou 'folga'
+          criado_em       TIMESTAMPTZ DEFAULT NOW(),
+          atualizado_em   TIMESTAMPTZ DEFAULT NOW()
+        )
+      `).catch(() => {});
+      await pool.query(`
+        INSERT INTO rh_escalas (funcionario_id, data_inicio, tipo_escala, primeiro_dia, atualizado_em)
+        VALUES ($1, $2, $3, $4, NOW())
+        ON CONFLICT (funcionario_id) DO UPDATE SET
+          data_inicio   = $2,
+          tipo_escala   = $3,
+          primeiro_dia  = $4,
+          atualizado_em = NOW()
+      `, [funcionario_id, data_inicio, tipo_escala || 'F', primeiro_dia || 'trabalho']);
+      res.json({ ok: true });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ── POST /apontamento com data ─────────────────────────────────────────────
+  // (já existe, mas vamos adicionar suporte a múltiplas datas via array)
+  r.post('/apontamentos-lote', async (req, res) => {
+    const { funcionario_id, mes_ref, tipo, descricao, datas, horas } = req.body;
+    if (!funcionario_id || !mes_ref || !tipo || !datas?.length)
+      return res.status(400).json({ ok: false, erro: 'Campos obrigatórios faltando' });
+    try {
+      const inseridos = [];
+      for (const data of datas) {
+        const { rows } = await pool.query(`
+          INSERT INTO rh_apontamentos
+            (funcionario_id, mes_ref, tipo, descricao, quantidade, valor_unitario, valor_total, data_ref)
+          VALUES ($1,$2,$3,$4,$5,0,0,$6) RETURNING *
+        `, [funcionario_id, mes_ref, tipo, descricao || null, parseFloat(horas || 0), data]);
+        inseridos.push(rows[0]);
+      }
+      res.json({ ok: true, inseridos: inseridos.length });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ── GET /relatorio?mes=MM/YYYY&ids=1,2,3 ─────────────────────────────────
+  r.get('/relatorio', async (req, res) => {
+    const { mes, ids } = req.query;
+    if (!mes) return res.status(400).json({ ok: false, erro: 'mes obrigatório' });
+    try {
+      const idsArr = ids ? ids.split(',').map(Number).filter(Boolean) : null;
+      const whereFunc = idsArr ? `AND f.id = ANY($2::int[])` : '';
+      const params = idsArr ? [mes, idsArr] : [mes];
+
+      const { rows } = await pool.query(`
+        SELECT
+          f.id, f.nome, f.cargo,
+          COALESCE(fi.salario_base, 0)     AS salario_base,
+          COALESCE(fi.vale_alimentacao, 0) AS vale_alimentacao,
+          COALESCE(fi.observacao, '')      AS observacao,
+          COALESCE((SELECT SUM(valor_total) FROM rh_apontamentos
+                    WHERE funcionario_id=f.id AND mes_ref=$1 AND tipo NOT IN ('falta','desconto')), 0) AS total_acrescimos,
+          COALESCE((SELECT SUM(valor_total) FROM rh_apontamentos
+                    WHERE funcionario_id=f.id AND mes_ref=$1 AND tipo IN ('falta','desconto')), 0) AS total_descontos,
+          COALESCE((SELECT SUM(valor) FROM rh_pagamentos
+                    WHERE funcionario_id=f.id AND mes_ref=$1), 0) AS total_extras,
+          COALESCE((SELECT SUM(valor_total) FROM retiradas
+                    WHERE funcionario_id=f.id AND mes=$1), 0) AS total_retiradas
+        FROM funcionarios f
+        LEFT JOIN rh_fichas fi ON fi.funcionario_id=f.id AND fi.mes_ref=$1
+        WHERE f.ativo=true ${whereFunc}
+        ORDER BY f.nome ASC
+      `, params);
+
+      // Busca apontamentos detalhados de cada funcionário
+      const funcIds = rows.map(r => r.id);
+      const { rows: aponts } = await pool.query(`
+        SELECT * FROM rh_apontamentos
+        WHERE funcionario_id = ANY($1::int[]) AND mes_ref = $2
+        ORDER BY funcionario_id, data_ref ASC, id ASC
+      `, [funcIds, mes]);
+
+      const { rows: retiradas } = await pool.query(`
+        SELECT r.*, p.descricao AS produto_nome
+        FROM retiradas r
+        LEFT JOIN produtos p ON p.id = r.produto_id
+        WHERE r.funcionario_id = ANY($1::int[]) AND r.mes = $2
+        ORDER BY r.funcionario_id, r.dt_retirada ASC
+      `, [funcIds, mes]);
+
+      const data = rows.map(r => ({
+        ...r,
+        salario_base:      parseFloat(r.salario_base),
+        vale_alimentacao:  parseFloat(r.vale_alimentacao),
+        total_acrescimos:  parseFloat(r.total_acrescimos),
+        total_descontos:   parseFloat(r.total_descontos),
+        total_extras:      parseFloat(r.total_extras),
+        total_retiradas:   parseFloat(r.total_retiradas),
+        apontamentos:      aponts.filter(a => a.funcionario_id === r.id),
+        retiradas_detalhe: retiradas.filter(ret => ret.funcionario_id === r.id),
+      }));
+
+      res.json({ ok: true, data, mes });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
   return r;
 };
