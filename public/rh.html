@@ -306,10 +306,11 @@ const post = (p,b) => api('POST', p, b);
 const del  = p => api('DELETE', p);
 
 // Recebe token do parent (iframe)
+let _bbInited = false;
 window.addEventListener('message', e => {
   if (e.data?.type === 'bb_token' && e.data.token) {
     sessionStorage.setItem('bb_token', e.data.token);
-    if (typeof onBBReady === 'function') onBBReady();
+    if (!_bbInited) { _bbInited = true; init(); }
   }
 });
 
@@ -616,15 +617,10 @@ async function delPagamento(id) {
   if (fd.ok) { _fichaAtual = fd; renderPagamentos(fd.pagamentos); calcResumo(fd); }
 }
 
-// Se já tem token (ex: reload), inicia direto; senão aguarda mensagem do parent
-if (getToken()) {
-  init();
-} else {
-  // onBBReady é chamado quando o parent envia o token
-  function onBBReady() { init(); }
-  // Fallback: se em 3s não chegou token, tenta mesmo assim
-  setTimeout(() => { if (!getToken()) init(); }, 3000);
-}
+// Se já tem token salvo, inicia direto
+if (getToken()) { _bbInited = true; init(); }
+// Fallback: se em 4s ainda não iniciou (token não chegou), tenta assim mesmo
+setTimeout(() => { if (!_bbInited) { _bbInited = true; init(); } }, 4000);
 </script>
 </body>
 </html>
