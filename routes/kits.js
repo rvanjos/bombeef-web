@@ -234,16 +234,16 @@ module.exports = function (pool) {
           ${nomeColPut} = COALESCE($1, ${nomeColPut}), descricao = COALESCE($2, descricao),
           preco_venda = COALESCE($3, preco_venda), margem = COALESCE($4, margem),
           atualizado_em = NOW()
-        WHERE id = $5 OR codigo = $5
+        WHERE id = $5
       `, [nome||null, descricao||null,
           precoVenda !== undefined ? parseFloat(precoVenda) : null,
           margem !== undefined ? parseFloat(margem) : null,
-          isNaN(numId) ? req.params.id : numId]);
+          numId]);
 
       if (Array.isArray(itens)) {
         const { rows: kitRow } = await client.query(
-          `SELECT id FROM kits WHERE id = $1 OR codigo = $1`,
-          [isNaN(numId) ? req.params.id : numId]
+          `SELECT id FROM kits WHERE id = $1`,
+          [numId]
         );
         if (!kitRow.length) throw new Error('Kit não encontrado');
         const kitId = kitRow[0].id;
@@ -274,7 +274,12 @@ module.exports = function (pool) {
   // DELETE /:id
   r.delete('/:id', async (req, res) => {
     try {
-      await pool.query(`UPDATE kits SET ativo = false, atualizado_em = NOW() WHERE id = $1 OR codigo = $1`, [req.params.id]);
+      const delId = parseInt(req.params.id);
+      if (!isNaN(delId)) {
+        await pool.query(`UPDATE kits SET ativo = false, atualizado_em = NOW() WHERE id = $1`, [delId]);
+      } else {
+        await pool.query(`UPDATE kits SET ativo = false, atualizado_em = NOW() WHERE codigo = $1`, [req.params.id]);
+      }
       res.json({ ok: true });
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
