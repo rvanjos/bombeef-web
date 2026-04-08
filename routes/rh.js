@@ -8,11 +8,12 @@
  */
 
 const express = require('express');
-const { requireAuth } = require('../middleware/auth');
+const autenticar = require('../middleware/auth');
+const { requireNivel } = autenticar;
 
 module.exports = function (pool) {
   const r = express.Router();
-  r.use(requireAuth);
+  r.use(autenticar());
 
   // Apenas admin
   r.use((req, res, next) => {
