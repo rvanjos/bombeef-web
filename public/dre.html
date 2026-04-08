@@ -342,6 +342,7 @@ td{padding:5px 9px;vertical-align:middle;}
   <div class="md" style="max-width:680px;max-height:85vh;display:flex;flex-direction:column">
     <div class="mdh"><h3>⚙️ Categorias DRE</h3><button class="mdx" onclick="fecharModal('m-cats')">×</button></div>
     <div class="mdb" style="flex:1;overflow-y:auto;padding:12px 16px">
+      <div id="cats-aviso-orfas" style="display:none;background:#fff3e0;border:1px solid #ffb74d;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:#e65100;"></div>
       <div style="display:flex;gap:8px;margin-bottom:12px;align-items:flex-end;flex-wrap:wrap">
         <div class="fg" style="flex:1;min-width:120px;margin:0">
           <label>Grupo</label>
@@ -639,7 +640,14 @@ function preencherSels() {
     Object.entries(CATS).map(([k,g]) => {
       const cats = g.s.map(s => `<option value="cat:${s}" style="padding-left:16px">　↳ ${s}</option>`).join('');
       return `<option value="${k}" style="font-weight:700">📁 ${g.l}</option>${cats}`;
-    }).join('');
+    }).join('') +
+    // Detecta categorias "órfãs" (existem em lançamentos mas não no CATS)
+    (() => {
+      const orfas = [...new Set(TXS.filter(t => t.categoria && !catGrupo(t.categoria)).map(t => t.categoria))];
+      if (!orfas.length) return '';
+      return `<option value="OUTROS" style="font-weight:700;color:var(--orange)">⚠️ OUTROS (sem grupo)</option>` +
+        orfas.map(s => `<option value="cat:${s}" style="padding-left:16px">　↳ ${s}</option>`).join('');
+    })();
 }
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
@@ -1333,10 +1341,12 @@ function render() {
     if (q && !t.lancamento.toLowerCase().includes(q) && !(t.razaoSocial||'').toLowerCase().includes(q)) return false;
     if (grp) {
       if (grp.startsWith('cat:')) {
-        // Filtro por categoria específica
         if (t.categoria !== grp.slice(4)) return false;
+      } else if (grp === 'OUTROS') {
+        // OUTROS = categorias que não estão em nenhum grupo conhecido
+        if (catGrupo(t.categoria) !== null) return false;
+        if (!t.categoria) return false;
       } else {
-        // Filtro por grupo
         if (catGrupo(t.categoria) !== grp) return false;
       }
     }
@@ -1791,7 +1801,37 @@ let _catsEditando = []; // cópia local para edição
 function abrirCategorias() {
   _catsEditando = [];
   renderCatsList();
+  // Detecta e mostra categorias órfãs
+  const orfas = [...new Set(TXS.filter(t => t.categoria && !catGrupo(t.categoria)).map(t => t.categoria))];
+  const avisoEl = document.getElementById('cats-aviso-orfas');
+  if (avisoEl) {
+    if (orfas.length) {
+      avisoEl.style.display = 'block';
+      avisoEl.innerHTML = `⚠️ <b>${orfas.length} categoria(s) sem grupo</b> encontrada(s) nos lançamentos: <b>${orfas.join(', ')}</b>.<br>
+        <button class="btn bs" style="margin-top:6px;font-size:11px" onclick="recriarCatsOrfas(${JSON.stringify(orfas).replace(/"/g,'&quot;')})">🔧 Recriar no banco</button>`;
+    } else {
+      avisoEl.style.display = 'none';
+    }
+  }
   document.getElementById('m-cats').classList.add('open');
+}
+
+async function recriarCatsOrfas(orfas) {
+  const GRUPO_PADRAO = {
+    'COMPRAS - REVENDA': 'CMV',
+    'COMPRAS-REVENDA': 'CMV',
+  };
+  let criadas = 0;
+  for (const cat of orfas) {
+    const grupo = GRUPO_PADRAO[cat] || 'OUTRAS';
+    const d = await api.post('/api/dre/categorias', { grupo, subgrupo: cat, label_exibicao: cat, ordem: 99 });
+    if (d.ok) criadas++;
+  }
+  toast(`✅ ${criadas} categoria(s) recriada(s)!`);
+  await carregarCats();
+  preencherSels();
+  atualizarDatalist();
+  renderCatsList();
 }
 
 async function renderCatsList() {
