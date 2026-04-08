@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Bom Beef — RH</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@300;400;500;600&display=swap');
+:root{--red:#8B0000;--red-light:#C0392B;--green:#1a7a4a;--green-light:#e8f5ee;--orange:#c76b00;--blue:#1a5c8a;--bg:#f7f4f0;--white:#fff;--text:#1a1a1a;--muted:#7a7068;--border:#e8e0d8;--shadow:0 2px 12px rgba(0,0,0,0.08);}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
+header{background:var(--red);padding:18px 28px;display:flex;align-items:center;gap:14px;box-shadow:0 3px 16px rgba(139,0,0,0.4);}
+header h1{font-family:'Playfair Display',serif;font-size:20px;color:#fff;}
+header p{font-size:11px;color:rgba(255,255,255,.7);letter-spacing:1px;text-transform:uppercase;}
+main{padding:20px 28px;max-width:1400px;margin:0 auto;}
+
+/* Toolbar */
+.toolbar{display:flex;align-items:center;gap:10px;margin-bottom:18px;flex-wrap:wrap;}
+.toolbar select,.toolbar input{padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:var(--white);}
+.btn{padding:8px 16px;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;transition:.15s;}
+.btn-red{background:var(--red);color:#fff;} .btn-red:hover{background:var(--red-light);}
+.btn-green{background:var(--green);color:#fff;} .btn-green:hover{opacity:.9;}
+.btn-gray{background:#e8e0d8;color:var(--text);} .btn-gray:hover{background:#d8cfc6;}
+.btn-sm{padding:5px 10px;font-size:11px;}
+
+/* Cards resumo */
+.resumo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;margin-bottom:24px;}
+.func-card{background:var(--white);border-radius:12px;padding:16px 18px;box-shadow:var(--shadow);border-left:4px solid var(--red);cursor:pointer;transition:.2s;}
+.func-card:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,0.12);}
+.func-card .fc-nome{font-size:15px;font-weight:600;margin-bottom:3px;}
+.func-card .fc-cargo{font-size:11px;color:var(--muted);margin-bottom:10px;}
+.func-card .fc-valores{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
+.fc-item{background:#f7f4f0;border-radius:6px;padding:6px 8px;}
+.fc-item .lbl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;}
+.fc-item .val{font-size:13px;font-weight:600;}
+.fc-item.green .val{color:var(--green);}
+.fc-item.red .val{color:var(--red-light);}
+.fc-item.blue .val{color:var(--blue);}
+.fc-total{grid-column:1/-1;background:#1a7a4a;border-radius:6px;padding:8px 10px;display:flex;justify-content:space-between;align-items:center;}
+.fc-total .lbl{color:rgba(255,255,255,.8);font-size:11px;}
+.fc-total .val{color:#fff;font-size:16px;font-weight:700;}
+.fc-total.neg{background:var(--red-light);}
+
+/* Modal ficha */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;display:none;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto;}
+.modal-bg.open{display:flex;}
+.modal{background:var(--white);border-radius:14px;width:100%;max-width:860px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.3);}
+.modal-head{background:var(--red);padding:18px 22px;display:flex;justify-content:space-between;align-items:center;}
+.modal-head h2{font-family:'Playfair Display',serif;color:#fff;font-size:17px;}
+.modal-head span{color:rgba(255,255,255,.8);font-size:13px;}
+.modal-close{background:none;border:none;color:#fff;font-size:22px;cursor:pointer;padding:0 4px;}
+.modal-body{padding:22px;}
+
+/* Seções da ficha */
+.ficha-section{margin-bottom:20px;}
+.ficha-section h3{font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border);}
+.ficha-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:10px;}
+.ficha-field label{display:block;font-size:11px;color:var(--muted);margin-bottom:4px;}
+.ficha-field input,.ficha-field select,.ficha-field textarea{width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;font-family:inherit;}
+.ficha-field textarea{resize:vertical;min-height:60px;}
+
+/* Tabela apontamentos */
+.apont-table{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px;}
+.apont-table th{background:#f0ebe4;padding:7px 10px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);}
+.apont-table td{padding:7px 10px;border-bottom:1px solid #f0ebe4;}
+.apont-table tr:hover td{background:#fafaf8;}
+.tipo-badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:10px;font-weight:700;text-transform:uppercase;}
+.tipo-hora_extra{background:#e3f2fd;color:#1565c0;}
+.tipo-feriado{background:#fff3e0;color:#e65100;}
+.tipo-falta,.tipo-desconto{background:#fce4ec;color:#c62828;}
+.tipo-bonus,.tipo-outro{background:#e8f5e9;color:#2e7d32;}
+.tipo-entrega{background:#f3e5f5;color:#6a1b9a;}
+.tipo-grelhado{background:#fbe9e7;color:#bf360c;}
+.tipo-comissao{background:#e0f2f1;color:#004d40;}
+.btn-del{background:none;border:none;color:#ccc;cursor:pointer;font-size:14px;padding:2px 6px;border-radius:4px;}
+.btn-del:hover{color:var(--red-light);background:#fce4ec;}
+
+/* Resumo final da ficha */
+.ficha-resumo{background:#f7f4f0;border-radius:10px;padding:14px 16px;margin-top:14px;}
+.ficha-resumo .linha{display:flex;justify-content:space-between;padding:4px 0;font-size:13px;}
+.ficha-resumo .linha.sep{border-top:1px solid var(--border);margin-top:4px;padding-top:8px;}
+.ficha-resumo .linha.total{font-weight:700;font-size:15px;}
+.ficha-resumo .linha.total .val{color:var(--green);}
+.ficha-resumo .linha.total.neg .val{color:var(--red-light);}
+.linha .val.pos{color:var(--green);}
+.linha .val.neg{color:var(--red-light);}
+
+/* Adicionar apontamento */
+.add-apont{background:#f7f4f0;border-radius:8px;padding:12px;margin-top:8px;}
+.add-apont .row{display:grid;grid-template-columns:1fr 1fr 1fr 1fr auto;gap:8px;align-items:end;}
+.add-apont label{font-size:11px;color:var(--muted);display:block;margin-bottom:3px;}
+.add-apont input,.add-apont select{width:100%;padding:6px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;}
+
+/* Toast */
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1a1a1a;color:#fff;padding:10px 20px;border-radius:20px;font-size:13px;z-index:9999;opacity:0;transition:.3s;pointer-events:none;}
+.toast.show{opacity:1;}
+
+/* Empty */
+.empty{text-align:center;padding:48px 20px;color:var(--muted);}
+.empty .icon{font-size:40px;margin-bottom:12px;}
+
+/* Spinner */
+.loading{text-align:center;padding:40px;color:var(--muted);font-size:13px;}
+</style>
+</head>
+<body>
+<header>
+  <div>🧑‍💼</div>
+  <div>
+    <h1>Gestão de RH</h1>
+    <p>Folha mensal · Apontamentos · Retiradas</p>
+  </div>
+</header>
+
+<main>
+  <div class="toolbar">
+    <label style="font-size:12px;font-weight:600;color:var(--muted)">MÊS:</label>
+    <input type="month" id="sel-mes" style="font-size:13px;padding:7px 10px;">
+    <button class="btn btn-red" onclick="carregarResumo()">🔄 Atualizar</button>
+    <button class="btn btn-gray" onclick="mesAnterior()">◀ Mês anterior</button>
+    <button class="btn btn-gray" onclick="mesProximo()">Próximo mês ▶</button>
+    <span id="lbl-mes" style="font-size:13px;font-weight:600;color:var(--muted);margin-left:4px;"></span>
+  </div>
+
+  <div id="resumo-container">
+    <div class="loading">Carregando...</div>
+  </div>
+</main>
+
+<!-- Modal ficha individual -->
+<div class="modal-bg" id="modal-ficha">
+  <div class="modal">
+    <div class="modal-head">
+      <div>
+        <h2 id="modal-nome">Ficha do Funcionário</h2>
+        <span id="modal-mes-label"></span>
+      </div>
+      <button class="modal-close" onclick="fecharFicha()">×</button>
+    </div>
+    <div class="modal-body">
+
+      <!-- Seção: Valores base do mês -->
+      <div class="ficha-section">
+        <h3>💰 Valores do Mês</h3>
+        <div class="ficha-row">
+          <div class="ficha-field">
+            <label>Salário Base (R$)</label>
+            <input type="number" id="f-salario" step="0.01" placeholder="0,00">
+          </div>
+          <div class="ficha-field">
+            <label>Vale Alimentação (R$)</label>
+            <input type="number" id="f-va" step="0.01" placeholder="0,00">
+          </div>
+          <div class="ficha-field">
+            <label>Domingos trabalhados</label>
+            <input type="number" id="f-domingos" step="1" min="0" placeholder="0">
+          </div>
+          <div class="ficha-field">
+            <label>Valor por domingo (R$)</label>
+            <input type="number" id="f-valor-domingo" step="0.01" placeholder="0,00">
+          </div>
+        </div>
+        <div class="ficha-field" style="max-width:100%;margin-top:4px;">
+          <label>Observação do mês</label>
+          <textarea id="f-obs" rows="2" placeholder="Observações gerais..."></textarea>
+        </div>
+        <button class="btn btn-green" style="margin-top:8px" onclick="salvarFicha()">💾 Salvar valores base</button>
+      </div>
+
+      <!-- Seção: Apontamentos -->
+      <div class="ficha-section">
+        <h3>📋 Apontamentos do Mês</h3>
+        <div class="add-apont">
+          <div class="row">
+            <div>
+              <label>Tipo</label>
+              <select id="ap-tipo">
+                <option value="hora_extra">⏰ Hora Extra</option>
+                <option value="feriado">📅 Feriado</option>
+                <option value="falta">❌ Falta</option>
+                <option value="desconto">➖ Desconto</option>
+                <option value="bonus">⭐ Bônus</option>
+                <option value="outro">📝 Outro</option>
+              </select>
+            </div>
+            <div>
+              <label>Descrição</label>
+              <input type="text" id="ap-desc" placeholder="Ex: 2h extra dia 15...">
+            </div>
+            <div>
+              <label>Qtd (h/dias)</label>
+              <input type="number" id="ap-qtd" step="0.5" min="0" value="1">
+            </div>
+            <div>
+              <label>Valor unitário (R$)</label>
+              <input type="number" id="ap-vunit" step="0.01" min="0" value="0">
+            </div>
+            <div>
+              <button class="btn btn-red" onclick="addApontamento()" style="height:32px;margin-top:18px">+ Add</button>
+            </div>
+          </div>
+        </div>
+        <table class="apont-table" id="tabela-apontamentos">
+          <thead><tr>
+            <th>Tipo</th><th>Descrição</th><th>Qtd</th><th>Valor Unit.</th><th>Total</th><th></th>
+          </tr></thead>
+          <tbody id="tbody-apontamentos">
+            <tr><td colspan="6" style="text-align:center;color:var(--muted);padding:16px">Nenhum apontamento</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Seção: Pagamentos extras -->
+      <div class="ficha-section">
+        <h3>🚚 Pagamentos Extras do Mês</h3>
+        <div class="add-apont">
+          <div class="row">
+            <div>
+              <label>Tipo</label>
+              <select id="pg-tipo">
+                <option value="entrega">🚚 Entrega</option>
+                <option value="grelhado">🔥 Grelhado</option>
+                <option value="comissao">💼 Comissão</option>
+                <option value="outro">📝 Outro</option>
+              </select>
+            </div>
+            <div>
+              <label>Descrição</label>
+              <input type="text" id="pg-desc" placeholder="Ex: 5 entregas semana 1...">
+            </div>
+            <div>
+              <label>Valor (R$)</label>
+              <input type="number" id="pg-valor" step="0.01" min="0" value="0">
+            </div>
+            <div>
+              <label>Data</label>
+              <input type="date" id="pg-data">
+            </div>
+            <div>
+              <button class="btn btn-red" onclick="addPagamento()" style="height:32px;margin-top:18px">+ Add</button>
+            </div>
+          </div>
+        </div>
+        <table class="apont-table" id="tabela-pagamentos">
+          <thead><tr>
+            <th>Tipo</th><th>Descrição</th><th>Data</th><th>Valor</th><th></th>
+          </tr></thead>
+          <tbody id="tbody-pagamentos">
+            <tr><td colspan="5" style="text-align:center;color:var(--muted);padding:16px">Nenhum pagamento extra</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Resumo final -->
+      <div class="ficha-resumo" id="ficha-resumo">
+        <div class="linha"><span>Salário Base</span><span class="val" id="res-salario">R$ 0,00</span></div>
+        <div class="linha"><span>Vale Alimentação</span><span class="val" id="res-va">R$ 0,00</span></div>
+        <div class="linha"><span>Domingos (<span id="res-dom-qtd">0</span>×)</span><span class="val" id="res-domingos">R$ 0,00</span></div>
+        <div class="linha"><span>Acréscimos (HE/Bônus/Feriados)</span><span class="val pos" id="res-acres">+ R$ 0,00</span></div>
+        <div class="linha"><span>Descontos/Faltas</span><span class="val neg" id="res-desc">- R$ 0,00</span></div>
+        <div class="linha"><span>Pagamentos Extras</span><span class="val pos" id="res-extras">+ R$ 0,00</span></div>
+        <div class="linha sep"><span style="font-weight:600">Bruto do Mês</span><span class="val" id="res-bruto" style="font-weight:600">R$ 0,00</span></div>
+        <div class="linha"><span>(-) Retiradas do mês</span><span class="val neg" id="res-retiradas">- R$ 0,00</span></div>
+        <div class="linha sep total" id="res-linha-total">
+          <span>💰 A Receber (Líquido)</span>
+          <span class="val" id="res-liquido">R$ 0,00</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const BASE = window.location.origin;
+let _mesAtual = '';
+let _funcAtual = null;
+let _fichaAtual = null;
+
+// ── API helper ──────────────────────────────────────────────────────────────
+async function api(method, path, body) {
+  const opts = { method, credentials: 'include', headers: { 'Content-Type': 'application/json' } };
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(BASE + path, opts);
+  return r.json();
+}
+const get  = p => api('GET', p);
+const post = (p,b) => api('POST', p, b);
+const del  = p => api('DELETE', p);
+
+// ── Toast ───────────────────────────────────────────────────────────────────
+function toast(msg, dur=3000) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), dur);
+}
+
+// ── Formatação ───────────────────────────────────────────────────────────────
+function brl(v) {
+  return 'R$ ' + parseFloat(v||0).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+function mesLabel(ym) {
+  const [y,m] = ym.split('-');
+  const meses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  return `${meses[parseInt(m)-1]} ${y}`;
+}
+function ymToMmYyyy(ym) {
+  const [y,m] = ym.split('-');
+  return `${m}/${y}`;
+}
+function mmYyyyToYm(mmyyyy) {
+  const [m,y] = mmyyyy.split('/');
+  return `${y}-${m.padStart(2,'0')}`;
+}
+
+// ── Init ────────────────────────────────────────────────────────────────────
+function init() {
+  const hoje = new Date();
+  const ym = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
+  document.getElementById('sel-mes').value = ym;
+  carregarResumo();
+}
+
+function mesAnterior() {
+  const sel = document.getElementById('sel-mes');
+  const [y,m] = sel.value.split('-').map(Number);
+  const d = new Date(y, m-2, 1);
+  sel.value = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  carregarResumo();
+}
+function mesProximo() {
+  const sel = document.getElementById('sel-mes');
+  const [y,m] = sel.value.split('-').map(Number);
+  const d = new Date(y, m, 1);
+  sel.value = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  carregarResumo();
+}
+
+// ── Carregar resumo mensal ──────────────────────────────────────────────────
+async function carregarResumo() {
+  const ym = document.getElementById('sel-mes').value;
+  if (!ym) return;
+  _mesAtual = ym;
+  const mes = ymToMmYyyy(ym);
+  document.getElementById('lbl-mes').textContent = mesLabel(ym);
+  document.getElementById('resumo-container').innerHTML = '<div class="loading">Carregando...</div>';
+
+  const d = await get(`/api/rh/resumo-mes?mes=${encodeURIComponent(mes)}`);
+  if (!d.ok) { document.getElementById('resumo-container').innerHTML = `<div class="empty"><div class="icon">⚠️</div><p>${d.erro}</p></div>`; return; }
+
+  if (!d.data.length) {
+    document.getElementById('resumo-container').innerHTML = '<div class="empty"><div class="icon">👥</div><p>Nenhum funcionário ativo cadastrado</p></div>';
+    return;
+  }
+
+  let html = '<div class="resumo-grid">';
+  for (const f of d.data) {
+    const liquido = parseFloat(f.liquido);
+    const totalClass = liquido >= 0 ? '' : 'neg';
+    html += `
+    <div class="func-card" onclick="abrirFicha(${f.id},'${f.nome.replace(/'/g,'\\'')}')">
+      <div class="fc-nome">${f.nome}</div>
+      <div class="fc-cargo">${f.cargo || 'Sem cargo definido'}</div>
+      <div class="fc-valores">
+        <div class="fc-item">
+          <div class="lbl">Salário Base</div>
+          <div class="val">${brl(f.salario_base)}</div>
+        </div>
+        <div class="fc-item">
+          <div class="lbl">VA</div>
+          <div class="val">${brl(f.vale_alimentacao)}</div>
+        </div>
+        <div class="fc-item green">
+          <div class="lbl">Acréscimos</div>
+          <div class="val">+ ${brl(f.total_acrescimos)}</div>
+        </div>
+        <div class="fc-item red">
+          <div class="lbl">Descontos + Retiradas</div>
+          <div class="val">- ${brl(parseFloat(f.total_descontos)+parseFloat(f.total_retiradas))}</div>
+        </div>
+        ${parseFloat(f.total_extras) > 0 ? `
+        <div class="fc-item blue" style="grid-column:1/-1">
+          <div class="lbl">Extras (entregas/grelhados)</div>
+          <div class="val">+ ${brl(f.total_extras)}</div>
+        </div>` : ''}
+        <div class="fc-total ${totalClass}" style="grid-column:1/-1">
+          <span class="lbl">💰 A Receber</span>
+          <span class="val">${brl(liquido)}</span>
+        </div>
+      </div>
+    </div>`;
+  }
+  html += '</div>';
+  document.getElementById('resumo-container').innerHTML = html;
+}
+
+// ── Abrir ficha individual ──────────────────────────────────────────────────
+async function abrirFicha(funcId, funcNome) {
+  _funcAtual = funcId;
+  document.getElementById('modal-nome').textContent = funcNome;
+  document.getElementById('modal-mes-label').textContent = mesLabel(_mesAtual);
+  document.getElementById('modal-ficha').classList.add('open');
+
+  const mes = ymToMmYyyy(_mesAtual);
+  const d = await get(`/api/rh/ficha?funcionario_id=${funcId}&mes=${encodeURIComponent(mes)}`);
+  if (!d.ok) { toast('❌ Erro ao carregar ficha'); return; }
+
+  _fichaAtual = d;
+
+  // Preencher campos base
+  const f = d.ficha;
+  const func = d.funcionario;
+  document.getElementById('f-salario').value        = f?.salario_base     ?? func?.salario_base     ?? 0;
+  document.getElementById('f-va').value             = f?.vale_alimentacao ?? func?.vale_alimentacao ?? 0;
+  document.getElementById('f-domingos').value       = f?.escala_domingo   ?? 0;
+  document.getElementById('f-valor-domingo').value  = f?.valor_domingo    ?? 0;
+  document.getElementById('f-obs').value            = f?.observacao       ?? '';
+
+  renderApontamentos(d.apontamentos);
+  renderPagamentos(d.pagamentos);
+  calcResumo(d);
+}
+
+function fecharFicha() {
+  document.getElementById('modal-ficha').classList.remove('open');
+  _funcAtual = null;
+  carregarResumo();
+}
+
+// ── Render apontamentos ─────────────────────────────────────────────────────
+const TIPO_LABEL = {
+  hora_extra:'⏰ Hora Extra', feriado:'📅 Feriado', falta:'❌ Falta',
+  desconto:'➖ Desconto', bonus:'⭐ Bônus', outro:'📝 Outro',
+  entrega:'🚚 Entrega', grelhado:'🔥 Grelhado', comissao:'💼 Comissão'
+};
+
+function renderApontamentos(lista) {
+  const tb = document.getElementById('tbody-apontamentos');
+  if (!lista?.length) {
+    tb.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:16px">Nenhum apontamento</td></tr>';
+    return;
+  }
+  tb.innerHTML = lista.map(a => `
+    <tr>
+      <td><span class="tipo-badge tipo-${a.tipo}">${TIPO_LABEL[a.tipo]||a.tipo}</span></td>
+      <td>${a.descricao||'—'}</td>
+      <td>${parseFloat(a.quantidade)||0}</td>
+      <td>${brl(a.valor_unitario)}</td>
+      <td><b>${brl(a.valor_total)}</b></td>
+      <td><button class="btn-del" onclick="delApontamento(${a.id})">🗑</button></td>
+    </tr>`).join('');
+}
+
+function renderPagamentos(lista) {
+  const tb = document.getElementById('tbody-pagamentos');
+  if (!lista?.length) {
+    tb.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:16px">Nenhum pagamento extra</td></tr>';
+    return;
+  }
+  tb.innerHTML = lista.map(p => `
+    <tr>
+      <td><span class="tipo-badge tipo-${p.tipo}">${TIPO_LABEL[p.tipo]||p.tipo}</span></td>
+      <td>${p.descricao||'—'}</td>
+      <td>${p.data_ref ? new Date(p.data_ref).toLocaleDateString('pt-BR') : '—'}</td>
+      <td><b>${brl(p.valor)}</b></td>
+      <td><button class="btn-del" onclick="delPagamento(${p.id})">🗑</button></td>
+    </tr>`).join('');
+}
+
+// ── Calcular resumo ─────────────────────────────────────────────────────────
+function calcResumo(d) {
+  const salario  = parseFloat(document.getElementById('f-salario').value) || 0;
+  const va       = parseFloat(document.getElementById('f-va').value)      || 0;
+  const doms     = parseInt(document.getElementById('f-domingos').value)  || 0;
+  const vDom     = parseFloat(document.getElementById('f-valor-domingo').value) || 0;
+  const domTotal = doms * vDom;
+
+  const aponts   = d?.apontamentos || _fichaAtual?.apontamentos || [];
+  const pags     = d?.pagamentos   || _fichaAtual?.pagamentos   || [];
+  const retiradas= parseFloat(d?.total_retiradas ?? _fichaAtual?.total_retiradas ?? 0);
+
+  const acres  = aponts.filter(a=>!['falta','desconto'].includes(a.tipo)).reduce((s,a)=>s+parseFloat(a.valor_total),0);
+  const desc   = aponts.filter(a=>['falta','desconto'].includes(a.tipo)).reduce((s,a)=>s+parseFloat(a.valor_total),0);
+  const extras = pags.reduce((s,p)=>s+parseFloat(p.valor),0);
+  const bruto  = salario + va + domTotal + acres + extras - desc;
+  const liq    = bruto - retiradas;
+
+  document.getElementById('res-salario').textContent  = brl(salario);
+  document.getElementById('res-va').textContent       = brl(va);
+  document.getElementById('res-dom-qtd').textContent  = doms;
+  document.getElementById('res-domingos').textContent = brl(domTotal);
+  document.getElementById('res-acres').textContent    = '+ ' + brl(acres);
+  document.getElementById('res-desc').textContent     = '- ' + brl(desc);
+  document.getElementById('res-extras').textContent   = '+ ' + brl(extras);
+  document.getElementById('res-bruto').textContent    = brl(bruto);
+  document.getElementById('res-retiradas').textContent= '- ' + brl(retiradas);
+  document.getElementById('res-liquido').textContent  = brl(liq);
+  const tl = document.getElementById('res-linha-total');
+  tl.classList.toggle('neg', liq < 0);
+}
+
+// Atualiza resumo ao mudar campos base
+['f-salario','f-va','f-domingos','f-valor-domingo'].forEach(id => {
+  document.getElementById(id).addEventListener('input', () => calcResumo(null));
+});
+
+// ── Salvar ficha ────────────────────────────────────────────────────────────
+async function salvarFicha() {
+  const mes = ymToMmYyyy(_mesAtual);
+  const d = await post('/api/rh/ficha', {
+    funcionario_id:  _funcAtual,
+    mes_ref:         mes,
+    salario_base:    document.getElementById('f-salario').value,
+    vale_alimentacao:document.getElementById('f-va').value,
+    escala_domingo:  document.getElementById('f-domingos').value,
+    valor_domingo:   document.getElementById('f-valor-domingo').value,
+    observacao:      document.getElementById('f-obs').value,
+  });
+  if (d.ok) { toast('✅ Ficha salva!'); calcResumo(null); }
+  else toast('❌ Erro: ' + d.erro);
+}
+
+// ── Adicionar apontamento ───────────────────────────────────────────────────
+async function addApontamento() {
+  const tipo  = document.getElementById('ap-tipo').value;
+  const desc  = document.getElementById('ap-desc').value;
+  const qtd   = document.getElementById('ap-qtd').value;
+  const vunit = document.getElementById('ap-vunit').value;
+  const mes   = ymToMmYyyy(_mesAtual);
+
+  const d = await post('/api/rh/apontamento', {
+    funcionario_id: _funcAtual, mes_ref: mes,
+    tipo, descricao: desc, quantidade: qtd, valor_unitario: vunit,
+  });
+  if (!d.ok) { toast('❌ ' + d.erro); return; }
+
+  toast('✅ Apontamento adicionado!');
+  document.getElementById('ap-desc').value = '';
+  document.getElementById('ap-qtd').value  = '1';
+  document.getElementById('ap-vunit').value= '0';
+
+  // Recarregar ficha
+  const fd = await get(`/api/rh/ficha?funcionario_id=${_funcAtual}&mes=${encodeURIComponent(mes)}`);
+  if (fd.ok) { _fichaAtual = fd; renderApontamentos(fd.apontamentos); calcResumo(fd); }
+}
+
+async function delApontamento(id) {
+  if (!confirm('Remover apontamento?')) return;
+  const d = await del(`/api/rh/apontamento/${id}`);
+  if (!d.ok) { toast('❌ ' + d.erro); return; }
+  toast('🗑 Removido');
+  const mes = ymToMmYyyy(_mesAtual);
+  const fd = await get(`/api/rh/ficha?funcionario_id=${_funcAtual}&mes=${encodeURIComponent(mes)}`);
+  if (fd.ok) { _fichaAtual = fd; renderApontamentos(fd.apontamentos); calcResumo(fd); }
+}
+
+// ── Adicionar pagamento ─────────────────────────────────────────────────────
+async function addPagamento() {
+  const tipo  = document.getElementById('pg-tipo').value;
+  const desc  = document.getElementById('pg-desc').value;
+  const valor = document.getElementById('pg-valor').value;
+  const data  = document.getElementById('pg-data').value;
+  const mes   = ymToMmYyyy(_mesAtual);
+
+  const d = await post('/api/rh/pagamento', {
+    funcionario_id: _funcAtual, mes_ref: mes,
+    tipo, descricao: desc, valor, data_ref: data||null,
+  });
+  if (!d.ok) { toast('❌ ' + d.erro); return; }
+
+  toast('✅ Pagamento adicionado!');
+  document.getElementById('pg-desc').value = '';
+  document.getElementById('pg-valor').value= '0';
+  document.getElementById('pg-data').value = '';
+
+  const fd = await get(`/api/rh/ficha?funcionario_id=${_funcAtual}&mes=${encodeURIComponent(mes)}`);
+  if (fd.ok) { _fichaAtual = fd; renderPagamentos(fd.pagamentos); calcResumo(fd); }
+}
+
+async function delPagamento(id) {
+  if (!confirm('Remover pagamento?')) return;
+  const d = await del(`/api/rh/pagamento/${id}`);
+  if (!d.ok) { toast('❌ ' + d.erro); return; }
+  toast('🗑 Removido');
+  const mes = ymToMmYyyy(_mesAtual);
+  const fd = await get(`/api/rh/ficha?funcionario_id=${_funcAtual}&mes=${encodeURIComponent(mes)}`);
+  if (fd.ok) { _fichaAtual = fd; renderPagamentos(fd.pagamentos); calcResumo(fd); }
+}
+
+init();
+</script>
+</body>
+</html>
