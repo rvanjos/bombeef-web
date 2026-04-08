@@ -26,7 +26,7 @@ module.exports = function (pool) {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS rh_fichas (
         id                  SERIAL PRIMARY KEY,
-        funcionario_id      INTEGER NOT NULL REFERENCES funcionarios(id),
+        funcionario_id      INTEGER NOT NULL,
         mes_ref             TEXT NOT NULL,           -- MM/YYYY
         salario_base        NUMERIC(10,2) DEFAULT 0,
         vale_alimentacao    NUMERIC(10,2) DEFAULT 0,
@@ -42,7 +42,7 @@ module.exports = function (pool) {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS rh_apontamentos (
         id                  SERIAL PRIMARY KEY,
-        funcionario_id      INTEGER NOT NULL REFERENCES funcionarios(id),
+        funcionario_id      INTEGER NOT NULL,
         mes_ref             TEXT NOT NULL,
         tipo                TEXT NOT NULL CHECK (tipo IN ('hora_extra','feriado','falta','desconto','bonus','outro')),
         descricao           TEXT,
@@ -57,7 +57,7 @@ module.exports = function (pool) {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS rh_pagamentos (
         id                  SERIAL PRIMARY KEY,
-        funcionario_id      INTEGER NOT NULL REFERENCES funcionarios(id),
+        funcionario_id      INTEGER NOT NULL,
         mes_ref             TEXT NOT NULL,
         tipo                TEXT NOT NULL CHECK (tipo IN ('entrega','grelhado','comissao','outro')),
         descricao           TEXT,
@@ -74,7 +74,10 @@ module.exports = function (pool) {
       ['vale_alimentacao', 'NUMERIC(10,2) DEFAULT 0'],
     ]) await pool.query(`ALTER TABLE funcionarios ADD COLUMN IF NOT EXISTS ${col} ${def}`).catch(() => {});
   }
-  initTables().catch(e => console.error('[rh] initTables:', e.message));
+  // Aguarda 2s para garantir que config.js já criou a tabela funcionarios
+  setTimeout(() => {
+    initTables().catch(e => console.error('[rh] initTables:', e.message));
+  }, 2000);
 
   // ── GET /funcionarios — lista com dados base ───────────────────────────────
   r.get('/funcionarios', async (req, res) => {
@@ -122,7 +125,10 @@ module.exports = function (pool) {
 
       // Dados base do funcionário
       const { rows: func } = await pool.query(`
-        SELECT id, nome, cargo, salario_base, vale_alimentacao, limite_retirada
+        SELECT id, nome, cargo,
+               COALESCE(salario_base, 0) AS salario_base,
+               COALESCE(vale_alimentacao, 0) AS vale_alimentacao,
+               limite_retirada
         FROM funcionarios WHERE id = $1
       `, [funcionario_id]);
 
@@ -216,8 +222,8 @@ module.exports = function (pool) {
       const { rows } = await pool.query(`
         SELECT
           f.id, f.nome, f.cargo,
-          COALESCE(fi.salario_base,    f.salario_base,    0) AS salario_base,
-          COALESCE(fi.vale_alimentacao,f.vale_alimentacao,0) AS vale_alimentacao,
+          COALESCE(fi.salario_base,    0) AS salario_base,
+          COALESCE(fi.vale_alimentacao,0) AS vale_alimentacao,
           COALESCE(fi.escala_domingo,  0)                    AS escala_domingo,
           COALESCE(fi.valor_domingo,   0)                    AS valor_domingo,
           COALESCE((SELECT SUM(valor_total) FROM rh_apontamentos
