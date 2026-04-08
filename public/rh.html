@@ -355,12 +355,13 @@ async function carregarResumo() {
     return;
   }
 
+  _resumoData = d.data;
   let html = '<div class="resumo-grid">';
   for (const f of d.data) {
     const liquido = parseFloat(f.liquido);
     const totalClass = liquido >= 0 ? '' : 'neg';
     html += `
-    <div class="func-card" onclick="abrirFicha(${f.id},'${f.nome.replace(/'/g,'\\'')}')">
+    <div class="func-card" onclick="abrirFicha(${f.id})">
       <div class="fc-nome">${f.nome}</div>
       <div class="fc-cargo">${f.cargo || 'Sem cargo definido'}</div>
       <div class="fc-valores">
@@ -397,9 +398,12 @@ async function carregarResumo() {
 }
 
 // ── Abrir ficha individual ──────────────────────────────────────────────────
+let _resumoData = [];
 async function abrirFicha(funcId, funcNome) {
   _funcAtual = funcId;
-  document.getElementById('modal-nome').textContent = funcNome;
+  // Se nome não foi passado, busca no cache de resumo
+  const nomeExibir = funcNome || (_resumoData.find(f => f.id === funcId)?.nome) || 'Funcionário';
+  document.getElementById('modal-nome').textContent = nomeExibir;
   document.getElementById('modal-mes-label').textContent = mesLabel(_mesAtual);
   document.getElementById('modal-ficha').classList.add('open');
 
