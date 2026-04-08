@@ -305,8 +305,7 @@ let _funcAtual = null;
 let _fichaAtual = null;
 let _resumoData = [];
 let _escalaMes = { ano: new Date().getFullYear(), mes: new Date().getMonth() };
-let _diasSelecionados = [];
-let _miniCalMes = { ano: new Date().getFullYear(), mes: new Date().getMonth() };
+
 
 // ── Auth ────────────────────────────────────────────────────────────────────
 function getToken() {
@@ -430,8 +429,6 @@ async function abrirFicha(funcId) {
   document.getElementById('modal-nome').textContent = f?.nome || 'Funcionário';
   document.getElementById('modal-mes-label').textContent = mesLabel(_mesAtual);
   document.getElementById('modal-ficha').classList.add('open');
-  _diasSelecionados = [];
-  renderMiniCal();
   const mes = ymToMmYyyy(_mesAtual);
   const d = await get(`/api/rh/ficha?funcionario_id=${funcId}&mes=${encodeURIComponent(mes)}`);
   if (!d.ok) { toast('❌ Erro ao carregar ficha'); return; }
@@ -505,47 +502,7 @@ async function salvarFicha() {
   if (d.ok) { toast('✅ Salvo!'); await carregarResumo(); } else toast('❌ ' + d.erro);
 }
 
-// ── Mini calendário picker ───────────────────────────────────────────────────
-function renderMiniCal() {
-  const { ano, mes } = _miniCalMes;
-  const primeiroDia = new Date(ano, mes, 1).getDay();
-  const ultimoDia = new Date(ano, mes+1, 0).getDate();
-  let html = `<div class="mini-cal-head">
-    <button class="btn btn-gray btn-sm" onclick="miniCalNav(-1)">◀</button>
-    <span>${MESES[mes]} ${ano}</span>
-    <button class="btn btn-gray btn-sm" onclick="miniCalNav(1)">▶</button>
-  </div><div class="mini-cal-grid">`;
-  ['D','S','T','Q','Q','S','S'].forEach(d => html += `<div class="mini-cal-dh">${d}</div>`);
-  for (let i = 0; i < primeiroDia; i++) html += '<div class="mini-cal-d outro"></div>';
-  for (let d = 1; d <= ultimoDia; d++) {
-    const dtStr = `${ano}-${String(mes+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-    const sel = _diasSelecionados.includes(dtStr);
-    html += `<div class="mini-cal-d ${sel?'sel':''}" onclick="toggleDia('${dtStr}')">${d}</div>`;
-  }
-  html += '</div>';
-  document.getElementById('mini-cal-ap').innerHTML = html;
-  atualizarDiasSel();
-}
-function miniCalNav(delta) {
-  let { ano, mes } = _miniCalMes;
-  mes += delta;
-  if (mes < 0) { mes = 11; ano--; }
-  if (mes > 11) { mes = 0; ano++; }
-  _miniCalMes = { ano, mes };
-  renderMiniCal();
-}
-function toggleDia(dtStr) {
-  const idx = _diasSelecionados.indexOf(dtStr);
-  if (idx >= 0) _diasSelecionados.splice(idx, 1);
-  else _diasSelecionados.push(dtStr);
-  renderMiniCal();
-}
-function atualizarDiasSel() {
-  const el = document.getElementById('dias-selecionados');
-  if (!_diasSelecionados.length) { el.textContent = 'Nenhuma data selecionada'; return; }
-  el.textContent = `${_diasSelecionados.length} dia(s) selecionado(s): ` +
-    _diasSelecionados.sort().map(d => fmtData(d)).join(', ');
-}
+
 
 async function addApontamento() {
   const data = document.getElementById('ap-data').value;
@@ -617,46 +574,54 @@ async function renderEscala() {
   if (!d.ok) return;
   _escalasConfig = d.data;
 
-  // Calcula quem trabalha em cada domingo do mês
-  const domingos = [];
+  // Calcula quem trabalha em cada fim de semana do mês
+  const fimDeSemana = [];
   for (let dia = 1; dia <= new Date(ano, mes+1, 0).getDate(); dia++) {
-    if (new Date(ano, mes, dia).getDay() === 0) domingos.push(dia);
+    const dow = new Date(ano, mes, dia).getDay();
+    if (dow === 0 || dow === 6) fimDeSemana.push({ dia, dow }); // 0=dom, 6=sab
   }
 
-  // Para cada funcionário com escala configurada, calcula os domingos
-  const porDomingo = {}; // dia -> [{nome, trabalha}]
-  domingos.forEach(d => { porDomingo[d] = []; });
+  const porDia = {}; // dia -> [{nome, trabalha}]
+  fimDeSemana.forEach(({dia}) => { porDia[dia] = []; });
 
   for (const f of _escalasConfig) {
     if (!f.data_inicio) continue;
+    const fds = f.trabalha_fds || 'ambos';
     const inicio = new Date(f.data_inicio + 'T12:00:00');
-    const tipoEscala = f.tipo_escala || 'F'; // F=1/1, M=2/1
+    const tipoEscala = f.tipo_escala || 'F';
     const primeiroStatus = f.primeiro_dia || 'trabalho';
-    const ciclo = tipoEscala === 'M' ? 3 : 2; // M: TTF, F: TF
+    const ciclo = tipoEscala === 'M' ? 3 : 2;
 
-    for (const dom of domingos) {
-      const dtDom = new Date(ano, mes, dom);
-      // Conta quantos domingos se passaram desde data_inicio
+    for (const { dia, dow } of fimDeSemana) {
+      // Verifica se este funcionário trabalha neste dia da semana
+      if (fds === 'nao') continue;
+      if (fds === 'domingo' && dow !== 0) continue;
+      if (fds === 'sabado'  && dow !== 6) continue;
+
+      // Para domingos: calcula escala rotativa
+      // Para sábados com fds='ambos' ou 'sabado': sempre trabalha (sem rodízio)
+      if (dow === 6) {
+        porDia[dia].push({ nome: f.nome.split(' ')[0], trabalha: true });
+        continue;
+      }
+
+      // Domingo: calcula rodízio
+      const dtDom = new Date(ano, mes, dia);
       let domCount = 0;
       let d = new Date(inicio);
-      // Ajusta para o próximo domingo a partir do início
       while (d.getDay() !== 0) d.setDate(d.getDate() + 1);
-      // d agora é o primeiro domingo a partir do início
       while (d < dtDom) { d.setDate(d.getDate() + 7); domCount++; }
-      if (d.getTime() !== dtDom.getTime()) continue; // não é domingo relevante
+      if (d.getTime() !== dtDom.getTime()) continue;
 
-      // Calcula status no ciclo
       let idx = domCount % ciclo;
       let trabalha;
       if (tipoEscala === 'M') {
-        // 0,1 = trabalha; 2 = folga
         const cicloM = primeiroStatus === 'trabalho' ? [true, true, false] : [false, true, true];
         trabalha = cicloM[idx];
       } else {
-        // 0 = primeiro status; 1 = oposto
         trabalha = idx === 0 ? primeiroStatus === 'trabalho' : primeiroStatus === 'folga';
       }
-      porDomingo[dom].push({ nome: f.nome.split(' ')[0], trabalha });
+      porDia[dia].push({ nome: f.nome.split(' ')[0], trabalha });
     }
   }
 
@@ -675,16 +640,17 @@ async function renderEscala() {
     const fora = diaN < 1 || diaN > ultimoDia;
     const dtObj = new Date(ano, mes, diaN); dtObj.setHours(0,0,0,0);
     const ehHoje = !fora && dtObj.getTime() === hoje.getTime();
-    const ehDom  = !fora && new Date(ano, mes, diaN).getDay() === 0;
-    const pessoas = ehDom ? (porDomingo[diaN] || []) : [];
+    const dow    = new Date(ano, mes, diaN).getDay();
+    const ehFds  = !fora && (dow === 0 || dow === 6);
+    const pessoas = ehFds ? (porDia[diaN] || []) : [];
 
     html += `<div class="cal-day ${fora?'outro-mes':''} ${ehHoje?'hoje':''}">
       <div class="cal-dn">${fora ? '' : diaN}</div>`;
-    if (ehDom && !fora) {
+    if (ehFds && !fora) {
       pessoas.forEach(p => {
         html += `<span class="turno-tag ${p.trabalha?'turno-trabalho':'turno-folga'}">${p.nome}</span>`;
       });
-      if (!pessoas.length && _escalasConfig.some(f => f.data_inicio)) {
+      if (!pessoas.length && _escalasConfig.some(f => f.data_inicio && f.trabalha_fds !== 'nao')) {
         html += '<span style="font-size:9px;color:var(--muted)">sem escala</span>';
       }
     }
@@ -719,6 +685,15 @@ async function abrirConfigEscala() {
           <option value="folga" ${f.primeiro_dia==='folga'?'selected':''}>De Folga</option>
         </select>
       </div>
+      <div class="escala-campo">
+        <label>Trabalha sáb/dom?</label>
+        <select id="esc-fds-${f.id}">
+          <option value="ambos" ${!f.trabalha_fds||f.trabalha_fds==='ambos'?'selected':''}>Sáb + Dom</option>
+          <option value="domingo" ${f.trabalha_fds==='domingo'?'selected':''}>Só Dom</option>
+          <option value="sabado" ${f.trabalha_fds==='sabado'?'selected':''}>Só Sáb</option>
+          <option value="nao" ${f.trabalha_fds==='nao'?'selected':''}>Não trabalha</option>
+        </select>
+      </div>
       <button class="btn btn-green btn-sm" onclick="salvarEscala(${f.id})">💾</button>
     </div>`;
   }
@@ -730,8 +705,9 @@ async function salvarEscala(funcId) {
   const inicio = document.getElementById(`esc-inicio-${funcId}`).value;
   const tipo   = document.getElementById(`esc-tipo-${funcId}`).value;
   const prim   = document.getElementById(`esc-prim-${funcId}`).value;
+  const fds    = document.getElementById(`esc-fds-${funcId}`).value;
   if (!inicio) { toast('⚠️ Informe a data de início'); return; }
-  const d = await post('/api/rh/escalas', { funcionario_id: funcId, data_inicio: inicio, tipo_escala: tipo, primeiro_dia: prim });
+  const d = await post('/api/rh/escalas', { funcionario_id: funcId, data_inicio: inicio, tipo_escala: tipo, primeiro_dia: prim, trabalha_fds: fds });
   if (d.ok) { toast('✅ Escala salva!'); renderEscala(); } else toast('❌ ' + d.erro);
 }
 

@@ -85,6 +85,7 @@ module.exports = function (pool) {
       data_inicio     DATE NOT NULL,
       tipo_escala     TEXT DEFAULT 'F',
       primeiro_dia    TEXT DEFAULT 'trabalho',
+      trabalha_fds    TEXT DEFAULT 'ambos',
       criado_em       TIMESTAMPTZ DEFAULT NOW(),
       atualizado_em   TIMESTAMPTZ DEFAULT NOW()
     )
@@ -92,6 +93,7 @@ module.exports = function (pool) {
 
   // Garante coluna sexo em funcionarios
   pool.query(`ALTER TABLE funcionarios ADD COLUMN IF NOT EXISTS sexo TEXT DEFAULT 'F'`).catch(() => {});
+  pool.query(`ALTER TABLE rh_escalas ADD COLUMN IF NOT EXISTS trabalha_fds TEXT DEFAULT 'ambos'`).catch(() => {});
 
   initTables().catch(e => console.error('[rh] initTables:', e.message));
   }, 2000);
@@ -318,7 +320,7 @@ module.exports = function (pool) {
     try {
       const { rows } = await pool.query(`
         SELECT f.id, f.nome, f.cargo,
-               e.data_inicio, e.tipo_escala, e.primeiro_dia
+               e.data_inicio, e.tipo_escala, e.primeiro_dia, e.trabalha_fds
         FROM funcionarios f
         LEFT JOIN rh_escalas e ON e.funcionario_id = f.id
         WHERE f.ativo = true
@@ -330,18 +332,19 @@ module.exports = function (pool) {
 
   // ── POST /escalas ─────────────────────────────────────────────────────────
   r.post('/escalas', async (req, res) => {
-    const { funcionario_id, data_inicio, tipo_escala, primeiro_dia } = req.body;
+    const { funcionario_id, data_inicio, tipo_escala, primeiro_dia, trabalha_fds } = req.body;
     if (!funcionario_id || !data_inicio) return res.status(400).json({ ok: false, erro: 'funcionario_id e data_inicio obrigatórios' });
     try {
       await pool.query(`
-        INSERT INTO rh_escalas (funcionario_id, data_inicio, tipo_escala, primeiro_dia, atualizado_em)
-        VALUES ($1, $2, $3, $4, NOW())
+        INSERT INTO rh_escalas (funcionario_id, data_inicio, tipo_escala, primeiro_dia, trabalha_fds, atualizado_em)
+        VALUES ($1, $2, $3, $4, $5, NOW())
         ON CONFLICT (funcionario_id) DO UPDATE SET
           data_inicio   = $2,
           tipo_escala   = $3,
           primeiro_dia  = $4,
+          trabalha_fds  = $5,
           atualizado_em = NOW()
-      `, [funcionario_id, data_inicio, tipo_escala || 'F', primeiro_dia || 'trabalho']);
+      `, [funcionario_id, data_inicio, tipo_escala || 'F', primeiro_dia || 'trabalho', trabalha_fds || 'ambos']);
       res.json({ ok: true });
     } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
