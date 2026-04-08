@@ -427,6 +427,7 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
       <div class="fg"><label>Descrição *</label><input id="v-desc" placeholder="Nome do produto"></div>
       <div class="fg-row">
         <div class="fg"><label>Data de Validade *</label><input type="date" id="v-val"></div>
+        <div class="fg"><label>Data de Recebimento</label><input type="date" id="v-receb"></div>
         <div class="fg"><label>Lote</label><input id="v-lote" placeholder="Número do lote"></div>
       </div>
       <div class="fg">
@@ -1263,6 +1264,7 @@ function abrirModal(id){
   document.getElementById('v-desc').value  = v?.descricao||'';
   document.getElementById('v-qtd').value   = v?.qtd_unidades||0;
   document.getElementById('v-val').value   = v?.data_validade? fmt.dateInput(v.data_validade):'';
+  document.getElementById('v-receb').value = v?.data_recebimento ? fmt.dateInput(v.data_recebimento) : '';
   document.getElementById('v-lote').value  = v?.lote||'';
   document.getElementById('v-acao').value  = v?.acao_antes_vencer||'';
   const respSel = document.getElementById('v-resp');
@@ -1391,6 +1393,7 @@ async function salvarVal(){
     qtdUnidades:       parseInt(document.getElementById('v-qtd').value)||0,
     pesoTotalKg:       totalKg > 0 ? totalKg : null,
     dataValidade:      document.getElementById('v-val').value,
+    dataRecebimento:   document.getElementById('v-receb').value || null,
     lote:              document.getElementById('v-lote').value,
     acaoAntesVencer:   document.getElementById('v-acao').value,
     responsavel:       document.getElementById('v-resp').value,

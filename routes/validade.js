@@ -64,6 +64,7 @@ module.exports = function (pool) {
       ['status',         "TEXT DEFAULT 'ativo'"],
       ['desc_original',  'TEXT'],
       ['peso_total_kg',  'NUMERIC(8,3)'],
+      ['data_recebimento','DATE'],
     ];
     for (const [col, def] of needed) {
       await pool.query(`ALTER TABLE validade_items ADD COLUMN IF NOT EXISTS ${col} ${def}`).catch(() => {});
@@ -151,6 +152,9 @@ module.exports = function (pool) {
       // Serializa datas como strings YYYY-MM-DD para o frontend
       const data = rows.map(r => ({
         ...r,
+        data_recebimento: r.data_recebimento instanceof Date
+          ? r.data_recebimento.toISOString().slice(0, 10)
+          : r.data_recebimento ? String(r.data_recebimento).slice(0, 10) : null,
         data_validade: r.data_validade instanceof Date
           ? r.data_validade.toISOString().slice(0, 10)
           : r.data_validade ? String(r.data_validade).slice(0, 10) : null,
@@ -176,8 +180,8 @@ module.exports = function (pool) {
       const { rows } = await pool.query(`
         INSERT INTO validade_items
           (produto_id, codigo, descricao, data_validade, lote, acao_antes_vencer,
-           ultima_conferencia, responsavel, qtd_unidades, dias_alerta, localizacao, observacao, peso_total_kg)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+           ultima_conferencia, responsavel, qtd_unidades, dias_alerta, localizacao, observacao, peso_total_kg, data_recebimento)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
         RETURNING *
       `, [
         prodId, v.codigo?.trim() || null, v.descricao.trim(),
@@ -186,6 +190,7 @@ module.exports = function (pool) {
         parseInt(v.qtdUnidades || 0), parseInt(v.diasAlerta || 7),
         v.localizacao || null, v.observacao || null,
         v.pesoTotalKg ? parseFloat(v.pesoTotalKg) : null,
+        v.dataRecebimento || null,
       ]);
       res.json({ ok: true, data: rows[0] });
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
@@ -231,6 +236,7 @@ module.exports = function (pool) {
           dias_alerta         = COALESCE($11, dias_alerta),
           localizacao         = COALESCE($12, localizacao),
           observacao          = COALESCE($13, observacao),
+          data_recebimento    = COALESCE($16, data_recebimento),
           atualizado_em       = NOW()
         WHERE id = $14
       `, [
@@ -242,6 +248,7 @@ module.exports = function (pool) {
         v.diasAlerta !== undefined ? parseInt(v.diasAlerta) : null,
         v.localizacao || null, v.observacao || null,
         parseInt(req.params.id), descOriginal,
+        v.dataRecebimento || null,
       ]);
       res.json({ ok: true });
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
