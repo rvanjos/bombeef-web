@@ -119,6 +119,19 @@ td{padding:5px 9px;vertical-align:middle;}
 .si:hover{background:#f5f9ff;}
 .chk{accent-color:var(--red);}
 @media(max-width:800px){.dre-p{display:none;}.stats-grid,.totals-row{grid-template-columns:1fr 1fr;}}
+
+/* Input de categoria com busca */
+.cat-input {
+  padding: 4px 8px;
+  border: 1.5px solid var(--border);
+  border-radius: 6px;
+  font-size: 12px;
+  font-family: inherit;
+  width: 100%;
+  background: var(--white);
+  color: var(--text);
+}
+.cat-input:focus { outline: none; border-color: var(--blue); }
 </style>
 </head>
 <body>
@@ -267,9 +280,7 @@ td{padding:5px 9px;vertical-align:middle;}
     <!-- BULK BAR (sticky bottom, igual ao sistema anterior) -->
     <div id="bulk-bar">
       <span id="bulk-count" style="font-size:13px;font-weight:600;flex:1">0 selecionados</span>
-      <select id="bulk-cat-sel">
-        <option value="">— Classificar como —</option>
-      </select>
+      <input id="bulk-cat-sel" list="cats-dl" class="cat-input" placeholder="🔍 Classificar como..." autocomplete="off" style="width:200px;padding:5px 8px;font-size:12px">
       <label style="font-size:11px;display:flex;align-items:center;gap:5px;cursor:pointer;white-space:nowrap">
         <input type="checkbox" class="chk" id="bulk-apply-supplier" style="accent-color:#fff"> Aplicar a todo o fornecedor
       </label>
@@ -313,7 +324,7 @@ td{padding:5px 9px;vertical-align:middle;}
         <div class="fg"><label>Valor (neg=saída) *</label><input type="number" id="el-v" step="0.01"></div>
         <div class="fg"><label>Data</label><input type="date" id="el-dt"></div>
       </div>
-      <div class="fg"><label>Categoria DRE</label><select id="el-c"><option value="">— Sem categoria —</option></select></div>
+      <div class="fg"><label>Categoria DRE</label><input id="el-c" list="cats-dl" class="cat-input" placeholder="🔍 Digite ou selecione..." autocomplete="off"></div>
       <div class="fg-r">
         <div class="fg"><label>Mês DRE</label><input id="el-m" placeholder="03/2026"></div>
         <div class="fg"><label>Mês Caixa</label><input id="el-mc" placeholder="03/2026"></div>
@@ -377,7 +388,7 @@ td{padding:5px 9px;vertical-align:middle;}
         <div class="fg"><label>Valor mensal (neg=saída) *</label><input type="number" id="pv-v" step="0.01" placeholder="-3500.00"></div>
         <div class="fg"><label>Data referência</label><input type="date" id="pv-dt"></div>
       </div>
-      <div class="fg"><label>Categoria DRE</label><select id="pv-c"><option value="">— Sem categoria —</option></select></div>
+      <div class="fg"><label>Categoria DRE</label><input id="pv-c" list="cats-dl" class="cat-input" placeholder="🔍 Digite ou selecione..." autocomplete="off"></div>
       <div class="fg-r">
         <div class="fg"><label>Mês inicial *</label><input id="pv-m1" placeholder="03/2026"></div>
         <div class="fg"><label>Mês final *</label><input id="pv-m2" placeholder="12/2026"></div>
@@ -401,7 +412,7 @@ td{padding:5px 9px;vertical-align:middle;}
         <div class="fg"><label>Valor (neg=saída)</label><input type="number" id="ml-v" step="0.01" placeholder="-1500.00"></div>
         <div class="fg"><label>Data</label><input type="date" id="ml-dt"></div>
       </div>
-      <div class="fg"><label>Categoria DRE</label><select id="ml-c"><option value="">— Sem categoria —</option></select></div>
+      <div class="fg"><label>Categoria DRE</label><input id="ml-c" list="cats-dl" class="cat-input" placeholder="🔍 Digite ou selecione..." autocomplete="off"></div>
       <div class="fgr">
         <div class="fg"><label>Mês DRE</label><input id="ml-m" placeholder="03/2026"></div>
         <div class="fg"><label>Mês Caixa</label><input id="ml-mc" placeholder="03/2026"></div>
@@ -621,10 +632,7 @@ function catOptsHtml(sel='') {
 }
 
 function preencherSels() {
-  ['ml-c','bulk-cat-sel','el-c','pv-c'].forEach(id => {
-    const el = document.getElementById(id); if (!el) return;
-    el.innerHTML = '<option value="">— Sem categoria —</option>' + catOptsHtml();
-  });
+  // ml-c, bulk-cat-sel, el-c, pv-c agora são inputs com datalist — não precisam de innerHTML
   // Preenche filtro de grupos + categorias
   const fg = document.getElementById('f-grp');
   fg.innerHTML = '<option value="">Todos os grupos</option>' +
@@ -708,7 +716,8 @@ function atualizarDatalist() {
   const opts = [];
   Object.entries(CATS).forEach(([,g]) => {
     if (Array.isArray(g.s)) {
-      g.s.forEach(s => opts.push(`<option value="${s}" label="${g.l} › ${s}">`));
+      // Adiciona separador do grupo como opção desabilitada
+      g.s.forEach(s => opts.push(`<option value="${s}">${g.l} › ${s}</option>`));
     }
   });
   dl.innerHTML = opts.join('');
@@ -1846,7 +1855,7 @@ function abrirProvisao(){
   document.getElementById('pv-preview').style.display='none';
   // Preenche categorias
   const sel = document.getElementById('pv-c');
-  sel.innerHTML = '<option value="">— Sem categoria —</option>' + catOptsHtml('');
+  sel.value = '';
   document.getElementById('m-provisao').classList.add('open');
 }
 
@@ -1927,7 +1936,7 @@ function editarLanc(id) {
   document.getElementById('el-mc').value = t.mesCaixa || t.mes || mesRef;
   // Preenche categorias
   const sel = document.getElementById('el-c');
-  sel.innerHTML = '<option value="">— Sem categoria —</option>' + catOptsHtml(t.categoria);
+  sel.value = t.categoria || '';
   document.getElementById('m-edit-lanc').classList.add('open');
 }
 
