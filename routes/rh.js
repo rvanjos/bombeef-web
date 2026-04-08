@@ -77,7 +77,23 @@ module.exports = function (pool) {
   }
   // Aguarda 2s para garantir que config.js já criou a tabela funcionarios
   setTimeout(() => {
-    initTables().catch(e => console.error('[rh] initTables:', e.message));
+    // Cria tabela rh_escalas se não existir
+  pool.query(`
+    CREATE TABLE IF NOT EXISTS rh_escalas (
+      id              SERIAL PRIMARY KEY,
+      funcionario_id  INTEGER NOT NULL UNIQUE,
+      data_inicio     DATE NOT NULL,
+      tipo_escala     TEXT DEFAULT 'F',
+      primeiro_dia    TEXT DEFAULT 'trabalho',
+      criado_em       TIMESTAMPTZ DEFAULT NOW(),
+      atualizado_em   TIMESTAMPTZ DEFAULT NOW()
+    )
+  `).catch(e => console.warn('[rh] rh_escalas:', e.message));
+
+  // Garante coluna sexo em funcionarios
+  pool.query(`ALTER TABLE funcionarios ADD COLUMN IF NOT EXISTS sexo TEXT DEFAULT 'F'`).catch(() => {});
+
+  initTables().catch(e => console.error('[rh] initTables:', e.message));
   }, 2000);
 
   // ── GET /funcionarios — lista com dados base ───────────────────────────────
@@ -317,17 +333,6 @@ module.exports = function (pool) {
     const { funcionario_id, data_inicio, tipo_escala, primeiro_dia } = req.body;
     if (!funcionario_id || !data_inicio) return res.status(400).json({ ok: false, erro: 'funcionario_id e data_inicio obrigatórios' });
     try {
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS rh_escalas (
-          id              SERIAL PRIMARY KEY,
-          funcionario_id  INTEGER NOT NULL UNIQUE,
-          data_inicio     DATE NOT NULL,
-          tipo_escala     TEXT DEFAULT 'F',  -- F=1trabalha/1folga, M=2trabalha/1folga
-          primeiro_dia    TEXT DEFAULT 'trabalho',  -- 'trabalho' ou 'folga'
-          criado_em       TIMESTAMPTZ DEFAULT NOW(),
-          atualizado_em   TIMESTAMPTZ DEFAULT NOW()
-        )
-      `).catch(() => {});
       await pool.query(`
         INSERT INTO rh_escalas (funcionario_id, data_inicio, tipo_escala, primeiro_dia, atualizado_em)
         VALUES ($1, $2, $3, $4, NOW())
