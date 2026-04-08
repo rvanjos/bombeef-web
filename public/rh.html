@@ -278,6 +278,7 @@ const BASE = window.location.origin;
 let _mesAtual = '';
 let _funcAtual = null;
 let _fichaAtual = null;
+let _resumoData = [];
 
 // ── API helper com JWT (igual aos outros módulos) ──────────────────────────
 function getToken() {
@@ -421,7 +422,6 @@ async function carregarResumo() {
 }
 
 // ── Abrir ficha individual ──────────────────────────────────────────────────
-let _resumoData = [];
 async function abrirFicha(funcId, funcNome) {
   _funcAtual = funcId;
   // Se nome não foi passado, busca no cache de resumo
