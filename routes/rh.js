@@ -280,8 +280,6 @@ module.exports = function (pool) {
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
-};
-
   // ── GET /escalas?mes=MM/YYYY ──────────────────────────────────────────────
   r.get('/escalas', async (req, res) => {
     const { mes } = req.query;
