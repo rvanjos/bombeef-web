@@ -617,10 +617,17 @@ async function delPagamento(id) {
   if (fd.ok) { _fichaAtual = fd; renderPagamentos(fd.pagamentos); calcResumo(fd); }
 }
 
-// Se já tem token salvo, inicia direto
-if (getToken()) { _bbInited = true; init(); }
-// Fallback: se em 4s ainda não iniciou (token não chegou), tenta assim mesmo
-setTimeout(() => { if (!_bbInited) { _bbInited = true; init(); } }, 4000);
+// Sempre aguarda o postMessage do parent com o token
+// (o parent envia após o load do iframe)
+// Fallback: se em 5s não chegou, tenta com o que tiver no storage
+setTimeout(() => {
+  if (!_bbInited) {
+    _bbInited = true;
+    if (getToken()) init();
+    else document.getElementById('resumo-container').innerHTML =
+      '<div class="empty"><div class="icon">🔒</div><p>Sessão não encontrada. Recarregue a página.</p></div>';
+  }
+}, 5000);
 </script>
 </body>
 </html>
