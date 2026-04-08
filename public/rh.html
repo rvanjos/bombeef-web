@@ -279,16 +279,38 @@ let _mesAtual = '';
 let _funcAtual = null;
 let _fichaAtual = null;
 
-// ── API helper ──────────────────────────────────────────────────────────────
+// ── API helper com JWT (igual aos outros módulos) ──────────────────────────
+function getToken() {
+  return sessionStorage.getItem('bb_token') || localStorage.getItem('bb_token') || '';
+}
 async function api(method, path, body) {
-  const opts = { method, credentials: 'include', headers: { 'Content-Type': 'application/json' } };
+  const opts = {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + getToken(),
+    }
+  };
   if (body) opts.body = JSON.stringify(body);
   const r = await fetch(BASE + path, opts);
+  if (r.status === 401) {
+    sessionStorage.removeItem('bb_token');
+    try { window.parent.postMessage({ type: 'bb_logout' }, '*'); } catch(_) {}
+    return { ok: false, erro: 'Sessão expirada' };
+  }
   return r.json();
 }
 const get  = p => api('GET', p);
 const post = (p,b) => api('POST', p, b);
 const del  = p => api('DELETE', p);
+
+// Recebe token do parent (iframe)
+window.addEventListener('message', e => {
+  if (e.data?.type === 'bb_token' && e.data.token) {
+    sessionStorage.setItem('bb_token', e.data.token);
+    if (typeof onBBReady === 'function') onBBReady();
+  }
+});
 
 // ── Toast ───────────────────────────────────────────────────────────────────
 function toast(msg, dur=3000) {
@@ -593,7 +615,15 @@ async function delPagamento(id) {
   if (fd.ok) { _fichaAtual = fd; renderPagamentos(fd.pagamentos); calcResumo(fd); }
 }
 
-init();
+// Se já tem token (ex: reload), inicia direto; senão aguarda mensagem do parent
+if (getToken()) {
+  init();
+} else {
+  // onBBReady é chamado quando o parent envia o token
+  function onBBReady() { init(); }
+  // Fallback: se em 3s não chegou token, tenta mesmo assim
+  setTimeout(() => { if (!getToken()) init(); }, 3000);
+}
 </script>
 </body>
 </html>
