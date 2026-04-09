@@ -570,8 +570,10 @@ function escalaProximo()  { let {ano,mes}=_escalaMes; mes++; if(mes>11){mes=0;an
 async function renderEscala() {
   const { ano, mes } = _escalaMes;
   document.getElementById('escala-mes-label').textContent = `${MESES[mes]} ${ano}`;
+  document.getElementById('escala-cal-container').innerHTML = '<div class="loading">Carregando...</div>';
+  try {
   const d = await get('/api/rh/escalas/funcionarios');
-  if (!d.ok) return;
+  if (!d.ok) { document.getElementById('escala-cal-container').innerHTML = `<div class="empty"><div class="icon">⚠️</div><p>${d.erro||'Erro ao carregar'}</p></div>`; return; }
   _escalasConfig = d.data;
 
   // Calcula quem trabalha em cada fim de semana do mês
@@ -609,8 +611,10 @@ async function renderEscala() {
       const dtDom = new Date(ano, mes, dia);
       let domCount = 0;
       let cur = new Date(inicio);
-      while (cur.getDay() !== 0) cur.setDate(cur.getDate() + 1);
-      while (cur < dtDom) { cur.setDate(cur.getDate() + 7); domCount++; }
+      let safety = 0;
+      while (cur.getDay() !== 0 && safety++ < 7) cur.setDate(cur.getDate() + 1);
+      safety = 0;
+      while (cur < dtDom && safety++ < 500) { cur.setDate(cur.getDate() + 7); domCount++; }
       if (cur.getTime() !== dtDom.getTime()) continue;
 
       let idx = domCount % ciclo;
@@ -658,6 +662,10 @@ async function renderEscala() {
   }
   html += '</div>';
   document.getElementById('escala-cal-container').innerHTML = html;
+  } catch(err) {
+    console.error('[renderEscala]', err);
+    document.getElementById('escala-cal-container').innerHTML = `<div class="empty"><div class="icon">⚠️</div><p>Erro: ${err.message}</p></div>`;
+  }
 }
 
 async function abrirConfigEscala() {
