@@ -212,19 +212,26 @@ module.exports = function (pool) {
         if (isUtf16) {
           txt = req.file.buffer.toString('utf16le');
         } else {
+          // Tenta UTF-8 primeiro; se tiver caracteres inválidos, cai para latin1
           txt = req.file.buffer.toString('utf8');
+          if (txt.includes('�')) {
+            txt = req.file.buffer.toString('latin1');
+          }
         }
+        // Normaliza: remove BOM e normaliza acentos para comparação
+        txt = txt.replace(/^\uFEFF/, '');
 
         const lines = txt.split(/\r?\n/);
 
         // Detecta separador
         const sep = lines.find(l => l.includes(';')) ? ';' : ',';
 
-        // Encontra linha de cabeçalho real (que contém 'codigo' ou 'produto' ou 'nome')
+        // Encontra linha de cabeçalho real
+        const normStr = s => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
         let headerIdx = -1;
         for (let i = 0; i < Math.min(lines.length, 15); i++) {
-          const l = lines[i].toLowerCase();
-          if (l.includes('codigoproduto') || l.includes('código') || l.includes('codigo') || l.includes('nomeproduto')) {
+          const l = normStr(lines[i]);
+          if (l.includes('codigoproduto') || l.includes('codigo') || l.includes('nomeproduto') || l.includes('produto')) {
             headerIdx = i;
             break;
           }
@@ -244,30 +251,44 @@ module.exports = function (pool) {
         // XLSX / XLS
         const wb    = XLSX.read(req.file.buffer, { type: 'buffer', cellDates: true });
         const sheet = wb.Sheets[wb.SheetNames[0]];
-        rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+        const allRows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+        // Pula linhas iniciais vazias ou sem conteúdo relevante
+        const normStr2 = s => String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+        let startIdx = 0;
+        for (let i = 0; i < Math.min(allRows.length, 10); i++) {
+          const rowStr = allRows[i].map(normStr2).join('|');
+          if (rowStr.includes('codigo') || rowStr.includes('produto') || rowStr.includes('codigoproduto')) {
+            startIdx = i;
+            break;
+          }
+        }
+        rows = allRows.slice(startIdx);
       }
 
       if (rows.length < 2) {
         return res.status(422).json({ ok: false, erro: 'Planilha vazia ou sem cabeçalho' });
       }
 
-      const header = rows[0].map(c => String(c).toLowerCase().trim());
+      // Normaliza header: sem acentos, minúsculo
+      const normH = s => String(s).toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      const header    = rows[0].map(c => String(c).toLowerCase().trim());
+      const headerNorm= rows[0].map(c => normH(c));
 
-      // Mapeamento de colunas — suporta ChefWeb (CodigoProduto, NomeProduto, PrecoVenda, PrecoCompra)
-      // e planilhas genéricas
+      // Mapeamento de colunas — suporta ChefWeb, TOTVS, Xmenu e planilhas genéricas
       const col = (nomes) => {
         for (const n of nomes) {
-          const i = header.findIndex(h => h === n || h.includes(n));
+          const nn = normH(n);
+          const i = headerNorm.findIndex(h => h === nn || h.includes(nn));
           if (i >= 0) return i;
         }
         return -1;
       };
 
-      const colCod   = col(['codigoproduto', 'código', 'codigo', 'cod ', 'sku', ' id']);
-      const colDesc  = col(['nomeproduto', 'descrição', 'descricao', 'desc', 'produto', 'item', 'nome']);
+      const colCod   = col(['codigoproduto', 'código', 'codigo', 'cod', 'sku', 'id']);
+      const colDesc  = col(['nomeproduto', 'descrição', 'descricao', 'produto', 'desc', 'item', 'nome']);
       const colForn  = col(['fornecedor', 'supplier', 'marca']);
-      const colCusto = col(['precocompra', 'custo', 'cost', 'preco custo', 'preço custo', 'p. custo', 'precodecompra']);
-      const colVenda = col(['precovenda', 'venda', 'sale', 'preco venda', 'preço venda', 'p. venda']);
+      const colCusto = col(['precocompra', 'precodecompra', 'custo', 'preco custo', 'preco de compra', 'p. custo', 'cost']);
+      const colVenda = col(['precovenda', 'precodevenda', 'preco venda', 'preco de venda', 'p. venda', 'venda', 'sale']);
       const colUnit  = col(['unidade', 'unid', 'unit', 'un']);
       const colCat   = col(['categoria', 'category', 'grupo', 'depart', 'subcategoria']);
 
