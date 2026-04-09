@@ -608,10 +608,10 @@ async function renderEscala() {
       // Domingo: calcula rodízio
       const dtDom = new Date(ano, mes, dia);
       let domCount = 0;
-      let d = new Date(inicio);
-      while (d.getDay() !== 0) d.setDate(d.getDate() + 1);
-      while (d < dtDom) { d.setDate(d.getDate() + 7); domCount++; }
-      if (d.getTime() !== dtDom.getTime()) continue;
+      let cur = new Date(inicio);
+      while (cur.getDay() !== 0) cur.setDate(cur.getDate() + 1);
+      while (cur < dtDom) { cur.setDate(cur.getDate() + 7); domCount++; }
+      if (cur.getTime() !== dtDom.getTime()) continue;
 
       let idx = domCount % ciclo;
       let trabalha;
