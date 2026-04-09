@@ -300,6 +300,7 @@ td{padding:5px 9px;vertical-align:middle;}
           <option value="comp">Competência</option>
           <option value="caixa">Caixa</option>
         </select>
+        <button id="btn-pct" class="btn bn" style="padding:2px 7px;font-size:11px" onclick="togglePct()" title="Mostrar % de cada categoria sobre a receita total">%</button>
         <button class="btn bn" style="padding:2px 9px;font-size:11px" onclick="abrirDREModal()">⛶</button>
         <button class="btn bn" style="padding:2px 7px;font-size:11px" onclick="toggleDREPanel()">✕</button>
       </div>
@@ -454,6 +455,7 @@ td{padding:5px 9px;vertical-align:middle;}
           <option value="comp">Competência (data da compra)</option>
           <option value="caixa">Caixa (data do pagamento)</option>
         </select>
+        <button id="btn-pct-full" style="padding:3px 10px;border:1px solid rgba(255,255,255,.3);border-radius:6px;font-size:12px;background:rgba(255,255,255,.15);color:#fff;cursor:pointer;font-weight:600" onclick="togglePct()" title="Mostrar % de cada categoria sobre a receita total">% Custos</button>
       </div>
       <button onclick="fecharModal('m-dre')" style="background:none;border:none;color:rgba(255,255,255,.8);font-size:22px;cursor:pointer">×</button>
     </div>
@@ -1670,6 +1672,20 @@ function sincModo(){
 }
 function getMesTx(t){return getModo()==='caixa'?(t.mesCaixa||t.mes||mesRef):(t.mes||mesRef);}
 
+let _showPct = false;
+function togglePct() {
+  _showPct = !_showPct;
+  // Atualiza visual dos botões
+  ['btn-pct','btn-pct-full'].forEach(id => {
+    const b = document.getElementById(id);
+    if (!b) return;
+    b.style.background = _showPct ? 'var(--orange)' : '';
+    b.style.color      = _showPct ? '#fff' : '';
+    b.style.fontWeight = _showPct ? '700' : '';
+  });
+  renderDRE();
+  if (document.getElementById('m-dre')?.classList.contains('open')) renderDREFull();
+}
 function renderDRE(){_buildDRE(document.getElementById('dre-body'),false);}
 function renderDREFull(){_buildDRE(document.getElementById('dre-full-body'),true);}
 
@@ -1707,6 +1723,13 @@ function _buildDRE(el, full) {
 
   const sg=(gk,m)=>Object.values(data[gk]||{}).reduce((s,c)=>s+(c[m]||0),0);
   const sgt=(gk)=>meses.reduce((s,m)=>s+sg(gk,m),0);
+  const recTotalMes = Object.fromEntries(meses.map(m=>[m, sg('RECEITAS',m)]));
+  const recTotalGeral = meses.reduce((s,m)=>s+recTotalMes[m],0);
+  const pct = (v, base) => {
+    if(!_showPct || !base || base===0) return '';
+    const p = (Math.abs(v)/Math.abs(base)*100).toFixed(1);
+    return `<br><span style="font-size:9px;color:#aaa;font-weight:400">${p}%</span>`;
+  };
 
   const fv=(v,isDesp)=>{
     if(v===0) return `<span style="color:#bbb;font-family:'DM Mono',monospace">—</span>`;
@@ -1752,7 +1775,7 @@ function _buildDRE(el, full) {
       h+=`<tr class="${gid}-row">
         <td style="${TDL};padding-left:${full?'22':'18'}px;color:var(--muted)">· ${cat}</td>
         ${meses.map(m=>`<td style="${TD};${mD[m]?'cursor:pointer':''}" title="${mD[m]?'Duplo clique para ver lançamentos':''}" ondblclick="${mD[m]?`drillDown('${cat.replace(/'/g,"\\'")}','${m}')`:''}">
-          ${fv(mD[m]||0,isDesp)}
+          ${fv(mD[m]||0,isDesp)}${pct(mD[m]||0, recTotalMes[m])}
         </td>`).join('')}
         ${showTot?`<td style="${TD};font-weight:600">${fv(totC,isDesp)}</td>`:''}
       </tr>`;
@@ -1763,7 +1786,7 @@ function _buildDRE(el, full) {
     h+=`<tr class="${gid}-row" style="background:${stBg}">
       <td style="${TDL};font-weight:700;color:${stCol}">▶ SUBTOTAL ${g?g.l:gk}</td>
       ${meses.map(m=>{const v=sg(gk,m);lucroMes[m]=(lucroMes[m]||0)+v;
-        return `<td style="${TD};font-weight:700;color:${v>=0?'var(--green)':'var(--red-l)'}">${fmt.brl(isDesp?-Math.abs(v):v)}</td>`;}).join('')}
+        return `<td style="${TD};font-weight:700;color:${v>=0?'var(--green)':'var(--red-l)'}">${fmt.brl(isDesp?-Math.abs(v):v)}${pct(v, recTotalMes[m])}</td>`;}).join('')}
       ${showTot?`<td style="${TD};font-weight:700;color:${totG>=0?'var(--green)':'var(--red-l)'}">${fmt.brl(isDesp?-Math.abs(totG):totG)}</td>`:''}
     </tr>
     <tr><td colspan="${meses.length+(showTot?2:1)}" style="height:3px;background:var(--border)"></td></tr>`;
