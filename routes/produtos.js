@@ -308,6 +308,9 @@ module.exports = function (pool) {
           const unidade    = colUnit  >= 0 ? String(row[colUnit] ?? 'un').trim().toUpperCase() || 'UN' : 'UN';
           const categoria  = colCat   >= 0 ? String(row[colCat]  ?? '').trim() || null : null;
 
+          // Ignora produtos com preço de venda E custo ambos zerados (Xmenu: itens inativos)
+          if (custo === 0 && venda === 0) continue;
+
           try {
             await client.query(`
               INSERT INTO produtos (codigo, descricao, fornecedor, preco_custo, preco_venda, unidade, categoria, origem)
