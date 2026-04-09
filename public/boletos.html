@@ -178,7 +178,7 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
         <th title="Número da Nota Fiscal">NF-e Nº</th>
         <th>Vencimento</th>
         <th title="Parcela / Total de parcelas">Parcela</th>
-        <th>Categoria</th><th>Valor</th><th>Status</th><th>Ações</th>
+        <th>Categoria</th><th>Valor</th><th>Status</th><th title="Lançamento do extrato vinculado">Extrato</th><th>Ações</th>
       </tr></thead>
       <tbody id="tbody"></tbody>
     </table>
@@ -672,6 +672,16 @@ function renderizar(lista){
       <td style="font-size:12px">${b.plano||'—'}</td>
       <td style="font-family:'DM Mono',monospace;font-weight:600">${fmt.brl(b.valor)}</td>
       <td>${pill}</td>
+      <td style="max-width:180px">
+        ${b.vinculado
+          ? `<div style="display:flex;align-items:center;gap:4px">
+               <span title="${b.extratLancamento||'Vinculado ao extrato'}" style="font-size:10px;background:#d4edda;color:#155724;padding:2px 6px;border-radius:4px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px;cursor:help">
+                 🔗 ${b.extratLancamento ? b.extratLancamento.slice(0,22)+(b.extratLancamento.length>22?'…':'') : 'Extrato vinculado'}
+               </span>
+               <button class="act-btn" onclick="desvincularExtrato(${b.dbId})" title="Remover vínculo com extrato" style="color:var(--red-l);font-size:11px;padding:1px 5px">✕</button>
+             </div>`
+          : `<span style="font-size:10px;color:var(--muted)">—</span>`}
+      </td>
       <td>
         ${b.status!=='pago'?`<button class="act-btn" onclick="abrirBaixa(${b.dbId})">✅ Pagar</button>`:''}
         <button class="act-btn" onclick="abrirModal(${b.dbId})">✏️</button>
@@ -756,6 +766,13 @@ function fecharXML(){ document.getElementById('modal-xml').classList.remove('ope
 // Categorias carregadas do banco (mesmas do DRE)
 let _dreCategoriasOpts = ''; // HTML de options para reusar
 let _dreCategorias = [];     // array de rows do banco
+
+async function desvincularExtrato(dbId) {
+  if (!confirm('Remover vínculo com o extrato? O boleto voltará para não vinculado.')) return;
+  const d = await api.post(`/api/boletos/${dbId}/desvincular-extrato`, {});
+  if (d.ok) { toast('✅ Vínculo removido!'); carregar(); }
+  else toast('❌ ' + (d.erro || 'Erro'));
+}
 
 async function carregarCategorias() {
   try {

@@ -484,6 +484,20 @@ module.exports = function (pool) {
     }
   });
 
+  // ── POST /desvincular-extrato/:id — remove vínculo com lançamento OFX ─────
+  r.post('/desvincular-extrato/:id', async (req, res) => {
+    try {
+      await pool.query(`
+        UPDATE boletos SET
+          vinculado_extrato  = false,
+          extrato_lancamento = NULL,
+          atualizado_em      = NOW()
+        WHERE id = $1
+      `, [req.params.id]);
+      res.json({ ok: true });
+    } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
   // ── POST /import-xml — preview da NF-e XML ────────────────────────────────
   r.post('/import-xml', upload.single('arquivo'), async (req, res) => {
     if (!req.file) return res.status(400).json({ ok: false, erro: 'Arquivo não enviado' });
