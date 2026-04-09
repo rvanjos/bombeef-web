@@ -2244,79 +2244,113 @@ function exportXLS(){
   if(!TXS.length){toast('Sem dados');return;}
   const wb = XLSX.utils.book_new();
 
-  // ── Aba 1: DRE estruturado por categoria ────────────────────────────────────
   const at = TXS.filter(t=>!t.ignorar && t.categoria);
+  // Meses únicos ordenados
   const mesesSet = new Set(at.map(t=>getMesTx(t)));
   const meses = [...mesesSet].sort((a,b)=>{
-    const p=s=>{const[m,y]=s.split('/');return(+y)*12+(+m);}; return p(a)-p(b);
+    const p=s=>{const[mm,yy]=s.split('/');return(+yy)*12+(+mm);}; return p(a)-p(b);
   });
+  const MESES_NOMES = {
+    '01':'Janeiro','02':'Fevereiro','03':'Março','04':'Abril','05':'Maio','06':'Junho',
+    '07':'Julho','08':'Agosto','09':'Setembro','10':'Outubro','11':'Novembro','12':'Dezembro'
+  };
+  const nomeMes = m => { const [mm] = m.split('/'); return MESES_NOMES[mm]||m; };
 
-  // Agrupa dados
-  const data={};
+  // Agrupa por competência (Mês DRE)
+  const dataComp={}, dataCaixa={};
   for (const t of at) {
-    const g = catGrupo(t.categoria)||'OUTROS';
-    const m = getMesTx(t);
-    const v = parseFloat(t.valor||0);
-    if(!data[g])data[g]={};
-    if(!data[g][t.categoria])data[g][t.categoria]={};
-    data[g][t.categoria][m]=(data[g][t.categoria][m]||0)+v;
+    const gk = catGrupo(t.categoria)||'OUTROS';
+    const mC = getMesTx(t);         // mês DRE (competência)
+    const mK = t.mesCaixa||t.mes;   // mês caixa
+    const v  = parseFloat(t.valor||0);
+    // Competência
+    if(!dataComp[gk])dataComp[gk]={};
+    if(!dataComp[gk][t.categoria])dataComp[gk][t.categoria]={};
+    dataComp[gk][t.categoria][mC]=(dataComp[gk][t.categoria][mC]||0)+v;
+    // Caixa
+    if(!dataCaixa[gk])dataCaixa[gk]={};
+    if(!dataCaixa[gk][t.categoria])dataCaixa[gk][t.categoria]={};
+    dataCaixa[gk][t.categoria][mK]=(dataCaixa[gk][t.categoria][mK]||0)+v;
   }
+  const mesesCaixa = [...new Set(TXS.filter(t=>!t.ignorar&&t.categoria).map(t=>t.mesCaixa||t.mes))]
+    .sort((a,b)=>{const p=s=>{const[mm,yy]=s.split('/');return(+yy)*12+(+mm);};return p(a)-p(b);});
 
-  const sg=(gk,m)=>Object.values(data[gk]||{}).reduce((s,c)=>s+(c[m]||0),0);
+  function buildDRE(data, mesesUsados, nomeAba) {
+    const sg=(gk,m)=>Object.values(data[gk]||{}).reduce((s,c)=>s+(c[m]||0),0);
+    const rows=[];
+    const headerCols = mesesUsados.map(nomeMes);
+    rows.push(['BOM BEEF — GESTÃO', ...headerCols.map(()=>''), '']);
+    rows.push([nomeAba, ...headerCols, 'TOTAL']);
+    rows.push([]); // linha em branco
 
-  // Monta array de linhas para o DRE
-  const dreRows = [];
-  // Cabeçalho
-  dreRows.push(['Descrição', ...meses, 'TOTAL']);
+    const ORDEM=['RECEITAS','CMV','PESSOAL','VENDAS_CAT','CONSUMO','TERCEIROS','MATERIAL','FINANCEIRAS','OUTRAS','IMPOSTOS','OUTROS'];
+    let lucroMes = Object.fromEntries(mesesUsados.map(m=>[m,0]));
+    let recTot = 0, despTot = 0;
 
-  const ORDEM=['RECEITAS','CMV','PESSOAL','VENDAS_CAT','CONSUMO','TERCEIROS','MATERIAL','FINANCEIRAS','OUTRAS','IMPOSTOS'];
-  let lucroMes = Object.fromEntries(meses.map(m=>[m,0]));
+    for (const gk of ORDEM) {
+      if (!data[gk]) continue;
+      const g = CATS[gk];
+      const label = g ? g.l : gk;
+      const totG  = mesesUsados.reduce((s,m)=>s+sg(gk,m),0);
 
-  for (const gk of ORDEM) {
-    if (!data[gk]) continue;
-    const g = CATS[gk];
-    const isDesp = gk !== 'RECEITAS';
-    // Linha de grupo (header)
-    dreRows.push(['', ...meses.map(()=>''), '']); // linha em branco
-    const totG = meses.reduce((s,m)=>s+sg(gk,m),0);
-    dreRows.push([g?g.l:gk, ...meses.map(m=>sg(gk,m)||''), totG||'']);
-
-    // Linhas de categorias
-    for (const [cat, mD] of Object.entries(data[gk])) {
-      const totC = Object.values(mD).reduce((s,v)=>s+v,0);
-      dreRows.push([`  ${cat}`, ...meses.map(m=>mD[m]||''), totC||'']);
+      rows.push([]); // separador
+      // Linha de seção (header grupo)
+      rows.push([label, ...mesesUsados.map(()=>''), '']);
+      // Linhas de categorias
+      for (const [cat, mD] of Object.entries(data[gk])) {
+        const totC = Object.values(mD).reduce((s,v)=>s+v,0);
+        rows.push([`    ${cat}`, ...mesesUsados.map(m=>mD[m]||null), totC||null]);
+      }
+      // Subtotal grupo
+      rows.push([`${label} Total:`, ...mesesUsados.map(m=>sg(gk,m)||null), totG||null]);
+      mesesUsados.forEach(m=>{ lucroMes[m]=(lucroMes[m]||0)+sg(gk,m); });
+      if(gk==='RECEITAS') recTot=totG; else despTot+=totG;
     }
 
-    // Subtotal
-    dreRows.push([`${g?g.l:gk} Total:`, ...meses.map(m=>sg(gk,m)||''), totG||'']);
+    // Margem bruta
+    rows.push([]);
+    rows.push(['Margem Bruta (Receita - Custo)', ...mesesUsados.map(m=>{
+      const rec=sg('RECEITAS',m), cmv=sg('CMV',m); return (rec+cmv)||null;
+    }), (recTot+(dataCaixa['CMV']?0:0))||null]);
 
-    // Acumula no lucro
-    meses.forEach(m=>{ lucroMes[m]=(lucroMes[m]||0)+sg(gk,m); });
+    rows.push([]);
+    const lucroTotal = mesesUsados.reduce((s,m)=>s+(lucroMes[m]||0),0);
+    rows.push(['RESULTADO (LUCRO/PREJUÍZO)', ...mesesUsados.map(m=>lucroMes[m]||null), lucroTotal||null]);
+
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = [{wch:42}, ...mesesUsados.map(()=>({wch:14})), {wch:14}];
+
+    // Formatação básica via estilos SheetJS (sem Enterprise — só larguras)
+    return ws;
   }
 
-  // Linha de resultado
-  dreRows.push(['']); // separador
-  const lucroTotal = meses.reduce((s,m)=>s+(lucroMes[m]||0),0);
-  dreRows.push(['RESULTADO (LUCRO/PREJUÍZO)', ...meses.map(m=>lucroMes[m]||''), lucroTotal||'']);
+  // ── ABA 1: DRE por Competência ───────────────────────────────────────────────
+  const wsDRE = buildDRE(dataComp, meses, 'DRE — Por Competência');
+  XLSX.utils.book_append_sheet(wb, wsDRE, 'DRE Competência');
 
-  const wsDRE = XLSX.utils.aoa_to_sheet(dreRows);
-  wsDRE['!cols'] = [{wch:40}, ...meses.map(()=>({wch:14})), {wch:14}];
-  XLSX.utils.book_append_sheet(wb, wsDRE, `DRE ${mesRef}`);
+  // ── ABA 2: Fluxo de Caixa (por data de caixa) ────────────────────────────────
+  const wsDFC = buildDRE(dataCaixa, mesesCaixa, 'DRE — Fluxo de Caixa');
+  XLSX.utils.book_append_sheet(wb, wsDFC, 'Fluxo de Caixa');
 
-  // ── Aba 2: Lançamentos detalhados ────────────────────────────────────────────
+  // ── ABA 3: Lançamentos detalhados ────────────────────────────────────────────
   const detRows = TXS.filter(t=>!t.ignorar).map(t=>({
-    'Data':t.data, 'Mês DRE':t.mes, 'Mês Caixa':t.mesCaixa||t.mes,
-    'Fonte':t.fonte, 'Operação':t.lancamento,
-    'Fornecedor/Razão Social':t.razaoSocial||t.portador||'',
-    'Valor (R$)':parseFloat(t.valor||0),
-    'Categoria DRE':t.categoria||'', 'Grupo DRE':catGrupo(t.categoria)||''
+    'Data':             t.data||'',
+    'Mês DRE':          t.mes||'',
+    'Mês Caixa':        t.mesCaixa||t.mes||'',
+    'Fonte':            t.fonte||'',
+    'Operação':         t.lancamento||'',
+    'Fornecedor/Razão Social': t.razaoSocial||t.portador||'',
+    'Valor (R$)':       parseFloat(t.valor||0),
+    'Categoria DRE':    t.categoria||'',
+    'Grupo DRE':        catGrupo(t.categoria)||'',
   }));
-  const wsDetalhe = XLSX.utils.json_to_sheet(detRows);
-  wsDetalhe['!cols'] = [{wch:12},{wch:10},{wch:10},{wch:12},{wch:30},{wch:35},{wch:14},{wch:35},{wch:20}];
-  XLSX.utils.book_append_sheet(wb, wsDetalhe, 'Lançamentos');
+  const wsLanc = XLSX.utils.json_to_sheet(detRows);
+  wsLanc['!cols'] = [{wch:12},{wch:10},{wch:10},{wch:12},{wch:35},{wch:38},{wch:14},{wch:35},{wch:25}];
+  XLSX.utils.book_append_sheet(wb, wsLanc, 'Lançamentos');
 
-  XLSX.writeFile(wb, `DRE_${mesRef.replace('/','_')}.xlsx`);
-  toast('📤 Excel exportado com DRE estruturado!');
+  const ano = meses[0]?.split('/')?.[1] || new Date().getFullYear();
+  XLSX.writeFile(wb, `DRE_BomBeef_${ano}.xlsx`);
+  toast('📤 Excel exportado: Competência + Fluxo de Caixa + Lançamentos!');
 }
 
 // ─── SALVAR / SESSÕES ────────────────────────────────────────────────────────
