@@ -595,35 +595,47 @@ async function renderEscala() {
     const ciclo = tipoEscala === 'M' ? 3 : 2;
 
     for (const { dia, dow } of fimDeSemana) {
-      // Verifica se este funcionário trabalha neste dia da semana
       if (fds === 'nao') continue;
       if (fds === 'domingo' && dow !== 0) continue;
       if (fds === 'sabado'  && dow !== 6) continue;
 
-      // Para domingos: calcula escala rotativa
-      // Para sábados com fds='ambos' ou 'sabado': sempre trabalha (sem rodízio)
+      // Sábado: sempre trabalha (sem rodízio)
       if (dow === 6) {
         porDia[dia].push({ nome: f.nome.split(' ')[0], trabalha: true });
         continue;
       }
 
-      // Domingo: calcula rodízio
-      const dtDom = new Date(ano, mes, dia);
-      let domCount = 0;
-      let cur = new Date(inicio);
-      let safety = 0;
-      while (cur.getDay() !== 0 && safety++ < 7) cur.setDate(cur.getDate() + 1);
-      safety = 0;
-      while (cur < dtDom && safety++ < 500) { cur.setDate(cur.getDate() + 7); domCount++; }
-      if (cur.getTime() !== dtDom.getTime()) continue;
+      // Domingo: calcula rodízio com base na data de início
+      // Normaliza tudo para datas sem hora (apenas ano/mes/dia)
+      const dtDom   = new Date(ano, mes, dia);       // domingo do mês atual
+      const dtInicio = new Date(
+        parseInt(f.data_inicio.slice(0,4)),
+        parseInt(f.data_inicio.slice(5,7)) - 1,
+        parseInt(f.data_inicio.slice(8,10))
+      );
 
-      let idx = domCount % ciclo;
+      // Encontra o primeiro domingo a partir da data_inicio
+      const primDom = new Date(dtInicio);
+      while (primDom.getDay() !== 0) primDom.setDate(primDom.getDate() + 1);
+
+      // Se o domingo do mês é anterior ao primeiro domingo configurado, pula
+      if (dtDom < primDom) continue;
+
+      // Conta quantos domingos se passaram desde primDom até dtDom
+      const diffMs   = dtDom.getTime() - primDom.getTime();
+      const diffDias = Math.round(diffMs / (1000 * 60 * 60 * 24));
+      const domCount = Math.round(diffDias / 7);
+
+      // Verifica que é exatamente um domingo múltiplo de 7
+      if (diffDias % 7 !== 0) continue;
+
+      const idx = domCount % ciclo;
       let trabalha;
       if (tipoEscala === 'M') {
         const cicloM = primeiroStatus === 'trabalho' ? [true, true, false] : [false, true, true];
         trabalha = cicloM[idx];
       } else {
-        trabalha = idx === 0 ? primeiroStatus === 'trabalho' : primeiroStatus === 'folga';
+        trabalha = idx === 0 ? (primeiroStatus === 'trabalho') : (primeiroStatus !== 'trabalho');
       }
       porDia[dia].push({ nome: f.nome.split(' ')[0], trabalha });
     }
