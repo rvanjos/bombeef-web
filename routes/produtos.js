@@ -252,17 +252,19 @@ module.exports = function (pool) {
         const wb    = XLSX.read(req.file.buffer, { type: 'buffer', cellDates: true });
         const sheet = wb.Sheets[wb.SheetNames[0]];
         const allRows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
-        // Pula linhas iniciais vazias ou sem conteúdo relevante
-        const normStr2 = s => String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+        // Pula linhas iniciais vazias, encontra o cabeçalho
+        const norm2 = s => String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
         let startIdx = 0;
         for (let i = 0; i < Math.min(allRows.length, 10); i++) {
-          const rowStr = allRows[i].map(normStr2).join('|');
-          if (rowStr.includes('codigo') || rowStr.includes('produto') || rowStr.includes('codigoproduto')) {
+          const rowArr = allRows[i];
+          // Linha válida: tem ao menos 2 células não vazias
+          const nonEmpty = rowArr.filter(c => String(c).trim() !== '').length;
+          if (nonEmpty >= 2) {
             startIdx = i;
             break;
           }
         }
-        rows = allRows.slice(startIdx);
+        rows = allRows.slice(startIdx).filter(r => r.some(c => String(c).trim() !== ''));
       }
 
       if (rows.length < 2) {
