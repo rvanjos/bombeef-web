@@ -673,10 +673,10 @@ function renderizar(lista){
       <td style="font-family:'DM Mono',monospace;font-weight:600">${fmt.brl(b.valor)}</td>
       <td>${pill}</td>
       <td style="max-width:180px">
-        ${b.vinculado
+        ${b.vinculadoExtrato
           ? `<div style="display:flex;align-items:center;gap:4px">
                <span title="${b.extratLancamento||'Vinculado ao extrato'}" style="font-size:10px;background:#d4edda;color:#155724;padding:2px 6px;border-radius:4px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px;cursor:help">
-                 🔗 ${b.extratLancamento ? b.extratLancamento.slice(0,22)+(b.extratLancamento.length>22?'…':'') : 'Extrato vinculado'}
+                 🔗 ${b.extratLancamento ? b.extratLancamento.slice(0,25)+(b.extratLancamento.length>25?'…':'') : 'Extrato vinculado'}
                </span>
                <button class="act-btn" onclick="desvincularExtrato(${b.dbId})" title="Remover vínculo com extrato" style="color:var(--red-l);font-size:11px;padding:1px 5px">✕</button>
              </div>`
