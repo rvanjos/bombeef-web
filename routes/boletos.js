@@ -487,10 +487,17 @@ module.exports = function (pool) {
   // ── POST /desvincular-extrato/:id — remove vínculo com lançamento OFX ─────
   r.post('/desvincular-extrato/:id', async (req, res) => {
     try {
+      // Reverte para avencer ou vencido dependendo da data — NUNCA exclui o boleto
       await pool.query(`
         UPDATE boletos SET
           vinculado_extrato  = false,
           extrato_lancamento = NULL,
+          status             = CASE
+            WHEN vencimento < CURRENT_DATE THEN 'vencido'
+            ELSE 'avencer'
+          END,
+          dt_pagamento       = NULL,
+          mes_caixa          = mes_competencia,
           atualizado_em      = NOW()
         WHERE id = $1
       `, [req.params.id]);
