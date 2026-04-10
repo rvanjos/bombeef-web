@@ -251,18 +251,26 @@ module.exports = function (pool) {
         // XLSX / XLS
         const wb    = XLSX.read(req.file.buffer, { type: 'buffer', cellDates: true });
         const sheet = wb.Sheets[wb.SheetNames[0]];
+        // Corrige !ref incorreto (bug em planilhas Xmenu e similares)
+        // O range declarado pode ser menor que os dados reais — recalcula
+        const decoded = XLSX.utils.decode_range(sheet['!ref'] || 'A1');
+        // Percorre todas as células para achar o range real
+        let maxR = decoded.e.r, maxC = decoded.e.c;
+        for (const addr of Object.keys(sheet)) {
+          if (addr[0] === '!') continue;
+          const cell = XLSX.utils.decode_cell(addr);
+          if (cell.r > maxR) maxR = cell.r;
+          if (cell.c > maxC) maxC = cell.c;
+        }
+        if (maxR > decoded.e.r || maxC > decoded.e.c) {
+          sheet['!ref'] = XLSX.utils.encode_range({ s: decoded.s, e: { r: maxR, c: maxC } });
+        }
         const allRows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
-        // Pula linhas iniciais vazias, encontra o cabeçalho
-        const norm2 = s => String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        // Pula linhas iniciais vazias
         let startIdx = 0;
         for (let i = 0; i < Math.min(allRows.length, 10); i++) {
-          const rowArr = allRows[i];
-          // Linha válida: tem ao menos 2 células não vazias
-          const nonEmpty = rowArr.filter(c => String(c).trim() !== '').length;
-          if (nonEmpty >= 2) {
-            startIdx = i;
-            break;
-          }
+          const nonEmpty = allRows[i].filter(c => String(c).trim() !== '').length;
+          if (nonEmpty >= 2) { startIdx = i; break; }
         }
         rows = allRows.slice(startIdx).filter(r => r.some(c => String(c).trim() !== ''));
       }
