@@ -881,20 +881,26 @@ module.exports = function (pool) {
         if (!valorCentavos) continue;
 
         try {
-          // Busca boletos em aberto com valor próximo (±1 centavo) e data de vencimento próxima
+          // Busca boletos em aberto com valor próximo (±1 centavo)
+          // A data de vencimento deve ser próxima da data do pagamento (±45 dias)
+          // Isso evita vincular parcelas futuras quando há múltiplos boletos do mesmo valor
+          const dtPagamento = l.data || new Date().toISOString().slice(0,10);
           const { rows: boletos } = await pool.query(`
             SELECT id, valor, vencimento, fornecedor
             FROM boletos
             WHERE status IN ('avencer','vencido')
               AND ABS(ROUND(valor::numeric * 100) - $1) <= 1
-              AND (vencimento IS NULL OR vencimento <= CURRENT_DATE + INTERVAL '60 days')
-            ORDER BY ABS(ROUND(valor::numeric * 100) - $1) ASC, vencimento ASC
+              AND (
+                vencimento IS NULL
+                OR ABS(vencimento - $2::date) <= 45
+              )
+            ORDER BY ABS(vencimento - $2::date) ASC, ABS(ROUND(valor::numeric * 100) - $1) ASC
             LIMIT 1
-          `, [valorCentavos]);
+          `, [valorCentavos, dtPagamento]);
 
           if (boletos.length) {
             const boleto = boletos[0];
-            const dtPag = l.data || new Date().toISOString().slice(0,10);
+            const dtPag = dtPagamento;
             const descExtrato = [l.lancamento, l.memo, l.razaoSocial]
               .filter(Boolean).filter(s => s !== 'BOLETO')
               .join(' — ') || l.lancamento || 'Extrato vinculado';

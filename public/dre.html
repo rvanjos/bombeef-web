@@ -1632,10 +1632,19 @@ function aplicarBulk() {
     const catValidaBulk = Object.values(CATS).some(g => g.s.includes(cat));
     if (catValidaBulk) fornecedores.forEach(k=>supMem[k]=cat);
   }
-  toast(`✅ ${n} lançamentos classificados como "${cat}"`);
+  // Mostra quais meses foram afetados
+  const mesesAfetados = [...new Set(TXS.filter(t => selIds.has(String(t.id)) || 
+    (applySupplier && fornecedores.has(_chaveFornecedor(t)))).map(t => t.mes || mesRef))];
+  console.log('[bulk] meses afetados:', mesesAfetados, '_sessoesPorMes:', window._sessoesPorMes);
+  toast(`✅ ${n} lançamentos classificados como "${cat}" — salvando...`);
   limparSel(); render(); updStats(); renderDRE();
-  // Salva imediatamente (sem debounce) pois bulk pode afetar muitos meses
-  salvarTodos(true);
+  // Salva imediatamente cada mês afetado
+  for (const mes of mesesAfetados) {
+    console.log(`[bulk] salvando mes=${mes} sid=${(window._sessoesPorMes||{})[mes]}`);
+    await salvarMes(mes, true);
+  }
+  toast(`✅ ${n} lançamentos salvos em ${mesesAfetados.length} mês(es)!`);
+  setSt('ok');
 }
 
 function bulkIgn() {

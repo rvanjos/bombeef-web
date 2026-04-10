@@ -726,11 +726,25 @@ async function salvar(){
     obs:        document.getElementById('f-obs').value,
   };
   if(!body.fornecedor||!body.valor){ toast('Fornecedor e valor são obrigatórios'); return; }
+  // Aviso quando editando boleto existente que pode estar no DRE
+  if (dbId) {
+    const b = boletos.find(x => String(x.dbId) === String(dbId));
+    const alterou = b && (b.vencimento !== body.vencimento || b.valor !== body.valor);
+    if (alterou) {
+      const ok = confirm(
+        '⚠️ Atenção: você está alterando a data de vencimento ou valor deste boleto.\n\n' +
+        'Essa alteração vai impactar os lançamentos do DRE.\n' +
+        'Após salvar, clique em "Boletos DB" no DRE para atualizar.\n\n' +
+        'Confirma a alteração?'
+      );
+      if (!ok) return;
+    }
+  }
   const d = dbId
     ? await api.put(`/api/boletos/${dbId}`, body)
     : await api.post('/api/boletos', body);
   if(!d.ok){ toast('Erro: '+d.erro); return; }
-  toast(dbId?'Boleto atualizado!':'Boleto criado!');
+  toast(dbId?'✅ Boleto atualizado! Clique em "Boletos DB" no DRE para refletir a alteração.':'✅ Boleto criado!');
   fecharModal(); carregar(); carregarKPIs();
 }
 
