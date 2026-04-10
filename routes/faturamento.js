@@ -181,6 +181,65 @@ module.exports = function(pool) {
     return result;
   }
 
+  // ── Parser Xmenu Formas de Pagamento ───────────────────────────────────────
+  function parseXMenuFormasPagamento(buffer) {
+    const XLSX = require('xlsx');
+    const wb = XLSX.read(buffer, { type: 'buffer' });
+    const sheet = wb.Sheets[wb.SheetNames[0]];
+    // Corrige !ref
+    const dec = XLSX.utils.decode_range(sheet['!ref'] || 'A1');
+    let mR = dec.e.r, mC = dec.e.c;
+    for (const addr of Object.keys(sheet)) {
+      if (addr[0] === '!') continue;
+      const c = XLSX.utils.decode_cell(addr);
+      if (c.r > mR) mR = c.r; if (c.c > mC) mC = c.c;
+    }
+    sheet['!ref'] = XLSX.utils.encode_range({ s: dec.s, e: { r: mR, c: mC } });
+    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
+    if (rows.length < 2) return { dias: [], totais: {} };
+
+    // Linha 0 = cabeçalho das formas (col 2 em diante)
+    const formas = rows[0].slice(2).map(f => f ? String(f).trim().toUpperCase() : null).filter(Boolean);
+    const resultado = { dias: [], totais: {} };
+
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+      const cel0 = String(row[0] || '').trim();
+      const cel1 = row[1];
+
+      // Linha de total geral — pula
+      if (cel0.includes('Total') || cel0.includes('Grande')) {
+        // Captura totais gerais
+        formas.forEach((f, idx) => {
+          const v = parseFloat(row[2 + idx]) || 0;
+          if (v > 0) resultado.totais[f] = (resultado.totais[f] || 0) + v;
+        });
+        continue;
+      }
+
+      // Linha de dia — tem data válida na col 1
+      if (!cel1) continue;
+      const dtStr = String(cel1).trim();
+      // Aceita DD/MM/YYYY ou objeto Date
+      let data = null;
+      if (typeof cel1 === 'object' && cel1 instanceof Date) {
+        data = cel1.toISOString().slice(0,10);
+      } else {
+        const m = dtStr.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+        if (m) data = m[3] + '-' + m[2] + '-' + m[1];
+      }
+      if (!data) continue;
+
+      const dia = { data, formas: {}, total: 0 };
+      formas.forEach((f, idx) => {
+        const v = parseFloat(row[2 + idx]) || 0;
+        if (v > 0) { dia.formas[f] = v; dia.total += v; }
+      });
+      resultado.dias.push(dia);
+    }
+    return resultado;
+  }
+
   // ── Parser Xmenu Listagem (relatório de vendas por dia) ────────────────────
   function parseXMenuListagem(buffer) {
     const XLSX = require('xlsx');
@@ -397,6 +456,71 @@ module.exports = function(pool) {
     }
   });
 
+  // ── POST /import-formas — importa relatório de formas de pagamento Xmenu ───
+  r.post('/import-formas', upload.single('arquivo'), async (req, res) => {
+    if (!req.file) return res.status(400).json({ ok: false, erro: 'Arquivo não enviado' });
+    try {
+      const result = parseXMenuFormasPagamento(req.file.buffer);
+      if (!result.dias.length) return res.status(422).json({ ok: false, erro: 'Nenhum dia encontrado' });
+
+      const client = await pool.connect();
+      let atualizados = 0;
+      try {
+        await client.query('BEGIN');
+        for (const d of result.dias) {
+          // Merge com o registro do dia existente — atualiza só o campo pagamentos
+          const existing = await client.query(
+            `SELECT id, pagamentos FROM faturamento_periodos WHERE data_inicio=$1 AND tipo_periodo='dia'`,
+            [d.data]
+          );
+          if (existing.rows.length) {
+            const pagAtual = existing.rows[0].pagamentos || {};
+            // Merge mantendo dados do Xmenu Listagem (nfce/mei) e adicionando formas
+            const pagMerge = { ...pagAtual, ...d.formas,
+              dinheiro: d.formas['DINHEIRO'] || 0,
+              pix_conta: d.formas['PIX NA CONTA'] || 0,
+              pix_pag: d.formas['PIX PAGSEGURO'] || 0,
+              pagseguro: d.formas['PAGSEGURO'] || 0,
+              rede_credito: d.formas['REDE CREDITO'] || 0,
+              rede_debito: d.formas['REDE DEBITO'] || 0,
+              voucher: d.formas['VOUCHER'] || 0,
+            };
+            await client.query(
+              `UPDATE faturamento_periodos SET pagamentos=$1, atualizado_em=NOW() WHERE id=$2`,
+              [JSON.stringify(pagMerge), existing.rows[0].id]
+            );
+            atualizados++;
+          } else {
+            // Dia não existe ainda — cria com os dados de formas
+            await client.query(`
+              INSERT INTO faturamento_periodos
+                (data_inicio, data_fim, tipo_periodo, label, fat_bruto, fat_liquido,
+                 total_pessoas, ticket_medio, descontos, categorias, pagamentos)
+              VALUES ($1,$1,'dia',$2,$3,$3,0,0,0,'{}', $4)
+            `, [d.data, 'Xmenu ' + d.data, d.total, JSON.stringify({
+              dinheiro: d.formas['DINHEIRO'] || 0,
+              pix_conta: d.formas['PIX NA CONTA'] || 0,
+              pix_pag: d.formas['PIX PAGSEGURO'] || 0,
+              pagseguro: d.formas['PAGSEGURO'] || 0,
+              rede_credito: d.formas['REDE CREDITO'] || 0,
+              rede_debito: d.formas['REDE DEBITO'] || 0,
+              voucher: d.formas['VOUCHER'] || 0,
+            })]);
+            atualizados++;
+          }
+        }
+        await client.query('COMMIT');
+      } catch(e) { await client.query('ROLLBACK'); throw e; }
+      finally { client.release(); }
+
+      const mes = result.dias[0].data.slice(5,7) + '/' + result.dias[0].data.slice(0,4);
+      res.json({ ok: true, dias: result.dias.length, atualizados, totais: result.totais, mes });
+    } catch(e) {
+      console.error('[faturamento/import-formas]', e.message);
+      res.status(500).json({ ok: false, erro: e.message });
+    }
+  });
+
   // ── GET /caixa/:mes — busca lançamentos de caixa do mês ────────────────────
   r.get('/caixa/:mes', async (req, res) => {
     try {
@@ -486,7 +610,31 @@ module.exports = function(pool) {
       const diferenca = recebidoExtrato - totalXmenu; // negativo = ainda a receber
       const taxaEfetiva = totalXmenu > 0 ? ((totalXmenu - recebidoExtrato) / totalXmenu * 100) : 0;
 
-      // 3. Lançamentos de caixa registrados
+      // 3. Formas de pagamento (dos dias importados)
+      const { rows: diasFormas } = await pool.query(`
+        SELECT
+          pagamentos,
+          COALESCE((pagamentos->>'dinheiro')::numeric, 0) AS dinheiro,
+          COALESCE((pagamentos->>'pix_conta')::numeric, 0) AS pix_conta,
+          COALESCE((pagamentos->>'pix_pag')::numeric, 0) AS pix_pag,
+          COALESCE((pagamentos->>'pagseguro')::numeric, 0) AS pagseguro,
+          COALESCE((pagamentos->>'rede_credito')::numeric, 0) AS rede_credito,
+          COALESCE((pagamentos->>'rede_debito')::numeric, 0) AS rede_debito,
+          COALESCE((pagamentos->>'voucher')::numeric, 0) AS voucher
+        FROM faturamento_periodos
+        WHERE TO_CHAR(data_inicio,'MM/YYYY') = $1 AND tipo_periodo = 'dia'
+      `, [mes]);
+
+      const somaFormas = {
+        dinheiro: 0, pix_conta: 0, pix_pag: 0, pagseguro: 0,
+        rede_credito: 0, rede_debito: 0, voucher: 0
+      };
+      diasFormas.forEach(r => {
+        Object.keys(somaFormas).forEach(k => { somaFormas[k] += parseFloat(r[k] || 0); });
+      });
+      const temFormas = Object.values(somaFormas).some(v => v > 0);
+
+      // 4. Lançamentos de caixa registrados
       const { rows: caixaRows } = await pool.query(
         `SELECT tipo, SUM(valor) AS total FROM faturamento_caixa
          WHERE mes_ref=$1 GROUP BY tipo`, [mes]
@@ -514,6 +662,16 @@ module.exports = function(pool) {
           outros: Math.round(recebidoOutros * 100) / 100,
           lancamentos: lancamentosReceita.length,
         },
+        formas: temFormas ? {
+          dinheiro:     Math.round(somaFormas.dinheiro * 100) / 100,
+          pix_conta:    Math.round(somaFormas.pix_conta * 100) / 100,
+          pix_pag:      Math.round(somaFormas.pix_pag * 100) / 100,
+          pagseguro:    Math.round(somaFormas.pagseguro * 100) / 100,
+          rede_credito: Math.round(somaFormas.rede_credito * 100) / 100,
+          rede_debito:  Math.round(somaFormas.rede_debito * 100) / 100,
+          voucher:      Math.round(somaFormas.voucher * 100) / 100,
+        } : null,
+        tem_formas: temFormas,
         diferenca: Math.round(diferenca * 100) / 100,
         taxa_efetiva_pct: Math.round(taxaEfetiva * 100) / 100,
         tem_dre: sessDRE.length > 0,

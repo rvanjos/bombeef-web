@@ -135,6 +135,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
       <select class="flt" id="flt-ano" onchange="carregar()"></select>
       <button class="btn btn-g" onclick="abrirImport()">📥 Importar CSV/XMenu</button>
       <button class="btn btn-g" style="background:#1a5c8a" onclick="abrirImportListagem()">📋 Importar Listagem</button>
+      <button class="btn btn-g" style="background:#6040c0" onclick="abrirImportFormas()">💳 Importar Formas Pgto</button>
       <button class="btn btn-s" onclick="exportarXLS()">📊 Excel</button>
       <button class="btn btn-s" style="color:var(--red-l);margin-left:auto" onclick="limparFaturamento()">🗑️ Limpar dados</button>
     </div>
@@ -266,10 +267,13 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
       <div id="rec-caixa-lista" style="font-size:12px"></div>
     </div>
 
-    <!-- Breakdown extrato -->
-    <div class="card" style="padding:16px;margin-bottom:12px" id="rec-breakdown" style="display:none">
-      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:12px">Recebimentos por tipo</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px" id="rec-breakdown-grid"></div>
+    <!-- Breakdown: Formas de Pagamento Xmenu vs Extrato -->
+    <div class="card" style="padding:16px;margin-bottom:12px" id="rec-breakdown">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div style="font-size:12px;font-weight:700;color:var(--text)">📊 Formas de Pagamento</div>
+        <span style="font-size:10px;color:var(--muted)" id="rec-formas-hint"></span>
+      </div>
+      <div id="rec-breakdown-grid"></div>
     </div>
 
     <!-- Tabela por dia -->
@@ -390,6 +394,34 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
   </div>
 </div>
 
+<!-- Modal Importar Formas de Pagamento -->
+<div class="modal-bg" id="modal-formas">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-head" style="background:#6040c0">
+      <h3>💳 Importar Formas de Pagamento (Xmenu)</h3>
+      <button class="modal-close" onclick="fecharModalFormas()">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="background:#f0e8ff;border-radius:8px;padding:10px 12px;font-size:12px;color:#3d1a8a;margin-bottom:14px">
+        Importe o relatório <strong>"Faturamento por Forma de Pagamento"</strong> do Xmenu em formato <strong>XLSX</strong>.
+        Complementa a Listagem com detalhes de DINHEIRO, PIX, PAGSEGURO, REDE CRÉDITO/DÉBITO e VOUCHER por dia.
+      </div>
+      <div class="upload-zone" id="upload-zone-formas" onclick="document.getElementById('f-formas').click()" style="border-color:#6040c0">
+        <div style="font-size:36px;margin-bottom:8px">💳</div>
+        <div style="font-weight:600;color:#6040c0">Clique para selecionar o arquivo</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">GridRelatorioFaturamentoFormaPagamento.xlsx</div>
+        <div id="f-formas-nome" style="margin-top:8px;font-size:12px;color:#6040c0"></div>
+      </div>
+      <input type="file" id="f-formas" accept=".xlsx,.xls" style="display:none" onchange="selecionarFormas(this)">
+      <div id="formas-preview" style="display:none;margin-top:12px;background:#f5f0ff;border-radius:8px;padding:12px;font-size:12px"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-s" onclick="fecharModalFormas()">Cancelar</button>
+      <button class="btn btn-g" id="btn-import-formas" onclick="importarFormas()" style="background:#6040c0" disabled>💾 Importar</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal Importar Listagem Xmenu -->
 <div class="modal-bg" id="modal-listagem">
   <div class="modal" style="max-width:520px">
@@ -482,6 +514,103 @@ function iniciarReconciliacao() {
     el.value = hoje.getFullYear() + '-' + String(hoje.getMonth()+1).padStart(2,'0');
   }
   carregarReconciliacao();
+}
+
+// ── FORMAS DE PAGAMENTO ──────────────────────────────────────────────────────
+var _formasFile = null;
+function abrirImportFormas() {
+  _formasFile = null;
+  document.getElementById('f-formas').value = '';
+  document.getElementById('f-formas-nome').textContent = '';
+  document.getElementById('formas-preview').style.display = 'none';
+  document.getElementById('btn-import-formas').disabled = true;
+  document.getElementById('modal-formas').classList.add('open');
+}
+function fecharModalFormas() { document.getElementById('modal-formas').classList.remove('open'); }
+
+function selecionarFormas(input) {
+  const file = input.files[0]; if (!file) return;
+  _formasFile = file;
+  document.getElementById('f-formas-nome').textContent = file.name;
+  document.getElementById('btn-import-formas').disabled = false;
+  document.getElementById('formas-preview').style.display = '';
+  document.getElementById('formas-preview').innerHTML = '<span style="color:#6040c0">✅ ' + file.name + ' (' + (file.size/1024).toFixed(1) + ' KB)</span>';
+}
+
+async function importarFormas() {
+  if (!_formasFile) return;
+  const btn = document.getElementById('btn-import-formas');
+  btn.disabled = true; btn.textContent = 'Importando...';
+  try {
+    const form = new FormData();
+    form.append('arquivo', _formasFile);
+    const resp = await fetch('/api/faturamento/import-formas', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + api.token() },
+      body: form,
+    });
+    const d = await resp.json();
+    if (!d.ok) { toast('❌ ' + d.erro); return; }
+    var t = d.totais || {};
+    document.getElementById('formas-preview').innerHTML =
+      '<div style="font-weight:600;color:#6040c0;margin-bottom:6px">✅ ' + d.dias + ' dias atualizados</div>'
+      + Object.entries(t).map(function(e){
+          return '<div>' + e[0] + ': <strong>' + fmt.brl(e[1]) + '</strong></div>';
+        }).join('');
+    toast('✅ Formas de pagamento importadas! ' + d.dias + ' dias · ' + d.mes);
+    carregar();
+    if (_recMesAtual) carregarReconciliacao();
+  } catch(e) { toast('❌ ' + e.message); }
+  finally { btn.disabled = false; btn.textContent = '💾 Importar'; }
+}
+
+function renderBreakdownFormas(d) {
+  const grid = document.getElementById('rec-breakdown-grid');
+  const hint = document.getElementById('rec-formas-hint');
+
+  if (d.formas) {
+    // Tem dados detalhados de formas — usa eles
+    hint.textContent = 'dados do relatório de formas importado';
+    var f = d.formas;
+    var rows = [
+      { label: '💵 Dinheiro',       val: f.dinheiro,     cor: '#b35c00', bg: '#fff8e1', nota: 'não entra no extrato' },
+      { label: '📲 PIX na Conta',   val: f.pix_conta,    cor: '#1a5c8a', bg: '#e8f0ff', nota: 'entra no mesmo dia' },
+      { label: '📲 PIX PagSeguro',  val: f.pix_pag,      cor: '#1a5c8a', bg: '#e8f0ff', nota: 'pode ter prazo' },
+      { label: '💳 PagSeguro',      val: f.pagseguro,    cor: '#6040c0', bg: '#f5f0ff', nota: 'prazo D+1 a D+30' },
+      { label: '💳 Rede Crédito',   val: f.rede_credito, cor: '#c0392b', bg: '#fce8e8', nota: 'prazo ~D+30' },
+      { label: '💳 Rede Débito',    val: f.rede_debito,  cor: '#1a7a4a', bg: '#e8f7ef', nota: 'entra D+1' },
+      { label: '🎟️ Voucher',        val: f.voucher,      cor: '#555',    bg: '#f0f0f0', nota: 'prazo variável' },
+    ].filter(function(r){ return r.val > 0; });
+
+    var total = rows.reduce(function(s,r){ return s + r.val; }, 0);
+    grid.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px">'
+      + rows.map(function(r) {
+          var pct = total > 0 ? Math.round(r.val/total*100) : 0;
+          return '<div style="background:' + r.bg + ';border-radius:8px;padding:10px 12px">'
+            + '<div style="font-size:11px;font-weight:600;color:' + r.cor + ';margin-bottom:4px">' + r.label + '</div>'
+            + '<div style="font-size:17px;font-weight:700;font-family:monospace">' + fmt.brl(r.val) + '</div>'
+            + '<div style="font-size:10px;color:var(--muted)">' + pct + '% · ' + r.nota + '</div>'
+            + '</div>';
+        }).join('')
+      + '</div>';
+  } else {
+    // Sem formas — usa breakdown do extrato
+    hint.textContent = 'dados do extrato bancário — importe o relatório de formas para mais detalhes';
+    grid.innerHTML = '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">'
+      + [
+          { label: '💳 Cartão/Máquininha', val: d.extrato.cartao },
+          { label: '📲 PIX / TED / DOC',   val: d.extrato.pix    },
+          { label: '📦 Outros',             val: d.extrato.outros },
+        ].map(function(item) {
+          var pct = d.extrato.total > 0 ? Math.round(item.val/d.extrato.total*100) : 0;
+          return '<div style="text-align:center">'
+            + '<div style="font-size:11px;color:var(--muted);margin-bottom:4px">' + item.label + '</div>'
+            + '<div style="font-size:18px;font-weight:700;font-family:monospace">' + fmt.brl(item.val) + '</div>'
+            + '<div style="font-size:11px;color:var(--muted)">' + pct + '% do extrato</div>'
+            + '</div>';
+        }).join('')
+      + '</div>';
+  }
 }
 
 // ── CAIXA (destino do dinheiro) ──────────────────────────────────────────────
@@ -593,20 +722,9 @@ async function carregarReconciliacao() {
     }
   }
 
-  // Breakdown
-  const grid = document.getElementById('rec-breakdown-grid');
-  grid.innerHTML = [
-    { label: '💳 Cartão/Máquininha', val: d.extrato.cartao, pct: d.extrato.total > 0 ? Math.round(d.extrato.cartao/d.extrato.total*100) : 0 },
-    { label: '📲 PIX / TED / DOC',   val: d.extrato.pix,    pct: d.extrato.total > 0 ? Math.round(d.extrato.pix/d.extrato.total*100)    : 0 },
-    { label: '📦 Outros',             val: d.extrato.outros, pct: d.extrato.total > 0 ? Math.round(d.extrato.outros/d.extrato.total*100) : 0 },
-  ].map(function(item) {
-    return '<div style="text-align:center">'
-      + '<div style="font-size:11px;color:var(--muted);margin-bottom:4px">' + item.label + '</div>'
-      + '<div style="font-size:18px;font-weight:700;font-family:monospace">' + fmt.brl(item.val) + '</div>'
-      + '<div style="font-size:11px;color:var(--muted)">' + item.pct + '% do total</div>'
-      + '</div>';
-  }).join('');
-  document.getElementById('rec-breakdown').style.display = d.tem_dre ? '' : 'none';
+  // Breakdown formas de pagamento
+  renderBreakdownFormas(d);
+  document.getElementById('rec-breakdown').style.display = (d.tem_dre || d.tem_formas) ? '' : 'none';
 
   // Tabela por dia
   const tbody = document.getElementById('rec-tbody');
