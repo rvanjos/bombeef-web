@@ -1414,7 +1414,11 @@ function render() {
       <td style="font-size:11px;white-space:nowrap;cursor:pointer;color:var(--blue);text-decoration:underline dotted" onclick="editMes('${t.id}','mes',this)">${fmtMes(t.mes)}</td>
       <td style="font-size:11px;white-space:nowrap;cursor:pointer;color:var(--muted);text-decoration:underline dotted" onclick="editMes('${t.id}','mesCaixa',this)">${fmtMes(t.mesCaixa||t.mes)}</td>
       <td>${badge}</td>
-      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500" title="${t.lancamento}">${t.lancamento}${isReview?needsReviewBadge:''}</td>
+      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500" title="${t.lancamento}">
+        ${t.lancamento}${isReview?needsReviewBadge:''}
+        ${t.boletoId && t.fonte==='EXTRATO' ? `<br><span style="font-size:9px;background:#dbeafe;color:#1e40af;padding:1px 5px;border-radius:3px;cursor:pointer" onclick="verVinculoDRE('${t.id}')" title="Ver boleto vinculado">🔗 boleto vinculado</span>` : ''}
+        ${t.boletoId && t.fonte?.startsWith('BOLETO') && t.vinculadoA ? `<br><span style="font-size:9px;background:#dcfce7;color:#166534;padding:1px 5px;border-radius:3px;cursor:pointer" onclick="verVinculoDRE('${t.id}')" title="${t.vinculadoA}">✅ ${(t.vinculadoA||'').slice(0,25)}${(t.vinculadoA||'').length>25?'…':''}</span>` : ''}
+      </td>
       <td style="font-size:11px;color:var(--muted);max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.razaoSocial||t.portador||'—'}</td>
       <td>
         <input class="csel${isCat?'':' u'}" list="cats-dl" 
@@ -1527,6 +1531,28 @@ async function salvarMes(mes, silent=false) {
   } catch(e) {
     console.error('[salvarMes] exception:', e);
     setSt('err');
+  }
+}
+
+function verVinculoDRE(id) {
+  const t = TXS.find(x => String(x.id) === String(id));
+  if (!t) return;
+  if (t.fonte === 'EXTRATO' && t.boletoId) {
+    // Busca o boleto correspondente na lista
+    const boleto = TXS.find(x => String(x.boletoId) === String(t.boletoId) && x.fonte?.startsWith('BOLETO'));
+    if (boleto) {
+      alert(`🔗 Extrato vinculado ao boleto:\n\n${boleto.lancamento}\nFornecedor: ${boleto.razaoSocial||'—'}\nValor: ${fmt.brl(Math.abs(parseFloat(boleto.valor||0)))}\nData: ${fmt.date(boleto.data)}`);
+    } else {
+      alert(`🔗 Este lançamento está vinculado ao boleto ID ${t.boletoId}.\nO boleto pode estar em outro mês.`);
+    }
+  } else if (t.fonte?.startsWith('BOLETO') && t.vinculadoA) {
+    // Busca o extrato correspondente
+    const extrato = TXS.find(x => String(x.boletoId) === String(t.boletoId) && x.fonte === 'EXTRATO');
+    if (extrato) {
+      alert(`✅ Boleto pago — lançamento do extrato vinculado:\n\n${extrato.lancamento}\nFornecedor: ${extrato.razaoSocial||'—'}\nValor: ${fmt.brl(Math.abs(parseFloat(extrato.valor||0)))}\nData: ${fmt.date(extrato.data)}`);
+    } else {
+      alert(`✅ Boleto pago — extrato:\n\n${t.vinculadoA}`);
+    }
   }
 }
 
