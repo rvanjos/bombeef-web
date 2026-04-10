@@ -132,7 +132,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
         <option value="mes">Mensal</option>
       </select>
       <select class="flt" id="flt-ano" onchange="carregar()"></select>
-      <button class="btn btn-g" onclick="abrirImport()">📥 Importar CSV</button>
+      <button class="btn btn-g" onclick="abrirImport()">📥 Importar CSV/XMenu</button>
+      <button class="btn btn-g" style="background:#1a5c8a" onclick="abrirImportListagem()">📋 Importar Listagem</button>
       <button class="btn btn-s" onclick="exportarXLS()">📊 Excel</button>
     </div>
 
@@ -183,8 +184,10 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
     <div class="card">
       <table class="tbl">
         <thead><tr>
-          <th>Mês</th><th>Períodos</th><th>Atendimentos</th><th>Ticket Médio</th>
-          <th>Descontos</th><th>Fat. Bruto</th><th>Fat. Líquido</th>
+          <th>Mês</th><th style="text-align:center">Dias</th><th style="text-align:right">Clientes</th>
+          <th style="text-align:right">Ticket Médio</th>
+          <th style="text-align:right">NFCE</th><th style="text-align:right">MEI</th>
+          <th style="text-align:right">Fat. Bruto</th>
         </tr></thead>
         <tbody id="tbody-mensal"></tbody>
       </table>
@@ -251,6 +254,34 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
   </div>
 </div>
 
+<!-- Modal Importar Listagem Xmenu -->
+<div class="modal-bg" id="modal-listagem">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-head" style="background:#1a5c8a">
+      <h3>📋 Importar Listagem de Vendas (Xmenu)</h3>
+      <button class="modal-close" onclick="fecharModalListagem()">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="background:#e8f0ff;border-radius:8px;padding:10px 12px;font-size:12px;color:#1a3c6a;margin-bottom:14px">
+        Importe o relatório <strong>"Listagem"</strong> exportado do Xmenu em formato <strong>XLSX</strong>.
+        O sistema lê automaticamente os dados de cada dia: faturamento, clientes, NFCE e MEI.
+      </div>
+      <div class="upload-zone" id="upload-zone-list" onclick="document.getElementById('f-listagem').click()">
+        <div style="font-size:36px;margin-bottom:8px">📋</div>
+        <div style="font-weight:600;color:#1a5c8a">Clique para selecionar o arquivo</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">Arquivo .XLSX da Listagem do Xmenu</div>
+        <div id="f-list-nome" style="margin-top:8px;font-size:12px;color:#1a5c8a"></div>
+      </div>
+      <input type="file" id="f-listagem" accept=".xlsx,.xls" style="display:none" onchange="selecionarListagem(this)">
+      <div id="list-preview" style="display:none;margin-top:12px;background:#f0f8ff;border-radius:8px;padding:12px;font-size:12px"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-s" onclick="fecharModalListagem()">Cancelar</button>
+      <button class="btn btn-g" id="btn-import-list" onclick="importarListagem()" style="background:#1a5c8a" disabled>💾 Importar</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal Importar CSV -->
 <div class="modal-bg" id="modal-import">
   <div class="modal">
@@ -305,6 +336,67 @@ function showTab(t, btn){
   if(t==='periodos') carregarPeriodos();
   if(t==='mensal') carregarMensal();
   if(t==='metas') carregarMetas();
+}
+
+// ── IMPORTAR LISTAGEM ────────────────────────────────────────────────────────
+let _listagemFile = null;
+
+function abrirImportListagem() {
+  _listagemFile = null;
+  document.getElementById('f-listagem').value = '';
+  document.getElementById('f-list-nome').textContent = '';
+  document.getElementById('list-preview').style.display = 'none';
+  document.getElementById('btn-import-list').disabled = true;
+  document.getElementById('modal-listagem').classList.add('open');
+}
+
+function fecharModalListagem() {
+  document.getElementById('modal-listagem').classList.remove('open');
+}
+
+function selecionarListagem(input) {
+  const file = input.files[0];
+  if (!file) return;
+  _listagemFile = file;
+  document.getElementById('f-list-nome').textContent = file.name;
+  document.getElementById('btn-import-list').disabled = false;
+  document.getElementById('list-preview').style.display = '';
+  document.getElementById('list-preview').innerHTML = `<span style="color:#1a5c8a">✅ Arquivo selecionado: <strong>${file.name}</strong> (${(file.size/1024).toFixed(1)} KB)</span>`;
+}
+
+async function importarListagem() {
+  if (!_listagemFile) return;
+  const btn = document.getElementById('btn-import-list');
+  btn.disabled = true;
+  btn.textContent = 'Importando...';
+  try {
+    const form = new FormData();
+    form.append('arquivo', _listagemFile);
+    const resp = await fetch('/api/faturamento/import-listagem', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + api.token() },
+      body: form,
+    });
+    const d = await resp.json();
+    if (!d.ok) { toast('❌ ' + d.erro); return; }
+
+    const prev = document.getElementById('list-preview');
+    prev.innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <div><div style="font-size:10px;color:var(--muted);text-transform:uppercase">Dias importados</div><div style="font-size:18px;font-weight:700;color:#1a5c8a">${d.dias}</div></div>
+        <div><div style="font-size:10px;color:var(--muted);text-transform:uppercase">Faturamento total</div><div style="font-size:18px;font-weight:700;color:var(--green)">${fmt.brl(d.fat_total)}</div></div>
+        <div><div style="font-size:10px;color:var(--muted);text-transform:uppercase">Clientes atendidos</div><div style="font-size:18px;font-weight:700">${d.pessoas_total}</div></div>
+        <div><div style="font-size:10px;color:var(--muted);text-transform:uppercase">Realizado no mês</div><div style="font-size:18px;font-weight:700;color:var(--green)">${fmt.brl(d.fat_real_mes)}</div></div>
+      </div>
+      <div style="color:#155724;font-weight:600">✅ ${d.inseridos} dias novos · ${d.atualizados} já existiam · Mês ${d.mes}</div>`;
+    toast(`✅ Listagem importada! ${d.dias} dias, ${fmt.brl(d.fat_total)}`);
+    carregar();
+  } catch(e) {
+    toast('❌ Erro: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '💾 Importar';
+  }
 }
 
 // ── METAS ────────────────────────────────────────────────────────────────────
@@ -510,12 +602,22 @@ async function carregarMensal(){
   const em = document.getElementById('empty-mensal');
   if(!d.data.length){ tb.innerHTML=''; em.style.display=''; return; }
   em.style.display='none';
-  tb.innerHTML = d.data.map(m => `<tr>
+  tb.innerHTML = d.data.map(m => {
+    const pctNfce = m.fat_bruto > 0 ? Math.round(m.fat_nfce / m.fat_bruto * 100) : 0;
+    const pctMei  = m.fat_bruto > 0 ? Math.round(m.fat_mei  / m.fat_bruto * 100) : 0;
+    return `<tr>
     <td style="font-weight:700">${m.mes}</td>
     <td style="text-align:center;color:var(--muted)">${m.periodos}</td>
-    <td style="text-align:right">${fmt.n(m.total_pessoas)}</td>
+    <td style="text-align:right">${fmt.n(m.total_pessoas)}<br><span style="font-size:10px;color:var(--muted)">ticket ${fmt.brl(m.ticket_medio_avg)}</span></td>
     <td style="text-align:right;font-family:'DM Mono',monospace">${fmt.brl(m.ticket_medio_avg)}</td>
-    <td style="text-align:right;color:var(--red-l)">${fmt.brl(m.descontos)}</td>
+    <td style="text-align:right">
+      ${m.fat_nfce > 0 ? `<span style="font-family:'DM Mono',monospace;font-weight:600">${fmt.brl(parseFloat(m.fat_nfce))}</span><br>
+      <span style="font-size:10px;color:var(--muted)">${m.qtd_nfce} pedidos · ${pctNfce}%</span>` : '<span style="color:var(--muted)">—</span>'}
+    </td>
+    <td style="text-align:right">
+      ${m.fat_mei > 0 ? `<span style="font-family:'DM Mono',monospace">${fmt.brl(parseFloat(m.fat_mei))}</span><br>
+      <span style="font-size:10px;color:var(--muted)">${m.qtd_mei} pedidos · ${pctMei}%</span>` : '<span style="color:var(--muted)">—</span>'}
+    </td>
     <td style="text-align:right;font-family:'DM Mono',monospace;font-weight:700;color:var(--green)">${fmt.brl(m.fat_bruto)}</td>
     <td style="text-align:right;font-family:'DM Mono',monospace">${fmt.brl(m.fat_liquido)}</td>
   </tr>`).join('');

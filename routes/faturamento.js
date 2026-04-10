@@ -168,6 +168,71 @@ module.exports = function(pool) {
     return result;
   }
 
+  // ── Parser Xmenu Listagem (relatório de vendas por dia) ────────────────────
+  function parseXMenuListagem(buffer) {
+    const XLSX = require('xlsx');
+    const wb = XLSX.read(buffer, { type: 'buffer' });
+    const sheet = wb.Sheets[wb.SheetNames[0]];
+
+    // Corrige !ref incorreto (bug Xmenu)
+    const decoded = XLSX.utils.decode_range(sheet['!ref'] || 'A1');
+    let maxR = decoded.e.r, maxC = decoded.e.c;
+    for (const addr of Object.keys(sheet)) {
+      if (addr[0] === '!') continue;
+      const cell = XLSX.utils.decode_cell(addr);
+      if (cell.r > maxR) maxR = cell.r;
+      if (cell.c > maxC) maxC = cell.c;
+    }
+    sheet['!ref'] = XLSX.utils.encode_range({ s: decoded.s, e: { r: maxR, c: maxC } });
+
+    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+
+    const dias = [];
+    let diaAtual = null;
+
+    for (const row of rows) {
+      const cel0 = String(row[0] || '').trim();
+
+      // Linha de cabeçalho do dia: "Data: 01/04/2026 (7)"
+      if (cel0.startsWith('Data:')) {
+        const m = cel0.match(/Data:\s*(\d{2})\/(\d{2})\/(\d{4})\s*\((\d+)\)/);
+        if (m) {
+          const data = `${m[3]}-${m[2]}-${m[1]}`; // YYYY-MM-DD
+          const valStr = String(row[2] || '').replace(/R\$\s*/,'').replace(/\./g,'').replace(',','.').trim();
+          diaAtual = {
+            data,
+            pedidos: parseInt(m[4]) || 0,
+            fat_bruto: parseFloat(valStr) || 0,
+            pessoas: parseInt(row[4]) || 0,
+            fat_nfce: 0, qtd_nfce: 0,
+            fat_mei: 0,  qtd_mei: 0,
+            cancelados: 0,
+          };
+          dias.push(diaAtual);
+        }
+        continue;
+      }
+
+      // Linha de pedido: operador = "CAIXA"
+      if (diaAtual && cel0 === 'CAIXA') {
+        const cancelado = String(row[5] || '').toLowerCase() === 'verdadeiro';
+        const emissor   = String(row[6] || '').trim().toUpperCase();
+        const valor     = parseFloat(String(row[2] || '0').replace(',', '.')) || 0;
+        if (cancelado) {
+          diaAtual.cancelados++;
+        } else if (emissor === 'NFCE') {
+          diaAtual.qtd_nfce++;
+          diaAtual.fat_nfce += valor;
+        } else if (emissor === 'MEI') {
+          diaAtual.qtd_mei++;
+          diaAtual.fat_mei += valor;
+        }
+      }
+    }
+
+    return dias;
+  }
+
   // ── POST /import — importa CSV com datas ──────────────────────────────────
   r.post('/import', upload.single('arquivo'), async (req, res) => {
     if (!req.file) return res.status(400).json({ ok: false, erro: 'Arquivo não enviado' });
@@ -241,13 +306,76 @@ module.exports = function(pool) {
           SUM(fat_liquido) AS fat_liquido,
           SUM(total_pessoas) AS total_pessoas,
           SUM(descontos) AS descontos,
-          ROUND(AVG(ticket_medio),2) AS ticket_medio_avg
+          ROUND(CASE WHEN SUM(total_pessoas)>0 THEN SUM(fat_bruto)/SUM(total_pessoas) ELSE 0 END, 2) AS ticket_medio_avg,
+          COALESCE(SUM((pagamentos->'nfce'->>'total')::numeric),0) AS fat_nfce,
+          COALESCE(SUM((pagamentos->'mei'->>'total')::numeric),0) AS fat_mei,
+          COALESCE(SUM((pagamentos->'nfce'->>'qtd')::int),0) AS qtd_nfce,
+          COALESCE(SUM((pagamentos->'mei'->>'qtd')::int),0) AS qtd_mei
         FROM faturamento_periodos ${where}
         GROUP BY TO_CHAR(data_inicio,'MM/YYYY'), EXTRACT(YEAR FROM data_inicio), EXTRACT(MONTH FROM data_inicio)
         ORDER BY EXTRACT(YEAR FROM data_inicio) DESC, EXTRACT(MONTH FROM data_inicio) DESC
       `, params);
       res.json({ ok: true, data: rows });
     } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ── POST /import-listagem — importa relatório de vendas por dia (Xmenu) ───
+  r.post('/import-listagem', upload.single('arquivo'), async (req, res) => {
+    if (!req.file) return res.status(400).json({ ok: false, erro: 'Arquivo não enviado' });
+    try {
+      const dias = parseXMenuListagem(req.file.buffer);
+      if (!dias.length) return res.status(422).json({ ok: false, erro: 'Nenhum dia encontrado no arquivo' });
+
+      const client = await pool.connect();
+      let inseridos = 0, atualizados = 0;
+      try {
+        await client.query('BEGIN');
+        for (const d of dias) {
+          const ticket = d.pessoas > 0 ? Math.round(d.fat_bruto / d.pessoas * 100) / 100 : 0;
+          const pagamentos = JSON.stringify({
+            nfce: { qtd: d.qtd_nfce, total: Math.round(d.fat_nfce * 100) / 100 },
+            mei:  { qtd: d.qtd_mei,  total: Math.round(d.fat_mei  * 100) / 100 },
+          });
+          const categorias = JSON.stringify({
+            nfce_pct: d.fat_bruto > 0 ? Math.round(d.fat_nfce / d.fat_bruto * 100) : 0,
+            mei_pct:  d.fat_bruto > 0 ? Math.round(d.fat_mei  / d.fat_bruto * 100) : 0,
+          });
+          // Upsert por data (dia)
+          const { rowCount } = await client.query(`
+            INSERT INTO faturamento_periodos
+              (data_inicio, data_fim, tipo_periodo, label, fat_bruto, fat_liquido,
+               total_pessoas, ticket_medio, descontos, categorias, pagamentos)
+            VALUES ($1,$1,'dia',$2,$3,$3,$4,$5,0,$6,$7)
+            ON CONFLICT DO NOTHING
+          `, [d.data, `Xmenu ${d.data}`, d.fat_bruto, d.pessoas, ticket, categorias, pagamentos]);
+          if (rowCount > 0) inseridos++; else atualizados++;
+        }
+        await client.query('COMMIT');
+      } catch(e) {
+        await client.query('ROLLBACK');
+        throw e;
+      } finally { client.release(); }
+
+      // Atualiza meta do mês com realizado acumulado
+      const mes = dias[0].data.slice(5,7) + '/' + dias[0].data.slice(0,4);
+      const { rows: real } = await pool.query(`
+        SELECT COALESCE(SUM(fat_bruto),0) AS total
+        FROM faturamento_periodos
+        WHERE TO_CHAR(data_inicio,'MM/YYYY') = $1 AND tipo_periodo = 'dia'
+      `, [mes]);
+
+      res.json({
+        ok: true, inseridos, atualizados,
+        dias: dias.length,
+        fat_total: dias.reduce((s,d) => s + d.fat_bruto, 0),
+        pessoas_total: dias.reduce((s,d) => s + d.pessoas, 0),
+        fat_real_mes: parseFloat(real.rows[0]?.total || 0),
+        mes,
+      });
+    } catch(e) {
+      console.error('[faturamento/import-listagem]', e.message);
+      res.status(500).json({ ok: false, erro: e.message });
+    }
   });
 
   // ── GET /meta/:mes — busca meta do mês ──────────────────────────────────
