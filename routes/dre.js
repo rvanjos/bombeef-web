@@ -895,6 +895,9 @@ module.exports = function (pool) {
           if (boletos.length) {
             const boleto = boletos[0];
             const dtPag = l.data || new Date().toISOString().slice(0,10);
+            const descExtrato = [l.lancamento, l.memo, l.razaoSocial]
+              .filter(Boolean).filter(s => s !== 'BOLETO')
+              .join(' — ') || l.lancamento || 'Extrato vinculado';
             await pool.query(`
               UPDATE boletos SET
                 status = 'pago',
@@ -903,12 +906,12 @@ module.exports = function (pool) {
                 extrato_lancamento = $2,
                 atualizado_em = NOW()
               WHERE id = $3
-            `, [dtPag, l.lancamento || l.memo || '', boleto.id]);
+            `, [dtPag, descExtrato, boleto.id]);
             boletosQuitados++;
             lancamentosComBoleto.push({ lancamento: l, boletoId: boleto.id });
             // Marca o lançamento com o boletoId para deduplicação no frontend
             l.boletoId = boleto.id;
-            l.categoria = l.categoria || 'BOLETO PAGO';
+            // Não define categoria aqui — será classificado normalmente pelo DRE
           }
         } catch(e) {
           console.warn('[dre/import-extrato] auto-baixa boleto:', e.message);
