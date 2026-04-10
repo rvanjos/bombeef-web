@@ -340,15 +340,22 @@ module.exports = function(pool) {
             nfce_pct: d.fat_bruto > 0 ? Math.round(d.fat_nfce / d.fat_bruto * 100) : 0,
             mei_pct:  d.fat_bruto > 0 ? Math.round(d.fat_mei  / d.fat_bruto * 100) : 0,
           });
-          // Upsert por data (dia)
-          const { rowCount } = await client.query(`
+          // Upsert: remove dia existente e reinsere com dados atualizados
+          const existing = await client.query(
+            `SELECT id FROM faturamento_periodos WHERE data_inicio=$1 AND tipo_periodo='dia'`, [d.data]
+          );
+          if (existing.rows.length) {
+            await client.query(`DELETE FROM faturamento_periodos WHERE id=$1`, [existing.rows[0].id]);
+            atualizados++;
+          } else {
+            inseridos++;
+          }
+          await client.query(`
             INSERT INTO faturamento_periodos
               (data_inicio, data_fim, tipo_periodo, label, fat_bruto, fat_liquido,
                total_pessoas, ticket_medio, descontos, categorias, pagamentos)
             VALUES ($1,$1,'dia',$2,$3,$3,$4,$5,0,$6,$7)
-            ON CONFLICT DO NOTHING
-          `, [d.data, `Xmenu ${d.data}`, d.fat_bruto, d.pessoas, ticket, categorias, pagamentos]);
-          if (rowCount > 0) inseridos++; else atualizados++;
+          `, [d.data, 'Xmenu ' + d.data, d.fat_bruto, d.pessoas, ticket, categorias, pagamentos]);
         }
         await client.query('COMMIT');
       } catch(e) {
@@ -356,9 +363,8 @@ module.exports = function(pool) {
         throw e;
       } finally { client.release(); }
 
-      // Atualiza meta do mês com realizado acumulado
       const mes = dias[0].data.slice(5,7) + '/' + dias[0].data.slice(0,4);
-      const { rows: real } = await pool.query(`
+      const realQ = await pool.query(`
         SELECT COALESCE(SUM(fat_bruto),0) AS total
         FROM faturamento_periodos
         WHERE TO_CHAR(data_inicio,'MM/YYYY') = $1 AND tipo_periodo = 'dia'
@@ -369,13 +375,34 @@ module.exports = function(pool) {
         dias: dias.length,
         fat_total: dias.reduce((s,d) => s + d.fat_bruto, 0),
         pessoas_total: dias.reduce((s,d) => s + d.pessoas, 0),
-        fat_real_mes: parseFloat(real.rows[0]?.total || 0),
+        fat_real_mes: parseFloat(realQ.rows[0]?.total || 0),
         mes,
       });
     } catch(e) {
       console.error('[faturamento/import-listagem]', e.message);
       res.status(500).json({ ok: false, erro: e.message });
     }
+  });
+
+  // ── DELETE /limpar — apaga todos os registros de faturamento ───────────────
+  r.delete('/limpar', async (req, res) => {
+    try {
+      const { rows } = await pool.query(`DELETE FROM faturamento_periodos RETURNING id`);
+      res.json({ ok: true, removidos: rows.length });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ── DELETE /limpar/:mes — apaga registros de um mês específico ──────────
+  r.delete('/limpar/:mes', async (req, res) => {
+    try {
+      const mes = decodeURIComponent(req.params.mes); // MM/YYYY
+      const { rows } = await pool.query(`
+        DELETE FROM faturamento_periodos
+        WHERE TO_CHAR(data_inicio,'MM/YYYY') = $1
+        RETURNING id
+      `, [mes]);
+      res.json({ ok: true, removidos: rows.length, mes });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
   // ── GET /meta/:mes — busca meta do mês ──────────────────────────────────

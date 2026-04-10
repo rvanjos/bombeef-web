@@ -135,6 +135,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
       <button class="btn btn-g" onclick="abrirImport()">📥 Importar CSV/XMenu</button>
       <button class="btn btn-g" style="background:#1a5c8a" onclick="abrirImportListagem()">📋 Importar Listagem</button>
       <button class="btn btn-s" onclick="exportarXLS()">📊 Excel</button>
+      <button class="btn btn-s" style="color:var(--red-l);margin-left:auto" onclick="limparFaturamento()">🗑️ Limpar dados</button>
     </div>
 
     <div class="charts-row">
@@ -336,6 +337,28 @@ function showTab(t, btn){
   if(t==='periodos') carregarPeriodos();
   if(t==='mensal') carregarMensal();
   if(t==='metas') carregarMetas();
+}
+
+// ── LIMPAR ───────────────────────────────────────────────────────────────────
+async function limparFaturamento() {
+  const ano = document.getElementById('flt-ano').value;
+  const tipo = document.getElementById('flt-tipo').value;
+  const msg = tipo !== 'todos'
+    ? `Apagar TODOS os registros de faturamento de ${ano} do tipo "${tipo}"?
+
+Essa ação não pode ser desfeita.`
+    : `Apagar TODOS os registros de faturamento de ${ano}?
+
+Essa ação não pode ser desfeita.`;
+  if (!confirm(msg)) return;
+  // Limpar por mês ou tudo
+  const d = await api.delete('/api/faturamento/limpar');
+  if (d.ok) {
+    toast(`✅ ${d.removidos} registros removidos`);
+    carregar();
+  } else {
+    toast('❌ ' + (d.erro || 'Erro'));
+  }
 }
 
 // ── IMPORTAR LISTAGEM ────────────────────────────────────────────────────────
