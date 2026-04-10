@@ -220,13 +220,50 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
       <div class="kpi vermelho"><div class="kpi-l">Taxa Efetiva Est.</div><div class="kpi-v" id="rec-taxa">—</div><div class="kpi-s">custo financeiro aprox.</div></div>
     </div>
 
-    <!-- Nota explicativa -->
-    <div id="rec-nota" style="background:#f8f4f0;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:11px;color:var(--muted);line-height:1.6">
-      💡 <strong>Como interpretar:</strong>
-      Débito e PIX entram na conta no mesmo dia — aparecem no extrato imediatamente.
-      Crédito cai com prazo (geralmente D+30) — fica na diferença até entrar.
-      Dinheiro só aparece no extrato quando você depositar na conta.
-      A <strong>Taxa Efetiva Est.</strong> inclui prazo de crédito + dinheiro não depositado — não é só custo de maquininha.
+    <!-- Painel de destino do dinheiro -->
+    <div class="card" style="padding:16px;margin-bottom:12px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div>
+          <div style="font-size:12px;font-weight:700;color:var(--text)">💵 Destino do Dinheiro em Caixa</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">Registre como o dinheiro recebido foi utilizado — explica a diferença entre vendido e extrato</div>
+        </div>
+        <button class="btn btn-g" style="font-size:11px;padding:6px 12px" onclick="abrirLancCaixa()">+ Registrar</button>
+      </div>
+
+      <!-- Resumo do caixa -->
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px" id="rec-caixa-resumo">
+        <div style="background:#fff8e1;border-radius:8px;padding:10px;text-align:center">
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Pago a Fornecedor</div>
+          <div style="font-size:16px;font-weight:700;color:#b35c00" id="caixa-pagamento">—</div>
+        </div>
+        <div style="background:#fce8e8;border-radius:8px;padding:10px;text-align:center">
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Retirada Sócios</div>
+          <div style="font-size:16px;font-weight:700;color:var(--red-l)" id="caixa-retirada">—</div>
+        </div>
+        <div style="background:#e8f0ff;border-radius:8px;padding:10px;text-align:center">
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Depositado</div>
+          <div style="font-size:16px;font-weight:700;color:#1a5c8a" id="caixa-deposito">—</div>
+        </div>
+        <div style="background:#e8f7ef;border-radius:8px;padding:10px;text-align:center">
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Caixa Físico</div>
+          <div style="font-size:16px;font-weight:700;color:var(--green)" id="caixa-fisico">—</div>
+        </div>
+      </div>
+
+      <!-- Barra de explicação da diferença -->
+      <div id="rec-barra-wrap" style="margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-bottom:4px">
+          <span>Diferença explicada</span>
+          <span id="rec-barra-pct">0%</span>
+        </div>
+        <div style="background:#f0ebe4;border-radius:6px;height:10px;overflow:hidden">
+          <div id="rec-barra-fill" style="height:100%;width:0%;background:var(--green);border-radius:6px;transition:.3s"></div>
+        </div>
+        <div style="font-size:10px;color:var(--muted);margin-top:4px" id="rec-barra-label"></div>
+      </div>
+
+      <!-- Lista de lançamentos -->
+      <div id="rec-caixa-lista" style="font-size:12px"></div>
     </div>
 
     <!-- Breakdown extrato -->
@@ -307,6 +344,48 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
     <div class="modal-foot">
       <button class="btn btn-s" onclick="fecharModalMeta()">Cancelar</button>
       <button class="btn btn-g" onclick="salvarMeta()">💾 Salvar Meta</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Lançamento de Caixa -->
+<div class="modal-bg" id="modal-caixa">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-head" style="background:#b35c00">
+      <h3>💵 Registrar Destino do Dinheiro</h3>
+      <button class="modal-close" onclick="fecharLancCaixa()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="fg">
+        <label>Tipo *</label>
+        <select id="caixa-tipo" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:7px;font-size:13px">
+          <option value="pagamento">💸 Pago a fornecedor/insumo (não entrou no DRE)</option>
+          <option value="retirada">👤 Retirada de sócio</option>
+          <option value="deposito">🏦 Depositado na conta bancária</option>
+          <option value="caixa_fisico">💼 Ficou no caixa físico</option>
+        </select>
+      </div>
+      <div class="fg-row">
+        <div class="fg">
+          <label>Valor (R$) *</label>
+          <input type="number" id="caixa-valor" placeholder="0,00" step="0.01"
+            style="width:100%;padding:8px;border:1px solid var(--border);border-radius:7px;font-size:13px">
+        </div>
+        <div class="fg">
+          <label>Data</label>
+          <input type="date" id="caixa-data"
+            style="width:100%;padding:8px;border:1px solid var(--border);border-radius:7px;font-size:13px">
+        </div>
+      </div>
+      <div class="fg">
+        <label>Descrição (opcional)</label>
+        <input type="text" id="caixa-desc" placeholder="Ex: Gelo, embalagens, retirada Rafael"
+          style="width:100%;padding:8px;border:1px solid var(--border);border-radius:7px;font-size:13px">
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-s" onclick="fecharLancCaixa()">Cancelar</button>
+      <button class="btn btn-g" style="background:#b35c00" onclick="salvarLancCaixa()">💾 Salvar</button>
     </div>
   </div>
 </div>
@@ -405,6 +484,41 @@ function iniciarReconciliacao() {
   carregarReconciliacao();
 }
 
+// ── CAIXA (destino do dinheiro) ──────────────────────────────────────────────
+var _recMesAtual = '';
+
+function abrirLancCaixa() {
+  const hoje = new Date().toISOString().slice(0,10);
+  document.getElementById('caixa-data').value = hoje;
+  document.getElementById('caixa-valor').value = '';
+  document.getElementById('caixa-desc').value = '';
+  document.getElementById('caixa-tipo').value = 'pagamento';
+  document.getElementById('modal-caixa').classList.add('open');
+  setTimeout(() => document.getElementById('caixa-valor').focus(), 100);
+}
+function fecharLancCaixa() { document.getElementById('modal-caixa').classList.remove('open'); }
+
+async function salvarLancCaixa() {
+  const tipo    = document.getElementById('caixa-tipo').value;
+  const valor   = parseFloat(document.getElementById('caixa-valor').value);
+  const data    = document.getElementById('caixa-data').value;
+  const desc    = document.getElementById('caixa-desc').value.trim();
+  if (!valor || valor <= 0) { toast('Informe o valor'); return; }
+  const d = await api.post('/api/faturamento/caixa', {
+    mes_ref: _recMesAtual, tipo, valor, data, descricao: desc
+  });
+  if (!d.ok) { toast('Erro: ' + d.erro); return; }
+  toast('✅ Lançamento salvo!');
+  fecharLancCaixa();
+  carregarReconciliacao();
+}
+
+async function excluirLancCaixa(id) {
+  if (!confirm('Remover este lançamento?')) return;
+  const d = await api.delete('/api/faturamento/caixa/' + id);
+  if (d.ok) { toast('Removido'); carregarReconciliacao(); }
+}
+
 // ── RECONCILIAÇÃO ────────────────────────────────────────────────────────────
 async function carregarReconciliacao() {
   const mesInput = document.getElementById('rec-mes').value; // YYYY-MM
@@ -434,6 +548,50 @@ async function carregarReconciliacao() {
   document.getElementById('rec-diff-s').textContent   = diffLabel;
   document.getElementById('rec-taxa').textContent     = d.taxa_efetiva_pct.toFixed(1) + '%';
   document.getElementById('rec-taxa').style.color     = d.taxa_efetiva_pct > 5 ? 'var(--red-l)' : 'var(--green)';
+
+  // Salva mês atual para usar no modal
+  _recMesAtual = mes;
+
+  // Carrega lançamentos de caixa
+  var dc = await api.get('/api/faturamento/caixa/' + encodeURIComponent(mes));
+  if (dc.ok) {
+    var tc = dc.totais || {};
+    document.getElementById('caixa-pagamento').textContent = fmt.brl(tc.pagamento || 0);
+    document.getElementById('caixa-retirada').textContent  = fmt.brl(tc.retirada  || 0);
+    document.getElementById('caixa-deposito').textContent  = fmt.brl(tc.deposito  || 0);
+    document.getElementById('caixa-fisico').textContent    = fmt.brl(tc.caixa_fisico || 0);
+
+    // Barra de explicação
+    var totalExplicado = (tc.pagamento||0) + (tc.retirada||0) + (tc.deposito||0) + (tc.caixa_fisico||0);
+    var diffAbs = Math.abs(diff);
+    var pctExpl = diffAbs > 0 ? Math.min(Math.round(totalExplicado / diffAbs * 100), 100) : 100;
+    var naoExplicado = Math.max(0, diffAbs - totalExplicado);
+    document.getElementById('rec-barra-fill').style.width = pctExpl + '%';
+    document.getElementById('rec-barra-fill').style.background = pctExpl >= 100 ? 'var(--green)' : pctExpl >= 60 ? 'var(--orange)' : 'var(--red-l)';
+    document.getElementById('rec-barra-pct').textContent = pctExpl + '%';
+    document.getElementById('rec-barra-label').textContent = pctExpl >= 100
+      ? '✅ Diferença totalmente explicada'
+      : 'Faltam ' + fmt.brl(naoExplicado) + ' sem destino registrado';
+
+    // Lista de lançamentos
+    var tipos = { pagamento: '💸 Fornecedor', retirada: '👤 Retirada', deposito: '🏦 Depósito', caixa_fisico: '💼 Caixa' };
+    var lista = document.getElementById('rec-caixa-lista');
+    if (dc.data && dc.data.length) {
+      lista.innerHTML = '<div style="border-top:1px solid var(--border);margin-top:8px;padding-top:8px">'
+        + dc.data.map(function(l) {
+          var dt = l.data ? new Date(l.data+'T12:00').toLocaleDateString('pt-BR') : '—';
+          return '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid #f5efe8">'
+            + '<span style="font-size:10px;background:#f0ebe4;padding:2px 6px;border-radius:4px;min-width:100px;text-align:center">' + (tipos[l.tipo]||l.tipo) + '</span>'
+            + '<span style="color:var(--muted);font-size:11px">' + dt + '</span>'
+            + '<span style="flex:1;font-size:11px">' + (l.descricao||'—') + '</span>'
+            + '<span style="font-family:monospace;font-weight:600">' + fmt.brl(parseFloat(l.valor)) + '</span>'
+            + '<button onclick="excluirLancCaixa(' + l.id + ')" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;opacity:.5" title="Remover">✕</button>'
+            + '</div>';
+        }).join('') + '</div>';
+    } else {
+      lista.innerHTML = '<div style="font-size:11px;color:var(--muted);padding:8px 0">Nenhum lançamento registrado. Clique em "+ Registrar" para explicar a diferença.</div>';
+    }
+  }
 
   // Breakdown
   const grid = document.getElementById('rec-breakdown-grid');

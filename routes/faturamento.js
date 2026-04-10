@@ -36,6 +36,19 @@ module.exports = function(pool) {
       CREATE INDEX IF NOT EXISTS idx_fat_tipo ON faturamento_periodos(tipo_periodo);
     `).catch(()=>{});
     // Tabela de metas mensais de faturamento
+    // Tabela para registrar destino do dinheiro (reconciliação)
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS faturamento_caixa (
+        id            SERIAL PRIMARY KEY,
+        mes_ref       TEXT NOT NULL,
+        data          DATE,
+        tipo          TEXT NOT NULL, -- 'pagamento', 'retirada', 'deposito', 'caixa_fisico'
+        descricao     TEXT,
+        valor         NUMERIC(12,2) NOT NULL DEFAULT 0,
+        criado_em     TIMESTAMPTZ DEFAULT NOW()
+      )
+    `).catch(()=>{});
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS faturamento_metas (
         id         SERIAL PRIMARY KEY,
@@ -384,6 +397,42 @@ module.exports = function(pool) {
     }
   });
 
+  // ── GET /caixa/:mes — busca lançamentos de caixa do mês ────────────────────
+  r.get('/caixa/:mes', async (req, res) => {
+    try {
+      const mes = decodeURIComponent(req.params.mes);
+      const { rows } = await pool.query(
+        `SELECT * FROM faturamento_caixa WHERE mes_ref=$1 ORDER BY data ASC, criado_em ASC`,
+        [mes]
+      );
+      const totais = { pagamento: 0, retirada: 0, deposito: 0, caixa_fisico: 0 };
+      rows.forEach(r => { if (totais[r.tipo] !== undefined) totais[r.tipo] += parseFloat(r.valor); });
+      res.json({ ok: true, data: rows, totais });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ── POST /caixa — adiciona lançamento de caixa ────────────────────────────
+  r.post('/caixa', async (req, res) => {
+    const { mes_ref, data, tipo, descricao, valor } = req.body;
+    if (!mes_ref || !tipo || !valor) return res.status(400).json({ ok: false, erro: 'mes_ref, tipo e valor obrigatórios' });
+    try {
+      const { rows } = await pool.query(
+        `INSERT INTO faturamento_caixa (mes_ref, data, tipo, descricao, valor)
+         VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+        [mes_ref, data || null, tipo, descricao || null, parseFloat(valor)]
+      );
+      res.json({ ok: true, data: rows[0] });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ── DELETE /caixa/:id — remove lançamento de caixa ───────────────────────
+  r.delete('/caixa/:id', async (req, res) => {
+    try {
+      await pool.query(`DELETE FROM faturamento_caixa WHERE id=$1`, [req.params.id]);
+      res.json({ ok: true });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
   // ── GET /reconciliacao/:mes — cruza Xmenu (listagem) vs Extrato (DRE) ─────
   r.get('/reconciliacao/:mes', async (req, res) => {
     try {
@@ -437,9 +486,20 @@ module.exports = function(pool) {
       const diferenca = recebidoExtrato - totalXmenu; // negativo = ainda a receber
       const taxaEfetiva = totalXmenu > 0 ? ((totalXmenu - recebidoExtrato) / totalXmenu * 100) : 0;
 
+      // 3. Lançamentos de caixa registrados
+      const { rows: caixaRows } = await pool.query(
+        `SELECT tipo, SUM(valor) AS total FROM faturamento_caixa
+         WHERE mes_ref=$1 GROUP BY tipo`, [mes]
+      );
+      const caixa = { pagamento: 0, retirada: 0, deposito: 0, caixa_fisico: 0 };
+      caixaRows.forEach(r => { if (caixa[r.tipo] !== undefined) caixa[r.tipo] = parseFloat(r.total); });
+      const totalExplicado = caixa.pagamento + caixa.retirada + caixa.deposito + caixa.caixa_fisico;
+
       res.json({
         ok: true,
         mes,
+        caixa,
+        total_explicado: Math.round(totalExplicado * 100) / 100,
         xmenu: {
           total: Math.round(totalXmenu * 100) / 100,
           dias: diasXmenu.length,
