@@ -777,7 +777,16 @@ async function carregarSessao() {
       }
       
       if (dados.loadedFiles?.length) files = [...files, ...dados.loadedFiles];
-      if (dados.supplierMem) supMem = { ...supMem, ...dados.supplierMem };
+      if (dados.supplierMem) {
+        // Filtra entradas inválidas do supMem (categorias que não existem mais no CATS)
+        const memFiltrada = {};
+        for (const [k, v] of Object.entries(dados.supplierMem)) {
+          if (v && Object.values(CATS).some(g => g.s.includes(v))) {
+            memFiltrada[k] = v;
+          }
+        }
+        supMem = { ...supMem, ...memFiltrada };
+      }
       window._sessoesPorMes[r.data.mes_ref] = r.data.id;
     }
     console.log(`[carregarSessao] ${TXS.length} lançamentos únicos de ${sessoes.filter(r=>r.ok).length} sessões`);
@@ -1447,7 +1456,9 @@ function setCat(id, cat) {
   const t = TXS.find(x => String(x.id)===String(id)); if (!t) return;
   t.categoria = cat;
   if (cat) t.needsReview = false; // classificação manual remove o aviso de revisão
-  if (cat) {
+  // Só salva no supMem se for uma categoria válida do CATS
+  const catValida = cat && Object.values(CATS).some(g => g.s.includes(cat));
+  if (catValida) {
     const k = _chaveFornecedor(t);
     if (k) {
       supMem[k] = cat;
@@ -1543,7 +1554,9 @@ function aplicarBulk() {
     TXS.forEach(t=>{
       if (!selIds.has(String(t.id)) && fornecedores.has(_chaveFornecedor(t))){t.categoria=cat;n++;}
     });
-    fornecedores.forEach(k=>supMem[k]=cat);
+    // Só salva no supMem se for categoria válida
+    const catValidaBulk = Object.values(CATS).some(g => g.s.includes(cat));
+    if (catValidaBulk) fornecedores.forEach(k=>supMem[k]=cat);
   }
   toast(`✅ ${n} lançamentos classificados como "${cat}"`);
   limparSel(); render(); updStats(); renderDRE();

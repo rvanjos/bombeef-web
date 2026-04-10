@@ -341,6 +341,47 @@ app.get('/api/admin/fix-dre-sessions', async (req, res) => {
   } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
 });
 
+// Limpa categorias inválidas (ex: "BOLETO PAGO") do supplierMem nas sessões DRE
+app.get('/api/admin/fix-dre-supermem', async (req, res) => {
+  try {
+    const { rows } = await pool.query(`SELECT id, mes_ref, dados_json FROM dre_sessoes`);
+    let sessoes_limpas = 0, entradas_removidas = 0;
+    for (const row of rows) {
+      const dados = row.dados_json || {};
+      const mem = dados.supplierMem || {};
+      // Categorias válidas = subgrupos do DRE (qualquer valor que tenha espaço ou seja uma descrição real)
+      // Remove entradas onde o valor parece status de boleto, não categoria DRE
+      const invalidas = ['BOLETO PAGO', 'PAGO', 'PENDENTE', 'VENCIDO', 'CANCELADO'];
+      const memLimpo = {};
+      let removeu = false;
+      for (const [k, v] of Object.entries(mem)) {
+        if (invalidas.includes(String(v).toUpperCase().trim())) {
+          removeu = true;
+          entradas_removidas++;
+        } else {
+          memLimpo[k] = v;
+        }
+      }
+      // Também limpa categorias das transactions
+      const txs = (dados.transactions || []).map(t => {
+        if (invalidas.includes(String(t.categoria||'').toUpperCase().trim())) {
+          removeu = true;
+          return { ...t, categoria: '' };
+        }
+        return t;
+      });
+      if (removeu) {
+        await pool.query(
+          `UPDATE dre_sessoes SET dados_json=$1, atualizado_em=NOW() WHERE id=$2`,
+          [JSON.stringify({ ...dados, supplierMem: memLimpo, transactions: txs }), row.id]
+        );
+        sessoes_limpas++;
+      }
+    }
+    res.json({ ok: true, sessoes_limpas, entradas_removidas });
+  } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+});
+
 // Rota de migration manual — acessa uma vez para renomear colunas legadas
 app.get('/api/admin/fix-kits', async (req, res) => {
   try {
