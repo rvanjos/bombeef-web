@@ -1318,6 +1318,31 @@ function addLancs(novos, fileName) {
     const h = `${l.data}|${String(l.valor)}|${(l.lancamento||'').slice(0,40)}`;
     if (exHash.has(h))                          { dup++; continue; }
 
+    // Se é lançamento do extrato (EXTRATO/OFX), verifica se já existe BOLETO_PREV com mesmo valor e data próxima
+    // Se sim, vincula e atualiza em vez de criar duplicata
+    if ((l.fonte === 'EXTRATO' || l.fonte === 'OFX') && l.valor < 0) {
+      const valCents = Math.round(Math.abs(parseFloat(l.valor||0)) * 100);
+      const dtL = l.data ? new Date(l.data) : null;
+      const prevMatch = TXS.find(t => {
+        if (t.fonte !== 'BOLETO_PREV') return false;
+        if (Math.round(Math.abs(parseFloat(t.valor||0)) * 100) !== valCents) return false;
+        if (!dtL || !t.data) return true;
+        const dtT = new Date(t.data);
+        return Math.abs(dtL - dtT) <= 4 * 86400000; // ±4 dias
+      });
+      if (prevMatch) {
+        // Vincula o extrato ao BOLETO_PREV existente — atualiza em vez de duplicar
+        prevMatch.fonte = 'BOLETO';
+        prevMatch.data = l.data;
+        prevMatch.fitid = l.fitid;
+        prevMatch.boletoId = prevMatch.boletoId; // mantém
+        prevMatch.vinculadoA = l.lancamento;
+        if (l.fitid) exFitid.add(l.fitid);
+        atualiz++;
+        continue;
+      }
+    }
+
     // Auto-classifica se não tiver categoria
     if (!l.categoria && l.lancamento) {
       const ch = _chaveFornecedor(l) || l.lancamento.toUpperCase().slice(0,30);
@@ -1612,7 +1637,7 @@ function updBulk() {
   document.getElementById('bulk-count').textContent=`${n} selecionado(s)`;
 }
 
-function aplicarBulk() {
+async function aplicarBulk() {
   const cat=document.getElementById('bulk-cat-sel').value; if (!cat){toast('Selecione uma categoria');return;}
   const applySupplier=document.getElementById('bulk-apply-supplier').checked;
   let n=0;

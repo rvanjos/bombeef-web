@@ -892,7 +892,7 @@ module.exports = function (pool) {
               AND ABS(ROUND(valor::numeric * 100) - $1) <= 1
               AND (
                 vencimento IS NULL
-                OR ABS(vencimento - $2::date) <= 45
+                OR ABS(vencimento - $2::date) <= 4
               )
             ORDER BY ABS(vencimento - $2::date) ASC, ABS(ROUND(valor::numeric * 100) - $1) ASC
             LIMIT 1
