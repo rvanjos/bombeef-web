@@ -752,8 +752,9 @@ async function carregarSessao() {
     // Junta todos os TXS de todos os meses — deduplicando por fitid ou hash
     TXS = []; files = []; supMem = {};
     window._sessoesPorMes = {};
-    const _seenFitid = new Set();
-    const _seenHash  = new Set();
+    const _seenFitid  = new Set();
+    const _seenHash   = new Set();
+    const _seenBoleto = new Set();
     function _hashTx(t) { return `${t.data||''}_${t.valor||''}_${(t.lancamento||'').slice(0,30)}_${t.mes||''}`; }
 
     for (const r of sessoes) {
@@ -762,9 +763,24 @@ async function carregarSessao() {
       const txs = (typeof dados === 'object' && !Array.isArray(dados))
         ? (dados.transactions || [])
         : (Array.isArray(dados) ? dados : []);
-      
-      // Deduplicação: só adiciona se não visto ainda
+
+      // Deduplicação: por fitid, boletoId, ou hash
       for (const t of txs) {
+        // Por boletoId — se já existe lançamento com mesmo boletoId, pega o mais completo
+        if (t.boletoId) {
+          const bid = String(t.boletoId);
+          if (_seenBoleto.has(bid)) {
+            // Se o existente é BOLETO_PREV e o novo é BOLETO (pago), atualiza
+            const existing = TXS.find(x => String(x.boletoId) === bid);
+            if (existing && t.fonte === 'BOLETO' && existing.fonte === 'BOLETO_PREV') {
+              existing.fonte = t.fonte;
+              existing.data = t.data || existing.data;
+              existing.vinculadoA = t.vinculadoA || existing.vinculadoA;
+            }
+            continue;
+          }
+          _seenBoleto.add(bid);
+        }
         if (t.fitid) {
           if (_seenFitid.has(t.fitid)) continue;
           _seenFitid.add(t.fitid);
@@ -1318,6 +1334,23 @@ function addLancs(novos, fileName) {
     const h = `${l.data}|${String(l.valor)}|${(l.lancamento||'').slice(0,40)}`;
     if (exHash.has(h))                          { dup++; continue; }
 
+    // Dedup adicional: verifica se já existe lançamento com mesmo boletoId (qualquer fonte)
+    if (l.boletoId) {
+      const jaExiste = TXS.find(t => String(t.boletoId) === String(l.boletoId));
+      if (jaExiste) {
+        // Se o novo é BOLETO (pago) e o existente é BOLETO_PREV, atualiza
+        if (l.fonte === 'BOLETO' && jaExiste.fonte === 'BOLETO_PREV') {
+          jaExiste.fonte = 'BOLETO';
+          jaExiste.data = l.data || jaExiste.data;
+          jaExiste.vinculadoA = l.vinculadoA || jaExiste.vinculadoA;
+          atualiz++;
+        } else {
+          dup++;
+        }
+        continue;
+      }
+    }
+
     // Se é lançamento do extrato (EXTRATO/OFX), verifica se já existe BOLETO_PREV com mesmo valor e data próxima
     // Se sim, vincula e atualiza em vez de criar duplicata
     if ((l.fonte === 'EXTRATO' || l.fonte === 'OFX') && l.valor < 0) {
@@ -1593,22 +1626,29 @@ async function desvinculardoBoleto(id) {
   render(); updStats(); renderDRE(); autoSv();
 }
 
-function verVinculoDRE(id) {
+async function verVinculoDRE(id) {
   const t = TXS.find(x => String(x.id) === String(id));
   if (!t) return;
+
   if (t.fonte === 'EXTRATO' && t.boletoId) {
-    // Busca o boleto correspondente na lista
+    // Busca primeiro em TXS, se não achar busca no banco
     const boleto = TXS.find(x => String(x.boletoId) === String(t.boletoId) && x.fonte?.startsWith('BOLETO'));
     if (boleto) {
-      alert(`🔗 Extrato vinculado ao boleto:\n\n${boleto.lancamento}\nFornecedor: ${boleto.razaoSocial||'—'}\nValor: ${fmt.brl(Math.abs(parseFloat(boleto.valor||0)))}\nData: ${fmt.date(boleto.data)}`);
+      alert(`🔗 Extrato vinculado ao boleto:\n\n📄 ${boleto.lancamento}\nFornecedor: ${boleto.razaoSocial||'—'}\nValor: ${fmt.brl(Math.abs(parseFloat(boleto.valor||0)))}\nVencimento: ${fmt.date(boleto.data)}`);
     } else {
-      alert(`🔗 Este lançamento está vinculado ao boleto ID ${t.boletoId}.\nO boleto pode estar em outro mês.`);
+      // Busca no banco
+      const d = await api.get(`/api/boletos/${t.boletoId}`);
+      if (d.ok && d.data) {
+        const b = d.data;
+        alert(`🔗 Extrato vinculado ao boleto:\n\n📄 ${b.produto||b.fornecedor||'—'}\nFornecedor: ${b.fornecedor||'—'}\nNF: ${b.nf||'—'} · Parcela: ${b.parcela||'1'}\nValor: ${fmt.brl(Math.abs(parseFloat(b.valor||0)))}\nVencimento: ${fmt.date(b.vencimento)}`);
+      } else {
+        alert(`🔗 Boleto ID ${t.boletoId} vinculado.\nNão foi possível carregar os detalhes.`);
+      }
     }
   } else if (t.fonte?.startsWith('BOLETO') && t.vinculadoA) {
-    // Busca o extrato correspondente
     const extrato = TXS.find(x => String(x.boletoId) === String(t.boletoId) && x.fonte === 'EXTRATO');
     if (extrato) {
-      alert(`✅ Boleto pago — lançamento do extrato vinculado:\n\n${extrato.lancamento}\nFornecedor: ${extrato.razaoSocial||'—'}\nValor: ${fmt.brl(Math.abs(parseFloat(extrato.valor||0)))}\nData: ${fmt.date(extrato.data)}`);
+      alert(`✅ Boleto pago pelo extrato:\n\n🏦 ${extrato.lancamento}\nFornecedor: ${extrato.razaoSocial||'—'}\nValor: ${fmt.brl(Math.abs(parseFloat(extrato.valor||0)))}\nData pag.: ${fmt.date(extrato.data)}`);
     } else {
       alert(`✅ Boleto pago — extrato:\n\n${t.vinculadoA}`);
     }
