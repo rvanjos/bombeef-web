@@ -1514,9 +1514,10 @@ async function salvarMes(mes, silent=false) {
   const txsMes = TXS.filter(t => (t.mes || mesRef) === mes);
   console.log(`[salvarMes] mes=${mes} txs=${txsMes.length} sid=${(window._sessoesPorMes||{})[mes]} mesRef=${mesRef}`);
   if (!txsMes.length) { console.warn('[salvarMes] nenhum lançamento para', mes); return; }
+  // Usa o ID da sessão do mês específico — nunca usa sessId de outro mês como fallback
+  // O backend faz upsert por mes_ref quando sessao_id é null
   const sid = (window._sessoesPorMes && window._sessoesPorMes[mes])
-           || (mes === mesRef ? sessId : null)
-           || sessId; // fallback: usa sessão ativa se não achar pelo mês
+           || (mes === mesRef ? sessId : null);
   try {
     const d = await api.post('/api/dre/salvar', {
       sessao_id: sid,
