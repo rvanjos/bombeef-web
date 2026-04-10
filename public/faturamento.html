@@ -120,6 +120,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
     <button class="tab" onclick="showTab('periodos',this)">📅 Períodos</button>
     <button class="tab" onclick="showTab('mensal',this)">📆 Mensal</button>
     <button class="tab" onclick="showTab('metas',this)">🎯 Metas</button>
+    <button class="tab" onclick="showTab('reconciliacao',this)">🔄 Reconciliação</button>
   </div>
 
   <!-- ── VISÃO GERAL ── -->
@@ -193,6 +194,52 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
         <tbody id="tbody-mensal"></tbody>
       </table>
       <div class="empty" id="empty-mensal" style="display:none">Nenhum dado mensal disponível.</div>
+    </div>
+  </div>
+
+  <!-- ── RECONCILIAÇÃO ── -->
+  <div id="sec-reconciliacao" style="display:none">
+    <div class="toolbar" style="margin-bottom:14px">
+      <label style="font-size:12px;font-weight:600;color:var(--muted)">Mês:</label>
+      <input type="month" id="rec-mes" style="padding:6px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px"
+        onchange="carregarReconciliacao()">
+      <span style="font-size:11px;color:var(--muted);margin-left:8px">
+        Cruza vendas do Xmenu com recebimentos do extrato bancário no DRE
+      </span>
+    </div>
+
+    <div id="rec-aviso-dre" style="display:none;background:#fff8e1;border:1px solid #f59e0b;border-radius:8px;padding:12px 16px;margin-bottom:12px;font-size:12px;color:#856404">
+      ⚠️ Sessão DRE não encontrada para este mês. Importe o extrato no DRE para ver a reconciliação completa.
+    </div>
+
+    <!-- Cards de resumo -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px" id="rec-cards">
+      <div class="kpi azul"><div class="kpi-l">Vendido (Xmenu)</div><div class="kpi-v" id="rec-xmenu">—</div><div class="kpi-s" id="rec-xmenu-s"></div></div>
+      <div class="kpi verde"><div class="kpi-l">Recebido (Extrato)</div><div class="kpi-v" id="rec-extrato">—</div><div class="kpi-s" id="rec-extrato-s"></div></div>
+      <div class="kpi laranja"><div class="kpi-l">Diferença</div><div class="kpi-v" id="rec-diff">—</div><div class="kpi-s" id="rec-diff-s">a receber / em aberto</div></div>
+      <div class="kpi vermelho"><div class="kpi-l">Taxa Efetiva Est.</div><div class="kpi-v" id="rec-taxa">—</div><div class="kpi-s">custo financeiro aprox.</div></div>
+    </div>
+
+    <!-- Breakdown extrato -->
+    <div class="card" style="padding:16px;margin-bottom:12px" id="rec-breakdown" style="display:none">
+      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:12px">Recebimentos por tipo</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px" id="rec-breakdown-grid"></div>
+    </div>
+
+    <!-- Tabela por dia -->
+    <div class="card" id="rec-tabela-wrap">
+      <table class="tbl">
+        <thead><tr>
+          <th>Data</th>
+          <th style="text-align:right">Vendido Xmenu</th>
+          <th style="text-align:right">Clientes</th>
+          <th style="text-align:right">Ticket Médio</th>
+          <th style="text-align:center">NFCE / MEI</th>
+          <th style="text-align:center">Status</th>
+        </tr></thead>
+        <tbody id="rec-tbody"></tbody>
+      </table>
+      <div class="empty" id="rec-empty" style="display:none">Selecione um mês com dados do Xmenu importados.</div>
     </div>
   </div>
 
@@ -337,6 +384,86 @@ function showTab(t, btn){
   if(t==='periodos') carregarPeriodos();
   if(t==='mensal') carregarMensal();
   if(t==='metas') carregarMetas();
+  if(t==='reconciliacao') { iniciarReconciliacao(); }
+}
+
+function iniciarReconciliacao() {
+  const el = document.getElementById('rec-mes');
+  if (!el.value) {
+    const hoje = new Date();
+    el.value = hoje.getFullYear() + '-' + String(hoje.getMonth()+1).padStart(2,'0');
+  }
+  carregarReconciliacao();
+}
+
+// ── RECONCILIAÇÃO ────────────────────────────────────────────────────────────
+async function carregarReconciliacao() {
+  const mesInput = document.getElementById('rec-mes').value; // YYYY-MM
+  if (!mesInput) return;
+  const [yyyy, mm] = mesInput.split('-');
+  const mes = mm + '/' + yyyy;
+
+  const d = await api.get('/api/faturamento/reconciliacao/' + encodeURIComponent(mes));
+  if (!d.ok) { toast('Erro: ' + d.erro); return; }
+
+  // Aviso DRE
+  document.getElementById('rec-aviso-dre').style.display = d.tem_dre ? 'none' : '';
+
+  // Cards
+  const diff = d.diferenca;
+  const diffStr = (diff >= 0 ? '+' : '') + fmt.brl(Math.abs(diff));
+  const diffColor = diff >= 0 ? 'var(--green)' : 'var(--red-l)';
+  document.getElementById('rec-xmenu').textContent   = fmt.brl(d.xmenu.total);
+  document.getElementById('rec-xmenu-s').textContent = d.xmenu.dias + ' dias · ' + d.xmenu.pessoas + ' clientes';
+  document.getElementById('rec-extrato').textContent = fmt.brl(d.extrato.total);
+  document.getElementById('rec-extrato-s').textContent = d.extrato.lancamentos + ' lançamentos';
+  document.getElementById('rec-diff').textContent     = fmt.brl(Math.abs(diff));
+  document.getElementById('rec-diff').style.color     = diffColor;
+  document.getElementById('rec-diff-s').textContent   = diff < 0 ? '⚠️ a receber / em trânsito' : diff > 0 ? '✅ recebeu mais que vendeu' : '✅ zerado';
+  document.getElementById('rec-taxa').textContent     = d.taxa_efetiva_pct.toFixed(1) + '%';
+  document.getElementById('rec-taxa').style.color     = d.taxa_efetiva_pct > 5 ? 'var(--red-l)' : 'var(--green)';
+
+  // Breakdown
+  const grid = document.getElementById('rec-breakdown-grid');
+  grid.innerHTML = [
+    { label: '💳 Cartão/Máquininha', val: d.extrato.cartao, pct: d.extrato.total > 0 ? Math.round(d.extrato.cartao/d.extrato.total*100) : 0 },
+    { label: '📲 PIX / TED / DOC',   val: d.extrato.pix,    pct: d.extrato.total > 0 ? Math.round(d.extrato.pix/d.extrato.total*100)    : 0 },
+    { label: '📦 Outros',             val: d.extrato.outros, pct: d.extrato.total > 0 ? Math.round(d.extrato.outros/d.extrato.total*100) : 0 },
+  ].map(function(item) {
+    return '<div style="text-align:center">'
+      + '<div style="font-size:11px;color:var(--muted);margin-bottom:4px">' + item.label + '</div>'
+      + '<div style="font-size:18px;font-weight:700;font-family:monospace">' + fmt.brl(item.val) + '</div>'
+      + '<div style="font-size:11px;color:var(--muted)">' + item.pct + '% do total</div>'
+      + '</div>';
+  }).join('');
+  document.getElementById('rec-breakdown').style.display = d.tem_dre ? '' : 'none';
+
+  // Tabela por dia
+  const tbody = document.getElementById('rec-tbody');
+  const empty = document.getElementById('rec-empty');
+  if (!d.xmenu.por_dia.length) {
+    tbody.innerHTML = '';
+    empty.style.display = '';
+    return;
+  }
+  empty.style.display = 'none';
+  tbody.innerHTML = d.xmenu.por_dia.map(function(dia) {
+    var pag = dia.pagamentos ? (typeof dia.pagamentos === 'string' ? JSON.parse(dia.pagamentos) : dia.pagamentos) : {};
+    var nfce = pag.nfce || {};
+    var mei  = pag.mei  || {};
+    var dt = dia.data ? new Date(dia.data + 'T12:00:00').toLocaleDateString('pt-BR') : '—';
+    return '<tr>'
+      + '<td style="font-weight:600">' + dt + '</td>'
+      + '<td style="text-align:right;font-family:monospace;font-weight:600">' + fmt.brl(parseFloat(dia.fat_bruto)) + '</td>'
+      + '<td style="text-align:right">' + (dia.total_pessoas || 0) + '</td>'
+      + '<td style="text-align:right;font-family:monospace">' + fmt.brl(parseFloat(dia.ticket_medio || 0)) + '</td>'
+      + '<td style="text-align:center;font-size:11px">'
+        + (nfce.qtd ? '<span style="background:#dbeafe;color:#1e40af;padding:1px 5px;border-radius:3px">NFCE ' + nfce.qtd + 'x</span> ' : '')
+        + (mei.qtd  ? '<span style="background:#dcfce7;color:#166534;padding:1px 5px;border-radius:3px">MEI ' + mei.qtd + 'x</span>' : '')
+      + '</td>'
+      + '<td style="text-align:center"><span style="font-size:10px;background:#f0f0f0;padding:2px 6px;border-radius:3px">importado</span></td>'
+      + '</tr>';
+  }).join('');
 }
 
 // ── LIMPAR ───────────────────────────────────────────────────────────────────

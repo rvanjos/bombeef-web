@@ -384,6 +384,83 @@ module.exports = function(pool) {
     }
   });
 
+  // ── GET /reconciliacao/:mes — cruza Xmenu (listagem) vs Extrato (DRE) ─────
+  r.get('/reconciliacao/:mes', async (req, res) => {
+    try {
+      const mes = decodeURIComponent(req.params.mes); // MM/YYYY
+
+      // 1. Faturamento Xmenu por dia
+      const { rows: diasXmenu } = await pool.query(`
+        SELECT
+          data_inicio::text AS data,
+          fat_bruto,
+          total_pessoas,
+          ticket_medio,
+          pagamentos
+        FROM faturamento_periodos
+        WHERE TO_CHAR(data_inicio,'MM/YYYY') = $1 AND tipo_periodo = 'dia'
+        ORDER BY data_inicio
+      `, [mes]);
+
+      // 2. Receitas do extrato DRE no mês (sessões salvas)
+      const { rows: sessDRE } = await pool.query(`
+        SELECT dados_json
+        FROM dre_sessoes
+        WHERE mes_ref = $1
+        ORDER BY atualizado_em DESC LIMIT 1
+      `, [mes]);
+
+      let recebidoExtrato = 0;
+      let recebidoPix = 0;
+      let recebidoCartao = 0;
+      let recebidoOutros = 0;
+      const lancamentosReceita = [];
+
+      if (sessDRE.length) {
+        const txs = sessDRE[0].dados_json?.transactions || [];
+        for (const t of txs) {
+          if (t.ignorar) continue;
+          if (t.categoria !== 'VENDAS DE MERCADORIAS') continue;
+          const v = parseFloat(t.valor || 0);
+          if (v <= 0) continue;
+          recebidoExtrato += v;
+          const lanc = (t.lancamento || '').toUpperCase();
+          if (/PIX|TED|DOC/.test(lanc)) recebidoPix += v;
+          else if (/REDE|VISA|MAST|ELO|AMEX|HIPER|TICKET|ALELO|VR |SWILE|PLUXEE/.test(lanc)) recebidoCartao += v;
+          else recebidoOutros += v;
+          lancamentosReceita.push({ data: t.data, lancamento: t.lancamento, valor: v, fonte: t.fonte });
+        }
+      }
+
+      const totalXmenu = diasXmenu.reduce((s, d) => s + parseFloat(d.fat_bruto || 0), 0);
+      const totalPessoas = diasXmenu.reduce((s, d) => s + parseInt(d.total_pessoas || 0), 0);
+      const diferenca = recebidoExtrato - totalXmenu; // negativo = ainda a receber
+      const taxaEfetiva = totalXmenu > 0 ? ((totalXmenu - recebidoExtrato) / totalXmenu * 100) : 0;
+
+      res.json({
+        ok: true,
+        mes,
+        xmenu: {
+          total: Math.round(totalXmenu * 100) / 100,
+          dias: diasXmenu.length,
+          pessoas: totalPessoas,
+          ticket_medio: totalPessoas > 0 ? Math.round(totalXmenu / totalPessoas * 100) / 100 : 0,
+          por_dia: diasXmenu,
+        },
+        extrato: {
+          total: Math.round(recebidoExtrato * 100) / 100,
+          pix: Math.round(recebidoPix * 100) / 100,
+          cartao: Math.round(recebidoCartao * 100) / 100,
+          outros: Math.round(recebidoOutros * 100) / 100,
+          lancamentos: lancamentosReceita.length,
+        },
+        diferenca: Math.round(diferenca * 100) / 100,
+        taxa_efetiva_pct: Math.round(taxaEfetiva * 100) / 100,
+        tem_dre: sessDRE.length > 0,
+      });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
   // ── DELETE /limpar — apaga todos os registros de faturamento ───────────────
   r.delete('/limpar', async (req, res) => {
     try {
