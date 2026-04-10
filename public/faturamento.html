@@ -602,25 +602,27 @@ async function carregarMensal(){
   const em = document.getElementById('empty-mensal');
   if(!d.data.length){ tb.innerHTML=''; em.style.display=''; return; }
   em.style.display='none';
-  tb.innerHTML = d.data.map(m => {
-    const pctNfce = m.fat_bruto > 0 ? Math.round(m.fat_nfce / m.fat_bruto * 100) : 0;
-    const pctMei  = m.fat_bruto > 0 ? Math.round(m.fat_mei  / m.fat_bruto * 100) : 0;
-    return `<tr>
-    <td style="font-weight:700">${m.mes}</td>
-    <td style="text-align:center;color:var(--muted)">${m.periodos}</td>
-    <td style="text-align:right">${fmt.n(m.total_pessoas)}<br><span style="font-size:10px;color:var(--muted)">ticket ${fmt.brl(m.ticket_medio_avg)}</span></td>
-    <td style="text-align:right;font-family:'DM Mono',monospace">${fmt.brl(m.ticket_medio_avg)}</td>
-    <td style="text-align:right">
-      ${m.fat_nfce > 0 ? `<span style="font-family:'DM Mono',monospace;font-weight:600">${fmt.brl(parseFloat(m.fat_nfce))}</span><br>
-      <span style="font-size:10px;color:var(--muted)">${m.qtd_nfce} pedidos · ${pctNfce}%</span>` : '<span style="color:var(--muted)">—</span>'}
-    </td>
-    <td style="text-align:right">
-      ${m.fat_mei > 0 ? `<span style="font-family:'DM Mono',monospace">${fmt.brl(parseFloat(m.fat_mei))}</span><br>
-      <span style="font-size:10px;color:var(--muted)">${m.qtd_mei} pedidos · ${pctMei}%</span>` : '<span style="color:var(--muted)">—</span>'}
-    </td>
-    <td style="text-align:right;font-family:'DM Mono',monospace;font-weight:700;color:var(--green)">${fmt.brl(m.fat_bruto)}</td>
-    <td style="text-align:right;font-family:'DM Mono',monospace">${fmt.brl(m.fat_liquido)}</td>
-  </tr>`).join('');
+  tb.innerHTML = d.data.map(function(m) {
+    var pctNfce = m.fat_bruto > 0 ? Math.round(m.fat_nfce / m.fat_bruto * 100) : 0;
+    var pctMei  = m.fat_bruto > 0 ? Math.round(m.fat_mei  / m.fat_bruto * 100) : 0;
+    var celNfce = m.fat_nfce > 0
+      ? '<span style="font-family:monospace;font-weight:600">' + fmt.brl(parseFloat(m.fat_nfce)) + '</span>'
+        + '<br><span style="font-size:10px;color:var(--muted)">' + m.qtd_nfce + ' pedidos · ' + pctNfce + '%</span>'
+      : '<span style="color:var(--muted)">—</span>';
+    var celMei = m.fat_mei > 0
+      ? '<span style="font-family:monospace">' + fmt.brl(parseFloat(m.fat_mei)) + '</span>'
+        + '<br><span style="font-size:10px;color:var(--muted)">' + m.qtd_mei + ' pedidos · ' + pctMei + '%</span>'
+      : '<span style="color:var(--muted)">—</span>';
+    return '<tr>'
+      + '<td style="font-weight:700">' + m.mes + '</td>'
+      + '<td style="text-align:center;color:var(--muted)">' + m.periodos + '</td>'
+      + '<td style="text-align:right">' + fmt.n(m.total_pessoas) + '</td>'
+      + '<td style="text-align:right;font-family:monospace">' + fmt.brl(m.ticket_medio_avg) + '</td>'
+      + '<td style="text-align:right">' + celNfce + '</td>'
+      + '<td style="text-align:right">' + celMei + '</td>'
+      + '<td style="text-align:right;font-family:monospace;font-weight:700;color:var(--green)">' + fmt.brl(m.fat_bruto) + '</td>'
+      + '</tr>';
+  }).join('');
 }
 
 // ── Import ────────────────────────────────────────────────────────────────────
