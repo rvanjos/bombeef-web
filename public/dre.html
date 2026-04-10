@@ -1428,6 +1428,8 @@ function render() {
   const lista = TXS.filter(t => {
     // Esconde BOLETO_PREV se já existe um EXTRATO vinculado a ele
     if (t.fonte === 'BOLETO_PREV' && t.boletoId && boletosQuitadosPorExtrato.has(String(t.boletoId))) return false;
+    // PREV_RECEITA nunca é ocultada
+    if (t.fonte === 'PREV_RECEITA') return true;
     if (q && !t.lancamento.toLowerCase().includes(q) && !(t.razaoSocial||'').toLowerCase().includes(q)) return false;
     if (grp) {
       if (grp.startsWith('cat:')) {
@@ -1448,6 +1450,7 @@ function render() {
 
   const bads = {OFX:'<span class="badge bofx">OFX</span>',CC:'<span class="badge bcc">CC</span>',
     BOLETO:'<span class="badge bbol">Boleto</span>',BOLETO_PREV:'<span class="badge bbolp">Prev.</span>',
+    PREV_RECEITA:'<span class="badge" style="background:#e8f7ef;color:#1a7a4a;font-weight:700">🎯 Meta</span>',
     MANUAL:'<span class="badge bman">Manual</span>'};
   const needsReviewBadge = '<span class="needs-review-badge">⚠️ VERIFICAR</span>';
 
@@ -2355,9 +2358,52 @@ async function importBoletos(){
   const d=await api.get(`/api/boletos/classificador?mes=${mesRef}`);
   if(!d.ok){toast('Erro: '+(d.erro||'falha'));return;}
   if(!d.data?.length){toast('Nenhum boleto/provisão para '+mesRef);return;}
-  // Ordena por data de vencimento antes de adicionar
   const ordenados = [...d.data].sort((a,b)=>(a.data||'').localeCompare(b.data||''));
   addLancs(ordenados, `Boletos ${mesRef}`);
+
+  // Busca meta de faturamento do mês e injeta como previsão de receita
+  try {
+    const mesEnc = encodeURIComponent(mesRef);
+    const dm = await api.get(`/api/faturamento/meta/${mesEnc}`);
+    if (dm.ok && dm.data && dm.data.meta > 0) {
+      const meta = parseFloat(dm.data.meta);
+      const fatReal = parseFloat(dm.fat_real || 0);
+      const previsto = Math.max(0, meta - fatReal); // só a parte ainda não realizada
+
+      // Remove previsão anterior se existir
+      const idPrev = `fat_prev_${mesRef.replace('/','_')}`;
+      const idxPrev = TXS.findIndex(t => t.id === idPrev);
+      if (idxPrev >= 0) TXS.splice(idxPrev, 1);
+
+      if (previsto > 0) {
+        const [mm, yyyy] = mesRef.split('/');
+        const dtPrev = `${yyyy}-${mm}-28`; // último dia do mês como referência
+        TXS.push({
+          id: idPrev,
+          data: dtPrev,
+          mes: mesRef,
+          mesCaixa: mesRef,
+          lancamento: `PREVISÃO DE RECEITA (Meta: ${fmt.brl(meta)}${fatReal>0?' · Realiz.: '+fmt.brl(fatReal):''})`+
+                      (fatReal>0?` — Falta: ${fmt.brl(previsto)}`:''),
+          razaoSocial: 'Meta de Faturamento',
+          valor: previsto,
+          categoria: 'VENDAS DE MERCADORIAS',
+          fonte: 'PREV_RECEITA',
+          ignorar: false,
+        });
+        toast(`✅ Boletos carregados + Previsão de receita: ${fmt.brl(previsto)} (meta ${fmt.brl(meta)}, realiz. ${fmt.brl(fatReal)})`);
+      } else if (fatReal >= meta) {
+        toast(`✅ Boletos carregados · Meta de ${fmt.brl(meta)} já atingida! 🎉`);
+      } else {
+        toast(`✅ Boletos carregados (sem meta definida para ${mesRef})`);
+      }
+    } else {
+      toast(`✅ Boletos carregados · Sem meta definida para ${mesRef}`);
+    }
+  } catch(e) {
+    toast('✅ Boletos carregados');
+  }
+
   showTable();
   render(); updStats(); renderDRE(); autoSv();
 }

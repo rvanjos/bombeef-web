@@ -35,6 +35,17 @@ module.exports = function(pool) {
       CREATE INDEX IF NOT EXISTS idx_fat_data ON faturamento_periodos(data_inicio);
       CREATE INDEX IF NOT EXISTS idx_fat_tipo ON faturamento_periodos(tipo_periodo);
     `).catch(()=>{});
+    // Tabela de metas mensais de faturamento
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS faturamento_metas (
+        id         SERIAL PRIMARY KEY,
+        mes_ref    TEXT NOT NULL UNIQUE,  -- MM/YYYY
+        meta       NUMERIC(12,2) NOT NULL DEFAULT 0,
+        obs        TEXT,
+        criado_em  TIMESTAMPTZ DEFAULT NOW(),
+        atualizado_em TIMESTAMPTZ DEFAULT NOW()
+      )
+    `).catch(()=>{});
   }
   initTable().catch(e => console.error('[faturamento] initTable:', e.message));
 
@@ -235,6 +246,58 @@ module.exports = function(pool) {
         GROUP BY TO_CHAR(data_inicio,'MM/YYYY'), EXTRACT(YEAR FROM data_inicio), EXTRACT(MONTH FROM data_inicio)
         ORDER BY EXTRACT(YEAR FROM data_inicio) DESC, EXTRACT(MONTH FROM data_inicio) DESC
       `, params);
+      res.json({ ok: true, data: rows });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ── GET /meta/:mes — busca meta do mês ──────────────────────────────────
+  r.get('/meta/:mes', async (req, res) => {
+    try {
+      const mes = decodeURIComponent(req.params.mes); // MM/YYYY
+      const { rows } = await pool.query(
+        `SELECT * FROM faturamento_metas WHERE mes_ref=$1`, [mes]
+      );
+      // Também retorna o faturamento real já lançado no mês
+      const real = await pool.query(`
+        SELECT COALESCE(SUM(fat_bruto),0) AS fat_bruto
+        FROM faturamento_periodos
+        WHERE TO_CHAR(data_inicio,'MM/YYYY') = $1
+      `, [mes]);
+      res.json({ ok: true, data: rows[0]||null, fat_real: parseFloat(real.rows[0]?.fat_bruto||0) });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ── POST /meta — salva/atualiza meta do mês ───────────────────────────────
+  r.post('/meta', async (req, res) => {
+    const { mes_ref, meta, obs } = req.body;
+    if (!mes_ref || meta === undefined) return res.status(400).json({ ok: false, erro: 'mes_ref e meta obrigatórios' });
+    try {
+      const { rows } = await pool.query(`
+        INSERT INTO faturamento_metas (mes_ref, meta, obs)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (mes_ref) DO UPDATE SET
+          meta = EXCLUDED.meta,
+          obs  = COALESCE(EXCLUDED.obs, faturamento_metas.obs),
+          atualizado_em = NOW()
+        RETURNING *
+      `, [mes_ref, parseFloat(meta), obs||null]);
+      res.json({ ok: true, data: rows[0] });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ── GET /metas — lista todas as metas ────────────────────────────────────
+  r.get('/metas', async (req, res) => {
+    try {
+      const { rows } = await pool.query(`
+        SELECT m.*,
+          COALESCE((
+            SELECT SUM(fat_bruto) FROM faturamento_periodos
+            WHERE TO_CHAR(data_inicio,'MM/YYYY') = m.mes_ref
+          ),0) AS fat_real
+        FROM faturamento_metas m
+        ORDER BY m.mes_ref DESC
+        LIMIT 24
+      `);
       res.json({ ok: true, data: rows });
     } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
   });

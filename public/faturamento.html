@@ -119,6 +119,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
     <button class="tab active" id="tab-visao" onclick="showTab('visao',this)">📊 Visão Geral</button>
     <button class="tab" onclick="showTab('periodos',this)">📅 Períodos</button>
     <button class="tab" onclick="showTab('mensal',this)">📆 Mensal</button>
+    <button class="tab" onclick="showTab('metas',this)">🎯 Metas</button>
   </div>
 
   <!-- ── VISÃO GERAL ── -->
@@ -191,6 +192,63 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
     </div>
   </div>
 
+  <!-- ── METAS ── -->
+  <div id="sec-metas" style="display:none">
+    <div class="toolbar">
+      <button class="btn btn-g" onclick="abrirModalMeta()">🎯 Definir Meta do Mês</button>
+      <span style="font-size:12px;color:var(--muted)">As metas aparecem como previsão de receita no DRE</span>
+    </div>
+    <div class="card">
+      <table class="tbl" id="tbl-metas">
+        <thead><tr>
+          <th>Mês</th>
+          <th style="text-align:right">Meta de Faturamento</th>
+          <th style="text-align:right">Realizado</th>
+          <th style="text-align:right">% Atingido</th>
+          <th style="text-align:center">Barra</th>
+          <th>Obs</th>
+          <th></th>
+        </tr></thead>
+        <tbody id="tbody-metas"></tbody>
+      </table>
+      <div class="empty" id="empty-metas" style="display:none">Nenhuma meta definida ainda. Clique em "Definir Meta do Mês".</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Modal Meta -->
+<div class="modal-bg" id="modal-meta">
+  <div class="modal">
+    <div class="modal-head" style="background:var(--green)">
+      <h3>🎯 Meta de Faturamento</h3>
+      <button class="modal-close" onclick="fecharModalMeta()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="fg">
+        <label>Mês de Referência *</label>
+        <input type="month" id="meta-mes" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:7px;font-size:13px">
+      </div>
+      <div class="fg">
+        <label>Meta de Faturamento Bruto (R$) *</label>
+        <input type="number" id="meta-valor" placeholder="Ex: 150000" step="100"
+          style="width:100%;padding:8px;border:1px solid var(--border);border-radius:7px;font-size:13px">
+      </div>
+      <div class="fg">
+        <label>Observação (opcional)</label>
+        <input type="text" id="meta-obs" placeholder="Ex: Meta ajustada por feriados"
+          style="width:100%;padding:8px;border:1px solid var(--border);border-radius:7px;font-size:13px">
+      </div>
+      <div style="background:#e8f7ef;border-radius:8px;padding:10px 12px;font-size:12px;color:#155724;margin-top:8px">
+        💡 A meta aparecerá no DRE como <strong>PREVISÃO DE RECEITA</strong> no mês correspondente.
+        Conforme você importar o faturamento real, o realizado substitui a previsão automaticamente.
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-s" onclick="fecharModalMeta()">Cancelar</button>
+      <button class="btn btn-g" onclick="salvarMeta()">💾 Salvar Meta</button>
+    </div>
+  </div>
 </div>
 
 <!-- Modal Importar CSV -->
@@ -240,12 +298,77 @@ function init(){
 }
 
 function showTab(t, btn){
-  ['sec-visao','sec-periodos','sec-mensal'].forEach(s => document.getElementById(s).style.display='none');
+  ['sec-visao','sec-periodos','sec-mensal','sec-metas'].forEach(s => document.getElementById(s).style.display='none');
   document.getElementById('sec-'+t).style.display='';
   document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
   if(btn) btn.classList.add('active');
   if(t==='periodos') carregarPeriodos();
   if(t==='mensal') carregarMensal();
+  if(t==='metas') carregarMetas();
+}
+
+// ── METAS ────────────────────────────────────────────────────────────────────
+async function carregarMetas() {
+  const d = await api.get('/api/faturamento/metas');
+  const tbody = document.getElementById('tbody-metas');
+  const empty = document.getElementById('empty-metas');
+  if (!d.ok || !d.data?.length) {
+    tbody.innerHTML = '';
+    empty.style.display = '';
+    return;
+  }
+  empty.style.display = 'none';
+  tbody.innerHTML = d.data.map(m => {
+    const pct = m.meta > 0 ? Math.min(Math.round(m.fat_real / m.meta * 100), 100) : 0;
+    const over = m.meta > 0 && m.fat_real >= m.meta;
+    return `<tr>
+      <td style="font-weight:600">${m.mes_ref}</td>
+      <td style="text-align:right;font-family:'DM Mono',monospace">${fmt.brl(m.meta)}</td>
+      <td style="text-align:right;font-family:'DM Mono',monospace;color:${over?'var(--green)':'var(--text)'}">${fmt.brl(m.fat_real)}</td>
+      <td style="text-align:right;font-weight:700;color:${over?'var(--green)':pct>=80?'var(--orange)':'var(--red-l)'}">${pct}%</td>
+      <td style="min-width:120px;padding:8px 12px">
+        <div style="background:#f0ebe4;border-radius:4px;height:8px;overflow:hidden">
+          <div style="height:100%;width:${pct}%;background:${over?'var(--green)':pct>=80?'var(--orange)':'var(--red-l)'};border-radius:4px;transition:.3s"></div>
+        </div>
+      </td>
+      <td style="font-size:11px;color:var(--muted)">${m.obs||'—'}</td>
+      <td>
+        <button onclick="abrirModalMeta('${m.mes_ref}',${m.meta},'${m.obs||''}')"
+          style="background:none;border:none;cursor:pointer;font-size:14px;opacity:.6" title="Editar">✏️</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function abrirModalMeta(mes, meta, obs) {
+  const hoje = new Date();
+  const mm = String(hoje.getMonth()+1).padStart(2,'0');
+  const yyyy = hoje.getFullYear();
+  document.getElementById('meta-mes').value = mes
+    ? `${mes.slice(3)}-${mes.slice(0,2)}`
+    : `${yyyy}-${mm}`;
+  document.getElementById('meta-valor').value = meta || '';
+  document.getElementById('meta-obs').value = obs || '';
+  document.getElementById('modal-meta').classList.add('open');
+  setTimeout(() => document.getElementById('meta-valor').focus(), 100);
+}
+
+function fecharModalMeta() {
+  document.getElementById('modal-meta').classList.remove('open');
+}
+
+async function salvarMeta() {
+  const mesInput = document.getElementById('meta-mes').value; // YYYY-MM
+  const meta = parseFloat(document.getElementById('meta-valor').value);
+  const obs = document.getElementById('meta-obs').value.trim();
+  if (!mesInput || !meta || meta <= 0) { toast('Informe o mês e o valor da meta'); return; }
+  const [yyyy, mm] = mesInput.split('-');
+  const mes_ref = `${mm}/${yyyy}`;
+  const d = await api.post('/api/faturamento/meta', { mes_ref, meta, obs });
+  if (!d.ok) { toast('Erro: ' + d.erro); return; }
+  toast(`✅ Meta de ${mes_ref} salva: ${fmt.brl(meta)}`);
+  fecharModalMeta();
+  carregarMetas();
 }
 
 // ── Carregar visão geral ──────────────────────────────────────────────────────
