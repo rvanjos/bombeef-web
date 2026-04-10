@@ -1474,7 +1474,9 @@ async function salvarMes(mes, silent=false) {
   const txsMes = TXS.filter(t => (t.mes || mesRef) === mes);
   console.log(`[salvarMes] mes=${mes} txs=${txsMes.length} sid=${(window._sessoesPorMes||{})[mes]} mesRef=${mesRef}`);
   if (!txsMes.length) { console.warn('[salvarMes] nenhum lançamento para', mes); return; }
-  const sid = (window._sessoesPorMes && window._sessoesPorMes[mes]) || (mes === mesRef ? sessId : null);
+  const sid = (window._sessoesPorMes && window._sessoesPorMes[mes])
+           || (mes === mesRef ? sessId : null)
+           || sessId; // fallback: usa sessão ativa se não achar pelo mês
   try {
     const d = await api.post('/api/dre/salvar', {
       sessao_id: sid,
@@ -1544,7 +1546,9 @@ function aplicarBulk() {
     fornecedores.forEach(k=>supMem[k]=cat);
   }
   toast(`✅ ${n} lançamentos classificados como "${cat}"`);
-  limparSel(); render(); updStats(); renderDRE(); autoSv();
+  limparSel(); render(); updStats(); renderDRE();
+  // Salva imediatamente (sem debounce) pois bulk pode afetar muitos meses
+  salvarTodos(true);
 }
 
 function bulkIgn() {
@@ -2381,7 +2385,7 @@ function autoSv(){
   if (!_inicializado || !TXS.length) return;
   setSt('load');
   clearTimeout(_sv);
-  _sv=setTimeout(()=>salvarTodos(true),2000);
+  _sv=setTimeout(()=>salvarTodos(true),800);
 }
 
 async function salvarTodos(silent=false) {
@@ -2417,7 +2421,9 @@ async function salvar(silent=false, tentativa=1){
     for (const mes of meses) {
       const txsMes = porMes[mes];
       // Para o mês atual, usa sessId conhecido; outros meses usam null (backend encontra pelo mes_ref)
-      const sid = (window._sessoesPorMes && window._sessoesPorMes[mes]) || (mes === mesRef ? sessId : null);
+      const sid = (window._sessoesPorMes && window._sessoesPorMes[mes])
+               || (mes === mesRef ? sessId : null)
+               || sessId;
       const d = await api.post('/api/dre/salvar', {
         sessao_id: sid,
         mes_ref: mes,
@@ -2479,6 +2485,9 @@ async function loadSessao(id){
   const d=await api.get(`/api/dre/sessoes/${id}`); if(!d.ok){toast('Erro');return;}
   sessId=d.data.id; mesRef=d.data.mes_ref;
   TXS=d.data.dados_json?.transactions||[]; files=d.data.dados_json?.loadedFiles||[]; supMem=d.data.dados_json?.supplierMem||{};
+  // Registra o mapeamento mês→sessão para o autoSave funcionar
+  if (!window._sessoesPorMes) window._sessoesPorMes = {};
+  window._sessoesPorMes[mesRef] = d.data.id;
   const[m,y]=mesRef.split('/'); document.getElementById('f-mesref').value=`${y}-${m}`;
   document.getElementById('dre-mes-label').textContent=mesRef;
   if(TXS.length)showTable();
