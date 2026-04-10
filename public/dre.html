@@ -1296,11 +1296,25 @@ function addLancs(novos, fileName) {
   const exBoleto  = new Set(TXS.filter(t=>t.boletoId).map(t=>String(t.boletoId)));
   const exHash    = new Set(TXS.map(t=>`${t.data}|${String(t.valor)}|${(t.lancamento||'').slice(0,40)}`));
 
-  let n = 0, dup = 0;
+  let n = 0, dup = 0, atualiz = 0;
   for (const l of novos) {
-    // Verifica duplicata
+    // Se boleto já existe → atualiza data/valor/lancamento (pode ter sido editado)
+    if (l.boletoId && exBoleto.has(String(l.boletoId))) {
+      const existing = TXS.find(t => String(t.boletoId) === String(l.boletoId));
+      if (existing) {
+        existing.data     = l.data;
+        existing.mes      = l.mes;
+        existing.mesCaixa = l.mesCaixa;
+        existing.valor    = l.valor;
+        existing.lancamento = l.lancamento;
+        existing.needsReview = l.needsReview;
+        existing.fonte    = l.fonte;
+        atualiz++;
+      }
+      continue;
+    }
+    // Verifica duplicata por fitid ou hash
     if (l.fitid && exFitid.has(l.fitid))       { dup++; continue; }
-    if (l.boletoId && exBoleto.has(String(l.boletoId))) { dup++; continue; }
     const h = `${l.data}|${String(l.valor)}|${(l.lancamento||'').slice(0,40)}`;
     if (exHash.has(h))                          { dup++; continue; }
 
@@ -1316,8 +1330,8 @@ function addLancs(novos, fileName) {
     n++;
   }
   if (!files.includes(fileName)) files.push(fileName);
-  const msg = n > 0
-    ? `✅ ${n} adicionados${dup?' · '+dup+' já existiam':''}`
+  const msg = n > 0 || atualiz > 0
+    ? `✅ ${n} adicionados${atualiz?' · '+atualiz+' atualizados':''}${dup?' · '+dup+' duplicados':''}`
     : `ℹ️ Todos os ${dup} lançamentos já estão no extrato`;
   toast(msg);
   showTable(); updMesFiltro(); render(); updStats(); renderDRE(); autoSv();
@@ -2211,6 +2225,7 @@ async function importBoletos(){
   const ordenados = [...d.data].sort((a,b)=>(a.data||'').localeCompare(b.data||''));
   addLancs(ordenados, `Boletos ${mesRef}`);
   showTable();
+  render(); updStats(); renderDRE(); autoSv();
 }
 
 // ─── LIMPAR ───────────────────────────────────────────────────────────────────
