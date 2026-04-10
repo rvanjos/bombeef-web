@@ -1362,7 +1362,14 @@ function render() {
   const fonte = document.getElementById('f-fonte').value;
   const pend  = document.getElementById('f-pend').checked;
 
+  // Boletos PREV que já foram quitados pelo extrato → ocultar (o extrato já representa)
+  const boletosQuitadosPorExtrato = new Set(
+    TXS.filter(t => t.fonte === 'EXTRATO' && t.boletoId).map(t => String(t.boletoId))
+  );
+
   const lista = TXS.filter(t => {
+    // Esconde BOLETO_PREV se já existe um EXTRATO vinculado a ele
+    if (t.fonte === 'BOLETO_PREV' && t.boletoId && boletosQuitadosPorExtrato.has(String(t.boletoId))) return false;
     if (q && !t.lancamento.toLowerCase().includes(q) && !(t.razaoSocial||'').toLowerCase().includes(q)) return false;
     if (grp) {
       if (grp.startsWith('cat:')) {
@@ -1416,8 +1423,12 @@ function render() {
       <td>${badge}</td>
       <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500" title="${t.lancamento}">
         ${t.lancamento}${isReview?needsReviewBadge:''}
-        ${t.boletoId && t.fonte==='EXTRATO' ? `<br><span style="font-size:9px;background:#dbeafe;color:#1e40af;padding:1px 5px;border-radius:3px;cursor:pointer" onclick="verVinculoDRE('${t.id}')" title="Ver boleto vinculado">🔗 boleto vinculado</span>` : ''}
-        ${t.boletoId && t.fonte?.startsWith('BOLETO') && t.vinculadoA ? `<br><span style="font-size:9px;background:#dcfce7;color:#166534;padding:1px 5px;border-radius:3px;cursor:pointer" onclick="verVinculoDRE('${t.id}')" title="${t.vinculadoA}">✅ ${(t.vinculadoA||'').slice(0,25)}${(t.vinculadoA||'').length>25?'…':''}</span>` : ''}
+        ${t.boletoId && t.fonte==='EXTRATO' ? `
+          <br><span style="display:inline-flex;align-items:center;gap:3px;font-size:9px;background:#dbeafe;color:#1e40af;padding:1px 5px;border-radius:3px;margin-top:2px">
+            <span style="cursor:pointer" onclick="verVinculoDRE('${t.id}')" title="Ver boleto vinculado">🔗 boleto vinculado</span>
+            <span style="cursor:pointer;color:#dc2626;font-weight:700;margin-left:2px" onclick="desvinculardoBoleto('${t.id}')" title="Desvincular deste boleto">✕</span>
+          </span>` : ''}
+        ${t.boletoId && t.fonte?.startsWith('BOLETO') && t.vinculadoA ? `<br><span style="font-size:9px;background:#dcfce7;color:#166534;padding:1px 5px;border-radius:3px;cursor:pointer" onclick="verVinculoDRE('${t.id}')" title="${t.vinculadoA}">✅ ${(t.vinculadoA||'').slice(0,28)}${(t.vinculadoA||'').length>28?'…':''}</span>` : ''}
       </td>
       <td style="font-size:11px;color:var(--muted);max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.razaoSocial||t.portador||'—'}</td>
       <td>
@@ -1532,6 +1543,28 @@ async function salvarMes(mes, silent=false) {
     console.error('[salvarMes] exception:', e);
     setSt('err');
   }
+}
+
+async function desvinculardoBoleto(id) {
+  const t = TXS.find(x => String(x.id) === String(id));
+  if (!t || !t.boletoId) return;
+  const boleto = TXS.find(x => String(x.boletoId) === String(t.boletoId) && x.fonte?.startsWith('BOLETO'));
+  const nomeBoleto = boleto?.lancamento || `Boleto ID ${t.boletoId}`;
+  if (!confirm(`Desvincular "${t.lancamento}" do boleto:\n"${nomeBoleto}"?\n\nO boleto voltará como pendente e o extrato ficará sem vínculo.`)) return;
+  // Desvincular no banco
+  const d = await api.post(`/api/boletos/${t.boletoId}/desvincular-extrato`, {});
+  if (!d.ok) { toast('❌ ' + (d.erro||'Erro')); return; }
+  // Remove o vínculo do extrato em memória
+  t.boletoId = null;
+  t.vinculadoA = null;
+  // Reativa o BOLETO_PREV na lista
+  if (boleto) {
+    boleto.boletoId = null;
+    boleto.vinculadoA = null;
+    boleto.fonte = 'BOLETO_PREV';
+  }
+  toast('✅ Desvinculado! Boleto voltou como pendente.');
+  render(); updStats(); renderDRE(); autoSv();
 }
 
 function verVinculoDRE(id) {
