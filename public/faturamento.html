@@ -220,6 +220,15 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
       <div class="kpi vermelho"><div class="kpi-l">Taxa Efetiva Est.</div><div class="kpi-v" id="rec-taxa">—</div><div class="kpi-s">custo financeiro aprox.</div></div>
     </div>
 
+    <!-- Nota explicativa -->
+    <div id="rec-nota" style="background:#f8f4f0;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:11px;color:var(--muted);line-height:1.6">
+      💡 <strong>Como interpretar:</strong>
+      Débito e PIX entram na conta no mesmo dia — aparecem no extrato imediatamente.
+      Crédito cai com prazo (geralmente D+30) — fica na diferença até entrar.
+      Dinheiro só aparece no extrato quando você depositar na conta.
+      A <strong>Taxa Efetiva Est.</strong> inclui prazo de crédito + dinheiro não depositado — não é só custo de maquininha.
+    </div>
+
     <!-- Breakdown extrato -->
     <div class="card" style="padding:16px;margin-bottom:12px" id="rec-breakdown" style="display:none">
       <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:12px">Recebimentos por tipo</div>
@@ -419,7 +428,10 @@ async function carregarReconciliacao() {
   document.getElementById('rec-extrato-s').textContent = d.extrato.lancamentos + ' lançamentos';
   document.getElementById('rec-diff').textContent     = fmt.brl(Math.abs(diff));
   document.getElementById('rec-diff').style.color     = diffColor;
-  document.getElementById('rec-diff-s').textContent   = diff < 0 ? '⚠️ a receber / em trânsito' : diff > 0 ? '✅ recebeu mais que vendeu' : '✅ zerado';
+  var diffLabel = diff < 0
+    ? '⏳ crédito futuro + dinheiro'
+    : diff > 0 ? '✅ recebeu mais (depósitos de períodos anteriores)' : '✅ zerado';
+  document.getElementById('rec-diff-s').textContent   = diffLabel;
   document.getElementById('rec-taxa').textContent     = d.taxa_efetiva_pct.toFixed(1) + '%';
   document.getElementById('rec-taxa').style.color     = d.taxa_efetiva_pct > 5 ? 'var(--red-l)' : 'var(--green)';
 
