@@ -226,6 +226,12 @@ tr:hover td{background:#faf5f0;}
     <button class="btn-logout" onclick="sair()">Sair</button>
   </div>
 </header>
+<script>
+  // Esconde header e nav mobile quando está dentro de um iframe (portal principal)
+  if (window.self !== window.top) {
+    document.querySelector('header').style.display = 'none';
+  }
+</script>
 
 <!-- ═══ NAV MOBILE ══════════════════════════════════════════ -->
 <div class="mob-config-nav" id="mob-config-nav">
