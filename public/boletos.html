@@ -85,7 +85,39 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
 .forn-cnpj-row{display:flex;gap:8px;align-items:flex-end;margin-top:-6px;margin-bottom:10px;}
 .forn-cnpj-row input{flex:1;}
 .forn-cnpj-row button{padding:8px 12px;white-space:nowrap;}
-@media(max-width:600px)@media(max-width:600px){.fg-row{grid-template-columns:1fr;}.tbl th:nth-child(3),.tbl td:nth-child(3),.tbl th:nth-child(5),.tbl td:nth-child(5){display:none;}}
+@media(max-width:700px){
+  .fg-row{grid-template-columns:1fr;}
+  /* Esconde a tabela e mostra cards */
+  .tbl, .tbl thead, .tbl tbody, .tbl tr, .tbl th, .tbl td { display:none !important; }
+  #empty { display:none !important; }
+  #mob-cards-wrap { display:block !important; }
+  /* Toolbar compacta */
+  .toolbar { flex-wrap:wrap; gap:6px; }
+  .toolbar .btn { font-size:11px; padding:6px 10px; }
+  .search-wrap input { font-size:13px; }
+  /* KPIs 2x2 */
+  .kpi-row { grid-template-columns:1fr 1fr !important; }
+}
+/* Cards mobile (ocultos no desktop) */
+#mob-cards-wrap { display:none; }
+.mob-boleto-card {
+  background:var(--white);
+  border:1px solid var(--border);
+  border-radius:12px;
+  padding:14px 16px;
+  margin-bottom:10px;
+  box-shadow:0 1px 6px rgba(0,0,0,.06);
+  position:relative;
+}
+.mob-boleto-card.vencido { border-left:4px solid var(--red-l); }
+.mob-boleto-card.pago    { border-left:4px solid #2ecc71; opacity:.85; }
+.mob-boleto-card .mob-forn { font-weight:700; font-size:14px; margin-bottom:4px; }
+.mob-boleto-card .mob-meta { font-size:11px; color:var(--muted); margin-bottom:8px; }
+.mob-boleto-card .mob-row  { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
+.mob-boleto-card .mob-valor { font-family:'DM Mono',monospace; font-size:18px; font-weight:700; }
+.mob-boleto-card .mob-acoes { display:flex; gap:8px; margin-top:10px; padding-top:10px; border-top:1px solid var(--border); }
+.mob-boleto-card .mob-acoes button { flex:1; padding:8px; border:1px solid var(--border); border-radius:8px; background:var(--white); font-size:12px; font-weight:600; cursor:pointer; }
+.mob-boleto-card .mob-acoes .mob-pagar { background:var(--green); color:#fff; border-color:var(--green); }
 /* Calendário de boletos */
 .cal-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
 .cal-nav-mes{font-size:18px;font-weight:700;color:var(--text);}
@@ -187,6 +219,8 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
       <p>Nenhum boleto encontrado</p>
       <button class="btn btn-p" style="margin-top:12px" onclick="abrirModal()">＋ Adicionar Boleto</button>
     </div>
+    <!-- Cards mobile -->
+    <div id="mob-cards-wrap" style="padding:10px"></div>
   </div>
   </div><!-- /bsec-lista -->
 
@@ -648,6 +682,44 @@ function renderizar(lista){
   if(!lista.length){ tbody.innerHTML=''; empty.style.display=''; return; }
   empty.style.display='none';
   const hoje = new Date(); hoje.setHours(0,0,0,0);
+  // Render mobile cards
+  const mobWrap = document.getElementById('mob-cards-wrap');
+  if (mobWrap) {
+    if (!lista.length) {
+      mobWrap.innerHTML = '<div style="text-align:center;padding:32px;color:var(--muted)"><div style="font-size:36px">📄</div><p>Nenhum boleto encontrado</p></div>';
+    } else {
+      mobWrap.innerHTML = lista.map(b => {
+        const venc = b.vencimento ? new Date(b.vencimento+'T12:00') : null;
+        const isVenc = venc && venc < hoje && b.status !== 'pago';
+        const vencStr = b.vencimento ? fmt.date(b.vencimento) : '—';
+        const statusCls = b.status==='pago' ? 'pago' : isVenc ? 'vencido' : '';
+        const pillTxt = b.status==='pago' ? '✅ Pago' : isVenc ? '🔴 Vencido' : '🟡 A Vencer';
+        const pillCol = b.status==='pago' ? '#2ecc71' : isVenc ? 'var(--red-l)' : '#f39c12';
+        return `<div class="mob-boleto-card ${statusCls}">
+          <div class="mob-forn">${b.fornecedor}</div>
+          <div class="mob-meta">
+            ${b.nf ? `NF ${b.nf} · ` : ''}
+            ${b.totalParcelas > 1 ? `Parc. ${b.parcela}/${b.totalParcelas} · ` : ''}
+            ${b.plano || ''}
+          </div>
+          <div class="mob-row">
+            <span class="mob-valor" style="color:${isVenc?'var(--red-l)':'var(--text)'}">${fmt.brl(b.valor)}</span>
+            <span style="font-size:12px;font-weight:700;color:${pillCol}">${pillTxt}</span>
+          </div>
+          <div class="mob-row" style="font-size:12px;color:var(--muted)">
+            <span>Venc: <strong style="color:${isVenc?'var(--red-l)':'var(--text)'}">${vencStr}</strong></span>
+            ${b.vinculadoExtrato ? `<span style="font-size:11px;background:#d4edda;color:#155724;padding:2px 7px;border-radius:5px">🔗 Extrato</span>` : ''}
+          </div>
+          <div class="mob-acoes">
+            ${b.status!=='pago' ? `<button class="mob-pagar" onclick="abrirBaixa(${b.dbId})">✅ Pagar</button>` : ''}
+            <button onclick="abrirModal(${b.dbId})">✏️ Editar</button>
+            <button onclick="excluir(${b.dbId})" style="color:var(--red-l)">🗑</button>
+          </div>
+        </div>`;
+      }).join('');
+    }
+  }
+
   tbody.innerHTML = lista.map(b => {
     const venc = b.vencimento ? new Date(b.vencimento+'T12:00') : null;
     const isVenc = venc && venc < hoje && b.status !== 'pago';
