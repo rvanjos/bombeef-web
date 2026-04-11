@@ -132,19 +132,56 @@ tr:hover td{background:#faf5f0;}
 .ov-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin-top:3px;}
 .ov-sub{font-size:11px;color:var(--muted);margin-top:2px;}
 
+/* Nav mobile para config */
+.mob-config-nav{display:none;}
+
 @media(max-width:700px){
   .layout{grid-template-columns:1fr;}
   .sidebar{display:none;}
   .form-grid,.form-grid-3{grid-template-columns:1fr;}
-  /* Abas internas com scroll horizontal */
-  .tab-bar,.tabs-nav,.nav-tabs{overflow-x:auto;flex-wrap:nowrap!important;scrollbar-width:none;}
-  .tab-bar::-webkit-scrollbar,.tabs-nav::-webkit-scrollbar{display:none;}
-  .tab-btn,.tab-item,.nav-item-tab{white-space:nowrap;font-size:12px;padding:8px 12px;}
+
+  /* Nav horizontal substituta da sidebar */
+  .mob-config-nav{
+    display:flex;overflow-x:auto;gap:0;
+    background:var(--white);border-bottom:2px solid var(--border);
+    scrollbar-width:none;-webkit-overflow-scrolling:touch;
+    position:sticky;top:0;z-index:10;box-shadow:0 2px 8px rgba(0,0,0,.06);
+  }
+  .mob-config-nav::-webkit-scrollbar{display:none;}
+  .mob-config-nav-item{
+    padding:10px 14px;font-size:12px;font-weight:600;
+    color:var(--muted);white-space:nowrap;cursor:pointer;
+    border-bottom:3px solid transparent;margin-bottom:-2px;
+    flex-shrink:0;
+  }
+  .mob-config-nav-item.active{color:var(--red);border-bottom-color:var(--red);}
+
+  /* Abas internas com scroll */
+  .tab-bar{overflow-x:auto;flex-wrap:nowrap!important;scrollbar-width:none;-webkit-overflow-scrolling:touch;}
+  .tab-bar::-webkit-scrollbar{display:none;}
+  .tab{white-space:nowrap;font-size:12px;padding:8px 12px;}
+
   /* Tabelas com scroll */
-  .tbl-wrap,.card-body,table{overflow-x:auto;display:block;width:100%;}
+  .tbl-wrap{overflow-x:auto;}
+  .card{overflow-x:auto;}
+  .tbl{min-width:500px;}
   .tbl th,.tbl td{font-size:11px;padding:7px 8px;white-space:nowrap;}
-  /* Esconde coluna de ações redundantes */
-  header .hdr-right .btn-logout{font-size:11px;padding:4px 10px;}
+
+  /* Forms */
+  .card-body{padding:14px;}
+  .form-field input,.form-field select,.form-field textarea{font-size:14px;}
+
+  /* Header compacto */
+  header{padding:10px 12px;}
+  header .hdr-title{font-size:14px;}
+  header .hdr-sub{display:none;}
+  .btn-logout{font-size:11px;padding:4px 10px;}
+  .logo-circle{width:32px;height:32px;font-size:12px;}
+
+  /* Content sem margem lateral */
+  .content{padding:12px;}
+  .pg-title{font-size:18px;}
+  .pg-sub{font-size:12px;}
 }
 </style>
 </head>
@@ -163,6 +200,23 @@ tr:hover td{background:#faf5f0;}
 </header>
 
 <div class="layout">
+
+<!-- ═══ NAV MOBILE (visível só no celular) ═══════════════════ -->
+<div class="mob-config-nav" id="mob-config-nav">
+  <div class="mob-config-nav-item active" onclick="go('overview')">🏠 Início</div>
+  <div class="mob-config-nav-item" onclick="go('usuarios')">🔐 Usuários</div>
+  <div class="mob-config-nav-item" onclick="go('funcionarios')">👥 Funcionários</div>
+  <div class="mob-config-nav-item" onclick="go('metas')">🎯 Metas</div>
+  <div class="mob-config-nav-item" onclick="go('categorias')">📊 Categorias</div>
+  <div class="mob-config-nav-item" onclick="go('faturamento')">💰 Faturamento</div>
+  <div class="mob-config-nav-item" onclick="go('planos-boleto')">📋 Boletos</div>
+  <div class="mob-config-nav-item" onclick="go('locais')">📍 Locais</div>
+  <div class="mob-config-nav-item" onclick="go('prazos')">⏱️ Prazos</div>
+  <div class="mob-config-nav-item" onclick="go('bonus')">🎁 Bônus</div>
+  <div class="mob-config-nav-item" onclick="go('integracao')">🔗 Integração</div>
+  <div class="mob-config-nav-item" onclick="go('backup')">💾 Backup</div>
+</div>
+
 <!-- ═══ SIDEBAR ══════════════════════════════════════════════ -->
 <nav class="sidebar" style="overflow-y:auto">
   <div class="sb-section">Visão Geral</div>
@@ -748,8 +802,13 @@ const fmtN = n => parseInt(n||0).toString();
 function go(pg) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.querySelectorAll('.mob-config-nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('page-' + pg)?.classList.add('active');
   document.querySelector(`.nav-item[onclick="go('${pg}')"]`)?.classList.add('active');
+  document.querySelector(`.mob-config-nav-item[onclick="go('${pg}')"]`)?.classList.add('active');
+  // Scroll da nav mobile para o item ativo
+  const mobItem = document.querySelector(`.mob-config-nav-item[onclick="go('${pg}')"]`);
+  if (mobItem) mobItem.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
   const init = PAGE_INIT[pg];
   if (init) init();
 }
