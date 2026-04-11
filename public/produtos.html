@@ -72,7 +72,27 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
 .upload-z{border:2px dashed var(--border);border-radius:9px;padding:20px;text-align:center;cursor:pointer;transition:.2s;margin-bottom:10px;}
 .upload-z:hover{border-color:var(--green);}
 .empty{text-align:center;padding:36px;color:var(--muted);}
-@media(max-width:1100px){.kit-two{grid-template-columns:1fr;}}@media(max-width:900px){.kit-two{grid-template-columns:1fr;}}
+@media(max-width:1100px){.kit-two{grid-template-columns:1fr;}}
+@media(max-width:900px){.kit-two{grid-template-columns:1fr;}}
+@media(max-width:700px){
+  /* Esconder colunas menos críticas */
+  .tbl th:nth-child(4),.tbl td:nth-child(4), /* Fornecedor */
+  .tbl th:nth-child(8),.tbl td:nth-child(8), /* Un */
+  .tbl th:nth-child(9),.tbl td:nth-child(9)  /* Status */
+  { display:none; }
+  /* Toolbar compacta */
+  .toolbar{flex-wrap:wrap;gap:6px;}
+  .toolbar .btn,.toolbar button{font-size:11px;padding:5px 9px;}
+  /* Tabela: scroll horizontal + ocultar colunas menos críticas */
+  .card{overflow-x:auto;}
+  .tbl th,.tbl td{font-size:11px;padding:7px 8px;white-space:nowrap;}
+  /* Esconde: Fornecedor, Categoria, Status nas colunas secundárias */
+  .tbl th:nth-child(3),.tbl td:nth-child(3),
+  .tbl th:nth-child(4),.tbl td:nth-child(4){display:none;}
+  /* KPIs 2 colunas */
+  .kpi-row{grid-template-columns:1fr 1fr!important;}
+  .tabs button{font-size:12px;padding:8px 10px;}
+}
 </style>
 </head>
 <body>
@@ -116,8 +136,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
       </select>
       <span id="badge-margem-neg" style="display:none;background:#fff0f0;color:var(--red-l);border:1px solid #f5c6c6;border-radius:7px;padding:4px 10px;font-size:11px;font-weight:700"></span>
     </div>
-    <div class="card">
-      <table class="tbl">
+    <div class="card" style="overflow-x:auto">
+      <table class="tbl" style="min-width:600px">
         <thead><tr>
           <th>Código</th>
           <th style="cursor:pointer" onclick="sortBy('desc_asc')" title="Ordenar por nome">Descrição ⇅</th>

@@ -158,21 +158,20 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
 /* ── MOBILE ────────────────────────────────────────────────────── */
 @media(max-width:768px){
   /* Tabela de validade — ocultar colunas menos importantes */
-  .tbl th:nth-child(4),  /* LOTE */
-  .tbl td:nth-child(4),
-  .tbl th:nth-child(7),  /* AÇÃO PREVISTA */
-  .tbl td:nth-child(7),
-  .tbl th:nth-child(8),  /* ÚLTIMA CONF */
-  .tbl td:nth-child(8),
-  .tbl th:nth-child(9),  /* RESPONSÁVEL */
-  .tbl td:nth-child(9)
+  .tbl th:nth-child(4), .tbl td:nth-child(4),  /* LOTE */
+  .tbl th:nth-child(7), .tbl td:nth-child(7),  /* AÇÃO PREVISTA */
+  .tbl th:nth-child(8), .tbl td:nth-child(8),  /* ÚLTIMA CONF */
+  .tbl th:nth-child(9), .tbl td:nth-child(9)   /* RESPONSÁVEL */
   { display:none; }
-
-  /* Tabela mais compacta */
-  .tbl td, .tbl th { padding:6px 6px; font-size:11px; }
-  
-  /* Descrição não quebra demais */
-  .tbl td:nth-child(3) { max-width:120px; }
+  /* Scroll horizontal para ver o que sobrou */
+  .tbl-wrap, .card, section { overflow-x:auto; }
+  .tbl td, .tbl th { padding:6px 7px; font-size:11px; white-space:nowrap; }
+  .tbl td:nth-child(3) { max-width:130px; white-space:normal; }
+  /* Toolbar compacta */
+  .toolbar,.top-bar,.filter-bar { flex-wrap:wrap; gap:6px; }
+  .btn,button.btn { font-size:11px; padding:5px 9px; }
+  /* KPIs 2 colunas */
+  .dash-kpi-grid,.kpi-row { grid-template-columns:1fr 1fr !important; }
   
   /* Barra de ações */
   .ctrl { flex-wrap:wrap; gap:5px; padding:8px; }

@@ -136,6 +136,15 @@ tr:hover td{background:#faf5f0;}
   .layout{grid-template-columns:1fr;}
   .sidebar{display:none;}
   .form-grid,.form-grid-3{grid-template-columns:1fr;}
+  /* Abas internas com scroll horizontal */
+  .tab-bar,.tabs-nav,.nav-tabs{overflow-x:auto;flex-wrap:nowrap!important;scrollbar-width:none;}
+  .tab-bar::-webkit-scrollbar,.tabs-nav::-webkit-scrollbar{display:none;}
+  .tab-btn,.tab-item,.nav-item-tab{white-space:nowrap;font-size:12px;padding:8px 12px;}
+  /* Tabelas com scroll */
+  .tbl-wrap,.card-body,table{overflow-x:auto;display:block;width:100%;}
+  .tbl th,.tbl td{font-size:11px;padding:7px 8px;white-space:nowrap;}
+  /* Esconde coluna de ações redundantes */
+  header .hdr-right .btn-logout{font-size:11px;padding:4px 10px;}
 }
 </style>
 </head>
@@ -155,7 +164,7 @@ tr:hover td{background:#faf5f0;}
 
 <div class="layout">
 <!-- ═══ SIDEBAR ══════════════════════════════════════════════ -->
-<nav class="sidebar">
+<nav class="sidebar" style="overflow-y:auto">
   <div class="sb-section">Visão Geral</div>
   <div class="nav-item active" onclick="go('overview')"><span class="ni">🏠</span>Dashboard</div>
 
@@ -285,7 +294,7 @@ tr:hover td{background:#faf5f0;}
     </div>
     <div class="card">
       <div class="card-title">Mapeamentos Ativos</div>
-      <div class="tbl-wrap">
+      <div class="tbl-wrap" style="overflow-x:auto">
         <table>
           <thead><tr><th>Palavra-chave</th><th>Categoria</th><th>Origem</th><th></th></tr></thead>
           <tbody id="map-tbody"></tbody>
@@ -345,7 +354,7 @@ tr:hover td{background:#faf5f0;}
 
   <div class="card">
     <div class="card-title">Funcionários Cadastrados</div>
-    <div class="tbl-wrap">
+    <div class="tbl-wrap" style="overflow-x:auto">
       <table>
         <thead><tr><th>Nome</th><th>Cargo</th><th>Salário</th><th>VA</th><th>VT</th><th>Status</th><th>Admissão</th><th></th></tr></thead>
         <tbody id="func-tbody"></tbody>
@@ -430,7 +439,7 @@ tr:hover td{background:#faf5f0;}
 
   <div class="card">
     <div class="card-title">Histórico</div>
-    <div class="tbl-wrap">
+    <div class="tbl-wrap" style="overflow-x:auto">
       <table>
         <thead><tr><th>Mês</th><th>Real (R$)</th><th>Previsto (R$)</th><th>Status</th><th></th></tr></thead>
         <tbody id="fat-tbody"></tbody>
@@ -446,7 +455,7 @@ tr:hover td{background:#faf5f0;}
 
   <div class="card">
     <div class="card-title">Planos Configurados</div>
-    <div class="tbl-wrap">
+    <div class="tbl-wrap" style="overflow-x:auto">
       <table>
         <thead><tr><th>Plano</th><th>Categoria DRE</th></tr></thead>
         <tbody id="planos-tbody"></tbody>
@@ -563,7 +572,7 @@ tr:hover td{background:#faf5f0;}
 
   <div class="card">
     <div class="card-title">Usuários do Sistema</div>
-    <div class="tbl-wrap">
+    <div class="tbl-wrap" style="overflow-x:auto">
       <table>
         <thead><tr><th>Nome</th><th>E-mail</th><th>Perfil</th><th>Último Acesso</th><th>Status</th><th></th></tr></thead>
         <tbody id="usr-tbody"></tbody>

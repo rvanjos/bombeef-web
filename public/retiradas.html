@@ -62,6 +62,18 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
 .rel-table{width:100%;border-collapse:collapse;font-size:13px;}
 .rel-table th{background:#f8f4fd;padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;border-bottom:2px solid var(--border);}
 .rel-table td{padding:8px 12px;border-bottom:1px solid var(--border);}
+
+@media(max-width:700px){
+  .card{overflow-x:auto;}
+  .tbl th,.tbl td{font-size:11px;padding:7px 8px;white-space:nowrap;}
+  /* Esconde colunas menos críticas: Desconto */
+  .tbl th:nth-child(6),.tbl td:nth-child(6){display:none;}
+  .toolbar,.top-bar{flex-wrap:wrap;gap:6px;}
+  .btn,button.btn{font-size:11px;padding:5px 9px;}
+  /* Funcionário não quebra demais */
+  .tbl td:nth-child(2){max-width:100px;white-space:normal;}
+  .tbl td:nth-child(3){max-width:120px;white-space:normal;}
+}
 </style>
 </head>
 <body>
@@ -90,10 +102,10 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
 
   <!-- Tabela -->
   <div class="card">
-    <table class="tbl">
+    <div style="overflow-x:auto"><table class="tbl">
       <thead><tr><th>Data</th><th>Funcionário</th><th>Produto / Descrição</th><th>Qtd</th><th>Preço Unit.</th><th>Desconto</th><th>Total</th><th>Ações</th></tr></thead>
       <tbody id="tbody"></tbody>
-    </table>
+    </table></div>
     <div class="empty" id="empty" style="display:none"><p>Nenhuma retirada encontrada</p></div>
   </div>
 </div>
