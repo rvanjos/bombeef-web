@@ -175,11 +175,33 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
 .spin{display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;}
 @keyframes spin{to{transform:rotate(360deg)}}
 
-@media(max-width:600px){
+/* ── MOBILE RESPONSIVO ─────────────────────────────────────────────────── */
+.mob-menu-btn{display:none;background:none;border:none;cursor:pointer;padding:6px 8px;color:#fff;font-size:22px;line-height:1;}
+.mob-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;}
+.mob-drawer{display:none;position:fixed;top:0;left:0;bottom:0;width:75vw;max-width:280px;background:var(--white);z-index:201;flex-direction:column;box-shadow:4px 0 24px rgba(0,0,0,.2);transform:translateX(-100%);transition:transform .25s;}
+.mob-drawer.open{transform:translateX(0);}
+.mob-drawer-head{background:var(--red);padding:20px 16px 14px;display:flex;align-items:center;gap:10px;}
+.mob-drawer-head span{color:#fff;font-weight:700;font-size:16px;}
+.mob-drawer-close{margin-left:auto;background:none;border:none;color:rgba(255,255,255,.8);font-size:22px;cursor:pointer;padding:0;}
+.mob-nav-item{display:flex;align-items:center;gap:10px;padding:13px 18px;font-size:14px;font-weight:600;color:var(--text);cursor:pointer;border-bottom:1px solid var(--border);transition:.1s;}
+.mob-nav-item:hover,.mob-nav-item.active{background:#f8f0f0;color:var(--red);}
+.mob-nav-item .mob-icon{font-size:18px;width:26px;text-align:center;}
+.mob-active-label{display:none;font-size:13px;font-weight:700;color:#fff;margin-left:8px;}
+
+@media(max-width:700px){
   .kpi-grid{grid-template-columns:1fr 1fr;}
   .sys-grid{grid-template-columns:1fr;}
-  .portal-page{padding:14px 12px;}
+  .portal-page{padding:12px 10px;}
   .ph-uname,.ph-role{display:none;}
+  /* Esconde a nav normal e mostra botão hamburger */
+  .pnav{display:none !important;}
+  .mob-menu-btn{display:flex;align-items:center;}
+  .mob-active-label{display:inline;}
+  .mob-overlay.open{display:block;}
+  .mob-drawer{display:flex;}
+  /* Header menor */
+  .ph{padding:8px 12px;}
+  .ph-logo{width:28px;height:28px;}
 }
 </style>
 </head>
@@ -228,10 +250,26 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
       <span id="sync-txt">online</span>
     </div>
     <div class="ph-user">
+      <button class="mob-menu-btn" onclick="abrirMobMenu()">☰</button>
+      <span class="mob-active-label" id="mob-active-label">Dashboard</span>
       <div class="ph-av" id="ph-av">?</div>
       <span class="ph-uname" id="ph-uname"></span>
       <span class="ph-role" id="ph-role"></span>
       <button class="ph-logout" onclick="fazerLogout()">Sair</button>
+    </div>
+  </div>
+
+  <!-- Overlay e drawer mobile -->
+  <div class="mob-overlay" id="mob-overlay" onclick="fecharMobMenu()"></div>
+  <div class="mob-drawer" id="mob-drawer">
+    <div class="mob-drawer-head">
+      <span>🥩 Bom Beef</span>
+      <button class="mob-drawer-close" onclick="fecharMobMenu()">×</button>
+    </div>
+    <div id="mob-nav-items" style="overflow-y:auto;flex:1"></div>
+    <div style="padding:12px 16px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+      <span style="font-size:11px;color:var(--muted)" id="mob-user-info"></span>
+      <button onclick="fazerLogout()" style="background:var(--red-l);color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer">Sair</button>
     </div>
   </div>
 
@@ -519,12 +557,53 @@ function filtrarTabs() {
   if (cardDre) cardDre.style.display = temDRE ? '' : 'none';
 }
 
+// ── MENU MOBILE ───────────────────────────────────────────────────────────────
+function buildMobNav() {
+  const items = document.getElementById('mob-nav-items');
+  if (!items) return;
+  items.innerHTML = '';
+  document.querySelectorAll('.pnav-tab').forEach(function(tab) {
+    if (tab.style.display === 'none') return;
+    const name = tab.dataset.tab;
+    if (!name) return;
+    const label = tab.textContent.trim();
+    const div = document.createElement('div');
+    div.className = 'mob-nav-item' + (tab.classList.contains('active') ? ' active' : '');
+    div.dataset.tab = name;
+    div.innerHTML = '<span class="mob-icon">' + label.split(' ')[0] + '</span><span>' + label.split(' ').slice(1).join(' ') + '</span>';
+    div.onclick = function() { showTab(name); fecharMobMenu(); };
+    items.appendChild(div);
+  });
+  var info = document.getElementById('mob-user-info');
+  if (info) {
+    var uname = document.getElementById('ph-uname');
+    var urole = document.getElementById('ph-role');
+    info.textContent = (uname ? uname.textContent : '') + ' · ' + (urole ? urole.textContent : '');
+  }
+}
+function abrirMobMenu() {
+  buildMobNav();
+  document.getElementById('mob-drawer').classList.add('open');
+  document.getElementById('mob-overlay').classList.add('open');
+}
+function fecharMobMenu() {
+  document.getElementById('mob-drawer').classList.remove('open');
+  document.getElementById('mob-overlay').classList.remove('open');
+}
+
 function showTab(tab) {
   document.querySelectorAll('.pnav-tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.portal-page, .frame-container').forEach(p => p.classList.remove('active'));
 
-  const tabBtn = document.querySelector(`[data-tab="${tab}"]`);
-  if(tabBtn) tabBtn.classList.add('active');
+  const tabBtn = document.querySelector('[data-tab="' + tab + '"]');
+  if(tabBtn) {
+    tabBtn.classList.add('active');
+    // Atualiza label no header mobile
+    var parts = tabBtn.textContent.trim().split(' ');
+    var label = parts.slice(1).join(' ') || parts[0];
+    var lbl = document.getElementById('mob-active-label');
+    if (lbl) lbl.textContent = label;
+  }
 
   if (tab === 'dashboard') {
     $('page-dashboard').classList.add('active');
