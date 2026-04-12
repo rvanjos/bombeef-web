@@ -107,6 +107,30 @@ module.exports = function (pool) {
   });
 
   // ── GET /:id ───────────────────────────────────────────────────────────────
+  // ── GET /buscar?q= — busca por código ou nome (autocomplete) ────────────────
+  r.get('/buscar', async (req, res) => {
+    const q = String(req.query.q || '').trim();
+    if (!q || q.length < 2) return res.json({ ok: true, data: [] });
+    try {
+      const { rows } = await pool.query(`
+        SELECT id, codigo, descricao, preco_custo, preco_venda, unidade
+        FROM produtos
+        WHERE ativo = true
+          AND (
+            codigo ILIKE $1
+            OR descricao ILIKE $1
+          )
+        ORDER BY
+          CASE WHEN codigo ILIKE $2 THEN 0
+               WHEN descricao ILIKE $2 THEN 1
+               ELSE 2 END,
+          descricao ASC
+        LIMIT 10
+      `, [`%${q}%`, `${q}%`]);
+      res.json({ ok: true, data: rows });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
   r.get('/:id', async (req, res) => {
     try {
       const id = req.params.id;
