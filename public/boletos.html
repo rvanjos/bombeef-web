@@ -547,7 +547,7 @@ async function renderCalendario(){
 
   let grid='';
   const semanas=[];
-  let semAtual={ini:null,fim:null,total:0};
+  let semAtual={ini:null,fim:null,total:0,datas:[],boletos:[]};
 
   for(let i=0;i<totalCelulas;i++){
     const diaN  = i-inicioPad+1;
@@ -558,9 +558,14 @@ async function renderCalendario(){
     const bsDia = !fora ? (porDia[dtStr]||[]) : [];
     const totDia= bsDia.filter(b=>b.status!=='pago').reduce((s,b)=>s+parseFloat(b.valor||0),0);
 
-    if(i%7===0) semAtual={ini:null,fim:null,total:0};
-    if(!fora){ if(semAtual.ini===null) semAtual.ini=diaN; semAtual.fim=diaN; semAtual.total+=totDia; }
-    if(i%7===6) semanas.push({...semAtual});
+    if(i%7===0) semAtual={ini:null,fim:null,total:0,datas:[],boletos:[]};
+    if(!fora){
+      if(semAtual.ini===null) semAtual.ini=diaN;
+      semAtual.fim=diaN;
+      semAtual.total+=totDia;
+      if(bsDia.length) { semAtual.datas.push(dtStr); semAtual.boletos.push(...bsDia); }
+    }
+    if(i%7===6) semanas.push({...semAtual, boletos:[...semAtual.boletos], datas:[...semAtual.datas]});
 
     const cls=['cal-day',fora?'outro-mes':'',ehHoje?'hoje':'',bsDia.length?'tem-boleto':''].filter(Boolean).join(' ');
     const onclick = bsDia.length ? 'onclick="calDia(\'' + dtStr + '\')"' : '';
@@ -581,15 +586,98 @@ async function renderCalendario(){
   }
   document.getElementById('cal-grid').innerHTML=grid;
 
+  // Guarda semanas para uso no calSemana()
+  window._calSemanas = semanas;
+
   const semHtml=semanas.filter(s=>s.total>0||s.ini).map((s,i)=>{
     if(!s.ini) return '';
-    return '<div class="semana-total"><div>Semana '+(i+1)
-      +' <span style="color:var(--muted);font-weight:400;font-size:11px">('+s.ini+' a '+s.fim+'/'+String(calMesN+1).padStart(2,'0')+')</span></div>'
+    const temBoletos = s.boletos && s.boletos.length > 0;
+    const cursor = temBoletos ? 'cursor:pointer' : '';
+    const hover  = temBoletos ? ' onmouseover="this.style.background='#fff0f0'" onmouseout="this.style.background=''"' : '';
+    const click  = temBoletos ? ' onclick="calSemana('+i+')"' : '';
+    return '<div class="semana-total" style="'+cursor+'"'+hover+click+'>'
+      +'<div>Semana '+(i+1)
+      +' <span style="color:var(--muted);font-weight:400;font-size:11px">('+s.ini+' a '+s.fim+'/'+String(calMesN+1).padStart(2,'0')+')</span>'
+      +(temBoletos?' <span style="font-size:10px;color:var(--blue)">▸ ver detalhes</span>':'')
+      +'</div>'
       +(s.total>0?'<span>'+fmt.brl(s.total)+'</span>':'<span style="color:var(--muted)">—</span>')
       +'</div>';
   }).join('');
   document.getElementById('cal-semanas-list').innerHTML=semHtml||
     '<div style="font-size:12px;color:var(--muted);padding:8px">Sem boletos a vencer neste mês</div>';
+}
+
+function calSemana(idx){
+  const sem = window._calSemanas && window._calSemanas[idx];
+  if(!sem || !sem.boletos.length) return;
+
+  const mesLabel = String(calMesN+1).padStart(2,'0');
+  const titulo   = 'Semana '+(idx+1)+' ('+sem.ini+' a '+sem.fim+'/'+mesLabel+')';
+  const abertos  = sem.boletos.filter(b=>b.status!=='pago');
+  const totAberto= abertos.reduce((s,b)=>s+parseFloat(b.valor||0),0);
+  const totPago  = sem.boletos.filter(b=>b.status==='pago').reduce((s,b)=>s+parseFloat(b.valor||0),0);
+
+  document.getElementById('cal-side-title').textContent =
+    titulo + ' — ' + fmt.brl(totAberto) + ' em aberto';
+
+  // Agrupar por dia
+  const porDiaSem = {};
+  sem.boletos.forEach(b => {
+    const dt = b.vencimento?.slice(0,10) || '?';
+    if(!porDiaSem[dt]) porDiaSem[dt] = [];
+    porDiaSem[dt].push(b);
+  });
+
+  // Resumo no topo
+  let html = '<div style="background:#f8f4f0;border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px">'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">'
+    + '<div><div style="color:var(--muted);font-size:10px;text-transform:uppercase">Em Aberto</div>'
+    + '<div style="font-weight:700;color:var(--red-l);font-family:monospace">'+fmt.brl(totAberto)+'</div></div>'
+    + '<div><div style="color:var(--muted);font-size:10px;text-transform:uppercase">Já Pagos</div>'
+    + '<div style="font-weight:700;color:var(--green);font-family:monospace">'+fmt.brl(totPago)+'</div></div>'
+    + '<div style="grid-column:1/-1"><div style="color:var(--muted);font-size:10px;text-transform:uppercase">Total de Boletos</div>'
+    + '<div style="font-weight:700">'+sem.boletos.length+' boleto(s) · '+abertos.length+' em aberto</div></div>'
+    + '</div></div>';
+
+  // Boletos agrupados por dia
+  Object.keys(porDiaSem).sort().forEach(dtStr => {
+    const [y,m,d] = dtStr.split('-');
+    const diasSem = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+    const diaSem  = diasSem[new Date(dtStr+'T12:00:00').getDay()];
+    const bsDia   = porDiaSem[dtStr];
+    const totDia  = bsDia.filter(b=>b.status!=='pago').reduce((s,b)=>s+parseFloat(b.valor||0),0);
+
+    html += '<div style="margin-bottom:8px">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;'
+      + 'background:var(--red);color:#fff;padding:5px 10px;border-radius:6px 6px 0 0;font-size:11px;font-weight:700">'
+      + '<span>'+diaSem+', '+d+'/'+m+'</span>'
+      + (totDia>0?'<span>'+fmt.brl(totDia)+'</span>':'<span style="opacity:.7">—</span>')
+      + '</div>';
+
+    bsDia.sort((a,b2)=>parseFloat(b2.valor)-parseFloat(a.valor)).forEach(b => {
+      const cl  = b.status==='pago'?'pill-p':b.status==='vencido'?'pill-r':'pill-v';
+      const st  = {pago:'✅ Pago',vencido:'🔴 Vencido',avencer:'🟡 A Vencer'}[b.status]||b.status;
+      const parc= b.totalParcelas>1 ? ' <span style="font-size:10px;color:var(--muted)">'+b.parcela+'/'+b.totalParcelas+'</span>' : '';
+      html += '<div style="border:1px solid var(--border);border-top:none;padding:8px 10px;background:#fff;last-child:{border-radius:0 0 6px 6px}">'
+        + '<div style="font-weight:600;font-size:13px">'+b.fornecedor+parc+'</div>'
+        + (b.produto?'<div style="font-size:11px;color:var(--muted)">'+b.produto+'</div>':'')
+        + (b.nf?'<div style="font-size:10px;color:var(--blue)">NF-e '+b.nf+'</div>':'')
+        + (b.plano?'<div style="font-size:10px;color:var(--muted)">'+b.plano+'</div>':'')
+        + '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:5px">'
+        + '<span class="pill '+cl+'" style="font-size:10px">'+st+'</span>'
+        + '<span style="font-weight:700;font-family:monospace;font-size:14px">'+fmt.brl(b.valor)+'</span>'
+        + '</div>'
+        + (b.status!=='pago'?'<button class="act-btn" onclick="abrirBaixa('+b.dbId+')" style="margin-top:6px;width:100%;padding:5px;background:var(--green);color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:11px;font-weight:600">✅ Registrar Pagamento</button>':'')
+        + '</div>';
+    });
+
+    html += '</div>';
+  });
+
+  document.getElementById('cal-side-list').innerHTML = html;
+
+  // Scroll suave para o painel
+  document.getElementById('cal-side-list').scrollTop = 0;
 }
 
 function calDia(dtStr){
