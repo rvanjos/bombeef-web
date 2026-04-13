@@ -250,6 +250,7 @@ app.use('/api/config',       require('./routes/config')(pool));
 app.use('/api/rh',           require('./routes/rh')(pool));
 app.use('/api/dashboard',    require('./routes/dashboard')(pool));
 app.use('/api/fornecedores', require('./routes/fornecedores')(pool));
+app.use('/api/cortes',       require('./routes/cortes')(pool));
 
 app.use('/api/admin/backup', require('./routes/backup')(pool));
 
