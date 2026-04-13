@@ -54,7 +54,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
 .fgr3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px;}
 /* KIT PRECIFICAÇÃO */
 .kit-two{display:grid;grid-template-columns:1fr 300px;gap:16px;align-items:start;}
-.kit-item-row{display:grid;grid-template-columns:1fr 1fr 80px 90px 80px 70px 26px;gap:6px;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);}
+.kit-item-row{display:grid;grid-template-columns:1.5fr 80px 90px 80px 80px 70px 26px;gap:6px;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);}
 .kit-item-row input{padding:5px 7px;border:1px solid var(--border);border-radius:5px;font-size:12px;font-family:'DM Sans',sans-serif;}
 .kit-del{background:none;border:none;cursor:pointer;font-size:15px;color:var(--red-l);}
 /* CUSTO BREAKDOWN */
@@ -237,8 +237,10 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
             <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px">Itens do Kit</div>
             <button class="btn btn-s" style="padding:4px 10px;font-size:11px" onclick="addKitItem()">＋ Item</button>
           </div>
-          <div style="font-size:10px;color:var(--muted);display:grid;grid-template-columns:1fr 1fr 80px 90px 80px 70px 26px;gap:6px;padding:4px 0;border-bottom:2px solid var(--border);font-weight:700;text-transform:uppercase;letter-spacing:.5px">
-            <span>Código</span><span>Descrição</span><span>Qtd</span><span>Custo Un.</span>
+          <div style="font-size:10px;color:var(--muted);display:grid;grid-template-columns:1.5fr 80px 90px 80px 80px 70px 26px;gap:6px;padding:4px 0;border-bottom:2px solid var(--border);font-weight:700;text-transform:uppercase;letter-spacing:.5px">
+            <span>Nome / Código</span><span>Qtd</span>
+            <span>Custo/Un</span>
+            <span style="color:var(--orange)" title="Qtd × Custo/Un">Subtotal ▾</span>
             <span style="color:var(--green)" title="Preço de venda atual do produto">Venda Un.</span>
             <span title="Produto próximo do vencimento — desconsiderar na margem" style="color:var(--orange)">⏱ Venc.</span>
             <span></span>
@@ -585,14 +587,18 @@ function renderKitItems(){
       </div>
       <input type="number" placeholder="Qtd" value="${item.quantidade||1}" min="0.001" step="0.001" oninput="kitItems[${i}].quantidade=parseFloat(this.value)||1;recalcKit()">
       <div style="display:flex;flex-direction:column;gap:2px">
-        <input type="number" placeholder="Custo orig." value="${item.precoCusto||''}" step="0.0001"
+        <input type="number" placeholder="Custo/un" value="${item.precoCusto||''}" step="0.0001"
           oninput="kitItems[${i}].precoCusto=parseFloat(this.value)||0;recalcKit()"
-          title="Preço de custo original do produto">
+          title="Preço de custo por unidade/kg do produto">
         ${item.ignorarMargem ? `<input type="number" placeholder="Custo kit" value="${item.custoKit!=null?item.custoKit:''}" step="0.0001"
           oninput="kitItems[${i}].custoKit=parseFloat(this.value)||0;recalcKit()"
           style="font-size:10px;border-color:var(--orange);background:#fff8f0"
           title="Custo que entra no kit (pode ser menor — ex: produto próx. vencimento)">` : ''}
       </div>
+      <input type="number" readonly
+        value="${((parseFloat(item.quantidade||1))*(parseFloat(item.precoCusto||0))).toFixed(2)}"
+        style="font-size:11px;background:#fff8f0;color:var(--orange);font-weight:700;border-color:var(--orange);cursor:default"
+        title="Subtotal = ${item.quantidade||1} × R$ ${parseFloat(item.precoCusto||0).toFixed(2)}">
       <input type="number" placeholder="Venda" value="${item.precoVenda||''}" step="0.01" readonly
         style="font-size:11px;background:#f7f4f0;color:var(--muted);cursor:default;"
         title="Preço de venda atual do produto (somente leitura)">
