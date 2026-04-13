@@ -148,6 +148,7 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
   padding:8px 12px;display:flex;justify-content:space-between;align-items:center;
   font-size:12px;margin-bottom:3px;}
 .semana-total span{font-weight:700;color:var(--red-l);font-family:'DM Mono',monospace;}
+.semana-total[onclick]:hover{background:#fff0f0;border-color:var(--red);}
 /* Tabs boletos */
 .btabs{display:flex;gap:4px;margin-bottom:14px;border-bottom:2px solid var(--border);padding-bottom:0;}
 .btab{padding:8px 16px;border:none;background:none;font-family:'DM Sans',sans-serif;font-size:13px;
@@ -593,7 +594,7 @@ async function renderCalendario(){
     if(!s.ini) return '';
     const temBoletos = s.boletos && s.boletos.length > 0;
     const cursor = temBoletos ? 'cursor:pointer' : '';
-    const hover  = temBoletos ? ' onmouseover="this.style.background='#fff0f0'" onmouseout="this.style.background=''"' : '';
+    const hover  = '';  // hover via CSS .semana-total:hover
     const click  = temBoletos ? ' onclick="calSemana('+i+')"' : '';
     return '<div class="semana-total" style="'+cursor+'"'+hover+click+'>'
       +'<div>Semana '+(i+1)
