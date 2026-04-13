@@ -117,6 +117,7 @@ tr:hover td{background:#fdf8f5;}
   <button class="tab-btn active" data-tab="dashboard"  onclick="showTab('dashboard',this)">📊 Dashboard</button>
   <button class="tab-btn" data-tab="registros"  onclick="showTab('registros',this)">🥩 Registros</button>
   <button class="tab-btn" data-tab="relatorio"  onclick="showTab('relatorio',this)">📈 Relatório</button>
+  <button class="tab-btn" data-tab="corteslimpos" onclick="showTab('corteslimpos',this)">🔪 Cortes Limpos</button>
   <button class="tab-btn" data-tab="insumos"    onclick="showTab('insumos',this)">🏷️ Insumos</button>
   <button class="tab-btn" data-tab="fichas"     onclick="showTab('fichas',this)">📋 Fichas Técnicas</button>
   <button class="tab-btn" data-tab="vendas"     onclick="showTab('vendas',this)">💰 Vendas</button>
@@ -127,24 +128,29 @@ tr:hover td{background:#fdf8f5;}
 <!-- ── DASHBOARD ─────────────────────────────────────────────────────── -->
 <div id="tab-dashboard">
   <div class="kpi-grid" id="dash-kpis">
-    <div class="kpi k-r"><div class="kpi-v" id="d-perda">—</div><div class="kpi-l">Perda Média</div><div class="kpi-s" id="d-perda-s"></div></div>
-    <div class="kpi k-o"><div class="kpi-v" id="d-valor-perda">—</div><div class="kpi-l">Valor Perdido</div><div class="kpi-s">em R$</div></div>
-    <div class="kpi k-g"><div class="kpi-v" id="d-registros">—</div><div class="kpi-l">Registros</div><div class="kpi-s" id="d-reg-s"></div></div>
-    <div class="kpi k-b"><div class="kpi-v" id="d-fichas">—</div><div class="kpi-l">Fichas Técnicas</div><div class="kpi-s" id="d-fichas-s"></div></div>
+    <div class="kpi k-b"><div class="kpi-v" id="d-investido">—</div><div class="kpi-l">Total Investido</div><div class="kpi-s" id="d-investido-s"></div></div>
+    <div class="kpi k-r"><div class="kpi-v" id="d-valor-perda">—</div><div class="kpi-l">Total Perdido R$</div><div class="kpi-s" id="d-perda-kg-s"></div></div>
+    <div class="kpi k-g"><div class="kpi-v" id="d-aproveitado">—</div><div class="kpi-l">Valor Aproveitado</div><div class="kpi-s" id="d-aproveitado-s"></div></div>
+    <div class="kpi k-o"><div class="kpi-v" id="d-perda">—</div><div class="kpi-l">% Perda Global</div><div class="kpi-s" id="d-perda-s"></div></div>
   </div>
 
+  <div id="dash-alerta-meta" style="display:none" class="alerta-box"></div>
   <div id="dash-meta-wrap" style="margin-bottom:14px"></div>
 
-  <div class="nota-custo" style="margin-bottom:14px">
-    🔗 <strong>Vinculação com Produtos:</strong> O custo dos cortes no PDV é o custo <em>sujo</em> (peso bruto).
-    Após registrar o corte aqui, você poderá atualizar o custo do produto com o valor <em>limpo</em> real — isso será implementado em breve.
-    Por enquanto, registre os cortes normalmente.
-  </div>
 
-  <div class="card">
-    <div class="card-head"><div class="card-title">📊 Ranking de Perda por Corte</div></div>
-    <div style="padding:14px 16px" id="dash-ranking">
-      <div class="empty"><div class="empty-icon">🔪</div><p>Nenhum registro ainda.</p></div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+    <div class="card">
+      <div class="card-head"><div class="card-title">📊 Perda por Corte (R$)</div></div>
+      <div style="padding:14px 16px" id="dash-ranking">
+        <div class="empty"><div class="empty-icon">🔪</div><p>Nenhum registro ainda.</p></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-head"><div class="card-title">🏭 % Perda por Fornecedor</div></div>
+      <div style="padding:14px 16px" id="dash-forn">
+        <div class="empty"><div class="empty-icon">🏭</div><p>Nenhum registro.</p></div>
+      </div>
     </div>
   </div>
 </div>
@@ -219,18 +225,9 @@ tr:hover td{background:#fdf8f5;}
         <button class="btn btn-p" onclick="abrirModalInsumo()">+ Novo Insumo</button>
       </div>
     </div>
-    <div class="tbl-wrap">
-      <table>
-        <thead><tr>
-          <th>Nome</th><th>Categoria</th><th>Fornecedor</th>
-          <th class="num">Preço Unit.</th><th>Unidade</th>
-          <th class="num">Estoque</th><th></th>
-        </tr></thead>
-        <tbody id="ins-tbody"></tbody>
-      </table>
-      <div class="empty" id="ins-empty" style="display:none">
-        <div class="empty-icon">🏷️</div><p>Nenhum insumo cadastrado.</p>
-      </div>
+    <div id="ins-cards" style="padding:14px 16px"></div>
+    <div class="empty" id="ins-empty" style="display:none;margin:0 16px 16px">
+      <div class="empty-icon">🏷️</div><p>Nenhum insumo cadastrado.</p>
     </div>
   </div>
 </div>
@@ -464,11 +461,12 @@ function showTab(name, btn) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   if(btn) btn.classList.add('active');
   // Carregar dados da aba
-  if(name==='registros')  carregarRegistros();
-  if(name==='relatorio')  carregarRelatorio();
-  if(name==='insumos')    carregarInsumos();
-  if(name==='fichas')     carregarFichas();
-  if(name==='vendas')     carregarVendas();
+  if(name==='registros')    carregarRegistros();
+  if(name==='relatorio')    carregarRelatorio();
+  if(name==='corteslimpos') carregarCortesLimpos();
+  if(name==='insumos')      carregarInsumos();
+  if(name==='fichas')       carregarFichas();
+  if(name==='vendas')       carregarVendas();
 }
 
 function fecharModal(id) { document.getElementById(id).style.display='none'; }
@@ -481,15 +479,21 @@ async function carregarDashboard() {
   const perdaPct = parseFloat(v.perda_media||0)*100;
   const meta = parseFloat(v.meta_perda||0.15)*100;
   const corBadge = perdaPct > meta*1.2 ? 'var(--red-l)' : perdaPct > meta ? 'var(--orange)' : 'var(--green)';
+  const totalInvest = parseFloat(v.total_bruto||0) * 0; // calculado abaixo
+  const valorPerdido = parseFloat(v.valor_perda||0);
+  const valorAproveitado = parseFloat(v.total_bruto||0) > 0
+    ? (parseFloat(v.total_bruto||0) - parseFloat(v.valor_perda||0)/parseFloat(v.custo_medio_kg||1)*parseFloat(v.total_bruto||0))
+    : 0;
 
+  document.getElementById('d-investido').textContent = brl(v.custo_total||0);
+  document.getElementById('d-investido-s').textContent = v.registros+' registros de corte';
+  document.getElementById('d-valor-perda').textContent = brl(valorPerdido);
+  document.getElementById('d-perda-kg-s').textContent = (parseFloat(v.total_bruto||0)-parseFloat(v.total_limpo||0)).toFixed(3)+' kg descartados';
+  document.getElementById('d-aproveitado').textContent = brl((v.custo_total||0)-valorPerdido);
+  document.getElementById('d-aproveitado-s').textContent = parseFloat(v.total_bruto||0)>0 ? (parseFloat(v.total_limpo||0)/parseFloat(v.total_bruto||0)*100).toFixed(1)+'% do investimento' : '—';
   document.getElementById('d-perda').textContent = perdaPct.toFixed(1)+'%';
   document.getElementById('d-perda').style.color = corBadge;
-  document.getElementById('d-perda-s').textContent = 'meta: '+meta.toFixed(0)+'%';
-  document.getElementById('d-valor-perda').textContent = brl(v.valor_perda);
-  document.getElementById('d-registros').textContent = v.registros;
-  document.getElementById('d-reg-s').textContent = v.insumos+' insumos';
-  document.getElementById('d-fichas').textContent = v.fichas;
-  document.getElementById('d-fichas-s').textContent = v.vendas+' vendas';
+  document.getElementById('d-perda-s').textContent = 'Meta: '+meta.toFixed(0)+'%';
 
   // Barra de meta
   const metaWrap = document.getElementById('dash-meta-wrap');
@@ -509,18 +513,70 @@ async function carregarDashboard() {
       </div>
     </div>`;
 
-  // Ranking
+  // Alerta cortes acima da meta
+  const alertaEl = document.getElementById('dash-alerta-meta');
+  if (v.acima_meta?.length) {
+    alertaEl.style.display = '';
+    alertaEl.innerHTML = `⚠️ <strong>${v.acima_meta.length} corte(s) acima da meta de perda (${(parseFloat(v.meta_perda||0.15)*100).toFixed(0)}%):</strong> `
+      + v.acima_meta.map(a => `<strong>${a.corte}</strong> (${(parseFloat(a.perda_pct)*100).toFixed(1)}%)`).join(', ');
+  } else {
+    alertaEl.style.display = 'none';
+  }
+
+  // Barra de meta com chips
+  const metaWrap = document.getElementById('dash-meta-wrap');
+  const fillPct2 = Math.min(100, perdaPct/meta*100);
+  const fillCor2 = perdaPct <= meta ? 'var(--green)' : 'var(--red-l)';
+  const aprovPct = parseFloat(v.total_bruto||0)>0 ? (parseFloat(v.total_limpo||0)/parseFloat(v.total_bruto||0)*100).toFixed(1) : 0;
+  metaWrap.innerHTML = `
+    <div class="card" style="padding:14px 16px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <span style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase">SITUAÇÃO DA PERDA VS META</span>
+        <span style="font-size:13px;font-weight:700;color:${fillCor2}">${perdaPct<=meta?'● Dentro da Meta':'● Acima da Meta'} — ${perdaPct.toFixed(1)}%</span>
+      </div>
+      <div class="meta-bar-bg"><div class="meta-bar-fill" style="width:${fillPct2}%;background:${fillCor2}"></div></div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:4px;margin-bottom:10px">
+        <span>0%</span><span>Meta: ${meta.toFixed(0)}%</span>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <div style="background:#e8f7ef;border:1px solid #b7ebc8;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;color:var(--green)">
+          ↓ Perda no mês: <strong>${brl(parseFloat(v.valor_perda||0))}</strong>
+        </div>
+        <div style="background:#fff0f0;border:1px solid #f5c6c6;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;color:var(--red-l)">
+          ↑ Perda acima da meta: <strong>${brl(Math.max(0,(perdaPct-meta)/100*(parseFloat(v.custo_total||0))))}</strong>
+        </div>
+        <div style="background:#e8f7ef;border:1px solid #b7ebc8;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;color:var(--green)">
+          ✓ Aproveitamento: <strong>${aprovPct}%</strong>
+        </div>
+      </div>
+    </div>`;
+
+  // Gráfico por fornecedor
+  const fornEl = document.getElementById('dash-forn');
+  if (v.fornecedores?.length) {
+    const cores = ['var(--orange)','var(--blue)','var(--green)','var(--red-l)','var(--muted)'];
+    fornEl.innerHTML = v.fornecedores.map((f,i) => `
+      <div class="bar-row">
+        <div class="bar-label">${f.forn}</div>
+        <div class="bar-track"><div class="bar-fill" style="width:${(parseFloat(f.perda_pct)*100/20*100).toFixed(0)}%;background:${cores[i%cores.length]}"></div></div>
+        <div class="bar-val">${(parseFloat(f.perda_pct)*100).toFixed(1)}%</div>
+        <div style="font-size:10px;color:var(--muted);min-width:50px;text-align:right">${parseFloat(f.peso_bruto).toFixed(1)}kg</div>
+      </div>`).join('');
+  } else {
+    fornEl.innerHTML = '<div class="empty" style="padding:20px"><div class="empty-icon">🏭</div><p>Nenhum dado.</p></div>';
+  }
+
+  // Ranking por valor perdido R$
   const rk = document.getElementById('dash-ranking');
   if(!v.ranking?.length){ rk.innerHTML='<div class="empty"><div class="empty-icon">🔪</div><p>Nenhum registro ainda.</p></div>'; return; }
-  const maxPerda = Math.max(...v.ranking.map(r=>parseFloat(r.perda_pct)||0));
-  rk.innerHTML = v.ranking.map(r => {
-    const pp = parseFloat(r.perda_pct||0);
-    const cor = pp > 0.20 ? 'var(--red-l)' : pp > 0.12 ? 'var(--orange)' : 'var(--green)';
+  const maxValor = Math.max(...v.ranking.map(r=>parseFloat(r.valor_perda||0)));
+  const cores_rk = ['var(--orange)','var(--blue)','var(--red-l)','var(--green)','var(--muted)'];
+  rk.innerHTML = v.ranking.map((r,i) => {
+    const vp = parseFloat(r.valor_perda||0);
     return `<div class="bar-row">
       <div class="bar-label" title="${r.corte}">${r.corte}</div>
-      <div class="bar-track"><div class="bar-fill" style="width:${maxPerda>0?pp/maxPerda*100:0}%;background:${cor}"></div></div>
-      <div class="bar-val" style="color:${cor}">${(pp*100).toFixed(1)}%</div>
-      <div style="font-size:10px;color:var(--muted);min-width:50px;text-align:right">${r.registros}x</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${maxValor>0?vp/maxValor*100:0}%;background:${cores_rk[i%cores_rk.length]}"></div></div>
+      <div class="bar-val">${brl(vp)}</div>
     </div>`;
   }).join('');
 }
@@ -639,6 +695,77 @@ async function excluirRegistro(id) {
   if(d.ok){ toast('Removido'); carregarRegistros(); carregarDashboard(); }
 }
 
+// ── CORTES LIMPOS ────────────────────────────────────────────────────────────
+let _cortesLimpos = [];
+
+async function carregarCortesLimpos() {
+  // Busca todos os registros e consolida por corte
+  const d = await api.get('/api/cortes/registros');
+  if(!d.ok) return;
+  // Consolida: pega o registro mais recente de cada corte
+  const map = {};
+  d.data.forEach(r => {
+    const corte = r.corte;
+    if (!map[corte] || r.data > map[corte].data) map[corte] = r;
+  });
+  _cortesLimpos = Object.values(map);
+  renderCortesLimpos();
+}
+
+function filtrarCortesLimpos() { renderCortesLimpos(); }
+
+function renderCortesLimpos() {
+  const q = (document.getElementById('cl-busca').value||'').toLowerCase();
+  const lista = _cortesLimpos
+    .filter(r => !q || r.corte.toLowerCase().includes(q) || (r.fornecedor||'').toLowerCase().includes(q))
+    .sort((a,b) => a.corte.localeCompare(b.corte));
+
+  // KPIs
+  const totalEst  = lista.reduce((s,r) => s+parseFloat(r.estoque||0), 0);
+  const totalValor = lista.reduce((r,c) => {
+    const limpo = parseFloat(c.peso_limpo||0), bruto = parseFloat(c.peso_bruto||0);
+    const custo = parseFloat(c.custo_por_kg||0);
+    const custoLimpo = limpo>0?(bruto*custo)/limpo:0;
+    return r + custoLimpo*parseFloat(c.estoque||0);
+  }, 0);
+  const semEst = lista.filter(r => parseFloat(r.estoque||0)<=0).length;
+  document.getElementById('cl-tipos').textContent = lista.length;
+  document.getElementById('cl-tipos-s').textContent = _cortesLimpos.length+' registros totais';
+  document.getElementById('cl-estoque').textContent = totalEst.toFixed(1)+' kg';
+  document.getElementById('cl-valor').textContent = brl(totalValor);
+  document.getElementById('cl-zerado').textContent = semEst;
+  document.getElementById('cl-zerado-s').textContent = semEst===0?'tudo ok ✓':'cortes esgotados';
+
+  const tbody = document.getElementById('cl-tbody');
+  const empty = document.getElementById('cl-empty');
+  if(!lista.length){ tbody.innerHTML=''; empty.style.display=''; return; }
+  empty.style.display='none';
+
+  tbody.innerHTML = lista.map(r => {
+    const bruto = parseFloat(r.peso_bruto||0), limpo = parseFloat(r.peso_limpo||0);
+    const custo = parseFloat(r.custo_por_kg||0), marg = parseFloat(r.margem||0.30);
+    const est   = parseFloat(r.estoque||0);
+    const perdaPct = bruto>0?(bruto-limpo)/bruto:0;
+    const custoLimpo = limpo>0?(bruto*custo)/limpo:0;
+    const precoIdeal = custoLimpo*(1+marg);
+    const valEst = custoLimpo*est;
+    const cor = perdaPct>0.20?'badge-crit':perdaPct>0.12?'badge-warn':'badge-ok';
+    const statusTxt = perdaPct>0.20?'🔴 Acima':perdaPct>0.12?'⚠️ Alerta':'✅ OK';
+    return `<tr>
+      <td style="font-weight:600">${r.corte}</td>
+      <td style="color:var(--muted)">${r.fornecedor||'—'}</td>
+      <td style="color:var(--muted);font-size:11px">${fmt.date(r.data)}</td>
+      <td class="num">${brl(custo)}</td>
+      <td class="num" style="color:${perdaPct>0.15?'var(--red-l)':'var(--orange)'};font-weight:700">${(perdaPct*100).toFixed(1)}%</td>
+      <td class="num" style="font-weight:700;color:var(--orange)">${brl(custoLimpo)}</td>
+      <td class="num" style="font-weight:700;color:var(--green)">${brl(precoIdeal)}</td>
+      <td class="num">${est.toFixed(2)} kg</td>
+      <td class="num" style="font-weight:600">${brl(valEst)}</td>
+      <td><span class="badge ${cor}">${statusTxt}</span></td>
+    </tr>`;
+  }).join('');
+}
+
 // ── RELATÓRIO ─────────────────────────────────────────────────────────────
 async function carregarRelatorio() {
   const mes = document.getElementById('rel-mes').value.replace('-','/').split('/').reverse().join('/');
@@ -674,29 +801,47 @@ async function carregarInsumos() {
 
 function filtrarInsumos() { renderInsumos(); }
 
+const CAT_ICON = { Tempero:'🧄', Embalagem:'📦', Descartável:'🧤', Molho:'🫙', Limpeza:'🧹', Outros:'📌' };
+
 function renderInsumos() {
   const q = (document.getElementById('ins-busca').value||'').toLowerCase();
   const cat = document.getElementById('ins-cat').value;
   const lista = _insumos.filter(i =>
-    (!q || i.nome.toLowerCase().includes(q)) &&
+    (!q || i.nome.toLowerCase().includes(q) || (i.fornecedor||'').toLowerCase().includes(q)) &&
     (!cat || i.categoria===cat)
   );
-  const tbody = document.getElementById('ins-tbody');
+  const wrap = document.getElementById('ins-cards');
   const empty = document.getElementById('ins-empty');
-  if(!lista.length){ tbody.innerHTML=''; empty.style.display=''; return; }
+  if(!lista.length){ wrap.innerHTML=''; empty.style.display=''; return; }
   empty.style.display='none';
-  tbody.innerHTML = lista.map(i => `<tr>
-    <td style="font-weight:600">${i.nome}</td>
-    <td><span class="badge badge-ok">${i.categoria}</span></td>
-    <td style="color:var(--muted)">${i.fornecedor||'—'}</td>
-    <td class="num">${brl(i.preco_unit)}/${i.unidade}</td>
-    <td>${i.unidade}</td>
-    <td class="num">${parseFloat(i.estoque||0).toFixed(3)}</td>
-    <td style="white-space:nowrap">
-      <button class="btn btn-s btn-sm" onclick="editarInsumo(${i.id})">✏️</button>
-      <button class="btn btn-r btn-sm" onclick="excluirInsumo(${i.id})">🗑</button>
-    </td>
-  </tr>`).join('');
+  // Agrupa por categoria
+  const grupos = {};
+  lista.forEach(i => { if(!grupos[i.categoria]) grupos[i.categoria]=[]; grupos[i.categoria].push(i); });
+  wrap.innerHTML = Object.entries(grupos).map(([cat, itens]) => `
+    <div style="margin-bottom:16px">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:8px;display:flex;align-items:center;gap:6px">
+        <span>${CAT_ICON[cat]||'📌'} ${cat}</span>
+        <span style="background:#f0ebe4;border-radius:10px;padding:1px 7px;font-size:10px">${itens.length} ${itens.length===1?'item':'itens'}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px">
+        ${itens.map(i => {
+          const valEst = parseFloat(i.estoque||0)*parseFloat(i.preco_unit||0);
+          return `<div style="background:#faf8f5;border:1px solid var(--border);border-radius:10px;padding:12px 14px;position:relative">
+            <button onclick="excluirInsumo(${i.id})" style="position:absolute;top:8px;right:8px;background:none;border:none;cursor:pointer;color:var(--muted);font-size:14px;opacity:.5">✕</button>
+            <div style="font-weight:700;font-size:13px;margin-bottom:4px;padding-right:20px">${i.nome}</div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:8px">${i.fornecedor||'—'}</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;font-size:11px">
+              <div><div style="color:var(--muted);font-size:9px;text-transform:uppercase">Preço/Un</div>
+                <div style="font-weight:700;color:var(--orange)">${brl(i.preco_unit)}<span style="color:var(--muted);font-weight:400"> por ${i.unidade}</span></div></div>
+              <div><div style="color:var(--muted);font-size:9px;text-transform:uppercase">Estoque</div>
+                <div style="font-weight:700">${parseFloat(i.estoque||0)} ${i.unidade}</div></div>
+              <div><div style="color:var(--muted);font-size:9px;text-transform:uppercase">Val: ${brl(valEst)}</div>
+                <button class="btn btn-s btn-sm" onclick="editarInsumo(${i.id})" style="margin-top:2px;width:100%">✏️</button></div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`).join('');
 }
 
 function abrirModalInsumo(id) {

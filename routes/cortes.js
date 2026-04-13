@@ -101,51 +101,75 @@ module.exports = function(pool) {
       const metaPerda = toNum(cfg[0]?.valor, 0.15);
 
       // Calcular KPIs
-      let totalBruto=0, totalLimpo=0, valorPerda=0;
+      let totalBruto=0, totalLimpo=0, valorPerda=0, custoTotal=0;
       reg.forEach(c => {
-        totalBruto  += toNum(c.peso_bruto);
-        totalLimpo  += toNum(c.peso_limpo);
-        valorPerda  += (toNum(c.peso_bruto) - toNum(c.peso_limpo)) * toNum(c.custo_por_kg);
+        const bruto = toNum(c.peso_bruto);
+        const limpo  = toNum(c.peso_limpo);
+        const custo  = toNum(c.custo_por_kg);
+        totalBruto  += bruto;
+        totalLimpo  += limpo;
+        valorPerda  += (bruto - limpo) * custo;
+        custoTotal  += bruto * custo;
       });
       const perdaMedia = totalBruto > 0 ? (totalBruto - totalLimpo) / totalBruto : 0;
 
-      // Ranking de cortes por perda
+      // Ranking de cortes por valor perdido em R$
       const porCorte = {};
       reg.forEach(c => {
-        if (!porCorte[c.corte]) porCorte[c.corte] = { bruto:0, limpo:0, n:0 };
-        porCorte[c.corte].bruto += toNum(c.peso_bruto);
-        porCorte[c.corte].limpo += toNum(c.peso_limpo);
-        porCorte[c.corte].n++;
+        const k = c.corte;
+        if (!porCorte[k]) porCorte[k] = { bruto:0, limpo:0, n:0, valorPerda:0 };
+        const b = toNum(c.peso_bruto), l = toNum(c.peso_limpo), cu = toNum(c.custo_por_kg);
+        porCorte[k].bruto += b;
+        porCorte[k].limpo += l;
+        porCorte[k].n++;
+        porCorte[k].valorPerda += (b - l) * cu;
       });
       const ranking = Object.entries(porCorte)
         .map(([corte, v]) => ({
           corte,
-          perda_pct: v.bruto > 0 ? (v.bruto - v.limpo) / v.bruto : 0,
-          registros: v.n,
+          perda_pct:   v.bruto > 0 ? (v.bruto - v.limpo) / v.bruto : 0,
+          valor_perda: v.valorPerda,
+          registros:   v.n,
         }))
-        .sort((a,b) => b.perda_pct - a.perda_pct)
+        .sort((a,b) => b.valor_perda - a.valor_perda)
         .slice(0, 8);
 
-      // Alertas: estoque abaixo do limiar
-      const { rows: alertas } = await pool.query(`
-        SELECT corte, AVG(estoque) AS estoque_medio FROM cortes_registros
-        WHERE data >= CURRENT_DATE - INTERVAL '30 days'
-        GROUP BY corte HAVING AVG(estoque) < 3
-      `);
+      // % perda por fornecedor
+      const porForn = {};
+      reg.forEach(c => {
+        const k = c.fornecedor || 'Outros';
+        if (!porForn[k]) porForn[k] = { bruto:0, limpo:0 };
+        porForn[k].bruto += toNum(c.peso_bruto);
+        porForn[k].limpo += toNum(c.peso_limpo);
+      });
+      const fornecedores = Object.entries(porForn)
+        .map(([forn, v]) => ({
+          forn,
+          perda_pct: v.bruto > 0 ? (v.bruto - v.limpo) / v.bruto : 0,
+          peso_bruto: v.bruto,
+        }))
+        .sort((a,b) => b.peso_bruto - a.peso_bruto);
+
+      // Cortes acima da meta
+      const acimaMeta = Object.entries(porCorte)
+        .filter(([, v]) => v.bruto > 0 && (v.bruto - v.limpo) / v.bruto > metaPerda)
+        .map(([corte, v]) => ({ corte, perda_pct: (v.bruto-v.limpo)/v.bruto }));
 
       res.json({ ok: true, data: {
-        registros: reg.length,
-        insumos:   toNum(ins[0]?.total),
-        fichas:    toNum(fichas[0]?.total),
-        vendas:    toNum(vendas[0]?.total),
-        faturamento: toNum(vendas[0]?.faturamento),
-        perda_media: perdaMedia,
-        meta_perda:  metaPerda,
-        valor_perda: valorPerda,
-        total_bruto: totalBruto,
-        total_limpo: totalLimpo,
+        registros:    reg.length,
+        insumos:      toNum(ins[0]?.total),
+        fichas:       toNum(fichas[0]?.total),
+        vendas:       toNum(vendas[0]?.total),
+        faturamento:  toNum(vendas[0]?.faturamento),
+        perda_media:  perdaMedia,
+        meta_perda:   metaPerda,
+        valor_perda:  valorPerda,
+        custo_total:  custoTotal,
+        total_bruto:  totalBruto,
+        total_limpo:  totalLimpo,
         ranking,
-        alertas,
+        fornecedores,
+        acima_meta:   acimaMeta,
       }});
     } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
   });
