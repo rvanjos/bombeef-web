@@ -45,15 +45,34 @@ module.exports = function (pool) {
         id                  SERIAL PRIMARY KEY,
         funcionario_id      INTEGER NOT NULL,
         mes_ref             TEXT NOT NULL,
-        tipo                TEXT NOT NULL CHECK (tipo IN ('hora_extra','feriado','falta','desconto','bonus','outro')),
+        tipo                TEXT NOT NULL CHECK (tipo IN ('hora_extra','feriado','falta','desconto','bonus','outro','adicional_noturno','comissao')),
         descricao           TEXT,
-        quantidade          NUMERIC(6,2) DEFAULT 0,  -- horas ou dias
+        quantidade          NUMERIC(6,2) DEFAULT 0,
         valor_unitario      NUMERIC(10,2) DEFAULT 0,
         valor_total         NUMERIC(10,2) DEFAULT 0,
         data_ref            DATE,
-        criado_em           TIMESTAMPTZ DEFAULT NOW()
+        status              TEXT NOT NULL DEFAULT 'aprovado' CHECK (status IN ('pendente','aprovado','rejeitado')),
+        solicitante_id      INTEGER,  -- usuario_id que criou o lançamento
+        solicitante_nome    TEXT,
+        aprovador_id        INTEGER,  -- usuario_id que aprovou/rejeitou
+        motivo_rejeicao     TEXT,
+        criado_em           TIMESTAMPTZ DEFAULT NOW(),
+        atualizado_em       TIMESTAMPTZ DEFAULT NOW()
       )
     `).catch(() => {});
+
+    // Migrações: adicionar colunas de aprovação se não existirem
+    for (const col of [
+      "ALTER TABLE rh_apontamentos ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'aprovado'",
+      "ALTER TABLE rh_apontamentos ADD COLUMN IF NOT EXISTS solicitante_id INTEGER",
+      "ALTER TABLE rh_apontamentos ADD COLUMN IF NOT EXISTS solicitante_nome TEXT",
+      "ALTER TABLE rh_apontamentos ADD COLUMN IF NOT EXISTS aprovador_id INTEGER",
+      "ALTER TABLE rh_apontamentos ADD COLUMN IF NOT EXISTS motivo_rejeicao TEXT",
+      "ALTER TABLE rh_apontamentos ADD COLUMN IF NOT EXISTS atualizado_em TIMESTAMPTZ DEFAULT NOW()",
+    ]) { await pool.query(col).catch(() => {}); }
+    // Atualizar constraint de tipo para incluir novos tipos
+    await pool.query(`ALTER TABLE rh_apontamentos DROP CONSTRAINT IF EXISTS rh_apontamentos_tipo_check`).catch(()=>{});
+    await pool.query(`ALTER TABLE rh_apontamentos ADD CONSTRAINT rh_apontamentos_tipo_check CHECK (tipo IN ('hora_extra','feriado','falta','desconto','bonus','outro','adicional_noturno','comissao'))`).catch(()=>{});
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS rh_pagamentos (
@@ -246,9 +265,11 @@ module.exports = function (pool) {
           COALESCE(fi.escala_domingo,  0)                    AS escala_domingo,
           COALESCE(fi.valor_domingo,   0)                    AS valor_domingo,
           COALESCE((SELECT SUM(valor_total) FROM rh_apontamentos
-                    WHERE funcionario_id=f.id AND mes_ref=$1 AND tipo NOT IN ('falta','desconto')), 0) AS total_acrescimos,
+                    WHERE funcionario_id=f.id AND mes_ref=$1 AND tipo NOT IN ('falta','desconto')
+                    AND status='aprovado'), 0) AS total_acrescimos,
           COALESCE((SELECT SUM(valor_total) FROM rh_apontamentos
-                    WHERE funcionario_id=f.id AND mes_ref=$1 AND tipo IN ('falta','desconto')), 0)     AS total_descontos,
+                    WHERE funcionario_id=f.id AND mes_ref=$1 AND tipo IN ('falta','desconto')
+                    AND status='aprovado'), 0)     AS total_descontos,
           COALESCE((SELECT SUM(valor)       FROM rh_pagamentos
                     WHERE funcionario_id=f.id AND mes_ref=$1), 0)                                      AS total_extras,
           COALESCE((SELECT SUM(valor_total) FROM retiradas
@@ -370,6 +391,90 @@ module.exports = function (pool) {
   });
 
   // ── GET /relatorio?mes=MM/YYYY&ids=1,2,3 ─────────────────────────────────
+  // ── POST /lancamento — funcionário lança apontamento pendente ───────────────
+  r.post('/lancamento', async (req, res) => {
+    const { funcionario_id, mes_ref, tipo, descricao, quantidade, valor_unitario, data_ref } = req.body;
+    const solicitante_id   = req.usuario?.id;
+    const solicitante_nome = req.usuario?.nome || req.usuario?.email || 'Usuário';
+    if (!funcionario_id || !mes_ref || !tipo) return res.status(400).json({ ok: false, erro: 'Dados obrigatórios faltando' });
+    const qtd = parseFloat(quantidade) || 0;
+    const vUnit = parseFloat(valor_unitario) || 0;
+    const vTotal = qtd * vUnit;
+    try {
+      const { rows } = await pool.query(`
+        INSERT INTO rh_apontamentos
+          (funcionario_id, mes_ref, tipo, descricao, quantidade, valor_unitario, valor_total, data_ref,
+           status, solicitante_id, solicitante_nome)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pendente',$9,$10) RETURNING *
+      `, [funcionario_id, mes_ref, tipo, descricao||null, qtd, vUnit, vTotal,
+          data_ref||null, solicitante_id||null, solicitante_nome]);
+      res.json({ ok: true, data: rows[0] });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ── GET /lancamentos-pendentes/count ─────────────────────────────────────
+  r.get('/lancamentos-pendentes/count', async (req, res) => {
+    try {
+      const { rows } = await pool.query(`SELECT COUNT(*) AS total FROM rh_apontamentos WHERE status='pendente'`);
+      res.json({ ok: true, total: parseInt(rows[0].total) });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ── GET /lancamentos-pendentes ───────────────────────────────────────────
+  r.get('/lancamentos-pendentes', async (req, res) => {
+    try {
+      const { rows } = await pool.query(`
+        SELECT a.*, f.nome AS funcionario_nome, f.cargo
+        FROM rh_apontamentos a JOIN funcionarios f ON f.id=a.funcionario_id
+        WHERE a.status='pendente' ORDER BY a.criado_em DESC
+      `);
+      res.json({ ok: true, data: rows });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ── POST /lancamento/:id/aprovar ─────────────────────────────────────────
+  r.post('/lancamento/:id/aprovar', async (req, res) => {
+    try {
+      const { rows } = await pool.query(`
+        UPDATE rh_apontamentos SET status='aprovado', aprovador_id=$1, atualizado_em=NOW()
+        WHERE id=$2 RETURNING *
+      `, [req.usuario?.id||null, parseInt(req.params.id)]);
+      if (!rows.length) return res.status(404).json({ ok:false, erro:'Não encontrado' });
+      res.json({ ok: true, data: rows[0] });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ── POST /lancamento/:id/rejeitar ────────────────────────────────────────
+  r.post('/lancamento/:id/rejeitar', async (req, res) => {
+    const { motivo } = req.body;
+    try {
+      const { rows } = await pool.query(`
+        UPDATE rh_apontamentos SET status='rejeitado', aprovador_id=$1,
+          motivo_rejeicao=$2, atualizado_em=NOW()
+        WHERE id=$3 RETURNING *
+      `, [req.usuario?.id||null, motivo||null, parseInt(req.params.id)]);
+      if (!rows.length) return res.status(404).json({ ok:false, erro:'Não encontrado' });
+      res.json({ ok: true, data: rows[0] });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ── GET /meus-lancamentos ────────────────────────────────────────────────
+  r.get('/meus-lancamentos', async (req, res) => {
+    const { mes_ref, funcionario_id } = req.query;
+    const conds = [], params = [];
+    if (funcionario_id) { params.push(funcionario_id); conds.push(`a.funcionario_id=$${params.length}`); }
+    if (mes_ref) { params.push(mes_ref); conds.push(`a.mes_ref=$${params.length}`); }
+    const where = conds.length ? 'WHERE '+conds.join(' AND ') : '';
+    try {
+      const { rows } = await pool.query(`
+        SELECT a.*, f.nome AS funcionario_nome
+        FROM rh_apontamentos a JOIN funcionarios f ON f.id=a.funcionario_id
+        ${where} ORDER BY a.criado_em DESC
+      `, params);
+      res.json({ ok: true, data: rows });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
   r.get('/relatorio', async (req, res) => {
     const { mes, ids } = req.query;
     if (!mes) return res.status(400).json({ ok: false, erro: 'mes obrigatório' });

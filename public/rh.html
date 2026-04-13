@@ -158,6 +158,10 @@ main{padding:16px 24px;max-width:1400px;margin:0 auto;}
 <main>
   <div class="tabs">
     <button class="tab active" onclick="showTab('folha')">📋 Folha Mensal</button>
+    <button class="tab" id="tab-btn-aprovacoes" onclick="showTab('aprovacoes')" style="display:none">
+      ✅ Aprovações <span id="badge-pendentes" style="display:none;background:var(--red);color:#fff;border-radius:10px;padding:1px 7px;font-size:10px;margin-left:4px">0</span>
+    </button>
+    <button class="tab" id="tab-btn-meus" onclick="showTab('meus')" style="display:none">📝 Meus Lançamentos</button>
     <button class="tab" onclick="showTab('escala')">📅 Escala de Domingos</button>
     <button class="tab" onclick="showTab('relatorio')">📄 Relatório</button>
   </div>
@@ -173,6 +177,26 @@ main{padding:16px 24px;max-width:1400px;margin:0 auto;}
       <span id="lbl-mes" style="font-size:13px;font-weight:600;color:var(--muted);"></span>
     </div>
     <div id="resumo-container"><div class="loading">Carregando...</div></div>
+  </div>
+
+  <!-- ── TAB APROVAÇÕES (admin/gestor) ── -->
+  <div id="tab-aprovacoes" class="tab-content">
+    <div class="toolbar">
+      <label>Lançamentos pendentes de aprovação</label>
+      <button class="btn btn-red" onclick="carregarPendentes()">🔄 Atualizar</button>
+    </div>
+    <div id="pendentes-container"><div class="loading">Carregando...</div></div>
+  </div>
+
+  <!-- ── TAB MEUS LANÇAMENTOS (funcionário) ── -->
+  <div id="tab-meus" class="tab-content">
+    <div class="toolbar">
+      <label>MÊS:</label>
+      <input type="month" id="sel-mes-meus">
+      <button class="btn btn-red" onclick="carregarMeusLanc()">🔄 Atualizar</button>
+      <button class="btn btn-blue" onclick="abrirModalLanc()">＋ Novo Lançamento</button>
+    </div>
+    <div id="meus-container"><div class="loading">Carregando...</div></div>
   </div>
 
   <!-- ── TAB ESCALA ── -->
@@ -296,6 +320,76 @@ main{padding:16px 24px;max-width:1400px;margin:0 auto;}
   </div>
 </div>
 
+<!-- Modal novo lançamento -->
+<div class="modal-overlay" id="modal-lanc" style="display:none">
+  <div class="modal-box" style="max-width:480px">
+    <div class="modal-header" style="background:var(--red)">
+      <h3>📝 Novo Lançamento</h3>
+      <button class="modal-close" onclick="fecharModal('modal-lanc')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Tipo *</label>
+          <select id="lanc-tipo" onchange="atualizarCamposLanc()">
+            <option value="hora_extra">⏱️ Hora Extra</option>
+            <option value="adicional_noturno">🌙 Adicional Noturno</option>
+            <option value="falta">❌ Falta</option>
+            <option value="comissao">💰 Comissão</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Data de Referência</label>
+          <input type="date" id="lanc-data">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Descrição / Motivo *</label>
+        <input type="text" id="lanc-desc" placeholder="Ex: Hora extra dia 15/04, cobertura de turno...">
+      </div>
+      <div class="form-row">
+        <div class="form-group" id="lanc-qtd-wrap">
+          <label id="lanc-qtd-label">Quantidade (horas)</label>
+          <input type="number" id="lanc-qtd" step="0.5" min="0" placeholder="0">
+        </div>
+        <div class="form-group">
+          <label id="lanc-vunit-label">Valor Unitário (R$)</label>
+          <input type="number" id="lanc-vunit" step="0.01" min="0" placeholder="0,00" oninput="calcLanc()">
+        </div>
+      </div>
+      <div id="lanc-calc" style="background:#f0faf4;border-radius:8px;padding:10px 14px;font-size:13px;margin-top:4px;display:none">
+        Valor total: <strong id="lanc-vtotal" style="color:var(--green)">R$ 0,00</strong>
+      </div>
+      <div class="info-box ib-blue" style="margin-top:12px;font-size:12px">
+        ℹ️ Seu lançamento ficará <strong>pendente</strong> até o admin aprovar. Você receberá confirmação na tela.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-gray" onclick="fecharModal('modal-lanc')">Cancelar</button>
+      <button class="btn btn-red" onclick="salvarLancamento()">📤 Enviar para Aprovação</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal rejeitar -->
+<div class="modal-overlay" id="modal-rejeitar" style="display:none">
+  <div class="modal-box" style="max-width:400px">
+    <div class="modal-header" style="background:#dc2626">
+      <h3>❌ Rejeitar Lançamento</h3>
+      <button class="modal-close" onclick="fecharModal('modal-rejeitar')">×</button>
+    </div>
+    <div class="modal-body">
+      <p style="margin-bottom:12px;font-size:13px">Informe o motivo da rejeição (opcional):</p>
+      <input type="hidden" id="rejeitar-id">
+      <textarea id="rejeitar-motivo" rows="3" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:7px;font-size:13px" placeholder="Ex: Valor incorreto, não autorizado..."></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-gray" onclick="fecharModal('modal-rejeitar')">Cancelar</button>
+      <button class="btn" style="background:#dc2626;color:#fff" onclick="confirmarRejeitar()">❌ Confirmar Rejeição</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast" class="toast"></div>
 
 <script>
@@ -340,6 +434,135 @@ window.addEventListener('message', e => {
     if (!_inited) { _inited = true; init(); }
   }
 });
+// ── PERFIL E FUNCIONÁRIO VINCULADO ──────────────────────────────────────────
+let _perfil = '';
+let _meuFuncId = null;
+
+// ── APROVAÇÕES (admin/gestor) ─────────────────────────────────────────────────
+async function carregarPendentes() {
+  const c = document.getElementById('pendentes-container');
+  c.innerHTML = '<div class="loading">Carregando...</div>';
+  const d = await get('/api/rh/lancamentos-pendentes');
+  if (!d.ok) { c.innerHTML = '<div class="empty"><div class="icon">⚠️</div><p>' + (d.erro||'Erro') + '</p></div>'; return; }
+  if (!d.data.length) { c.innerHTML = '<div class="empty"><div class="icon">✅</div><p>Nenhum lançamento pendente</p></div>'; atualizarBadge(0); return; }
+  atualizarBadge(d.data.length);
+  const tipoLabel = t => ({'hora_extra':'⏱️ Hora Extra','adicional_noturno':'🌙 Ad. Noturno','falta':'❌ Falta','comissao':'💰 Comissão','bonus':'🎁 Bônus','desconto':'↘️ Desconto','outro':'📌 Outro'}[t]||t);
+  c.innerHTML = d.data.map(a => `
+    <div class="lanc-card pendente">
+      <div class="lanc-info">
+        <div class="lanc-nome">${a.funcionario_nome} <span style="font-weight:400;color:var(--muted);font-size:12px">${a.cargo||''}</span></div>
+        <div class="lanc-meta">${tipoLabel(a.tipo)} · ${a.mes_ref}${a.data_ref?' · '+fmtData(a.data_ref):''}</div>
+        <div style="font-size:12px;margin-top:3px">${a.descricao||'—'}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:3px">Por: ${a.solicitante_nome||'—'} · ${new Date(a.criado_em).toLocaleString('pt-BR')}</div>
+      </div>
+      <div style="text-align:right;min-width:90px">
+        <div style="font-family:monospace;font-size:15px;font-weight:700;color:${a.tipo==='falta'||a.tipo==='desconto'?'#dc2626':'#16a34a'}">
+          ${a.tipo==='falta'||a.tipo==='desconto'?'- ':'+ '}${brl(a.valor_total)}
+        </div>
+        <div style="font-size:11px;color:var(--muted)">${a.quantidade} × ${brl(a.valor_unitario)}</div>
+      </div>
+      <div class="lanc-acoes" style="flex-direction:column">
+        <button class="btn" style="background:#16a34a;color:#fff;padding:6px 12px;font-size:12px" onclick="aprovarLanc(${a.id})">✅ Aprovar</button>
+        <button class="btn" style="background:#fee2e2;color:#dc2626;border:1px solid #fca5a5;padding:6px 12px;font-size:12px;margin-top:4px" onclick="abrirRejeitar(${a.id})">❌ Rejeitar</button>
+      </div>
+    </div>`).join('');
+}
+
+async function aprovarLanc(id) {
+  const d = await post('/api/rh/lancamento/'+id+'/aprovar', {});
+  if (!d.ok) { toast('❌ '+d.erro); return; }
+  toast('✅ Aprovado — já entra na folha!'); carregarPendentes(); carregarResumo();
+}
+
+function abrirRejeitar(id) {
+  document.getElementById('rejeitar-id').value = id;
+  document.getElementById('rejeitar-motivo').value = '';
+  document.getElementById('modal-rejeitar').style.display = 'flex';
+}
+async function confirmarRejeitar() {
+  const id = document.getElementById('rejeitar-id').value;
+  const motivo = document.getElementById('rejeitar-motivo').value.trim();
+  const d = await post('/api/rh/lancamento/'+id+'/rejeitar', { motivo });
+  if (!d.ok) { toast('❌ '+d.erro); return; }
+  toast('Lançamento rejeitado.'); fecharModal('modal-rejeitar'); carregarPendentes();
+}
+function atualizarBadge(n) {
+  const b = document.getElementById('badge-pendentes');
+  if (b) { b.textContent = n; b.style.display = n>0?'':'none'; }
+}
+
+// ── MEUS LANÇAMENTOS (funcionário) ────────────────────────────────────────────
+async function carregarMeusLanc() {
+  const ym = document.getElementById('sel-mes-meus').value;
+  if (!ym) return;
+  const mes = ymToMmYyyy(ym);
+  const c = document.getElementById('meus-container');
+  c.innerHTML = '<div class="loading">Carregando...</div>';
+  const params = 'mes_ref='+encodeURIComponent(mes)+(_meuFuncId?'&funcionario_id='+_meuFuncId:'');
+  const d = await get('/api/rh/meus-lancamentos?'+params);
+  if (!d.ok) { c.innerHTML = '<div class="empty"><div class="icon">⚠️</div><p>'+d.erro+'</p></div>'; return; }
+  if (!d.data.length) { c.innerHTML = '<div class="empty"><div class="icon">📝</div><p>Nenhum lançamento neste mês.<br><small>Clique em "+ Novo Lançamento"</small></p></div>'; return; }
+  const tipoLabel = t => ({'hora_extra':'⏱️ Hora Extra','adicional_noturno':'🌙 Ad. Noturno','falta':'❌ Falta','comissao':'💰 Comissão','bonus':'🎁 Bônus','desconto':'↘️ Desconto','outro':'📌 Outro'}[t]||t);
+  c.innerHTML = d.data.map(a => {
+    const statusEl = {pendente:'<span class="pill-pend">⏳ Aguardando</span>',aprovado:'<span class="pill-aprov">✅ Aprovado</span>',rejeitado:'<span class="pill-rejei">❌ Rejeitado</span>'}[a.status]||'';
+    return `<div class="lanc-card ${a.status}">
+      <div class="lanc-info">
+        <div class="lanc-nome">${tipoLabel(a.tipo)} ${statusEl}</div>
+        <div class="lanc-meta">${a.mes_ref}${a.data_ref?' · '+fmtData(a.data_ref):''}</div>
+        <div style="font-size:12px;margin-top:3px">${a.descricao||'—'}</div>
+        ${a.motivo_rejeicao?'<div style="font-size:11px;color:#dc2626;margin-top:4px">Motivo: '+a.motivo_rejeicao+'</div>':''}
+      </div>
+      <div style="font-family:monospace;font-size:15px;font-weight:700;color:${a.tipo==='falta'||a.tipo==='desconto'?'#dc2626':'#16a34a'}">
+        ${a.tipo==='falta'||a.tipo==='desconto'?'- ':'+ '}${brl(a.valor_total)}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function abrirModalLanc() {
+  const hoje = new Date().toISOString().slice(0,10);
+  document.getElementById('lanc-data').value = hoje;
+  document.getElementById('lanc-desc').value = '';
+  document.getElementById('lanc-qtd').value = '';
+  document.getElementById('lanc-vunit').value = '';
+  document.getElementById('lanc-tipo').value = 'hora_extra';
+  document.getElementById('lanc-calc').style.display = 'none';
+  atualizarCamposLanc();
+  document.getElementById('modal-lanc').style.display = 'flex';
+}
+function atualizarCamposLanc() {
+  const tipo = document.getElementById('lanc-tipo').value;
+  const qL = document.getElementById('lanc-qtd-label');
+  const vL = document.getElementById('lanc-vunit-label');
+  if (tipo==='falta') { qL.textContent='Quantidade (dias)'; vL.textContent='Desconto por dia (R$)'; }
+  else if (tipo==='comissao') { qL.textContent='Quantidade'; vL.textContent='Valor (R$)'; }
+  else if (tipo==='adicional_noturno') { qL.textContent='Horas noturnas'; vL.textContent='Valor por hora (R$)'; }
+  else { qL.textContent='Quantidade (horas)'; vL.textContent='Valor por hora (R$)'; }
+  calcLanc();
+}
+function calcLanc() {
+  const qtd = parseFloat(document.getElementById('lanc-qtd').value)||0;
+  const vu  = parseFloat(document.getElementById('lanc-vunit').value)||0;
+  const total = qtd*vu;
+  const el = document.getElementById('lanc-calc');
+  el.style.display = total>0?'':'none';
+  if (total>0) document.getElementById('lanc-vtotal').textContent = brl(total);
+}
+async function salvarLancamento() {
+  if (!_meuFuncId) { toast('⚠️ Usuário não vinculado a funcionário. Fale com o admin.'); return; }
+  const tipo = document.getElementById('lanc-tipo').value;
+  const descricao = document.getElementById('lanc-desc').value.trim();
+  const quantidade = parseFloat(document.getElementById('lanc-qtd').value)||0;
+  const valor_unitario = parseFloat(document.getElementById('lanc-vunit').value)||0;
+  const data_ref = document.getElementById('lanc-data').value;
+  const mes_ref = ymToMmYyyy(document.getElementById('sel-mes-meus').value||_mesAtual);
+  if (!descricao) { toast('⚠️ Informe a descrição'); return; }
+  if (!quantidade||!valor_unitario) { toast('⚠️ Informe quantidade e valor'); return; }
+  const d = await post('/api/rh/lancamento', { funcionario_id:_meuFuncId, mes_ref, tipo, descricao, quantidade, valor_unitario, data_ref });
+  if (!d.ok) { toast('❌ '+d.erro); return; }
+  toast('✅ Enviado para aprovação!'); fecharModal('modal-lanc'); carregarMeusLanc();
+}
+
 // Inicia imediatamente se já tem token no storage
 if (getToken()) { _inited = true; init(); }
 else {
@@ -369,21 +592,70 @@ function toast(msg, dur=3000) {
 }
 function fecharModal(id) { document.getElementById(id).classList.remove('open'); }
 function showTab(t) {
-  document.querySelectorAll('.tab').forEach((b,i) => b.classList.toggle('active', ['folha','escala','relatorio'][i]===t));
+  document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+  // Ativa o botão correto
+  const btn = document.querySelector(`.tab[onclick="showTab('${t}')"]`);
+  if (btn) btn.classList.add('active');
   document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
   document.getElementById('tab-'+t).classList.add('active');
-  if (t === 'escala') renderEscala();
-  if (t === 'relatorio') carregarFuncsRelatorio();
+  if (t === 'escala')     renderEscala();
+  if (t === 'relatorio')  carregarFuncsRelatorio();
+  if (t === 'aprovacoes') carregarPendentes();
+  if (t === 'meus')       carregarMeusLanc();
 }
 
 // ── Init ────────────────────────────────────────────────────────────────────
-function init() {
+async function init() {
   const hoje = new Date();
   const ym = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
   document.getElementById('sel-mes').value = ym;
   document.getElementById('sel-mes-rel').value = ym;
+  if (document.getElementById('sel-mes-meus')) document.getElementById('sel-mes-meus').value = ym;
   _escalaMes = { ano: hoje.getFullYear(), mes: hoje.getMonth() };
-  carregarResumo();
+
+  // Detectar perfil do usuário logado via token JWT
+  try {
+    const token = getToken();
+    if (token) {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      _perfil = payload.perfil || '';
+      const email = payload.email || '';
+      // Vincular funcionário pelo email (nome do usuário)
+      const funcs = await get('/api/rh/funcionarios');
+      if (funcs.ok && funcs.data) {
+        // Tenta casar pelo email ou nome
+        const match = funcs.data.find(f =>
+          (f.email && f.email.toLowerCase() === email.toLowerCase()) ||
+          (f.nome && email && email.toLowerCase().includes(f.nome.split(' ')[0].toLowerCase()))
+        );
+        if (match) _meuFuncId = match.id;
+      }
+    }
+  } catch(e) { _perfil = ''; }
+
+  // Mostrar abas conforme perfil
+  const isAdmin = _perfil === 'admin' || _perfil === 'gestor';
+  const isFuncionario = !isAdmin; // todos que não são admin/gestor
+  const btnAprov = document.getElementById('tab-btn-aprovacoes');
+  const btnMeus  = document.getElementById('tab-btn-meus');
+  if (btnAprov) btnAprov.style.display = isAdmin ? '' : 'none';
+  if (btnMeus)  btnMeus.style.display  = isFuncionario ? '' : 'none';
+
+  // Admin também pode ver a aba de lançamentos (para testar/cadastrar por outro)
+  if (isAdmin) {
+    if (btnMeus) btnMeus.style.display = '';
+  }
+
+  if (isAdmin) {
+    carregarResumo();
+    // Carregar badge de pendentes
+    get('/api/rh/lancamentos-pendentes/count').then(d => {
+      if (d.ok) atualizarBadge(d.total);
+    });
+  } else {
+    // Funcionário vai direto para seus lançamentos
+    showTab('meus');
+  }
 }
 
 // ── Nav mês ─────────────────────────────────────────────────────────────────
