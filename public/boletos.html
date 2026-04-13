@@ -658,7 +658,7 @@ function calSemana(idx){
       const cl  = b.status==='pago'?'pill-p':b.status==='vencido'?'pill-r':'pill-v';
       const st  = {pago:'✅ Pago',vencido:'🔴 Vencido',avencer:'🟡 A Vencer'}[b.status]||b.status;
       const parc= b.totalParcelas>1 ? ' <span style="font-size:10px;color:var(--muted)">'+b.parcela+'/'+b.totalParcelas+'</span>' : '';
-      html += '<div style="border:1px solid var(--border);border-top:none;padding:8px 10px;background:#fff;last-child:{border-radius:0 0 6px 6px}">'
+      html += '<div style="border:1px solid var(--border);border-top:none;padding:8px 10px;background:#fff">'
         + '<div style="font-weight:600;font-size:13px">'+b.fornecedor+parc+'</div>'
         + (b.produto?'<div style="font-size:11px;color:var(--muted)">'+b.produto+'</div>':'')
         + (b.nf?'<div style="font-size:10px;color:var(--blue)">NF-e '+b.nf+'</div>':'')
