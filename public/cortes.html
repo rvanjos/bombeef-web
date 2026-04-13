@@ -433,6 +433,12 @@ tr:hover td{background:#fdf8f5;}
 </div>
 
 <script>
+// Aguarda BB estar disponível
+(function waitBB() {
+  if (typeof BB === 'undefined' || !BB.api) {
+    setTimeout(waitBB, 50); return;
+  }
+
 const {api, fmt, toast} = BB;
 const brl = v => fmt.brl(parseFloat(v)||0);
 const pct = v => ((parseFloat(v)||0)*100).toFixed(1)+'%';
@@ -441,6 +447,9 @@ const mesAtual = () => { const d=new Date(); return String(d.getMonth()+1).padSt
 const mesInput = () => { const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); };
 
 let _registros=[], _insumos=[], _fichas=[], _vendas=[];
+
+// Expõe cmShowTab globalmente para os onclick do HTML
+window.cmShowTab = cmShowTab;
 
 window.onBBReady = () => init();
 if(api.token()) init();
@@ -504,24 +513,6 @@ async function carregarDashboard() {
   document.getElementById('d-perda').textContent = perdaPct.toFixed(1)+'%';
   document.getElementById('d-perda').style.color = corBadge;
   document.getElementById('d-perda-s').textContent = 'Meta: '+meta.toFixed(0)+'%';
-
-  // Barra de meta
-  const metaWrapEl = document.getElementById('dash-meta-wrap');
-  const fillPct = Math.min(100, perdaPct/meta*100);
-  const fillCor = perdaPct <= meta ? 'var(--green)' : 'var(--red-l)';
-  metaWrapEl.innerHTML = `
-    <div class="card" style="padding:14px 16px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-        <span style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase">META DE PERDA — ${mesAtual()}</span>
-        <span style="font-size:13px;font-weight:700;color:${fillCor}">${perdaPct.toFixed(1)}% / ${meta.toFixed(0)}%</span>
-      </div>
-      <div class="meta-bar-bg"><div class="meta-bar-fill" style="width:${fillPct}%;background:${fillCor}"></div></div>
-      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:4px">
-        <span>Total bruto: ${(parseFloat(v.total_bruto)||0).toFixed(1)}kg</span>
-        <span>Total limpo: ${(parseFloat(v.total_limpo)||0).toFixed(1)}kg</span>
-        <span>Perda: ${((parseFloat(v.total_bruto)||0)-(parseFloat(v.total_limpo)||0)).toFixed(1)}kg</span>
-      </div>
-    </div>`;
 
   // Alerta cortes acima da meta
   const alertaEl = document.getElementById('dash-alerta-meta');
@@ -1133,6 +1124,7 @@ document.addEventListener('click', e => {
     if(el && el.style.display!=='none' && e.target===el) fecharModal(id);
   });
 });
+})(); // fim waitBB
 </script>
 </body>
 </html>
