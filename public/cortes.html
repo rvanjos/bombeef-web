@@ -433,6 +433,22 @@ tr:hover td{background:#fdf8f5;}
 </div>
 
 <script>
+// Stub de cmShowTab exposto antes do BB carregar (evita "not defined" nos onclick)
+window.cmShowTab = function(name, btn) {
+  // Adia até o BB estar pronto
+  if (!window._cmReady) { setTimeout(() => window.cmShowTab(name, btn), 100); return; }
+  const tabEl = document.getElementById('tab-'+name);
+  if (tabEl) {
+    document.querySelectorAll('.body > div[id^="tab-"]').forEach(d => d.style.display='none');
+    tabEl.style.display='';
+  }
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  ['registros','relatorio','corteslimpos','insumos','fichas','vendas'].forEach(n => {
+    if (name===n && window['_cm_load_'+n]) window['_cm_load_'+n]();
+  });
+};
+
 // Aguarda BB estar disponível
 (function waitBB() {
   if (typeof BB === 'undefined' || !BB.api) {
@@ -467,7 +483,8 @@ function init(){
 
 function cmShowTab(name, btn) {
   document.querySelectorAll('.body > div[id^="tab-"]').forEach(d => d.style.display='none');
-  document.getElementById('tab-'+name).style.display='';
+  const tabEl = document.getElementById('tab-'+name);
+  if (tabEl) tabEl.style.display='';
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   if(btn) btn.classList.add('active');
   // Carregar dados da aba
@@ -478,6 +495,15 @@ function cmShowTab(name, btn) {
   if(name==='fichas')       carregarFichas();
   if(name==='vendas')       carregarVendas();
 }
+
+// Registra os loaders para o stub externo chamar
+window._cm_load_registros    = () => carregarRegistros();
+window._cm_load_relatorio    = () => carregarRelatorio();
+window._cm_load_corteslimpos = () => carregarCortesLimpos();
+window._cm_load_insumos      = () => carregarInsumos();
+window._cm_load_fichas       = () => carregarFichas();
+window._cm_load_vendas       = () => carregarVendas();
+window._cmReady = true;
 
 function fecharModal(id) {
   const el = document.getElementById(id);

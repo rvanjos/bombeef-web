@@ -35,6 +35,10 @@ module.exports = function(pool) {
       CREATE INDEX IF NOT EXISTS idx_fat_data ON faturamento_periodos(data_inicio);
       CREATE INDEX IF NOT EXISTS idx_fat_tipo ON faturamento_periodos(tipo_periodo);
     `).catch(()=>{});
+    // Adicionar coluna atualizado_em se não existir (migração)
+    await pool.query(`
+      ALTER TABLE faturamento_periodos ADD COLUMN IF NOT EXISTS atualizado_em TIMESTAMPTZ DEFAULT NOW()
+    `).catch(()=>{});
     // Tabela de metas mensais de faturamento
     // Tabela para registrar destino do dinheiro (reconciliação)
     await pool.query(`
@@ -184,58 +188,91 @@ module.exports = function(pool) {
   // ── Parser Xmenu Formas de Pagamento ───────────────────────────────────────
   function parseXMenuFormasPagamento(buffer) {
     const XLSX = require('xlsx');
-    const wb = XLSX.read(buffer, { type: 'buffer' });
+    const wb = XLSX.read(buffer, { type: 'buffer', cellDates: true });
     const sheet = wb.Sheets[wb.SheetNames[0]];
-    // Corrige !ref
-    const dec = XLSX.utils.decode_range(sheet['!ref'] || 'A1');
-    let mR = dec.e.r, mC = dec.e.c;
+
+    // Corrige !ref percorrendo todas as células
+    let mR = 0, mC = 0;
     for (const addr of Object.keys(sheet)) {
       if (addr[0] === '!') continue;
       const c = XLSX.utils.decode_cell(addr);
-      if (c.r > mR) mR = c.r; if (c.c > mC) mC = c.c;
+      if (c.r > mR) mR = c.r;
+      if (c.c > mC) mC = c.c;
     }
-    sheet['!ref'] = XLSX.utils.encode_range({ s: dec.s, e: { r: mR, c: mC } });
-    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
+    sheet['!ref'] = XLSX.utils.encode_range({ s: {r:0,c:0}, e: { r: mR, c: mC } });
+
+    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null, raw: false });
     if (rows.length < 2) return { dias: [], totais: {} };
 
-    // Linha 0 = cabeçalho das formas (col 2 em diante)
-    const formas = rows[0].slice(2).map(f => f ? String(f).trim().toUpperCase() : null).filter(Boolean);
+    // Encontrar linha de cabeçalho (tem "DINHEIRO" ou "PIX" ou "REDE")
+    let headerRow = 0;
+    for (let i = 0; i < Math.min(5, rows.length); i++) {
+      const r = rows[i];
+      if (r && r.some(c => c && /DINHEIRO|PIX|REDE|PAGSEGURO|VOUCHER/i.test(String(c)))) {
+        headerRow = i; break;
+      }
+    }
+
+    const formas = [];
+    const headerCols = rows[headerRow] || [];
+    // Encontrar col de início das formas (pular cols de label/data)
+    let startCol = 2;
+    for (let c = 0; c < headerCols.length; c++) {
+      if (headerCols[c] && /DINHEIRO|PIX|REDE|PAGSEGURO|VOUCHER/i.test(String(headerCols[c]))) {
+        startCol = c; break;
+      }
+    }
+    for (let c = startCol; c < headerCols.length; c++) {
+      const v = headerCols[c];
+      if (v && String(v).trim()) formas.push(String(v).trim().toUpperCase());
+    }
+
     const resultado = { dias: [], totais: {} };
 
-    for (let i = 1; i < rows.length; i++) {
+    for (let i = headerRow + 1; i < rows.length; i++) {
       const row = rows[i];
+      if (!row) continue;
       const cel0 = String(row[0] || '').trim();
       const cel1 = row[1];
 
-      // Linha de total geral — pula
-      if (cel0.includes('Total') || cel0.includes('Grande')) {
-        // Captura totais gerais
+      // Linha de total — captura e pula
+      if (/total|grande/i.test(cel0)) {
         formas.forEach((f, idx) => {
-          const v = parseFloat(row[2 + idx]) || 0;
+          const v = parseFloat(String(row[startCol + idx] || '').replace(',', '.')) || 0;
           if (v > 0) resultado.totais[f] = (resultado.totais[f] || 0) + v;
         });
         continue;
       }
 
-      // Linha de dia — tem data válida na col 1
-      if (!cel1) continue;
-      const dtStr = String(cel1).trim();
-      // Aceita DD/MM/YYYY ou objeto Date
+      // Linha de dia — detectar data na col 1 (DD/MM/YYYY, YYYY-MM-DD, ou Date obj)
+      if (!cel1 && cel1 !== 0) continue;
       let data = null;
-      if (typeof cel1 === 'object' && cel1 instanceof Date) {
-        data = cel1.toISOString().slice(0,10);
-      } else {
-        const m = dtStr.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-        if (m) data = m[3] + '-' + m[2] + '-' + m[1];
+      const dtStr = String(cel1).trim();
+
+      // Tenta DD/MM/YYYY
+      const m1 = dtStr.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+      if (m1) data = m1[3] + '-' + m1[2] + '-' + m1[1];
+
+      // Tenta YYYY-MM-DD
+      if (!data) { const m2 = dtStr.match(/^(\d{4})-(\d{2})-(\d{2})/); if (m2) data = m2[0]; }
+
+      // Tenta número serial Excel (dias desde 1900)
+      if (!data && /^\d+(\.\d+)?$/.test(dtStr)) {
+        try {
+          const d = XLSX.SSF.parse_date_code(parseFloat(dtStr));
+          if (d) data = `${d.y}-${String(d.m).padStart(2,'0')}-${String(d.d).padStart(2,'0')}`;
+        } catch(e) {}
       }
+
       if (!data) continue;
 
       const dia = { data, formas: {}, total: 0 };
       formas.forEach((f, idx) => {
-        const v = parseFloat(row[2 + idx]) || 0;
+        const raw = row[startCol + idx];
+        const v = parseFloat(String(raw || '').replace(',', '.')) || 0;
         if (v > 0) { dia.formas[f] = v; dia.total += v; }
       });
-      resultado.dias.push(dia);
+      if (dia.total > 0 || Object.keys(dia.formas).length > 0) resultado.dias.push(dia);
     }
     return resultado;
   }
