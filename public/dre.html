@@ -889,19 +889,23 @@ async function procCC(file) {
       for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
         const content = await page.getTextContent();
-        // Preserva posições para reconstruir linhas
-        const items = content.items;
-        let lastY = null, lineText = '';
+        // Agrupa items por linha (Y), depois ordena por X dentro de cada linha
+        const items = content.items.filter(it => it.str.trim());
+        // Agrupa por Y com tolerância de 4pt
+        const linhasMap = new Map();
         for (const item of items) {
-          const y = item.transform[5];
-          if (lastY !== null && Math.abs(y - lastY) > 3) {
-            fullText += lineText + '\n';
-            lineText = '';
-          }
-          lineText += item.str + ' ';
-          lastY = y;
+          const y = Math.round(item.transform[5] / 4) * 4; // bucket de 4pt
+          if (!linhasMap.has(y)) linhasMap.set(y, []);
+          linhasMap.get(y).push({ x: item.transform[4], str: item.str });
         }
-        if (lineText.trim()) fullText += lineText + '\n';
+        // Ordena linhas de cima para baixo (Y decrescente em pdfjs)
+        const ysOrdenados = [...linhasMap.keys()].sort((a, b) => b - a);
+        for (const y of ysOrdenados) {
+          // Ordena items da linha da esquerda para a direita
+          const linha = linhasMap.get(y).sort((a, b) => a.x - b.x);
+          const texto = linha.map(it => it.str).join(' ').trim();
+          if (texto) fullText += texto + '\n';
+        }
         fullText += '\n--- PAGE ---\n';
       }
       const lancs = parseFaturaPDF(fullText, file.name);
@@ -1028,12 +1032,14 @@ function parseFaturaC6(text) {
       const descRaw = mLanc[3].trim();
       const vRaw    = mLanc[4];
 
-      // Ignora pagamentos de fatura
-      if (/^pag\s+fatura|^pagamento\s+fatura/i.test(descRaw)) continue;
+      // Ignora pagamentos de fatura e ajuste cred
+      if (/^pag\s+fatura|^pagamento\s+fatura|^obrigado\s+pelo|^ajuste\s+cred/i.test(descRaw)) continue;
 
       let v = parseFloat(vRaw.replace(/\./g,'').replace(',','.')) || 0;
       if (!v) continue;
-      v = -Math.abs(v); // sempre despesa
+      // Estornos viram crédito (positivo), demais são despesa (negativo)
+      const isEstorno = /estorno|cashback|credito|crédito/i.test(descRaw);
+      v = isEstorno ? Math.abs(v) : -Math.abs(v);
 
       const mes = `${mm}/${ano}`;
       result.push({
