@@ -510,17 +510,24 @@ module.exports = function(pool) {
             `SELECT id, pagamentos FROM faturamento_periodos WHERE data_inicio=$1 AND tipo_periodo='dia'`,
             [d.data]
           );
+          // Normaliza sempre para snake_case (evita chaves duplicadas DINHEIRO/dinheiro)
+          const formasNorm = {
+            dinheiro:     d.formas['DINHEIRO']       || d.formas['dinheiro']      || 0,
+            pix_conta:    d.formas['PIX NA CONTA']   || d.formas['pix_conta']     || 0,
+            pix_pag:      d.formas['PIX PAGSEGURO']  || d.formas['pix_pag']       || 0,
+            pagseguro:    d.formas['PAGSEGURO']      || d.formas['pagseguro']     || 0,
+            rede_credito: d.formas['REDE CREDITO']   || d.formas['rede_credito']  || 0,
+            rede_debito:  d.formas['REDE DEBITO']    || d.formas['rede_debito']   || 0,
+            voucher:      d.formas['VOUCHER']         || d.formas['voucher']       || 0,
+            clube:        d.formas['CLUBE DA PICANHA']|| d.formas['clube']         || 0,
+          };
           if (existing.rows.length) {
             const pagAtual = existing.rows[0].pagamentos || {};
-            // Merge mantendo dados do Xmenu Listagem (nfce/mei) e adicionando formas
-            const pagMerge = { ...pagAtual, ...d.formas,
-              dinheiro: d.formas['DINHEIRO'] || 0,
-              pix_conta: d.formas['PIX NA CONTA'] || 0,
-              pix_pag: d.formas['PIX PAGSEGURO'] || 0,
-              pagseguro: d.formas['PAGSEGURO'] || 0,
-              rede_credito: d.formas['REDE CREDITO'] || 0,
-              rede_debito: d.formas['REDE DEBITO'] || 0,
-              voucher: d.formas['VOUCHER'] || 0,
+            // Preserva nfce/mei da Listagem, substitui formas com dados normalizados
+            const pagMerge = {
+              ...(pagAtual.nfce ? { nfce: pagAtual.nfce } : {}),
+              ...(pagAtual.mei  ? { mei:  pagAtual.mei  } : {}),
+              ...formasNorm,
             };
             await client.query(
               `UPDATE faturamento_periodos SET pagamentos=$1, atualizado_em=NOW() WHERE id=$2`,
@@ -528,21 +535,12 @@ module.exports = function(pool) {
             );
             atualizados++;
           } else {
-            // Dia não existe ainda — cria com os dados de formas
             await client.query(`
               INSERT INTO faturamento_periodos
                 (data_inicio, data_fim, tipo_periodo, label, fat_bruto, fat_liquido,
                  total_pessoas, ticket_medio, descontos, categorias, pagamentos)
               VALUES ($1,$1,'dia',$2,$3,$3,0,0,0,'{}', $4)
-            `, [d.data, 'Xmenu ' + d.data, d.total, JSON.stringify({
-              dinheiro: d.formas['DINHEIRO'] || 0,
-              pix_conta: d.formas['PIX NA CONTA'] || 0,
-              pix_pag: d.formas['PIX PAGSEGURO'] || 0,
-              pagseguro: d.formas['PAGSEGURO'] || 0,
-              rede_credito: d.formas['REDE CREDITO'] || 0,
-              rede_debito: d.formas['REDE DEBITO'] || 0,
-              voucher: d.formas['VOUCHER'] || 0,
-            })]);
+            `, [d.data, 'Xmenu ' + d.data, d.total, JSON.stringify(formasNorm)]);
             atualizados++;
           }
         }

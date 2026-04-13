@@ -213,6 +213,9 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
       ⚠️ Sessão DRE não encontrada para este mês. Importe o extrato no DRE para ver a reconciliação completa.
     </div>
 
+    <!-- Nota explicativa da diferença -->
+    <div id="rec-nota-diff" style="display:none;background:#fff8e1;border:1px solid #f59e0b;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#856404"></div>
+
     <!-- Cards de resumo -->
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px" id="rec-cards">
       <div class="kpi azul"><div class="kpi-l">Vendido (Xmenu)</div><div class="kpi-v" id="rec-xmenu">—</div><div class="kpi-s" id="rec-xmenu-s"></div></div>
@@ -673,9 +676,26 @@ async function carregarReconciliacao() {
   document.getElementById('rec-diff').textContent     = fmt.brl(Math.abs(diff));
   document.getElementById('rec-diff').style.color     = diffColor;
   var diffLabel = diff < 0
-    ? '⏳ crédito futuro + dinheiro'
-    : diff > 0 ? '✅ recebeu mais (depósitos de períodos anteriores)' : '✅ zerado';
-  document.getElementById('rec-diff-s').textContent   = diffLabel;
+    ? '⏳ crédito futuro + dinheiro em caixa'
+    : diff > 0 ? '📅 recebimentos de períodos anteriores caindo agora' : '✅ zerado';
+  document.getElementById('rec-diff-s').textContent = diffLabel;
+  // Adicionar nota explicativa quando extrato >> xmenu
+  var notaEl = document.getElementById('rec-nota-diff');
+  if (notaEl) {
+    if (diff > 0 && diff > d.xmenu.total * 0.3) {
+      notaEl.style.display = '';
+      notaEl.innerHTML = '📅 <strong>Por que o extrato é maior que o Xmenu?</strong> '
+        + 'Vendas no cartão crédito de meses anteriores estão caindo agora no extrato bancário. '
+        + 'Isso é normal — o crédito leva até 30 dias para ser creditado na conta.';
+    } else if (diff < 0) {
+      notaEl.style.display = '';
+      notaEl.innerHTML = '⏳ <strong>O que compõe essa diferença?</strong> '
+        + 'Dinheiro em caixa (não depositado) + crédito que ainda não caiu (prazo D+30) + vouchers com prazo variável. '
+        + 'Use o painel abaixo para registrar o destino do dinheiro.';
+    } else {
+      notaEl.style.display = 'none';
+    }
+  }
   document.getElementById('rec-taxa').textContent     = d.taxa_efetiva_pct.toFixed(1) + '%';
   document.getElementById('rec-taxa').style.color     = d.taxa_efetiva_pct > 5 ? 'var(--red-l)' : 'var(--green)';
 
@@ -956,16 +976,45 @@ function renderCharts(){
       scales:{ y:{ ticks:{ callback: v=>'R$ '+fmt.brl(v).replace('R$ ','') } } } }
   });
 
-  // Gráfico de pagamentos (pizza) — soma de todos os períodos
+  // Gráfico de pagamentos (pizza) — normaliza chaves para evitar duplicatas
+  const PAG_NORM = {
+    // snake_case canônico → label legível
+    dinheiro:     '💵 Dinheiro',
+    pix_conta:    '📲 PIX na Conta',
+    pix_pag:      '📲 PIX PagSeguro',
+    pagseguro:    '💳 PagSeguro',
+    rede_credito: '💳 Rede Crédito',
+    rede_debito:  '💳 Rede Débito',
+    voucher:      '🎟️ Voucher',
+    clube:        '🥩 Clube Picanha',
+    nfce:         null, // ignora — não é forma de pagamento
+    mei:          null,
+  };
+  // Mapa de UPPERCASE → snake_case para normalizar chaves antigas
+  const PAG_ALIAS = {
+    'DINHEIRO':'dinheiro','PIX NA CONTA':'pix_conta','PIX PAGSEGURO':'pix_pag',
+    'PAGSEGURO':'pagseguro','REDE CREDITO':'rede_credito','REDE DEBITO':'rede_debito',
+    'VOUCHER':'voucher','CLUBE DA PICANHA':'clube','GRANDE TOTAL':null,
+  };
   const pagTotais = {};
   for(const p of periodos){
     const pags = typeof p.pagamentos==='string' ? JSON.parse(p.pagamentos||'{}') : (p.pagamentos||{});
-    for(const [k,v] of Object.entries(pags)){
-      pagTotais[k] = (pagTotais[k]||0) + parseFloat(v||0);
+    for(let [k,v] of Object.entries(pags)){
+      // Normaliza chave
+      const norm = PAG_ALIAS[k] !== undefined ? PAG_ALIAS[k] : k;
+      if (!norm) continue; // ignora nfce, mei, GRANDE TOTAL
+      if (PAG_NORM[norm] === null) continue; // ignora explicitamente
+      const val = parseFloat(v||0);
+      if (val <= 0) continue;
+      pagTotais[norm] = (pagTotais[norm]||0) + val;
     }
   }
-  const pagLabels = Object.keys(pagTotais);
-  const pagVals   = pagLabels.map(k => pagTotais[k]);
+  // Ordena por valor e filtra zerados
+  const pagEntries = Object.entries(pagTotais)
+    .filter(([,v]) => v > 0)
+    .sort((a,b) => b[1]-a[1]);
+  const pagLabels = pagEntries.map(([k]) => PAG_NORM[k] || k);
+  const pagVals   = pagEntries.map(([,v]) => v);
   const CORES = ['#1a7a4a','#1a5c8a','#c76b00','#8B0000','#6040c0','#2d7a00','#b35c00','#555'];
 
   if(chartPag) chartPag.destroy();
