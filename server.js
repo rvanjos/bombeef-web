@@ -251,6 +251,54 @@ app.use('/api/rh',           require('./routes/rh')(pool));
 app.use('/api/dashboard',    require('./routes/dashboard')(pool));
 app.use('/api/fornecedores', require('./routes/fornecedores')(pool));
 app.use('/api/cortes',       require('./routes/cortes')(pool));
+// ── Rota seed CorteMaster (executa uma vez para popular dados iniciais) ─────
+app.get('/api/admin/seed-cortes', async (req, res) => {
+  try {
+    // Registros de corte
+    const cortes = [
+      { data:'2026-02-27', fornecedor:'3gFoods', corte:'Patinho',    peso_bruto:4.404, peso_limpo:3.460, custo_por_kg:35.00, margem:0.30, estoque:12.0 },
+      { data:'2026-03-05', fornecedor:'3gFoods', corte:'Coxão Duro', peso_bruto:6.220, peso_limpo:5.544, custo_por_kg:33.70, margem:0.30, estoque:20.0 },
+      { data:'2026-03-06', fornecedor:'Frigol',  corte:'Alcatra',    peso_bruto:8.500, peso_limpo:7.820, custo_por_kg:48.00, margem:0.35, estoque:15.5 },
+      { data:'2026-03-06', fornecedor:'3gFoods', corte:'Picanha',    peso_bruto:3.200, peso_limpo:2.950, custo_por_kg:89.00, margem:0.40, estoque:8.0  },
+      { data:'2026-03-07', fornecedor:'Frigol',  corte:'Fraldinha',  peso_bruto:5.100, peso_limpo:4.600, custo_por_kg:42.00, margem:0.35, estoque:10.0 },
+    ];
+    let cr = 0;
+    for (const c of cortes) {
+      const ex = await pool.query('SELECT id FROM cortes_registros WHERE corte=$1 AND data=$2', [c.corte, c.data]);
+      if (!ex.rows.length) {
+        await pool.query(
+          'INSERT INTO cortes_registros (data,fornecedor,corte,peso_bruto,peso_limpo,custo_por_kg,margem,estoque) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
+          [c.data, c.fornecedor, c.corte, c.peso_bruto, c.peso_limpo, c.custo_por_kg, c.margem, c.estoque]
+        );
+        cr++;
+      }
+    }
+
+    // Insumos
+    const insumos = [
+      { nome:'Alho em Pó',         categoria:'Tempero',     preco_unit:18.90, unidade:'kg',   estoque:2.5,  fornecedor:'Distsab'   },
+      { nome:'Sal Grosso',          categoria:'Tempero',     preco_unit:3.50,  unidade:'kg',   estoque:10.0, fornecedor:'Distsab'   },
+      { nome:'Pimenta do Reino',    categoria:'Tempero',     preco_unit:62.00, unidade:'kg',   estoque:0.8,  fornecedor:'Distsab'   },
+      { nome:'Azeite Extra Virgem', categoria:'Molho',       preco_unit:32.00, unidade:'L',    estoque:3.0,  fornecedor:'Distsab'   },
+      { nome:'Bandeja PP3',         categoria:'Embalagem',   preco_unit:0.45,  unidade:'un',   estoque:500,  fornecedor:'Embalpak'  },
+      { nome:'Filme PVC Rolo',      categoria:'Embalagem',   preco_unit:28.00, unidade:'rolo', estoque:4.0,  fornecedor:'Embalpak'  },
+      { nome:'Luva Descartável',    categoria:'Descartável', preco_unit:22.00, unidade:'cx',   estoque:3.0,  fornecedor:'Cirúrgica' },
+      { nome:'Detergente 500ml',    categoria:'Limpeza',     preco_unit:4.80,  unidade:'un',   estoque:6.0,  fornecedor:'Limpmax'   },
+    ];
+    let ir = 0;
+    for (const i of insumos) {
+      await pool.query(
+        `INSERT INTO cortes_insumos (nome,categoria,preco_unit,unidade,estoque,fornecedor)
+         VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (nome) DO NOTHING`,
+        [i.nome, i.categoria, i.preco_unit, i.unidade, i.estoque, i.fornecedor]
+      );
+      ir++;
+    }
+
+    res.json({ ok:true, cortes_inseridos:cr, insumos_inseridos:ir });
+  } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
+});
+
 
 app.use('/api/admin/backup', require('./routes/backup')(pool));
 
