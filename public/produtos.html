@@ -574,8 +574,15 @@ function renderKitItems(){
   if(!kitItems.length){el.innerHTML='<p style="text-align:center;color:var(--muted);font-size:12px;padding:12px">Nenhum item</p>';recalcKit();return;}
   el.innerHTML=kitItems.map((item,i)=>`
     <div class="kit-item-row">
-      <input placeholder="Código" value="${item.codigo||''}" oninput="kitItems[${i}].codigo=this.value;buscarProdKit(${i},this.value)" style="font-size:11px">
-      <input placeholder="Descrição" value="${item.descricao||''}" oninput="kitItems[${i}].descricao=this.value" style="font-size:11px">
+      <div style="position:relative;flex:1.5">
+        <input placeholder="Código ou nome..." value="${item.descricao||item.codigo||''}"
+          oninput="buscarProdKitQ(${i},this.value)"
+          onkeydown="navSugKit(event,${i})"
+          id="kit-busca-${i}"
+          autocomplete="off"
+          style="font-size:11px;width:100%;padding:5px 8px;border:1px solid var(--border);border-radius:6px">
+        <div id="kit-sug-${i}" style="display:none;position:absolute;left:0;right:0;top:100%;background:#fff;border:1px solid var(--border);border-radius:0 0 7px 7px;box-shadow:0 4px 12px rgba(0,0,0,.1);z-index:50;max-height:180px;overflow-y:auto"></div>
+      </div>
       <input type="number" placeholder="Qtd" value="${item.quantidade||1}" min="0.001" step="0.001" oninput="kitItems[${i}].quantidade=parseFloat(this.value)||1;recalcKit()">
       <div style="display:flex;flex-direction:column;gap:2px">
         <input type="number" placeholder="Custo orig." value="${item.precoCusto||''}" step="0.0001"
@@ -598,10 +605,66 @@ function renderKitItems(){
   recalcKit();
 }
 
+let _kitSugTimers = {};
+let _kitSugIdx = {};
+
+async function buscarProdKitQ(i, q) {
+  const box = document.getElementById('kit-sug-'+i);
+  if(!box) return;
+  if(!q || q.length < 2) { box.style.display='none'; return; }
+  clearTimeout(_kitSugTimers[i]);
+  _kitSugTimers[i] = setTimeout(async () => {
+    const d = await api.get('/api/produtos/buscar?q='+encodeURIComponent(q));
+    if(!d.ok || !d.data.length) { box.style.display='none'; return; }
+    _kitSugIdx[i] = -1;
+    box.innerHTML = d.data.map((p,idx) => `
+      <div data-idx="${idx}"
+        onmousedown="selecionarProdKit(${i},${JSON.stringify(p).split('"').join('&quot;')})"
+        style="padding:7px 10px;cursor:pointer;border-bottom:1px solid #f5f0e8;font-size:12px">
+        <span style="font-family:monospace;color:var(--muted);font-size:10px;margin-right:6px">${p.codigo}</span>
+        <strong>${p.descricao}</strong>
+        <span style="float:right;font-size:11px;color:var(--green)">R$ ${parseFloat(p.preco_custo||0).toFixed(2)}</span>
+      </div>`).join('');
+    box.style.display = 'block';
+  }, 200);
+}
+
+function navSugKit(e, i) {
+  const box = document.getElementById('kit-sug-'+i);
+  if(!box || box.style.display==='none') return;
+  const items = box.querySelectorAll('[data-idx]');
+  if(!items.length) return;
+  if(e.key==='ArrowDown'){ e.preventDefault(); _kitSugIdx[i]=Math.min((_kitSugIdx[i]||0)+1,items.length-1); }
+  else if(e.key==='ArrowUp'){ e.preventDefault(); _kitSugIdx[i]=Math.max((_kitSugIdx[i]||0)-1,0); }
+  else if(e.key==='Enter' && (_kitSugIdx[i]||0)>=0){ e.preventDefault(); items[_kitSugIdx[i]].dispatchEvent(new Event('mousedown')); return; }
+  else if(e.key==='Escape'){ box.style.display='none'; return; }
+  items.forEach((it,idx)=>{ it.style.background = idx===_kitSugIdx[i]?'#fdf5e8':''; });
+}
+
+function selecionarProdKit(i, p) {
+  if(typeof p === 'string') p = JSON.parse(p.replace(/&quot;/g,'"'));
+  kitItems[i].codigo     = p.codigo;
+  kitItems[i].descricao  = p.descricao;
+  kitItems[i].precoCusto = parseFloat(p.preco_custo||0);
+  kitItems[i].precoVenda = parseFloat(p.preco_venda||0);
+  const box = document.getElementById('kit-sug-'+i);
+  if(box) box.style.display='none';
+  renderKitItems();
+}
+
+// Fechar sugestões ao clicar fora
+document.addEventListener('click', function(e){
+  document.querySelectorAll('[id^="kit-sug-"]').forEach(box=>{
+    if(!e.target.closest('[id^="kit-busca-"]') && !e.target.closest('[id^="kit-sug-"]'))
+      box.style.display='none';
+  });
+});
+
 async function buscarProdKit(i,cod){
   if(cod.length<2)return;
   const d=await api.get(`/api/produtos/${cod}`);
   if(d.ok){
+    kitItems[i].codigo=cod;
     kitItems[i].descricao=d.data.descricao;
     kitItems[i].precoCusto=parseFloat(d.data.preco_custo||0);
     kitItems[i].precoVenda=parseFloat(d.data.preco_venda||0);

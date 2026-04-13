@@ -115,13 +115,13 @@ tr:hover td{background:#fdf8f5;}
 </div>
 
 <div class="tabs" id="tabs">
-  <button class="tab-btn active" data-tab="dashboard"  onclick="showTab('dashboard',this)">📊 Dashboard</button>
-  <button class="tab-btn" data-tab="registros"  onclick="showTab('registros',this)">🥩 Registros</button>
-  <button class="tab-btn" data-tab="relatorio"  onclick="showTab('relatorio',this)">📈 Relatório</button>
-  <button class="tab-btn" data-tab="corteslimpos" onclick="showTab('corteslimpos',this)">🔪 Cortes Limpos</button>
-  <button class="tab-btn" data-tab="insumos"    onclick="showTab('insumos',this)">🏷️ Insumos</button>
-  <button class="tab-btn" data-tab="fichas"     onclick="showTab('fichas',this)">📋 Fichas Técnicas</button>
-  <button class="tab-btn" data-tab="vendas"     onclick="showTab('vendas',this)">💰 Vendas</button>
+  <button class="tab-btn active" data-tab="dashboard"  onclick="cmShowTab('dashboard',this)">📊 Dashboard</button>
+  <button class="tab-btn" data-tab="registros"  onclick="cmShowTab('registros',this)">🥩 Registros</button>
+  <button class="tab-btn" data-tab="relatorio"  onclick="cmShowTab('relatorio',this)">📈 Relatório</button>
+  <button class="tab-btn" data-tab="corteslimpos" onclick="cmShowTab('corteslimpos',this)">🔪 Cortes Limpos</button>
+  <button class="tab-btn" data-tab="insumos"    onclick="cmShowTab('insumos',this)">🏷️ Insumos</button>
+  <button class="tab-btn" data-tab="fichas"     onclick="cmShowTab('fichas',this)">📋 Fichas Técnicas</button>
+  <button class="tab-btn" data-tab="vendas"     onclick="cmShowTab('vendas',this)">💰 Vendas</button>
 </div>
 
 <div class="body">
@@ -456,7 +456,7 @@ function init(){
   carregarFornecedores();
 }
 
-function showTab(name, btn) {
+function cmShowTab(name, btn) {
   document.querySelectorAll('.body > div[id^="tab-"]').forEach(d => d.style.display='none');
   document.getElementById('tab-'+name).style.display='';
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -506,10 +506,10 @@ async function carregarDashboard() {
   document.getElementById('d-perda-s').textContent = 'Meta: '+meta.toFixed(0)+'%';
 
   // Barra de meta
-  const metaWrap = document.getElementById('dash-meta-wrap');
+  const metaWrapEl = document.getElementById('dash-meta-wrap');
   const fillPct = Math.min(100, perdaPct/meta*100);
   const fillCor = perdaPct <= meta ? 'var(--green)' : 'var(--red-l)';
-  metaWrap.innerHTML = `
+  metaWrapEl.innerHTML = `
     <div class="card" style="padding:14px 16px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
         <span style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase">META DE PERDA — ${mesAtual()}</span>
@@ -534,11 +534,11 @@ async function carregarDashboard() {
   }
 
   // Barra de meta com chips
-  const metaWrap = document.getElementById('dash-meta-wrap');
+  const metaWrapEl = document.getElementById('dash-meta-wrap');
   const fillPct2 = Math.min(100, perdaPct/meta*100);
   const fillCor2 = perdaPct <= meta ? 'var(--green)' : 'var(--red-l)';
   const aprovPct = parseFloat(v.total_bruto||0)>0 ? (parseFloat(v.total_limpo||0)/parseFloat(v.total_bruto||0)*100).toFixed(1) : 0;
-  metaWrap.innerHTML = `
+  metaWrapEl.innerHTML = `
     <div class="card" style="padding:14px 16px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
         <span style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase">SITUAÇÃO DA PERDA VS META</span>
