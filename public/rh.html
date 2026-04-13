@@ -334,8 +334,20 @@ window.addEventListener('message', e => {
     sessionStorage.setItem('bb_token', e.data.token);
     if (!_inited) { _inited = true; init(); }
   }
+  // Compatibilidade com bb_auth (config usa esse tipo)
+  if (e.data?.type === 'bb_auth' && e.data.token) {
+    sessionStorage.setItem('bb_token', e.data.token);
+    if (!_inited) { _inited = true; init(); }
+  }
 });
-setTimeout(() => { if (!_inited) { _inited = true; if (getToken()) init(); } }, 5000);
+// Inicia imediatamente se já tem token no storage
+if (getToken()) { _inited = true; init(); }
+else {
+  // Pede token ao portal pai
+  try { window.parent.postMessage({ type: 'bb_request_auth' }, '*'); } catch(_) {}
+  // Fallback: tenta de novo em 1s
+  setTimeout(() => { if (!_inited && getToken()) { _inited = true; init(); } }, 1000);
+}
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
