@@ -1340,6 +1340,13 @@ async function loadBonus() {
     const r = await api('GET', '/api/validade/config/bonus');
     _bonus = r.data || {};
   } catch(e) { _bonus = {}; }
+  // Garante que funcionários estejam carregados
+  if (!_funcs.length) {
+    try {
+      const r = await api('GET', '/api/validade/funcionarios');
+      _funcs = r.data || [];
+    } catch(e) {}
+  }
   renderBonus();
 }
 
@@ -1353,12 +1360,15 @@ function renderBonus() {
         <div style="font-size:11px;color:var(--muted)">${f.cargo||'Funcionária'}</div>
       </div>
       <div style="display:flex;align-items:center;gap:8px">
-        <label style="font-size:11px;color:var(--muted)">Bônus custo/mês</label>
-        <div style="position:relative">
-          <span style="position:absolute;left:9px;top:50%;transform:translateY(-50%);font-size:12px;color:var(--muted)">R$</span>
-          <input type="number" step="0.01" min="0" placeholder="0,00" id="bonus-${f.nome.replace(/\s+/g,'_')}"
-            value="${(_bonus[f.nome]?.limiteCusto||0)>0?_bonus[f.nome].limiteCusto:''}"
-            style="width:120px;padding:7px 10px 7px 28px;border:1px solid var(--border);border-radius:7px;font-family:'DM Sans',sans-serif;font-size:13px"/>
+        <div>
+          <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">Limite custo/mês (R$)</label>
+          <div style="position:relative">
+            <span style="position:absolute;left:9px;top:50%;transform:translateY(-50%);font-size:12px;color:var(--muted)">R$</span>
+            <input type="number" step="0.01" min="0" placeholder="0,00" id="bonus-${f.nome.replace(/\s+/g,'_')}"
+              value="${(_bonus[f.nome]?.limiteCusto||0)>0?_bonus[f.nome].limiteCusto:''}"
+              style="width:130px;padding:8px 10px 8px 30px;border:1px solid var(--border);border-radius:7px;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:600"/>
+          </div>
+          ${(_bonus[f.nome]?.limiteCusto||0)>0?'<div style="font-size:10px;color:var(--green);margin-top:2px">✓ Limite configurado</div>':'<div style="font-size:10px;color:var(--muted);margin-top:2px">Sem limite definido</div>'}
         </div>
       </div>
     </div>`).join('') : '<div style="color:var(--muted);padding:20px;text-align:center">Cadastre funcionários primeiro</div>';
