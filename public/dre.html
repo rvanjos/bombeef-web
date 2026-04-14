@@ -2837,6 +2837,10 @@ function exportXLS(){
   a.click();
   URL.revokeObjectURL(url);
   toast('📤 Excel exportado com formatação!');
+}
+
+// gerarExcelDRE é chamado pelo botão no modal — aponta para exportXLS
+function gerarExcelDRE(){ exportXLS(); }
 
 // ─── SALVAR / SESSÕES ────────────────────────────────────────────────────────
 function autoSv(){
