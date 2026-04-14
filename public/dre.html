@@ -2450,9 +2450,13 @@ async function importBoletos(){
     const mesEnc = encodeURIComponent(mesRef);
     const [mm, yyyy] = mesRef.split('/');
 
-    // Remove previsão anterior
+    // Remove TODAS as previsões anteriores do mês (evita duplicação)
     const idPrev = `fat_prev_${mesRef.replace('/','_')}`;
-    TXS.splice(TXS.findIndex(t => t.id === idPrev), 1);
+    // Remove por fonte PREV_RECEITA do mês — mais robusto que buscar por id
+    let prevIdx;
+    while ((prevIdx = TXS.findIndex(t => t.fonte === 'PREV_RECEITA' && t.mes === mesRef)) >= 0) {
+      TXS.splice(prevIdx, 1);
+    }
 
     // Calcula receita JÁ REALIZADA no extrato do mês corrente
     const receitasRealizadas = TXS.filter(t =>

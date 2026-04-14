@@ -629,6 +629,15 @@ module.exports = function(pool) {
         for (const t of txs) {
           if (t.ignorar) continue;
           if (t.categoria !== 'VENDAS DE MERCADORIAS') continue;
+          if (t.fonte === 'PREV_RECEITA') continue; // ignorar previsões
+          // ── Filtro de mês: só considera lançamentos do mês selecionado ──
+          // Usa t.mes (mês DRE) ou inferido da data do lançamento
+          const txMes = t.mes || (t.data ? (() => {
+            const d = t.data.slice(0, 10);
+            const [yy, mm] = d.split('-');
+            return `${mm}/${yy}`;
+          })() : null);
+          if (txMes && txMes !== mes) continue;
           const v = parseFloat(t.valor || 0);
           if (v <= 0) continue;
           recebidoExtrato += v;
