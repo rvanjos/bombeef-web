@@ -5,6 +5,7 @@
 <title>DRE & Classificador — Bom Beef</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="/js/api.js"></script>
 <script>
@@ -105,6 +106,8 @@ td{padding:5px 9px;vertical-align:middle;}
 .mbg.open{display:flex;}
 .md{background:var(--white);border-radius:13px;width:100%;max-width:500px;max-height:92vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3);}
 .md-lg{max-width:1050px;}
+.md-fs{max-width:100vw!important;width:100vw!important;height:100vh!important;max-height:100vh!important;border-radius:0!important;margin:0!important;}
+.mbg.fs-mode{padding:0!important;align-items:stretch!important;}
 .mdh{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;}
 .mdh h3{font-family:'Playfair Display',serif;font-size:14px;color:var(--red);}
 .mdx{background:none;border:none;font-size:18px;cursor:pointer;color:var(--muted);}
@@ -447,19 +450,23 @@ td{padding:5px 9px;vertical-align:middle;}
 
 <!-- Modal DRE Tela Cheia -->
 <div class="mbg" id="m-dre">
-  <div class="md md-lg">
-    <div class="mdh" style="background:var(--red);border-radius:13px 13px 0 0">
-      <div style="display:flex;align-items:center;gap:10px">
+  <div class="md md-lg" id="dre-modal-box">
+    <div class="mdh" style="background:var(--red);border-radius:13px 13px 0 0;flex-shrink:0" id="dre-modal-header">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
         <h3 style="color:#fff;font-size:15px">📊 DRE — DEMONSTRATIVO POR MÊS</h3>
         <select id="dre-modo-full" onchange="sincModo()" style="padding:3px 8px;border:1px solid rgba(255,255,255,.3);border-radius:6px;font-size:12px;background:rgba(255,255,255,.15);color:#fff">
           <option value="comp">Competência (data da compra)</option>
           <option value="caixa">Caixa (data do pagamento)</option>
         </select>
         <button id="btn-pct-full" style="padding:3px 10px;border:1px solid rgba(255,255,255,.3);border-radius:6px;font-size:12px;background:rgba(255,255,255,.15);color:#fff;cursor:pointer;font-weight:600" onclick="togglePct()" title="Mostrar % de cada categoria sobre a receita total">% Custos</button>
+        <button onclick="gerarExcelDRE()" style="padding:3px 10px;border:1px solid rgba(255,255,255,.3);border-radius:6px;font-size:12px;background:rgba(255,255,255,.15);color:#fff;cursor:pointer;font-weight:600" title="Exportar Excel com formatação">📤 Excel</button>
       </div>
-      <button onclick="fecharModal('m-dre')" style="background:none;border:none;color:rgba(255,255,255,.8);font-size:22px;cursor:pointer">×</button>
+      <div style="display:flex;align-items:center;gap:6px">
+        <button onclick="toggleDREFullscreen()" id="btn-dre-fs" title="Tela cheia" style="background:none;border:1px solid rgba(255,255,255,.3);border-radius:6px;color:rgba(255,255,255,.9);font-size:16px;cursor:pointer;padding:2px 8px;line-height:1">⛶</button>
+        <button onclick="fecharModal('m-dre')" style="background:none;border:none;color:rgba(255,255,255,.8);font-size:22px;cursor:pointer;line-height:1">×</button>
+      </div>
     </div>
-    <div style="overflow-y:auto;max-height:calc(95vh - 70px)">
+    <div style="overflow-y:auto;flex:1;min-height:0" id="dre-modal-scroll">
       <div id="dre-full-body" style="padding:16px"></div>
     </div>
   </div>
@@ -1863,6 +1870,32 @@ function togglePct() {
 function renderDRE(){_buildDRE(document.getElementById('dre-body'),false);}
 function renderDREFull(){_buildDRE(document.getElementById('dre-full-body'),true);}
 
+let _dreIsFS = false;
+function toggleDREFullscreen() {
+  _dreIsFS = !_dreIsFS;
+  const bg  = document.getElementById('m-dre');
+  const box = document.getElementById('dre-modal-box');
+  const hdr = document.getElementById('dre-modal-header');
+  const btn = document.getElementById('btn-dre-fs');
+  if (_dreIsFS) {
+    bg.classList.add('fs-mode');
+    box.classList.add('md-fs');
+    box.style.display = 'flex';
+    box.style.flexDirection = 'column';
+    hdr.style.borderRadius = '0';
+    btn.textContent = '⊡';
+    btn.title = 'Sair da tela cheia';
+  } else {
+    bg.classList.remove('fs-mode');
+    box.classList.remove('md-fs');
+    box.style.display = '';
+    box.style.flexDirection = '';
+    hdr.style.borderRadius = '13px 13px 0 0';
+    btn.textContent = '⛶';
+    btn.title = 'Tela cheia';
+  }
+}
+
 function abrirDREModal(){
   document.getElementById('m-dre').classList.add('open');
   const el=document.getElementById('dre-modo-full'); if(el) el.value=getModo();
@@ -2605,117 +2638,335 @@ function drillDown(cat, mes) {
 
 function exportXLS(){
   if(!TXS.length){toast('Sem dados');return;}
-  const wb = XLSX.utils.book_new();
+  // ── ExcelJS — cores idênticas ao DRE renderizado ────────────────────────────
+  if (typeof ExcelJS === 'undefined') { toast('⚠️ ExcelJS não carregado, tente recarregar a página'); return; }
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'Bom Beef Gestão';
 
   const at = TXS.filter(t=>!t.ignorar && t.categoria);
-  // Meses únicos ordenados
   const mesesSet = new Set(at.map(t=>getMesTx(t)));
   const meses = [...mesesSet].sort((a,b)=>{
     const p=s=>{const[mm,yy]=s.split('/');return(+yy)*12+(+mm);}; return p(a)-p(b);
   });
-  const MESES_NOMES = {
-    '01':'Janeiro','02':'Fevereiro','03':'Março','04':'Abril','05':'Maio','06':'Junho',
-    '07':'Julho','08':'Agosto','09':'Setembro','10':'Outubro','11':'Novembro','12':'Dezembro'
-  };
-  const nomeMes = m => { const [mm] = m.split('/'); return MESES_NOMES[mm]||m; };
+  const MESES_NOMES={'01':'Jan','02':'Fev','03':'Mar','04':'Abr','05':'Mai','06':'Jun',
+                     '07':'Jul','08':'Ago','09':'Set','10':'Out','11':'Nov','12':'Dez'};
+  const nomeMes = m => { const [mm,yy] = m.split('/'); return (MESES_NOMES[mm]||mm)+'/'+yy; };
 
-  // Agrupa por competência (Mês DRE)
-  const dataComp={}, dataCaixa={};
+  // Agrupa dados
+  const dataComp={};
   for (const t of at) {
-    const gk = catGrupo(t.categoria)||'OUTROS';
-    const mC = getMesTx(t);         // mês DRE (competência)
-    const mK = t.mesCaixa||t.mes;   // mês caixa
-    const v  = parseFloat(t.valor||0);
-    // Competência
+    const gk=catGrupo(t.categoria)||'OUTROS';
+    const m=getMesTx(t);
+    const v=parseFloat(t.valor||0);
     if(!dataComp[gk])dataComp[gk]={};
     if(!dataComp[gk][t.categoria])dataComp[gk][t.categoria]={};
-    dataComp[gk][t.categoria][mC]=(dataComp[gk][t.categoria][mC]||0)+v;
-    // Caixa
-    if(!dataCaixa[gk])dataCaixa[gk]={};
-    if(!dataCaixa[gk][t.categoria])dataCaixa[gk][t.categoria]={};
-    dataCaixa[gk][t.categoria][mK]=(dataCaixa[gk][t.categoria][mK]||0)+v;
+    dataComp[gk][t.categoria][m]=(dataComp[gk][t.categoria][m]||0)+v;
   }
-  const mesesCaixa = [...new Set(TXS.filter(t=>!t.ignorar&&t.categoria).map(t=>t.mesCaixa||t.mes))]
-    .sort((a,b)=>{const p=s=>{const[mm,yy]=s.split('/');return(+yy)*12+(+mm);};return p(a)-p(b);});
 
-  function buildDRE(data, mesesUsados, nomeAba) {
-    const sg=(gk,m)=>Object.values(data[gk]||{}).reduce((s,c)=>s+(c[m]||0),0);
-    const rows=[];
-    const headerCols = mesesUsados.map(nomeMes);
-    rows.push(['BOM BEEF — GESTÃO', ...headerCols.map(()=>''), '']);
-    rows.push([nomeAba, ...headerCols, 'TOTAL']);
-    rows.push([]); // linha em branco
+  const sg=(gk,m)=>Object.values(dataComp[gk]||{}).reduce((s,c)=>s+(c[m]||0),0);
+  const sgt=(gk)=>meses.reduce((s,m)=>s+sg(gk,m),0);
 
-    const ORDEM=['RECEITAS','CMV','PESSOAL','VENDAS_CAT','CONSUMO','TERCEIROS','MATERIAL','FINANCEIRAS','OUTRAS','IMPOSTOS','OUTROS'];
-    let lucroMes = Object.fromEntries(mesesUsados.map(m=>[m,0]));
-    let recTot = 0, despTot = 0;
+  // Helpers de estilo
+  const hex = s => s.replace('#','');
+  const fillSolid = color => ({ type:'pattern', pattern:'solid', fgColor:{argb:'FF'+hex(color)} });
+  const fontW = (color='000000',sz=10,bold=false) => ({ name:'Calibri', size:sz, bold, color:{argb:'FF'+hex(color)} });
+  const alignR = { horizontal:'right', vertical:'middle' };
+  const alignL = { horizontal:'left',  vertical:'middle' };
+  const numFmt = '"R$"#,##0.00;[Red]"R$"-#,##0.00';
+  const borderThin = s => ({ style:'thin', color:{argb:'FFCCCCCC'} });
+  const allBorders = () => ({ top:borderThin(), bottom:borderThin(), left:borderThin(), right:borderThin() });
 
-    for (const gk of ORDEM) {
-      if (!data[gk]) continue;
+  function buildSheet(sheetName) {
+    const ws = wb.addWorksheet(sheetName, { views:[{showGridLines:false}] });
+
+    // Larguras de coluna
+    ws.getColumn(1).width = 46;
+    meses.forEach((_,i) => { ws.getColumn(i+2).width = 16; });
+    if (meses.length > 1) ws.getColumn(meses.length+2).width = 16;
+    const showTot = meses.length > 1;
+    const lastCol = meses.length + (showTot ? 2 : 1);
+
+    let row = 1;
+
+    // ── Cabeçalho ─────────────────────────────────────────────────────────
+    const titleRow = ws.getRow(row++);
+    titleRow.getCell(1).value = '🥩 BOM BEEF — DRE GERENCIAL';
+    titleRow.getCell(1).font = { name:'Calibri', size:14, bold:true, color:{argb:'FF8B0000'} };
+    titleRow.getCell(1).fill = fillSolid('fff5f5');
+    titleRow.height = 24;
+
+    const subRow = ws.getRow(row++);
+    subRow.getCell(1).value = `Exportado em ${new Date().toLocaleString('pt-BR')}`;
+    subRow.getCell(1).font = fontW('888888',9);
+
+    ws.getRow(row++); // linha em branco
+
+    // Cabeçalho de colunas
+    const hRow = ws.getRow(row++);
+    hRow.getCell(1).value = 'GRUPO / CATEGORIA';
+    hRow.getCell(1).fill  = fillSolid('8B0000');
+    hRow.getCell(1).font  = fontW('ffffff',10,true);
+    hRow.getCell(1).alignment = alignL;
+    meses.forEach((m,i) => {
+      const c = hRow.getCell(i+2);
+      c.value = nomeMes(m);
+      c.fill  = fillSolid('8B0000');
+      c.font  = fontW('ffffff',10,true);
+      c.alignment = alignR;
+    });
+    if (showTot) {
+      const tc = hRow.getCell(lastCol);
+      tc.value = 'TOTAL';
+      tc.fill  = fillSolid('5a2020');
+      tc.font  = fontW('ffffff',10,true);
+      tc.alignment = alignR;
+    }
+    hRow.height = 22;
+
+    // Acumuladores
+    const lucBruto  = Object.fromEntries(meses.map(m=>[m,0]));
+    const lucOp     = Object.fromEntries(meses.map(m=>[m,0]));
+    const resFin    = Object.fromEntries(meses.map(m=>[m,0]));
+    const resAntRet = Object.fromEntries(meses.map(m=>[m,0]));
+
+    // ── Helper: renderizar bloco de grupo ──────────────────────────────────
+    function addGrupo(gk) {
+      if (!dataComp[gk]) return;
       const g = CATS[gk];
       const label = g ? g.l : gk;
-      const totG  = mesesUsados.reduce((s,m)=>s+sg(gk,m),0);
+      const isDesp = gk !== 'RECEITAS';
+      const ghBg = gk==='RECEITAS'?'1a5c2a': gk==='CMV'?'5a2020':'374151';
 
-      rows.push([]); // separador
-      // Linha de seção (header grupo)
-      rows.push([label, ...mesesUsados.map(()=>''), '']);
+      // Header grupo
+      const ghr = ws.getRow(row++);
+      ws.mergeCells(ghr.number, 1, ghr.number, lastCol);
+      ghr.getCell(1).value = '  ' + label;
+      ghr.getCell(1).fill  = fillSolid('#'+ghBg);
+      ghr.getCell(1).font  = fontW('ffffff',10,true);
+      ghr.getCell(1).alignment = alignL;
+      ghr.height = 18;
+
       // Linhas de categorias
-      for (const [cat, mD] of Object.entries(data[gk])) {
+      for (const [cat, mD] of Object.entries(dataComp[gk])) {
         const totC = Object.values(mD).reduce((s,v)=>s+v,0);
-        rows.push([`    ${cat}`, ...mesesUsados.map(m=>mD[m]||null), totC||null]);
+        const cr = ws.getRow(row++);
+        cr.getCell(1).value = '      · ' + cat;
+        cr.getCell(1).font  = fontW('555555',10);
+        cr.getCell(1).alignment = alignL;
+        cr.getCell(1).fill = fillSolid('fafaf8');
+        meses.forEach((m,i) => {
+          const c = cr.getCell(i+2);
+          const v = mD[m]||0;
+          c.value = v !== 0 ? (isDesp ? -Math.abs(v) : v) : null;
+          c.numFmt = numFmt;
+          c.font = fontW(v===0?'cccccc': isDesp? (v>0?'c0392b':'2ecc71'): (v>0?'1a7a4a':'c0392b'), 10);
+          c.alignment = alignR;
+          c.fill = fillSolid('fafaf8');
+          c.border = allBorders();
+        });
+        if (showTot) {
+          const tc = cr.getCell(lastCol);
+          tc.value = totC !== 0 ? (isDesp ? -Math.abs(totC) : totC) : null;
+          tc.numFmt = numFmt;
+          tc.font = fontW(totC===0?'cccccc': isDesp?(totC>0?'c0392b':'2ecc71'):(totC>0?'1a7a4a':'c0392b'), 10, true);
+          tc.alignment = alignR;
+          tc.fill = fillSolid('f5f0eb');
+          tc.border = allBorders();
+        }
+        cr.height = 16;
       }
+
       // Subtotal grupo
-      rows.push([`${label} Total:`, ...mesesUsados.map(m=>sg(gk,m)||null), totG||null]);
-      mesesUsados.forEach(m=>{ lucroMes[m]=(lucroMes[m]||0)+sg(gk,m); });
-      if(gk==='RECEITAS') recTot=totG; else despTot+=totG;
+      const stBg = gk==='RECEITAS'?'e8f7ef': gk==='CMV'?'fff0f0':'f5f0eb';
+      const stCol = gk==='RECEITAS'?'1a7a4a':'c0392b';
+      const str = ws.getRow(row++);
+      str.getCell(1).value = '▶ SUBTOTAL ' + label;
+      str.getCell(1).font  = fontW(stCol,10,true);
+      str.getCell(1).fill  = fillSolid(stBg);
+      str.getCell(1).alignment = alignL;
+      const totG = sgt(gk);
+      meses.forEach((m,i) => {
+        const v = sg(gk,m);
+        const c = str.getCell(i+2);
+        c.value = v !== 0 ? (isDesp ? -Math.abs(v) : v) : null;
+        c.numFmt = numFmt;
+        c.font = fontW(v>=0?'1a7a4a':'c0392b',10,true);
+        c.alignment = alignR;
+        c.fill = fillSolid(stBg);
+        c.border = allBorders();
+      });
+      if (showTot) {
+        const tc = str.getCell(lastCol);
+        tc.value = totG !== 0 ? (isDesp ? -Math.abs(totG) : totG) : null;
+        tc.numFmt = numFmt;
+        tc.font = fontW(totG>=0?'1a7a4a':'c0392b',10,true);
+        tc.alignment = alignR;
+        tc.fill = fillSolid(stBg);
+        tc.border = allBorders();
+      }
+      str.height = 18;
+
+      // Separador
+      const sep = ws.getRow(row++);
+      ws.mergeCells(sep.number,1,sep.number,lastCol);
+      sep.getCell(1).fill = fillSolid('e8e0d8');
+      sep.height = 3;
     }
 
-    // Margem bruta
-    rows.push([]);
-    rows.push(['Margem Bruta (Receita - Custo)', ...mesesUsados.map(m=>{
-      const rec=sg('RECEITAS',m), cmv=sg('CMV',m); return (rec+cmv)||null;
-    }), (recTot+(dataCaixa['CMV']?0:0))||null]);
+    // ── Helper: linha de resultado intermediário ───────────────────────────
+    function addResultado(label, acumMes, bgColor, fontColor, borderColor, fontSize=13) {
+      // Linha de borda superior
+      const sepR = ws.getRow(row++);
+      ws.mergeCells(sepR.number,1,sepR.number,lastCol);
+      sepR.getCell(1).fill = fillSolid(borderColor);
+      sepR.height = 4;
 
-    rows.push([]);
-    const lucroTotal = mesesUsados.reduce((s,m)=>s+(lucroMes[m]||0),0);
-    rows.push(['RESULTADO (LUCRO/PREJUÍZO)', ...mesesUsados.map(m=>lucroMes[m]||null), lucroTotal||null]);
+      const rr = ws.getRow(row++);
+      rr.getCell(1).value = label;
+      rr.getCell(1).font  = fontW(fontColor, fontSize, true);
+      rr.getCell(1).fill  = fillSolid(bgColor);
+      rr.getCell(1).alignment = alignL;
+      const tot = meses.reduce((s,m)=>s+(acumMes[m]||0),0);
+      meses.forEach((m,i) => {
+        const v = acumMes[m]||0;
+        const c = rr.getCell(i+2);
+        c.value = v || null;
+        c.numFmt = numFmt;
+        c.font = fontW(v>=0?'1a7a4a':'c0392b', fontSize, true);
+        c.alignment = alignR;
+        c.fill = fillSolid(bgColor);
+        c.border = { top:{style:'medium',color:{argb:'FF'+hex(borderColor)}},
+                     bottom:{style:'medium',color:{argb:'FF'+hex(borderColor)}},
+                     left:borderThin(), right:borderThin() };
+      });
+      if (showTot) {
+        const tc = rr.getCell(lastCol);
+        tc.value = tot || null;
+        tc.numFmt = numFmt;
+        tc.font = fontW(tot>=0?'1a7a4a':'c0392b', fontSize, true);
+        tc.alignment = alignR;
+        tc.fill = fillSolid(bgColor);
+        tc.border = { top:{style:'medium',color:{argb:'FF'+hex(borderColor)}},
+                      bottom:{style:'medium',color:{argb:'FF'+hex(borderColor)}},
+                      left:borderThin(), right:borderThin() };
+      }
+      rr.height = fontSize >= 13 ? 24 : 20;
 
-    const ws = XLSX.utils.aoa_to_sheet(rows);
-    ws['!cols'] = [{wch:42}, ...mesesUsados.map(()=>({wch:14})), {wch:14}];
+      const sepB = ws.getRow(row++);
+      ws.mergeCells(sepB.number,1,sepB.number,lastCol);
+      sepB.getCell(1).fill = fillSolid(borderColor+'44');
+      sepB.height = 4;
+    }
 
-    // Formatação básica via estilos SheetJS (sem Enterprise — só larguras)
-    return ws;
+    // ── Helper: cabeçalho de seção ─────────────────────────────────────────
+    function addSecLabel(label) {
+      const lr = ws.getRow(row++);
+      ws.mergeCells(lr.number,1,lr.number,lastCol);
+      lr.getCell(1).value = label;
+      lr.getCell(1).fill  = fillSolid('f7f4f0');
+      lr.getCell(1).font  = fontW('888888',9,true);
+      lr.getCell(1).alignment = alignL;
+      lr.height = 16;
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // BLOCO 1: RECEITA BRUTA
+    addSecLabel('1. RECEITA BRUTA');
+    addGrupo('RECEITAS');
+    meses.forEach(m=>{ lucBruto[m]=(lucBruto[m]||0)+sg('RECEITAS',m); });
+
+    // BLOCO 2: CMV
+    addSecLabel('2. (-) CUSTO DA MERCADORIA VENDIDA (CMV)');
+    addGrupo('CMV');
+    meses.forEach(m=>{ lucBruto[m]=(lucBruto[m]||0)+sg('CMV',m); });
+
+    // RESULTADO 1: LUCRO BRUTO
+    addResultado('🟢  LUCRO BRUTO', lucBruto, 'e8f7ef', '1a7a4a', '22c55e');
+    meses.forEach(m=>{ lucOp[m]=lucBruto[m]||0; });
+
+    // BLOCO 3: DESPESAS OPERACIONAIS
+    addSecLabel('3. (-) DESPESAS OPERACIONAIS');
+    ['PESSOAL','VENDAS_CAT','CONSUMO','TERCEIROS','MATERIAL','OUTRAS','IMPOSTOS'].forEach(gk=>{
+      if(!dataComp[gk]) return;
+      addGrupo(gk);
+      meses.forEach(m=>{ lucOp[m]=(lucOp[m]||0)+sg(gk,m); });
+    });
+
+    // RESULTADO 2: LUCRO OPERACIONAL
+    addResultado('🔵  LUCRO OPERACIONAL', lucOp, 'eff6ff', '1d4ed8', '3b82f6');
+    meses.forEach(m=>{ resFin[m]=lucOp[m]||0; });
+
+    // BLOCO 4: RESULTADO FINANCEIRO
+    if (dataComp['FINANCEIRAS']) {
+      addSecLabel('4. (-) RESULTADO FINANCEIRO');
+      addGrupo('FINANCEIRAS');
+      meses.forEach(m=>{ resFin[m]=(resFin[m]||0)+sg('FINANCEIRAS',m); });
+    }
+
+    // RESULTADO 3: ANTES DAS RETIRADAS
+    addResultado('🟡  RESULTADO ANTES DAS RETIRADAS', resFin, 'fffbeb', '92400e', 'f59e0b');
+    meses.forEach(m=>{ resAntRet[m]=resFin[m]||0; });
+
+    // BLOCO 5: RETIRADAS
+    if (dataComp['OUTROS']) {
+      addSecLabel('5. (-) RETIRADAS DOS SÓCIOS / OUTROS');
+      addGrupo('OUTROS');
+      meses.forEach(m=>{ resAntRet[m]=(resAntRet[m]||0)+sg('OUTROS',m); });
+    }
+
+    // RESULTADO FINAL
+    addResultado('💰  RESULTADO FINAL (LUCRO / PREJUÍZO REAL)', resAntRet, '1a1a1a', 'ffffff', '374151', 14);
+
+    // Freeze header
+    ws.views = [{ state:'frozen', ySplit: 4, xSplit: 1, showGridLines: false }];
   }
 
-  // ── ABA 1: DRE por Competência ───────────────────────────────────────────────
-  const wsDRE = buildDRE(dataComp, meses, 'DRE — Por Competência');
-  XLSX.utils.book_append_sheet(wb, wsDRE, 'DRE Competência');
+  // ── Aba DRE ────────────────────────────────────────────────────────────────
+  buildSheet('DRE — Competência');
 
-  // ── ABA 2: Fluxo de Caixa (por data de caixa) ────────────────────────────────
-  const wsDFC = buildDRE(dataCaixa, mesesCaixa, 'DRE — Fluxo de Caixa');
-  XLSX.utils.book_append_sheet(wb, wsDFC, 'Fluxo de Caixa');
+  // ── Aba Lançamentos detalhados ──────────────────────────────────────────────
+  const wsLanc = wb.addWorksheet('Lançamentos', { views:[{showGridLines:false}] });
+  const lanCols = [
+    {header:'Data',key:'data',width:12},
+    {header:'Mês DRE',key:'mes',width:10},
+    {header:'Fonte',key:'fonte',width:12},
+    {header:'Operação',key:'lancamento',width:38},
+    {header:'Fornecedor / Razão Social',key:'razao',width:40},
+    {header:'Valor (R$)',key:'valor',width:14},
+    {header:'Categoria DRE',key:'categoria',width:35},
+    {header:'Grupo DRE',key:'grupo',width:25},
+  ];
+  wsLanc.columns = lanCols;
+  // Header
+  wsLanc.getRow(1).eachCell(c => {
+    c.fill = fillSolid('8B0000'); c.font = fontW('ffffff',10,true);
+    c.alignment = {horizontal:'center',vertical:'middle'};
+  });
+  wsLanc.getRow(1).height = 20;
+  TXS.filter(t=>!t.ignorar).forEach(t => {
+    const r = wsLanc.addRow({
+      data: t.data||'', mes: t.mes||'', fonte: t.fonte||'',
+      lancamento: t.lancamento||'', razao: t.razaoSocial||t.portador||'',
+      valor: parseFloat(t.valor||0), categoria: t.categoria||'', grupo: catGrupo(t.categoria)||'',
+    });
+    r.getCell('valor').numFmt = numFmt;
+    const v = parseFloat(t.valor||0);
+    r.getCell('valor').font = fontW(v<0?'c0392b':'1a7a4a',10);
+    r.getCell('valor').alignment = alignR;
+  });
+  wsLanc.views = [{state:'frozen',ySplit:1,xSplit:0,showGridLines:false}];
 
-  // ── ABA 3: Lançamentos detalhados ────────────────────────────────────────────
-  const detRows = TXS.filter(t=>!t.ignorar).map(t=>({
-    'Data':             t.data||'',
-    'Mês DRE':          t.mes||'',
-    'Mês Caixa':        t.mesCaixa||t.mes||'',
-    'Fonte':            t.fonte||'',
-    'Operação':         t.lancamento||'',
-    'Fornecedor/Razão Social': t.razaoSocial||t.portador||'',
-    'Valor (R$)':       parseFloat(t.valor||0),
-    'Categoria DRE':    t.categoria||'',
-    'Grupo DRE':        catGrupo(t.categoria)||'',
-  }));
-  const wsLanc = XLSX.utils.json_to_sheet(detRows);
-  wsLanc['!cols'] = [{wch:12},{wch:10},{wch:10},{wch:12},{wch:35},{wch:38},{wch:14},{wch:35},{wch:25}];
-  XLSX.utils.book_append_sheet(wb, wsLanc, 'Lançamentos');
-
+  // ── Download ────────────────────────────────────────────────────────────────
+  const buf = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
   const ano = meses[0]?.split('/')?.[1] || new Date().getFullYear();
-  XLSX.writeFile(wb, `DRE_BomBeef_${ano}.xlsx`);
-  toast('📤 Excel exportado: Competência + Fluxo de Caixa + Lançamentos!');
-}
-
+  a.download = `DRE_BomBeef_${ano}.xlsx`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('📤 Excel exportado com formatação completa!');
 // ─── SALVAR / SESSÕES ────────────────────────────────────────────────────────
 function autoSv(){
   if (!_inicializado || !TXS.length) return;
