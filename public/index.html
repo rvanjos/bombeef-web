@@ -154,17 +154,75 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
   -webkit-overflow-scrolling:touch;
 }
 
-/* ── KPIs ──────────────────────────────────────────────────────────────── */
-.dash-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px;}
+/* ── DASHBOARD REDESIGN ──────────────────────────────────────────────── */
+.dash-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px;}
 .dash-title{font-family:'Playfair Display',serif;font-size:22px;color:var(--red);}
 .dash-sub{font-size:12px;color:var(--muted);margin-top:2px;}
 .dash-mes-sel{display:flex;align-items:center;gap:8px;}
-.dash-mes-sel select{padding:6px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;background:var(--white);font-family:'DM Sans',sans-serif;cursor:pointer;}
+.dash-mes-sel input{padding:6px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;background:var(--white);font-family:'DM Sans',sans-serif;}
 .btn-refresh{padding:6px 12px;background:var(--white);border:1px solid var(--border);border-radius:7px;cursor:pointer;font-size:12px;font-weight:600;font-family:'DM Sans',sans-serif;transition:.15s;}
 .btn-refresh:hover{border-color:var(--red);color:var(--red);}
 
+/* Meta de faturamento — hero bar */
+.fat-hero{background:var(--white);border:1px solid var(--border);border-radius:14px;padding:18px 20px;margin-bottom:16px;box-shadow:var(--shadow);display:flex;gap:20px;align-items:center;flex-wrap:wrap;}
+.fat-hero.hidden{display:none;}
+.fat-hero-info{flex:1;min-width:200px;}
+.fat-hero-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:4px;}
+.fat-hero-val{font-size:28px;font-weight:700;font-family:'DM Mono',monospace;color:var(--text);}
+.fat-hero-sub{font-size:12px;color:var(--muted);margin-top:2px;}
+.fat-hero-bar-wrap{flex:2;min-width:200px;}
+.fat-bar-track{height:14px;background:#f0ebe4;border-radius:7px;overflow:hidden;position:relative;}
+.fat-bar-fill{height:100%;border-radius:7px;transition:width .8s cubic-bezier(.4,0,.2,1);position:relative;}
+.fat-bar-fill::after{content:'';position:absolute;top:0;left:0;right:0;bottom:0;background:linear-gradient(90deg,transparent 0%,rgba(255,255,255,.25) 50%,transparent 100%);animation:shimmer 2s infinite;}
+@keyframes shimmer{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
+.fat-bar-labels{display:flex;justify-content:space-between;margin-top:5px;font-size:11px;color:var(--muted);}
+.fat-pct{font-size:22px;font-weight:800;font-family:'DM Mono',monospace;min-width:60px;text-align:right;}
+
+/* KPI row — compacto */
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:16px;}
+.kpi-card{background:var(--white);border:1px solid var(--border);border-radius:11px;padding:13px 15px;border-left:4px solid var(--border);box-shadow:var(--shadow);transition:all .15s;cursor:pointer;position:relative;overflow:hidden;}
+.kpi-card:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,.1);}
+.kpi-card.k-red{border-left-color:var(--red-l);}
+.kpi-card.k-orange{border-left-color:var(--orange);}
+.kpi-card.k-green{border-left-color:var(--green);}
+.kpi-card.k-blue{border-left-color:var(--blue);}
+.kpi-card.k-purple{border-left-color:#7c3aed;}
+.kpi-icon2{font-size:22px;margin-bottom:6px;display:block;}
+.kpi-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);}
+.kpi-val{font-size:22px;font-weight:700;font-family:'DM Mono',monospace;line-height:1.1;margin:3px 0;}
+.kpi-sub{font-size:11px;color:var(--muted);}
+.kpi-loading{opacity:.4;animation:pulse .8s ease-in-out infinite alternate;}
+@keyframes pulse{0%{opacity:.3}100%{opacity:.6}}
+
+/* Linha de gráficos + atalhos */
+.dash-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;}
+.dash-row.tres{grid-template-columns:1fr 1fr 1fr;}
+.dash-card{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:16px 18px;box-shadow:var(--shadow);}
+.dash-card-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin-bottom:12px;}
+
+/* Mini gráfico de barras inline */
+.mini-bar-row{display:flex;align-items:center;gap:8px;margin-bottom:7px;font-size:11px;}
+.mini-bar-label{min-width:90px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.mini-bar-track{flex:1;height:7px;background:#f0ebe4;border-radius:4px;overflow:hidden;}
+.mini-bar-fill{height:100%;border-radius:4px;transition:width .6s ease;}
+.mini-bar-val{min-width:50px;text-align:right;font-family:'DM Mono',monospace;color:var(--muted);font-size:10px;}
+
+/* Atalhos inteligentes */
+.atalhos-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.atalho-btn{display:flex;align-items:center;gap:10px;padding:10px 12px;background:#faf8f5;border:1px solid var(--border);border-radius:9px;cursor:pointer;transition:all .15s;text-align:left;}
+.atalho-btn:hover{background:var(--white);border-color:var(--red);box-shadow:0 2px 8px rgba(139,0,0,.08);}
+.atalho-btn .ab-icon{font-size:18px;flex-shrink:0;}
+.atalho-btn .ab-text{font-size:12px;font-weight:600;color:var(--text);}
+.atalho-btn .ab-sub{font-size:10px;color:var(--muted);margin-top:1px;}
+.atalho-btn.atalho-alerta{border-color:#f59e0b;background:#fffbeb;}
+.atalho-btn.atalho-ok{border-color:#22c55e;background:#f0fdf4;}
+.atalho-btn.atalho-danger{border-color:var(--red-l);background:#fff5f5;}
+
+/* Gauge circular */
+.gauge-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px 0;}
+
 /* Progress */
-.prog-wrap{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:16px 18px;margin-bottom:20px;box-shadow:var(--shadow);}
+.prog-wrap{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:16px 18px;margin-bottom:16px;box-shadow:var(--shadow);}
 .prog-wrap.hidden{display:none;}
 .prog-label{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;}
 .prog-bar-bg{background:#f0ebe4;border-radius:8px;height:12px;overflow:hidden;}
@@ -174,10 +232,8 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
 .prog-bar.ok{background:var(--green);}
 .prog-info{display:flex;justify-content:space-between;margin-top:6px;font-size:12px;color:var(--muted);}
 
-/* KPI grid */
-.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-bottom:22px;}
-.kpi-card{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:15px 16px;border-left:4px solid var(--red);box-shadow:var(--shadow);transition:transform .15s;cursor:default;}
-.kpi-card:hover{transform:translateY(-2px);}
+/* KPI grid legado (mantém para compatibilidade) */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:16px;}
 .kpi-card.green{border-left-color:var(--green);}
 .kpi-card.orange{border-left-color:var(--orange);}
 .kpi-card.blue{border-left-color:var(--blue);}
@@ -343,13 +399,14 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
     <!-- DASHBOARD -->
     <div class="portal-page active" id="page-dashboard">
 
+      <!-- Header -->
       <div class="dash-header">
         <div>
           <div class="dash-title">Dashboard</div>
           <div class="dash-sub" id="dash-sub">Carregando dados...</div>
         </div>
         <div class="dash-mes-sel">
-          <input type="month" id="dash-mes" style="padding:6px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px" onchange="carregarKPIs()">
+          <input type="month" id="dash-mes" onchange="carregarKPIs()">
           <button class="btn-refresh" onclick="carregarKPIs()">↺ Atualizar</button>
         </div>
       </div>
@@ -357,104 +414,182 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
       <!-- Alertas dinâmicos -->
       <div id="dash-alertas"></div>
 
-      <!-- Barra de faturamento -->
-      <div class="prog-wrap hidden" id="prog-fat">
-        <div class="prog-label">
-          <span>🎯 Meta de Faturamento — <span id="prog-mes"></span></span>
-          <span id="prog-pct" style="font-size:14px;font-weight:700;color:var(--text)">0%</span>
+      <!-- Hero: Meta de Faturamento -->
+      <div class="fat-hero hidden" id="prog-fat">
+        <div class="fat-hero-info">
+          <div class="fat-hero-label">🎯 Meta de Faturamento — <span id="prog-mes"></span></div>
+          <div class="fat-hero-val" id="prog-real">R$ 0</div>
+          <div class="fat-hero-sub">de <strong id="prog-meta">R$ 0</strong> planejado</div>
         </div>
-        <div class="prog-bar-bg"><div class="prog-bar" id="prog-bar" style="width:0%"></div></div>
-        <div class="prog-info">
-          <span>Real: <strong id="prog-real">R$ 0</strong></span>
-          <span>Meta: <strong id="prog-meta">R$ 0</strong></span>
+        <div class="fat-hero-bar-wrap">
+          <div class="fat-bar-track">
+            <div class="fat-bar-fill" id="prog-bar" style="width:0%"></div>
+          </div>
+          <div class="fat-bar-labels">
+            <span>0%</span><span>50%</span><span>100%</span>
+          </div>
         </div>
+        <div class="fat-pct" id="prog-pct" style="color:var(--muted)">0%</div>
       </div>
 
-      <!-- KPIs -->
-      <div class="kpi-grid">
-        <!-- Boletos a vencer -->
-        <div class="kpi-card" onclick="showTab('boletos')">
-          <div class="kpi-icon">📄</div>
+      <!-- KPI Row -->
+      <div class="kpi-row">
+        <div class="kpi-card k-red" onclick="showTab('boletos')" style="cursor:pointer">
+          <span class="kpi-icon2">📄</span>
           <div class="kpi-label">Boletos Vencendo (7d)</div>
           <div class="kpi-val kpi-loading" id="k-vence7d">—</div>
           <div class="kpi-sub" id="k-vence7d-val">—</div>
         </div>
-        <!-- Boletos vencidos -->
-        <div class="kpi-card orange" onclick="showTab('boletos')">
-          <div class="kpi-icon">⚠️</div>
+        <div class="kpi-card k-orange" onclick="showTab('boletos')" style="cursor:pointer">
+          <span class="kpi-icon2">⚠️</span>
           <div class="kpi-label">Boletos Vencidos</div>
           <div class="kpi-val kpi-loading" id="k-vencidos">—</div>
           <div class="kpi-sub" id="k-aberto">—</div>
         </div>
-        <!-- DRE resultado — só para quem tem acesso ao DRE -->
-        <div class="kpi-card blue" onclick="showTab('dre')" id="kpi-card-dre" style="display:none">
-          <div class="kpi-icon">📊</div>
+        <div class="kpi-card k-blue" onclick="showTab('dre')" id="kpi-card-dre" style="display:none;cursor:pointer">
+          <span class="kpi-icon2">📊</span>
           <div class="kpi-label">Resultado DRE</div>
           <div class="kpi-val kpi-loading" id="k-resultado">—</div>
           <div class="kpi-sub" id="k-resultado-sub">—</div>
         </div>
-        <!-- Validade -->
-        <div class="kpi-card orange" onclick="showTab('validade')">
-          <div class="kpi-icon">🗓</div>
+        <div class="kpi-card k-orange" onclick="showTab('validade')" style="cursor:pointer">
+          <span class="kpi-icon2">🗓</span>
           <div class="kpi-label">Validade — Alertas</div>
           <div class="kpi-val kpi-loading" id="k-val-alerta">—</div>
           <div class="kpi-sub" id="k-val-venc">—</div>
         </div>
-        <!-- Perdas -->
-        <div class="kpi-card" onclick="showTab('validade')">
-          <div class="kpi-icon">🗑️</div>
+        <div class="kpi-card k-red" onclick="showTab('perdas')" style="cursor:pointer">
+          <span class="kpi-icon2">🗑️</span>
           <div class="kpi-label">Perdas do Mês</div>
           <div class="kpi-val kpi-loading" id="k-perdas">—</div>
           <div class="kpi-sub" id="k-perdas-meta">—</div>
         </div>
-        <!-- Retiradas -->
-        <div class="kpi-card purple" onclick="showTab('retiradas')">
-          <div class="kpi-icon">👥</div>
+        <div class="kpi-card k-purple" onclick="showTab('retiradas')" style="cursor:pointer">
+          <span class="kpi-icon2">👥</span>
           <div class="kpi-label">Retiradas do Mês</div>
           <div class="kpi-val kpi-loading" id="k-retiradas">—</div>
           <div class="kpi-sub">funcionários</div>
         </div>
       </div>
 
-      <!-- Acesso Rápido -->
-      <div class="sys-section-title">Acesso Rápido</div>
-      <div class="sys-grid">
-        <div class="sys-card" style="--c:var(--red)" onclick="showTab('boletos')">
-          <div class="sys-icon">📄</div>
-          <div class="sys-title">Boletos & NF-e</div>
-          <div class="sys-desc">Importação de XML/PDF, baixas, vencimentos e integração DRE</div>
-          <div class="sys-badge" id="badge-boletos">—</div>
+      <!-- Linha 1: Financeiro + Atalhos Inteligentes -->
+      <div class="dash-row" style="margin-bottom:14px">
+
+        <!-- Gráfico de barras: DRE simplificado -->
+        <div class="dash-card" id="dash-dre-card" style="display:none">
+          <div class="dash-card-title">📊 DRE — Resumo do Mês</div>
+          <div id="dash-dre-bars">
+            <div class="mini-bar-row">
+              <div class="mini-bar-label">Receitas</div>
+              <div class="mini-bar-track"><div class="mini-bar-fill" id="bar-rec" style="width:0%;background:var(--green)"></div></div>
+              <div class="mini-bar-val" id="bar-rec-val">—</div>
+            </div>
+            <div class="mini-bar-row">
+              <div class="mini-bar-label">Despesas</div>
+              <div class="mini-bar-track"><div class="mini-bar-fill" id="bar-desp" style="width:0%;background:var(--red-l)"></div></div>
+              <div class="mini-bar-val" id="bar-desp-val">—</div>
+            </div>
+            <div class="mini-bar-row">
+              <div class="mini-bar-label">Resultado</div>
+              <div class="mini-bar-track"><div class="mini-bar-fill" id="bar-res" style="width:0%;background:var(--blue)"></div></div>
+              <div class="mini-bar-val" id="bar-res-val">—</div>
+            </div>
+          </div>
+          <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
+            <div class="dash-card-title" style="margin-bottom:8px">📄 Boletos — Próximos Vencimentos</div>
+            <div id="dash-boletos-prox"><div style="font-size:12px;color:var(--muted)">Carregando...</div></div>
+          </div>
         </div>
-        <div class="sys-card" style="--c:var(--blue)" onclick="showTab('dre')" id="card-acesso-dre" style="display:none">
-          <div class="sys-icon">📊</div>
-          <div class="sys-title">DRE & Classificador</div>
-          <div class="sys-desc">Extratos bancários, fatura cartão e relatório DRE completo</div>
-          <div class="sys-badge" id="badge-dre">—</div>
+
+        <!-- Atalhos Inteligentes -->
+        <div class="dash-card" id="dash-atalhos-card">
+          <div class="dash-card-title">⚡ Atalhos Rápidos</div>
+          <div class="atalhos-grid" id="dash-atalhos">
+            <!-- gerados dinamicamente -->
+          </div>
         </div>
-        <div class="sys-card" style="--c:var(--green)" onclick="showTab('produtos')">
-          <div class="sys-icon">📦</div>
-          <div class="sys-title">Produtos & Kits</div>
-          <div class="sys-desc">Catálogo, kits com custo operacional, royalties e precificação</div>
-          <div class="sys-badge" id="badge-produtos">—</div>
+
+        <!-- Validade — gráfico de criticidade (quando DRE não disponível) -->
+        <div class="dash-card" id="dash-validade-card">
+          <div class="dash-card-title">🗓 Validade — Situação</div>
+          <div id="dash-val-bars">
+            <div class="mini-bar-row">
+              <div class="mini-bar-label" style="color:var(--red-l);font-weight:600">🔴 Vencidos</div>
+              <div class="mini-bar-track"><div class="mini-bar-fill" id="vbar-venc" style="width:0%;background:var(--red-l)"></div></div>
+              <div class="mini-bar-val" id="vbar-venc-v">0</div>
+            </div>
+            <div class="mini-bar-row">
+              <div class="mini-bar-label" style="color:var(--orange);font-weight:600">🟡 Críticos (3d)</div>
+              <div class="mini-bar-track"><div class="mini-bar-fill" id="vbar-crit" style="width:0%;background:var(--orange)"></div></div>
+              <div class="mini-bar-val" id="vbar-crit-v">0</div>
+            </div>
+            <div class="mini-bar-row">
+              <div class="mini-bar-label" style="color:#f59e0b;font-weight:600">🟠 Alerta (7d)</div>
+              <div class="mini-bar-track"><div class="mini-bar-fill" id="vbar-alert" style="width:0%;background:#f59e0b"></div></div>
+              <div class="mini-bar-val" id="vbar-alert-v">0</div>
+            </div>
+            <div class="mini-bar-row">
+              <div class="mini-bar-label" style="color:var(--green);font-weight:600">🟢 OK</div>
+              <div class="mini-bar-track"><div class="mini-bar-fill" id="vbar-ok" style="width:0%;background:var(--green)"></div></div>
+              <div class="mini-bar-val" id="vbar-ok-v">0</div>
+            </div>
+          </div>
+          <div style="margin-top:12px">
+            <button class="btn-refresh" style="width:100%;justify-content:center" onclick="showTab('validade')">Ver Validade Completa →</button>
+          </div>
         </div>
-        <div class="sys-card" style="--c:var(--orange)" onclick="showTab('validade')">
-          <div class="sys-icon">🗓</div>
-          <div class="sys-title">Controle de Validade</div>
-          <div class="sys-desc">Alertas de vencimento, conferências e registro de perdas</div>
-          <div class="sys-badge" id="badge-validade">—</div>
+
+      </div>
+
+      <!-- Linha 2: Perdas gauge + Cortes + Retiradas -->
+      <div class="dash-row tres" style="margin-bottom:0">
+
+        <!-- Perdas do mês -->
+        <div class="dash-card">
+          <div class="dash-card-title">🗑️ Perdas — Meta do Mês</div>
+          <div class="gauge-wrap" id="dash-perdas-gauge">
+            <svg width="120" height="80" viewBox="0 0 120 80">
+              <path d="M10,70 A50,50 0 0,1 110,70" fill="none" stroke="#f0ebe4" stroke-width="12" stroke-linecap="round"/>
+              <path d="M10,70 A50,50 0 0,1 110,70" fill="none" stroke="var(--green)" stroke-width="12" stroke-linecap="round"
+                stroke-dasharray="157" stroke-dashoffset="157" id="gauge-arc" style="transition:stroke-dashoffset .8s ease"/>
+              <text x="60" y="65" text-anchor="middle" font-size="18" font-weight="700" fill="var(--text)" font-family="DM Mono,monospace" id="gauge-pct">—</text>
+            </svg>
+          </div>
+          <div style="text-align:center;font-size:11px;color:var(--muted)">
+            <span id="perdas-val">—</span> de <span id="perdas-meta">—</span> permitido
+          </div>
         </div>
-        <div class="sys-card" style="--c:var(--purple)" onclick="showTab('retiradas')">
-          <div class="sys-icon">👥</div>
-          <div class="sys-title">Retiradas Funcionários</div>
-          <div class="sys-desc">Controle de benefícios, limites mensais e relatórios</div>
-          <div class="sys-badge" id="badge-retiradas">—</div>
+
+        <!-- Cortes — resumo rápido -->
+        <div class="dash-card">
+          <div class="dash-card-title">🔪 Cortes — Último Registro</div>
+          <div id="dash-cortes-mini">
+            <div style="font-size:12px;color:var(--muted);padding:8px 0">Carregando...</div>
+          </div>
+          <div style="margin-top:8px">
+            <button class="btn-refresh" style="width:100%;justify-content:center" onclick="showTab('cortes')">Ver CorteMaster →</button>
+          </div>
         </div>
-        <div class="sys-card" style="--c:var(--gold)" onclick="showTab('config')">
-          <div class="sys-icon">⚙️</div>
-          <div class="sys-title">Configurações</div>
-          <div class="sys-desc">Usuários, funcionários, metas, categorias DRE e parâmetros</div>
-          <div class="sys-badge ok">Admin</div>
+
+        <!-- RH / Equipe -->
+        <div class="dash-card">
+          <div class="dash-card-title">👥 Equipe — Resumo</div>
+          <div id="dash-rh-mini">
+            <div style="font-size:12px;color:var(--muted);padding:8px 0">Carregando...</div>
+          </div>
+          <div style="margin-top:8px">
+            <button class="btn-refresh" style="width:100%;justify-content:center" onclick="showTab('rh')">Ver RH Completo →</button>
+          </div>
         </div>
+
+      </div>
+
+      <!-- IDs legados mantidos para compatibilidade com carregarKPIs() -->
+      <div style="display:none">
+        <span id="badge-boletos"></span><span id="badge-dre"></span>
+        <span id="badge-produtos"></span><span id="badge-validade"></span>
+        <span id="badge-retiradas"></span>
+        <span id="card-acesso-dre"></span>
       </div>
 
     </div><!-- /dashboard -->
@@ -694,6 +829,112 @@ function showTab(tab) {
 }
 
 // ── KPIs ───────────────────────────────────────────────────────────────────
+// ── Atalhos inteligentes ────────────────────────────────────────────────────
+function renderAtalhos(d) {
+  const el = $('dash-atalhos'); if(!el) return;
+  const atalhos = [];
+  // Boletos vencidos → urgente
+  if (d.boletosVencidos > 0)
+    atalhos.push({ icon:'🚨', text:'Pagar boletos', sub:d.boletosVencidos+' vencido(s)', cls:'atalho-danger', fn:"showTab('boletos')" });
+  else if (d.boletosVence7d > 0)
+    atalhos.push({ icon:'📄', text:'Boletos (7d)', sub:d.boletosVence7d+' a vencer · '+fmtBRL(d.boletosValorVence7d||0), cls:'atalho-alerta', fn:"showTab('boletos')" });
+
+  // Validade vencida → urgente
+  if (d.validadeVencidos > 0)
+    atalhos.push({ icon:'🔴', text:'Retirar vencidos', sub:d.validadeVencidos+' produto(s)', cls:'atalho-danger', fn:"showTab('validade')" });
+  else if (d.validadeAlerta > 0)
+    atalhos.push({ icon:'⏰', text:'Checar validades', sub:d.validadeAlerta+' em alerta', cls:'atalho-alerta', fn:"showTab('validade')" });
+
+  // Importar extrato/DRE
+  if (['admin','financeiro','contabil'].includes(usuario?.perfil))
+    atalhos.push({ icon:'📊', text:'Classificar DRE', sub:'Extrato e faturas CC', cls:'', fn:"showTab('dre')" });
+
+  // Faturamento abaixo de 50%
+  if (d.faturamentoPct < 50 && d.faturamentoPct > 0)
+    atalhos.push({ icon:'💰', text:'Importar Faturamento', sub:(d.faturamentoPct||0)+'% da meta atingido', cls:'atalho-alerta', fn:"showTab('faturamento')" });
+
+  // Cortes
+  atalhos.push({ icon:'🔪', text:'Novo Corte', sub:'Registrar corte do dia', cls:'', fn:"showTab('cortes')" });
+
+  // Retiradas
+  atalhos.push({ icon:'👥', text:'Retiradas', sub:'Lançar retirada', cls:'', fn:"showTab('retiradas')" });
+
+  // Perdas fora da meta
+  if (d.perdasDentroMeta === false)
+    atalhos.push({ icon:'📉', text:'Ver Perdas', sub:'Meta ultrapassada', cls:'atalho-danger', fn:"showTab('validade')" });
+
+  // RH pendentes
+  atalhos.push({ icon:'✅', text:'Aprovar Lançamentos', sub:'RH — apontamentos pendentes', cls:'', fn:"showTab('rh')" });
+
+  el.innerHTML = atalhos.slice(0,8).map(a =>
+    `<div class="atalho-btn ${a.cls}" onclick="${a.fn}">
+      <span class="ab-icon">${a.icon}</span>
+      <div><div class="ab-text">${a.text}</div><div class="ab-sub">${a.sub}</div></div>
+    </div>`
+  ).join('');
+}
+
+async function carregarBoletosProx() {
+  const el = $('dash-boletos-prox'); if(!el) return;
+  try {
+    const mesVal = $('dash-mes').value;
+    const [y,m] = mesVal ? mesVal.split('-') : [new Date().getFullYear(), String(new Date().getMonth()+1).padStart(2,'0')];
+    const mes = `${m}/${y}`;
+    const d = await apiFetch(`/api/boletos?status=avencer&mes=${encodeURIComponent(mes)}`);
+    const lista = (d.data||[]).filter(b=>b.status!=='pago').slice(0,4);
+    if(!lista.length){ el.innerHTML='<div style="font-size:11px;color:var(--green)">✅ Nenhum boleto a vencer</div>'; return; }
+    el.innerHTML = lista.map(b=>`
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid #f5efe8;font-size:11px">
+        <div>
+          <div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px">${b.fornecedor}</div>
+          <div style="color:var(--muted)">${b.vencimento?b.vencimento.slice(8,10)+'/'+b.vencimento.slice(5,7):''}</div>
+        </div>
+        <div style="font-family:monospace;font-weight:700;color:var(--red-l)">${fmtBRL(b.valor)}</div>
+      </div>`).join('');
+  } catch(e) { el.innerHTML=''; }
+}
+
+async function carregarCortesMini() {
+  const el = $('dash-cortes-mini'); if(!el) return;
+  try {
+    const d = await apiFetch('/api/cortes/dashboard');
+    if(!d.ok||!d.data) { el.innerHTML='<div style="font-size:11px;color:var(--muted)">Sem dados de cortes</div>'; return; }
+    const v = d.data;
+    const perdaPct = (parseFloat(v.perda_media||0)*100).toFixed(1);
+    const cor = parseFloat(perdaPct)>20?'var(--red-l)':parseFloat(perdaPct)>12?'var(--orange)':'var(--green)';
+    el.innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11px">
+        <div><div style="color:var(--muted);font-size:9px;text-transform:uppercase">Registros</div><div style="font-weight:700;font-size:16px">${v.registros||0}</div></div>
+        <div><div style="color:var(--muted);font-size:9px;text-transform:uppercase">Perda Média</div><div style="font-weight:700;font-size:16px;color:${cor}">${perdaPct}%</div></div>
+        <div><div style="color:var(--muted);font-size:9px;text-transform:uppercase">Insumos</div><div style="font-weight:700">${v.insumos||0}</div></div>
+        <div><div style="color:var(--muted);font-size:9px;text-transform:uppercase">Fichas Téc.</div><div style="font-weight:700">${v.fichas||0}</div></div>
+      </div>`;
+  } catch(e) { el.innerHTML='<div style="font-size:11px;color:var(--muted)">—</div>'; }
+}
+
+async function carregarRHMini() {
+  const el = $('dash-rh-mini'); if(!el) return;
+  try {
+    const mesVal = $('dash-mes').value;
+    const [y,m] = mesVal ? mesVal.split('-') : [new Date().getFullYear(), String(new Date().getMonth()+1).padStart(2,'0')];
+    const mes = `${m}/${y}`;
+    const [funcs, pend] = await Promise.all([
+      apiFetch('/api/rh/funcionarios'),
+      apiFetch('/api/rh/lancamentos-pendentes/count').catch(()=>({ok:false}))
+    ]);
+    const ativos = (funcs.data||[]).filter(f=>f.ativo!==false).length;
+    const pendentes = pend.ok ? pend.total : 0;
+    el.innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11px">
+        <div><div style="color:var(--muted);font-size:9px;text-transform:uppercase">Funcionários</div><div style="font-weight:700;font-size:18px">${ativos}</div></div>
+        <div><div style="color:var(--muted);font-size:9px;text-transform:uppercase">Pendentes</div>
+          <div style="font-weight:700;font-size:18px;color:${pendentes>0?'var(--orange)':'var(--green)'}">${pendentes}</div>
+        </div>
+      </div>
+      ${pendentes>0?'<div style="font-size:11px;color:var(--orange);margin-top:6px">⏳ '+pendentes+' lançamento(s) aguardando aprovação</div>':'<div style="font-size:11px;color:var(--green);margin-top:6px">✅ Nenhum lançamento pendente</div>'}`;
+  } catch(e) { el.innerHTML='<div style="font-size:11px;color:var(--muted)">—</div>'; }
+}
+
 async function carregarKPIs() {
   setSyncStatus('loading');
 
@@ -743,6 +984,14 @@ async function carregarKPIs() {
       $('k-resultado').textContent = fmtBRL(res);
       $('k-resultado').className   = 'kpi-val ' + (res >= 0 ? 'c-green' : 'c-red');
       $('k-resultado-sub').textContent = `Rec: ${fmtBRL(d.dreReceitas||0)} | Desp: ${fmtBRL(d.dreDespesas||0)}`;
+      // DRE bars
+      const dreCard = $('dash-dre-card'); if(dreCard) dreCard.style.display='';
+      const maxDre = Math.max(d.dreReceitas||0, d.dreDespesas||0, 1);
+      const brec = $('bar-rec'); if(brec){ brec.style.width=Math.round((d.dreReceitas||0)/maxDre*100)+'%'; $('bar-rec-val').textContent=fmtBRL(d.dreReceitas||0); }
+      const bdesp = $('bar-desp'); if(bdesp){ bdesp.style.width=Math.round((d.dreDespesas||0)/maxDre*100)+'%'; $('bar-desp-val').textContent=fmtBRL(d.dreDespesas||0); }
+      const bres = $('bar-res'); if(bres){ bres.style.width=Math.max(0,Math.round(Math.abs(res)/maxDre*100))+'%'; bres.style.background=res>=0?'var(--green)':'var(--red-l)'; $('bar-res-val').textContent=fmtBRL(res); }
+      // Próximos boletos
+      carregarBoletosProx();
     }
 
     // ── Validade ──────────────────────────────────────────────────────────
@@ -791,11 +1040,47 @@ async function carregarKPIs() {
     }
     $('dash-alertas').innerHTML = alertasHtml;
 
-    // ── Badges dos cards ──────────────────────────────────────────────────
-    $('badge-boletos').textContent = d.boletosVencidos > 0
-      ? `⚠️ ${d.boletosVencidos} vencido(s)`
-      : d.boletosVence7d > 0 ? `📅 ${d.boletosVence7d} vence em 7d` : '✅ Em dia';
-    $('badge-boletos').className = 'sys-badge ' + (d.boletosVencidos > 0 ? 'danger' : d.boletosVence7d > 0 ? 'alert' : 'ok');
+    // ── Fat Hero Bar ──────────────────────────────────────────────────────
+    if (d.faturamentoMeta > 0) {
+      $('prog-fat').classList.remove('hidden');
+      $('prog-mes').textContent  = mesTxt;
+      $('prog-real').textContent = fmtBRL(d.faturamentoReal||0);
+      $('prog-meta').textContent = fmtBRL(d.faturamentoMeta);
+      const pct = Math.min(100, d.faturamentoPct || 0);
+      const pctEl = $('prog-pct'); if(pctEl) { pctEl.textContent = (d.faturamentoPct||0)+'%'; pctEl.style.color = pct>=100?'var(--green)':pct>=70?'var(--orange)':'var(--red-l)'; }
+      const bar = $('prog-bar');
+      if(bar){ bar.style.width = pct+'%'; bar.style.background = pct>=100?'var(--green)':pct>=70?'var(--orange)':'var(--red-l)'; }
+    } else { $('prog-fat').classList.add('hidden'); }
+
+    // ── Validade bars ─────────────────────────────────────────────────────
+    const vtotal = (d.validadeVencidos||0)+(d.validadeCriticos||0)+(d.validadeAlerta||0)+(d.validadeOk||0);
+    const vpct = v => vtotal>0?Math.max(3,Math.round(v/vtotal*100)):0;
+    if($('vbar-venc')){ $('vbar-venc').style.width=vpct(d.validadeVencidos||0)+'%'; $('vbar-venc-v').textContent=d.validadeVencidos||0; }
+    if($('vbar-crit')){ $('vbar-crit').style.width=vpct(d.validadeCriticos||0)+'%'; $('vbar-crit-v').textContent=d.validadeCriticos||0; }
+    if($('vbar-alert')){ $('vbar-alert').style.width=vpct(d.validadeAlerta||0)+'%'; $('vbar-alert-v').textContent=d.validadeAlerta||0; }
+    if($('vbar-ok')){ $('vbar-ok').style.width=vpct(d.validadeOk||0)+'%'; $('vbar-ok-v').textContent=d.validadeOk||0; }
+
+    // ── Perdas gauge ──────────────────────────────────────────────────────
+    if(d.perdasMeta>0){
+      const perdPct = Math.min(100,Math.round((d.perdasMes||0)/d.perdasMeta*100));
+      const arc = $('gauge-arc'); const gPct = $('gauge-pct');
+      if(arc){ const offset = 157-(157*perdPct/100); arc.style.strokeDashoffset=offset; arc.style.stroke=perdPct>100?'var(--red-l)':perdPct>80?'var(--orange)':'var(--green)'; }
+      if(gPct) gPct.textContent = perdPct+'%';
+      if($('perdas-val')) $('perdas-val').textContent = fmtBRL(d.perdasMes||0);
+      if($('perdas-meta')) $('perdas-meta').textContent = fmtBRL(d.perdasMeta);
+    }
+
+    // ── Atalhos inteligentes ──────────────────────────────────────────────
+    renderAtalhos(d);
+
+    // ── Cortes mini ───────────────────────────────────────────────────────
+    carregarCortesMini();
+
+    // ── RH mini ───────────────────────────────────────────────────────────
+    carregarRHMini();
+
+    // ── Badges legados ────────────────────────────────────────────────────
+    const badge = $('badge-boletos'); if(badge) badge.textContent = '';
 
     if (['admin','financeiro','contabil'].includes(usuario?.perfil)) {
       const res = d.dreResultado || 0;
