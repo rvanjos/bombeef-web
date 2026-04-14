@@ -1897,82 +1897,160 @@ function _buildDRE(el, full) {
 
   const sg=(gk,m)=>Object.values(data[gk]||{}).reduce((s,c)=>s+(c[m]||0),0);
   const sgt=(gk)=>meses.reduce((s,m)=>s+sg(gk,m),0);
-  const recTotalMes = Object.fromEntries(meses.map(m=>[m, sg('RECEITAS',m)]));
-  const recTotalGeral = meses.reduce((s,m)=>s+recTotalMes[m],0);
-  const pct = (v, base) => {
-    if(!_showPct || !base || base===0) return '';
-    const p = (Math.abs(v)/Math.abs(base)*100).toFixed(1);
-    return `<br><span style="font-size:9px;color:#aaa;font-weight:400">${p}%</span>`;
-  };
+  const recTotalMes=Object.fromEntries(meses.map(m=>[m,sg('RECEITAS',m)]));
 
+  const pct=(v,base)=>{
+    if(!_showPct||!base||base===0) return '';
+    const p=(Math.abs(v)/Math.abs(base)*100).toFixed(1);
+    return '<br><span style="font-size:9px;color:#aaa;font-weight:400">'+p+'%</span>';
+  };
   const fv=(v,isDesp)=>{
-    if(v===0) return `<span style="color:#bbb;font-family:'DM Mono',monospace">—</span>`;
+    if(v===0) return '<span style="color:#bbb;font-family:\'DM Mono\',monospace">—</span>';
     const col=isDesp?(v<0?'#e74c3c':'#2ecc71'):(v>0?'#2ecc71':'#e74c3c');
     const sign=isDesp&&v!==0?'-':(v>0?'+':'');
-    return `<span style="font-family:'DM Mono',monospace;white-space:nowrap;color:${col}">${sign}${fmt.brl(Math.abs(v))}</span>`;
+    return '<span style="font-family:\'DM Mono\',monospace;white-space:nowrap;color:'+col+'">'+sign+fmt.brl(Math.abs(v))+'</span>';
   };
 
-  const TH=`padding:8px 10px;text-align:right;font-size:10px;color:#fff;font-weight:700;text-transform:uppercase;background:var(--red);white-space:nowrap;border-right:1px solid rgba(255,255,255,.1)`;
-  const THL=`padding:8px 14px;text-align:left;font-size:10px;color:#fff;font-weight:700;text-transform:uppercase;background:var(--red)`;
-  const TD=`padding:5px 10px;text-align:right;font-size:12px;border-bottom:1px solid #f5efe8;border-right:1px solid #f5efe8;transition:background .15s`;
-  const TDL=`padding:5px ${full?'14':'10'}px;text-align:left;font-size:12px;border-bottom:1px solid #f5efe8`;
+  const TH='padding:8px 10px;text-align:right;font-size:10px;color:#fff;font-weight:700;text-transform:uppercase;background:var(--red);white-space:nowrap;border-right:1px solid rgba(255,255,255,.1)';
+  const THL='padding:8px 14px;text-align:left;font-size:10px;color:#fff;font-weight:700;text-transform:uppercase;background:var(--red)';
+  const TD='padding:5px 10px;text-align:right;font-size:12px;border-bottom:1px solid #f5efe8;border-right:1px solid #f5efe8;transition:background .15s';
+  const TDL='padding:5px '+(full?'14':'10')+'px;text-align:left;font-size:12px;border-bottom:1px solid #f5efe8';
+  const cols=meses.length+(showTot?2:1);
 
-  let h=`<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
-  <thead><tr>
-    <th style="${THL};min-width:${full?'220':'170'}px">Grupo / Categoria</th>
-    ${meses.map(m=>`<th style="${TH}">${fmtMes(m)}</th>`).join('')}
-    ${showTot?`<th style="${TH};background:#5a2020">TOTAL</th>`:''}
-  </tr></thead><tbody>`;
-
-  const ORDEM=['RECEITAS','CMV','PESSOAL','VENDAS_CAT','CONSUMO','TERCEIROS','MATERIAL','FINANCEIRAS','OUTRAS','IMPOSTOS','OUTROS'];
-  const lucroMes=Object.fromEntries(meses.map(m=>[m,0]));
-
-  for (const gk of ORDEM) {
-    if (!data[gk]) continue;
+  // ── renderGrupo: linhas detalhadas de um grupo ────────────────────────────
+  function renderGrupo(gk) {
+    if (!data[gk]) return '';
     const g=CATS[gk];
     const isDesp=gk!=='RECEITAS';
-    const totG=sgt(gk);
-    const ghBg=gk==='RECEITAS'?'#1a5c2a':gk==='CMV'?'#5a2020':'#2d2d2d';
-    const gid=`dreg-${full?'f':'s'}-${gk}`;
-
-    // Header clicável — toggle ao clicar
-    h+=`<tr style="cursor:pointer" onclick="toggleDREGrupo('${gid}')">
-      <td colspan="${meses.length+(showTot?2:1)}" style="padding:7px 14px;background:${ghBg};color:#fff;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.5px">
-        <span id="${gid}-ico">▼</span> ${g?g.l:gk}
-        <span style="float:right;font-size:10px;font-weight:400;opacity:.6">CLIQUE PARA RECOLHER</span>
-      </td>
-    </tr>`;
-
-    // Linhas de categorias — marcadas com classe para o toggle
+    const ghBg=gk==='RECEITAS'?'#1a5c2a':gk==='CMV'?'#5a2020':'#374151';
+    const gid='dreg-'+(full?'f':'s')+'-'+gk;
+    let rows='';
+    rows+='<tr style="cursor:pointer" onclick="toggleDREGrupo(\''+gid+'\')">'
+         +'<td colspan="'+cols+'" style="padding:6px 14px;background:'+ghBg+';color:#fff;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.5px">'
+         +'<span id="'+gid+'-ico">▼</span> '+(g?g.l:gk)
+         +'<span style="float:right;font-size:10px;font-weight:400;opacity:.5">CLIQUE PARA RECOLHER</span>'
+         +'</td></tr>';
     for (const [cat,mD] of Object.entries(data[gk])) {
       const totC=Object.values(mD).reduce((s,v)=>s+v,0);
-      h+=`<tr class="${gid}-row">
-        <td style="${TDL};padding-left:${full?'22':'18'}px;color:var(--muted)">· ${cat}</td>
-        ${meses.map(m=>`<td style="${TD};${mD[m]?'cursor:pointer':''}" title="${mD[m]?'Duplo clique para ver lançamentos':''}" ondblclick="${mD[m]?`drillDown('${cat.replace(/'/g,"\\'")}','${m}')`:''}">
-          ${fv(mD[m]||0,isDesp)}${pct(mD[m]||0, recTotalMes[m])}
-        </td>`).join('')}
-        ${showTot?`<td style="${TD};font-weight:600">${fv(totC,isDesp)}</td>`:''}
-      </tr>`;
+      const escapedCat=cat.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+      rows+='<tr class="'+gid+'-row">'
+           +'<td style="'+TDL+';padding-left:'+(full?'22':'18')+'px;color:var(--muted)">· '+cat+'</td>'
+           +meses.map(m=>'<td style="'+TD+(mD[m]?';cursor:pointer':'')+'" ondblclick="'+(mD[m]?'drillDown(\''+escapedCat+'\',\''+m+'\')':'')+'">'
+             +fv(mD[m]||0,isDesp)+pct(mD[m]||0,recTotalMes[m])
+             +'</td>').join('')
+           +(showTot?'<td style="'+TD+';font-weight:600">'+fv(totC,isDesp)+'</td>':'')
+           +'</tr>';
     }
-
-    const stBg=gk==='RECEITAS'?'#e8f7ef':gk==='CMV'?'#fff0f0':'#f0ebe4';
-    const stCol=gk==='RECEITAS'?'var(--green)':'var(--red-l)';
-    h+=`<tr class="${gid}-row" style="background:${stBg}">
-      <td style="${TDL};font-weight:700;color:${stCol}">▶ SUBTOTAL ${g?g.l:gk}</td>
-      ${meses.map(m=>{const v=sg(gk,m);lucroMes[m]=(lucroMes[m]||0)+v;
-        return `<td style="${TD};font-weight:700;color:${v>=0?'var(--green)':'var(--red-l)'}">${fmt.brl(isDesp?-Math.abs(v):v)}${pct(v, recTotalMes[m])}</td>`;}).join('')}
-      ${showTot?`<td style="${TD};font-weight:700;color:${totG>=0?'var(--green)':'var(--red-l)'}">${fmt.brl(isDesp?-Math.abs(totG):totG)}</td>`:''}
-    </tr>
-    <tr><td colspan="${meses.length+(showTot?2:1)}" style="height:3px;background:var(--border)"></td></tr>`;
+    return rows;
   }
 
-  const lucroTot=Object.values(lucroMes).reduce((s,v)=>s+v,0);
-  h+=`<tr style="background:#1a1a1a">
-    <td style="padding:10px 14px;color:#fff;font-weight:700;font-size:13px">💰 LUCRO / PREJUÍZO</td>
-    ${meses.map(m=>{const v=lucroMes[m]||0;
-      return `<td style="padding:10px;text-align:right;color:${v>=0?'#2ecc71':'#e74c3c'};font-family:'DM Mono',monospace;font-weight:700;font-size:13px;border-right:1px solid rgba(255,255,255,.1)">${v>=0?'+':''}${fmt.brl(v)}</td>`;}).join('')}
-    ${showTot?`<td style="padding:10px;text-align:right;color:${lucroTot>=0?'#2ecc71':'#e74c3c'};font-family:'DM Mono',monospace;font-weight:700;font-size:13px;background:#2d2d2d">${lucroTot>=0?'+':''}${fmt.brl(lucroTot)}</td>`:''}
-  </tr></tbody></table></div>`;
+  // ── renderSubtotal: linha de subtotal de um grupo ─────────────────────────
+  function renderSubtotal(gk, acumMes) {
+    const g=CATS[gk];
+    const isDesp=gk!=='RECEITAS';
+    const stBg=gk==='RECEITAS'?'#e8f7ef':gk==='CMV'?'#fff0f0':'#f5f0eb';
+    const stCol=gk==='RECEITAS'?'var(--green)':'var(--red-l)';
+    const totG=sgt(gk);
+    const gid='dreg-'+(full?'f':'s')+'-'+gk;
+    return '<tr class="'+gid+'-row" style="background:'+stBg+'">'
+      +'<td style="'+TDL+';font-weight:700;color:'+stCol+'">▶ SUBTOTAL '+(g?g.l:gk)+'</td>'
+      +meses.map(m=>{const v=sg(gk,m);if(acumMes)acumMes[m]=(acumMes[m]||0)+v;
+        return '<td style="'+TD+';font-weight:700;color:'+(v>=0?'var(--green)':'var(--red-l)')+'">'+fmt.brl(isDesp?-Math.abs(v):v)+pct(v,recTotalMes[m])+'</td>';}).join('')
+      +(showTot?'<td style="'+TD+';font-weight:700;color:'+(totG>=0?'var(--green)':'var(--red-l)')+'">'+fmt.brl(isDesp?-Math.abs(totG):totG)+'</td>':'')
+      +'</tr>'
+      +'<tr><td colspan="'+cols+'" style="height:2px;background:var(--border)"></td></tr>';
+  }
+
+  // ── renderResultado: linha de resultado intermediário ─────────────────────
+  function renderResultado(label, emoji, acumMes, bgRow, borderColor) {
+    const tot=meses.reduce((s,m)=>s+(acumMes[m]||0),0);
+    return '<tr style="background:'+bgRow+';border-top:3px solid '+borderColor+'">'
+      +'<td style="padding:10px 14px;font-weight:800;font-size:13px;letter-spacing:.2px">'+emoji+' '+label+'</td>'
+      +meses.map(m=>{const v=acumMes[m]||0;
+        return '<td style="padding:10px;text-align:right;font-family:\'DM Mono\',monospace;font-weight:800;font-size:13px;border-right:1px solid rgba(0,0,0,.08);color:'+(v>=0?'#1a7a4a':'#c0392b')+'">'+(v>=0?'+':'')+fmt.brl(v)+'</td>';}).join('')
+      +(showTot?'<td style="padding:10px;text-align:right;font-family:\'DM Mono\',monospace;font-weight:800;font-size:13px;color:'+(tot>=0?'#1a7a4a':'#c0392b')+'">'+(tot>=0?'+':'')+fmt.brl(tot)+'</td>':'')
+      +'</tr>'
+      +'<tr><td colspan="'+cols+'" style="height:4px;background:'+borderColor+'22"></td></tr>';
+  }
+
+  // ── renderSecLabel: cabeçalho de seção ────────────────────────────────────
+  function renderSecLabel(label) {
+    return '<tr><td colspan="'+cols+'" style="padding:8px 14px 4px;background:#f7f4f0;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);border-top:2px solid #e8e0d8">'+label+'</td></tr>';
+  }
+
+  // ── Cabeçalho da tabela ───────────────────────────────────────────────────
+  let h='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">'
+    +'<thead><tr>'
+    +'<th style="'+THL+';min-width:'+(full?'220':'170')+'px">Grupo / Categoria</th>'
+    +meses.map(m=>'<th style="'+TH+'">'+fmtMes(m)+'</th>').join('')
+    +(showTot?'<th style="'+TH+';background:#5a2020">TOTAL</th>':'')
+    +'</tr></thead><tbody>';
+
+  // ── Acumuladores por estágio ──────────────────────────────────────────────
+  const lucBrutoMes  = Object.fromEntries(meses.map(m=>[m,0]));
+  const lucOpMes     = Object.fromEntries(meses.map(m=>[m,0]));
+  const resFinMes    = Object.fromEntries(meses.map(m=>[m,0]));
+  const resAntRetMes = Object.fromEntries(meses.map(m=>[m,0]));
+
+  // ── BLOCO 1: RECEITA BRUTA ────────────────────────────────────────────────
+  h += renderSecLabel('1. RECEITA BRUTA');
+  h += renderGrupo('RECEITAS');
+  h += renderSubtotal('RECEITAS', lucBrutoMes);
+
+  // ── BLOCO 2: CMV ──────────────────────────────────────────────────────────
+  h += renderSecLabel('2. (-) CUSTO DA MERCADORIA VENDIDA (CMV)');
+  h += renderGrupo('CMV');
+  meses.forEach(m=>{ lucBrutoMes[m]=(lucBrutoMes[m]||0)+sg('CMV',m); });
+  h += renderSubtotal('CMV', null);
+
+  // ── RESULTADO 1: LUCRO BRUTO ───────────────────────────────────────────────
+  h += renderResultado('LUCRO BRUTO', '🟢', lucBrutoMes, '#e8f7ef', '#22c55e');
+  meses.forEach(m=>{ lucOpMes[m]=lucBrutoMes[m]||0; });
+
+  // ── BLOCO 3: DESPESAS OPERACIONAIS ────────────────────────────────────────
+  h += renderSecLabel('3. (-) DESPESAS OPERACIONAIS');
+  const OPER=['PESSOAL','VENDAS_CAT','CONSUMO','TERCEIROS','MATERIAL','OUTRAS','IMPOSTOS'];
+  for (const gk of OPER) {
+    if (!data[gk]) continue;
+    h += renderGrupo(gk);
+    meses.forEach(m=>{ lucOpMes[m]=(lucOpMes[m]||0)+sg(gk,m); });
+    h += renderSubtotal(gk, null);
+  }
+
+  // ── RESULTADO 2: LUCRO OPERACIONAL ────────────────────────────────────────
+  h += renderResultado('LUCRO OPERACIONAL', '🔵', lucOpMes, '#eff6ff', '#3b82f6');
+  meses.forEach(m=>{ resFinMes[m]=lucOpMes[m]||0; });
+
+  // ── BLOCO 4: RESULTADO FINANCEIRO ─────────────────────────────────────────
+  if (data['FINANCEIRAS']) {
+    h += renderSecLabel('4. (-) RESULTADO FINANCEIRO');
+    h += renderGrupo('FINANCEIRAS');
+    meses.forEach(m=>{ resFinMes[m]=(resFinMes[m]||0)+sg('FINANCEIRAS',m); });
+    h += renderSubtotal('FINANCEIRAS', null);
+  }
+
+  // ── RESULTADO 3: RESULTADO ANTES DAS RETIRADAS ────────────────────────────
+  h += renderResultado('RESULTADO ANTES DAS RETIRADAS', '🟡', resFinMes, '#fffbeb', '#f59e0b');
+  meses.forEach(m=>{ resAntRetMes[m]=resFinMes[m]||0; });
+
+  // ── BLOCO 5: RETIRADAS / OUTROS ───────────────────────────────────────────
+  if (data['OUTROS']) {
+    h += renderSecLabel('5. (-) RETIRADAS DOS SÓCIOS / OUTROS');
+    h += renderGrupo('OUTROS');
+    meses.forEach(m=>{ resAntRetMes[m]=(resAntRetMes[m]||0)+sg('OUTROS',m); });
+    h += renderSubtotal('OUTROS', null);
+  }
+
+  // ── RESULTADO FINAL ───────────────────────────────────────────────────────
+  const totFinal=meses.reduce((s,m)=>s+(resAntRetMes[m]||0),0);
+  h+='<tr style="background:#1a1a1a;border-top:4px solid #374151">'
+    +'<td style="padding:12px 14px;color:#fff;font-weight:800;font-size:14px">💰 RESULTADO FINAL (LUCRO / PREJUÍZO REAL)</td>'
+    +meses.map(m=>{const v=resAntRetMes[m]||0;
+      return '<td style="padding:12px 10px;text-align:right;font-family:\'DM Mono\',monospace;font-weight:800;font-size:14px;border-right:1px solid rgba(255,255,255,.1);color:'+(v>=0?'#2ecc71':'#e74c3c')+'">'+(v>=0?'+':'')+fmt.brl(v)+'</td>';}).join('')
+    +(showTot?'<td style="padding:12px 10px;text-align:right;font-family:\'DM Mono\',monospace;font-weight:800;font-size:14px;background:#2d2d2d;color:'+(totFinal>=0?'#2ecc71':'#e74c3c')+'">'+(totFinal>=0?'+':'')+fmt.brl(totFinal)+'</td>':'')
+    +'</tr>';
+
+  h+='</tbody></table></div>';
 
   document.getElementById('dre-mes-label').textContent=meses.map(fmtMes).join(' · ');
   el.innerHTML=h;
