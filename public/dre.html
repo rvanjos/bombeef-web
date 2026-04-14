@@ -2367,46 +2367,86 @@ async function importBoletos(){
   const ordenados = [...d.data].sort((a,b)=>(a.data||'').localeCompare(b.data||''));
   addLancs(ordenados, `Boletos ${mesRef}`);
 
-  // Busca meta de faturamento do mês e injeta como previsão de receita
+  // ── Projeção de receita por média diária ────────────────────────────────
   try {
     const mesEnc = encodeURIComponent(mesRef);
-    const dm = await api.get(`/api/faturamento/meta/${mesEnc}`);
-    if (dm.ok && dm.data && dm.data.meta > 0) {
-      const meta = parseFloat(dm.data.meta);
-      const fatReal = parseFloat(dm.fat_real || 0);
-      const previsto = Math.max(0, meta - fatReal); // só a parte ainda não realizada
+    const [mm, yyyy] = mesRef.split('/');
 
-      // Remove previsão anterior se existir
-      const idPrev = `fat_prev_${mesRef.replace('/','_')}`;
-      const idxPrev = TXS.findIndex(t => t.id === idPrev);
-      if (idxPrev >= 0) TXS.splice(idxPrev, 1);
+    // Remove previsão anterior
+    const idPrev = `fat_prev_${mesRef.replace('/','_')}`;
+    TXS.splice(TXS.findIndex(t => t.id === idPrev), 1);
 
-      if (previsto > 0) {
-        const [mm, yyyy] = mesRef.split('/');
-        const dtPrev = `${yyyy}-${mm}-28`; // último dia do mês como referência
+    // Calcula receita JÁ REALIZADA no extrato do mês corrente
+    const receitasRealizadas = TXS.filter(t =>
+      t.mes === mesRef &&
+      t.categoria === 'VENDAS DE MERCADORIAS' &&
+      t.fonte !== 'PREV_RECEITA' &&
+      !t.ignorar &&
+      parseFloat(t.valor) > 0
+    );
+
+    const totalRealizado = receitasRealizadas.reduce((s,t) => s + parseFloat(t.valor), 0);
+
+    // Encontrar a data mais recente dos lançamentos de receita para saber até quando foi realizado
+    const datas = receitasRealizadas
+      .map(t => t.data)
+      .filter(Boolean)
+      .sort();
+    const ultimaData = datas.length ? datas[datas.length - 1] : null;
+
+    if (totalRealizado > 0 && ultimaData) {
+      // Dias já realizados no mês (do dia 1 até a última data com receita)
+      const diaUltimo = parseInt(ultimaData.slice(8, 10));
+      const diasRealizados = Math.max(1, diaUltimo);
+
+      // Dias totais do mês
+      const diasMes = new Date(parseInt(yyyy), parseInt(mm), 0).getDate();
+
+      // Dias restantes a projetar
+      const diasRestantes = Math.max(0, diasMes - diasRealizados);
+
+      // Média diária e projeção
+      const mediaDiaria = totalRealizado / diasRealizados;
+      const projecao = mediaDiaria * diasRestantes;
+
+      if (projecao > 1) {
+        const dtPrev = `${yyyy}-${mm}-${String(diasMes).padStart(2,'0')}`;
         TXS.push({
           id: idPrev,
           data: dtPrev,
           mes: mesRef,
           mesCaixa: mesRef,
-          lancamento: `PREVISÃO DE RECEITA (Meta: ${fmt.brl(meta)}${fatReal>0?' · Realiz.: '+fmt.brl(fatReal):''})`+
-                      (fatReal>0?` — Falta: ${fmt.brl(previsto)}`:''),
-          razaoSocial: 'Meta de Faturamento',
-          valor: previsto,
+          lancamento: `📈 PROJEÇÃO DE RECEITA — Média diária ${fmt.brl(mediaDiaria)}/dia × ${diasRestantes} dias restantes`,
+          razaoSocial: 'Projeção por Média Diária',
+          valor: Math.round(projecao * 100) / 100,
           categoria: 'VENDAS DE MERCADORIAS',
           fonte: 'PREV_RECEITA',
           ignorar: false,
         });
-        toast(`✅ Boletos carregados + Previsão de receita: ${fmt.brl(previsto)} (meta ${fmt.brl(meta)}, realiz. ${fmt.brl(fatReal)})`);
-      } else if (fatReal >= meta) {
-        toast(`✅ Boletos carregados · Meta de ${fmt.brl(meta)} já atingida! 🎉`);
+
+        // Busca meta para comparar (opcional)
+        const dm = await api.get(`/api/faturamento/meta/${mesEnc}`).catch(()=>({ok:false}));
+        const meta = dm.ok && dm.data?.meta ? parseFloat(dm.data.meta) : 0;
+        const totalProjetado = totalRealizado + projecao;
+        const pctMeta = meta > 0 ? ` · ${Math.round(totalProjetado/meta*100)}% da meta` : '';
+
+        toast(`✅ Boletos + Projeção: ${fmt.brl(projecao)} (realiz. ${fmt.brl(totalRealizado)} em ${diasRealizados}d · projetado total ${fmt.brl(totalProjetado)}${pctMeta})`);
       } else {
-        toast(`✅ Boletos carregados (sem meta definida para ${mesRef})`);
+        // Mês encerrado ou realizado até o fim — sem projeção
+        toast(`✅ Boletos carregados · Total realizado: ${fmt.brl(totalRealizado)}`);
       }
     } else {
-      toast(`✅ Boletos carregados · Sem meta definida para ${mesRef}`);
+      // Sem receitas no extrato ainda — usa meta como fallback
+      const dm = await api.get(`/api/faturamento/meta/${mesEnc}`).catch(()=>({ok:false}));
+      if (dm.ok && dm.data?.meta > 0) {
+        const meta = parseFloat(dm.data.meta);
+        toast(`✅ Boletos carregados · Sem receitas no extrato ainda (meta: ${fmt.brl(meta)})`);
+      } else {
+        toast(`✅ Boletos carregados`);
+      }
     }
   } catch(e) {
+    console.error('[prev receita]', e);
     toast('✅ Boletos carregados');
   }
 
