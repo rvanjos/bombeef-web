@@ -72,15 +72,18 @@ module.exports = function (pool) {
         safeQuery(`SELECT * FROM metas WHERE mes=$1 LIMIT 1`, [mes]),
       ]);
 
-      // Calcula receitas/despesas do DRE — filtra apenas o mês selecionado
+      // Calcula receitas/despesas do DRE — filtra mês e ignora boletos/previsões
       let dreReceitas=0, dreDespesas=0;
       if (dreRow.dados_json) {
         const txs = dreRow.dados_json.transactions || [];
         for (const t of txs) {
           if (t.ignorar) continue;
-          if (t.fonte === 'PREV_RECEITA') continue; // ignora projeções
-          // Filtra pelo mês: usa t.mes ou infere da data
-          const tMes = t.mes || (t.data ? t.data.slice(5,7)+'/'+t.data.slice(0,4) : null);
+          // Ignorar fontes que não são lançamentos reais classificados
+          if (!t.categoria) continue; // apenas classificados
+          if (t.fonte === 'PREV_RECEITA') continue;
+          if (t.fonte === 'BOLETO_PREV') continue; // boletos a vencer não são receita/despesa realizada
+          // Filtra pelo mês DRE (competência)
+          const tMes = t.mes;
           if (tMes && tMes !== mes) continue;
           const v=parseFloat(t.valor||0);
           if (v>0) dreReceitas+=v; else dreDespesas+=Math.abs(v);

@@ -126,6 +126,46 @@ module.exports = function (pool) {
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
+  // ── GET /dedup — remove duplicatas (temporário) ──────────────────────────────
+  r.post('/dedup', async (req, res) => {
+    try {
+      // Encontra e remove duplicatas mantendo o registro mais antigo (menor id)
+      const { rows: dups } = await pool.query(`
+        SELECT codigo, descricao, data_validade, array_agg(id ORDER BY id ASC) AS ids
+        FROM validade_items
+        WHERE status NOT IN ('descartado','vendido')
+        GROUP BY codigo, descricao, data_validade
+        HAVING COUNT(*) > 1
+      `);
+
+      let removidos = 0;
+      for (const dup of dups) {
+        // Manter o primeiro (menor id), remover os demais
+        const idsRemover = dup.ids.slice(1);
+        if (idsRemover.length) {
+          await pool.query(`DELETE FROM validade_items WHERE id = ANY($1::int[])`, [idsRemover]);
+          removidos += idsRemover.length;
+        }
+      }
+      res.json({ ok: true, duplicatas: dups.length, removidos });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ── GET /dedup-check — conta duplicatas ────────────────────────────────────
+  r.get('/dedup-check', async (req, res) => {
+    try {
+      const { rows } = await pool.query(`
+        SELECT codigo, descricao, data_validade, COUNT(*) as qtd, array_agg(id ORDER BY id) as ids
+        FROM validade_items
+        WHERE status NOT IN ('descartado','vendido')
+        GROUP BY codigo, descricao, data_validade
+        HAVING COUNT(*) > 1
+        ORDER BY qtd DESC LIMIT 20
+      `);
+      res.json({ ok: true, data: rows, total: rows.length });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
   // ── GET / ──────────────────────────────────────────────────────────────────
   r.get('/', async (req, res) => {
     try {
