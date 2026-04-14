@@ -1166,9 +1166,18 @@ window.addEventListener('message', e => {
   if (e.data.type === 'bb_refresh_kpis') {
     setTimeout(carregarKPIs, 500);
   }
-  // Logo atualizado na Config → aplica imediatamente
+  // Logo atualizado na Config → aplica imediatamente e salva no banco
   if (e.data.type === 'bb_logo') {
-    aplicarLogoGlobal(e.data.logo || null);
+    const logo = e.data.logo || null;
+    aplicarLogoGlobal(logo);
+    // Salva no banco para persistir em todos os browsers/computadores
+    if (logo) {
+      apiFetch('/api/config/sistema', { method:'PUT', body: JSON.stringify({ logo_base64: logo }) }).catch(()=>{});
+      try { localStorage.setItem('bb_logo', logo); } catch(_) {}
+    } else {
+      apiFetch('/api/config/sistema', { method:'PUT', body: JSON.stringify({ logo_base64: '' }) }).catch(()=>{});
+      try { localStorage.removeItem('bb_logo'); } catch(_) {}
+    }
   }
 });
 

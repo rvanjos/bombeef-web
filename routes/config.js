@@ -362,7 +362,8 @@ module.exports = function (pool) {
       const { rows } = await pool.query(`SELECT chave, valor FROM config_sistema`);
       const cfg = {};
       rows.forEach(r => { cfg[r.chave] = r.valor; });
-      res.json({ ok: true, data: cfg });
+      // Expõe logo_base64 explicitamente
+      res.json({ ok: true, data: { ...cfg, logo_base64: cfg.logo_base64 || null } });
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
