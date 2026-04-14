@@ -305,6 +305,7 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
     <div class="toolbar">
       <button class="btn btn-p" onclick="abrirModal()">＋ Novo Item</button>
       <button class="btn btn-s" onclick="abrirImport()">📥 Importar Planilha</button>
+      <button class="btn btn-s" onclick="limparDuplicatas()" id="btn-dedup" style="background:#fff3cd;color:#856404;border-color:#ffc107" title="Remove itens com mesma descrição e data de validade">🧹 Limpar Duplicatas</button>
       <div class="search-w"><input type="text" id="busca-val" placeholder="Buscar produto, código, lote..." oninput="filtrarVal()"></div>
       <select class="flt" id="flt-status" onchange="carregar()">
         <option value="todos">Todos</option>
@@ -786,6 +787,35 @@ function _renderDash(){
 function fecharModal(id){ document.getElementById(id).classList.remove('open'); }
 
 // ── KPIs ──────────────────────────────────────────────────────────────────────
+async function limparDuplicatas() {
+  const btn = document.getElementById('btn-dedup');
+  try {
+    const check = await BB.api.get('/api/validade/dedup-check');
+    if (!check.ok) { BB.toast('❌ Erro ao verificar duplicatas'); return; }
+    if (!check.total || check.total === 0) {
+      BB.toast('✅ Nenhuma duplicata encontrada!');
+      return;
+    }
+    let msg = `Encontradas ${check.total} grupo(s) com duplicatas:\n\n`;
+    check.data.slice(0,5).forEach(d => {
+      msg += `• ${(d.descricao||'').slice(0,40)} (${d.qtd}x)\n`;
+    });
+    if (check.data.length > 5) msg += `...e mais ${check.data.length-5} grupos.\n`;
+    msg += `\nRemover os duplicados? (mantém o registro mais antigo de cada grupo)`;
+    if (!confirm(msg)) return;
+    btn.textContent = '⏳ Removendo...';
+    btn.disabled = true;
+    const d = await BB.api.post('/api/validade/dedup', {});
+    if (!d.ok) { BB.toast('❌ ' + d.erro); return; }
+    BB.toast(`✅ ${d.removidos} duplicata(s) removida(s)!`);
+    carregar();
+  } catch(e) {
+    BB.toast('❌ Erro: ' + e.message);
+  } finally {
+    if(btn){ btn.textContent = '🧹 Limpar Duplicatas'; btn.disabled = false; }
+  }
+}
+
 async function carregarKPIs(){
   const d = await api.get('/api/validade/kpis');
   if(d.ok){
