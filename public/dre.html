@@ -171,17 +171,10 @@ td{padding:5px 9px;vertical-align:middle;}
   <div class="prog-bg"><div class="prog-fill" id="prog-f" style="width:0%"></div></div>
 </div>
 
-<!-- BANNER DE ARQUIVOS -->
+<!-- BANNER DE ARQUIVOS (só mostra arquivos, sem botões duplicados) -->
 <div class="banner" id="banner">
   <span style="font-size:11px;font-weight:600;color:var(--muted)">Arquivos:</span>
-  <div id="ftags" style="display:flex;flex-wrap:wrap;gap:4px"></div>
-  <div style="display:flex;gap:5px;margin-left:auto;flex-wrap:wrap">
-    <button class="btn bs" onclick="document.getElementById('f-ofx').click()">➕ OFX</button>
-    <button class="btn bs" onclick="document.getElementById('f-cc').click()">💳 Fatura CC</button>
-    <button class="btn bs" onclick="importBoletos()">📄 Boletos DB</button>
-    <button class="btn bg" onclick="salvar()">💾 Salvar</button>
-    <button class="btn bn" onclick="limpar()">🗑 Limpar</button>
-  </div>
+  <div id="ftags" style="display:flex;flex-wrap:wrap;gap:4px;flex:1"></div>
 </div>
 
 <!-- BARRA DE CONTROLES -->
@@ -200,6 +193,7 @@ td{padding:5px 9px;vertical-align:middle;}
   </label>
   <button class="btn bp" onclick="abrirDREModal()" title="Ver relatório DRE completo">📊 Ver DRE</button>
   <button class="btn bg" onclick="salvar()" title="Salvar agora">💾 Salvar</button>
+  <button class="btn bn" onclick="limpar()" title="Limpar todos os lançamentos">🗑 Limpar</button>
   <button class="btn bs" onclick="exportXLS()" title="Exportar Excel">📤 Excel</button>
   <button class="btn bs" onclick="abrirSessoes()" title="Histórico de sessões">📂 Sessões</button>
   <button class="btn bs" onclick="recuperarDoBanco()" title="Recuperar: reconstrói sessão a partir do backup no banco de dados. Use apenas se lançamentos sumirem." style="border-color:var(--orange);color:var(--orange)">🔄 Recuperar</button>
