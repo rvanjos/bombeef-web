@@ -634,10 +634,9 @@ async function init() {
   } catch(e) { _perfil = ''; }
 
   // ── Controle de abas por perfil ────────────────────────────────────────────
-  // admin/gestor: vê tudo (Folha, Aprovações, Meus Lançamentos, Escala, Relatório)
-  // demais (caixa, estoque, financeiro, etc.): vê apenas Meus Lançamentos
-  const isGestor  = ['admin','gestor'].includes(_perfil);
-  const isAny     = !isGestor; // qualquer outro perfil = funcionário
+  // Apenas admin: acesso total (Folha, Aprovações, Escala, Relatório + Meus Lançamentos)
+  // Todos os outros perfis: apenas Meus Lançamentos
+  const isAdmin = _perfil === 'admin';
 
   const btnFolha  = document.querySelector('.tab[onclick="showTab('folha')"]');
   const btnEscala = document.querySelector('.tab[onclick="showTab('escala')"]');
@@ -645,27 +644,24 @@ async function init() {
   const btnAprov  = document.getElementById('tab-btn-aprovacoes');
   const btnMeus   = document.getElementById('tab-btn-meus');
 
-  if (isGestor) {
-    // Admin/gestor vê tudo
+  if (isAdmin) {
+    // Admin vê tudo
     if (btnFolha)  btnFolha.style.display  = '';
     if (btnEscala) btnEscala.style.display = '';
     if (btnRel)    btnRel.style.display    = '';
     if (btnAprov)  btnAprov.style.display  = '';
-    if (btnMeus)   btnMeus.style.display   = ''; // gestor também pode lançar
-    // Carrega folha automaticamente
+    if (btnMeus)   btnMeus.style.display   = '';
     carregarResumo();
-    // Badge de pendentes
     get('/api/rh/lancamentos-pendentes/count').then(d => {
       if (d.ok) atualizarBadge(d.total);
     });
   } else {
-    // Funcionário: oculta abas gerenciais
+    // Todos os outros: apenas Meus Lançamentos
     if (btnFolha)  btnFolha.style.display  = 'none';
     if (btnEscala) btnEscala.style.display = 'none';
     if (btnRel)    btnRel.style.display    = 'none';
     if (btnAprov)  btnAprov.style.display  = 'none';
     if (btnMeus)   btnMeus.style.display   = '';
-    // Vai direto para seus lançamentos
     showTab('meus');
   }
 }
