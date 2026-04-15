@@ -243,6 +243,7 @@ app.use('/api/faturamento',  require('./routes/faturamento')(pool));
 app.use('/api/dre',          require('./routes/dre')(pool));
 app.use('/api/produtos',     require('./routes/produtos')(pool));
 app.use('/api/kits',         require('./routes/kits')(pool));
+app.use('/api/kits-campanha',require('./routes/kits_campanha')(pool));
 app.use('/api/validade',     require('./routes/validade')(pool));
 app.use('/api/perdas',       require('./routes/perdas')(pool));
 app.use('/api/retiradas',    require('./routes/retiradas')(pool));

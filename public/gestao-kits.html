@@ -1,0 +1,1051 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Gestão de Kits</title>
+<script src="/js/api.js"></script>
+<style>
+:root{
+  --red:#8B0000;--red-l:#c0392b;--green:#1a7a4a;--blue:#1a4a7a;
+  --orange:#e67e22;--gold:#c9a84c;--purple:#6c3483;
+  --bg:#f7f4f0;--white:#fff;--border:#e8e0d8;--muted:#8a7d72;
+  --text:#2c2420;--shadow:0 2px 8px rgba(0,0,0,.06);
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans',system-ui,sans-serif;font-size:13px;background:var(--bg);color:var(--text);}
+.ph{background:var(--red);color:#fff;padding:10px 18px;display:flex;align-items:center;gap:12px;}
+.ph h1{font-size:15px;font-weight:700;}
+.ph p{font-size:11px;opacity:.7;}
+.tabs{display:flex;gap:2px;padding:0 16px;background:var(--white);border-bottom:2px solid var(--border);}
+.tab{padding:10px 16px;font-size:12px;font-weight:600;cursor:pointer;border:none;background:none;
+     color:var(--muted);border-bottom:3px solid transparent;transition:.15s;white-space:nowrap;}
+.tab.active{color:var(--red);border-bottom-color:var(--red);}
+.tab:hover:not(.active){color:var(--text);}
+.tab-content{display:none;padding:16px;height:calc(100vh - 95px);overflow-y:auto;}
+.tab-content.active{display:block;}
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:16px;}
+.kpi{background:var(--white);border:1px solid var(--border);border-radius:10px;padding:12px 14px;
+     border-left:4px solid var(--border);}
+.kpi.verde{border-left-color:var(--green);}
+.kpi.vermelho{border-left-color:var(--red-l);}
+.kpi.laranja{border-left-color:var(--orange);}
+.kpi.azul{border-left-color:var(--blue);}
+.kpi-val{font-size:24px;font-weight:700;font-family:'DM Mono',monospace;line-height:1.1;}
+.kpi-lbl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-top:3px;}
+.card{background:var(--white);border:1px solid var(--border);border-radius:12px;
+      padding:16px;margin-bottom:14px;box-shadow:var(--shadow);}
+.card-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;
+            color:var(--muted);margin-bottom:12px;}
+.btn{padding:7px 14px;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;
+     font-family:inherit;border:1px solid transparent;transition:.15s;}
+.btn-p{background:var(--red);color:#fff;border-color:var(--red);}
+.btn-p:hover{background:var(--red-l);}
+.btn-s{background:var(--white);color:var(--text);border-color:var(--border);}
+.btn-s:hover{border-color:var(--muted);}
+.btn-g{background:#e8f7ef;color:var(--green);border-color:#86efac;}
+.btn-g:hover{background:#dcfce7;}
+.btn-o{background:#fff3cd;color:#856404;border-color:#ffc107;}
+.btn-r{background:#fee2e2;color:var(--red-l);border-color:#fca5a5;}
+.btn-sm{padding:4px 10px;font-size:11px;}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;}
+select,input[type=text],input[type=date],input[type=number],textarea{
+  padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;
+  font-family:inherit;background:var(--white);color:var(--text);width:100%;}
+select:focus,input:focus{outline:none;border-color:var(--red);}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;}
+.form-grid.tres{grid-template-columns:1fr 1fr 1fr;}
+.fg label{display:block;font-size:11px;font-weight:600;color:var(--muted);
+          text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;}
+table{width:100%;border-collapse:collapse;font-size:12px;}
+th{background:var(--red);color:#fff;padding:8px 10px;text-align:left;
+   font-size:10px;text-transform:uppercase;letter-spacing:.5px;font-weight:700;}
+th:first-child{border-radius:6px 0 0 0;}th:last-child{border-radius:0 6px 0 0;}
+td{padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:middle;}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:#faf8f5;}
+.badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:10px;
+       font-size:10px;font-weight:700;white-space:nowrap;}
+.b-verde{background:#dcfce7;color:#166534;}
+.b-vermelho{background:#fee2e2;color:#991b1b;}
+.b-laranja{background:#fef3c7;color:#92400e;}
+.b-azul{background:#dbeafe;color:#1e40af;}
+.b-cinza{background:#f3f4f6;color:#6b7280;}
+.b-roxo{background:#ede9fe;color:#5b21b6;}
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;
+          align-items:center;justify-content:center;padding:16px;}
+.modal-bg.open{display:flex;}
+.modal{background:var(--white);border-radius:14px;width:100%;max-width:680px;
+       max-height:92vh;overflow:hidden;display:flex;flex-direction:column;
+       box-shadow:0 20px 60px rgba(0,0,0,.25);}
+.modal-lg{max-width:860px;}
+.modal-h{background:var(--red);padding:14px 20px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;}
+.modal-h h3{color:#fff;font-size:14px;font-weight:700;}
+.modal-x{background:none;border:none;color:rgba(255,255,255,.8);font-size:22px;cursor:pointer;line-height:1;}
+.modal-body{padding:20px;overflow-y:auto;flex:1;}
+.modal-foot{padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;flex-shrink:0;}
+.slot-card{border:1px solid var(--border);border-radius:9px;padding:12px;margin-bottom:10px;background:#fafaf8;}
+.slot-card-h{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+.slot-card-h strong{flex:1;font-size:13px;}
+.prod-chip{display:inline-flex;align-items:center;gap:4px;background:#f0ebe4;
+           border-radius:6px;padding:2px 7px;font-size:11px;margin:2px;}
+.prod-chip button{background:none;border:none;cursor:pointer;color:var(--muted);font-size:13px;line-height:1;padding:0;}
+.alert{background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;
+       padding:10px 14px;font-size:12px;color:#92400e;margin-bottom:12px;}
+.alert.danger{background:#fff5f5;border-color:#fca5a5;color:var(--red-l);}
+.alert.ok{background:#f0fdf4;border-color:#86efac;color:var(--green);}
+.progresso{background:#f0ebe4;border-radius:6px;height:8px;overflow:hidden;margin-top:4px;}
+.progresso-fill{height:100%;border-radius:6px;transition:width .5s ease;}
+.camp-card{background:var(--white);border:1px solid var(--border);border-radius:12px;
+           padding:16px;transition:.15s;cursor:pointer;}
+.camp-card:hover{border-color:var(--red);box-shadow:0 4px 16px rgba(139,0,0,.08);}
+.camp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-bottom:16px;}
+.disp-num{font-size:36px;font-weight:800;font-family:'DM Mono',monospace;line-height:1;}
+.disp-num.ok{color:var(--green);}
+.disp-num.warn{color:var(--orange);}
+.disp-num.crit{color:var(--red-l);}
+.sep{height:1px;background:var(--border);margin:12px 0;}
+/* Montagem rápida */
+.slot-mount{border:1px solid var(--border);border-radius:9px;padding:14px;margin-bottom:10px;}
+.slot-mount-h{display:flex;align-items:center;gap:8px;margin-bottom:10px;}
+.slot-mount-h .slot-badge{background:var(--red);color:#fff;border-radius:6px;padding:2px 8px;font-size:10px;}
+.prod-opt{display:flex;align-items:center;gap:8px;padding:7px 10px;border:2px solid var(--border);
+          border-radius:8px;cursor:pointer;transition:.15s;margin-bottom:6px;}
+.prod-opt:hover{border-color:var(--red);}
+.prod-opt.selected{border-color:var(--green);background:#f0fdf4;}
+.prod-opt .po-nome{flex:1;font-weight:600;}
+.prod-opt .po-saldo{font-size:11px;color:var(--muted);}
+.toast{position:fixed;bottom:20px;right:20px;padding:10px 16px;border-radius:9px;
+       font-size:12px;font-weight:600;color:#fff;z-index:999;
+       background:var(--green);box-shadow:0 4px 16px rgba(0,0,0,.2);
+       transition:opacity .3s;pointer-events:none;}
+.empty{text-align:center;padding:40px;color:var(--muted);}
+.empty .ei{font-size:40px;margin-bottom:8px;}
+@media(max-width:600px){
+  .form-grid,.form-grid.tres{grid-template-columns:1fr;}
+  .camp-grid{grid-template-columns:1fr;}
+  .kpi-row{grid-template-columns:1fr 1fr;}
+}
+</style>
+</head>
+<body>
+<div class="ph">
+  <div>
+    <h1>📦 Gestão Interna de Kits</h1>
+    <p>Campanhas · Pedidos · Reservas · Conciliação com PDV</p>
+  </div>
+</div>
+
+<div class="tabs">
+  <button class="tab active" onclick="showTab('campanhas')">🎯 Campanhas</button>
+  <button class="tab" onclick="showTab('novo-pedido')">➕ Novo Pedido</button>
+  <button class="tab" onclick="showTab('pedidos')">📋 Pedidos</button>
+  <button class="tab" onclick="showTab('separacao')">📦 Separação</button>
+  <button class="tab" onclick="showTab('conciliacao')">🔄 Conciliação PDV</button>
+  <button class="tab" onclick="showTab('relatorios')">📊 Relatórios</button>
+</div>
+
+<!-- ══ CAMPANHAS ══════════════════════════════════════════════════════════ -->
+<div id="tab-campanhas" class="tab-content active">
+  <div class="kpi-row" id="kpi-row"></div>
+  <div class="toolbar">
+    <button class="btn btn-p" onclick="abrirModalCampanha()">➕ Nova Campanha</button>
+    <button class="btn btn-s" onclick="abrirModalEstoque()">📦 Atualizar Estoque</button>
+    <button class="btn btn-s" onclick="carregarCampanhas()">🔄 Atualizar</button>
+  </div>
+  <div id="camp-grid" class="camp-grid"></div>
+</div>
+
+<!-- ══ NOVO PEDIDO ════════════════════════════════════════════════════════ -->
+<div id="tab-novo-pedido" class="tab-content">
+  <div class="card" style="max-width:700px">
+    <div class="card-title">➕ Montagem Rápida de Pedido</div>
+    <div class="form-grid">
+      <div class="fg">
+        <label>Campanha *</label>
+        <select id="np-campanha" onchange="carregarSlotsMontagem()">
+          <option value="">Selecione...</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label>Canal</label>
+        <select id="np-canal">
+          <option value="balcao">🏪 Balcão</option>
+          <option value="whatsapp">📱 WhatsApp</option>
+          <option value="delivery">🛵 Delivery</option>
+          <option value="telefone">📞 Telefone</option>
+          <option value="outro">Outro</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label>Nome do Cliente</label>
+        <input type="text" id="np-cliente" placeholder="Nome (opcional)">
+      </div>
+      <div class="fg">
+        <label>Telefone</label>
+        <input type="text" id="np-tel" placeholder="(11) 99999-9999">
+      </div>
+    </div>
+    <div id="np-disp-info" style="margin-bottom:12px"></div>
+    <div id="np-slots" style="margin-bottom:12px"></div>
+    <div class="fg" style="margin-bottom:12px">
+      <label>Observação</label>
+      <textarea id="np-obs" rows="2" placeholder="Observações do pedido..."></textarea>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-p" onclick="salvarPedido('reservado')">✅ Confirmar Pedido</button>
+      <button class="btn btn-s" onclick="salvarPedido('rascunho')">📝 Salvar Rascunho</button>
+      <button class="btn btn-s" onclick="limparFormPedido()">🗑 Limpar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ PEDIDOS ════════════════════════════════════════════════════════════ -->
+<div id="tab-pedidos" class="tab-content">
+  <div class="toolbar">
+    <select id="f-status-ped" onchange="carregarPedidos()" style="width:auto;min-width:140px">
+      <option value="">Todos os status</option>
+      <option value="rascunho">Rascunho</option>
+      <option value="reservado">Reservado</option>
+      <option value="separado">Separado</option>
+      <option value="entregue">Entregue</option>
+      <option value="cancelado">Cancelado</option>
+    </select>
+    <select id="f-canal-ped" onchange="carregarPedidos()" style="width:auto;min-width:120px">
+      <option value="">Todos os canais</option>
+      <option value="balcao">Balcão</option>
+      <option value="whatsapp">WhatsApp</option>
+      <option value="delivery">Delivery</option>
+      <option value="telefone">Telefone</option>
+    </select>
+    <select id="f-camp-ped" onchange="carregarPedidos()" style="width:auto;min-width:160px">
+      <option value="">Todas as campanhas</option>
+    </select>
+    <input type="text" id="f-busca-ped" placeholder="🔍 Buscar cliente ou número" 
+           style="width:220px" oninput="carregarPedidos()">
+    <button class="btn btn-s" onclick="carregarPedidos()">🔄</button>
+  </div>
+  <div id="tabela-pedidos"></div>
+</div>
+
+<!-- ══ SEPARAÇÃO ══════════════════════════════════════════════════════════ -->
+<div id="tab-separacao" class="tab-content">
+  <div class="toolbar">
+    <h3 style="font-size:14px;font-weight:700">📦 Pedidos Reservados — Aguardando Separação</h3>
+    <button class="btn btn-s" onclick="carregarSeparacao()">🔄 Atualizar</button>
+  </div>
+  <div id="tabela-separacao"></div>
+</div>
+
+<!-- ══ CONCILIAÇÃO ════════════════════════════════════════════════════════ -->
+<div id="tab-conciliacao" class="tab-content">
+  <div class="card" style="max-width:560px;margin-bottom:16px">
+    <div class="card-title">📥 Registrar Vendas do PDV</div>
+    <div class="form-grid">
+      <div class="fg">
+        <label>Campanha *</label>
+        <select id="conc-camp" style=""></select>
+      </div>
+      <div class="fg">
+        <label>Data *</label>
+        <input type="date" id="conc-data">
+      </div>
+      <div class="fg">
+        <label>Qtd vendida no PDV *</label>
+        <input type="number" id="conc-qtd" min="0" placeholder="0">
+      </div>
+      <div class="fg">
+        <label>Observação</label>
+        <input type="text" id="conc-obs" placeholder="Opcional">
+      </div>
+    </div>
+    <button class="btn btn-p" onclick="salvarConciliacao()">💾 Registrar</button>
+  </div>
+  <div id="tabela-conciliacao"></div>
+</div>
+
+<!-- ══ RELATÓRIOS ═════════════════════════════════════════════════════════ -->
+<div id="tab-relatorios" class="tab-content">
+  <div class="toolbar">
+    <div class="fg" style="width:auto">
+      <select id="rel-camp" style="min-width:200px">
+        <option value="">Todas as campanhas</option>
+      </select>
+    </div>
+    <input type="date" id="rel-ini" style="width:150px">
+    <span style="color:var(--muted);font-size:12px">até</span>
+    <input type="date" id="rel-fim" style="width:150px">
+    <button class="btn btn-p" onclick="carregarRelatorio()">🔍 Filtrar</button>
+  </div>
+  <div id="rel-content"></div>
+</div>
+
+<!-- ══ MODAL CAMPANHA ═════════════════════════════════════════════════════ -->
+<div class="modal-bg" id="modal-campanha">
+  <div class="modal modal-lg">
+    <div class="modal-h">
+      <h3 id="modal-camp-title">Nova Campanha</h3>
+      <button class="modal-x" onclick="fecharModal('modal-campanha')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid tres">
+        <div class="fg"><label>Nome *</label><input id="mc-nome" placeholder="Ex: Kit Burguer Especial"></div>
+        <div class="fg"><label>Preço de Referência (R$)</label><input type="number" id="mc-preco" step="0.01" placeholder="0,00"></div>
+        <div class="fg"><label>Limite de Kits (0=sem limite)</label><input type="number" id="mc-limite" placeholder="0"></div>
+      </div>
+      <div class="form-grid">
+        <div class="fg"><label>Data Início</label><input type="date" id="mc-ini"></div>
+        <div class="fg"><label>Data Fim</label><input type="date" id="mc-fim"></div>
+      </div>
+      <div class="fg" style="margin-bottom:14px">
+        <label>Descrição</label>
+        <textarea id="mc-desc" rows="2" placeholder="Descrição opcional da campanha..."></textarea>
+      </div>
+      <div class="sep"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <strong style="font-size:13px">🎛️ Slots do Kit</strong>
+        <button class="btn btn-s btn-sm" onclick="adicionarSlot()">➕ Adicionar Slot</button>
+      </div>
+      <div id="mc-slots"></div>
+      <input type="hidden" id="mc-id">
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-s" onclick="fecharModal('modal-campanha')">Cancelar</button>
+      <button class="btn btn-p" onclick="salvarCampanha()">💾 Salvar Campanha</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL PEDIDO DETALHE ════════════════════════════════════════════════ -->
+<div class="modal-bg" id="modal-pedido">
+  <div class="modal">
+    <div class="modal-h">
+      <h3 id="modal-ped-title">Pedido</h3>
+      <button class="modal-x" onclick="fecharModal('modal-pedido')">×</button>
+    </div>
+    <div class="modal-body" id="modal-ped-body"></div>
+    <div class="modal-foot" id="modal-ped-foot"></div>
+  </div>
+</div>
+
+<!-- ══ MODAL ESTOQUE ══════════════════════════════════════════════════════ -->
+<div class="modal-bg" id="modal-estoque">
+  <div class="modal">
+    <div class="modal-h">
+      <h3>📦 Atualizar Estoque Interno de Kits</h3>
+      <button class="modal-x" onclick="fecharModal('modal-estoque')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="alert">ℹ️ Este estoque é exclusivo do módulo de kits. Informe a quantidade disponível de cada componente.</div>
+      <div class="toolbar" style="margin-bottom:10px">
+        <input type="text" id="est-busca" placeholder="🔍 Buscar produto..." oninput="buscarProdutoEst(this.value)" style="max-width:300px">
+      </div>
+      <div id="est-resultado"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-s" onclick="fecharModal('modal-estoque')">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast" style="display:none"></div>
+
+<script>
+const {api, fmt, toast: bbToast} = BB;
+let _campanhas = [];
+let _slotsAtual = [];
+let _slotsMontagemData = [];
+let _pedidoSelecoesAtuais = {};
+
+// ── HELPERS ──────────────────────────────────────────────────────────────────
+function showTab(t) {
+  document.querySelectorAll('.tab').forEach((b,i) => {
+    b.classList.toggle('active', b.getAttribute('onclick')===`showTab('${t}')`);
+  });
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  document.getElementById('tab-'+t).classList.add('active');
+  if (t==='campanhas')   carregarCampanhas();
+  if (t==='pedidos')     { carregarPedidos(); preencherSelectCampanhas('#f-camp-ped'); }
+  if (t==='separacao')   carregarSeparacao();
+  if (t==='conciliacao') { carregarConciliacao(); preencherSelectCampanhas('#conc-camp'); }
+  if (t==='relatorios')  preencherSelectCampanhas('#rel-camp');
+  if (t==='novo-pedido') preencherSelectCampanhas('#np-campanha');
+}
+
+function fecharModal(id) { document.getElementById(id).classList.remove('open'); }
+
+function toast(msg, tipo='ok') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.style.background = tipo==='err'?'var(--red-l)':tipo==='warn'?'var(--orange)':'var(--green)';
+  el.style.display = 'block';
+  setTimeout(() => { el.style.display='none'; }, 3500);
+}
+
+function brl(v) { return 'R$ '+parseFloat(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+
+function statusBadge(s) {
+  const map = {
+    rascunho:'<span class="badge b-cinza">📝 Rascunho</span>',
+    reservado:'<span class="badge b-azul">🔵 Reservado</span>',
+    separado:'<span class="badge b-laranja">📦 Separado</span>',
+    entregue:'<span class="badge b-verde">✅ Entregue</span>',
+    cancelado:'<span class="badge b-vermelho">❌ Cancelado</span>',
+    conciliado:'<span class="badge b-roxo">🔄 Conciliado</span>',
+  };
+  return map[s] || s;
+}
+
+function canalIcon(c) {
+  return {balcao:'🏪',whatsapp:'📱',delivery:'🛵',telefone:'📞',outro:'📌'}[c]||'';
+}
+
+async function preencherSelectCampanhas(sel) {
+  const d = await api.get('/api/kits-campanha/campanhas');
+  if (!d.ok) return;
+  const el = document.querySelector(sel);
+  if (!el) return;
+  const opts = el.options[0]?.value === '' ? '<option value="">'+el.options[0].text+'</option>' : '';
+  el.innerHTML = opts + d.data.map(c =>
+    `<option value="${c.id}">${c.nome}${c.status!=='ativa'?' ('+c.status+')':''}</option>`
+  ).join('');
+}
+
+// ── KPIs ─────────────────────────────────────────────────────────────────────
+async function carregarKPIs() {
+  const d = await api.get('/api/kits-campanha/kpis');
+  if (!d.ok) return;
+  const k = d.data;
+  document.getElementById('kpi-row').innerHTML = `
+    <div class="kpi azul"><div class="kpi-val">${k.campanhas_ativas}</div><div class="kpi-lbl">Campanhas Ativas</div></div>
+    <div class="kpi laranja"><div class="kpi-val">${k.pedidos_reservados}</div><div class="kpi-lbl">Reservados</div></div>
+    <div class="kpi laranja"><div class="kpi-val">${k.pedidos_separados}</div><div class="kpi-lbl">Em Separação</div></div>
+    <div class="kpi verde"><div class="kpi-val">${k.pedidos_entregues}</div><div class="kpi-lbl">Entregues</div></div>
+    <div class="kpi azul"><div class="kpi-val">${k.pedidos_hoje}</div><div class="kpi-lbl">Pedidos Hoje</div></div>
+    <div class="kpi vermelho"><div class="kpi-val">${k.pedidos_cancelados}</div><div class="kpi-lbl">Cancelados</div></div>
+  `;
+}
+
+// ── CAMPANHAS ─────────────────────────────────────────────────────────────────
+async function carregarCampanhas() {
+  carregarKPIs();
+  const d = await api.get('/api/kits-campanha/campanhas');
+  if (!d.ok) { document.getElementById('camp-grid').innerHTML = '<div class="alert danger">Erro ao carregar campanhas</div>'; return; }
+  _campanhas = d.data;
+  if (!d.data.length) {
+    document.getElementById('camp-grid').innerHTML = '<div class="empty"><div class="ei">🎯</div><p>Nenhuma campanha cadastrada.<br><small>Clique em "+ Nova Campanha" para criar.</small></p></div>';
+    return;
+  }
+  document.getElementById('camp-grid').innerHTML = d.data.map(c => {
+    const dispNum = c.disponivel ?? '—';
+    const dispCls = c.disponivel===null?'':c.disponivel>10?'ok':c.disponivel>3?'warn':'crit';
+    const pct = c.limite_campanha>0 ? Math.min(100,Math.round((c.vendidos||0)/c.limite_campanha*100)) : null;
+    const statusBg = {ativa:'b-verde',pausada:'b-laranja',encerrada:'b-cinza'}[c.status]||'b-cinza';
+    return `<div class="camp-card" onclick="verCampanha(${c.id})">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+        <div style="font-weight:700;font-size:14px;flex:1">${c.nome}</div>
+        <span class="badge ${statusBg}" style="margin-left:8px">${c.status}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:16px;margin-bottom:10px">
+        <div><div class="disp-num ${dispCls}">${dispNum}</div><div style="font-size:10px;color:var(--muted)">disponíveis</div></div>
+        <div style="flex:1">
+          <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:3px">
+            <span>🔵 ${c.reservados||0} reservados</span>
+            <span>✅ ${c.vendidos||0} entregues</span>
+          </div>
+          ${pct!==null?`<div class="progresso"><div class="progresso-fill" style="width:${pct}%;background:${pct>80?'var(--red-l)':pct>50?'var(--orange)':'var(--green)'}"></div></div><div style="font-size:10px;color:var(--muted);margin-top:2px">${pct}% da meta de ${c.limite_campanha}</div>`:''}
+        </div>
+      </div>
+      ${c.gargalo_slot?`<div class="alert" style="padding:6px 10px;font-size:11px;margin-bottom:8px">⚠️ Gargalo: <strong>${c.gargalo_slot}</strong></div>`:''}
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:12px;color:var(--muted)">${brl(c.preco_referencia)}</span>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-s btn-sm" onclick="event.stopPropagation();editarCampanha(${c.id})">✏️ Editar</button>
+          <button class="btn btn-p btn-sm" onclick="event.stopPropagation();showTab('novo-pedido');setTimeout(()=>selecionarCampanha(${c.id}),100)">➕ Pedido</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function selecionarCampanha(id) {
+  const sel = document.getElementById('np-campanha');
+  if (sel) { sel.value = id; carregarSlotsMontagem(); }
+}
+
+// ── MODAL CAMPANHA ────────────────────────────────────────────────────────────
+let _slotsProd = {}; // { slotIdx: [{id,codigo,descricao}] }
+
+function abrirModalCampanha() {
+  document.getElementById('mc-id').value = '';
+  document.getElementById('mc-nome').value = '';
+  document.getElementById('mc-preco').value = '';
+  document.getElementById('mc-limite').value = '';
+  document.getElementById('mc-ini').value = '';
+  document.getElementById('mc-fim').value = '';
+  document.getElementById('mc-desc').value = '';
+  document.getElementById('modal-camp-title').textContent = 'Nova Campanha';
+  _slotsAtual = [];
+  _slotsProd = {};
+  renderizarSlots();
+  document.getElementById('modal-campanha').classList.add('open');
+}
+
+async function editarCampanha(id) {
+  const d = await api.get('/api/kits-campanha/campanhas/'+id);
+  if (!d.ok) { toast('Erro ao carregar campanha','err'); return; }
+  const c = d.data;
+  document.getElementById('mc-id').value = c.id;
+  document.getElementById('mc-nome').value = c.nome||'';
+  document.getElementById('mc-preco').value = c.preco_referencia||'';
+  document.getElementById('mc-limite').value = c.limite_campanha||'';
+  document.getElementById('mc-ini').value = c.data_inicio?.slice(0,10)||'';
+  document.getElementById('mc-fim').value = c.data_fim?.slice(0,10)||'';
+  document.getElementById('mc-desc').value = c.descricao||'';
+  document.getElementById('modal-camp-title').textContent = 'Editar: '+c.nome;
+  _slotsProd = {};
+  _slotsAtual = (c.slots||[]).map((s,i) => {
+    _slotsProd[i] = s.produtos_info?.filter(Boolean)||[];
+    return {
+      nome: s.nome, tipo: s.tipo, obrigatorio: s.obrigatorio,
+      quantidade: s.quantidade, aceita_peso_real: s.aceita_peso_real,
+      produtos_permitidos: s.produtos_permitidos||[]
+    };
+  });
+  renderizarSlots();
+  document.getElementById('modal-campanha').classList.add('open');
+}
+
+function adicionarSlot() {
+  const idx = _slotsAtual.length;
+  _slotsAtual.push({ nome:'', tipo:'choice', obrigatorio:true, quantidade:1, aceita_peso_real:false, produtos_permitidos:[] });
+  _slotsProd[idx] = [];
+  renderizarSlots();
+}
+
+function removerSlot(idx) {
+  _slotsAtual.splice(idx,1);
+  const novosProd = {};
+  Object.keys(_slotsProd).forEach(k => { if (parseInt(k)!==idx) { const nk=parseInt(k)>idx?parseInt(k)-1:parseInt(k); novosProd[nk]=_slotsProd[k]; }});
+  _slotsProd = novosProd;
+  renderizarSlots();
+}
+
+function renderizarSlots() {
+  const c = document.getElementById('mc-slots');
+  if (!_slotsAtual.length) { c.innerHTML='<div style="color:var(--muted);font-size:12px;padding:8px">Nenhum slot adicionado.</div>'; return; }
+  c.innerHTML = _slotsAtual.map((s,i) => `
+    <div class="slot-card">
+      <div class="slot-card-h">
+        <strong>Slot ${i+1}</strong>
+        <select onchange="_slotsAtual[${i}].tipo=this.value;renderizarSlots()" style="width:auto;padding:4px 8px">
+          <option value="choice" ${s.tipo==='choice'?'selected':''}>choice — cliente escolhe</option>
+          <option value="fixed" ${s.tipo==='fixed'?'selected':''}>fixed — item fixo</option>
+        </select>
+        <label style="font-size:11px;display:flex;align-items:center;gap:4px">
+          <input type="checkbox" ${s.obrigatorio?'checked':''} onchange="_slotsAtual[${i}].obrigatorio=this.checked"> Obrigatório
+        </label>
+        <label style="font-size:11px;display:flex;align-items:center;gap:4px">
+          <input type="checkbox" ${s.aceita_peso_real?'checked':''} onchange="_slotsAtual[${i}].aceita_peso_real=this.checked"> Peso real
+        </label>
+        <button class="btn btn-r btn-sm" onclick="removerSlot(${i})">✕</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr auto;gap:8px;margin-bottom:8px">
+        <input type="text" value="${s.nome}" placeholder="Nome do slot (ex: Hambúrguer, Molho...)"
+               oninput="_slotsAtual[${i}].nome=this.value">
+        <div style="display:flex;align-items:center;gap:6px">
+          <label style="font-size:11px;white-space:nowrap">Qtd exigida:</label>
+          <input type="number" value="${s.quantidade}" min="0.1" step="0.1"
+                 style="width:80px" onchange="_slotsAtual[${i}].quantidade=parseFloat(this.value)||1">
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Produtos permitidos:</div>
+      <div style="margin-bottom:6px">${(_slotsProd[i]||[]).map(p=>
+        `<span class="prod-chip">${p.codigo?p.codigo+' — ':''} ${p.descricao}<button onclick="removerProdSlot(${i},${p.id})">×</button></span>`
+      ).join('')}</div>
+      <div style="display:flex;gap:6px">
+        <input type="text" id="slot-busca-${i}" placeholder="🔍 Buscar produto para adicionar..."
+               oninput="buscarProdSlot(${i},this.value)" style="flex:1">
+      </div>
+      <div id="slot-sugestoes-${i}" style="margin-top:4px"></div>
+    </div>
+  `).join('');
+}
+
+let _buscarTimer = {};
+function buscarProdSlot(idx, q) {
+  clearTimeout(_buscarTimer[idx]);
+  if (!q || q.length < 2) { document.getElementById(`slot-sugestoes-${idx}`).innerHTML=''; return; }
+  _buscarTimer[idx] = setTimeout(async () => {
+    const d = await api.get('/api/kits-campanha/produtos-busca?q='+encodeURIComponent(q));
+    if (!d.ok) return;
+    const jaAdicionados = new Set((_slotsProd[idx]||[]).map(p=>p.id));
+    const el = document.getElementById(`slot-sugestoes-${idx}`);
+    if (!el) return;
+    if (!d.data.length) { el.innerHTML='<div style="font-size:11px;color:var(--muted);padding:4px">Nenhum produto encontrado</div>'; return; }
+    el.innerHTML = '<div style="border:1px solid var(--border);border-radius:7px;overflow:hidden;max-height:160px;overflow-y:auto">'+
+      d.data.filter(p=>!jaAdicionados.has(p.id)).slice(0,8).map(p =>
+        `<div onclick="adicionarProdSlot(${idx},${p.id},'${p.codigo||''}','${(p.descricao||'').replace(/'/g,"\\'")}',${p.saldo_interno||0})"
+              style="padding:7px 10px;cursor:pointer;border-bottom:1px solid var(--border);font-size:12px;transition:.1s"
+              onmouseover="this.style.background='#faf0f0'" onmouseout="this.style.background=''">
+          <strong>${p.codigo||'—'}</strong> — ${p.descricao}
+          <span style="float:right;color:var(--muted);font-size:10px">Estoque: ${p.saldo_interno||0}</span>
+        </div>`
+      ).join('')+'</div>';
+  }, 300);
+}
+
+function adicionarProdSlot(idx, id, codigo, descricao, saldo) {
+  if (!_slotsProd[idx]) _slotsProd[idx] = [];
+  if (_slotsProd[idx].find(p=>p.id===id)) return;
+  _slotsProd[idx].push({id, codigo, descricao, saldo});
+  _slotsAtual[idx].produtos_permitidos = _slotsProd[idx].map(p=>p.id);
+  renderizarSlots();
+}
+
+function removerProdSlot(idx, prodId) {
+  _slotsProd[idx] = (_slotsProd[idx]||[]).filter(p=>p.id!==prodId);
+  _slotsAtual[idx].produtos_permitidos = _slotsProd[idx].map(p=>p.id);
+  renderizarSlots();
+}
+
+async function salvarCampanha() {
+  const nome = document.getElementById('mc-nome').value.trim();
+  if (!nome) { toast('Nome obrigatório','warn'); return; }
+  for (const s of _slotsAtual) {
+    if (!s.nome.trim()) { toast('Todos os slots precisam de nome','warn'); return; }
+  }
+  const body = {
+    nome, descricao: document.getElementById('mc-desc').value||null,
+    preco_referencia: parseFloat(document.getElementById('mc-preco').value)||0,
+    limite_campanha: parseInt(document.getElementById('mc-limite').value)||0,
+    data_inicio: document.getElementById('mc-ini').value||null,
+    data_fim: document.getElementById('mc-fim').value||null,
+    slots: _slotsAtual,
+  };
+  const id = document.getElementById('mc-id').value;
+  const d = id ? await api.put('/api/kits-campanha/campanhas/'+id, body)
+               : await api.post('/api/kits-campanha/campanhas', body);
+  if (!d.ok) { toast('Erro: '+d.erro,'err'); return; }
+  toast('✅ Campanha salva!');
+  fecharModal('modal-campanha');
+  carregarCampanhas();
+}
+
+async function verCampanha(id) {
+  const d = await api.get('/api/kits-campanha/campanhas/'+id);
+  if (!d.ok) return;
+  const c = d.data;
+  const dispCls = c.disponivel===null?'':c.disponivel>10?'ok':c.disponivel>3?'warn':'crit';
+  document.getElementById('modal-ped-title').textContent = c.nome;
+  document.getElementById('modal-ped-body').innerHTML = `
+    <div style="display:flex;gap:24px;margin-bottom:16px;flex-wrap:wrap">
+      <div><div class="disp-num ${dispCls}">${c.disponivel??'—'}</div><div style="font-size:11px;color:var(--muted)">disponíveis</div></div>
+      <div><div style="font-size:22px;font-weight:700">${c.vendidos||0}</div><div style="font-size:11px;color:var(--muted)">vendidos</div></div>
+      <div><div style="font-size:22px;font-weight:700">${brl(c.preco_referencia)}</div><div style="font-size:11px;color:var(--muted)">preço ref.</div></div>
+    </div>
+    ${c.gargalo_slot?`<div class="alert danger">⚠️ Gargalo atual: <strong>${c.gargalo_slot}</strong></div>`:''}
+    <strong style="font-size:12px">Análise por slot:</strong>
+    <table style="margin-top:8px">
+      <tr><th>Slot</th><th>Tipo</th><th>Qtd</th><th>Capacidade</th></tr>
+      ${(c.detalhes||[]).map(det=>`
+        <tr>
+          <td>${det.slot}</td>
+          <td><span class="badge ${det.tipo==='fixed'?'b-azul':'b-laranja'}">${det.tipo}</span></td>
+          <td>${c.slots?.find(s=>s.nome===det.slot)?.quantidade||1}</td>
+          <td><span class="badge ${det.capacidade>10?'b-verde':det.capacidade>3?'b-laranja':'b-vermelho'}">${det.capacidade} kits</span></td>
+        </tr>`).join('')}
+    </table>
+  `;
+  document.getElementById('modal-ped-foot').innerHTML = `
+    <button class="btn btn-s" onclick="fecharModal('modal-pedido')">Fechar</button>
+    <button class="btn btn-p" onclick="fecharModal('modal-pedido');showTab('novo-pedido');setTimeout(()=>selecionarCampanha(${id}),100)">➕ Criar Pedido</button>
+  `;
+  document.getElementById('modal-pedido').classList.add('open');
+}
+
+// ── NOVO PEDIDO ───────────────────────────────────────────────────────────────
+async function carregarSlotsMontagem() {
+  const campId = document.getElementById('np-campanha').value;
+  const slotsCont = document.getElementById('np-slots');
+  const dispInfo = document.getElementById('np-disp-info');
+  _pedidoSelecoesAtuais = {};
+  if (!campId) { slotsCont.innerHTML=''; dispInfo.innerHTML=''; return; }
+
+  // Carregar disponibilidade
+  const dd = await api.get('/api/kits-campanha/campanhas/'+campId+'/disponibilidade');
+  if (dd.ok) {
+    const d = dd.data;
+    const cls = d.disponivel>10?'ok':d.disponivel>3?'warn':'danger';
+    dispInfo.innerHTML = `<div class="alert ${cls}">
+      ${d.disponivel>0?`✅ <strong>${d.disponivel} kits disponíveis</strong>`:`❌ <strong>Sem disponibilidade</strong>`}
+      ${d.gargalo_slot?` — Gargalo: <strong>${d.gargalo_slot}</strong>`:''}
+    </div>`;
+  }
+
+  const dc = await api.get('/api/kits-campanha/campanhas/'+campId);
+  if (!dc.ok) return;
+  _slotsMontagemData = dc.data.slots||[];
+
+  slotsCont.innerHTML = _slotsMontagemData.map((slot,i) => {
+    const prods = slot.produtos_info?.filter(Boolean)||[];
+    return `<div class="slot-mount">
+      <div class="slot-mount-h">
+        <span class="slot-badge">${slot.tipo==='fixed'?'FIXO':'ESCOLHA'}</span>
+        <strong>${slot.nome}</strong>
+        <span style="font-size:11px;color:var(--muted)">Qtd: ${slot.quantidade}${slot.obrigatorio?' · obrigatório':''}</span>
+        ${slot.aceita_peso_real?'<span style="font-size:10px;color:var(--blue);background:#dbeafe;padding:2px 6px;border-radius:5px">⚖️ peso variável</span>':''}
+      </div>
+      ${slot.tipo==='fixed' && prods.length===1 ?
+        `<div class="prod-opt selected" style="cursor:default">
+          <span class="po-nome">✅ ${prods[0].codigo||''} — ${prods[0].descricao}</span>
+          ${slot.aceita_peso_real?`<input type="number" step="0.01" placeholder="Peso (kg)"
+            style="width:120px" id="peso-${slot.id}" onchange="setPesoReal(${slot.id},this.value)">`:'' }
+        </div>` :
+        prods.map(p => `
+          <div class="prod-opt" id="opt-${slot.id}-${p.id}" onclick="selecionarProduto(${slot.id},${p.id},${slot.quantidade},${slot.aceita_peso_real?'true':'false'})">
+            <span class="po-nome">${p.codigo||''} — ${p.descricao}</span>
+            <span class="po-saldo">Estoque: ${p.saldo_interno||0}</span>
+          </div>`).join('')
+      }
+      ${!prods.length?'<div style="color:var(--muted);font-size:12px">Nenhum produto configurado neste slot</div>':''}
+    </div>`;
+  }).join('');
+
+  // Pré-selecionar slots fixed com 1 produto
+  _slotsMontagemData.forEach(slot => {
+    const prods = slot.produtos_info?.filter(Boolean)||[];
+    if (slot.tipo==='fixed' && prods.length===1) {
+      _pedidoSelecoesAtuais[slot.id] = [{ slot_id:slot.id, slot_nome:slot.nome, produto_id:prods[0].id, quantidade:slot.quantidade }];
+    }
+  });
+}
+
+function selecionarProduto(slotId, prodId, qtd, aceitaPeso) {
+  const slot = _slotsMontagemData.find(s=>s.id===slotId);
+  if (!slot) return;
+  // Toggle para choice com quantidade >1
+  const jaSelected = _pedidoSelecoesAtuais[slotId]?.some(s=>s.produto_id===prodId);
+  if (jaSelected) {
+    _pedidoSelecoesAtuais[slotId] = (_pedidoSelecoesAtuais[slotId]||[]).filter(s=>s.produto_id!==prodId);
+    document.getElementById(`opt-${slotId}-${prodId}`)?.classList.remove('selected');
+  } else {
+    if (!_pedidoSelecoesAtuais[slotId]) _pedidoSelecoesAtuais[slotId] = [];
+    _pedidoSelecoesAtuais[slotId].push({ slot_id:slotId, slot_nome:slot.nome, produto_id:prodId, quantidade:qtd });
+    document.getElementById(`opt-${slotId}-${prodId}`)?.classList.add('selected');
+  }
+}
+
+function setPesoReal(slotId, peso) {
+  if (_pedidoSelecoesAtuais[slotId]) {
+    _pedidoSelecoesAtuais[slotId].forEach(s => s.peso_real = parseFloat(peso)||null);
+  }
+}
+
+async function salvarPedido(status) {
+  const campId = document.getElementById('np-campanha').value;
+  if (!campId) { toast('Selecione uma campanha','warn'); return; }
+
+  // Montar lista de itens
+  const itens = [];
+  for (const [slotId, sels] of Object.entries(_pedidoSelecoesAtuais)) {
+    sels.forEach(s => itens.push(s));
+  }
+
+  // Validar slots obrigatórios
+  for (const slot of _slotsMontagemData) {
+    if (slot.obrigatorio && !_pedidoSelecoesAtuais[slot.id]?.length) {
+      toast(`Slot obrigatório não preenchido: ${slot.nome}`,'warn'); return;
+    }
+  }
+
+  const body = {
+    campanha_id: parseInt(campId),
+    canal: document.getElementById('np-canal').value,
+    cliente_nome: document.getElementById('np-cliente').value.trim()||null,
+    cliente_tel: document.getElementById('np-tel').value.trim()||null,
+    observacao: document.getElementById('np-obs').value.trim()||null,
+    itens, status,
+  };
+
+  const d = await api.post('/api/kits-campanha/pedidos', body);
+  if (!d.ok) { toast('Erro: '+d.erro,'err'); return; }
+  toast(`✅ Pedido ${d.numero} criado!`);
+  limparFormPedido();
+  showTab('pedidos');
+}
+
+function limparFormPedido() {
+  document.getElementById('np-campanha').value='';
+  document.getElementById('np-cliente').value='';
+  document.getElementById('np-tel').value='';
+  document.getElementById('np-obs').value='';
+  document.getElementById('np-slots').innerHTML='';
+  document.getElementById('np-disp-info').innerHTML='';
+  _pedidoSelecoesAtuais={};
+}
+
+// ── PEDIDOS ───────────────────────────────────────────────────────────────────
+async function carregarPedidos() {
+  const params = new URLSearchParams();
+  const s = document.getElementById('f-status-ped')?.value;
+  const c = document.getElementById('f-canal-ped')?.value;
+  const k = document.getElementById('f-camp-ped')?.value;
+  const b = document.getElementById('f-busca-ped')?.value;
+  if (s) params.set('status',s);
+  if (c) params.set('canal',c);
+  if (k) params.set('campanha_id',k);
+  if (b) params.set('busca',b);
+  const d = await api.get('/api/kits-campanha/pedidos?'+params.toString());
+  const cont = document.getElementById('tabela-pedidos');
+  if (!d.ok) { cont.innerHTML='<div class="alert danger">Erro ao carregar</div>'; return; }
+  if (!d.data.length) { cont.innerHTML='<div class="empty"><div class="ei">📋</div><p>Nenhum pedido encontrado</p></div>'; return; }
+  cont.innerHTML = `<table>
+    <tr><th>Número</th><th>Campanha</th><th>Canal</th><th>Cliente</th><th>Status</th><th>Itens</th><th>Data</th><th>Ações</th></tr>
+    ${d.data.map(p=>`<tr>
+      <td><strong>${p.numero}</strong></td>
+      <td>${p.campanha_nome||'—'}</td>
+      <td>${canalIcon(p.canal)} ${p.canal}</td>
+      <td>${p.cliente_nome||'—'}</td>
+      <td>${statusBadge(p.status)}</td>
+      <td>${p.total_itens||0} itens</td>
+      <td>${new Date(p.criado_em).toLocaleDateString('pt-BR')}</td>
+      <td><button class="btn btn-s btn-sm" onclick="verPedido(${p.id})">👁 Ver</button></td>
+    </tr>`).join('')}
+  </table>`;
+}
+
+async function verPedido(id) {
+  const d = await api.get('/api/kits-campanha/pedidos/'+id);
+  if (!d.ok) return;
+  const p = d.data;
+  // Agrupar itens por slot
+  const porSlot = {};
+  (p.itens||[]).forEach(it => {
+    const k = it.slot_nome||'Sem slot';
+    if (!porSlot[k]) porSlot[k]=[];
+    porSlot[k].push(it);
+  });
+
+  document.getElementById('modal-ped-title').textContent = p.numero+' — '+p.campanha_nome;
+  document.getElementById('modal-ped-body').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;font-size:12px">
+      <div><strong>Status:</strong> ${statusBadge(p.status)}</div>
+      <div><strong>Canal:</strong> ${canalIcon(p.canal)} ${p.canal}</div>
+      <div><strong>Cliente:</strong> ${p.cliente_nome||'—'}</div>
+      <div><strong>Telefone:</strong> ${p.cliente_tel||'—'}</div>
+      <div><strong>Criado por:</strong> ${p.criado_por_nome||'—'}</div>
+      <div><strong>Data:</strong> ${new Date(p.criado_em).toLocaleString('pt-BR')}</div>
+    </div>
+    ${p.observacao?`<div class="alert" style="margin-bottom:12px">📝 ${p.observacao}</div>`:''}
+    <strong style="font-size:12px">Itens escolhidos:</strong>
+    ${Object.entries(porSlot).map(([slot,itens])=>`
+      <div style="margin-top:8px;border:1px solid var(--border);border-radius:8px;overflow:hidden">
+        <div style="background:#f0ebe4;padding:6px 10px;font-size:11px;font-weight:700;text-transform:uppercase">${slot}</div>
+        ${itens.map(it=>`<div style="padding:7px 10px;border-top:1px solid var(--border);font-size:12px;display:flex;justify-content:space-between">
+          <span>${it.produto_codigo||''} — ${it.produto_nome||'—'}</span>
+          <span style="color:var(--muted)">Qtd: ${it.quantidade}${it.peso_real?` · ${it.peso_real}kg`:''}</span>
+        </div>`).join('')}
+      </div>`).join('')}
+    ${p.motivo_cancelamento?`<div class="alert danger" style="margin-top:10px">❌ Cancelamento: ${p.motivo_cancelamento}</div>`:''}
+  `;
+
+  // Botões de ação conforme status
+  const btns = [`<button class="btn btn-s" onclick="fecharModal('modal-pedido')">Fechar</button>`];
+  if (p.status==='reservado') {
+    btns.push(`<button class="btn btn-o" onclick="mudarStatus(${p.id},'separado')">📦 Marcar Separado</button>`);
+    btns.push(`<button class="btn btn-r" onclick="cancelarPedido(${p.id})">❌ Cancelar</button>`);
+  }
+  if (p.status==='separado') {
+    btns.push(`<button class="btn btn-g" onclick="mudarStatus(${p.id},'entregue')">✅ Marcar Entregue</button>`);
+    btns.push(`<button class="btn btn-r" onclick="cancelarPedido(${p.id})">❌ Cancelar</button>`);
+  }
+  document.getElementById('modal-ped-foot').innerHTML = btns.join('');
+  document.getElementById('modal-pedido').classList.add('open');
+}
+
+async function mudarStatus(id, status) {
+  const d = await api.post('/api/kits-campanha/pedidos/'+id+'/status', { status });
+  if (!d.ok) { toast('Erro: '+d.erro,'err'); return; }
+  toast('✅ Status atualizado!');
+  fecharModal('modal-pedido');
+  carregarPedidos(); carregarSeparacao();
+}
+
+async function cancelarPedido(id) {
+  const motivo = prompt('Motivo do cancelamento (opcional):');
+  if (motivo === null) return; // usuário clicou Cancelar no prompt
+  const d = await api.post('/api/kits-campanha/pedidos/'+id+'/status', { status:'cancelado', motivo });
+  if (!d.ok) { toast('Erro: '+d.erro,'err'); return; }
+  toast('Pedido cancelado.');
+  fecharModal('modal-pedido');
+  carregarPedidos(); carregarSeparacao();
+}
+
+// ── SEPARAÇÃO ─────────────────────────────────────────────────────────────────
+async function carregarSeparacao() {
+  const d = await api.get('/api/kits-campanha/pedidos?status=reservado');
+  const cont = document.getElementById('tabela-separacao');
+  if (!d.ok) { cont.innerHTML='<div class="alert danger">Erro</div>'; return; }
+  if (!d.data.length) {
+    cont.innerHTML='<div class="empty"><div class="ei">✅</div><p>Nenhum pedido aguardando separação!</p></div>'; return;
+  }
+  cont.innerHTML = `<table>
+    <tr><th>Número</th><th>Campanha</th><th>Canal</th><th>Cliente</th><th>Data</th><th>Ações</th></tr>
+    ${d.data.map(p=>`<tr>
+      <td><strong>${p.numero}</strong></td>
+      <td>${p.campanha_nome||'—'}</td>
+      <td>${canalIcon(p.canal)} ${p.canal}</td>
+      <td>${p.cliente_nome||'—'}</td>
+      <td>${new Date(p.criado_em).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</td>
+      <td style="display:flex;gap:6px">
+        <button class="btn btn-s btn-sm" onclick="verPedido(${p.id})">👁 Ver</button>
+        <button class="btn btn-o btn-sm" onclick="mudarStatus(${p.id},'separado');carregarSeparacao()">📦 Separar</button>
+        <button class="btn btn-g btn-sm" onclick="mudarStatus(${p.id},'entregue');carregarSeparacao()">✅ Entregar</button>
+      </td>
+    </tr>`).join('')}
+  </table>`;
+}
+
+// ── CONCILIAÇÃO ───────────────────────────────────────────────────────────────
+async function salvarConciliacao() {
+  const campId = document.getElementById('conc-camp').value;
+  const data = document.getElementById('conc-data').value;
+  const qtd = document.getElementById('conc-qtd').value;
+  if (!campId||!data||!qtd) { toast('Preencha todos os campos obrigatórios','warn'); return; }
+  const d = await api.post('/api/kits-campanha/conciliacao', {
+    campanha_id: parseInt(campId), data_ref: data, qtd_pdv: parseInt(qtd),
+    observacao: document.getElementById('conc-obs').value||null,
+  });
+  if (!d.ok) { toast('Erro: '+d.erro,'err'); return; }
+  toast('✅ Conciliação registrada!');
+  document.getElementById('conc-qtd').value='';
+  document.getElementById('conc-obs').value='';
+  carregarConciliacao();
+}
+
+async function carregarConciliacao() {
+  const campId = document.getElementById('conc-camp')?.value;
+  const d = await api.get('/api/kits-campanha/conciliacao'+(campId?'?campanha_id='+campId:''));
+  const cont = document.getElementById('tabela-conciliacao');
+  if (!d.ok) return;
+  if (!d.data.length) { cont.innerHTML='<div class="empty"><div class="ei">🔄</div><p>Nenhum registro de conciliação ainda</p></div>'; return; }
+  cont.innerHTML = `<table>
+    <tr><th>Data</th><th>Campanha</th><th>PDV</th><th>Interno</th><th>Divergência</th><th>Obs</th></tr>
+    ${d.data.map(c=>{
+      const dif = c.diferenca;
+      const difCls = dif===0?'b-verde':Math.abs(dif)<=2?'b-laranja':'b-vermelho';
+      return `<tr>
+        <td>${new Date(c.data_ref+'T12:00:00').toLocaleDateString('pt-BR')}</td>
+        <td>${c.campanha_nome||'—'}</td>
+        <td><strong>${c.qtd_pdv}</strong></td>
+        <td><strong>${c.qtd_interna}</strong></td>
+        <td><span class="badge ${difCls}">${dif>0?'+':''}${dif}</span></td>
+        <td style="color:var(--muted)">${c.observacao||'—'}</td>
+      </tr>`;
+    }).join('')}
+  </table>`;
+}
+
+// ── RELATÓRIOS ────────────────────────────────────────────────────────────────
+async function carregarRelatorio() {
+  const campId = document.getElementById('rel-camp')?.value;
+  const ini = document.getElementById('rel-ini')?.value;
+  const fim = document.getElementById('rel-fim')?.value;
+  const params = new URLSearchParams();
+  if (campId) params.set('campanha_id',campId);
+  if (ini) params.set('data_ini',ini);
+  if (fim) params.set('data_fim',fim);
+  const d = await api.get('/api/kits-campanha/relatorio?'+params.toString());
+  const cont = document.getElementById('rel-content');
+  if (!d.ok) { cont.innerHTML='<div class="alert danger">Erro ao carregar relatório</div>'; return; }
+  const r = d.data;
+  cont.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+      <div class="card">
+        <div class="card-title">📦 Por Campanha/Kit</div>
+        ${r.por_kit.length?`<table>
+          <tr><th>Campanha</th><th>Total</th><th>Entregues</th><th>Cancelados</th></tr>
+          ${r.por_kit.map(k=>`<tr>
+            <td>${k.campanha_nome||'—'}</td>
+            <td><strong>${k.total}</strong></td>
+            <td><span class="badge b-verde">${k.entregues}</span></td>
+            <td><span class="badge b-vermelho">${k.cancelados}</span></td>
+          </tr>`).join('')}
+        </table>`:'<div class="empty" style="padding:20px">Sem dados</div>'}
+      </div>
+      <div class="card">
+        <div class="card-title">📱 Por Canal</div>
+        ${r.por_canal.length?`<table>
+          <tr><th>Canal</th><th>Pedidos</th><th>%</th></tr>
+          ${(()=>{const tot=r.por_canal.reduce((s,c)=>s+parseInt(c.total),0);
+            return r.por_canal.map(c=>`<tr>
+              <td>${canalIcon(c.canal)} ${c.canal}</td>
+              <td><strong>${c.total}</strong></td>
+              <td>${tot?Math.round(c.total/tot*100):0}%</td>
+            </tr>`).join('');})()}
+        </table>`:'<div class="empty" style="padding:20px">Sem dados</div>'}
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">🥇 Itens Mais Escolhidos por Slot</div>
+      ${r.itens_mais_escolhidos.length?`<table>
+        <tr><th>Slot</th><th>Produto</th><th>Vezes escolhido</th><th>Qtd total</th></tr>
+        ${r.itens_mais_escolhidos.map(it=>`<tr>
+          <td><span class="badge b-azul">${it.slot_nome||'—'}</span></td>
+          <td>${it.produto_nome||'—'}</td>
+          <td><strong>${it.vezes}</strong></td>
+          <td>${parseFloat(it.qtd_total||0).toFixed(1)}</td>
+        </tr>`).join('')}
+      </table>`:'<div class="empty" style="padding:20px">Sem dados</div>'}
+    </div>
+  `;
+}
+
+// ── ESTOQUE ───────────────────────────────────────────────────────────────────
+function abrirModalEstoque() {
+  document.getElementById('est-busca').value='';
+  document.getElementById('est-resultado').innerHTML='<div style="color:var(--muted);font-size:12px;padding:8px">Digite para buscar um produto...</div>';
+  document.getElementById('modal-estoque').classList.add('open');
+}
+
+let _estTimer;
+async function buscarProdutoEst(q) {
+  clearTimeout(_estTimer);
+  if (!q || q.length < 2) { document.getElementById('est-resultado').innerHTML=''; return; }
+  _estTimer = setTimeout(async () => {
+    const d = await api.get('/api/kits-campanha/produtos-busca?q='+encodeURIComponent(q));
+    if (!d.ok) return;
+    document.getElementById('est-resultado').innerHTML = d.data.map(p=>`
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+        <div style="flex:1;font-size:12px"><strong>${p.codigo||'—'}</strong> — ${p.descricao}</div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="font-size:11px;color:var(--muted)">Saldo atual: <strong>${p.saldo_interno||0}</strong></span>
+          <input type="number" step="0.1" min="0" value="${p.saldo_interno||0}"
+                 id="est-saldo-${p.id}" style="width:90px;padding:5px 8px">
+          <button class="btn btn-g btn-sm" onclick="salvarSaldoEst(${p.id})">💾</button>
+        </div>
+      </div>
+    `).join('');
+  }, 300);
+}
+
+async function salvarSaldoEst(prodId) {
+  const saldo = document.getElementById('est-saldo-'+prodId)?.value;
+  if (saldo===undefined) return;
+  const d = await api.put('/api/kits-campanha/estoque/'+prodId, { saldo: parseFloat(saldo) });
+  if (!d.ok) { toast('Erro: '+d.erro,'err'); return; }
+  toast('✅ Estoque atualizado!');
+}
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+(function waitBB() {
+  if (typeof BB === 'undefined' || !BB.api) { setTimeout(waitBB, 50); return; }
+  carregarCampanhas();
+  // Data padrão no formulário de conciliação
+  const hoje = new Date().toISOString().slice(0,10);
+  document.getElementById('conc-data').value = hoje;
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,654 @@
+/**
+ * routes/kits_campanha.js — Gestão Interna de Kits/Campanhas
+ *
+ * Tabelas:
+ *   kit_campanhas         — campanhas com config de slots
+ *   kit_campanha_slots    — slots de cada campanha
+ *   kit_pedidos           — pedidos internos
+ *   kit_pedido_itens      — itens escolhidos por slot
+ *   kit_reservas          — saldo comprometido por produto
+ *   kit_pdv_conciliacao   — lançamentos do PDV para conciliação
+ *   kit_estoque_interno   — saldo de estoque por produto para este módulo
+ */
+
+const express = require('express');
+const autenticar = require('../middleware/auth');
+
+module.exports = function (pool) {
+  const r = express.Router();
+  r.use(autenticar());
+
+  // ── INIT TABELAS ────────────────────────────────────────────────────────────
+  async function initTables() {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS kit_campanhas (
+        id              SERIAL PRIMARY KEY,
+        nome            TEXT NOT NULL,
+        descricao       TEXT,
+        preco_referencia NUMERIC(10,2) DEFAULT 0,
+        limite_campanha INTEGER DEFAULT 0,   -- 0 = sem limite
+        data_inicio     DATE,
+        data_fim        DATE,
+        status          TEXT NOT NULL DEFAULT 'ativa'
+                        CHECK (status IN ('ativa','pausada','encerrada')),
+        criado_por      INTEGER,
+        criado_em       TIMESTAMPTZ DEFAULT NOW(),
+        atualizado_em   TIMESTAMPTZ DEFAULT NOW()
+      )
+    `).catch(() => {});
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS kit_campanha_slots (
+        id              SERIAL PRIMARY KEY,
+        campanha_id     INTEGER NOT NULL REFERENCES kit_campanhas(id) ON DELETE CASCADE,
+        nome            TEXT NOT NULL,
+        tipo            TEXT NOT NULL DEFAULT 'choice'
+                        CHECK (tipo IN ('fixed','choice')),
+        obrigatorio     BOOLEAN DEFAULT true,
+        quantidade      NUMERIC(8,3) DEFAULT 1,
+        aceita_peso_real BOOLEAN DEFAULT false,
+        ordem           INTEGER DEFAULT 0,
+        -- produtos_permitidos: array de produto_ids em JSON
+        produtos_permitidos JSONB DEFAULT '[]'
+      )
+    `).catch(() => {});
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS kit_pedidos (
+        id              SERIAL PRIMARY KEY,
+        numero          TEXT UNIQUE NOT NULL,  -- KIT-2026-0001
+        campanha_id     INTEGER REFERENCES kit_campanhas(id),
+        campanha_nome   TEXT,
+        canal           TEXT DEFAULT 'balcao'
+                        CHECK (canal IN ('balcao','whatsapp','delivery','telefone','outro')),
+        cliente_nome    TEXT,
+        cliente_tel     TEXT,
+        status          TEXT NOT NULL DEFAULT 'rascunho'
+                        CHECK (status IN ('rascunho','reservado','separado','entregue','cancelado','conciliado')),
+        observacao      TEXT,
+        valor_total     NUMERIC(10,2) DEFAULT 0,
+        criado_por      INTEGER,
+        criado_por_nome TEXT,
+        alterado_por    INTEGER,
+        separado_por    INTEGER,
+        separado_por_nome TEXT,
+        entregue_por    INTEGER,
+        entregue_por_nome TEXT,
+        cancelado_por   INTEGER,
+        cancelado_por_nome TEXT,
+        motivo_cancelamento TEXT,
+        criado_em       TIMESTAMPTZ DEFAULT NOW(),
+        atualizado_em   TIMESTAMPTZ DEFAULT NOW()
+      )
+    `).catch(() => {});
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS kit_pedido_itens (
+        id              SERIAL PRIMARY KEY,
+        pedido_id       INTEGER NOT NULL REFERENCES kit_pedidos(id) ON DELETE CASCADE,
+        slot_id         INTEGER REFERENCES kit_campanha_slots(id),
+        slot_nome       TEXT,
+        produto_id      INTEGER REFERENCES produtos(id),
+        produto_codigo  TEXT,
+        produto_nome    TEXT,
+        quantidade      NUMERIC(8,3) DEFAULT 1,
+        peso_real       NUMERIC(8,3),          -- para itens com peso variável
+        preco_custo_unit NUMERIC(10,4) DEFAULT 0
+      )
+    `).catch(() => {});
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS kit_reservas (
+        id              SERIAL PRIMARY KEY,
+        pedido_id       INTEGER REFERENCES kit_pedidos(id),
+        produto_id      INTEGER REFERENCES produtos(id),
+        produto_nome    TEXT,
+        quantidade      NUMERIC(8,3) DEFAULT 0,
+        status          TEXT NOT NULL DEFAULT 'reservado'
+                        CHECK (status IN ('reservado','consumido','cancelado')),
+        criado_em       TIMESTAMPTZ DEFAULT NOW()
+      )
+    `).catch(() => {});
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS kit_estoque_interno (
+        id              SERIAL PRIMARY KEY,
+        produto_id      INTEGER UNIQUE REFERENCES produtos(id),
+        produto_codigo  TEXT,
+        produto_nome    TEXT,
+        saldo           NUMERIC(10,3) DEFAULT 0,
+        atualizado_em   TIMESTAMPTZ DEFAULT NOW()
+      )
+    `).catch(() => {});
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS kit_pdv_conciliacao (
+        id              SERIAL PRIMARY KEY,
+        campanha_id     INTEGER REFERENCES kit_campanhas(id),
+        data_ref        DATE NOT NULL,
+        qtd_pdv         INTEGER DEFAULT 0,
+        qtd_interna     INTEGER DEFAULT 0,
+        diferenca       INTEGER GENERATED ALWAYS AS (qtd_pdv - qtd_interna) STORED,
+        observacao      TEXT,
+        registrado_por  INTEGER,
+        criado_em       TIMESTAMPTZ DEFAULT NOW()
+      )
+    `).catch(() => {});
+
+    // Índices
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_kit_pedidos_campanha ON kit_pedidos(campanha_id);
+      CREATE INDEX IF NOT EXISTS idx_kit_pedidos_status   ON kit_pedidos(status);
+      CREATE INDEX IF NOT EXISTS idx_kit_reservas_pedido  ON kit_reservas(pedido_id);
+      CREATE INDEX IF NOT EXISTS idx_kit_reservas_produto ON kit_reservas(produto_id);
+    `).catch(() => {});
+  }
+  initTables().catch(e => console.error('[kits_campanha] init:', e.message));
+
+  // ── HELPERS ─────────────────────────────────────────────────────────────────
+
+  /** Gera número de pedido sequencial: KIT-AAAAMM-NNNN */
+  async function gerarNumeroPedido() {
+    const { rows } = await pool.query(
+      `SELECT COUNT(*)+1 AS seq FROM kit_pedidos WHERE DATE_TRUNC('month', criado_em) = DATE_TRUNC('month', NOW())`
+    );
+    const d = new Date();
+    const ym = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}`;
+    return `KIT-${ym}-${String(rows[0].seq).padStart(4,'0')}`;
+  }
+
+  /**
+   * Calcula disponibilidade de uma campanha.
+   * Retorna { disponivel, gargalo_slot, detalhes[] }
+   */
+  async function calcDisponibilidade(campanhaId) {
+    const { rows: slots } = await pool.query(
+      `SELECT * FROM kit_campanha_slots WHERE campanha_id=$1 AND obrigatorio=true ORDER BY ordem`,
+      [campanhaId]
+    );
+    if (!slots.length) return { disponivel: 0, gargalo_slot: null, detalhes: [] };
+
+    const { rows: camp } = await pool.query(
+      `SELECT limite_campanha, status,
+              (SELECT COUNT(*) FROM kit_pedidos
+               WHERE campanha_id=$1 AND status NOT IN ('cancelado','rascunho')) AS vendidos
+       FROM kit_campanhas WHERE id=$1`, [campanhaId]
+    );
+    if (!camp.length) return { disponivel: 0, gargalo_slot: null, detalhes: [] };
+
+    const detalhes = [];
+    let minDisp = Infinity;
+    let gargalo = null;
+
+    for (const slot of slots) {
+      const prods = slot.produtos_permitidos || [];
+      if (!prods.length) { detalhes.push({ slot: slot.nome, capacidade: 0, motivo: 'sem produtos' }); minDisp = 0; gargalo = slot.nome; continue; }
+
+      // Saldo livre por produto = estoque_interno - reservas abertas
+      let saldoTotal = 0;
+      for (const pid of prods) {
+        const { rows: est } = await pool.query(
+          `SELECT COALESCE(e.saldo,0) -
+                  COALESCE((SELECT SUM(r.quantidade) FROM kit_reservas r
+                            JOIN kit_pedidos p ON p.id=r.pedido_id
+                            WHERE r.produto_id=$1 AND r.status='reservado'
+                              AND p.campanha_id=$2),0) AS livre
+           FROM kit_estoque_interno e WHERE e.produto_id=$1`,
+          [pid, campanhaId]
+        );
+        saldoTotal += Math.max(0, parseFloat(est[0]?.livre || 0));
+      }
+
+      // Capacidade do slot
+      let cap;
+      if (slot.tipo === 'fixed') {
+        cap = Math.floor(saldoTotal / slot.quantidade);
+      } else {
+        // choice: soma dos estoques / quantidade exigida
+        cap = Math.floor(saldoTotal / slot.quantidade);
+      }
+
+      detalhes.push({ slot: slot.nome, tipo: slot.tipo, capacidade: cap, saldo_total: saldoTotal });
+      if (cap < minDisp) { minDisp = cap; gargalo = slot.nome; }
+    }
+
+    // Respeitar limite da campanha
+    const vendidos = parseInt(camp[0].vendidos || 0);
+    const limite = parseInt(camp[0].limite_campanha || 0);
+    let disponivel = minDisp === Infinity ? 0 : minDisp;
+    if (limite > 0) disponivel = Math.min(disponivel, limite - vendidos);
+    disponivel = Math.max(0, disponivel);
+
+    return { disponivel, gargalo_slot: gargalo, detalhes, vendidos, limite };
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // CAMPANHAS
+  // ══════════════════════════════════════════════════════════════════════════
+
+  r.get('/campanhas', async (req, res) => {
+    try {
+      const { rows } = await pool.query(`
+        SELECT c.*,
+          (SELECT COUNT(*) FROM kit_pedidos p WHERE p.campanha_id=c.id AND p.status NOT IN ('cancelado','rascunho')) AS vendidos,
+          (SELECT COUNT(*) FROM kit_pedidos p WHERE p.campanha_id=c.id AND p.status='reservado') AS reservados,
+          (SELECT COUNT(*) FROM kit_campanha_slots s WHERE s.campanha_id=c.id) AS total_slots
+        FROM kit_campanhas c ORDER BY c.status ASC, c.criado_em DESC
+      `);
+      // Calcula disponibilidade para cada campanha ativa
+      const resultado = await Promise.all(rows.map(async camp => {
+        if (camp.status === 'ativa') {
+          const disp = await calcDisponibilidade(camp.id);
+          return { ...camp, ...disp };
+        }
+        return { ...camp, disponivel: null, gargalo_slot: null };
+      }));
+      res.json({ ok: true, data: resultado });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  r.get('/campanhas/:id', async (req, res) => {
+    try {
+      const { rows } = await pool.query(`SELECT * FROM kit_campanhas WHERE id=$1`, [req.params.id]);
+      if (!rows.length) return res.status(404).json({ ok: false, erro: 'Não encontrada' });
+      const { rows: slots } = await pool.query(
+        `SELECT s.*,
+                (SELECT json_agg(json_build_object('id',p.id,'codigo',p.codigo,'descricao',p.descricao,'preco_custo',p.preco_custo))
+                 FROM produtos p WHERE p.id = ANY(
+                   SELECT (v::text)::int FROM jsonb_array_elements(s.produtos_permitidos) v
+                 )) AS produtos_info
+         FROM kit_campanha_slots s WHERE s.campanha_id=$1 ORDER BY s.ordem`,
+        [req.params.id]
+      );
+      const disp = await calcDisponibilidade(req.params.id);
+      res.json({ ok: true, data: { ...rows[0], slots, ...disp } });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  r.post('/campanhas', async (req, res) => {
+    const { nome, descricao, preco_referencia, limite_campanha, data_inicio, data_fim, slots } = req.body;
+    if (!nome) return res.status(400).json({ ok: false, erro: 'nome obrigatório' });
+    try {
+      const { rows } = await pool.query(`
+        INSERT INTO kit_campanhas (nome,descricao,preco_referencia,limite_campanha,data_inicio,data_fim,criado_por)
+        VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
+        [nome, descricao||null, preco_referencia||0, limite_campanha||0,
+         data_inicio||null, data_fim||null, req.usuario?.id||null]
+      );
+      const campId = rows[0].id;
+      // Inserir slots
+      if (slots?.length) {
+        for (let i=0; i<slots.length; i++) {
+          const s = slots[i];
+          await pool.query(`
+            INSERT INTO kit_campanha_slots
+              (campanha_id,nome,tipo,obrigatorio,quantidade,aceita_peso_real,ordem,produtos_permitidos)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+            [campId, s.nome, s.tipo||'choice', s.obrigatorio!==false, s.quantidade||1,
+             s.aceita_peso_real||false, i, JSON.stringify(s.produtos_permitidos||[])]
+          );
+        }
+      }
+      res.json({ ok: true, id: campId });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  r.put('/campanhas/:id', async (req, res) => {
+    const { nome, descricao, preco_referencia, limite_campanha, data_inicio, data_fim, status, slots } = req.body;
+    try {
+      await pool.query(`
+        UPDATE kit_campanhas SET nome=$1,descricao=$2,preco_referencia=$3,limite_campanha=$4,
+          data_inicio=$5,data_fim=$6,status=COALESCE($7,status),atualizado_em=NOW() WHERE id=$8`,
+        [nome, descricao||null, preco_referencia||0, limite_campanha||0,
+         data_inicio||null, data_fim||null, status||null, req.params.id]
+      );
+      // Atualiza slots: deleta e recria
+      if (slots) {
+        await pool.query(`DELETE FROM kit_campanha_slots WHERE campanha_id=$1`, [req.params.id]);
+        for (let i=0; i<slots.length; i++) {
+          const s = slots[i];
+          await pool.query(`
+            INSERT INTO kit_campanha_slots
+              (campanha_id,nome,tipo,obrigatorio,quantidade,aceita_peso_real,ordem,produtos_permitidos)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+            [req.params.id, s.nome, s.tipo||'choice', s.obrigatorio!==false, s.quantidade||1,
+             s.aceita_peso_real||false, i, JSON.stringify(s.produtos_permitidos||[])]
+          );
+        }
+      }
+      res.json({ ok: true });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // Disponibilidade de uma campanha
+  r.get('/campanhas/:id/disponibilidade', async (req, res) => {
+    try {
+      const d = await calcDisponibilidade(req.params.id);
+      res.json({ ok: true, data: d });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // PEDIDOS
+  // ══════════════════════════════════════════════════════════════════════════
+
+  r.get('/pedidos', async (req, res) => {
+    const { status, campanha_id, canal, data_ini, data_fim, busca } = req.query;
+    const conds = [], params = [];
+    if (status) { params.push(status); conds.push(`p.status=$${params.length}`); }
+    if (campanha_id) { params.push(campanha_id); conds.push(`p.campanha_id=$${params.length}`); }
+    if (canal) { params.push(canal); conds.push(`p.canal=$${params.length}`); }
+    if (data_ini) { params.push(data_ini); conds.push(`p.criado_em::date>=$${params.length}`); }
+    if (data_fim) { params.push(data_fim); conds.push(`p.criado_em::date<=$${params.length}`); }
+    if (busca) { params.push(`%${busca}%`); conds.push(`(p.cliente_nome ILIKE $${params.length} OR p.numero ILIKE $${params.length})`); }
+    const where = conds.length ? 'WHERE '+conds.join(' AND ') : '';
+    try {
+      const { rows } = await pool.query(
+        `SELECT p.*,
+                (SELECT COUNT(*) FROM kit_pedido_itens WHERE pedido_id=p.id) AS total_itens
+         FROM kit_pedidos p ${where} ORDER BY p.criado_em DESC LIMIT 200`,
+        params
+      );
+      res.json({ ok: true, data: rows });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  r.get('/pedidos/:id', async (req, res) => {
+    try {
+      const { rows } = await pool.query(`SELECT * FROM kit_pedidos WHERE id=$1`, [req.params.id]);
+      if (!rows.length) return res.status(404).json({ ok: false, erro: 'Não encontrado' });
+      const { rows: itens } = await pool.query(
+        `SELECT * FROM kit_pedido_itens WHERE pedido_id=$1 ORDER BY slot_nome, id`,
+        [req.params.id]
+      );
+      res.json({ ok: true, data: { ...rows[0], itens } });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  r.post('/pedidos', async (req, res) => {
+    const { campanha_id, canal, cliente_nome, cliente_tel, observacao, itens, status: reqStatus } = req.body;
+    if (!campanha_id) return res.status(400).json({ ok: false, erro: 'campanha_id obrigatório' });
+    if (!itens?.length) return res.status(400).json({ ok: false, erro: 'itens obrigatórios' });
+
+    try {
+      // Validar slots obrigatórios preenchidos
+      const { rows: slots } = await pool.query(
+        `SELECT * FROM kit_campanha_slots WHERE campanha_id=$1`, [campanha_id]
+      );
+      const slotsObrig = slots.filter(s => s.obrigatorio);
+      for (const slot of slotsObrig) {
+        const temItem = itens.some(i => i.slot_id === slot.id);
+        if (!temItem) return res.status(400).json({ ok: false, erro: `Slot obrigatório não preenchido: ${slot.nome}` });
+      }
+
+      const { rows: camp } = await pool.query(`SELECT nome FROM kit_campanhas WHERE id=$1`, [campanha_id]);
+      const numero = await gerarNumeroPedido();
+      const status = reqStatus || 'reservado';
+      const nomeOp = req.usuario?.nome || req.usuario?.email || 'Sistema';
+
+      // Calcular valor total (soma custo dos itens)
+      let valorTotal = 0;
+      for (const it of itens) {
+        if (it.produto_id) {
+          const { rows: p } = await pool.query(`SELECT preco_custo FROM produtos WHERE id=$1`, [it.produto_id]);
+          valorTotal += (parseFloat(p[0]?.preco_custo||0)) * parseFloat(it.quantidade||1);
+        }
+      }
+
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+
+        const { rows: pedRows } = await client.query(`
+          INSERT INTO kit_pedidos
+            (numero,campanha_id,campanha_nome,canal,cliente_nome,cliente_tel,
+             status,observacao,valor_total,criado_por,criado_por_nome)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
+          [numero, campanha_id, camp[0]?.nome||'', canal||'balcao',
+           cliente_nome||null, cliente_tel||null, status, observacao||null,
+           valorTotal, req.usuario?.id||null, nomeOp]
+        );
+        const pedId = pedRows[0].id;
+
+        // Inserir itens
+        for (const it of itens) {
+          const { rows: p } = await client.query(`SELECT codigo,descricao,preco_custo FROM produtos WHERE id=$1`, [it.produto_id]);
+          await client.query(`
+            INSERT INTO kit_pedido_itens
+              (pedido_id,slot_id,slot_nome,produto_id,produto_codigo,produto_nome,quantidade,peso_real,preco_custo_unit)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+            [pedId, it.slot_id||null, it.slot_nome||null, it.produto_id,
+             p[0]?.codigo||null, p[0]?.descricao||null,
+             it.quantidade||1, it.peso_real||null, p[0]?.preco_custo||0]
+          );
+        }
+
+        // Se status=reservado, criar reservas internas
+        if (status === 'reservado') {
+          for (const it of itens) {
+            if (!it.produto_id) continue;
+            const { rows: p } = await client.query(`SELECT descricao FROM produtos WHERE id=$1`, [it.produto_id]);
+            await client.query(`
+              INSERT INTO kit_reservas (pedido_id,produto_id,produto_nome,quantidade,status)
+              VALUES ($1,$2,$3,$4,'reservado')`,
+              [pedId, it.produto_id, p[0]?.descricao||'', it.quantidade||1]
+            );
+          }
+        }
+
+        await client.query('COMMIT');
+        res.json({ ok: true, id: pedId, numero });
+      } catch(e) {
+        await client.query('ROLLBACK'); throw e;
+      } finally { client.release(); }
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // Transições de status: reservado → separado → entregue | cancelado
+  r.post('/pedidos/:id/status', async (req, res) => {
+    const { status, motivo } = req.body;
+    const VALIDOS = ['reservado','separado','entregue','cancelado'];
+    if (!VALIDOS.includes(status)) return res.status(400).json({ ok: false, erro: 'status inválido' });
+
+    try {
+      const { rows } = await pool.query(`SELECT * FROM kit_pedidos WHERE id=$1`, [req.params.id]);
+      if (!rows.length) return res.status(404).json({ ok: false, erro: 'Não encontrado' });
+      const ped = rows[0];
+      const nomeOp = req.usuario?.nome || req.usuario?.email || 'Sistema';
+
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+
+        const upd = {};
+        if (status === 'separado') {
+          upd.separado_por = req.usuario?.id; upd.separado_por_nome = nomeOp;
+          // Consumir reservas → consumido
+          await client.query(
+            `UPDATE kit_reservas SET status='consumido' WHERE pedido_id=$1 AND status='reservado'`,
+            [req.params.id]
+          );
+        } else if (status === 'entregue') {
+          upd.entregue_por = req.usuario?.id; upd.entregue_por_nome = nomeOp;
+        } else if (status === 'cancelado') {
+          upd.cancelado_por = req.usuario?.id; upd.cancelado_por_nome = nomeOp;
+          upd.motivo_cancelamento = motivo || null;
+          // Devolver reservas
+          await client.query(
+            `UPDATE kit_reservas SET status='cancelado' WHERE pedido_id=$1 AND status='reservado'`,
+            [req.params.id]
+          );
+        }
+
+        // Monta SET dinâmico
+        const sets = [`status=$1`, `atualizado_em=NOW()`];
+        const vals = [status];
+        Object.entries(upd).forEach(([k,v]) => { vals.push(v); sets.push(`${k}=$${vals.length}`); });
+        vals.push(req.params.id);
+        await client.query(
+          `UPDATE kit_pedidos SET ${sets.join(',')} WHERE id=$${vals.length}`, vals
+        );
+
+        await client.query('COMMIT');
+        res.json({ ok: true });
+      } catch(e) {
+        await client.query('ROLLBACK'); throw e;
+      } finally { client.release(); }
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // ESTOQUE INTERNO
+  // ══════════════════════════════════════════════════════════════════════════
+
+  r.get('/estoque', async (req, res) => {
+    try {
+      const { rows } = await pool.query(`
+        SELECT e.*,
+          COALESCE((SELECT SUM(r.quantidade) FROM kit_reservas r WHERE r.produto_id=e.produto_id AND r.status='reservado'),0) AS reservado,
+          e.saldo - COALESCE((SELECT SUM(r.quantidade) FROM kit_reservas r WHERE r.produto_id=e.produto_id AND r.status='reservado'),0) AS livre
+        FROM kit_estoque_interno e
+        ORDER BY e.produto_nome
+      `);
+      res.json({ ok: true, data: rows });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  r.put('/estoque/:produto_id', async (req, res) => {
+    const { saldo } = req.body;
+    if (saldo === undefined) return res.status(400).json({ ok: false, erro: 'saldo obrigatório' });
+    try {
+      const { rows: p } = await pool.query(`SELECT codigo,descricao FROM produtos WHERE id=$1`, [req.params.produto_id]);
+      if (!p.length) return res.status(404).json({ ok: false, erro: 'Produto não encontrado' });
+      await pool.query(`
+        INSERT INTO kit_estoque_interno (produto_id,produto_codigo,produto_nome,saldo,atualizado_em)
+        VALUES ($1,$2,$3,$4,NOW())
+        ON CONFLICT (produto_id) DO UPDATE SET saldo=$4, atualizado_em=NOW()`,
+        [req.params.produto_id, p[0].codigo, p[0].descricao, parseFloat(saldo)]
+      );
+      res.json({ ok: true });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // Busca produtos para autocomplete nos slots
+  r.get('/produtos-busca', async (req, res) => {
+    const { q } = req.query;
+    try {
+      const { rows } = await pool.query(`
+        SELECT id, codigo, descricao, preco_custo,
+               COALESCE((SELECT saldo FROM kit_estoque_interno WHERE produto_id=p.id),0) AS saldo_interno
+        FROM produtos p
+        WHERE ativo=true AND (descricao ILIKE $1 OR codigo ILIKE $1)
+        ORDER BY descricao LIMIT 30`,
+        [`%${q||''}%`]
+      );
+      res.json({ ok: true, data: rows });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // CONCILIAÇÃO PDV
+  // ══════════════════════════════════════════════════════════════════════════
+
+  r.get('/conciliacao', async (req, res) => {
+    const { campanha_id } = req.query;
+    try {
+      const conds = campanha_id ? 'WHERE c.campanha_id=$1' : '';
+      const params = campanha_id ? [campanha_id] : [];
+      const { rows } = await pool.query(`
+        SELECT c.*, k.nome AS campanha_nome
+        FROM kit_pdv_conciliacao c
+        LEFT JOIN kit_campanhas k ON k.id=c.campanha_id
+        ${conds} ORDER BY c.data_ref DESC`, params
+      );
+      res.json({ ok: true, data: rows });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  r.post('/conciliacao', async (req, res) => {
+    const { campanha_id, data_ref, qtd_pdv, observacao } = req.body;
+    if (!campanha_id || !data_ref || qtd_pdv === undefined)
+      return res.status(400).json({ ok: false, erro: 'campanha_id, data_ref e qtd_pdv obrigatórios' });
+    try {
+      // Conta pedidos internos entregues/conciliados da campanha na data
+      const { rows: qi } = await pool.query(`
+        SELECT COUNT(*) AS qtd FROM kit_pedidos
+        WHERE campanha_id=$1 AND criado_em::date=$2
+          AND status IN ('entregue','conciliado','separado')`,
+        [campanha_id, data_ref]
+      );
+      const qtdInterna = parseInt(qi[0].qtd);
+      const { rows } = await pool.query(`
+        INSERT INTO kit_pdv_conciliacao
+          (campanha_id,data_ref,qtd_pdv,qtd_interna,observacao,registrado_por)
+        VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+        [campanha_id, data_ref, parseInt(qtd_pdv), qtdInterna, observacao||null, req.usuario?.id||null]
+      );
+      res.json({ ok: true, data: rows[0] });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // RELATÓRIOS / KPIs
+  // ══════════════════════════════════════════════════════════════════════════
+
+  r.get('/kpis', async (req, res) => {
+    try {
+      const [campRes, pedRes, resRes] = await Promise.all([
+        pool.query(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status='ativa') AS ativas FROM kit_campanhas`),
+        pool.query(`SELECT
+          COUNT(*) AS total,
+          COUNT(*) FILTER (WHERE status='reservado') AS reservados,
+          COUNT(*) FILTER (WHERE status='separado') AS separados,
+          COUNT(*) FILTER (WHERE status='entregue') AS entregues,
+          COUNT(*) FILTER (WHERE status='cancelado') AS cancelados,
+          COUNT(*) FILTER (WHERE criado_em::date = CURRENT_DATE) AS hoje
+        FROM kit_pedidos`),
+        pool.query(`SELECT COUNT(*) AS total FROM kit_reservas WHERE status='reservado'`),
+      ]);
+      res.json({ ok: true, data: {
+        campanhas: parseInt(campRes.rows[0].total),
+        campanhas_ativas: parseInt(campRes.rows[0].ativas),
+        pedidos_total: parseInt(pedRes.rows[0].total),
+        pedidos_reservados: parseInt(pedRes.rows[0].reservados),
+        pedidos_separados: parseInt(pedRes.rows[0].separados),
+        pedidos_entregues: parseInt(pedRes.rows[0].entregues),
+        pedidos_cancelados: parseInt(pedRes.rows[0].cancelados),
+        pedidos_hoje: parseInt(pedRes.rows[0].hoje),
+        reservas_ativas: parseInt(resRes.rows[0].total),
+      }});
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  r.get('/relatorio', async (req, res) => {
+    const { campanha_id, data_ini, data_fim } = req.query;
+    const conds = [], params = [];
+    if (campanha_id) { params.push(campanha_id); conds.push(`p.campanha_id=$${params.length}`); }
+    if (data_ini) { params.push(data_ini); conds.push(`p.criado_em::date>=$${params.length}`); }
+    if (data_fim) { params.push(data_fim); conds.push(`p.criado_em::date<=$${params.length}`); }
+    const where = conds.length ? 'WHERE '+conds.join(' AND ') : '';
+    try {
+      const [porKit, porCanal, porItem] = await Promise.all([
+        pool.query(`SELECT p.campanha_nome, COUNT(*) AS total,
+          COUNT(*) FILTER (WHERE p.status='entregue') AS entregues,
+          COUNT(*) FILTER (WHERE p.status='cancelado') AS cancelados
+          FROM kit_pedidos p ${where} GROUP BY p.campanha_nome ORDER BY total DESC`, params),
+        pool.query(`SELECT p.canal, COUNT(*) AS total
+          FROM kit_pedidos p ${where} GROUP BY p.canal ORDER BY total DESC`, params),
+        pool.query(`SELECT i.slot_nome, i.produto_nome, COUNT(*) AS vezes,
+          SUM(i.quantidade) AS qtd_total
+          FROM kit_pedido_itens i
+          JOIN kit_pedidos p ON p.id=i.pedido_id
+          ${where.replace('p.','p.')} GROUP BY i.slot_nome,i.produto_nome
+          ORDER BY i.slot_nome, vezes DESC`, params),
+      ]);
+      res.json({ ok: true, data: {
+        por_kit: porKit.rows,
+        por_canal: porCanal.rows,
+        itens_mais_escolhidos: porItem.rows,
+      }});
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  return r;
+};
