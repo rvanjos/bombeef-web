@@ -127,6 +127,15 @@ tr:hover td{background:#faf8f5;}
   .kpi-row{grid-template-columns:1fr 1fr;}
 }
 </style>
+<script>
+// Oculta o header quando carregado dentro do iframe do portal
+if (window.self !== window.top) {
+  document.addEventListener('DOMContentLoaded', function() {
+    var ph = document.querySelector('.ph');
+    if (ph) ph.style.display = 'none';
+  });
+}
+</script>
 </head>
 <body>
 <div class="ph">
