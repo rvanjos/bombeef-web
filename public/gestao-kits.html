@@ -1048,13 +1048,19 @@ async function salvarSaldoEst(prodId) {
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
-(function waitBB() {
-  if (typeof BB === 'undefined' || !BB.api) { setTimeout(waitBB, 50); return; }
+function initGestaoKits() {
+  if (typeof BB === 'undefined' || !BB.api) { setTimeout(initGestaoKits, 80); return; }
   carregarCampanhas();
-  // Data padrão no formulário de conciliação
   const hoje = new Date().toISOString().slice(0,10);
-  document.getElementById('conc-data').value = hoje;
-})();
+  const concData = document.getElementById('conc-data');
+  if (concData) concData.value = hoje;
+}
+
+// Usa onBBReady se disponível, senão polling
+window.onBBReady = function() { initGestaoKits(); };
+// Fallback: se BB já está carregado antes do onBBReady ser definido
+if (typeof BB !== 'undefined' && BB.api) { initGestaoKits(); }
+else { setTimeout(initGestaoKits, 200); }
 </script>
 </body>
 </html>
