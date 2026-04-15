@@ -140,7 +140,7 @@ if (window.self !== window.top) {
 <body>
 <div class="ph">
   <div>
-    <h1>📦 Gestão Interna de Kits</h1>
+    <h1>📦 Operação de Kits</h1>
     <p>Campanhas · Pedidos · Reservas · Conciliação com PDV</p>
   </div>
 </div>
@@ -157,6 +157,8 @@ if (window.self !== window.top) {
 <!-- ══ CAMPANHAS ══════════════════════════════════════════════════════════ -->
 <div id="tab-campanhas" class="tab-content active">
   <div class="kpi-row" id="kpi-row"></div>
+  <!-- Dashboard de status dos pedidos -->
+  <div id="dash-status" style="margin-bottom:16px"></div>
   <div class="toolbar">
     <button class="btn btn-p" onclick="abrirModalCampanha()">➕ Nova Campanha</button>
     <button class="btn btn-s" onclick="abrirModalEstoque()">📦 Atualizar Estoque</button>
@@ -178,7 +180,7 @@ if (window.self !== window.top) {
       </div>
       <div class="fg">
         <label>Canal</label>
-        <select id="np-canal">
+        <select id="np-canal" onchange="toggleEnderecoDelivery()">
           <option value="balcao">🏪 Balcão</option>
           <option value="whatsapp">📱 WhatsApp</option>
           <option value="delivery">🛵 Delivery</option>
@@ -193,6 +195,37 @@ if (window.self !== window.top) {
       <div class="fg">
         <label>Telefone</label>
         <input type="text" id="np-tel" placeholder="(11) 99999-9999">
+      </div>
+      <div class="fg">
+        <label>Quantidade de Kits</label>
+        <input type="number" id="np-qtd-kits" value="1" min="1" max="99" style="max-width:100px">
+      </div>
+      <div class="fg" style="display:flex;align-items:flex-end;gap:8px;padding-bottom:2px">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-bottom:0">
+          <input type="checkbox" id="np-pago" style="width:16px;height:16px;accent-color:var(--green)">
+          <span style="font-size:12px;font-weight:600">💰 Pago na hora</span>
+        </label>
+        <select id="np-forma-pgto" style="flex:1;display:none">
+          <option value="">Forma de pagamento</option>
+          <option value="dinheiro">💵 Dinheiro</option>
+          <option value="pix">📲 PIX</option>
+          <option value="debito">💳 Débito</option>
+          <option value="credito">💳 Crédito</option>
+          <option value="outro">Outro</option>
+        </select>
+      </div>
+    </div>
+    <!-- Endereço delivery (oculto por padrão) -->
+    <div id="np-endereco-wrap" style="display:none;border:1px solid var(--border);border-radius:9px;padding:12px;margin-bottom:12px;background:#f9f9f7">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted);margin-bottom:8px">📍 Endereço de Entrega</div>
+      <div class="form-grid tres">
+        <div class="fg"><label>Rua / Av.</label><input type="text" id="np-end-rua" placeholder="Ex: Rua das Flores"></div>
+        <div class="fg"><label>Número</label><input type="text" id="np-end-num" placeholder="123"></div>
+        <div class="fg"><label>Bairro</label><input type="text" id="np-end-bairro" placeholder="Centro"></div>
+      </div>
+      <div class="form-grid">
+        <div class="fg"><label>Cidade</label><input type="text" id="np-end-cidade" placeholder="Valinhos"></div>
+        <div class="fg"><label>Referência</label><input type="text" id="np-end-ref" placeholder="Próximo ao..."></div>
       </div>
     </div>
     <div id="np-disp-info" style="margin-bottom:12px"></div>
@@ -427,12 +460,14 @@ async function carregarKPIs() {
   const k = d.data;
   document.getElementById('kpi-row').innerHTML = `
     <div class="kpi azul"><div class="kpi-val">${k.campanhas_ativas}</div><div class="kpi-lbl">Campanhas Ativas</div></div>
-    <div class="kpi laranja"><div class="kpi-val">${k.pedidos_reservados}</div><div class="kpi-lbl">Reservados</div></div>
-    <div class="kpi laranja"><div class="kpi-val">${k.pedidos_separados}</div><div class="kpi-lbl">Em Separação</div></div>
-    <div class="kpi verde"><div class="kpi-val">${k.pedidos_entregues}</div><div class="kpi-lbl">Entregues</div></div>
-    <div class="kpi azul"><div class="kpi-val">${k.pedidos_hoje}</div><div class="kpi-lbl">Pedidos Hoje</div></div>
-    <div class="kpi vermelho"><div class="kpi-val">${k.pedidos_cancelados}</div><div class="kpi-lbl">Cancelados</div></div>
+    <div class="kpi laranja" style="cursor:pointer" onclick="filtrarDashboard('reservado')"><div class="kpi-val">${k.pedidos_reservados}</div><div class="kpi-lbl">Reservados</div></div>
+    <div class="kpi laranja" style="cursor:pointer" onclick="filtrarDashboard('separado')"><div class="kpi-val">${k.pedidos_separados}</div><div class="kpi-lbl">Em Separação</div></div>
+    <div class="kpi verde" style="cursor:pointer" onclick="filtrarDashboard('entregue')"><div class="kpi-val">${k.pedidos_entregues}</div><div class="kpi-lbl">Entregues</div></div>
+    <div class="kpi verde" style="cursor:pointer" onclick="filtrarDashboard('pago')"><div class="kpi-val">${k.pedidos_pagos||0}</div><div class="kpi-lbl">💰 Pagos</div></div>
+    <div class="kpi azul"><div class="kpi-val">${k.pedidos_hoje}</div><div class="kpi-lbl">Hoje</div></div>
+    <div class="kpi vermelho" style="cursor:pointer" onclick="filtrarDashboard('cancelado')"><div class="kpi-val">${k.pedidos_cancelados}</div><div class="kpi-lbl">Cancelados</div></div>
   `;
+  renderDashboardStatus(k);
 }
 
 // ── CAMPANHAS ─────────────────────────────────────────────────────────────────
@@ -705,6 +740,7 @@ async function carregarSlotsMontagem() {
         <span style="font-size:11px;color:var(--muted)">Qtd: ${slot.quantidade}${slot.obrigatorio?' · obrigatório':''}</span>
         ${slot.aceita_peso_real?'<span style="font-size:10px;color:var(--blue);background:#dbeafe;padding:2px 6px;border-radius:5px">⚖️ peso variável</span>':''}
       </div>
+      <div id="slot-prog-${slot.id}" style="font-size:11px;font-weight:600;color:var(--orange);margin-bottom:6px"></div>
       ${slot.tipo==='fixed' && prods.length===1 ?
         `<div class="prod-opt selected" style="cursor:default">
           <span class="po-nome">✅ ${prods[0].codigo||''} — ${prods[0].descricao}</span>
@@ -730,18 +766,50 @@ async function carregarSlotsMontagem() {
   });
 }
 
-function selecionarProduto(slotId, prodId, qtd, aceitaPeso) {
+function selecionarProduto(slotId, prodId, qtdSlot, aceitaPeso) {
   const slot = _slotsMontagemData.find(s=>s.id===slotId);
   if (!slot) return;
-  // Toggle para choice com quantidade >1
-  const jaSelected = _pedidoSelecoesAtuais[slotId]?.some(s=>s.produto_id===prodId);
-  if (jaSelected) {
-    _pedidoSelecoesAtuais[slotId] = (_pedidoSelecoesAtuais[slotId]||[]).filter(s=>s.produto_id!==prodId);
-    document.getElementById(`opt-${slotId}-${prodId}`)?.classList.remove('selected');
-  } else {
-    if (!_pedidoSelecoesAtuais[slotId]) _pedidoSelecoesAtuais[slotId] = [];
-    _pedidoSelecoesAtuais[slotId].push({ slot_id:slotId, slot_nome:slot.nome, produto_id:prodId, quantidade:qtd });
-    document.getElementById(`opt-${slotId}-${prodId}`)?.classList.add('selected');
+  if (!_pedidoSelecoesAtuais[slotId]) _pedidoSelecoesAtuais[slotId] = [];
+
+  // Conta quantas unidades deste produto já foram selecionadas neste slot
+  const totalJaSelecionado = _pedidoSelecoesAtuais[slotId].reduce((s,x)=>s+x.quantidade,0);
+  const qtdDesteProd = _pedidoSelecoesAtuais[slotId].filter(x=>x.produto_id===prodId).reduce((s,x)=>s+x.quantidade,0);
+
+  if (qtdDesteProd > 0 && totalJaSelecionado >= qtdSlot) {
+    // Já tem este produto e slot cheio — remove uma unidade deste produto
+    const idx = _pedidoSelecoesAtuais[slotId].findLastIndex(x=>x.produto_id===prodId);
+    if (idx>=0) _pedidoSelecoesAtuais[slotId].splice(idx,1);
+  } else if (totalJaSelecionado < qtdSlot) {
+    // Ainda tem espaço — adiciona mais uma unidade deste produto
+    _pedidoSelecoesAtuais[slotId].push({ slot_id:slotId, slot_nome:slot.nome, produto_id:prodId, quantidade:1 });
+  }
+  // Atualiza visual dos botões
+  atualizarVisuaisSlot(slotId, qtdSlot);
+}
+
+function atualizarVisuaisSlot(slotId, qtdSlot) {
+  const sels = _pedidoSelecoesAtuais[slotId]||[];
+  const total = sels.reduce((s,x)=>s+x.quantidade,0);
+  // Atualiza cada opção de produto
+  const slot = _slotsMontagemData.find(s=>s.id===slotId);
+  const prods = slot?.produtos_info?.filter(Boolean)||[];
+  prods.forEach(p => {
+    const el = document.getElementById(`opt-${slotId}-${p.id}`);
+    if (!el) return;
+    const qtdEste = sels.filter(x=>x.produto_id===p.id).reduce((s,x)=>s+x.quantidade,0);
+    el.classList.toggle('selected', qtdEste>0);
+    // Mostrar contador se > 1
+    let badge = el.querySelector('.qtd-badge');
+    if (qtdEste>0) {
+      if (!badge) { badge=document.createElement('span'); badge.className='qtd-badge'; badge.style.cssText='background:var(--red);color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;font-weight:700;margin-left:4px'; el.querySelector('.po-nome').after(badge); }
+      badge.textContent = qtdEste>1?`×${qtdEste}`:'✓';
+    } else if (badge) { badge.remove(); }
+  });
+  // Indicador de progresso do slot
+  const progEl = document.getElementById(`slot-prog-${slotId}`);
+  if (progEl) {
+    progEl.textContent = `${total}/${qtdSlot} selecionado(s)`;
+    progEl.style.color = total>=qtdSlot?'var(--green)':'var(--orange)';
   }
 }
 
@@ -768,12 +836,21 @@ async function salvarPedido(status) {
     }
   }
 
+  const pagoCheck = document.getElementById('np-pago')?.checked;
   const body = {
     campanha_id: parseInt(campId),
     canal: document.getElementById('np-canal').value,
     cliente_nome: document.getElementById('np-cliente').value.trim()||null,
     cliente_tel: document.getElementById('np-tel').value.trim()||null,
     observacao: document.getElementById('np-obs').value.trim()||null,
+    qtd_kits: parseInt(document.getElementById('np-qtd-kits')?.value)||1,
+    pago: pagoCheck||false,
+    forma_pagamento: pagoCheck ? (document.getElementById('np-forma-pgto')?.value||null) : null,
+    endereco_rua:    document.getElementById('np-end-rua')?.value.trim()||null,
+    endereco_num:    document.getElementById('np-end-num')?.value.trim()||null,
+    endereco_bairro: document.getElementById('np-end-bairro')?.value.trim()||null,
+    endereco_cidade: document.getElementById('np-end-cidade')?.value.trim()||null,
+    endereco_ref:    document.getElementById('np-end-ref')?.value.trim()||null,
     itens, status,
   };
 
@@ -789,9 +866,25 @@ function limparFormPedido() {
   document.getElementById('np-cliente').value='';
   document.getElementById('np-tel').value='';
   document.getElementById('np-obs').value='';
+  document.getElementById('np-qtd-kits').value='1';
+  const pagoEl = document.getElementById('np-pago');
+  if(pagoEl) pagoEl.checked=false;
+  const formaEl = document.getElementById('np-forma-pgto');
+  if(formaEl) { formaEl.value=''; formaEl.style.display='none'; }
+  ['np-end-rua','np-end-num','np-end-bairro','np-end-cidade','np-end-ref'].forEach(id => {
+    const el=document.getElementById(id); if(el) el.value='';
+  });
+  const endWrap = document.getElementById('np-endereco-wrap');
+  if(endWrap) endWrap.style.display='none';
   document.getElementById('np-slots').innerHTML='';
   document.getElementById('np-disp-info').innerHTML='';
   _pedidoSelecoesAtuais={};
+}
+
+function toggleEnderecoDelivery() {
+  const canal = document.getElementById('np-canal').value;
+  const wrap = document.getElementById('np-endereco-wrap');
+  if(wrap) wrap.style.display = canal==='delivery' ? '' : 'none';
 }
 
 // ── PEDIDOS ───────────────────────────────────────────────────────────────────
@@ -810,14 +903,15 @@ async function carregarPedidos() {
   if (!d.ok) { cont.innerHTML='<div class="alert danger">Erro ao carregar</div>'; return; }
   if (!d.data.length) { cont.innerHTML='<div class="empty"><div class="ei">📋</div><p>Nenhum pedido encontrado</p></div>'; return; }
   cont.innerHTML = `<table>
-    <tr><th>Número</th><th>Campanha</th><th>Canal</th><th>Cliente</th><th>Status</th><th>Itens</th><th>Data</th><th>Ações</th></tr>
+    <tr><th>Número</th><th>Campanha</th><th>Canal</th><th>Cliente</th><th>Status</th><th>Pago</th><th>Kits</th><th>Data</th><th>Ações</th></tr>
     ${d.data.map(p=>`<tr>
       <td><strong>${p.numero}</strong></td>
       <td>${p.campanha_nome||'—'}</td>
       <td>${canalIcon(p.canal)} ${p.canal}</td>
       <td>${p.cliente_nome||'—'}</td>
       <td>${statusBadge(p.status)}</td>
-      <td>${p.total_itens||0} itens</td>
+      <td>${p.pago?'<span class="badge b-verde">💰</span>':'<span style="color:#ccc">—</span>'}</td>
+      <td>${p.qtd_kits||1}</td>
       <td>${new Date(p.criado_em).toLocaleDateString('pt-BR')}</td>
       <td><button class="btn btn-s btn-sm" onclick="verPedido(${p.id})">👁 Ver</button></td>
     </tr>`).join('')}
@@ -840,9 +934,12 @@ async function verPedido(id) {
   document.getElementById('modal-ped-body').innerHTML = `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;font-size:12px">
       <div><strong>Status:</strong> ${statusBadge(p.status)}</div>
+      <div><strong>Pagamento:</strong> ${p.pago?'<span class="badge b-verde">💰 Pago'+(p.forma_pagamento?' — '+p.forma_pagamento:'')+'</span>':'<span class="badge b-cinza">Pendente</span>'}</div>
       <div><strong>Canal:</strong> ${canalIcon(p.canal)} ${p.canal}</div>
+      <div><strong>Kits:</strong> ${p.qtd_kits||1} kit(s)</div>
       <div><strong>Cliente:</strong> ${p.cliente_nome||'—'}</div>
       <div><strong>Telefone:</strong> ${p.cliente_tel||'—'}</div>
+      ${p.canal==='delivery'&&p.endereco_rua?`<div style="grid-column:1/-1"><strong>Endereço:</strong> ${p.endereco_rua}${p.endereco_num?', '+p.endereco_num:''} — ${p.endereco_bairro||''} ${p.endereco_cidade||''} ${p.endereco_ref?'('+p.endereco_ref+')':''}</div>`:''}
       <div><strong>Criado por:</strong> ${p.criado_por_nome||'—'}</div>
       <div><strong>Data:</strong> ${new Date(p.criado_em).toLocaleString('pt-BR')}</div>
     </div>
@@ -868,6 +965,12 @@ async function verPedido(id) {
   if (p.status==='separado') {
     btns.push(`<button class="btn btn-g" onclick="mudarStatus(${p.id},'entregue')">✅ Marcar Entregue</button>`);
     btns.push(`<button class="btn btn-r" onclick="cancelarPedido(${p.id})">❌ Cancelar</button>`);
+  }
+  // Botão pagar independente do status
+  if (!p.pago && p.status !== 'cancelado') {
+    btns.push(`<button class="btn" style="background:#f0fdf4;color:var(--green);border:1px solid #86efac" onclick="marcarPago(${p.id})">💰 Marcar Pago</button>`);
+  } else if (p.pago) {
+    btns.push(`<button class="btn btn-s" onclick="desmarcarPago(${p.id})" title="Desfazer pagamento">↩ Desfazer Pago</button>`);
   }
   document.getElementById('modal-ped-foot').innerHTML = btns.join('');
   document.getElementById('modal-pedido').classList.add('open');
@@ -1005,6 +1108,7 @@ async function carregarRelatorio() {
           <td>${it.produto_nome||'—'}</td>
           <td><strong>${it.vezes}</strong></td>
           <td>${parseFloat(it.qtd_total||0).toFixed(1)}</td>
+          <td>${parseFloat(it.peso_total||0)>0?'<strong>'+parseFloat(it.peso_total).toFixed(2)+' kg</strong>':'—'}</td>
         </tr>`).join('')}
       </table>`:'<div class="empty" style="padding:20px">Sem dados</div>'}
     </div>
@@ -1047,6 +1151,111 @@ async function salvarSaldoEst(prodId) {
   toast('✅ Estoque atualizado!');
 }
 
+// ── PAGAMENTO ─────────────────────────────────────────────────────────────────
+async function marcarPago(id) {
+  const formas = ['dinheiro','pix','debito','credito','outro'];
+  const forma = prompt('Forma de pagamento:
+1-Dinheiro 2-PIX 3-Débito 4-Crédito 5-Outro
+
+Digite o número ou deixe vazio:');
+  if (forma === null) return;
+  const formaMap = {'1':'dinheiro','2':'pix','3':'debito','4':'credito','5':'outro'};
+  const formaPgto = formaMap[forma?.trim()] || forma?.trim() || null;
+  const d = await api.post('/api/kits-campanha/pedidos/'+id+'/pagar', { forma_pagamento: formaPgto });
+  if (!d.ok) { toast('Erro: '+d.erro,'err'); return; }
+  toast('💰 Marcado como pago!');
+  fecharModal('modal-pedido');
+  carregarPedidos(); carregarCampanhas();
+}
+
+async function desmarcarPago(id) {
+  if (!confirm('Desfazer o pagamento deste pedido?')) return;
+  const d = await api.post('/api/kits-campanha/pedidos/'+id+'/despagar', {});
+  if (!d.ok) { toast('Erro','err'); return; }
+  toast('Pagamento desfeito.');
+  fecharModal('modal-pedido');
+  carregarPedidos();
+}
+
+// ── DASHBOARD DE STATUS ────────────────────────────────────────────────────────
+async function renderDashboardStatus(kpis) {
+  // Busca pedidos recentes para montar o painel
+  const d = await api.get('/api/kits-campanha/pedidos');
+  if (!d.ok) return;
+  const pedidos = d.data;
+
+  // Agrupa por status
+  const grupos = {
+    reservado: pedidos.filter(p=>p.status==='reservado'),
+    separado:  pedidos.filter(p=>p.status==='separado'),
+    entregue:  pedidos.filter(p=>p.status==='entregue'),
+    pago:      pedidos.filter(p=>p.pago && p.status!=='cancelado'),
+    cancelado: pedidos.filter(p=>p.status==='cancelado'),
+  };
+
+  const cores = {
+    reservado:'#dbeafe',separado:'#fef3c7',entregue:'#dcfce7',pago:'#f0fdf4',cancelado:'#fee2e2'
+  };
+  const icons = {reservado:'🔵',separado:'📦',entregue:'✅',pago:'💰',cancelado:'❌'};
+  const labels = {reservado:'Reservados',separado:'Em Separação',entregue:'Entregues',pago:'Pagos',cancelado:'Cancelados'};
+
+  const el = document.getElementById('dash-status');
+  if (!el) return;
+
+  // Só mostra se tiver pedidos pendentes (reservado ou separado)
+  const pendentes = grupos.reservado.length + grupos.separado.length;
+  if (!pendentes && !grupos.entregue.length) { el.innerHTML=''; return; }
+
+  el.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px">' +
+    Object.entries(grupos).filter(([,arr])=>arr.length>0).map(([status,arr])=>`
+      <div style="background:${cores[status]};border-radius:10px;padding:12px 14px;cursor:pointer"
+           onclick="filtrarDashboard('${status}')">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#555;margin-bottom:6px">${icons[status]} ${labels[status]}</div>
+        ${arr.slice(0,3).map(p=>`
+          <div style="display:flex;justify-content:space-between;font-size:11px;padding:3px 0;border-bottom:1px solid rgba(0,0,0,.06)">
+            <span>${p.numero}</span>
+            <span style="color:#888">${p.cliente_nome||p.canal}</span>
+          </div>`).join('')}
+        ${arr.length>3?`<div style="font-size:10px;color:#888;margin-top:4px">+${arr.length-3} mais → clique para ver todos</div>`:''}
+      </div>`).join('') + '</div>';
+}
+
+function filtrarDashboard(status) {
+  showTab('pedidos');
+  setTimeout(() => {
+    const sel = document.getElementById('f-status-ped');
+    if (status === 'pago') {
+      // Filtro especial para pagos — não é um status, é uma flag
+      if (sel) sel.value = '';
+      carregarPedidosPagos();
+    } else {
+      if (sel) sel.value = status;
+      carregarPedidos();
+    }
+  }, 100);
+}
+
+async function carregarPedidosPagos() {
+  const d = await api.get('/api/kits-campanha/pedidos');
+  const cont = document.getElementById('tabela-pedidos');
+  if (!d.ok) return;
+  const pagos = d.data.filter(p=>p.pago && p.status!=='cancelado');
+  if (!pagos.length) { cont.innerHTML='<div class="empty"><div class="ei">💰</div><p>Nenhum pedido pago</p></div>'; return; }
+  cont.innerHTML = `<div style="margin-bottom:8px"><span class="badge b-verde">💰 Mostrando apenas pedidos pagos</span> <button class="btn btn-s btn-sm" onclick="carregarPedidos()">Ver todos</button></div>`+
+    `<table><tr><th>Número</th><th>Campanha</th><th>Canal</th><th>Cliente</th><th>Status</th><th>Forma Pgto</th><th>Data</th><th>Ações</th></tr>
+    ${pagos.map(p=>`<tr>
+      <td><strong>${p.numero}</strong></td>
+      <td>${p.campanha_nome||'—'}</td>
+      <td>${canalIcon(p.canal)} ${p.canal}</td>
+      <td>${p.cliente_nome||'—'}</td>
+      <td>${statusBadge(p.status)}</td>
+      <td>${p.forma_pagamento||'—'}</td>
+      <td>${new Date(p.criado_em).toLocaleDateString('pt-BR')}</td>
+      <td><button class="btn btn-s btn-sm" onclick="verPedido(${p.id})">👁 Ver</button></td>
+    </tr>`).join('')}
+  </table>`;
+}
+
 // ── INIT ──────────────────────────────────────────────────────────────────────
 function initGestaoKits() {
   if (typeof BB === 'undefined' || !BB.api) { setTimeout(initGestaoKits, 80); return; }
@@ -1055,6 +1264,14 @@ function initGestaoKits() {
   const concData = document.getElementById('conc-data');
   if (concData) concData.value = hoje;
 }
+
+// Toggle forma de pagamento ao marcar pago
+document.addEventListener('change', function(e) {
+  if (e.target.id === 'np-pago') {
+    const forma = document.getElementById('np-forma-pgto');
+    if (forma) forma.style.display = e.target.checked ? '' : 'none';
+  }
+});
 
 // Usa onBBReady se disponível, senão polling
 window.onBBReady = function() { initGestaoKits(); };

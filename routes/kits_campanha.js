@@ -65,6 +65,19 @@ module.exports = function (pool) {
         cliente_tel     TEXT,
         status          TEXT NOT NULL DEFAULT 'rascunho'
                         CHECK (status IN ('rascunho','reservado','separado','entregue','cancelado','conciliado')),
+        pago            BOOLEAN DEFAULT false,
+        pago_em         TIMESTAMPTZ,
+        pago_por        INTEGER,
+        pago_por_nome   TEXT,
+        forma_pagamento TEXT,
+        -- Endereço para delivery
+        endereco_rua    TEXT,
+        endereco_num    TEXT,
+        endereco_bairro TEXT,
+        endereco_cidade TEXT,
+        endereco_ref    TEXT,
+        -- Quantidade de kits no pedido (default 1)
+        qtd_kits        INTEGER DEFAULT 1,
         observacao      TEXT,
         valor_total     NUMERIC(10,2) DEFAULT 0,
         criado_por      INTEGER,
@@ -134,6 +147,24 @@ module.exports = function (pool) {
         criado_em       TIMESTAMPTZ DEFAULT NOW()
       )
     `).catch(() => {});
+
+    // Migrações de colunas novas em kit_pedidos
+    for (const col of [
+      "ALTER TABLE kit_pedidos ADD COLUMN IF NOT EXISTS pago BOOLEAN DEFAULT false",
+      "ALTER TABLE kit_pedidos ADD COLUMN IF NOT EXISTS pago_em TIMESTAMPTZ",
+      "ALTER TABLE kit_pedidos ADD COLUMN IF NOT EXISTS pago_por INTEGER",
+      "ALTER TABLE kit_pedidos ADD COLUMN IF NOT EXISTS pago_por_nome TEXT",
+      "ALTER TABLE kit_pedidos ADD COLUMN IF NOT EXISTS forma_pagamento TEXT",
+      "ALTER TABLE kit_pedidos ADD COLUMN IF NOT EXISTS endereco_rua TEXT",
+      "ALTER TABLE kit_pedidos ADD COLUMN IF NOT EXISTS endereco_num TEXT",
+      "ALTER TABLE kit_pedidos ADD COLUMN IF NOT EXISTS endereco_bairro TEXT",
+      "ALTER TABLE kit_pedidos ADD COLUMN IF NOT EXISTS endereco_cidade TEXT",
+      "ALTER TABLE kit_pedidos ADD COLUMN IF NOT EXISTS endereco_ref TEXT",
+      "ALTER TABLE kit_pedidos ADD COLUMN IF NOT EXISTS qtd_kits INTEGER DEFAULT 1",
+    ]) { await pool.query(col).catch(() => {}); }
+    // Atualizar constraint de status para incluir conciliado (se não existir)
+    await pool.query(`ALTER TABLE kit_pedidos DROP CONSTRAINT IF EXISTS kit_pedidos_status_check`).catch(()=>{});
+    await pool.query(`ALTER TABLE kit_pedidos ADD CONSTRAINT kit_pedidos_status_check CHECK (status IN ('rascunho','reservado','separado','entregue','cancelado','conciliado'))`).catch(()=>{});
 
     // Índices
     await pool.query(`
@@ -366,7 +397,9 @@ module.exports = function (pool) {
   });
 
   r.post('/pedidos', async (req, res) => {
-    const { campanha_id, canal, cliente_nome, cliente_tel, observacao, itens, status: reqStatus } = req.body;
+    const { campanha_id, canal, cliente_nome, cliente_tel, observacao, itens, status: reqStatus,
+             qtd_kits, pago, forma_pagamento,
+             endereco_rua, endereco_num, endereco_bairro, endereco_cidade, endereco_ref } = req.body;
     if (!campanha_id) return res.status(400).json({ ok: false, erro: 'campanha_id obrigatório' });
     if (!itens?.length) return res.status(400).json({ ok: false, erro: 'itens obrigatórios' });
 
@@ -399,14 +432,23 @@ module.exports = function (pool) {
       try {
         await client.query('BEGIN');
 
-        const { rows: pedRows } = await client.query(`
+        const pagoAgora = pago === true || pago === 'true';
+      const { rows: pedRows } = await client.query(`
           INSERT INTO kit_pedidos
             (numero,campanha_id,campanha_nome,canal,cliente_nome,cliente_tel,
-             status,observacao,valor_total,criado_por,criado_por_nome)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
+             status,observacao,valor_total,qtd_kits,
+             pago,pago_em,pago_por,pago_por_nome,forma_pagamento,
+             endereco_rua,endereco_num,endereco_bairro,endereco_cidade,endereco_ref,
+             criado_por,criado_por_nome)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22) RETURNING id`,
           [numero, campanha_id, camp[0]?.nome||'', canal||'balcao',
            cliente_nome||null, cliente_tel||null, status, observacao||null,
-           valorTotal, req.usuario?.id||null, nomeOp]
+           valorTotal, parseInt(qtd_kits)||1,
+           pagoAgora, pagoAgora?new Date():null,
+           pagoAgora?req.usuario?.id:null, pagoAgora?nomeOp:null, forma_pagamento||null,
+           endereco_rua||null, endereco_num||null, endereco_bairro||null,
+           endereco_cidade||null, endereco_ref||null,
+           req.usuario?.id||null, nomeOp]
         );
         const pedId = pedRows[0].id;
 
@@ -441,6 +483,34 @@ module.exports = function (pool) {
       } catch(e) {
         await client.query('ROLLBACK'); throw e;
       } finally { client.release(); }
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ── POST /pedidos/:id/pagar — marcar como pago (independente do status) ──────
+  r.post('/pedidos/:id/pagar', async (req, res) => {
+    const { forma_pagamento } = req.body;
+    const nomeOp = req.usuario?.nome || req.usuario?.email || 'Sistema';
+    try {
+      const { rows } = await pool.query(`
+        UPDATE kit_pedidos SET
+          pago=true, pago_em=NOW(), pago_por=$1, pago_por_nome=$2, forma_pagamento=$3,
+          atualizado_em=NOW()
+        WHERE id=$4 RETURNING *`,
+        [req.usuario?.id||null, nomeOp, forma_pagamento||null, parseInt(req.params.id)]
+      );
+      if (!rows.length) return res.status(404).json({ ok:false, erro:'Não encontrado' });
+      res.json({ ok: true, data: rows[0] });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ── POST /pedidos/:id/despagar — desmarcar pagamento ──────────────────────
+  r.post('/pedidos/:id/despagar', async (req, res) => {
+    try {
+      await pool.query(
+        `UPDATE kit_pedidos SET pago=false, pago_em=NULL, pago_por=NULL, pago_por_nome=NULL, atualizado_em=NOW() WHERE id=$1`,
+        [parseInt(req.params.id)]
+      );
+      res.json({ ok: true });
     } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
@@ -594,7 +664,7 @@ module.exports = function (pool) {
 
   r.get('/kpis', async (req, res) => {
     try {
-      const [campRes, pedRes, resRes] = await Promise.all([
+      const [campRes, pedRes, resRes, pagRes] = await Promise.all([
         pool.query(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status='ativa') AS ativas FROM kit_campanhas`),
         pool.query(`SELECT
           COUNT(*) AS total,
@@ -605,6 +675,7 @@ module.exports = function (pool) {
           COUNT(*) FILTER (WHERE criado_em::date = CURRENT_DATE) AS hoje
         FROM kit_pedidos`),
         pool.query(`SELECT COUNT(*) AS total FROM kit_reservas WHERE status='reservado'`),
+        pool.query(`SELECT COUNT(*) AS total FROM kit_pedidos WHERE pago=true AND status NOT IN ('cancelado')`),
       ]);
       res.json({ ok: true, data: {
         campanhas: parseInt(campRes.rows[0].total),
@@ -616,6 +687,7 @@ module.exports = function (pool) {
         pedidos_cancelados: parseInt(pedRes.rows[0].cancelados),
         pedidos_hoje: parseInt(pedRes.rows[0].hoje),
         reservas_ativas: parseInt(resRes.rows[0].total),
+        pedidos_pagos: parseInt(pagRes.rows[0].total||0),
       }});
     } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
@@ -636,10 +708,11 @@ module.exports = function (pool) {
         pool.query(`SELECT p.canal, COUNT(*) AS total
           FROM kit_pedidos p ${where} GROUP BY p.canal ORDER BY total DESC`, params),
         pool.query(`SELECT i.slot_nome, i.produto_nome, COUNT(*) AS vezes,
-          SUM(i.quantidade) AS qtd_total
+          SUM(i.quantidade) AS qtd_total,
+          COALESCE(SUM(i.peso_real),0) AS peso_total
           FROM kit_pedido_itens i
           JOIN kit_pedidos p ON p.id=i.pedido_id
-          ${where.replace('p.','p.')} GROUP BY i.slot_nome,i.produto_nome
+          ${where} GROUP BY i.slot_nome,i.produto_nome
           ORDER BY i.slot_nome, vezes DESC`, params),
       ]);
       res.json({ ok: true, data: {
