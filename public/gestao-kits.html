@@ -627,15 +627,17 @@ function buscarProdSlot(idx, q) {
     const el = document.getElementById(`slot-sugestoes-${idx}`);
     if (!el) return;
     if (!d.data.length) { el.innerHTML='<div style="font-size:11px;color:var(--muted);padding:4px">Nenhum produto encontrado</div>'; return; }
-    el.innerHTML = '<div style="border:1px solid var(--border);border-radius:7px;overflow:hidden;max-height:160px;overflow-y:auto">'+
-      d.data.filter(p=>!jaAdicionados.has(p.id)).slice(0,8).map(p =>
-        `<div onclick="adicionarProdSlot(${idx},${p.id},'${p.codigo||''}','${(p.descricao||'').replace(/'/g,"\\'")}',${p.saldo_interno||0})"
-              style="padding:7px 10px;cursor:pointer;border-bottom:1px solid var(--border);font-size:12px;transition:.1s"
-              onmouseover="this.style.background='#faf0f0'" onmouseout="this.style.background=''">
-          <strong>${p.codigo||'—'}</strong> — ${p.descricao}
-          <span style="float:right;color:var(--muted);font-size:10px">Estoque: ${p.saldo_interno||0}</span>
-        </div>`
-      ).join('')+'</div>';
+        const items = d.data.filter(p=>!jaAdicionados.has(p.id)).slice(0,8);
+    el.innerHTML = '<div style="border:1px solid var(--border);border-radius:7px;overflow:hidden;max-height:160px;overflow-y:auto">'
+      + items.map(p => {
+        const desc = (p.descricao||'').replace(/'/g,"\'");
+        const cod  = (p.codigo||'').replace(/'/g,"\'");
+        return '<div onclick="adicionarProdSlot('+idx+','+p.id+',' + JSON.stringify(p.codigo||'') + ',' + JSON.stringify(p.descricao||'') + ','+(p.saldo_interno||0)+')"'
+          +' style="padding:7px 10px;cursor:pointer;border-bottom:1px solid var(--border);font-size:12px">'
+          +'<strong>'+(p.codigo||'—')+'</strong> — '+p.descricao
+          +'<span style="float:right;color:#aaa;font-size:10px">Estoque: '+(p.saldo_interno||0)+'</span>'
+          +'</div>';
+      }).join('') + '</div>';
   }, 300);
 }
 
@@ -1154,10 +1156,7 @@ async function salvarSaldoEst(prodId) {
 // ── PAGAMENTO ─────────────────────────────────────────────────────────────────
 async function marcarPago(id) {
   const formas = ['dinheiro','pix','debito','credito','outro'];
-  const forma = prompt('Forma de pagamento:
-1-Dinheiro 2-PIX 3-Débito 4-Crédito 5-Outro
-
-Digite o número ou deixe vazio:');
+  const forma = prompt('Forma de pagamento: 1-Dinheiro 2-PIX 3-Débito 4-Crédito 5-Outro\n\nDigite o número ou deixe vazio:');
   if (forma === null) return;
   const formaMap = {'1':'dinheiro','2':'pix','3':'debito','4':'credito','5':'outro'};
   const formaPgto = formaMap[forma?.trim()] || forma?.trim() || null;
