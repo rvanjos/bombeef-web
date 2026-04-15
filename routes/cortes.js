@@ -226,6 +226,19 @@ module.exports = function(pool) {
     } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
   });
 
+  // PATCH /registros/:id/estoque — atualização rápida de estoque (edição inline)
+  r.patch('/registros/:id/estoque', async (req, res) => {
+    const { estoque } = req.body;
+    try {
+      const { rowCount } = await pool.query(
+        `UPDATE cortes_registros SET estoque=$1 WHERE id=$2`,
+        [toNum(estoque), req.params.id]
+      );
+      if (!rowCount) return res.status(404).json({ ok:false, erro:'Não encontrado' });
+      res.json({ ok:true });
+    } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
+  });
+
   // ── INSUMOS ───────────────────────────────────────────────────────────────
   r.get('/insumos', async (req, res) => {
     try {

@@ -471,6 +471,9 @@ let TXS=[], sessId=null, mesRef='', files=[], supMem={}, selIds=new Set(), _sv;
 let _ignorarTrocarMes = false;
 const MO=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
+// Escape seguro para atributos HTML inline — evita SyntaxError com aspas em fornecedores
+const esc = s => (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
 // ─── Categorias DRE (exatas do sistema anterior) ──────────────────────────────
 // CATS é carregado do banco via /api/dre/categorias no init()
 // Estrutura: { GRUPO: { l: 'Label', s: ['subcat1', 'subcat2'] } }
@@ -737,7 +740,7 @@ async function carregarSessao() {
   setSt('load');
   try {
     // Carrega lista de todas as sessões disponíveis (últimos 24 meses)
-    const lista = await api.get('/api/dre/sessoes?limit=6');
+    const lista = await api.get('/api/dre/sessoes?limit=24');
     if (!lista.ok || !lista.data?.length) {
       TXS=[]; files=[]; supMem={}; sessId=null;
       setSt('ok'); updMesFiltro(); render(); updStats(); renderDRE();
@@ -1488,19 +1491,19 @@ function render() {
       <td style="font-size:11px;white-space:nowrap;cursor:pointer;color:var(--blue);text-decoration:underline dotted" onclick="editMes('${t.id}','mes',this)">${fmtMes(t.mes)}</td>
       <td style="font-size:11px;white-space:nowrap;cursor:pointer;color:var(--muted);text-decoration:underline dotted" onclick="editMes('${t.id}','mesCaixa',this)">${fmtMes(t.mesCaixa||t.mes)}</td>
       <td>${badge}</td>
-      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500" title="${t.lancamento}">
+      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500" title="${esc(t.lancamento)}">
         ${t.lancamento}${isReview?needsReviewBadge:''}
         ${t.boletoId && t.fonte==='EXTRATO' ? `
           <br><span style="display:inline-flex;align-items:center;gap:3px;font-size:9px;background:#dbeafe;color:#1e40af;padding:1px 5px;border-radius:3px;margin-top:2px">
             <span style="cursor:pointer" onclick="verVinculoDRE('${t.id}')" title="Ver boleto vinculado">🔗 boleto vinculado</span>
             <span style="cursor:pointer;color:#dc2626;font-weight:700;margin-left:2px" onclick="desvinculardoBoleto('${t.id}')" title="Desvincular deste boleto">✕</span>
           </span>` : ''}
-        ${t.boletoId && t.fonte?.startsWith('BOLETO') && t.vinculadoA ? `<br><span style="font-size:9px;background:#dcfce7;color:#166534;padding:1px 5px;border-radius:3px;cursor:pointer" onclick="verVinculoDRE('${t.id}')" title="${t.vinculadoA}">✅ ${(t.vinculadoA||'').slice(0,28)}${(t.vinculadoA||'').length>28?'…':''}</span>` : ''}
+        ${t.boletoId && t.fonte?.startsWith('BOLETO') && t.vinculadoA ? `<br><span style="font-size:9px;background:#dcfce7;color:#166534;padding:1px 5px;border-radius:3px;cursor:pointer" onclick="verVinculoDRE('${t.id}')" title="${esc(t.vinculadoA)}">✅ ${esc((t.vinculadoA||'').slice(0,28))}${(t.vinculadoA||'').length>28?'…':''}</span>` : ''}
       </td>
       <td style="font-size:11px;color:var(--muted);max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.razaoSocial||t.portador||'—'}</td>
       <td>
         <input class="csel${isCat?'':' u'}" list="cats-dl" 
-          value="${t.categoria||''}" 
+          value="${esc(t.categoria||'')}" 
           placeholder="— Sem categoria —"
           style="padding:3px 6px;font-size:11px;width:180px"
           onchange="setCat('${t.id}',this.value)"
@@ -2615,8 +2618,8 @@ function drillDown(cat, mes) {
         const badge = FONTE_BADGE[t.fonte] || `<span style="font-size:10px">${t.fonte||'—'}</span>`;
         return `<tr style="border-bottom:1px solid #f5efe8">
           <td style="padding:7px 12px;font-family:'DM Mono',monospace;font-size:11px;white-space:nowrap">${t.data ? t.data.slice(0,10) : '—'}</td>
-          <td style="padding:7px 12px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${t.lancamento||''}">${t.lancamento||'—'}</td>
-          <td style="padding:7px 12px;font-size:11px;color:var(--muted);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${t.razaoSocial||''}">${t.razaoSocial||t.portador||'—'}</td>
+          <td style="padding:7px 12px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(t.lancamento||'')}">${esc(t.lancamento||'—')}</td>
+          <td style="padding:7px 12px;font-size:11px;color:var(--muted);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(t.razaoSocial||'')}">${esc(t.razaoSocial||t.portador||'—')}</td>
           <td style="padding:7px 12px">${badge}</td>
           <td style="padding:7px 12px;text-align:right;font-family:'DM Mono',monospace;font-weight:600;color:${vCol};white-space:nowrap">${fmt.brl(v)}</td>
         </tr>`;

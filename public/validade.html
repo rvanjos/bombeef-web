@@ -1413,7 +1413,11 @@ function buscarProdVal(){
 }
 
 async function salvarVal(){
+  // Proteção anti-duplo-clique
+  const btnSalvar = document.querySelector('#modal-val .btn-p');
+  if (btnSalvar) { if (btnSalvar.disabled) return; btnSalvar.disabled = true; btnSalvar.textContent = '⏳ Salvando...'; }
   const id = document.getElementById('v-id').value;
+  try {
   // Calcular total kg da calculadora
   const totalKg = _pesagens.reduce((s,p)=>s+(parseFloat(p.kg)||0),0);
   const body = {
@@ -1437,6 +1441,10 @@ async function salvarVal(){
   toast(id?'✅ Item atualizado!':'✅ Item criado!');
   fecharModal('modal-val'); carregar(); carregarKPIs();
   try { window.parent.postMessage({type:'bb_refresh_kpis'},'*'); } catch(_) {}
+  } finally {
+    // Sempre reabilita o botão (sucesso ou erro)
+    if (btnSalvar) { btnSalvar.disabled = false; btnSalvar.textContent = '💾 Salvar'; }
+  }
 }
 
 // ── Vincular código (modal próprio em vez de prompt) ──────────────────────────

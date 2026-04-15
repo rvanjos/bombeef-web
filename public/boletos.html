@@ -56,6 +56,7 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
 .fg input,.fg select,.fg textarea{width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:'DM Sans',sans-serif;background:var(--white);}
 .fg input:focus,.fg select:focus{outline:none;border-color:var(--red);}
 .fg-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.fg-full{grid-column:1/-1;}
 .modal-foot{padding:14px 22px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end;}
 /* upload zone */
 .upload-zone{border:2px dashed var(--border);border-radius:10px;padding:28px;text-align:center;cursor:pointer;transition:all .2s;margin-bottom:16px;}
@@ -295,14 +296,31 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
         <div class="fg"><label>Valor *</label><input type="number" id="f-val" placeholder="0,00" min="0" step="0.01"></div>
       </div>
       <div class="fg-row">
-        <div class="fg"><label>Parcela</label><input id="f-parc" placeholder="1/1" value="1"></div>
-        <div class="fg"><label>Categoria DRE</label>
+        <div class="fg"><label>Parcela</label><input id="f-parc" placeholder="ex: 1" value="1"></div>
+        <div class="fg"><label>Total Parcelas</label><input type="number" id="f-total-parcelas" placeholder="ex: 2" min="1" value="1"></div>
+      </div>
+      <div class="fg-row">
+        <div class="fg fg-full"><label>Categoria DRE</label>
           <select id="f-plano">
             <option value="">— Carregando categorias... —</option>
           </select>
         </div>
       </div>
       <div class="fg"><label>Observação</label><textarea id="f-obs" rows="2"></textarea></div>
+      <div class="fg">
+        <label>💳 Pago com Cartão de Crédito?</label>
+        <select id="f-cartao">
+          <option value="">— Não (boleto/PIX/débito) —</option>
+          <option value="Itaú Visa">Itaú Visa</option>
+          <option value="Itaú Mastercard">Itaú Mastercard</option>
+          <option value="Nubank">Nubank</option>
+          <option value="BB Ourocard">BB Ourocard</option>
+          <option value="Bradesco">Bradesco</option>
+          <option value="Santander">Santander</option>
+          <option value="XP Visa">XP Visa</option>
+          <option value="Outro Cartão">Outro Cartão</option>
+        </select>
+      </div>
     </div>
     <div class="modal-foot">
       <button class="btn btn-s" onclick="fecharModal()">Cancelar</button>
@@ -797,7 +815,10 @@ function renderizar(lista){
           </div>
           <div class="mob-row" style="font-size:12px;color:var(--muted)">
             <span>Venc: <strong style="color:${isVenc?'var(--red-l)':'var(--text)'}">${vencStr}</strong></span>
-            ${b.vinculadoExtrato ? `<span style="font-size:11px;background:#d4edda;color:#155724;padding:2px 7px;border-radius:5px">🔗 Extrato</span>` : ''}
+            <span style="display:flex;gap:4px;align-items:center">
+              ${b.cartaoCredito ? `<span style="font-size:11px;background:#ede9fe;color:#5b21b6;padding:2px 7px;border-radius:5px;font-weight:600">💳 ${b.cartaoCredito}</span>` : ''}
+              ${b.vinculadoExtrato ? `<span style="font-size:11px;background:#d4edda;color:#155724;padding:2px 7px;border-radius:5px">🔗 Extrato</span>` : ''}
+            </span>
           </div>
           <div class="mob-acoes">
             ${b.status!=='pago' ? `<button class="mob-pagar" onclick="abrirBaixa(${b.dbId})">✅ Pagar</button>` : ''}
@@ -834,14 +855,17 @@ function renderizar(lista){
       <td style="font-family:'DM Mono',monospace;font-weight:600">${fmt.brl(b.valor)}</td>
       <td>${pill}</td>
       <td style="max-width:180px">
+        ${b.cartaoCredito
+          ? `<span style="font-size:10px;background:#ede9fe;color:#5b21b6;padding:2px 7px;border-radius:4px;white-space:nowrap;font-weight:600">💳 ${b.cartaoCredito}</span>`
+          : ''}
         ${b.vinculadoExtrato
-          ? `<div style="display:flex;align-items:center;gap:4px">
+          ? `<div style="display:flex;align-items:center;gap:4px;margin-top:${b.cartaoCredito?'3px':'0'}">
                <span title="${b.extratLancamento||'Vinculado ao extrato'}" style="font-size:10px;background:#d4edda;color:#155724;padding:2px 6px;border-radius:4px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px;cursor:help">
                  🔗 ${b.extratLancamento ? b.extratLancamento.slice(0,25)+(b.extratLancamento.length>25?'…':'') : 'Extrato vinculado'}
                </span>
                <button class="act-btn" onclick="desvincularExtrato(${b.dbId})" title="Remover vínculo com extrato" style="color:var(--red-l);font-size:11px;padding:1px 5px">✕</button>
              </div>`
-          : `<span style="font-size:10px;color:var(--muted)">—</span>`}
+          : (!b.cartaoCredito ? `<span style="font-size:10px;color:var(--muted)">—</span>` : '')}
       </td>
       <td>
         ${b.status!=='pago'?`<button class="act-btn" onclick="abrirBaixa(${b.dbId})">✅ Pagar</button>`:''}
@@ -866,9 +890,11 @@ function abrirModal(dbId){
   document.getElementById('f-dtnota').value= b?.dtNota||'';
   document.getElementById('f-venc').value  = b?.vencimento||'';
   document.getElementById('f-val').value   = b?.valor||'';
-  document.getElementById('f-parc').value  = b?.parcela||'1';
-  document.getElementById('f-plano').value = b?.plano||'';
-  document.getElementById('f-obs').value   = b?.obs||'';
+  document.getElementById('f-parc').value           = b?.parcela||'1';
+  document.getElementById('f-total-parcelas').value = b?.totalParcelas||1;
+  document.getElementById('f-plano').value           = b?.plano||'';
+  document.getElementById('f-obs').value             = b?.obs||'';
+  document.getElementById('f-cartao').value          = b?.cartaoCredito||'';
   document.getElementById('modal-boleto').classList.add('open');
 }
 function fecharModal(){ document.getElementById('modal-boleto').classList.remove('open'); }
@@ -882,30 +908,27 @@ async function salvar(){
     dtNota:     document.getElementById('f-dtnota').value,
     vencimento: document.getElementById('f-venc').value,
     valor:      parseFloat(document.getElementById('f-val').value)||0,
-    parcela:    document.getElementById('f-parc').value,
-    plano:      document.getElementById('f-plano').value,
-    obs:        document.getElementById('f-obs').value,
+    parcela:        document.getElementById('f-parc').value,
+    totalParcelas:  parseInt(document.getElementById('f-total-parcelas').value)||1,
+    plano:          document.getElementById('f-plano').value,
+    obs:            document.getElementById('f-obs').value,
+    cartaoCredito:  document.getElementById('f-cartao').value,
   };
   if(!body.fornecedor||!body.valor){ toast('Fornecedor e valor são obrigatórios'); return; }
-  // Aviso quando editando boleto existente que pode estar no DRE
+  // Aviso discreto quando editando boleto que pode estar no DRE
   if (dbId) {
     const b = boletos.find(x => String(x.dbId) === String(dbId));
     const alterou = b && (b.vencimento !== body.vencimento || b.valor !== body.valor);
     if (alterou) {
-      const ok = confirm(
-        '⚠️ Atenção: você está alterando a data de vencimento ou valor deste boleto.\n\n' +
-        'Essa alteração vai impactar os lançamentos do DRE.\n' +
-        'Após salvar, clique em "Boletos DB" no DRE para atualizar.\n\n' +
-        'Confirma a alteração?'
-      );
-      if (!ok) return;
+      // Apenas notifica — não bloqueia; o usuário já clicou em Salvar conscientemente
+      setTimeout(() => toast('ℹ️ Vencimento/valor alterado — atualize "Boletos DB" no DRE.'), 300);
     }
   }
   const d = dbId
     ? await api.put(`/api/boletos/${dbId}`, body)
     : await api.post('/api/boletos', body);
   if(!d.ok){ toast('Erro: '+d.erro); return; }
-  toast(dbId?'✅ Boleto atualizado! Clique em "Boletos DB" no DRE para refletir a alteração.':'✅ Boleto criado!');
+  toast(dbId ? '✅ Boleto atualizado!' : '✅ Boleto criado!');
   fecharModal(); carregar(); carregarKPIs();
 }
 

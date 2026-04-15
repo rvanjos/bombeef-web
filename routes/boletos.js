@@ -67,6 +67,7 @@ module.exports = function (pool) {
       ['vinculado_extrato',  'BOOLEAN DEFAULT false'],
       ['extrato_lancamento', 'TEXT'],
       ['atualizado_em',      'TIMESTAMPTZ DEFAULT NOW()'],
+      ['cartao_credito',     'TEXT'],   // ex: 'Itaú Visa', 'Nubank', 'BB Mastercard'
     ];
 
     for (const [col, def] of colunas) {
@@ -175,6 +176,7 @@ module.exports = function (pool) {
       mesCaixa,
       vinculadoExtrato: b.vinculado_extrato || false,
       extratLancamento: b.extrato_lancamento || '',
+      cartaoCredito:    b.cartao_credito || '',
     };
   }
 
@@ -386,8 +388,8 @@ module.exports = function (pool) {
         INSERT INTO boletos
           (fornecedor,produto,dt_nota,nf,chave_nfe,parcela,total_parcelas,plano,
            vencimento,valor,status,dt_pagamento,observacao,origem,codigo_barras,
-           mes_competencia,mes_caixa,usuario_id,atualizado_em)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,NOW())
+           mes_competencia,mes_caixa,usuario_id,cartao_credito,atualizado_em)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,NOW())
         RETURNING id
       `, [
         b.fornecedor||null, b.produto||null, dtNota, b.nf||null, b.chaveNfe||b.chave_nfe||null,
@@ -395,7 +397,7 @@ module.exports = function (pool) {
         venc, parseFloat(b.valor)||0,
         b.status||'avencer', dtPag,
         b.obs||b.observacao||null, b.origem||'manual', b.codigoBarras||null,
-        mesComp, mesCaixa, req.user.id,
+        mesComp, mesCaixa, req.user.id, b.cartaoCredito||null,
       ]);
       res.json({ ok: true, id: rows[0].id });
     } catch (e) {
@@ -432,8 +434,9 @@ module.exports = function (pool) {
           codigo_barras    = COALESCE($13, codigo_barras),
           mes_competencia  = COALESCE($14, mes_competencia),
           mes_caixa        = COALESCE($15, mes_caixa),
+          cartao_credito   = $16,
           atualizado_em    = NOW()
-        WHERE id = $16
+        WHERE id = $17
       `, [
         b.fornecedor||null, b.produto||null, dtNota, b.nf||null,
         b.parcela||null, b.totalParcelas?parseInt(b.totalParcelas):null,
@@ -442,6 +445,7 @@ module.exports = function (pool) {
         b.status||null, dtPag||null,
         b.obs !== undefined ? (b.obs||null) : null,
         b.codigoBarras||null, mesComp||null, mesCaixa||null,
+        b.cartaoCredito||null,
         req.params.id,
       ]);
       if (!rowCount) return res.status(404).json({ ok: false, erro: 'Não encontrado' });
@@ -530,9 +534,14 @@ module.exports = function (pool) {
       const dtNota     = dhEmi ? dhEmi.slice(0, 10) : '';
       const mesComp    = dtNota ? dtNota.slice(5,7)+'/'+dtNota.slice(0,4) : '';
 
-      // ── Parcelas: tenta <cobr/dup>, depois infCpl, depois parcela única ───────
+      // ── Parcelas: tenta <cobr/dup>, depois detPag (prazo em dias), depois infCpl, depois parcela única ───────
       const dupBlocks = [...xml.matchAll(/<dup>([\s\S]*?)<\/dup>/gi)];
       let parcelas = [];
+
+      // Helper: detecta condição de pagamento parcelada via <xCond> e <detPag><nDias>
+      // Ex.: xCond = "Parcelado 21/28 dias" → calcula vencimentos a partir da dtNota
+      const xCond = getTag('xCond');
+      const detPagBlocks = [...xml.matchAll(/<detPag>([\s\S]*?)<\/detPag>/gi)];
 
       // Helper: parseia data no formato DD/MM/YYYY ou YYYY-MM-DD → YYYY-MM-DD
       const parseDateStr = s => {
@@ -569,6 +578,47 @@ module.exports = function (pool) {
               origem:         'nfe',
             });
           }
+        }
+      }
+
+      // Fonte 1b: detPag com nDias — "Parcelado 21/28 dias" ou similar
+      // Usado quando <cobr/dup> está ausente mas <detPag> contém prazos em dias
+      if (parcelas.length === 0 && detPagBlocks.length > 0 && dtNota) {
+        const baseDate = new Date(dtNota + 'T12:00:00');
+        const fromDetPag = [];
+        for (const [, block] of detPagBlocks) {
+          const tPag  = getTag('tPag', block);   // ex: "15" = boleto
+          const vPag  = parseFloat(getTag('vPag', block) || '0');
+          const nDias = parseInt(getTag('nDias', block) || '0', 10);
+          if (vPag > 0 && nDias > 0) {
+            const vencDate = new Date(baseDate);
+            vencDate.setDate(vencDate.getDate() + nDias);
+            const vencISO = vencDate.toISOString().slice(0, 10);
+            fromDetPag.push({ vencISO, vPag, nDias });
+          }
+        }
+        // Validação extra: se xCond indica parcelamento (ex.: "Parcelado") confiar mais
+        const isParcelado = /parc|prazo/i.test(xCond);
+        if (fromDetPag.length > 0 && (isParcelado || fromDetPag.length > 1)) {
+          fromDetPag.forEach((p, i) => {
+            const mesC = p.vencISO.slice(5,7)+'/'+p.vencISO.slice(0,4);
+            parcelas.push({
+              fornecedor:     emitente,
+              produto:        '',
+              dtNota,
+              nf:             nNF,
+              chaveNfe,
+              parcela:        String(i+1)+'/'+fromDetPag.length,
+              totalParcelas:  fromDetPag.length,
+              vencimento:     p.vencISO,
+              valor:          p.vPag,
+              mesCompetencia: mesComp,
+              mesCaixa:       mesC,
+              status:         'avencer',
+              origem:         'nfe',
+              origemParcela:  'detPag',
+            });
+          });
         }
       }
 
