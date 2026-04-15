@@ -633,27 +633,39 @@ async function init() {
     }
   } catch(e) { _perfil = ''; }
 
-  // Mostrar abas conforme perfil
-  const isAdmin = _perfil === 'admin' || _perfil === 'gestor';
-  const isFuncionario = !isAdmin; // todos que não são admin/gestor
-  const btnAprov = document.getElementById('tab-btn-aprovacoes');
-  const btnMeus  = document.getElementById('tab-btn-meus');
-  if (btnAprov) btnAprov.style.display = isAdmin ? '' : 'none';
-  if (btnMeus)  btnMeus.style.display  = isFuncionario ? '' : 'none';
+  // ── Controle de abas por perfil ────────────────────────────────────────────
+  // admin/gestor: vê tudo (Folha, Aprovações, Meus Lançamentos, Escala, Relatório)
+  // demais (caixa, estoque, financeiro, etc.): vê apenas Meus Lançamentos
+  const isGestor  = ['admin','gestor'].includes(_perfil);
+  const isAny     = !isGestor; // qualquer outro perfil = funcionário
 
-  // Admin também pode ver a aba de lançamentos (para testar/cadastrar por outro)
-  if (isAdmin) {
-    if (btnMeus) btnMeus.style.display = '';
-  }
+  const btnFolha  = document.querySelector('.tab[onclick="showTab('folha')"]');
+  const btnEscala = document.querySelector('.tab[onclick="showTab('escala')"]');
+  const btnRel    = document.querySelector('.tab[onclick="showTab('relatorio')"]');
+  const btnAprov  = document.getElementById('tab-btn-aprovacoes');
+  const btnMeus   = document.getElementById('tab-btn-meus');
 
-  if (isAdmin) {
+  if (isGestor) {
+    // Admin/gestor vê tudo
+    if (btnFolha)  btnFolha.style.display  = '';
+    if (btnEscala) btnEscala.style.display = '';
+    if (btnRel)    btnRel.style.display    = '';
+    if (btnAprov)  btnAprov.style.display  = '';
+    if (btnMeus)   btnMeus.style.display   = ''; // gestor também pode lançar
+    // Carrega folha automaticamente
     carregarResumo();
-    // Carregar badge de pendentes
+    // Badge de pendentes
     get('/api/rh/lancamentos-pendentes/count').then(d => {
       if (d.ok) atualizarBadge(d.total);
     });
   } else {
-    // Funcionário vai direto para seus lançamentos
+    // Funcionário: oculta abas gerenciais
+    if (btnFolha)  btnFolha.style.display  = 'none';
+    if (btnEscala) btnEscala.style.display = 'none';
+    if (btnRel)    btnRel.style.display    = 'none';
+    if (btnAprov)  btnAprov.style.display  = 'none';
+    if (btnMeus)   btnMeus.style.display   = '';
+    // Vai direto para seus lançamentos
     showTab('meus');
   }
 }

@@ -1166,6 +1166,13 @@ window.addEventListener('message', e => {
   if (e.data.type === 'bb_refresh_kpis') {
     setTimeout(carregarKPIs, 500);
   }
+  // Nome da empresa atualizado na Config
+  if (e.data.type === 'bb_nome_empresa' && e.data.nome) {
+    const el = document.getElementById('ph-empresa');
+    if (el) el.textContent = e.data.nome;
+    document.title = e.data.nome + ' — Gestão';
+  }
+
   // Logo atualizado na Config → aplica imediatamente e salva no banco
   if (e.data.type === 'bb_logo') {
     const logo = e.data.logo || null;
