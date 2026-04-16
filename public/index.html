@@ -393,7 +393,7 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
     <button class="pnav-tab" onclick="showTab('validade')"  data-tab="validade"  data-perfil="admin,gestor,estoque,caixa"><span class="tab-icon">🗓</span><span class="tab-label">Validade</span></button>
     <button class="pnav-tab" onclick="showTab('retiradas')" data-tab="retiradas" data-perfil="admin,gestor,caixa"><span class="tab-icon">👥</span><span class="tab-label">Retiradas</span></button>
     <div class="pnav-section">Gestão</div>
-    <button class="pnav-tab" onclick="showTab('rh')"        data-tab="rh"        data-perfil="admin"><span class="tab-icon">🧑‍💼</span><span class="tab-label">RH</span></button>
+    <button class="pnav-tab" onclick="showTab('rh')"        data-tab="rh"        data-perfil="admin,gestor,operador,caixa,estoque,financeiro,contabil"><span class="tab-icon">🧑‍💼</span><span class="tab-label">RH</span></button>
     <button class="pnav-tab" onclick="showTab('config')"    data-tab="config"    data-perfil="admin,gestor"><span class="tab-icon">⚙️</span><span class="tab-label">Config</span></button>
   </nav>
   <div class="portal-content">
@@ -740,6 +740,13 @@ function filtrarTabs() {
     const perfis = (tab.dataset.perfil||'').split(',');
     tab.style.display = perfis.includes(usuario?.perfil) ? '' : 'none';
   });
+
+  // Iframe de RH: admin vê rh.html completo, demais veem rh-funcionario.html
+  const ifrRH = document.getElementById('iframe-rh');
+  if (ifrRH) {
+    const rhSrc = usuario?.perfil === 'admin' ? 'rh.html' : 'rh-funcionario.html';
+    if (!ifrRH.src.endsWith(rhSrc)) ifrRH.src = rhSrc;
+  }
 
   // Perfis com acesso ao DRE
   const temDRE = ['admin','financeiro','contabil'].includes(usuario?.perfil);
