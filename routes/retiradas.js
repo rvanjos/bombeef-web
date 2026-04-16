@@ -1,4 +1,10 @@
 /**
+ * AR Boutique de Carnes LTDA — CNPJ 46.237.080/0001-02
+ * Sistema de Gestão Interna Bom Beef Valinhos
+ * Uso exclusivo. Reprodução, cópia ou redistribuição proibidas.
+ * © 2024-2025 AR Boutique de Carnes LTDA
+ */
+/**
  * routes/retiradas.js — M5: Retiradas de Funcionários
  *
  * Rotas:

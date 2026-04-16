@@ -837,5 +837,38 @@ async function procImport(inp){
   carregarProd(); carregarKPIs();
 }
 </script>
+
+<!-- ============================================================
+     SISTEMA BOM BEEF — GESTÃO INTERNA
+     Desenvolvido exclusivamente para:
+     AR Boutique de Carnes LTDA
+     CNPJ: 46.237.080/0001-02
+     Todos os direitos reservados.
+     Reprodução, cópia ou redistribuição proibidas.
+     © 2024-2025 AR Boutique de Carnes LTDA
+     ============================================================ -->
+<style>
+.bb-footer{display:none;background:#1a1a1a;color:#888;font-size:10px;text-align:center;padding:10px 16px;line-height:1.7;border-top:2px solid #8B0000;user-select:none;}
+.bb-footer strong{color:#aaa;}
+.bb-footer .bb-f-cnpj{font-family:monospace;letter-spacing:.5px;}
+</style>
+<footer class="bb-footer" id="bb-sys-footer">
+  <strong>Bom Beef — Sistema de Gestão Interna</strong><br>
+  Uso exclusivo de <strong>AR Boutique de Carnes LTDA</strong> &nbsp;·&nbsp;
+  <span class="bb-f-cnpj">CNPJ 46.237.080/0001-02</span><br>
+  Reprodução, cópia ou redistribuição não autorizada é expressamente proibida.
+  &nbsp;·&nbsp; © 2024–2025
+</footer>
+<script>
+/* BB-FOOTER — AR Boutique de Carnes LTDA — CNPJ 46.237.080/0001-02
+   Sistema de uso exclusivo. Reprodução proibida. */
+(function(){
+  var f=document.getElementById('bb-sys-footer');
+  if(!f)return;
+  // Só exibe quando acessado diretamente (fora de iframe)
+  if(window.self===window.top) f.style.display='block';
+})();
+</script>
+
 </body>
 </html>
