@@ -486,6 +486,37 @@ module.exports = function (pool) {
     } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
+  // ── PUT /pedidos/:id — editar dados do pedido ──────────────────────────────
+  r.put('/pedidos/:id', async (req, res) => {
+    const { cliente_nome, cliente_tel, observacao, canal, qtd_kits,
+            endereco_rua, endereco_num, endereco_bairro, endereco_cidade, endereco_ref } = req.body;
+    try {
+      const { rowCount } = await pool.query(`
+        UPDATE kit_pedidos SET
+          cliente_nome    = COALESCE($1, cliente_nome),
+          cliente_tel     = COALESCE($2, cliente_tel),
+          observacao      = $3,
+          canal           = COALESCE($4, canal),
+          qtd_kits        = COALESCE($5, qtd_kits),
+          endereco_rua    = $6,
+          endereco_num    = $7,
+          endereco_bairro = $8,
+          endereco_cidade = $9,
+          endereco_ref    = $10,
+          atualizado_em   = NOW()
+        WHERE id = $11
+      `, [
+        cliente_nome||null, cliente_tel||null, observacao||null,
+        canal||null, qtd_kits ? parseInt(qtd_kits) : null,
+        endereco_rua||null, endereco_num||null, endereco_bairro||null,
+        endereco_cidade||null, endereco_ref||null,
+        parseInt(req.params.id)
+      ]);
+      if (!rowCount) return res.status(404).json({ ok: false, erro: 'Pedido não encontrado' });
+      res.json({ ok: true });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
   // ── POST /pedidos/:id/pagar — marcar como pago (independente do status) ──────
   r.post('/pedidos/:id/pagar', async (req, res) => {
     const { forma_pagamento } = req.body;

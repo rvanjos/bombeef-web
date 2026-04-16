@@ -428,6 +428,79 @@ if (window.self !== window.top) {
   </div>
 </div>
 
+<div class="modal-bg" id="modal-editar-pedido">
+  <div class="modal" style="max-width:500px">
+    <div class="modal-h">
+      <h3>✏️ Editar Pedido <span id="edit-ped-numero" style="font-size:12px;opacity:.7;font-weight:400"></span></h3>
+      <button class="modal-x" onclick="fecharModal('modal-editar-pedido')">×</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="edit-ped-id">
+      <div class="form-grid">
+        <div class="fg">
+          <label>Canal</label>
+          <select id="edit-canal" onchange="toggleEditEndereco()">
+            <option value="balcao">🏪 Balcão</option>
+            <option value="delivery">🛵 Delivery</option>
+            <option value="whatsapp">💬 WhatsApp</option>
+            <option value="telefone">📞 Telefone</option>
+            <option value="outro">📌 Outro</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label>Qtd. Kits</label>
+          <input type="number" id="edit-qtd-kits" min="1" max="99" value="1">
+        </div>
+      </div>
+      <div class="form-grid">
+        <div class="fg">
+          <label>Nome do Cliente</label>
+          <input type="text" id="edit-cliente" placeholder="Nome (opcional)">
+        </div>
+        <div class="fg">
+          <label>Telefone</label>
+          <input type="text" id="edit-tel" placeholder="(11) 99999-9999">
+        </div>
+      </div>
+      <div id="edit-endereco-wrap" style="display:none;border:1px solid var(--border);border-radius:9px;padding:12px;margin-bottom:12px;background:#f9f9f7">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted);margin-bottom:8px">📍 Endereço de Entrega</div>
+        <div class="form-grid">
+          <div class="fg" style="grid-column:1/-1">
+            <label>Rua / Logradouro</label>
+            <input type="text" id="edit-end-rua" placeholder="Rua das Flores">
+          </div>
+        </div>
+        <div class="form-grid tres">
+          <div class="fg">
+            <label>Número</label>
+            <input type="text" id="edit-end-num" placeholder="123">
+          </div>
+          <div class="fg">
+            <label>Bairro</label>
+            <input type="text" id="edit-end-bairro" placeholder="Centro">
+          </div>
+          <div class="fg">
+            <label>Cidade</label>
+            <input type="text" id="edit-end-cidade" placeholder="Valinhos">
+          </div>
+        </div>
+        <div class="fg">
+          <label>Referência</label>
+          <input type="text" id="edit-end-ref" placeholder="Próximo ao mercado...">
+        </div>
+      </div>
+      <div class="fg">
+        <label>Observação</label>
+        <textarea id="edit-obs" rows="2" placeholder="Observações do pedido..." style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:inherit;resize:vertical"></textarea>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-s" onclick="fecharModal('modal-editar-pedido')">Cancelar</button>
+      <button class="btn btn-p" id="btn-salvar-edicao" onclick="salvarEdicaoPedido()">💾 Salvar Alterações</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast" class="toast" style="display:none"></div>
 
 <script>
@@ -953,7 +1026,7 @@ async function carregarPedidos() {
       <td>${p.pago?'<span class="badge b-verde">💰</span>':'<span style="color:#ccc">—</span>'}</td>
       <td>${p.qtd_kits||1}</td>
       <td>${new Date(p.criado_em).toLocaleDateString('pt-BR')}</td>
-      <td><button class="btn btn-s btn-sm" onclick="verPedido(${p.id})">👁 Ver</button></td>
+      <td><button class="btn btn-s btn-sm" onclick="verPedido(${p.id})">👁 Ver</button> <button class="btn btn-s btn-sm" onclick="abrirEditar(${p.id})" title="Editar">✏️</button></td>
     </tr>`).join('')}
   </table>`;
 }
@@ -998,6 +1071,10 @@ async function verPedido(id) {
 
   // Botões de ação conforme status
   const btns = [`<button class="btn btn-s" onclick="fecharModal('modal-pedido')">Fechar</button>`];
+  // Botão editar sempre disponível (exceto cancelado)
+  if (p.status !== 'cancelado') {
+    btns.push(`<button class="btn btn-s" onclick="abrirEditar(${p.id})">✏️ Editar</button>`);
+  }
   if (p.status==='reservado') {
     btns.push(`<button class="btn btn-o" onclick="mudarStatus(${p.id},'separado')">📦 Marcar Separado</button>`);
     btns.push(`<button class="btn btn-r" onclick="cancelarPedido(${p.id})">❌ Cancelar</button>`);
@@ -1032,6 +1109,72 @@ async function cancelarPedido(id) {
   toast('Pedido cancelado.');
   fecharModal('modal-pedido');
   carregarPedidos(); carregarSeparacao();
+}
+
+// ── EDITAR PEDIDO ──────────────────────────────────────────────────────────────
+async function abrirEditar(id) {
+  const d = await api.get('/api/kits-campanha/pedidos/'+id);
+  if (!d.ok) { toast('Erro ao carregar pedido','err'); return; }
+  const p = d.data;
+
+  document.getElementById('edit-ped-id').value      = p.id;
+  document.getElementById('edit-ped-numero').textContent = p.numero;
+  document.getElementById('edit-canal').value        = p.canal || 'balcao';
+  document.getElementById('edit-qtd-kits').value     = p.qtd_kits || 1;
+  document.getElementById('edit-cliente').value      = p.cliente_nome || '';
+  document.getElementById('edit-tel').value          = p.cliente_tel || '';
+  document.getElementById('edit-obs').value          = p.observacao || '';
+  document.getElementById('edit-end-rua').value      = p.endereco_rua || '';
+  document.getElementById('edit-end-num').value      = p.endereco_num || '';
+  document.getElementById('edit-end-bairro').value   = p.endereco_bairro || '';
+  document.getElementById('edit-end-cidade').value   = p.endereco_cidade || '';
+  document.getElementById('edit-end-ref').value      = p.endereco_ref || '';
+
+  const btn = document.getElementById('btn-salvar-edicao');
+  btn.disabled = false;
+  btn.textContent = '💾 Salvar Alterações';
+
+  toggleEditEndereco();
+  fecharModal('modal-pedido');
+  document.getElementById('modal-editar-pedido').classList.add('open');
+}
+
+function toggleEditEndereco() {
+  const canal = document.getElementById('edit-canal').value;
+  document.getElementById('edit-endereco-wrap').style.display = canal === 'delivery' ? '' : 'none';
+}
+
+async function salvarEdicaoPedido() {
+  const id = document.getElementById('edit-ped-id').value;
+  if (!id) return;
+
+  const btn = document.getElementById('btn-salvar-edicao');
+  btn.disabled = true;
+  btn.textContent = '⏳ Salvando...';
+
+  const canal = document.getElementById('edit-canal').value;
+  const body = {
+    canal,
+    qtd_kits:       parseInt(document.getElementById('edit-qtd-kits').value) || 1,
+    cliente_nome:   document.getElementById('edit-cliente').value.trim() || null,
+    cliente_tel:    document.getElementById('edit-tel').value.trim() || null,
+    observacao:     document.getElementById('edit-obs').value.trim() || null,
+    endereco_rua:    canal === 'delivery' ? document.getElementById('edit-end-rua').value.trim() || null : null,
+    endereco_num:    canal === 'delivery' ? document.getElementById('edit-end-num').value.trim() || null : null,
+    endereco_bairro: canal === 'delivery' ? document.getElementById('edit-end-bairro').value.trim() || null : null,
+    endereco_cidade: canal === 'delivery' ? document.getElementById('edit-end-cidade').value.trim() || null : null,
+    endereco_ref:    canal === 'delivery' ? document.getElementById('edit-end-ref').value.trim() || null : null,
+  };
+
+  const d = await api.put('/api/kits-campanha/pedidos/'+id, body);
+
+  btn.disabled = false;
+  btn.textContent = '💾 Salvar Alterações';
+
+  if (!d.ok) { toast('Erro: '+d.erro, 'err'); return; }
+  toast('✅ Pedido atualizado!');
+  fecharModal('modal-editar-pedido');
+  carregarPedidos(); carregarCampanhas();
 }
 
 // ── SEPARAÇÃO ─────────────────────────────────────────────────────────────────
