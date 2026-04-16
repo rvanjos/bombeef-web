@@ -582,4 +582,16 @@ app.listen(PORT, () => {
   conectarComRetry();
 });
 
+// ── Proteção contra crash ──────────────────────────────────────────────────────
+process.on('uncaughtException', (err) => {
+  console.error('[UNCAUGHT EXCEPTION]', err.message, err.stack?.slice(0,300));
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[UNHANDLED REJECTION]', reason);
+});
+process.on('SIGTERM', () => {
+  console.log('[server] SIGTERM — encerrando graciosamente');
+  pool.end().catch(() => {}).finally(() => process.exit(0));
+});
+
 module.exports = { app, pool };

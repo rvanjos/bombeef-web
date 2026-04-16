@@ -794,7 +794,9 @@ async function carregarSessao() {
         }
         TXS.push(t);
       }
-      
+      // Remove projeções persistidas por engano — são sempre recalculadas dinamicamente
+      TXS = TXS.filter(t => t.fonte !== 'PREV_RECEITA');
+
       if (dados.loadedFiles?.length) files = [...files, ...dados.loadedFiles];
       if (dados.supplierMem) {
         // Filtra entradas inválidas do supMem (categorias que não existem mais no CATS)
@@ -1581,7 +1583,8 @@ function salvarMesDebounce(mes) {
 }
 
 async function salvarMes(mes, silent=false) {
-  const txsMes = TXS.filter(t => (t.mes || mesRef) === mes);
+  // Exclui lançamentos de projeção (PREV_RECEITA) — são recalculados dinamicamente
+  const txsMes = TXS.filter(t => (t.mes || mesRef) === mes && t.fonte !== 'PREV_RECEITA');
   console.log(`[salvarMes] mes=${mes} txs=${txsMes.length} sid=${(window._sessoesPorMes||{})[mes]} mesRef=${mesRef}`);
   if (!txsMes.length) { console.warn('[salvarMes] nenhum lançamento para', mes); return; }
   // Usa o ID da sessão do mês específico — nunca usa sessId de outro mês como fallback
