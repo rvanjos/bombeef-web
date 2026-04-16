@@ -163,7 +163,7 @@ if(window.self !== window.top){
       <div class="pg-sub">Cadastro e limites de retirada</div>
       <div style="margin-bottom:14px"><button class="btn btn-p" onclick="abrirFunc()">＋ Novo Funcionário</button></div>
       <div class="card" style="padding:0;overflow:hidden">
-        <table class="tbl"><thead><tr><th>Nome</th><th>Cargo</th><th>E-mail</th><th>Limite/Mês</th><th>Status</th><th>Ações</th></tr></thead>
+        <table class="tbl"><thead><tr><th>Nome</th><th>Cargo</th><th>E-mail</th><th>Limite/Mês</th><th>Vínculo RH</th><th>Status</th><th>Ações</th></tr></thead>
         <tbody id="tbody-func"></tbody></table>
       </div>
     </div>
@@ -275,6 +275,15 @@ if(window.self !== window.top){
       </div>
       <div class="fg"><label>E-mail</label><input type="email" id="f-email" placeholder="funcionario@email.com"></div>
       <div class="fg"><label>Telefone</label><input id="f-tel" placeholder="(19) 99999-9999"></div>
+      <div class="fg">
+        <label>🔗 Vincular ao Usuário do Sistema</label>
+        <select id="f-usuario-id">
+          <option value="">— Sem vínculo —</option>
+        </select>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">
+          Vincule ao login do funcionário para que ele acesse o RH e faça apontamentos.
+        </div>
+      </div>
     </div>
     <div class="modal-foot">
       <button class="btn btn-s" onclick="fecharFunc()">Cancelar</button>
@@ -470,6 +479,11 @@ async function carregarFuncionarios(){
     <td style="font-size:12px">${f.cargo||'—'}</td>
     <td style="font-size:12px">${f.email||'—'}</td>
     <td style="font-family:'DM Mono',monospace;font-weight:600">${fmt.brl(f.limite_retirada)}</td>
+    <td>
+      ${f.usuario_id
+        ? `<span class="pill pill-ok" title="Vinculado: ${f.usuario_email||''}">🔗 Vinculado</span>`
+        : `<span class="pill pill-off">Sem vínculo</span>`}
+    </td>
     <td><span class="pill ${f.ativo?'pill-ok':'pill-off'}">${f.ativo?'Ativo':'Inativo'}</span></td>
     <td>
       <button class="act-btn" onclick="abrirFunc(${f.id})">✏️</button>
@@ -478,7 +492,7 @@ async function carregarFuncionarios(){
   </tr>`).join('');
 }
 
-function abrirFunc(id){
+async function abrirFunc(id){
   const f = id ? funcionarios.find(x=>x.id===id) : null;
   document.getElementById('func-title').textContent = f?'Editar Funcionário':'Novo Funcionário';
   document.getElementById('f-id').value     = f?.id||'';
@@ -487,18 +501,45 @@ function abrirFunc(id){
   document.getElementById('f-limite').value = f?.limite_retirada||0;
   document.getElementById('f-email').value  = f?.email||'';
   document.getElementById('f-tel').value    = f?.telefone||'';
+
+  // Carrega usuários para o select de vínculo
+  const sel = document.getElementById('f-usuario-id');
+  sel.innerHTML = '<option value="">— Sem vínculo —</option>';
+  try {
+    const du = await api.get('/auth/usuarios');
+    if(du.ok && du.data){
+      // IDs já vinculados a outros funcionários (para não oferecer duplicata)
+      const vinculados = new Set(
+        funcionarios
+          .filter(x => x.usuario_id && x.id !== (f?.id))
+          .map(x => x.usuario_id)
+      );
+      du.data
+        .filter(u => u.ativo && !vinculados.has(u.id))
+        .forEach(u => {
+          const opt = document.createElement('option');
+          opt.value = u.id;
+          opt.textContent = `${u.nome} (${u.perfil})`;
+          if(f?.usuario_id === u.id) opt.selected = true;
+          sel.appendChild(opt);
+        });
+    }
+  } catch(_) {}
+
   document.getElementById('modal-func').classList.add('open');
 }
 function fecharFunc(){ document.getElementById('modal-func').classList.remove('open'); }
 
 async function salvarFunc(){
   const id = document.getElementById('f-id').value;
+  const usuarioId = document.getElementById('f-usuario-id').value;
   const body = {
     nome:           document.getElementById('f-nome').value.trim(),
     cargo:          document.getElementById('f-cargo').value.trim(),
     limiteRetirada: parseFloat(document.getElementById('f-limite').value)||0,
     email:          document.getElementById('f-email').value.trim(),
     telefone:       document.getElementById('f-tel').value.trim(),
+    usuarioId:      usuarioId ? parseInt(usuarioId) : null,
   };
   if(!body.nome){ toast('Nome obrigatório'); return; }
   const d = id

@@ -204,6 +204,9 @@ module.exports = function (pool) {
   }
   initTable().catch(e => console.error('[config] initTable:', e.message));
 
+  // Garante coluna usuario_id em bancos criados antes dessa feature
+  pool.query(`ALTER TABLE funcionarios ADD COLUMN IF NOT EXISTS usuario_id INTEGER REFERENCES usuarios(id)`).catch(()=>{});
+
   // ══════════════════════════════════════════════════════════════════════
   // FUNCIONÁRIOS
   // ══════════════════════════════════════════════════════════════════════
@@ -236,23 +239,38 @@ module.exports = function (pool) {
   r.put('/funcionarios/:id', requireNivel('gestor'), async (req, res) => {
     const f = req.body;
     try {
-      await pool.query(`
-        UPDATE funcionarios SET
-          nome              = COALESCE($1, nome),
-          cargo             = COALESCE($2, cargo),
-          email             = COALESCE($3, email),
-          telefone          = COALESCE($4, telefone),
-          limite_retirada   = COALESCE($5, limite_retirada),
-          usuario_id        = COALESCE($6, usuario_id),
-          ativo             = COALESCE($7, ativo),
-          atualizado_em     = NOW()
-        WHERE id = $8
-      `, [
-        f.nome || null, f.cargo || null, f.email || null, f.telefone || null,
+      // usuario_id: se veio no body (mesmo null), atualiza; se não veio, mantém o existente
+      const temUsuarioId = 'usuarioId' in f;
+      const usuarioIdVal = temUsuarioId ? (f.usuarioId ? parseInt(f.usuarioId) : null) : undefined;
+
+      const sets = [
+        'nome            = COALESCE($1, nome)',
+        'cargo           = COALESCE($2, cargo)',
+        'email           = COALESCE($3, email)',
+        'telefone        = COALESCE($4, telefone)',
+        'limite_retirada = COALESCE($5, limite_retirada)',
+        'ativo           = COALESCE($6, ativo)',
+        'atualizado_em   = NOW()',
+      ];
+      const vals = [
+        f.nome || null,
+        f.cargo || null,
+        f.email || null,
+        f.telefone || null,
         f.limiteRetirada !== undefined ? parseFloat(f.limiteRetirada) : null,
-        f.usuarioId || null, f.ativo !== undefined ? f.ativo : null,
-        parseInt(req.params.id),
-      ]);
+        f.ativo !== undefined ? f.ativo : null,
+      ];
+
+      if (temUsuarioId) {
+        sets.splice(5, 0, `usuario_id = $${vals.length + 1}`);
+        vals.push(usuarioIdVal);
+      }
+
+      vals.push(parseInt(req.params.id));
+      await pool.query(
+        `UPDATE funcionarios SET ${sets.join(', ')} WHERE id = $${vals.length}`,
+        vals
+      );
       res.json({ ok: true });
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
