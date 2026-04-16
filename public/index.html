@@ -718,10 +718,23 @@ function entrarNoPortal() {
   filtrarTabs();
   carregarNomeEmpresa();
   carregarKPIs();
-  carregarLogoDoServidor(); // carrega logo do banco (persiste entre browsers)
+  carregarLogoDoServidor();
 
   // Atualiza KPIs a cada 90 segundos
   kpiTimer = setInterval(carregarKPIs, 90000);
+
+  // Broadcast do token para todos os iframes — crítico no mobile
+  // Iframes que carregam antes do login ficam esperando este sinal
+  const _broadcastToken = () => {
+    const tk = token();
+    if (!tk) return;
+    document.querySelectorAll('iframe').forEach(iframe => {
+      try { iframe.contentWindow.postMessage({ type: 'bb_token', token: tk, usuario }, '*'); } catch(_) {}
+    });
+  };
+  _broadcastToken();                       // imediato
+  setTimeout(_broadcastToken, 800);        // iframes que ainda estão carregando
+  setTimeout(_broadcastToken, 2500);       // retry final para rede lenta (mobile)
 }
 
 function fazerLogout() {
@@ -1170,6 +1183,16 @@ window.addEventListener('DOMContentLoaded', async () => {
 // ── Mensagens dos iframes ──────────────────────────────────────────────────
 window.addEventListener('message', e => {
   if (!e.data) return;
+  // Iframe pedindo token — responde a todos os iframes imediatamente
+  if (e.data.type === 'bb_request_auth') {
+    const tk = token();
+    if (tk && usuario) {
+      document.querySelectorAll('iframe').forEach(iframe => {
+        try { iframe.contentWindow.postMessage({ type: 'bb_token', token: tk, usuario }, '*'); } catch(_) {}
+      });
+    }
+    return;
+  }
   // Logout do iframe
   if (e.data.type === 'bb_logout') fazerLogout();
   // Navegação do iframe

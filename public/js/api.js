@@ -1,67 +1,77 @@
 /**
- * public/js/api.js
- * Helper de comunicação com a API REST — compartilhado por todos os módulos.
- * Deve ser incluído como <script src="/js/api.js"></script> em cada página.
+ * public/js/api.js — Bom Beef Sistema de Gestão
+ * AR Boutique de Carnes LTDA — CNPJ 46.237.080/0001-02
+ * Uso exclusivo. Reprodução proibida.
  */
-
 (function(w) {
   'use strict';
+
+  // Detecta se está rodando dentro de um iframe
+  const _emIframe = w.self !== w.top;
 
   // ── Token ──────────────────────────────────────────────────────────────────
   function getToken() {
     return sessionStorage.getItem('bb_token') || localStorage.getItem('bb_token') || '';
   }
-
   function setToken(tk) {
-    sessionStorage.setItem('bb_token', tk);
+    if (tk) sessionStorage.setItem('bb_token', tk);
   }
 
-  // ── Fetch com auth ─────────────────────────────────────────────────────────
+  // ── Tratamento de 401 ─────────────────────────────────────────────────────
+  // CRÍTICO: dentro de iframe NUNCA redirecionar com location.href
+  // Isso quebrava o portal inteiro no mobile (race condition de token)
+  function handle401() {
+    sessionStorage.removeItem('bb_token');
+    if (_emIframe) {
+      // Avisa o portal para fazer logout — não move o iframe
+      try { w.parent.postMessage({ type: 'bb_logout' }, '*'); } catch (_) {}
+    } else {
+      w.location.href = '/';
+    }
+  }
+
+  // ── apiFetch ───────────────────────────────────────────────────────────────
   async function apiFetch(path, opts = {}) {
     const headers = {
       'Content-Type': 'application/json',
       'Authorization': 'Bearer ' + getToken(),
       ...(opts.headers || {}),
     };
-
-    const res = await fetch(path, { ...opts, headers });
-
-    if (res.status === 401) {
-      // Token expirado — notifica o pai e redireciona
-      sessionStorage.removeItem('bb_token');
-      try { window.parent.postMessage({ type: 'bb_logout' }, '*'); } catch (_) {}
-      window.location.href = '/';
-      throw new Error('Sessão expirada');
+    let res;
+    try {
+      res = await fetch(path, { ...opts, headers });
+    } catch (_) {
+      return { ok: false, erro: 'Sem conexão com o servidor' };
     }
-
-    const data = await res.json();
-    return data;
+    if (res.status === 401) { handle401(); throw new Error('Sessão expirada'); }
+    try { return await res.json(); }
+    catch (_) { return { ok: false, erro: 'Resposta inválida do servidor' }; }
   }
 
-  // ── Upload multipart ───────────────────────────────────────────────────────
+  // ── apiUpload ──────────────────────────────────────────────────────────────
   async function apiUpload(path, formData) {
-    const res = await fetch(path, {
-      method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + getToken() },
-      body: formData,
-    });
-    if (res.status === 401) {
-      sessionStorage.removeItem('bb_token');
-      try { window.parent.postMessage({ type: 'bb_logout' }, '*'); } catch (_) {}
-      window.location.href = '/';
-      throw new Error('Sessão expirada');
-    }
-    return res.json();
+    let res;
+    try {
+      res = await fetch(path, {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + getToken() },
+        body: formData,
+      });
+    } catch (_) { return { ok: false, erro: 'Sem conexão com o servidor' }; }
+    if (res.status === 401) { handle401(); throw new Error('Sessão expirada'); }
+    try { return await res.json(); }
+    catch (_) { return { ok: false, erro: 'Resposta inválida do servidor' }; }
   }
 
-  // ── GET, POST, PUT, DELETE helpers ─────────────────────────────────────────
+  // ── Helpers de API ─────────────────────────────────────────────────────────
   const api = {
-    token: getToken,
+    token:  getToken,
     setToken,
-    get:    (path)         => apiFetch(path),
-    post:   (path, body)   => apiFetch(path, { method: 'POST',   body: JSON.stringify(body) }),
-    put:    (path, body)   => apiFetch(path, { method: 'PUT',    body: JSON.stringify(body) }),
-    delete: (path, body)   => apiFetch(path, { method: 'DELETE', ...(body ? { headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getToken() }, body: JSON.stringify(body) } : {}) }),
+    get:    (path)       => apiFetch(path),
+    post:   (path, body) => apiFetch(path, { method: 'POST',  body: JSON.stringify(body) }),
+    put:    (path, body) => apiFetch(path, { method: 'PUT',   body: JSON.stringify(body) }),
+    patch:  (path, body) => apiFetch(path, { method: 'PATCH', body: JSON.stringify(body) }),
+    delete: (path, body) => apiFetch(path, { method: 'DELETE', ...(body ? { body: JSON.stringify(body) } : {}) }),
     upload: apiUpload,
   };
 
@@ -94,7 +104,7 @@
     if (!el) {
       el = document.createElement('div');
       el.id = 'bb-toast';
-      el.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(60px);background:#333;color:#fff;padding:9px 20px;border-radius:9px;font-size:13px;z-index:9999;transition:transform .3s;pointer-events:none;font-family:DM Sans,sans-serif;';
+      el.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(60px);background:#333;color:#fff;padding:9px 20px;border-radius:9px;font-size:13px;z-index:9999;transition:transform .3s;pointer-events:none;font-family:DM Sans,sans-serif;white-space:nowrap;max-width:90vw;overflow:hidden;text-overflow:ellipsis;';
       document.body.appendChild(el);
     }
     el.textContent = msg;
@@ -103,18 +113,41 @@
     _toastTimer = setTimeout(() => { el.style.transform = 'translateX(-50%) translateY(60px)'; }, ms);
   }
 
-  // ── Inicialização: recebe token do parent (iframe) ─────────────────────────
+  // ── Inicialização com token ────────────────────────────────────────────────
+  let _bbReady = false;
+
+  function _dispararReady(usuario) {
+    if (_bbReady) return;
+    _bbReady = true;
+    if (typeof w.onBBReady === 'function') {
+      try { w.onBBReady(usuario); } catch(e) { console.error('[BB] onBBReady:', e); }
+    }
+  }
+
+  // Escuta token enviado pelo portal pai
   window.addEventListener('message', e => {
     if (e.data?.type === 'bb_token' && e.data.token) {
       setToken(e.data.token);
       w.__bbUsuario = e.data.usuario;
-      if (typeof w.onBBReady === 'function') w.onBBReady(e.data.usuario);
+      _dispararReady(e.data.usuario);
     }
   });
 
-  // Também tenta pegar o token já existente
-  if (getToken() && typeof w.onBBReady === 'function') {
-    setTimeout(() => w.onBBReady(w.__bbUsuario), 100);
+  // Token já existe no storage (recarga de página)
+  if (getToken()) {
+    setTimeout(() => _dispararReady(w.__bbUsuario), 50);
+  } else if (_emIframe) {
+    // Dentro de iframe sem token — pede ao portal pai
+    // Retry em 500ms, 1.5s e 4s para cobrir mobile com rede lenta
+    function _pedirToken() {
+      try { w.parent.postMessage({ type: 'bb_request_auth' }, '*'); } catch (_) {}
+    }
+    _pedirToken();
+    [500, 1500, 4000].forEach(d => setTimeout(() => {
+      if (_bbReady) return;
+      if (getToken()) _dispararReady(w.__bbUsuario);
+      else _pedirToken();
+    }, d));
   }
 
   // ── Expõe globalmente ──────────────────────────────────────────────────────
