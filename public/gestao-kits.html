@@ -43,6 +43,8 @@ body{font-family:'DM Sans',system-ui,sans-serif;font-size:13px;background:var(--
 .btn-p:hover{background:var(--red-l);}
 .btn-s{background:var(--white);color:var(--text);border-color:var(--border);}
 .btn-s:hover{border-color:var(--muted);}
+.btn-pgto{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:14px 10px;background:var(--white);border:2px solid var(--border);border-radius:10px;cursor:pointer;font-size:13px;font-weight:600;color:var(--text);transition:all .15s;width:100%;}
+.btn-pgto:hover{border-color:var(--red);background:#fff8f8;color:var(--red);}
 .btn-g{background:#e8f7ef;color:var(--green);border-color:#86efac;}
 .btn-g:hover{background:#dcfce7;}
 .btn-o{background:#fff3cd;color:#856404;border-color:#ffc107;}
@@ -386,6 +388,42 @@ if (window.self !== window.top) {
     </div>
     <div class="modal-foot">
       <button class="btn btn-s" onclick="fecharModal('modal-estoque')">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="modal-pagar">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-h">
+      <h3>💰 Registrar Pagamento</h3>
+      <button class="modal-x" onclick="fecharModal('modal-pagar')">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:13px;color:var(--muted);margin-bottom:14px">Selecione a forma de pagamento:</div>
+      <input type="hidden" id="pagar-id">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <button class="btn-pgto" onclick="confirmarPagamento('dinheiro')">
+          <span style="font-size:22px">💵</span><span>Dinheiro</span>
+        </button>
+        <button class="btn-pgto" onclick="confirmarPagamento('pix')">
+          <span style="font-size:22px">📲</span><span>PIX</span>
+        </button>
+        <button class="btn-pgto" onclick="confirmarPagamento('debito')">
+          <span style="font-size:22px">💳</span><span>Débito</span>
+        </button>
+        <button class="btn-pgto" onclick="confirmarPagamento('credito')">
+          <span style="font-size:22px">💳</span><span>Crédito</span>
+        </button>
+        <button class="btn-pgto" onclick="confirmarPagamento('vale')">
+          <span style="font-size:22px">🎟️</span><span>Vale</span>
+        </button>
+        <button class="btn-pgto" onclick="confirmarPagamento('outro')">
+          <span style="font-size:22px">📝</span><span>Outro</span>
+        </button>
+      </div>
+      <button class="btn btn-s" style="width:100%;margin-top:12px;color:var(--muted)" onclick="confirmarPagamento(null)">
+        Confirmar sem informar forma
+      </button>
     </div>
   </div>
 </div>
@@ -1154,16 +1192,28 @@ async function salvarSaldoEst(prodId) {
 }
 
 // ── PAGAMENTO ─────────────────────────────────────────────────────────────────
-async function marcarPago(id) {
-  const formas = ['dinheiro','pix','debito','credito','outro'];
-  const forma = prompt('Forma de pagamento: 1-Dinheiro 2-PIX 3-Débito 4-Crédito 5-Outro\n\nDigite o número ou deixe vazio:');
-  if (forma === null) return;
-  const formaMap = {'1':'dinheiro','2':'pix','3':'debito','4':'credito','5':'outro'};
-  const formaPgto = formaMap[forma?.trim()] || forma?.trim() || null;
+function marcarPago(id) {
+  document.getElementById('pagar-id').value = id;
+  // Reseta destaque dos botões
+  document.querySelectorAll('.btn-pgto').forEach(b => b.style.borderColor = '');
+  document.getElementById('modal-pagar').classList.add('open');
+}
+
+async function confirmarPagamento(formaPgto) {
+  const id = document.getElementById('pagar-id').value;
+  if (!id) return;
+
+  // Destaca visualmente o botão selecionado por um instante
+  if (formaPgto) {
+    const formaLabel = {dinheiro:'💵 Dinheiro',pix:'📲 PIX',debito:'💳 Débito',credito:'💳 Crédito',vale:'🎟️ Vale',outro:'📝 Outro'};
+  }
+
   const d = await api.post('/api/kits-campanha/pedidos/'+id+'/pagar', { forma_pagamento: formaPgto });
   if (!d.ok) { toast('Erro: '+d.erro,'err'); return; }
-  toast('💰 Marcado como pago!');
+  fecharModal('modal-pagar');
   fecharModal('modal-pedido');
+  const label = {dinheiro:'💵 Dinheiro',pix:'📲 PIX',debito:'💳 Débito',credito:'💳 Crédito',vale:'🎟️ Vale',outro:'📝 Outro'}[formaPgto];
+  toast('💰 Pago' + (label ? ' — ' + label : '') + '!');
   carregarPedidos(); carregarCampanhas();
 }
 
