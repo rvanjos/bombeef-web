@@ -3004,16 +3004,41 @@ async function abrirSessoes(){
 async function loadSessao(id){
   fecharModal('m-sess');
   const d=await api.get(`/api/dre/sessoes/${id}`); if(!d.ok){toast('Erro');return;}
-  sessId=d.data.id; mesRef=d.data.mes_ref;
-  TXS=d.data.dados_json?.transactions||[]; files=d.data.dados_json?.loadedFiles||[]; supMem=d.data.dados_json?.supplierMem||{};
-  // Registra o mapeamento mês→sessão para o autoSave funcionar
+
+  // Registra o mapeamento mês→sessão
   if (!window._sessoesPorMes) window._sessoesPorMes = {};
-  window._sessoesPorMes[mesRef] = d.data.id;
+  window._sessoesPorMes[d.data.mes_ref] = d.data.id;
+
+  const txsNovas = d.data.dados_json?.transactions || [];
+
+  // Merge: adiciona lançamentos do mês selecionado ao TXS já em memória
+  // Remove primeiro os do mesmo mês (para não duplicar), depois adiciona os do banco
+  const mesSel = d.data.mes_ref;
+  TXS = TXS.filter(t => (t.mes || mesRef) !== mesSel);
+
+  // Deduplicação ao adicionar
+  const exFitid = new Set(TXS.filter(t=>t.fitid).map(t=>t.fitid));
+  const exHash  = new Set(TXS.map(t=>`${t.data||''}_${t.valor||''}_${(t.lancamento||'').slice(0,30)}_${t.mes||''}`));
+  for (const t of txsNovas) {
+    if (t.fonte === 'PREV_RECEITA') continue;
+    if (t.fitid && exFitid.has(t.fitid)) continue;
+    const h = `${t.data||''}_${t.valor||''}_${(t.lancamento||'').slice(0,30)}_${t.mes||''}`;
+    if (exHash.has(h)) continue;
+    TXS.push(t);
+    exFitid.add(t.fitid);
+    exHash.add(h);
+  }
+
+  // Muda o mês de referência para o mês selecionado
+  sessId=d.data.id; mesRef=mesSel;
+  if (d.data.dados_json?.loadedFiles?.length) files=[...new Set([...files,...d.data.dados_json.loadedFiles])];
+  if (d.data.dados_json?.supplierMem) supMem={...supMem,...d.data.dados_json.supplierMem};
+
   const[m,y]=mesRef.split('/'); document.getElementById('f-mesref').value=`${y}-${m}`;
   document.getElementById('dre-mes-label').textContent=mesRef;
   if(TXS.length)showTable();
   updMesFiltro(); render(); updStats(); renderDRE();
-  toast(`📂 ${mesRef} — ${TXS.length} lançamentos`);
+  toast(`📂 ${mesRef} — ${txsNovas.length} lançamentos carregados (total em memória: ${TXS.length})`);
 }
 
 async function delSessao(id){if(!confirm('Remover sessão?'))return;await api.delete(`/api/dre/sessoes/${id}`);abrirSessoes();}
