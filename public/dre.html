@@ -1620,7 +1620,7 @@ function setCat(id, cat) {
 const _svMes = {}; // debounce por mês
 function salvarMesDebounce(mes) {
   clearTimeout(_svMes[mes]);
-  _svMes[mes] = setTimeout(() => salvarMes(mes, true), 800);
+  _svMes[mes] = setTimeout(() => salvarMes(mes, true), 3000);
 }
 
 async function salvarMes(mes, silent=false) {
@@ -2906,7 +2906,7 @@ function autoSv(){
   if (!_inicializado || !TXS.length) return;
   setSt('load');
   clearTimeout(_sv);
-  _sv=setTimeout(()=>salvarTodos(true),800);
+  _sv=setTimeout(()=>salvarTodos(true),3000);
 }
 
 async function salvarTodos(silent=false) {

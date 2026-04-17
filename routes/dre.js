@@ -661,67 +661,53 @@ module.exports = function (pool) {
     if (!mes_ref) return res.status(400).json({ ok: false, erro: 'mes_ref obrigatório' });
     try {
       const uid = req.user?.id || null;
-      // ESTRATÉGIA: frontend é a fonte da verdade para classificações.
-      // O banco pode ter lançamentos extras (de outros imports) que o frontend não tem.
-      // Merge: começa com o que o frontend enviou (com todas as classificações),
-      // e adiciona apenas lançamentos do banco que o frontend não conhece.
-      function mergeComFrontendPrioritario(txsDoFrontend, txsDoBanco) {
-        if (!Array.isArray(txsDoBanco) || txsDoBanco.length === 0) return txsDoFrontend;
-        if (!Array.isArray(txsDoFrontend) || txsDoFrontend.length === 0) return txsDoBanco;
+      const dadosStr = JSON.stringify(dados_json);
+      let sid = null;
 
-        // IDs conhecidos pelo frontend
-        const fitidsFront = new Set(txsDoFrontend.filter(t=>t.fitid).map(t=>t.fitid));
-        function hashT(t){ return `${t.data||''}_${t.valor||''}_${(t.lancamento||'').slice(0,30)}`; }
-        const hashesFront = new Set(txsDoFrontend.filter(t=>!t.fitid).map(t=>hashT(t)));
-
-        // Adiciona do banco apenas o que o frontend não tem
-        const extras = txsDoBanco.filter(t => {
-          if (t.fitid) return !fitidsFront.has(t.fitid);
-          return !hashesFront.has(hashT(t));
-        });
-
-        console.log(`[dre/merge] frontend=${txsDoFrontend.length} banco=${txsDoBanco.length} extras=${extras.length}`);
-        return [...txsDoFrontend, ...extras];
-      }
-
-      let rows;
       if (sessao_id) {
-        const cur = await pool.query(`SELECT dados_json FROM dre_sessoes WHERE id=$1`, [sessao_id]);
-        const txsFront = extrairTransacoes(dados_json);
-        const txsBanco = extrairTransacoes(cur.rows[0]?.dados_json);
-        const txsMerge = mergeComFrontendPrioritario(txsFront, txsBanco);
-        const dadosMerge = { ...(typeof dados_json === 'object' && !Array.isArray(dados_json) ? dados_json : {}), transactions: txsMerge };
+        // Atualiza sessão existente diretamente — frontend é a fonte da verdade
         const upd = await pool.query(`
           UPDATE dre_sessoes SET descricao=$1, dados_json=$2, atualizado_em=NOW()
           WHERE id=$3 RETURNING id
-        `, [descricao || `Sessão ${mes_ref}`, JSON.stringify(dadosMerge), sessao_id]);
-        if (upd.rows.length) { rows = upd.rows; }
+        `, [descricao || `Sessão ${mes_ref}`, dadosStr, sessao_id]);
+        if (upd.rows.length) sid = upd.rows[0].id;
       }
-      if (!rows || !rows.length) {
-        const existing = await pool.query(
-          `SELECT id FROM dre_sessoes WHERE mes_ref=$1 AND (usuario_id=$2 OR usuario_id IS NULL) ORDER BY atualizado_em DESC LIMIT 1`,
-          [mes_ref, uid]
-        );
-        if (existing.rows.length) {
-          const cur2 = await pool.query(`SELECT dados_json FROM dre_sessoes WHERE id=$1`, [existing.rows[0].id]);
-          const txsFront2 = extrairTransacoes(dados_json);
-          const txsBanco2 = extrairTransacoes(cur2.rows[0]?.dados_json);
-          const txsMerge2 = mergeComFrontendPrioritario(txsFront2, txsBanco2);
-          const dadosMerge2 = { ...(typeof dados_json === 'object' && !Array.isArray(dados_json) ? dados_json : {}), transactions: txsMerge2 };
-          const upd = await pool.query(`
-            UPDATE dre_sessoes SET descricao=$1, dados_json=$2, usuario_id=$3, atualizado_em=NOW()
-            WHERE id=$4 RETURNING id
-          `, [descricao || `Sessão ${mes_ref}`, JSON.stringify(dadosMerge2), uid, existing.rows[0].id]);
-          rows = upd.rows;
-        } else {
-          const ins = await pool.query(`
-            INSERT INTO dre_sessoes (mes_ref, descricao, dados_json, usuario_id)
-            VALUES ($1, $2, $3, $4) RETURNING id
-          `, [mes_ref, descricao || `Sessão ${mes_ref}`, JSON.stringify(dados_json), uid]);
-          rows = ins.rows;
+
+      if (!sid) {
+        // Upsert por mes_ref + usuario_id
+        const upsert = await pool.query(`
+          INSERT INTO dre_sessoes (mes_ref, descricao, dados_json, usuario_id)
+          VALUES ($1, $2, $3, $4)
+          ON CONFLICT (mes_ref, usuario_id) DO UPDATE SET
+            descricao     = EXCLUDED.descricao,
+            dados_json    = EXCLUDED.dados_json,
+            atualizado_em = NOW()
+          RETURNING id
+        `, [mes_ref, descricao || `Sessão ${mes_ref}`, dadosStr, uid]);
+        sid = upsert.rows[0]?.id;
+
+        // Fallback: se não encontrou por usuario_id (sessão sem usuário vinculado)
+        if (!sid) {
+          const existing = await pool.query(
+            `SELECT id FROM dre_sessoes WHERE mes_ref=$1 ORDER BY atualizado_em DESC LIMIT 1`,
+            [mes_ref]
+          );
+          if (existing.rows.length) {
+            await pool.query(
+              `UPDATE dre_sessoes SET descricao=$1, dados_json=$2, atualizado_em=NOW() WHERE id=$3`,
+              [descricao || `Sessão ${mes_ref}`, dadosStr, existing.rows[0].id]
+            );
+            sid = existing.rows[0].id;
+          } else {
+            const ins = await pool.query(
+              `INSERT INTO dre_sessoes (mes_ref, descricao, dados_json, usuario_id) VALUES ($1,$2,$3,$4) RETURNING id`,
+              [mes_ref, descricao || `Sessão ${mes_ref}`, dadosStr, uid]
+            );
+            sid = ins.rows[0]?.id;
+          }
         }
       }
-      const sid = rows[0]?.id;
+
       if (sid) {
         espelharLancamentos(sid, extrairTransacoes(dados_json)).catch(()=>{});
       }
