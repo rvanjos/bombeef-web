@@ -392,6 +392,24 @@ module.exports = function (pool) {
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_dre_sessoes_mes  ON dre_sessoes(mes_ref)`).catch(()=>{});
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_dre_lanc_sessao  ON dre_lancamentos(sessao_id)`).catch(()=>{});
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_dre_lanc_mes     ON dre_lancamentos(mes)`).catch(()=>{});
+
+    // Remove sessões duplicadas por mês — mantém apenas a mais recente com mais lançamentos
+    await pool.query(`
+      DELETE FROM dre_sessoes
+      WHERE id IN (
+        SELECT id FROM (
+          SELECT id,
+            ROW_NUMBER() OVER (
+              PARTITION BY mes_ref
+              ORDER BY
+                COALESCE(jsonb_array_length(dados_json->'transactions'), 0) DESC,
+                atualizado_em DESC
+            ) AS rn
+          FROM dre_sessoes
+        ) ranked
+        WHERE rn > 1
+      )
+    `).catch(e => console.warn('[dre] limpeza duplicatas:', e.message));
   }
   initTable().catch(e => console.error('[dre] initTable:', e.message));
 
@@ -660,59 +678,50 @@ module.exports = function (pool) {
     const { sessao_id, mes_ref, descricao, dados_json } = req.body;
     if (!mes_ref) return res.status(400).json({ ok: false, erro: 'mes_ref obrigatório' });
     try {
-      const uid = req.user?.id || null;
+      const uid  = req.user?.id || null;
+      const desc = descricao || `Sessão ${mes_ref}`;
       const dadosStr = JSON.stringify(dados_json);
       let sid = null;
 
+      // 1) Tenta atualizar pelo sessao_id (caminho mais comum e seguro)
       if (sessao_id) {
-        // Atualiza sessão existente diretamente — frontend é a fonte da verdade
-        const upd = await pool.query(`
-          UPDATE dre_sessoes SET descricao=$1, dados_json=$2, atualizado_em=NOW()
-          WHERE id=$3 RETURNING id
-        `, [descricao || `Sessão ${mes_ref}`, dadosStr, sessao_id]);
+        const upd = await pool.query(
+          `UPDATE dre_sessoes SET descricao=$1, dados_json=$2, atualizado_em=NOW()
+           WHERE id=$3 RETURNING id`,
+          [desc, dadosStr, sessao_id]
+        );
         if (upd.rows.length) sid = upd.rows[0].id;
       }
 
+      // 2) Se não achou pelo id, busca sessão do mesmo mês e atualiza
       if (!sid) {
-        // Upsert por mes_ref + usuario_id
-        const upsert = await pool.query(`
-          INSERT INTO dre_sessoes (mes_ref, descricao, dados_json, usuario_id)
-          VALUES ($1, $2, $3, $4)
-          ON CONFLICT (mes_ref, usuario_id) DO UPDATE SET
-            descricao     = EXCLUDED.descricao,
-            dados_json    = EXCLUDED.dados_json,
-            atualizado_em = NOW()
-          RETURNING id
-        `, [mes_ref, descricao || `Sessão ${mes_ref}`, dadosStr, uid]);
-        sid = upsert.rows[0]?.id;
-
-        // Fallback: se não encontrou por usuario_id (sessão sem usuário vinculado)
-        if (!sid) {
-          const existing = await pool.query(
-            `SELECT id FROM dre_sessoes WHERE mes_ref=$1 ORDER BY atualizado_em DESC LIMIT 1`,
-            [mes_ref]
+        const existing = await pool.query(
+          `SELECT id FROM dre_sessoes WHERE mes_ref=$1 ORDER BY atualizado_em DESC LIMIT 1`,
+          [mes_ref]
+        );
+        if (existing.rows.length) {
+          await pool.query(
+            `UPDATE dre_sessoes SET descricao=$1, dados_json=$2, usuario_id=COALESCE($3, usuario_id), atualizado_em=NOW()
+             WHERE id=$4`,
+            [desc, dadosStr, uid, existing.rows[0].id]
           );
-          if (existing.rows.length) {
-            await pool.query(
-              `UPDATE dre_sessoes SET descricao=$1, dados_json=$2, atualizado_em=NOW() WHERE id=$3`,
-              [descricao || `Sessão ${mes_ref}`, dadosStr, existing.rows[0].id]
-            );
-            sid = existing.rows[0].id;
-          } else {
-            const ins = await pool.query(
-              `INSERT INTO dre_sessoes (mes_ref, descricao, dados_json, usuario_id) VALUES ($1,$2,$3,$4) RETURNING id`,
-              [mes_ref, descricao || `Sessão ${mes_ref}`, dadosStr, uid]
-            );
-            sid = ins.rows[0]?.id;
-          }
+          sid = existing.rows[0].id;
+        } else {
+          // 3) Cria nova sessão
+          const ins = await pool.query(
+            `INSERT INTO dre_sessoes (mes_ref, descricao, dados_json, usuario_id)
+             VALUES ($1,$2,$3,$4) RETURNING id`,
+            [mes_ref, desc, dadosStr, uid]
+          );
+          sid = ins.rows[0]?.id;
         }
       }
 
-      if (sid) {
-        espelharLancamentos(sid, extrairTransacoes(dados_json)).catch(()=>{});
-      }
       res.json({ ok: true, sessao_id: sid });
-    } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
+    } catch (e) {
+      console.error('[dre/salvar]', mes_ref, e.message);
+      res.status(500).json({ ok: false, erro: e.message });
+    }
   });
 
   // ── POST /recuperar/:mes — reconstrói sessão a partir da tabela dre_lancamentos
