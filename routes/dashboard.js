@@ -38,7 +38,7 @@ module.exports = function (pool) {
         catch (e) { console.warn('[dashboard] query falhou:', e.message); return {}; }
       };
 
-      const [bRow, vRow, pRow, rRow, dreRow, metaRow] = await Promise.all([
+      const [bRow, vRow, pRow, rRow, dreRow, metaRow, fatRow] = await Promise.all([
         // M1: Boletos
         safeQuery(`
           SELECT
@@ -70,6 +70,12 @@ module.exports = function (pool) {
         ),
         // M6: Meta
         safeQuery(`SELECT * FROM metas WHERE mes=$1 LIMIT 1`, [mes]),
+        // M7: Faturamento real (módulo Faturamento — fonte da verdade)
+        safeQuery(`
+          SELECT COALESCE(SUM(fat_bruto),0) AS total
+          FROM faturamento_periodos
+          WHERE TO_CHAR(data_inicio,'MM/YYYY') = $1 AND tipo_periodo = 'dia'
+        `, [mes]),
       ]);
 
       // Calcula receitas/despesas do DRE — filtra mês e ignora boletos/previsões
@@ -91,7 +97,10 @@ module.exports = function (pool) {
       }
 
       const faturamentoMeta = parseFloat(metaRow.faturamento_meta||0);
-      const faturamentoReal = parseFloat(metaRow.faturamento_real||dreReceitas||0);
+      // Prioridade: Faturamento real (módulo Faturamento) > DRE receitas
+      // Não usa mais metas.faturamento_real (campo manual desatualizado)
+      const fatRealModulo = parseFloat(fatRow.total||0);
+      const faturamentoReal = fatRealModulo > 0 ? fatRealModulo : dreReceitas;
       const metaPerdaPct    = parseFloat(metaRow.meta_perda_pct||0);
       const metaPerdasValor = faturamentoReal>0 ? (faturamentoReal*metaPerdaPct/100) : 0;
       const totalPerdas     = parseFloat(pRow.total||0);
