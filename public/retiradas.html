@@ -246,16 +246,47 @@ function renderizar(lista){
   const em = document.getElementById('empty');
   if(!lista.length){ tb.innerHTML=''; em.style.display=''; return; }
   em.style.display='none';
-  tb.innerHTML = lista.map(r=>`<tr>
-    <td>${fmt.date(r.dt_retirada)}</td>
-    <td><b>${r.funcionario_nome}</b></td>
-    <td>${r.descricao}${r.prod_descricao&&r.prod_descricao!==r.descricao?`<br><small style="color:var(--muted)">${r.prod_descricao}</small>`:''}</td>
-    <td style="font-family:'DM Mono',monospace">${parseFloat(r.qtd||1).toFixed(3)}</td>
-    <td style="font-family:'DM Mono',monospace">${fmt.brl(r.preco_unitario)}</td>
-    <td style="color:var(--green);font-weight:600">${parseFloat(r.desconto_pct||0).toFixed(0)}%</td>
-    <td style="font-family:'DM Mono',monospace;font-weight:700;color:var(--purple)">${fmt.brl(r.valor_total)}</td>
-    <td><button class="act-btn" onclick="excluir(${r.id})" style="color:var(--red-l)">🗑</button></td>
-  </tr>`).join('');
+  tb.innerHTML = lista.map(r=>{
+    const semCusto = parseFloat(r.preco_unitario||0) === 0 && r.produto_id;
+    const badgeCusto = semCusto
+      ? `<span style="display:inline-block;background:#fef3c7;color:#d97706;border:1px solid #fcd34d;border-radius:6px;font-size:10px;font-weight:700;padding:1px 6px;margin-left:4px">⚠️ Sem custo</span>`
+      : '';
+    const btnAtualizar = semCusto
+      ? `<button class="act-btn" onclick="atualizarCusto(${r.id},${r.produto_id},${r.qtd||1})" title="Buscar custo atual do produto e atualizar" style="color:#d97706">🔄</button>`
+      : '';
+    return `<tr${semCusto?' style="background:#fffbeb"':''}>
+      <td>${fmt.date(r.dt_retirada)}</td>
+      <td><b>${r.funcionario_nome}</b></td>
+      <td>${r.descricao}${badgeCusto}${r.prod_descricao&&r.prod_descricao!==r.descricao?`<br><small style="color:var(--muted)">${r.prod_descricao}</small>`:''}</td>
+      <td style="font-family:'DM Mono',monospace">${parseFloat(r.qtd||1).toFixed(3)}</td>
+      <td style="font-family:'DM Mono',monospace">${semCusto?'<span style="color:#d97706">—</span>':fmt.brl(r.preco_unitario)}</td>
+      <td style="color:var(--green);font-weight:600">${parseFloat(r.desconto_pct||0).toFixed(0)}%</td>
+      <td style="font-family:'DM Mono',monospace;font-weight:700;color:${semCusto?'#d97706':'var(--purple)'}">
+        ${semCusto?'<span style="color:#d97706">Pendente</span>':fmt.brl(r.valor_total)}
+      </td>
+      <td>${btnAtualizar}<button class="act-btn" onclick="excluir(${r.id})" style="color:var(--red-l)">🗑</button></td>
+    </tr>`;
+  }).join('');
+}
+
+async function atualizarCusto(retId, prodId, qtd) {
+  // Busca custo atual do produto no banco
+  const dp = await api.get(`/api/produtos/${prodId}`);
+  if (!dp.ok || !dp.data) { toast('⚠️ Produto não encontrado'); return; }
+  const custo = parseFloat(dp.data.preco_custo || 0);
+  if (!custo) {
+    toast('⚠️ Este produto ainda não tem custo cadastrado. Atualize em Produtos → editar produto.');
+    return;
+  }
+  const valorTotal = parseFloat((custo * qtd).toFixed(2));
+  if (!confirm(`Atualizar custo desta retirada para ${fmt.brl(custo)}/un (total: ${fmt.brl(valorTotal)})?`)) return;
+  const d = await api.put(`/api/retiradas/${retId}`, {
+    precoUnitario: custo,
+    valorTotal,
+  });
+  if (!d.ok) { toast('Erro: ' + d.erro); return; }
+  toast(`✅ Custo atualizado para ${fmt.brl(custo)}/un`);
+  carregar(); carregarLimites();
 }
 
 // ── Modal ──────────────────────────────────────────────────────────────────
@@ -324,18 +355,35 @@ function navSugestoes(e) {
 }
 
 function selecionarProd(p) {
-  document.getElementById('r-busca').value  = p.descricao;
-  document.getElementById('r-cod').value    = p.codigo;
+  document.getElementById('r-busca').value   = p.descricao;
+  document.getElementById('r-cod').value     = p.codigo;
   document.getElementById('r-prod-id').value = p.id;
-  document.getElementById('r-desc').value   = p.descricao;
-  document.getElementById('r-preco').value  = p.preco_custo;
+  document.getElementById('r-desc').value    = p.descricao;
   document.getElementById('r-sugestoes').style.display = 'none';
+
   const custo = parseFloat(p.preco_custo || 0);
   const venda = parseFloat(p.preco_venda || 0);
-  const info = document.getElementById('r-prod-info');
-  info.innerHTML = `✅ <b>${p.descricao}</b> &nbsp;·&nbsp; `
-    + `<span style="color:var(--green)">💰 Custo: <b>R$ ${custo.toFixed(2)}</b></span>`
-    + (venda > 0 ? ` &nbsp;·&nbsp; <span style="color:var(--muted)">🏷️ Venda: <b>R$ ${venda.toFixed(2)}</b></span>` : '');
+  const info  = document.getElementById('r-prod-info');
+  const precoInput = document.getElementById('r-preco');
+
+  if (custo > 0) {
+    // Produto com custo cadastrado — normal
+    precoInput.value    = custo;
+    precoInput.readOnly = false;
+    precoInput.style.borderColor = '';
+    info.innerHTML = `✅ <b>${p.descricao}</b> &nbsp;·&nbsp; `
+      + `<span style="color:var(--green)">💰 Custo: <b>R$ ${custo.toFixed(2)}</b></span>`
+      + (venda > 0 ? ` &nbsp;·&nbsp; <span style="color:var(--muted)">🏷️ Venda: <b>R$ ${venda.toFixed(2)}</b></span>` : '');
+  } else {
+    // Sem custo cadastrado — avisa e zera o campo
+    precoInput.value    = '';
+    precoInput.readOnly = false;
+    precoInput.style.borderColor = '#f59e0b';
+    info.innerHTML = `⚠️ <b>${p.descricao}</b> &nbsp;·&nbsp; `
+      + `<span style="color:#d97706;font-weight:600">Sem custo cadastrado — atualize o produto antes de lançar a retirada.</span>`
+      + (venda > 0 ? ` &nbsp;·&nbsp; <span style="color:var(--muted)">🏷️ Venda: <b>R$ ${venda.toFixed(2)}</b></span>` : '');
+  }
+
   calcTotal();
   document.getElementById('r-qtd').focus();
 }
@@ -370,13 +418,14 @@ async function salvar(){
   const funcId = document.getElementById('r-func').value;
   const desc   = document.getElementById('r-desc').value.trim();
   if(!funcId||!desc){ toast('Funcionário e descrição são obrigatórios'); return; }
+  const preco = parseFloat(document.getElementById('r-preco').value)||0;
   const body = {
     funcionarioId: parseInt(funcId),
     produtoId:     parseInt(document.getElementById('r-prod-id').value)||null,
     descricao:     desc,
     qtd:           parseFloat(document.getElementById('r-qtd').value)||1,
-    precoUnitario: parseFloat(document.getElementById('r-preco').value)||0,
-    descontoPct:   0,  // funcionário paga o preço de custo integral
+    precoUnitario: preco,
+    descontoPct:   0,
     dtRetirada:    document.getElementById('r-dt').value,
     observacao:    document.getElementById('r-obs').value,
   };

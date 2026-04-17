@@ -833,7 +833,7 @@ async function procImport(inp){
   const el=document.getElementById('import-res');
   el.style.display='';
   if(!d.ok){el.style.background='#fdf2f2';el.innerHTML=`❌ ${d.erro}`;return;}
-  el.innerHTML=`✅ <b>Importado!</b> Inseridos: ${d.inseridos} · Atualizados: ${d.atualizados} · Erros: ${d.erros}`;
+  el.innerHTML=`✅ <b>Importado!</b> Inseridos: ${d.inseridos} · Atualizados: ${d.atualizados}${d.pulados?` · Pulados (sem preço): ${d.pulados}`:''}${d.erros?` · Erros: ${d.erros}`:''}`;
   carregarProd(); carregarKPIs();
 }
 </script>

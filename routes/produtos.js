@@ -348,53 +348,63 @@ module.exports = function (pool) {
         return parseFloat(String(v).replace(/[^\d.,]/g, '').replace(',', '.')) || 0;
       };
 
-      const client = await pool.connect();
-      let inseridos = 0, atualizados = 0, erros = 0;
+      // Monta arrays para batch upsert via unnest (1 query em vez de ~N queries individuais)
+      const bCod = [], bDesc = [], bForn = [], bCusto = [], bVenda = [], bUnit = [], bCat = [];
+      let inseridos = 0, atualizados = 0, erros = 0, pulados = 0;
       const detalheErros = [];
 
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        const codigo    = String(row[colCod]  ?? '').trim();
+        const descricao = String(row[colDesc] ?? '').trim();
+        if (!codigo || !descricao) continue;
+        if (descricao.toLowerCase().includes('total') && isNaN(parseInt(codigo))) continue;
+
+        const fornecedor = colForn >= 0 ? String(row[colForn] ?? '').trim() || null : null;
+        const custo      = colCusto >= 0 ? parseNum(row[colCusto]) : 0;
+        const venda      = colVenda >= 0 ? parseNum(row[colVenda]) : 0;
+        const unidade    = colUnit  >= 0 ? String(row[colUnit] ?? 'un').trim().toUpperCase() || 'UN' : 'UN';
+        const categoria  = colCat   >= 0 ? String(row[colCat]  ?? '').trim() || null : null;
+
+        if (custo === 0 && venda === 0) { pulados++; continue; }
+
+        bCod.push(codigo); bDesc.push(descricao); bForn.push(fornecedor);
+        bCusto.push(custo); bVenda.push(venda); bUnit.push(unidade); bCat.push(categoria);
+      }
+
+      if (bCod.length === 0) {
+        return res.json({ ok: true, inseridos: 0, atualizados: 0, erros: 0, pulados, detalheErros: [] });
+      }
+
+      const client = await pool.connect();
       try {
         await client.query('BEGIN');
 
-        for (let i = 1; i < rows.length; i++) {
-          const row = rows[i];
-          const codigo    = String(row[colCod]  ?? '').trim();
-          const descricao = String(row[colDesc] ?? '').trim();
-          if (!codigo || !descricao) continue;
-          // Pula linhas de totais ou cabeçalhos repetidos
-          if (descricao.toLowerCase().includes('total') && isNaN(parseInt(codigo))) continue;
+        const result = await client.query(`
+          INSERT INTO produtos (codigo, descricao, fornecedor, preco_custo, preco_venda, unidade, categoria, origem)
+          SELECT
+            UNNEST($1::text[]),
+            UNNEST($2::text[]),
+            UNNEST($3::text[]),
+            UNNEST($4::numeric[]),
+            UNNEST($5::numeric[]),
+            UNNEST($6::text[]),
+            UNNEST($7::text[]),
+            'pdv'
+          ON CONFLICT (codigo) DO UPDATE SET
+            descricao     = EXCLUDED.descricao,
+            fornecedor    = COALESCE(EXCLUDED.fornecedor, produtos.fornecedor),
+            preco_custo   = CASE WHEN EXCLUDED.preco_custo > 0 THEN EXCLUDED.preco_custo ELSE produtos.preco_custo END,
+            preco_venda   = CASE WHEN EXCLUDED.preco_venda > 0 THEN EXCLUDED.preco_venda ELSE produtos.preco_venda END,
+            unidade       = EXCLUDED.unidade,
+            categoria     = COALESCE(EXCLUDED.categoria, produtos.categoria),
+            atualizado_em = NOW()
+          RETURNING (xmax <> 0) AS foi_update
+        `, [bCod, bDesc, bForn, bCusto, bVenda, bUnit, bCat]);
 
-          const fornecedor = colForn >= 0 ? String(row[colForn] ?? '').trim() || null : null;
-          const custo      = colCusto >= 0 ? parseNum(row[colCusto]) : 0;
-          const venda      = colVenda >= 0 ? parseNum(row[colVenda]) : 0;
-          const unidade    = colUnit  >= 0 ? String(row[colUnit] ?? 'un').trim().toUpperCase() || 'UN' : 'UN';
-          const categoria  = colCat   >= 0 ? String(row[colCat]  ?? '').trim() || null : null;
-
-          // Ignora produtos com preço de venda E custo ambos zerados (Xmenu: itens inativos)
-          if (custo === 0 && venda === 0) continue;
-
-          try {
-            await client.query(`
-              INSERT INTO produtos (codigo, descricao, fornecedor, preco_custo, preco_venda, unidade, categoria, origem)
-              VALUES ($1, $2, $3, $4, $5, $6, $7, 'pdv')
-              ON CONFLICT (codigo) DO UPDATE SET
-                descricao     = EXCLUDED.descricao,
-                fornecedor    = COALESCE(EXCLUDED.fornecedor, produtos.fornecedor),
-                preco_custo   = CASE WHEN EXCLUDED.preco_custo > 0 THEN EXCLUDED.preco_custo ELSE produtos.preco_custo END,
-                preco_venda   = CASE WHEN EXCLUDED.preco_venda > 0 THEN EXCLUDED.preco_venda ELSE produtos.preco_venda END,
-                unidade       = EXCLUDED.unidade,
-                categoria     = COALESCE(EXCLUDED.categoria, produtos.categoria),
-                atualizado_em = NOW()
-            `, [codigo, descricao, fornecedor, custo, venda, unidade, categoria]);
-
-            const chk = await client.query(
-              `SELECT (xmin::text::bigint != xmax::text::bigint) AS is_update FROM produtos WHERE codigo = $1`, [codigo]
-            );
-            if (chk.rows[0]?.is_update) atualizados++;
-            else inseridos++;
-          } catch (e) {
-            erros++;
-            detalheErros.push({ linha: i + 1, codigo, erro: e.message });
-          }
+        for (const row of result.rows) {
+          if (row.foi_update) atualizados++;
+          else inseridos++;
         }
 
         await client.query('COMMIT');
@@ -403,7 +413,7 @@ module.exports = function (pool) {
         throw e;
       } finally { client.release(); }
 
-      res.json({ ok: true, inseridos, atualizados, erros, detalheErros });
+      res.json({ ok: true, inseridos, atualizados, erros, pulados, detalheErros });
     } catch (e) {
       console.error('[produtos/import]', e.message);
       res.status(500).json({ ok: false, erro: 'Erro ao processar planilha: ' + e.message });
