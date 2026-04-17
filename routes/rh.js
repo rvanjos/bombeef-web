@@ -21,7 +21,72 @@ module.exports = function (pool) {
   const r = express.Router();
   r.use(autenticar());
 
-  // Apenas admin
+  // ── Rotas abertas para todos os perfis autenticados ──────────────────────────
+  // (funcionários não-admin precisam acessar estas rotas)
+
+  // Lista de funcionários — para o módulo rh-funcionario.html identificar o próprio registro
+  r.get('/funcionarios', async (req, res) => {
+    try {
+      const { rows } = await pool.query(`
+        SELECT f.id, f.nome, f.cargo, f.email, f.telefone,
+               f.salario_base, f.vale_alimentacao, f.limite_retirada, f.ativo,
+               f.usuario_id
+        FROM funcionarios f
+        WHERE f.ativo = true
+        ORDER BY f.nome ASC
+      `);
+      res.json({ ok: true, data: rows });
+    } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // Escala de domingos — somente leitura para todos
+  r.get('/escalas/funcionarios', async (req, res) => {
+    try {
+      const { rows } = await pool.query(`
+        SELECT f.id, f.nome, f.tipo_escala, f.trabalha_fds,
+               e.data_inicio, e.primeiro_dia
+        FROM funcionarios f
+        LEFT JOIN rh_escalas e ON e.funcionario_id = f.id
+        WHERE f.ativo = true
+        ORDER BY f.nome ASC
+      `);
+      res.json({ ok: true, data: rows });
+    } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // Meus lançamentos — cada funcionário vê apenas os seus
+  r.get('/meus-lancamentos', async (req, res) => {
+    const { mes_ref, funcionario_id } = req.query;
+    if (!mes_ref || !funcionario_id) return res.status(400).json({ ok: false, erro: 'mes_ref e funcionario_id obrigatórios' });
+    try {
+      const { rows } = await pool.query(`
+        SELECT * FROM rh_apontamentos
+        WHERE funcionario_id = $1 AND mes_ref = $2
+        ORDER BY criado_em DESC
+      `, [parseInt(funcionario_id), mes_ref]);
+      res.json({ ok: true, data: rows });
+    } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // Novo lançamento — funcionário envia para aprovação
+  r.post('/lancamento', async (req, res) => {
+    const { funcionario_id, mes_ref, tipo, descricao, quantidade, valor_unitario, data_ref } = req.body;
+    if (!funcionario_id || !mes_ref || !tipo) return res.status(400).json({ ok: false, erro: 'funcionario_id, mes_ref e tipo obrigatórios' });
+    try {
+      const qtd  = parseFloat(quantidade  || 0);
+      const vUnit = parseFloat(valor_unitario || 0);
+      const solicitante_nome = req.user?.nome || req.user?.email || 'Usuário';
+      const { rows } = await pool.query(`
+        INSERT INTO rh_apontamentos
+          (funcionario_id, mes_ref, tipo, descricao, quantidade, valor_unitario, valor_total, data_ref, status, solicitante_nome)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pendente',$9)
+        RETURNING id
+      `, [funcionario_id, mes_ref, tipo, descricao || null, qtd, vUnit, qtd * vUnit, data_ref || null, solicitante_nome]);
+      res.json({ ok: true, id: rows[0].id });
+    } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ── Somente admin a partir daqui ─────────────────────────────────────────────
   r.use((req, res, next) => {
     if (req.user?.perfil !== 'admin')
       return res.status(403).json({ ok: false, erro: 'Acesso restrito ao administrador' });
@@ -122,21 +187,6 @@ module.exports = function (pool) {
 
   initTables().catch(e => console.error('[rh] initTables:', e.message));
   }, 2000);
-
-  // ── GET /funcionarios — lista com dados base ───────────────────────────────
-  r.get('/funcionarios', async (req, res) => {
-    try {
-      const { rows } = await pool.query(`
-        SELECT f.id, f.nome, f.cargo, f.email, f.telefone,
-               f.salario_base, f.vale_alimentacao, f.limite_retirada, f.ativo,
-               f.usuario_id
-        FROM funcionarios f
-        WHERE f.ativo = true
-        ORDER BY f.nome ASC
-      `);
-      res.json({ ok: true, data: rows });
-    } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
-  });
 
   // ── GET /ficha?funcionario_id=X&mes=MM/YYYY ────────────────────────────────
   r.get('/ficha', async (req, res) => {
@@ -343,21 +393,6 @@ module.exports = function (pool) {
     } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
-  // ── GET /escalas/funcionarios ─────────────────────────────────────────────
-  r.get('/escalas/funcionarios', async (req, res) => {
-    try {
-      const { rows } = await pool.query(`
-        SELECT f.id, f.nome, f.cargo,
-               e.data_inicio, e.tipo_escala, e.primeiro_dia, e.trabalha_fds
-        FROM funcionarios f
-        LEFT JOIN rh_escalas e ON e.funcionario_id = f.id
-        WHERE f.ativo = true
-        ORDER BY f.nome ASC
-      `).catch(() => ({ rows: [] }));
-      res.json({ ok: true, data: rows });
-    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
-  });
-
   // ── POST /escalas ─────────────────────────────────────────────────────────
   r.post('/escalas', async (req, res) => {
     const { funcionario_id, data_inicio, tipo_escala, primeiro_dia, trabalha_fds } = req.body;
@@ -394,28 +429,6 @@ module.exports = function (pool) {
         inseridos.push(rows[0]);
       }
       res.json({ ok: true, inseridos: inseridos.length });
-    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
-  });
-
-  // ── GET /relatorio?mes=MM/YYYY&ids=1,2,3 ─────────────────────────────────
-  // ── POST /lancamento — funcionário lança apontamento pendente ───────────────
-  r.post('/lancamento', async (req, res) => {
-    const { funcionario_id, mes_ref, tipo, descricao, quantidade, valor_unitario, data_ref } = req.body;
-    const solicitante_id   = req.usuario?.id;
-    const solicitante_nome = req.usuario?.nome || req.usuario?.email || 'Usuário';
-    if (!funcionario_id || !mes_ref || !tipo) return res.status(400).json({ ok: false, erro: 'Dados obrigatórios faltando' });
-    const qtd = parseFloat(quantidade) || 0;
-    const vUnit = parseFloat(valor_unitario) || 0;
-    const vTotal = qtd * vUnit;
-    try {
-      const { rows } = await pool.query(`
-        INSERT INTO rh_apontamentos
-          (funcionario_id, mes_ref, tipo, descricao, quantidade, valor_unitario, valor_total, data_ref,
-           status, solicitante_id, solicitante_nome)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pendente',$9,$10) RETURNING *
-      `, [funcionario_id, mes_ref, tipo, descricao||null, qtd, vUnit, vTotal,
-          data_ref||null, solicitante_id||null, solicitante_nome]);
-      res.json({ ok: true, data: rows[0] });
     } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
@@ -462,23 +475,6 @@ module.exports = function (pool) {
       `, [req.usuario?.id||null, motivo||null, parseInt(req.params.id)]);
       if (!rows.length) return res.status(404).json({ ok:false, erro:'Não encontrado' });
       res.json({ ok: true, data: rows[0] });
-    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
-  });
-
-  // ── GET /meus-lancamentos ────────────────────────────────────────────────
-  r.get('/meus-lancamentos', async (req, res) => {
-    const { mes_ref, funcionario_id } = req.query;
-    const conds = [], params = [];
-    if (funcionario_id) { params.push(funcionario_id); conds.push(`a.funcionario_id=$${params.length}`); }
-    if (mes_ref) { params.push(mes_ref); conds.push(`a.mes_ref=$${params.length}`); }
-    const where = conds.length ? 'WHERE '+conds.join(' AND ') : '';
-    try {
-      const { rows } = await pool.query(`
-        SELECT a.*, f.nome AS funcionario_nome
-        FROM rh_apontamentos a JOIN funcionarios f ON f.id=a.funcionario_id
-        ${where} ORDER BY a.criado_em DESC
-      `, params);
-      res.json({ ok: true, data: rows });
     } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
