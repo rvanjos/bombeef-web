@@ -1029,12 +1029,12 @@ function parseFaturaItauPDF(text) {
       const mes = `${mm}/${ano}`;
       result.push({
         id: 'cc_'+Date.now()+'_'+i,
-        lancamento: desc,
+        lancamento: portadorAtual || desc,
         valor: v, data: dt, mes, mesCaixa: mes,
-        categoria: autoClassificar(desc, ''),
+        categoria: autoClassificar(desc, portadorAtual),
         fonte: 'CC',
         portador: portadorAtual,
-        razaoSocial: portadorAtual,
+        razaoSocial: desc,
       });
     }
   }
@@ -1089,12 +1089,12 @@ function parseFaturaC6(text) {
       const mes = `${mm}/${ano}`;
       result.push({
         id: 'cc_'+Date.now()+'_'+i,
-        lancamento: descRaw,
+        lancamento: portadorAtual || descRaw,
         valor: v, data: dt, mes, mesCaixa: mes,
-        categoria: autoClassificar(descRaw, ''),
+        categoria: autoClassificar(descRaw, portadorAtual),
         fonte: 'CC',
         portador: portadorAtual,
-        razaoSocial: portadorAtual,
+        razaoSocial: descRaw,
       });
     }
   }
@@ -1163,12 +1163,12 @@ function parseFaturaCaixa(text) {
       const mes = `${mm}/${ano}`;
       result.push({
         id: 'cc_'+Date.now()+'_'+i,
-        lancamento: descRaw,
+        lancamento: portadorAtual || descRaw,
         valor: v, data: dt, mes, mesCaixa: mes,
-        categoria: autoClassificar(descRaw, ''),
+        categoria: autoClassificar(descRaw, portadorAtual),
         fonte: 'CC',
         portador: portadorAtual,
-        razaoSocial: portadorAtual,
+        razaoSocial: descRaw,
       });
     }
   }
@@ -1193,6 +1193,7 @@ function parseFaturaGenerica(text) {
       lancamento: desc, valor: -Math.abs(v),
       data: '', mes: mesRef, mesCaixa: mesRef,
       categoria: autoClassificar(desc, ''), fonte: 'CC',
+      razaoSocial: desc,
     });
   }
   return result;
@@ -1321,7 +1322,7 @@ function parseCCRows(rows) {
           categoria: autoClassificar(nome, ''),
           fonte: 'CC',
           portador: portadorAtual || '',
-          razaoSocial: portadorAtual || '',
+          razaoSocial: nome,
         });
       }
     }
@@ -1352,7 +1353,7 @@ function parseCCRows(rows) {
     const mes = dt ? dt.slice(5,7)+'/'+dt.slice(0,4) : mesRef;
     const parc = cP>=0 ? String(row[cP]||'') : '';
     result.push({id:'cc_'+Date.now()+'_'+i, lancamento:parc?`${nome} (${parc})`:nome,
-      valor:v, data:dt, mes, mesCaixa:mes, categoria:autoClassificar(nome,''), fonte:'CC'});
+      valor:v, data:dt, mes, mesCaixa:mes, categoria:autoClassificar(nome,''), fonte:'CC', razaoSocial:nome});
   }
   return result;
 }

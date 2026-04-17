@@ -1026,7 +1026,7 @@ async function carregarPedidos() {
       <td>${p.pago?'<span class="badge b-verde">💰</span>':'<span style="color:#ccc">—</span>'}</td>
       <td>${p.qtd_kits||1}</td>
       <td>${new Date(p.criado_em).toLocaleDateString('pt-BR')}</td>
-      <td><button class="btn btn-s btn-sm" onclick="verPedido(${p.id})">👁 Ver</button> <button class="btn btn-s btn-sm" onclick="abrirEditar(${p.id})" title="Editar">✏️</button></td>
+      <td><button class="btn btn-s btn-sm" onclick="verPedido(${p.id})">👁 Ver</button> <button class="btn btn-s btn-sm" onclick="abrirEditar(${p.id})" title="Editar">✏️</button>${!['entregue','conciliado'].includes(p.status)?` <button class="btn btn-sm" style="background:#fef2f2;color:#dc2626;border:1px solid #fca5a5" onclick="excluirPedido(${p.id},'${p.numero}')" title="Excluir pedido">🗑️</button>`:''}</td>
     </tr>`).join('')}
   </table>`;
 }
@@ -1071,8 +1071,8 @@ async function verPedido(id) {
 
   // Botões de ação conforme status
   const btns = [`<button class="btn btn-s" onclick="fecharModal('modal-pedido')">Fechar</button>`];
-  // Botão editar sempre disponível (exceto cancelado)
-  if (p.status !== 'cancelado') {
+  // Botão editar sempre disponível (exceto cancelado/entregue/conciliado)
+  if (!['cancelado','entregue','conciliado'].includes(p.status)) {
     btns.push(`<button class="btn btn-s" onclick="abrirEditar(${p.id})">✏️ Editar</button>`);
   }
   if (p.status==='reservado') {
@@ -1088,6 +1088,10 @@ async function verPedido(id) {
     btns.push(`<button class="btn" style="background:#f0fdf4;color:var(--green);border:1px solid #86efac" onclick="marcarPago(${p.id})">💰 Marcar Pago</button>`);
   } else if (p.pago) {
     btns.push(`<button class="btn btn-s" onclick="desmarcarPago(${p.id})" title="Desfazer pagamento">↩ Desfazer Pago</button>`);
+  }
+  // Excluir — disponível para status que não sejam entregue/conciliado
+  if (!['entregue','conciliado'].includes(p.status)) {
+    btns.push(`<button class="btn" style="background:#fef2f2;color:#dc2626;border:1px solid #fca5a5" onclick="excluirPedido(${p.id},'${p.numero}')">🗑️ Excluir</button>`);
   }
   document.getElementById('modal-ped-foot').innerHTML = btns.join('');
   document.getElementById('modal-pedido').classList.add('open');
@@ -1109,6 +1113,15 @@ async function cancelarPedido(id) {
   toast('Pedido cancelado.');
   fecharModal('modal-pedido');
   carregarPedidos(); carregarSeparacao();
+}
+
+async function excluirPedido(id, numero) {
+  if (!confirm(`Excluir permanentemente o pedido ${numero||id}?\n\nEssa ação não pode ser desfeita. As reservas de estoque serão liberadas.`)) return;
+  const d = await api.delete('/api/kits-campanha/pedidos/'+id);
+  if (!d.ok) { toast('Erro: '+d.erro, 'err'); return; }
+  toast(`🗑️ Pedido ${d.numero||numero} excluído.`);
+  fecharModal('modal-pedido');
+  carregarPedidos(); carregarCampanhas(); carregarSeparacao();
 }
 
 // ── EDITAR PEDIDO ──────────────────────────────────────────────────────────────

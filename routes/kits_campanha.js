@@ -517,6 +517,45 @@ module.exports = function (pool) {
     } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
+  // ── DELETE /pedidos/:id — excluir pedido (apenas se não entregue/conciliado) ──
+  r.delete('/pedidos/:id', async (req, res) => {
+    const id = parseInt(req.params.id);
+    try {
+      // Verifica status — pedidos entregues ou conciliados não podem ser excluídos
+      const { rows } = await pool.query(`SELECT status, numero FROM kit_pedidos WHERE id=$1`, [id]);
+      if (!rows.length) return res.status(404).json({ ok: false, erro: 'Pedido não encontrado' });
+
+      const { status, numero } = rows[0];
+      if (['entregue', 'conciliado'].includes(status)) {
+        return res.status(400).json({
+          ok: false,
+          erro: `Pedido ${numero} não pode ser excluído (status: ${status}). Use "Cancelar" para registrar o cancelamento.`
+        });
+      }
+
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        // Devolve reservas ao estoque (se houver)
+        await client.query(
+          `UPDATE kit_reservas SET status='cancelado' WHERE pedido_id=$1 AND status='reservado'`,
+          [id]
+        );
+        // Remove reservas do pedido
+        await client.query(`DELETE FROM kit_reservas WHERE pedido_id=$1`, [id]);
+        // Remove itens (CASCADE já faz isso, mas explícito por clareza)
+        await client.query(`DELETE FROM kit_pedido_itens WHERE pedido_id=$1`, [id]);
+        // Remove o pedido
+        await client.query(`DELETE FROM kit_pedidos WHERE id=$1`, [id]);
+        await client.query('COMMIT');
+        res.json({ ok: true, numero });
+      } catch(e) {
+        await client.query('ROLLBACK');
+        throw e;
+      } finally { client.release(); }
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
   // ── POST /pedidos/:id/pagar — marcar como pago (independente do status) ──────
   r.post('/pedidos/:id/pagar', async (req, res) => {
     const { forma_pagamento } = req.body;
