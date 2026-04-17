@@ -43,13 +43,13 @@ module.exports = function (pool) {
   r.get('/escalas/funcionarios', async (req, res) => {
     try {
       const { rows } = await pool.query(`
-        SELECT f.id, f.nome, f.tipo_escala, f.trabalha_fds,
-               e.data_inicio, e.primeiro_dia
+        SELECT f.id, f.nome,
+               e.data_inicio, e.tipo_escala, e.primeiro_dia, e.trabalha_fds
         FROM funcionarios f
         LEFT JOIN rh_escalas e ON e.funcionario_id = f.id
         WHERE f.ativo = true
         ORDER BY f.nome ASC
-      `);
+      `).catch(() => ({ rows: [] }));
       res.json({ ok: true, data: rows });
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
@@ -91,6 +91,27 @@ module.exports = function (pool) {
     if (req.user?.perfil !== 'admin')
       return res.status(403).json({ ok: false, erro: 'Acesso restrito ao administrador' });
     next();
+  });
+
+  // ── GET /historico — histórico de aprovações e rejeições (admin) ─────────────
+  r.get('/historico', async (req, res) => {
+    const { mes_ref, status, funcionario_id } = req.query;
+    const conds = [], params = [];
+    if (mes_ref)       { params.push(mes_ref);           conds.push(`a.mes_ref=$${params.length}`); }
+    if (status)        { params.push(status);            conds.push(`a.status=$${params.length}`); }
+    if (funcionario_id){ params.push(parseInt(funcionario_id)); conds.push(`a.funcionario_id=$${params.length}`); }
+    const where = conds.length ? 'WHERE ' + conds.join(' AND ') : '';
+    try {
+      const { rows } = await pool.query(`
+        SELECT a.*, f.nome AS funcionario_nome, f.cargo
+        FROM rh_apontamentos a
+        JOIN funcionarios f ON f.id = a.funcionario_id
+        ${where}
+        ORDER BY a.atualizado_em DESC
+        LIMIT 500
+      `, params);
+      res.json({ ok: true, data: rows });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
   // ── Init ───────────────────────────────────────────────────────────────────

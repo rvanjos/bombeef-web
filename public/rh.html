@@ -142,6 +142,15 @@ main{padding:16px 24px;max-width:1400px;margin:0 auto;}
 .empty .icon{font-size:40px;margin-bottom:10px;}
 .loading{text-align:center;padding:40px;color:var(--muted);font-size:13px;}
 
+/* Tabela histórico */
+.hist-table{width:100%;border-collapse:collapse;font-size:12px;}
+.hist-table th{background:#f7f4f0;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700;padding:8px 10px;text-align:left;border-bottom:2px solid var(--border);}
+.hist-table td{padding:8px 10px;border-bottom:1px solid #f5efe8;vertical-align:middle;}
+.hist-row.hist-aprovado td:first-child{border-left:3px solid var(--green);}
+.hist-row.hist-rejeitado td:first-child{border-left:3px solid #dc2626;}
+.hist-row.hist-pendente td:first-child{border-left:3px solid var(--orange);}
+.hist-row:hover td{background:#faf8f5;}
+
 @media print {
   header,.tabs,.toolbar,.modal-bg,.toast{display:none!important;}
   .print-btn{display:none!important;}
@@ -161,6 +170,7 @@ main{padding:16px 24px;max-width:1400px;margin:0 auto;}
     <button class="tab" id="tab-btn-aprovacoes" onclick="showTab('aprovacoes')" style="display:none">
       ✅ Aprovações <span id="badge-pendentes" style="display:none;background:var(--red);color:#fff;border-radius:10px;padding:1px 7px;font-size:10px;margin-left:4px">0</span>
     </button>
+    <button class="tab" id="tab-btn-historico" onclick="showTab('historico')" style="display:none">📜 Histórico</button>
     <button class="tab" id="tab-btn-meus" onclick="showTab('meus')" style="display:none">📝 Meus Lançamentos</button>
     <button class="tab" onclick="showTab('escala')">📅 Escala de Domingos</button>
     <button class="tab" onclick="showTab('relatorio')">📄 Relatório</button>
@@ -197,6 +207,27 @@ main{padding:16px 24px;max-width:1400px;margin:0 auto;}
       <button class="btn btn-blue" onclick="abrirModalLanc()">＋ Novo Lançamento</button>
     </div>
     <div id="meus-container"><div class="loading">Carregando...</div></div>
+  </div>
+
+  <!-- ── TAB HISTÓRICO (admin) ── -->
+  <div id="tab-historico" class="tab-content">
+    <div class="toolbar">
+      <label>MÊS:</label>
+      <input type="month" id="sel-mes-hist">
+      <label>STATUS:</label>
+      <select id="sel-status-hist" onchange="carregarHistorico()">
+        <option value="">Todos</option>
+        <option value="aprovado">✅ Aprovados</option>
+        <option value="rejeitado">❌ Rejeitados</option>
+        <option value="pendente">⏳ Pendentes</option>
+      </select>
+      <label>FUNCIONÁRIO:</label>
+      <select id="sel-func-hist" onchange="carregarHistorico()">
+        <option value="">Todos</option>
+      </select>
+      <button class="btn btn-red" onclick="carregarHistorico()">🔄 Atualizar</button>
+    </div>
+    <div id="historico-container"><div class="loading">Carregando...</div></div>
   </div>
 
   <!-- ── TAB ESCALA ── -->
@@ -372,7 +403,7 @@ main{padding:16px 24px;max-width:1400px;margin:0 auto;}
 </div>
 
 <!-- Modal rejeitar -->
-<div class="modal-overlay" id="modal-rejeitar" style="display:none">
+<div class="modal-bg" id="modal-rejeitar">
   <div class="modal-box" style="max-width:400px">
     <div class="modal-header" style="background:#dc2626">
       <h3>❌ Rejeitar Lançamento</h3>
@@ -477,7 +508,7 @@ async function aprovarLanc(id) {
 function abrirRejeitar(id) {
   document.getElementById('rejeitar-id').value = id;
   document.getElementById('rejeitar-motivo').value = '';
-  document.getElementById('modal-rejeitar').style.display = 'flex';
+  document.getElementById('modal-rejeitar').classList.add('open');
 }
 async function confirmarRejeitar() {
   const id = document.getElementById('rejeitar-id').value;
@@ -519,6 +550,64 @@ async function carregarMeusLanc() {
   }).join('');
 }
 
+// ── HISTÓRICO DE APROVAÇÕES/REJEIÇÕES ────────────────────────────────────────
+async function carregarHistorico() {
+  const ym     = document.getElementById('sel-mes-hist').value;
+  const status = document.getElementById('sel-status-hist').value;
+  const funcId = document.getElementById('sel-func-hist').value;
+
+  // Preenche select de funcionários na primeira vez
+  const sel = document.getElementById('sel-func-hist');
+  if (sel.options.length <= 1) {
+    const df = await get('/api/rh/funcionarios');
+    if (df.ok) df.data.forEach(f => {
+      const o = document.createElement('option');
+      o.value = f.id; o.textContent = f.nome;
+      sel.appendChild(o);
+    });
+  }
+
+  const mes = ym ? ymToMmYyyy(ym) : '';
+  let url = '/api/rh/historico?';
+  if (mes)    url += 'mes_ref='       + encodeURIComponent(mes) + '&';
+  if (status) url += 'status='        + encodeURIComponent(status) + '&';
+  if (funcId) url += 'funcionario_id='+ encodeURIComponent(funcId) + '&';
+
+  const c = document.getElementById('historico-container');
+  c.innerHTML = '<div class="loading">Carregando...</div>';
+
+  const d = await get(url);
+  if (!d.ok) { c.innerHTML = `<div class="empty"><div class="icon">⚠️</div><p>${d.erro}</p></div>`; return; }
+  if (!d.data.length) { c.innerHTML = '<div class="empty"><div class="icon">📜</div><p>Nenhum lançamento encontrado para os filtros selecionados.</p></div>'; return; }
+
+  const tipoLabel = t => ({'hora_extra':'⏱️ Hora Extra','adicional_noturno':'🌙 Ad. Noturno','falta':'❌ Falta','comissao':'💰 Comissão','bonus':'🎁 Bônus','desconto':'↘️ Desconto','outro':'📌 Outro'}[t]||t);
+  const statusEl  = s => ({
+    aprovado:  '<span class="pill" style="background:#d1e7dd;color:#0a4a22">✅ Aprovado</span>',
+    rejeitado: '<span class="pill" style="background:#f8d7da;color:#721c24">❌ Rejeitado</span>',
+    pendente:  '<span class="pill" style="background:#fff3cd;color:#856404">⏳ Pendente</span>',
+  }[s] || `<span class="pill">${s}</span>`);
+
+  c.innerHTML = `<table class="hist-table">
+    <thead><tr>
+      <th>Funcionário</th><th>Mês</th><th>Tipo</th><th>Descrição</th>
+      <th>Qtd</th><th>Valor</th><th>Status</th><th>Motivo</th><th>Data</th>
+    </tr></thead>
+    <tbody>
+      ${d.data.map(a => `<tr class="hist-row hist-${a.status}">
+        <td style="font-weight:600">${a.funcionario_nome||'—'}</td>
+        <td style="font-size:12px">${a.mes_ref}</td>
+        <td>${tipoLabel(a.tipo)}</td>
+        <td style="font-size:12px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${a.descricao||''}">${a.descricao||'—'}</td>
+        <td style="text-align:center">${parseFloat(a.quantidade||0).toFixed(1)}</td>
+        <td style="font-family:monospace">${a.valor_total > 0 ? brl(a.valor_total) : '—'}</td>
+        <td>${statusEl(a.status)}</td>
+        <td style="font-size:11px;color:#dc2626">${a.motivo_rejeicao||''}</td>
+        <td style="font-size:11px;color:var(--muted)">${a.atualizado_em ? new Date(a.atualizado_em).toLocaleDateString('pt-BR') : '—'}</td>
+      </tr>`).join('')}
+    </tbody>
+  </table>`;
+}
+
 function abrirModalLanc() {
   const hoje = new Date().toISOString().slice(0,10);
   document.getElementById('lanc-data').value = hoje;
@@ -532,12 +621,32 @@ function abrirModalLanc() {
 }
 function atualizarCamposLanc() {
   const tipo = document.getElementById('lanc-tipo').value;
-  const qL = document.getElementById('lanc-qtd-label');
-  const vL = document.getElementById('lanc-vunit-label');
-  if (tipo==='falta') { qL.textContent='Quantidade (dias)'; vL.textContent='Desconto por dia (R$)'; }
-  else if (tipo==='comissao') { qL.textContent='Quantidade'; vL.textContent='Valor (R$)'; }
-  else if (tipo==='adicional_noturno') { qL.textContent='Horas noturnas'; vL.textContent='Valor por hora (R$)'; }
-  else { qL.textContent='Quantidade (horas)'; vL.textContent='Valor por hora (R$)'; }
+  const qL   = document.getElementById('lanc-qtd-label');
+  const vL   = document.getElementById('lanc-vunit-label');
+  const vWrap = document.getElementById('lanc-vunit').closest('.form-group') || document.getElementById('lanc-vunit').parentElement;
+
+  // Hora extra e adicional noturno: admin informa o valor/hora, funcionário só informa horas
+  const somenteQtd = (tipo === 'hora_extra' || tipo === 'adicional_noturno');
+
+  if (tipo === 'falta') {
+    qL.textContent = 'Quantidade (dias)';
+    vL.textContent = 'Desconto por dia (R$)';
+    vWrap.style.display = '';
+  } else if (tipo === 'hora_extra') {
+    qL.textContent = 'Quantidade de horas';
+    vWrap.style.display = 'none'; // admin define o valor/hora
+  } else if (tipo === 'adicional_noturno') {
+    qL.textContent = 'Horas noturnas';
+    vWrap.style.display = 'none'; // admin define o valor/hora
+  } else if (tipo === 'comissao') {
+    qL.textContent = 'Quantidade';
+    vL.textContent = 'Valor (R$)';
+    vWrap.style.display = '';
+  } else {
+    qL.textContent = 'Quantidade';
+    vL.textContent = 'Valor (R$)';
+    vWrap.style.display = '';
+  }
   calcLanc();
 }
 function calcLanc() {
@@ -557,7 +666,9 @@ async function salvarLancamento() {
   const data_ref = document.getElementById('lanc-data').value;
   const mes_ref = ymToMmYyyy(document.getElementById('sel-mes-meus').value||_mesAtual);
   if (!descricao) { toast('⚠️ Informe a descrição'); return; }
-  if (!quantidade||!valor_unitario) { toast('⚠️ Informe quantidade e valor'); return; }
+  const somenteQtd = (tipo === 'hora_extra' || tipo === 'adicional_noturno');
+  if (!quantidade) { toast('⚠️ Informe a quantidade'); return; }
+  if (!somenteQtd && !valor_unitario) { toast('⚠️ Informe o valor'); return; }
   const d = await post('/api/rh/lancamento', { funcionario_id:_meuFuncId, mes_ref, tipo, descricao, quantidade, valor_unitario, data_ref });
   if (!d.ok) { toast('❌ '+d.erro); return; }
   toast('✅ Enviado para aprovação!'); fecharModal('modal-lanc'); carregarMeusLanc();
@@ -602,6 +713,7 @@ function showTab(t) {
   if (t === 'relatorio')  carregarFuncsRelatorio();
   if (t === 'aprovacoes') carregarPendentes();
   if (t === 'meus')       carregarMeusLanc();
+  if (t === 'historico')  carregarHistorico();
 }
 
 // ── Init ────────────────────────────────────────────────────────────────────
@@ -611,6 +723,7 @@ async function init() {
   document.getElementById('sel-mes').value = ym;
   document.getElementById('sel-mes-rel').value = ym;
   if (document.getElementById('sel-mes-meus')) document.getElementById('sel-mes-meus').value = ym;
+  if (document.getElementById('sel-mes-hist'))  document.getElementById('sel-mes-hist').value  = ym;
   _escalaMes = { ano: hoje.getFullYear(), mes: hoje.getMonth() };
 
   // Detectar perfil do usuário logado via token JWT
@@ -650,6 +763,8 @@ async function init() {
     if (btnRel)    btnRel.style.display    = '';
     if (btnAprov)  btnAprov.style.display  = '';
     if (btnMeus)   btnMeus.style.display   = '';
+    const btnHist = document.getElementById('tab-btn-historico');
+    if (btnHist)   btnHist.style.display   = '';
     carregarResumo();
     get('/api/rh/lancamentos-pendentes/count').then(d => {
       if (d.ok) atualizarBadge(d.total);

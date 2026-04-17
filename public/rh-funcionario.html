@@ -283,10 +283,20 @@ function abrirModal(){
 function atualizarCampos(){
   const tipo=document.getElementById('lanc-tipo').value;
   const qL=document.getElementById('lanc-qtd-label'), vL=document.getElementById('lanc-vunit-label');
-  if(tipo==='falta')                              { qL.textContent='Dias'; vL.textContent='Desconto por dia (R$)'; }
-  else if(tipo==='adicional_noturno')             { qL.textContent='Horas noturnas'; vL.textContent='Valor por hora (R$)'; }
-  else if(['comissao','bonus','desconto','outro'].includes(tipo)) { qL.textContent='Quantidade'; vL.textContent='Valor (R$)'; }
-  else                                            { qL.textContent='Quantidade (horas)'; vL.textContent='Valor por hora (R$)'; }
+  const vInput=document.getElementById('lanc-vunit');
+  const vWrap=vInput.parentElement;
+  const somenteQtd=(tipo==='hora_extra'||tipo==='adicional_noturno');
+  if(tipo==='falta'){
+    qL.textContent='Dias'; vL.textContent='Desconto por dia (R$)'; vWrap.style.display='';
+  } else if(tipo==='hora_extra'){
+    qL.textContent='Quantidade de horas'; vWrap.style.display='none';
+  } else if(tipo==='adicional_noturno'){
+    qL.textContent='Horas noturnas'; vWrap.style.display='none';
+  } else if(['comissao','bonus','desconto','outro'].includes(tipo)){
+    qL.textContent='Quantidade'; vL.textContent='Valor (R$)'; vWrap.style.display='';
+  } else {
+    qL.textContent='Quantidade (horas)'; vL.textContent='Valor por hora (R$)'; vWrap.style.display='';
+  }
   calcTotal();
 }
 
@@ -308,7 +318,9 @@ async function enviarLancamento(){
   const data_ref=document.getElementById('lanc-data').value;
   const mes_ref=ymToMes(document.getElementById('sel-mes').value);
   if(!descricao){ toast('⚠️ Informe a descrição / motivo'); return; }
-  if(!quantidade||!valor_unit){ toast('⚠️ Informe quantidade e valor'); return; }
+  const somenteQtd=(tipo==='hora_extra'||tipo==='adicional_noturno');
+  if(!quantidade){ toast('⚠️ Informe a quantidade'); return; }
+  if(!somenteQtd&&!valor_unit){ toast('⚠️ Informe o valor'); return; }
   const btn=document.getElementById('btn-enviar');
   btn.disabled=true; btn.textContent='⏳ Enviando...';
   const d=await post('/api/rh/lancamento',{funcionario_id:_funcId,mes_ref,tipo,descricao,quantidade,valor_unitario:valor_unit,data_ref});
