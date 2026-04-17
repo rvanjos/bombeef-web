@@ -309,6 +309,24 @@ td{padding:5px 9px;vertical-align:middle;}
 <input type="file" id="f-ofx" accept=".ofx,.ofc,.xlsx,.xls,.csv" style="display:none" onchange="loadFile(this,'ext')">
 <input type="file" id="f-cc" accept=".csv,.xlsx,.xls,.pdf" style="display:none" onchange="loadFile(this,'cc')">
 
+<!-- Modal confirmação mês fatura CC -->
+<div class="mbg" id="m-cc-mes">
+  <div class="md" style="max-width:380px">
+    <div class="mdh"><h3>💳 Mês da Fatura</h3><button class="mdx" onclick="fecharModal('m-cc-mes')">×</button></div>
+    <div class="mdb">
+      <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Confirme o mês de competência desta fatura. Os lançamentos sem data serão atribuídos a este mês.</p>
+      <div class="fg">
+        <label>Mês da Fatura *</label>
+        <input type="month" id="cc-mes-input" style="width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:8px;font-size:14px">
+      </div>
+    </div>
+    <div class="mdf" style="gap:10px">
+      <button class="btn bn" onclick="fecharModal('m-cc-mes')">Cancelar</button>
+      <button class="btn bp" onclick="confirmarImportCC()">✅ Importar Fatura</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal Manual -->
 <!-- Modal Editar Lançamento -->
 <div class="mbg" id="m-edit-lanc">
@@ -883,7 +901,29 @@ async function procExt(file) {
   addLancs(lancs, file.name);
 }
 
+// Armazena o arquivo CC enquanto o usuário confirma o mês
+let _ccFilePendente = null;
+
 async function procCC(file) {
+  // Pede confirmação do mês antes de processar
+  _ccFilePendente = file;
+  // Pré-preenche com o mesRef atual
+  const [mm, yyyy] = mesRef.split('/');
+  document.getElementById('cc-mes-input').value = `${yyyy}-${mm}`;
+  document.getElementById('m-cc-mes').classList.add('open');
+}
+
+async function confirmarImportCC() {
+  fecharModal('m-cc-mes');
+  const file = _ccFilePendente;
+  _ccFilePendente = null;
+  if (!file) return;
+
+  // Mês confirmado pelo usuário
+  const ymVal = document.getElementById('cc-mes-input').value;
+  const [yyyy, mm] = ymVal.split('-');
+  const mesCC = `${mm}/${yyyy}`; // ex: "02/2026"
+
   const ext = file.name.split('.').pop().toLowerCase();
   if (ext === 'pdf') {
     toast('💳 Lendo fatura PDF...');
@@ -894,19 +934,15 @@ async function procCC(file) {
       for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
         const content = await page.getTextContent();
-        // Agrupa items por linha (Y), depois ordena por X dentro de cada linha
         const items = content.items.filter(it => it.str.trim());
-        // Agrupa por Y com tolerância de 4pt
         const linhasMap = new Map();
         for (const item of items) {
-          const y = Math.round(item.transform[5] / 4) * 4; // bucket de 4pt
+          const y = Math.round(item.transform[5] / 4) * 4;
           if (!linhasMap.has(y)) linhasMap.set(y, []);
           linhasMap.get(y).push({ x: item.transform[4], str: item.str });
         }
-        // Ordena linhas de cima para baixo (Y decrescente em pdfjs)
         const ysOrdenados = [...linhasMap.keys()].sort((a, b) => b - a);
         for (const y of ysOrdenados) {
-          // Ordena items da linha da esquerda para a direita
           const linha = linhasMap.get(y).sort((a, b) => a.x - b.x);
           const texto = linha.map(it => it.str).join(' ').trim();
           if (texto) fullText += texto + '\n';
@@ -915,6 +951,8 @@ async function procCC(file) {
       }
       const lancs = parseFaturaPDF(fullText, file.name);
       if (!lancs.length) { toast('⚠️ Nenhum lançamento encontrado no PDF'); return; }
+      // Corrige mês dos lançamentos sem data para o mês confirmado
+      lancs.forEach(l => { if (!l.data || !l.mes || l.mes === mesRef) { l.mes = mesCC; l.mesCaixa = mesCC; } });
       addLancs(lancs, file.name);
     } catch(e) {
       console.error('[procCC PDF]', e);
@@ -930,6 +968,8 @@ async function procCC(file) {
   const rows= XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
   const lancs = parseCCRows(rows);
   if (!lancs.length) { toast('⚠️ Nenhum lançamento encontrado na fatura'); return; }
+  // Corrige mês dos lançamentos sem data para o mês confirmado pelo usuário
+  lancs.forEach(l => { if (!l.data || !l.mes || l.mes === mesRef) { l.mes = mesCC; l.mesCaixa = mesCC; } });
   addLancs(lancs, file.name);
 }
 
@@ -1584,13 +1624,30 @@ function salvarMesDebounce(mes) {
 
 async function salvarMes(mes, silent=false) {
   // Exclui lançamentos de projeção (PREV_RECEITA) — são recalculados dinamicamente
-  const txsMes = TXS.filter(t => (t.mes || mesRef) === mes && t.fonte !== 'PREV_RECEITA');
+  // Lançamentos sem t.mes só pertencem ao mesRef atual — não os inclui em saves de outros meses
+  const txsMes = TXS.filter(t => {
+    if (t.fonte === 'PREV_RECEITA') return false;
+    const mTx = t.mes || (mes === mesRef ? mesRef : null);
+    return mTx === mes;
+  });
   console.log(`[salvarMes] mes=${mes} txs=${txsMes.length} sid=${(window._sessoesPorMes||{})[mes]} mesRef=${mesRef}`);
   if (!txsMes.length) { console.warn('[salvarMes] nenhum lançamento para', mes); return; }
-  // Usa o ID da sessão do mês específico — nunca usa sessId de outro mês como fallback
-  // O backend faz upsert por mes_ref quando sessao_id é null
-  const sid = (window._sessoesPorMes && window._sessoesPorMes[mes])
-           || (mes === mesRef ? sessId : null);
+
+  // Se não temos o sessao_id para este mês, busca do banco antes de salvar
+  // (resolve o caso de fev/2026 que ficou fora dos últimos 24 carregados)
+  let sid = (window._sessoesPorMes && window._sessoesPorMes[mes])
+         || (mes === mesRef ? sessId : null);
+  if (!sid) {
+    try {
+      const sessaoMes = await api.get(`/api/dre/sessoes/${encodeURIComponent(mes)}`);
+      if (sessaoMes.ok && sessaoMes.data?.id) {
+        sid = sessaoMes.data.id;
+        if (!window._sessoesPorMes) window._sessoesPorMes = {};
+        window._sessoesPorMes[mes] = sid;
+        console.log(`[salvarMes] sessão de ${mes} encontrada no banco: id=${sid}`);
+      }
+    } catch(_) {}
+  }
   try {
     const d = await api.post('/api/dre/salvar', {
       sessao_id: sid,
