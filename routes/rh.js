@@ -128,7 +128,8 @@ module.exports = function (pool) {
     try {
       const { rows } = await pool.query(`
         SELECT f.id, f.nome, f.cargo, f.email, f.telefone,
-               f.salario_base, f.vale_alimentacao, f.limite_retirada, f.ativo
+               f.salario_base, f.vale_alimentacao, f.limite_retirada, f.ativo,
+               f.usuario_id
         FROM funcionarios f
         WHERE f.ativo = true
         ORDER BY f.nome ASC

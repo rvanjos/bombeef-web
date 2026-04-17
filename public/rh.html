@@ -619,15 +619,14 @@ async function init() {
     if (token) {
       const payload = JSON.parse(atob(token.split('.')[1]));
       _perfil = payload.perfil || '';
-      const email = payload.email || '';
-      // Vincular funcionário pelo email (nome do usuário)
+      const userId = payload.id    || null;
+      const email  = payload.email || '';
+      // Vincular funcionário: 1º por usuario_id (vínculo explícito), 2º por email
       const funcs = await get('/api/rh/funcionarios');
       if (funcs.ok && funcs.data) {
-        // Tenta casar pelo email ou nome
-        const match = funcs.data.find(f =>
-          (f.email && f.email.toLowerCase() === email.toLowerCase()) ||
-          (f.nome && email && email.toLowerCase().includes(f.nome.split(' ')[0].toLowerCase()))
-        );
+        const match =
+          funcs.data.find(f => userId && f.usuario_id && parseInt(f.usuario_id) === parseInt(userId)) ||
+          funcs.data.find(f => email && f.email && f.email.toLowerCase() === email.toLowerCase());
         if (match) _meuFuncId = match.id;
       }
     }

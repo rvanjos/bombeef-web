@@ -221,11 +221,20 @@ async function init(){
     const tk=getToken();
     if(tk){
       const payload=JSON.parse(atob(tk.split('.')[1]));
-      const email=payload.email||payload.nome||'';
+      const userId  = payload.id   || null;   // ID do usuário no JWT
+      const email   = payload.email|| '';
       const funcs=await get('/api/rh/funcionarios');
       if(funcs.ok&&funcs.data?.length){
-        const match=funcs.data.find(f=>(f.email&&f.email.toLowerCase()===email.toLowerCase())||(f.nome&&email&&email.toLowerCase().includes(f.nome.split(' ')[0].toLowerCase())));
-        if(match){ _funcId=match.id; document.getElementById('h-nome').textContent=match.nome; document.getElementById('h-cargo').textContent=match.cargo||'Bom Beef Valinhos'; }
+        // 1º: match pelo usuario_id (vínculo explícito feito na Config)
+        // 2º: fallback por email (compatibilidade)
+        const match =
+          funcs.data.find(f => userId && f.usuario_id && parseInt(f.usuario_id) === parseInt(userId)) ||
+          funcs.data.find(f => email && f.email && f.email.toLowerCase() === email.toLowerCase());
+        if(match){
+          _funcId=match.id;
+          document.getElementById('h-nome').textContent=match.nome;
+          document.getElementById('h-cargo').textContent=match.cargo||'Bom Beef Valinhos';
+        }
       }
     }
   }catch(e){ console.warn('[rh-func]',e); }
