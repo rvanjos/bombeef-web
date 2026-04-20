@@ -239,10 +239,10 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
     <div class="cal-layout">
       <div>
         <div class="cal-grid" id="cal-dow-row">
-          <div class="cal-dow">Dom</div><div class="cal-dow">Seg</div>
-          <div class="cal-dow">Ter</div><div class="cal-dow">Qua</div>
-          <div class="cal-dow">Qui</div><div class="cal-dow">Sex</div>
-          <div class="cal-dow">Sáb</div>
+          <div class="cal-dow">Sáb</div><div class="cal-dow">Dom</div>
+          <div class="cal-dow">Seg</div><div class="cal-dow">Ter</div>
+          <div class="cal-dow">Qua</div><div class="cal-dow">Qui</div>
+          <div class="cal-dow">Sex</div>
         </div>
         <div class="cal-grid" id="cal-grid"></div>
         <!-- Totais por semana -->
@@ -561,7 +561,10 @@ async function renderCalendario(){
   const hoje = new Date(); hoje.setHours(0,0,0,0);
   const primeiroDia = new Date(calAno,calMesN,1);
   const ultimoDia   = new Date(calAno,calMesN+1,0);
-  const inicioPad   = primeiroDia.getDay();
+  // Semana começa no Sábado (getDay()===6 → posição 0)
+  // Dom=1, Seg=2, Ter=3, Qua=4, Qui=5, Sex=6
+  const dow = primeiroDia.getDay(); // 0=Dom,1=Seg...6=Sáb
+  const inicioPad = (dow + 1) % 7;  // Sáb=0, Dom=1, Seg=2, Ter=3, Qua=4, Qui=5, Sex=6
   const totalCelulas= Math.ceil((inicioPad+ultimoDia.getDate())/7)*7;
 
   let grid='';

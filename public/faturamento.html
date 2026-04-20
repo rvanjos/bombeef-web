@@ -1221,43 +1221,14 @@ function renderMensal(lista, ini, fim) {
     + '<td style="text-align:right;padding:8px 12px;color:var(--green)">' + fmt.brl(totBruto) + '</td>'
     + '</tr>';
 
-  // Alerta limite MEI anual — calcula acumulado MEI do ano selecionado (ou ano atual)
-  var anoRef = ini ? ini.slice(0,4) : new Date().getFullYear().toString();
-  var meiAno = _dadosMensal
-    .filter(m => parseMesYm(m.mes).startsWith(anoRef))
-    .reduce((s,m) => s + parseFloat(m.fat_mei||0), 0);
-  var limEl = document.getElementById('men-limite-mei');
-  if (meiAno > 0) {
-    var pctLimite = Math.round(meiAno / LIMITE_MEI_ANUAL * 100);
-    var corBarra = pctLimite >= 90 ? '#dc2626' : pctLimite >= 70 ? '#f59e0b' : '#22c55e';
-    var msg = pctLimite >= 100
-      ? '🚨 <strong>Limite MEI ultrapassado!</strong> Considere regularizar a situação.'
-      : pctLimite >= 90
-      ? '⚠️ <strong>Atenção:</strong> MEI acima de 90% do limite anual.'
-      : pctLimite >= 70
-      ? '⚠️ Aproximando-se do limite MEI anual.'
-      : '✅ Dentro do limite MEI anual.';
-    limEl.style.display = '';
-    limEl.innerHTML = '<div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:14px 18px">'
-      + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
-      + '<span style="font-size:12px;font-weight:700">📊 Limite MEI Anual — ' + anoRef + '</span>'
-      + '<span style="font-size:12px;font-family:monospace">' + fmt.brl(meiAno) + ' / ' + fmt.brl(LIMITE_MEI_ANUAL) + ' <strong style="color:' + corBarra + '">' + pctLimite + '%</strong></span>'
-      + '</div>'
-      + '<div style="background:#f0ebe4;border-radius:6px;height:10px;overflow:hidden">'
-      + '<div style="background:' + corBarra + ';height:100%;width:' + Math.min(pctLimite,100) + '%;border-radius:6px;transition:width .5s"></div>'
-      + '</div>'
-      + '<div style="font-size:11px;color:var(--muted);margin-top:6px">' + msg + ' &nbsp;·&nbsp; Saldo disponível: <strong>' + fmt.brl(Math.max(0, LIMITE_MEI_ANUAL - meiAno)) + '</strong></div>'
-      + '</div>';
-  } else {
-    limEl.style.display = 'none';
-  }
+  // Oculta painel de limite MEI — MEI é apenas uma forma de emissão, sem limite a controlar
+  document.getElementById('men-limite-mei').style.display = 'none';
 
   // ── Painel NFC-e vs MEI com estimativa DAS ────────────────────────────────
-  var pctSimples = parseFloat(localStorage.getItem('bb_pct_simples') || '8');
-  var nfcePeriodo = totNfce; // do período filtrado
+  var pctSimples  = parseFloat(localStorage.getItem('bb_pct_simples') || '8');
+  var nfcePeriodo = totNfce;
   var meiPeriodo  = totMei;
   var dasEstimado = Math.round(nfcePeriodo * pctSimples / 100 * 100) / 100;
-  var saldoMei    = Math.max(0, LIMITE_MEI_ANUAL - meiAno);
 
   var panelEl = document.getElementById('men-nfce-mei');
   var cardsEl = document.getElementById('nfce-mei-cards');
@@ -1275,7 +1246,7 @@ function renderMensal(lista, ini, fim) {
       '<div style="background:#dcfce7;border-radius:8px;padding:12px 14px">'
         + '<div style="font-size:10px;font-weight:700;color:#166534;text-transform:uppercase;margin-bottom:4px">🤝 MEI — ' + mesesStr + '</div>'
         + '<div style="font-size:18px;font-weight:800;font-family:monospace;color:#166534">' + fmt.brl(meiPeriodo) + '</div>'
-        + '<div style="font-size:10px;color:#22c55e;margin-top:2px">' + totQtdMei + ' pedidos · Saldo anual: <strong>' + fmt.brl(saldoMei) + '</strong></div>'
+        + '<div style="font-size:10px;color:#22c55e;margin-top:2px">' + totQtdMei + ' pedidos</div>'
         + '</div>',
       // DAS estimado
       '<div style="background:#fef9c3;border-radius:8px;padding:12px 14px">'
