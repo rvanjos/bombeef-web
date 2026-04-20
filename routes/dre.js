@@ -535,64 +535,11 @@ module.exports = function (pool) {
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
-  // ── Espelha lançamentos do JSON na tabela dre_lancamentos ────────────────
-  // Garante que os dados nunca se percam — tabela é a fonte de verdade para backup
+  // ── espelharLancamentos — DESABILITADO ───────────────────────────────────
+  // Causava N queries por save esgotando o pool de conexões
+  // Os dados ficam salvos no dados_json da sessão (fonte primária)
   async function espelharLancamentos(sessaoId, transacoes) {
-    if (!sessaoId || !Array.isArray(transacoes)) return;
-    try {
-      for (const t of transacoes) {
-        if (!t.lancamento || t.valor === undefined) continue;
-        const fitid = t.fitid || null;
-        // Se tem fitid, upsert por fitid+sessao_id
-        if (fitid) {
-          await pool.query(`
-            INSERT INTO dre_lancamentos
-              (sessao_id, fitid, fonte, lancamento, razao_social, valor, data_lanc, mes, mes_caixa,
-               categoria, grupo_dre, ignorar, portador, atualizado_em)
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,NOW())
-            ON CONFLICT DO NOTHING
-          `, [sessaoId, fitid, t.fonte||'EXTRATO', t.lancamento||'',
-              t.razaoSocial||null, parseFloat(t.valor||0),
-              t.data||null, t.mes||null, t.mesCaixa||null,
-              t.categoria||null, t.grupoKey||null,
-              t.ignorar||false, t.portador||null]);
-          // Atualiza categoria se foi classificado depois
-          if (t.categoria) {
-            await pool.query(`
-              UPDATE dre_lancamentos SET categoria=$1, grupo_dre=$2, atualizado_em=NOW()
-              WHERE sessao_id=$3 AND fitid=$4
-            `, [t.categoria, t.grupoKey||null, sessaoId, fitid]);
-          }
-        } else {
-          // Sem fitid — usa hash para evitar duplicata
-          const hash = `${t.data||''}_${String(t.valor||'')}`.replace(/\./g,'_');
-          await pool.query(`
-            INSERT INTO dre_lancamentos
-              (sessao_id, fonte, lancamento, razao_social, valor, data_lanc, mes, mes_caixa,
-               categoria, grupo_dre, ignorar, portador, atualizado_em)
-            SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW()
-            WHERE NOT EXISTS (
-              SELECT 1 FROM dre_lancamentos
-              WHERE sessao_id=$1 AND data_lanc=$6 AND valor=$5
-                AND lancamento=$3
-            )
-          `, [sessaoId, t.fonte||'MANUAL', t.lancamento||'',
-              t.razaoSocial||null, parseFloat(t.valor||0),
-              t.data||null, t.mes||null, t.mesCaixa||null,
-              t.categoria||null, t.grupoKey||null,
-              t.ignorar||false, t.portador||null]);
-        }
-      }
-      // Atualiza categorias de lançamentos existentes (classificações feitas pelo usuário)
-      for (const t of transacoes.filter(t => t.fitid && t.categoria)) {
-        await pool.query(`
-          UPDATE dre_lancamentos SET categoria=$1, grupo_dre=$2, ignorar=$3, atualizado_em=NOW()
-          WHERE sessao_id=$4 AND fitid=$5
-        `, [t.categoria, t.grupoKey||null, t.ignorar||false, sessaoId, t.fitid]);
-      }
-    } catch(e) {
-      console.error('[dre/espelhar]', e.message);
-    }
+    return; // no-op
   }
 
   // Helper: extrai array de transações de qualquer formato (string, objeto, array)
@@ -690,7 +637,12 @@ module.exports = function (pool) {
            WHERE id=$3 RETURNING id`,
           [desc, dadosStr, sessao_id]
         );
-        if (upd.rows.length) sid = upd.rows[0].id;
+        if (upd.rows.length) {
+          sid = upd.rows[0].id;
+          console.log(`[dre/salvar] UPDATE by id: mes=${mes_ref} sid=${sid} txs=${(dados_json?.transactions||[]).length}`);
+        } else {
+          console.warn(`[dre/salvar] sessao_id=${sessao_id} não encontrada no banco para mes=${mes_ref}`);
+        }
       }
 
       // 2) Se não achou pelo id, busca sessão do mesmo mês e atualiza
