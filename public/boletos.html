@@ -39,7 +39,7 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
 .tbl tr:last-child td{border-bottom:none;}
 .tbl tr:hover td{background:#fdf9f4;}
 .pill{display:inline-block;padding:2px 9px;border-radius:8px;font-size:11px;font-weight:600;}
-.pill-v{background:#fff3cd;color:#856404;} .pill-p{background:#d1e7dd;color:#0a4a22;} .pill-a{background:#cfe2ff;color:#084298;} .pill-r{background:#f8d7da;color:#721c24;}
+.pill-v{background:#fff3cd;color:#856404;} .pill-p{background:#d1e7dd;color:#0a4a22;} .pill-a{background:#cfe2ff;color:#084298;} .pill-r{background:#f8d7da;color:#721c24;} .pill-prog{background:#ede9fe;color:#5b21b6;font-weight:700;}
 .act-btn{padding:4px 10px;border:1px solid var(--border);border-radius:6px;background:var(--white);cursor:pointer;font-size:12px;transition:all .15s;margin-right:3px;}
 .act-btn:hover{background:var(--bg);}
 .val-r{color:var(--red-l);font-weight:600;}
@@ -140,6 +140,7 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
 .cal-boleto{font-size:10px;font-weight:700;padding:2px 5px;border-radius:4px;margin-bottom:2px;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;}
 .cal-boleto.avencer{background:#fff3cd;color:#856404;}
+.cal-boleto.programado{background:#ede9fe;color:#5b21b6;font-weight:600;}
 .cal-boleto.vencido{background:#f8d7da;color:#721c24;}
 .cal-boleto.pago{background:#d1e7dd;color:#0a4a22;}
 .cal-mais{font-size:10px;color:var(--muted);text-align:center;margin-top:2px;}
@@ -597,7 +598,7 @@ async function renderCalendario(){
       : '<div class="cal-dn">'+(fora?'':diaN)+'</div>';
 
     const bsHtml = bsDia.slice(0,2).map(b=>{
-      const cl=b.status==='pago'?'pago':b.status==='vencido'?'vencido':'avencer';
+    const cl=b.status==='pago'?'pago':b.status==='vencido'?'vencido':b.dt_programado?'programado':'avencer';
       const nm=b.fornecedor.length>13?b.fornecedor.slice(0,13)+'…':b.fornecedor;
       return '<div class="cal-boleto '+cl+'" title="'+b.fornecedor+' — '+fmt.brl(b.valor)+'">'+nm+'</div>';
     }).join('');
@@ -677,19 +678,24 @@ function calSemana(idx){
       + '</div>';
 
     bsDia.sort((a,b2)=>parseFloat(b2.valor)-parseFloat(a.valor)).forEach(b => {
-      const cl  = b.status==='pago'?'pill-p':b.status==='vencido'?'pill-r':'pill-v';
-      const st  = {pago:'✅ Pago',vencido:'🔴 Vencido',avencer:'🟡 A Vencer'}[b.status]||b.status;
+      const cl  = b.status==='pago'?'pill-p':b.status==='vencido'?'pill-r':b.dt_programado?'pill-prog':'pill-v';
+      const st  = b.status==='pago'?'✅ Pago':b.status==='vencido'?'🔴 Vencido':b.dt_programado?'📅 Programado':'🟡 A Vencer';
       const parc= b.totalParcelas>1 ? ' <span style="font-size:10px;color:var(--muted)">'+b.parcela+'/'+b.totalParcelas+'</span>' : '';
       html += '<div style="border:1px solid var(--border);border-top:none;padding:8px 10px;background:#fff">'
         + '<div style="font-weight:600;font-size:13px">'+b.fornecedor+parc+'</div>'
         + (b.produto?'<div style="font-size:11px;color:var(--muted)">'+b.produto+'</div>':'')
         + (b.nf?'<div style="font-size:10px;color:var(--blue)">NF-e '+b.nf+'</div>':'')
         + (b.plano?'<div style="font-size:10px;color:var(--muted)">'+b.plano+'</div>':'')
+        + (b.dt_programado?'<div style="font-size:10px;color:#5b21b6;margin-top:2px">📅 Pgto programado em '+fmt.date(b.dt_programado)+'</div>':'')
         + '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:5px">'
         + '<span class="pill '+cl+'" style="font-size:10px">'+st+'</span>'
         + '<span style="font-weight:700;font-family:monospace;font-size:14px">'+fmt.brl(b.valor)+'</span>'
         + '</div>'
-        + (b.status!=='pago'?'<button class="act-btn" onclick="abrirBaixa('+b.dbId+')" style="margin-top:6px;width:100%;padding:5px;background:var(--green);color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:11px;font-weight:600">✅ Registrar Pagamento</button>':'')
+        + '<div style="display:flex;gap:6px;margin-top:6px">'
+        + (b.status!=='pago'&&!b.dt_programado?'<button class="act-btn" onclick="programarBoleto('+b.dbId+')" style="flex:1;padding:5px;background:#7c3aed;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:11px;font-weight:600">📅 Programar Pgto</button>':'')
+        + (b.dt_programado&&b.status!=='pago'?'<button class="act-btn" onclick="desprogramarBoleto('+b.dbId+')" style="flex:1;padding:5px;background:#f3f0ff;color:#5b21b6;border:1px solid #c4b5fd;border-radius:5px;cursor:pointer;font-size:11px;font-weight:600">↩ Desfazer</button>':'')
+        + (b.status!=='pago'?'<button class="act-btn" onclick="abrirBaixa('+b.dbId+')" style="flex:1;padding:5px;background:var(--green);color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:11px;font-weight:600">✅ Baixar</button>':'')
+        + '</div>'
         + '</div>';
     });
 
@@ -719,16 +725,20 @@ function calDia(dtStr){
     document.getElementById('cal-side-list').innerHTML=bsDia
       .sort((a,b)=>parseFloat(b.valor)-parseFloat(a.valor))
       .map(b=>{
-        const cl=b.status==='pago'?'pill-p':b.status==='vencido'?'pill-r':'pill-v';
-        const st={pago:'Pago',vencido:'Vencido',avencer:'A Vencer'}[b.status]||b.status;
+        const cl=b.status==='pago'?'pill-p':b.status==='vencido'?'pill-r':b.dt_programado?'pill-prog':'pill-v';
+        const st=b.status==='pago'?'Pago':b.status==='vencido'?'Vencido':b.dt_programado?'📅 Programado':'A Vencer';
         return '<div class="side-item">'
           +'<div class="si-forn">'+b.fornecedor+'</div>'
           +(b.produto?'<div style="font-size:11px;color:var(--muted)">'+b.produto+'</div>':'')
           +(b.nf?'<div style="font-size:10px;color:var(--blue)">NF-e '+b.nf+'</div>':'')
+          +(b.dt_programado?'<div style="font-size:10px;color:#5b21b6">📅 '+fmt.date(b.dt_programado)+'</div>':'')
           +'<div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">'
           +'<span class="pill '+cl+'">'+st+'</span>'
           +'<span class="si-val">'+fmt.brl(b.valor)+'</span>'
-          +'</div></div>';
+          +'</div>'
+          +(b.status!=='pago'&&!b.dt_programado?'<button onclick="programarBoleto('+b.dbId+')" style="margin-top:5px;width:100%;padding:4px;background:#7c3aed;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:10px;font-weight:600">📅 Programar Pgto</button>':'')
+          +(b.dt_programado&&b.status!=='pago'?'<button onclick="desprogramarBoleto('+b.dbId+')" style="margin-top:5px;width:100%;padding:4px;background:#f3f0ff;color:#5b21b6;border:1px solid #c4b5fd;border-radius:5px;cursor:pointer;font-size:10px;font-weight:600">↩ Desfazer programação</button>':'')
+          +'</div>';
       }).join('');
   });
 }
@@ -803,8 +813,8 @@ function renderizar(lista){
         const isVenc = venc && venc < hoje && b.status !== 'pago';
         const vencStr = b.vencimento ? fmt.date(b.vencimento) : '—';
         const statusCls = b.status==='pago' ? 'pago' : isVenc ? 'vencido' : '';
-        const pillTxt = b.status==='pago' ? '✅ Pago' : isVenc ? '🔴 Vencido' : '🟡 A Vencer';
-        const pillCol = b.status==='pago' ? '#2ecc71' : isVenc ? 'var(--red-l)' : '#f39c12';
+        const pillTxt = b.status==='pago' ? '✅ Pago' : isVenc ? '🔴 Vencido' : b.dt_programado ? '📅 Programado' : '🟡 A Vencer';
+        const pillCol = b.status==='pago' ? '#2ecc71' : isVenc ? 'var(--red-l)' : b.dt_programado ? '#5b21b6' : '#f39c12';
         return `<div class="mob-boleto-card ${statusCls}">
           <div class="mob-forn">${b.fornecedor}</div>
           <div class="mob-meta">
@@ -819,11 +829,14 @@ function renderizar(lista){
           <div class="mob-row" style="font-size:12px;color:var(--muted)">
             <span>Venc: <strong style="color:${isVenc?'var(--red-l)':'var(--text)'}">${vencStr}</strong></span>
             <span style="display:flex;gap:4px;align-items:center">
+              ${b.dt_programado ? `<span style="font-size:11px;background:#ede9fe;color:#5b21b6;padding:2px 7px;border-radius:5px">📅 ${fmt.date(b.dt_programado)}</span>` : ''}
               ${b.cartaoCredito ? `<span style="font-size:11px;background:#ede9fe;color:#5b21b6;padding:2px 7px;border-radius:5px;font-weight:600">💳 ${b.cartaoCredito}</span>` : ''}
               ${b.vinculadoExtrato ? `<span style="font-size:11px;background:#d4edda;color:#155724;padding:2px 7px;border-radius:5px">🔗 Extrato</span>` : ''}
             </span>
           </div>
           <div class="mob-acoes">
+            ${b.status!=='pago'&&!b.dt_programado ? `<button onclick="programarBoleto(${b.dbId})" style="background:#7c3aed;color:#fff;border:none;border-radius:5px;padding:5px 8px;font-size:11px;font-weight:600;cursor:pointer">📅 Programar</button>` : ''}
+            ${b.dt_programado&&b.status!=='pago' ? `<button onclick="desprogramarBoleto(${b.dbId})" style="background:#f3f0ff;color:#5b21b6;border:1px solid #c4b5fd;border-radius:5px;padding:5px 8px;font-size:11px;cursor:pointer">↩</button>` : ''}
             ${b.status!=='pago' ? `<button class="mob-pagar" onclick="abrirBaixa(${b.dbId})">✅ Pagar</button>` : ''}
             <button onclick="abrirModal(${b.dbId})">✏️ Editar</button>
             <button onclick="excluir(${b.dbId})" style="color:var(--red-l)">🗑</button>
@@ -840,9 +853,11 @@ function renderizar(lista){
       ? '<span class="pill pill-p">Pago</span>'
       : isVenc
         ? '<span class="pill pill-r">Vencido</span>'
-        : b.status==='avencer'
-          ? '<span class="pill pill-a">A Vencer</span>'
-          : `<span class="pill pill-v">${b.status}</span>`;
+        : b.dt_programado
+          ? '<span class="pill pill-prog">📅 Programado</span>'
+          : b.status==='avencer'
+            ? '<span class="pill pill-a">A Vencer</span>'
+            : `<span class="pill pill-v">${b.status}</span>`;
     const vencStr = b.vencimento ? fmt.date(b.vencimento) : '—';
     const vencClass = isVenc ? 'val-r' : '';
     return `<tr>
@@ -940,6 +955,25 @@ async function excluir(dbId){
   const d = await api.delete(`/api/boletos/${dbId}`);
   if(d.ok){ toast('Boleto cancelado'); carregar(); carregarKPIs(); }
   else toast('Erro: '+d.erro);
+}
+
+// ── Programar / Desprogramar pagamento ────────────────────────────────────
+async function programarBoleto(dbId) {
+  const hoje = new Date().toISOString().slice(0,10);
+  const dt = prompt('Data da programação (quando agendou no banco):', hoje);
+  if (!dt) return;
+  const d = await api.patch(`/api/boletos/${dbId}/programar`, { dtProgramado: dt });
+  if (!d.ok) { toast('Erro: ' + d.erro); return; }
+  toast('📅 Pagamento programado!');
+  renderCalendario();
+}
+
+async function desprogramarBoleto(dbId) {
+  if (!confirm('Desfazer a programação deste boleto?')) return;
+  const d = await api.patch(`/api/boletos/${dbId}/programar`, { dtProgramado: null });
+  if (!d.ok) { toast('Erro: ' + d.erro); return; }
+  toast('↩ Programação removida');
+  renderCalendario();
 }
 
 // ── Baixa ──────────────────────────────────────────────────────────────────

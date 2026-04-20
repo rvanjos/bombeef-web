@@ -74,6 +74,7 @@ module.exports = function (pool) {
       ['extrato_lancamento', 'TEXT'],
       ['atualizado_em',      'TIMESTAMPTZ DEFAULT NOW()'],
       ['cartao_credito',     'TEXT'],   // ex: 'Itaú Visa', 'Nubank', 'BB Mastercard'
+      ['dt_programado',      'DATE'],   // data em que o pagamento foi programado no banco
     ];
 
     for (const [col, def] of colunas) {
@@ -441,8 +442,9 @@ module.exports = function (pool) {
           mes_competencia  = COALESCE($14, mes_competencia),
           mes_caixa        = COALESCE($15, mes_caixa),
           cartao_credito   = $16,
+          dt_programado    = $17,
           atualizado_em    = NOW()
-        WHERE id = $17
+        WHERE id = $18
       `, [
         b.fornecedor||null, b.produto||null, dtNota, b.nf||null,
         b.parcela||null, b.totalParcelas?parseInt(b.totalParcelas):null,
@@ -452,6 +454,7 @@ module.exports = function (pool) {
         b.obs !== undefined ? (b.obs||null) : null,
         b.codigoBarras||null, mesComp||null, mesCaixa||null,
         b.cartaoCredito||null,
+        b.dtProgramado !== undefined ? (b.dtProgramado||null) : null,
         req.params.id,
       ]);
       if (!rowCount) return res.status(404).json({ ok: false, erro: 'Não encontrado' });
@@ -460,6 +463,18 @@ module.exports = function (pool) {
       console.error('[boletos/PUT]', e.message);
       res.status(500).json({ ok: false, erro: e.message });
     }
+  });
+
+  // ── PATCH /:id/programar — marcar/desmarcar programação de pagamento ────────
+  r.patch('/:id/programar', async (req, res) => {
+    const { dtProgramado } = req.body; // null para desmarcar
+    try {
+      await pool.query(
+        `UPDATE boletos SET dt_programado=$1, atualizado_em=NOW() WHERE id=$2`,
+        [dtProgramado || null, req.params.id]
+      );
+      res.json({ ok: true, dt_programado: dtProgramado || null });
+    } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
   // ── DELETE /:id ────────────────────────────────────────────────────────────
