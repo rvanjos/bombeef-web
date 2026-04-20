@@ -486,6 +486,7 @@ td{padding:5px 9px;vertical-align:middle;}
 <script>
 const {api, fmt, toast} = BB;
 let TXS=[], sessId=null, mesRef='', files=[], supMem={}, selIds=new Set(), _sv;
+let _estoquesMes = {}; // { 'MM/YYYY': valorEstoqueFinal }
 let _ignorarTrocarMes = false;
 const MO=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
@@ -817,7 +818,6 @@ async function carregarSessao() {
 
       if (dados.loadedFiles?.length) files = [...files, ...dados.loadedFiles];
       if (dados.supplierMem) {
-        // Filtra entradas inválidas do supMem (categorias que não existem mais no CATS)
         const memFiltrada = {};
         for (const [k, v] of Object.entries(dados.supplierMem)) {
           if (v && Object.values(CATS).some(g => g.s.includes(v))) {
@@ -825,6 +825,11 @@ async function carregarSessao() {
           }
         }
         supMem = { ...supMem, ...memFiltrada };
+      }
+      // Carrega estoques finais por mês
+      if (dados.estoquesMes) {
+        window._estoquesMes = { ...(window._estoquesMes||{}), ...dados.estoquesMes };
+        _estoquesMes = window._estoquesMes;
       }
       window._sessoesPorMes[r.data.mes_ref] = r.data.id;
     }
@@ -1624,10 +1629,11 @@ function salvarMesDebounce(mes) {
 }
 
 async function salvarMes(mes, silent=false) {
-  // Exclui lançamentos de projeção (PREV_RECEITA) — são recalculados dinamicamente
+  // Exclui lançamentos de projeção — são recalculados dinamicamente
   // Lançamentos sem t.mes só pertencem ao mesRef atual — não os inclui em saves de outros meses
   const txsMes = TXS.filter(t => {
     if (t.fonte === 'PREV_RECEITA') return false;
+    if (t.fonte === 'PREV_DAS') return false;
     const mTx = t.mes || (mes === mesRef ? mesRef : null);
     return mTx === mes;
   });
@@ -1658,6 +1664,7 @@ async function salvarMes(mes, silent=false) {
         transactions: txsMes,
         loadedFiles: mes === mesRef ? files : [],
         supplierMem: supMem,
+        estoquesMes: window._estoquesMes || {},
         _savedAt: new Date().toISOString()
       }
     });
@@ -1927,6 +1934,18 @@ function togglePct() {
 function renderDRE(){_buildDRE(document.getElementById('dre-body'),false);}
 function renderDREFull(){_buildDRE(document.getElementById('dre-full-body'),true);}
 
+function setEstoqueFinal(mesEnc, valor) {
+  const mes = mesEnc.replace('_', '/');
+  const val = parseFloat(valor) || 0;
+  if (!window._estoquesMes) window._estoquesMes = {};
+  if (val > 0) window._estoquesMes[mes] = val;
+  else delete window._estoquesMes[mes];
+  _estoquesMes = window._estoquesMes;
+  renderDRE();
+  if (document.getElementById('m-dre')?.classList.contains('open')) renderDREFull();
+  autoSv();
+}
+
 let _dreIsFS = false;
 function toggleDREFullscreen() {
   _dreIsFS = !_dreIsFS;
@@ -2090,7 +2109,77 @@ function _buildDRE(el, full) {
   // ── BLOCO 2: CMV ──────────────────────────────────────────────────────────
   h += renderSecLabel('2. (-) CUSTO DA MERCADORIA VENDIDA (CMV)');
   h += renderGrupo('CMV');
-  meses.forEach(m=>{ lucBrutoMes[m]=(lucBrutoMes[m]||0)+sg('CMV',m); });
+
+  // Ajuste de estoque: CMV real = Compras + Estoque Inicial - Estoque Final
+  // Estoque Inicial do mês M = Estoque Final do mês anterior
+  const EST = window._estoquesMes || {};
+  // Linha de ajuste de estoque no DRE
+  const estLinha = (() => {
+    let html = `<tr style="background:#fff8f0">
+      <td style="${TDL};color:#b35c00;font-size:11px;font-style:italic;padding-left:${full?'28':'20'}px">
+        📦 Ajuste de Estoque <span style="font-size:10px;color:#aaa">(+ini −fin)</span>
+      </td>`;
+    let totalAjuste = 0;
+    for (const m of meses) {
+      // Estoque inicial = estoque final do mês anterior
+      const [mm, yy] = m.split('/');
+      const dtAnterior = new Date(parseInt(yy), parseInt(mm) - 2, 1);
+      const mAnterior = `${String(dtAnterior.getMonth()+1).padStart(2,'0')}/${dtAnterior.getFullYear()}`;
+      const estIni = parseFloat(EST[mAnterior] || 0);
+      const estFin = parseFloat(EST[m] || 0);
+      const ajuste = estIni - estFin; // positivo = consumiu estoque (aumenta CMV); negativo = estocou (reduz CMV)
+      totalAjuste += ajuste;
+      const cor = ajuste > 0 ? '#e74c3c' : ajuste < 0 ? '#2ecc71' : '#bbb';
+      const txt = ajuste === 0
+        ? '<span style="color:#bbb;font-family:\'DM Mono\',monospace">—</span>'
+        : `<span style="font-family:'DM Mono',monospace;color:${cor}">${ajuste > 0 ? '-' : '+'}${fmt.brl(Math.abs(ajuste))}</span>`;
+      html += `<td style="${TD}">${txt}</td>`;
+    }
+    if (showTot) {
+      const cor = totalAjuste > 0 ? '#e74c3c' : totalAjuste < 0 ? '#2ecc71' : '#bbb';
+      html += `<td style="${TD};font-weight:700">${totalAjuste === 0 ? '—' : `<span style="font-family:'DM Mono',monospace;color:${cor}">${totalAjuste > 0 ? '-' : '+'}${fmt.brl(Math.abs(totalAjuste))}</span>`}</td>`;
+    }
+    html += '</tr>';
+    return html;
+  })();
+  h += estLinha;
+
+  // Linha editável de Estoque Final por mês
+  const estFinalLinha = (() => {
+    let html = `<tr style="background:#fff3e0">
+      <td style="${TDL};color:#b35c00;font-weight:600;font-size:11px;padding-left:${full?'28':'20'}px">
+        📦 Estoque Final (informar)
+      </td>`;
+    for (const m of meses) {
+      const val = parseFloat(EST[m] || 0);
+      const mEnc = m.replace('/', '_');
+      html += `<td style="${TD};padding:3px 6px">
+        <input type="number" step="100" min="0"
+          value="${val || ''}"
+          placeholder="0,00"
+          title="Estoque final de ${m}"
+          style="width:90px;text-align:right;font-size:11px;font-family:'DM Mono',monospace;border:1px solid #fcd34d;border-radius:4px;padding:2px 5px;background:#fffbeb"
+          onchange="setEstoqueFinal('${mEnc}', this.value)"
+          onclick="event.stopPropagation()"
+        >
+      </td>`;
+    }
+    if (showTot) html += `<td style="${TD}"></td>`;
+    html += '</tr>';
+    return html;
+  })();
+  h += estFinalLinha;
+
+  // Incorpora ajuste ao CMV para o Lucro Bruto
+  meses.forEach(m => {
+    const [mm, yy] = m.split('/');
+    const dtAnterior = new Date(parseInt(yy), parseInt(mm) - 2, 1);
+    const mAnterior = `${String(dtAnterior.getMonth()+1).padStart(2,'0')}/${dtAnterior.getFullYear()}`;
+    const estIni = parseFloat((window._estoquesMes||{})[mAnterior] || 0);
+    const estFin = parseFloat((window._estoquesMes||{})[m] || 0);
+    const ajuste = estIni - estFin;
+    lucBrutoMes[m] = (lucBrutoMes[m] || 0) + sg('CMV', m) + ajuste;
+  });
   h += renderSubtotal('CMV', null);
 
   // ── RESULTADO 1: LUCRO BRUTO ───────────────────────────────────────────────
@@ -2105,6 +2194,61 @@ function _buildDRE(el, full) {
     h += renderGrupo(gk);
     meses.forEach(m=>{ lucOpMes[m]=(lucOpMes[m]||0)+sg(gk,m); });
     h += renderSubtotal(gk, null);
+  }
+
+  // ── DAS / Simples Nacional estimado ───────────────────────────────────────
+  // Regra: para cada mês, verifica se já existe lançamento "Simples Nacional" classificado.
+  // Se não existe (pagamento ainda não feito), mostra estimativa = NFC-e mês anterior × %
+  const pctDAS = parseFloat(localStorage.getItem('bb_pct_simples') || '8') / 100;
+  const CAT_SIMPLES = 'Simples Nacional';
+  // Carrega NFC-e por mês do Faturamento (salvo pelo iframe de Faturamento)
+  try { window._nfcePorMes = JSON.parse(localStorage.getItem('bb_nfce_por_mes') || '{}'); } catch(_) { window._nfcePorMes = {}; }
+
+  // Verifica quais meses já têm pagamento real do Simples
+  const mesesComSimples = new Set(
+    TXS.filter(t => !t.ignorar && t.categoria === CAT_SIMPLES).map(t => t.mes || mesRef)
+  );
+
+  // Para estimar o DAS de um mês M, precisa do NFC-e do mês anterior
+  // Busca NFC-e por mês a partir dos dados do Faturamento (se disponível) ou suprime
+  const dasEstMes = {};
+  for (const m of meses) {
+    if (mesesComSimples.has(m)) continue; // já tem o real, não mostra estimativa
+    // Calcula mês anterior
+    const [mm, yy] = m.split('/');
+    const dtAnterior = new Date(parseInt(yy), parseInt(mm) - 2, 1);
+    const mAnterior = `${String(dtAnterior.getMonth()+1).padStart(2,'0')}/${dtAnterior.getFullYear()}`;
+    // Busca NFC-e do mês anterior em window._nfcePorMes (carregado pelo Faturamento)
+    const nfceAnt = parseFloat((window._nfcePorMes||{})[mAnterior] || 0);
+    if (nfceAnt > 0) {
+      dasEstMes[m] = Math.round(nfceAnt * pctDAS * 100) / 100;
+    }
+  }
+
+  if (Object.values(dasEstMes).some(v => v > 0)) {
+    let dasHtml = `<tr style="background:#fef9c3;border-left:3px solid #ca8a04">
+      <td style="${TDL};color:#854d0e;font-size:11px;font-style:italic;padding-left:${full?'28':'20'}px">
+        🏛️ DAS / Simples Nacional
+        <span style="font-size:10px;background:#fef3c7;color:#854d0e;border:1px solid #fcd34d;border-radius:3px;padding:0 4px;margin-left:4px">estimado</span>
+        <span style="font-size:9px;color:#aaa;margin-left:4px" title="8% sobre NFC-e do mês anterior. Ajuste em Faturamento → Mensal → ⚙️ ajustar %">ⓘ</span>
+      </td>`;
+    let totalDas = 0;
+    for (const m of meses) {
+      const v = dasEstMes[m] || 0;
+      totalDas += v;
+      lucOpMes[m] = (lucOpMes[m] || 0) - v; // desconta do resultado
+      dasHtml += `<td style="${TD}">${v > 0
+        ? `<span style="font-family:'DM Mono',monospace;color:#e74c3c">-${fmt.brl(v)}</span>`
+        : '<span style="color:#bbb;font-family:\'DM Mono\',monospace">—</span>'
+      }</td>`;
+    }
+    if (showTot) {
+      dasHtml += `<td style="${TD};font-weight:700">${totalDas > 0
+        ? `<span style="font-family:'DM Mono',monospace;color:#e74c3c">-${fmt.brl(totalDas)}</span>`
+        : '—'}</td>`;
+    }
+    dasHtml += '</tr>';
+    h += dasHtml;
   }
 
   // ── RESULTADO 2: LUCRO OPERACIONAL ────────────────────────────────────────
@@ -2677,11 +2821,15 @@ function drillDown(cat, mes) {
         const v = parseFloat(t.valor || 0);
         const vCol = v >= 0 ? 'var(--green)' : 'var(--red-l)';
         const badge = FONTE_BADGE[t.fonte] || `<span style="font-size:10px">${t.fonte||'—'}</span>`;
-        return `<tr style="border-bottom:1px solid #f5efe8">
+        const catBadge = t.categoria
+          ? `<span style="font-size:10px;background:#f0ebe4;color:var(--text);padding:1px 6px;border-radius:4px;cursor:pointer" title="Duplo clique para alterar">${t.categoria}</span>`
+          : `<span style="font-size:10px;color:#e74c3c;cursor:pointer" title="Duplo clique para classificar">⚠️ Sem categoria</span>`;
+        return `<tr style="border-bottom:1px solid #f5efe8" ondblclick="drillEditarCat('${t.id}')" title="Duplo clique para alterar a classificação">
           <td style="padding:7px 12px;font-family:'DM Mono',monospace;font-size:11px;white-space:nowrap">${t.data ? t.data.slice(0,10) : '—'}</td>
           <td style="padding:7px 12px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(t.lancamento||'')}">${esc(t.lancamento||'—')}</td>
           <td style="padding:7px 12px;font-size:11px;color:var(--muted);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(t.razaoSocial||'')}">${esc(t.razaoSocial||t.portador||'—')}</td>
           <td style="padding:7px 12px">${badge}</td>
+          <td id="drill-cat-${t.id}" style="padding:7px 12px;min-width:160px">${catBadge}</td>
           <td style="padding:7px 12px;text-align:right;font-family:'DM Mono',monospace;font-weight:600;color:${vCol};white-space:nowrap">${fmt.brl(v)}</td>
         </tr>`;
       }).join('');
@@ -2691,6 +2839,49 @@ function drillDown(cat, mes) {
   }
 
   el.style.display = 'flex';
+}
+
+function drillEditarCat(id) {
+  const t = TXS.find(x => String(x.id) === String(id));
+  if (!t) return;
+  const cel = document.getElementById('drill-cat-' + id);
+  if (!cel) return;
+  if (cel.querySelector('select')) return; // já aberto
+
+  // Monta select com todas as categorias disponíveis
+  const opts = Object.values(CATS)
+    .flatMap(g => g.s)
+    .sort((a, b) => a.localeCompare(b, 'pt-BR'));
+
+  const sel = document.createElement('select');
+  sel.style.cssText = 'font-size:11px;padding:3px 6px;border:1px solid var(--red);border-radius:5px;background:#fff;width:100%;max-width:220px';
+  sel.innerHTML = '<option value="">— Sem categoria —</option>'
+    + opts.map(c => `<option value="${c}"${c === t.categoria ? ' selected' : ''}>${c}</option>`).join('');
+
+  sel.onchange = () => {
+    const novaCat = sel.value;
+    setCat(id, novaCat); // reutiliza a função existente que salva e atualiza supMem
+    // Atualiza visual da célula
+    cel.innerHTML = novaCat
+      ? `<span style="font-size:10px;background:#f0ebe4;color:var(--text);padding:1px 6px;border-radius:4px;cursor:pointer" title="Duplo clique para alterar">${novaCat}</span>`
+      : `<span style="font-size:10px;color:#e74c3c;cursor:pointer">⚠️ Sem categoria</span>`;
+    // Atualiza o DRE renderizado
+    renderDRE();
+    if (document.getElementById('m-dre')?.classList.contains('open')) renderDREFull();
+    toast(`✅ Reclassificado: ${novaCat || 'sem categoria'}`);
+  };
+
+  sel.onblur = () => {
+    if (!sel.value || sel.value === t.categoria) {
+      cel.innerHTML = t.categoria
+        ? `<span style="font-size:10px;background:#f0ebe4;color:var(--text);padding:1px 6px;border-radius:4px;cursor:pointer">${t.categoria}</span>`
+        : `<span style="font-size:10px;color:#e74c3c;cursor:pointer">⚠️ Sem categoria</span>`;
+    }
+  };
+
+  cel.innerHTML = '';
+  cel.appendChild(sel);
+  sel.focus();
 }
 
 function exportXLS(){
@@ -3164,6 +3355,7 @@ function toggleDREGrupo(gid) {
             <th style="padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--muted);border-bottom:2px solid var(--border)">Operação</th>
             <th style="padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--muted);border-bottom:2px solid var(--border)">Fornecedor / Razão</th>
             <th style="padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--muted);border-bottom:2px solid var(--border)">Fonte</th>
+            <th style="padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--muted);border-bottom:2px solid var(--border)">Categoria <span style="font-weight:400;font-style:italic">(duplo clique para editar)</span></th>
             <th style="padding:8px 12px;text-align:right;font-size:10px;text-transform:uppercase;color:var(--muted);border-bottom:2px solid var(--border)">Valor</th>
           </tr>
         </thead>

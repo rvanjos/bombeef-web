@@ -135,7 +135,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
       <select class="flt" id="flt-ano" onchange="carregar()"></select>
       <button class="btn btn-g" onclick="abrirImport()">📥 Importar CSV/XMenu</button>
       <button class="btn btn-g" style="background:#1a5c8a" onclick="abrirImportListagem()">📋 Importar Listagem</button>
-      <button class="btn btn-g" style="background:#6040c0" onclick="abrirImportFormas()">💳 Importar Formas Pgto</button>
+      <button class="btn btn-g" style="background:#6040c0" onclick="abrirImportFormas()">💳 Importar Formas Pgto <span style="background:rgba(255,255,255,.25);border-radius:4px;padding:1px 6px;font-size:10px;font-weight:800">Rel. 205</span></button>
       <button class="btn btn-s" onclick="exportarXLS()">📊 Excel</button>
       <button class="btn btn-s" style="color:var(--red-l);margin-left:auto" onclick="limparFaturamento()">🗑️ Limpar dados</button>
     </div>
@@ -184,17 +184,50 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
 
   <!-- ── MENSAL ── -->
   <div id="sec-mensal" style="display:none">
-    <div class="card">
+    <!-- Filtro de período -->
+    <div class="card" style="margin-bottom:12px;padding:14px 18px">
+      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:12px">
+        <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Período:</div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <label style="font-size:11px;color:var(--muted)">De</label>
+          <input type="month" id="men-ini" style="padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px" onchange="filtrarMensal()">
+        </div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <label style="font-size:11px;color:var(--muted)">Até</label>
+          <input type="month" id="men-fim" style="padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px" onchange="filtrarMensal()">
+        </div>
+        <button class="btn btn-s" style="font-size:11px;padding:5px 12px" onclick="limparFiltroMensal()">✕ Limpar</button>
+      </div>
+      <!-- Totalizador do período selecionado -->
+      <div id="men-totais" style="display:none;margin-top:12px;display:flex;flex-wrap:wrap;gap:10px"></div>
+    </div>
+
+    <div class="card" style="padding:0;overflow:hidden">
       <table class="tbl">
         <thead><tr>
           <th>Mês</th><th style="text-align:center">Dias</th><th style="text-align:right">Clientes</th>
           <th style="text-align:right">Ticket Médio</th>
-          <th style="text-align:right">NFCE</th><th style="text-align:right">MEI</th>
+          <th style="text-align:right">NFC-e</th><th style="text-align:right">MEI</th>
           <th style="text-align:right">Fat. Bruto</th>
         </tr></thead>
         <tbody id="tbody-mensal"></tbody>
+        <tfoot id="tfoot-mensal"></tfoot>
       </table>
       <div class="empty" id="empty-mensal" style="display:none">Nenhum dado mensal disponível.</div>
+    </div>
+
+    <!-- Limite MEI anual -->
+    <div id="men-limite-mei" style="display:none;margin-top:10px"></div>
+
+    <!-- Painel NFC-e vs MEI -->
+    <div id="men-nfce-mei" style="display:none;margin-top:12px">
+      <div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:16px 18px">
+        <div style="font-size:12px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:8px">
+          📊 Análise NFC-e vs MEI no período
+          <span style="font-size:10px;font-weight:400;color:var(--muted)">— selecione período acima para comparar</span>
+        </div>
+        <div id="nfce-mei-cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px"></div>
+      </div>
     </div>
   </div>
 
@@ -406,6 +439,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
     </div>
     <div class="modal-body">
       <div style="background:#f0e8ff;border-radius:8px;padding:10px 12px;font-size:12px;color:#3d1a8a;margin-bottom:14px">
+        <div style="font-size:14px;font-weight:800;font-family:monospace;margin-bottom:6px">💳 Relatório Xmenu nº <span style="background:#6040c0;color:#fff;padding:1px 8px;border-radius:5px">205</span></div>
         Importe o relatório <strong>"Faturamento por Forma de Pagamento"</strong> do Xmenu em formato <strong>XLSX</strong>.
         Complementa a Listagem com detalhes de DINHEIRO, PIX, PAGSEGURO, REDE CRÉDITO/DÉBITO e VOUCHER por dia.
       </div>
@@ -1083,14 +1117,65 @@ async function carregarPeriodos(){
 }
 
 // ── Mensal ────────────────────────────────────────────────────────────────────
+var _dadosMensal = []; // cache para filtro local
+const LIMITE_MEI_ANUAL = 81000; // R$ 81.000/ano (2024)
+
 async function carregarMensal(){
   const d = await api.get('/api/faturamento/resumo');
   if(!d.ok) return;
+  _dadosMensal = d.data || [];
+
+  // Expõe NFC-e por mês via localStorage para o DRE calcular DAS estimado
+  const nfceMap = {};
+  _dadosMensal.forEach(m => {
+    if (m.fat_nfce > 0) nfceMap[m.mes] = parseFloat(m.fat_nfce);
+  });
+  try { localStorage.setItem('bb_nfce_por_mes', JSON.stringify(nfceMap)); } catch(_) {}
+  window._nfcePorMes = nfceMap;
+
+  const hoje = new Date();
+  const anoAtual = hoje.getFullYear();
+  if (!document.getElementById('men-ini').value) {
+    document.getElementById('men-ini').value = `${anoAtual}-01`;
+    document.getElementById('men-fim').value = `${anoAtual}-12`;
+  }
+  filtrarMensal();
+}
+
+function parseMesYm(mes) {
+  // mes = "MM/YYYY" → "YYYY-MM"
+  if (!mes) return '';
+  const [mm, yy] = mes.split('/');
+  return `${yy}-${mm}`;
+}
+
+function filtrarMensal() {
+  const ini = document.getElementById('men-ini').value; // YYYY-MM
+  const fim = document.getElementById('men-fim').value;
+  const lista = _dadosMensal.filter(m => {
+    const ym = parseMesYm(m.mes);
+    if (ini && ym < ini) return false;
+    if (fim && ym > fim) return false;
+    return true;
+  });
+  renderMensal(lista, ini, fim);
+}
+
+function limparFiltroMensal() {
+  document.getElementById('men-ini').value = '';
+  document.getElementById('men-fim').value = '';
+  renderMensal(_dadosMensal, '', '');
+}
+
+function renderMensal(lista, ini, fim) {
   const tb = document.getElementById('tbody-mensal');
+  const tf = document.getElementById('tfoot-mensal');
   const em = document.getElementById('empty-mensal');
-  if(!d.data.length){ tb.innerHTML=''; em.style.display=''; return; }
-  em.style.display='none';
-  tb.innerHTML = d.data.map(function(m) {
+
+  if (!lista.length) { tb.innerHTML = ''; tf.innerHTML = ''; em.style.display = ''; return; }
+  em.style.display = 'none';
+
+  tb.innerHTML = lista.map(function(m) {
     var pctNfce = m.fat_bruto > 0 ? Math.round(m.fat_nfce / m.fat_bruto * 100) : 0;
     var pctMei  = m.fat_bruto > 0 ? Math.round(m.fat_mei  / m.fat_bruto * 100) : 0;
     var celNfce = m.fat_nfce > 0
@@ -1111,9 +1196,112 @@ async function carregarMensal(){
       + '<td style="text-align:right;font-family:monospace;font-weight:700;color:var(--green)">' + fmt.brl(m.fat_bruto) + '</td>'
       + '</tr>';
   }).join('');
+
+  // Totalizador do período
+  var totNfce = lista.reduce((s,m) => s + parseFloat(m.fat_nfce||0), 0);
+  var totMei  = lista.reduce((s,m) => s + parseFloat(m.fat_mei||0), 0);
+  var totQtdNfce = lista.reduce((s,m) => s + parseInt(m.qtd_nfce||0), 0);
+  var totQtdMei  = lista.reduce((s,m) => s + parseInt(m.qtd_mei||0), 0);
+  var totBruto= lista.reduce((s,m) => s + parseFloat(m.fat_bruto||0), 0);
+  var totPessoas = lista.reduce((s,m) => s + parseInt(m.total_pessoas||0), 0);
+
+  tf.innerHTML = '<tr style="background:#f7f4f0;font-weight:700;border-top:2px solid var(--border)">'
+    + '<td style="padding:8px 12px;font-size:12px">TOTAL (' + lista.length + ' meses)</td>'
+    + '<td></td>'
+    + '<td style="text-align:right;padding:8px 12px">' + fmt.n(totPessoas) + '</td>'
+    + '<td></td>'
+    + '<td style="text-align:right;padding:8px 12px">'
+      + '<span style="font-family:monospace;font-weight:700">' + fmt.brl(totNfce) + '</span>'
+      + '<br><span style="font-size:10px;color:var(--muted)">' + totQtdNfce + ' pedidos</span>'
+    + '</td>'
+    + '<td style="text-align:right;padding:8px 12px">'
+      + '<span style="font-family:monospace;font-weight:700">' + fmt.brl(totMei) + '</span>'
+      + '<br><span style="font-size:10px;color:var(--muted)">' + totQtdMei + ' pedidos</span>'
+    + '</td>'
+    + '<td style="text-align:right;padding:8px 12px;color:var(--green)">' + fmt.brl(totBruto) + '</td>'
+    + '</tr>';
+
+  // Alerta limite MEI anual — calcula acumulado MEI do ano selecionado (ou ano atual)
+  var anoRef = ini ? ini.slice(0,4) : new Date().getFullYear().toString();
+  var meiAno = _dadosMensal
+    .filter(m => parseMesYm(m.mes).startsWith(anoRef))
+    .reduce((s,m) => s + parseFloat(m.fat_mei||0), 0);
+  var limEl = document.getElementById('men-limite-mei');
+  if (meiAno > 0) {
+    var pctLimite = Math.round(meiAno / LIMITE_MEI_ANUAL * 100);
+    var corBarra = pctLimite >= 90 ? '#dc2626' : pctLimite >= 70 ? '#f59e0b' : '#22c55e';
+    var msg = pctLimite >= 100
+      ? '🚨 <strong>Limite MEI ultrapassado!</strong> Considere regularizar a situação.'
+      : pctLimite >= 90
+      ? '⚠️ <strong>Atenção:</strong> MEI acima de 90% do limite anual.'
+      : pctLimite >= 70
+      ? '⚠️ Aproximando-se do limite MEI anual.'
+      : '✅ Dentro do limite MEI anual.';
+    limEl.style.display = '';
+    limEl.innerHTML = '<div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:14px 18px">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
+      + '<span style="font-size:12px;font-weight:700">📊 Limite MEI Anual — ' + anoRef + '</span>'
+      + '<span style="font-size:12px;font-family:monospace">' + fmt.brl(meiAno) + ' / ' + fmt.brl(LIMITE_MEI_ANUAL) + ' <strong style="color:' + corBarra + '">' + pctLimite + '%</strong></span>'
+      + '</div>'
+      + '<div style="background:#f0ebe4;border-radius:6px;height:10px;overflow:hidden">'
+      + '<div style="background:' + corBarra + ';height:100%;width:' + Math.min(pctLimite,100) + '%;border-radius:6px;transition:width .5s"></div>'
+      + '</div>'
+      + '<div style="font-size:11px;color:var(--muted);margin-top:6px">' + msg + ' &nbsp;·&nbsp; Saldo disponível: <strong>' + fmt.brl(Math.max(0, LIMITE_MEI_ANUAL - meiAno)) + '</strong></div>'
+      + '</div>';
+  } else {
+    limEl.style.display = 'none';
+  }
+
+  // ── Painel NFC-e vs MEI com estimativa DAS ────────────────────────────────
+  var pctSimples = parseFloat(localStorage.getItem('bb_pct_simples') || '8');
+  var nfcePeriodo = totNfce; // do período filtrado
+  var meiPeriodo  = totMei;
+  var dasEstimado = Math.round(nfcePeriodo * pctSimples / 100 * 100) / 100;
+  var saldoMei    = Math.max(0, LIMITE_MEI_ANUAL - meiAno);
+
+  var panelEl = document.getElementById('men-nfce-mei');
+  var cardsEl = document.getElementById('nfce-mei-cards');
+  if (nfcePeriodo > 0 || meiPeriodo > 0) {
+    panelEl.style.display = '';
+    var mesesStr = lista.length === 1 ? lista[0].mes : lista.length + ' meses';
+    cardsEl.innerHTML = [
+      // NFC-e
+      '<div style="background:#dbeafe;border-radius:8px;padding:12px 14px">'
+        + '<div style="font-size:10px;font-weight:700;color:#1e40af;text-transform:uppercase;margin-bottom:4px">🧾 NFC-e — ' + mesesStr + '</div>'
+        + '<div style="font-size:18px;font-weight:800;font-family:monospace;color:#1e40af">' + fmt.brl(nfcePeriodo) + '</div>'
+        + '<div style="font-size:10px;color:#3b82f6;margin-top:2px">' + totQtdNfce + ' pedidos</div>'
+        + '</div>',
+      // MEI
+      '<div style="background:#dcfce7;border-radius:8px;padding:12px 14px">'
+        + '<div style="font-size:10px;font-weight:700;color:#166534;text-transform:uppercase;margin-bottom:4px">🤝 MEI — ' + mesesStr + '</div>'
+        + '<div style="font-size:18px;font-weight:800;font-family:monospace;color:#166534">' + fmt.brl(meiPeriodo) + '</div>'
+        + '<div style="font-size:10px;color:#22c55e;margin-top:2px">' + totQtdMei + ' pedidos · Saldo anual: <strong>' + fmt.brl(saldoMei) + '</strong></div>'
+        + '</div>',
+      // DAS estimado
+      '<div style="background:#fef9c3;border-radius:8px;padding:12px 14px">'
+        + '<div style="font-size:10px;font-weight:700;color:#854d0e;text-transform:uppercase;margin-bottom:4px">🏛️ DAS estimado (' + pctSimples + '% NFC-e)</div>'
+        + '<div style="font-size:18px;font-weight:800;font-family:monospace;color:#854d0e">' + fmt.brl(dasEstimado) + '</div>'
+        + '<div style="font-size:10px;color:#ca8a04;margin-top:2px">sobre NFC-e do período &nbsp;'
+        + '<span onclick="configurarPctSimples()" style="cursor:pointer;text-decoration:underline dotted">⚙️ ajustar %</span></div>'
+        + '</div>',
+    ].join('');
+  } else {
+    panelEl.style.display = 'none';
+  }
 }
 
 // ── Import ────────────────────────────────────────────────────────────────────
+function configurarPctSimples() {
+  var atual = parseFloat(localStorage.getItem('bb_pct_simples') || '8');
+  var novo = prompt('Percentual do Simples Nacional sobre NFC-e (%):', atual);
+  if (novo === null) return;
+  var val = parseFloat(novo.replace(',','.'));
+  if (isNaN(val) || val <= 0 || val > 100) { toast('Percentual inválido'); return; }
+  localStorage.setItem('bb_pct_simples', val.toString());
+  filtrarMensal();
+  toast('✅ Percentual atualizado para ' + val + '%');
+}
+
 let arquivoSel = null;
 function abrirImport(){
   const hoje = new Date().toISOString().slice(0,10);
