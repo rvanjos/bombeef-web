@@ -1726,9 +1726,10 @@ function limparFiltrosHist(){
 }
 
 function abrirEditHist(id) {
-  const v = _histData.find(x => x.id === id);
-  if (!v) return;
-  document.getElementById('edit-hist-id').value       = id;
+  // Garante comparação correta de tipo (id pode vir como string ou number)
+  const v = _histData.find(x => String(x.id) === String(id));
+  if (!v) { toast('⚠️ Registro não encontrado — recarregue o histórico'); return; }
+  document.getElementById('edit-hist-id').value       = v.id;
   document.getElementById('edit-hist-codigo').value   = v.codigo||'';
   document.getElementById('edit-hist-descricao').value= v.descricao||'';
   document.getElementById('edit-hist-validade').value = v.data_validade||'';
