@@ -318,9 +318,9 @@ td{padding:5px 9px;vertical-align:middle;}
     <div class="dre-hd">
       <span>DRE — <span id="dre-mes-label">—</span></span>
       <div style="display:flex;gap:5px;align-items:center">
-        <select id="dre-modo" onchange="renderDRE()" style="padding:2px 6px;border:1px solid var(--border);border-radius:5px;font-size:11px">
-          <option value="caixa">Caixa</option>
-          <option value="comp">Competência</option>
+        <select id="dre-modo" onchange="renderDRE()" style="padding:2px 6px;border:1px solid rgba(255,255,255,.4);border-radius:5px;font-size:11px;background:#5a0000;color:#fff;font-weight:600;cursor:pointer">
+          <option value="caixa" style="background:#fff;color:#1a1a1a">Caixa (extrato bancário)</option>
+          <option value="comp"  style="background:#fff;color:#1a1a1a">Competência (faturamento)</option>
         </select>
         <button id="btn-pct" class="btn bn" style="padding:2px 7px;font-size:11px" onclick="togglePct()" title="Mostrar % de cada categoria sobre a receita total">%</button>
         <button class="btn bn" style="padding:2px 9px;font-size:11px" onclick="abrirDREModal()">⛶</button>
@@ -491,9 +491,9 @@ td{padding:5px 9px;vertical-align:middle;}
     <div class="mdh" style="background:var(--red);border-radius:13px 13px 0 0;flex-shrink:0" id="dre-modal-header">
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
         <h3 style="color:#fff;font-size:15px">📊 DRE — DEMONSTRATIVO POR MÊS</h3>
-        <select id="dre-modo-full" onchange="sincModo()" style="padding:3px 8px;border:1px solid rgba(255,255,255,.3);border-radius:6px;font-size:12px;background:rgba(255,255,255,.15);color:#fff">
-          <option value="caixa">Caixa (data do pagamento)</option>
-          <option value="comp">Competência (data da venda)</option>
+        <select id="dre-modo-full" onchange="sincModo()" style="padding:4px 10px;border:1px solid rgba(255,255,255,.4);border-radius:6px;font-size:12px;background:#5a0000;color:#fff;font-weight:600;cursor:pointer">
+          <option value="caixa" style="background:#fff;color:#1a1a1a">Caixa (extrato bancário)</option>
+          <option value="comp"  style="background:#fff;color:#1a1a1a">Competência (faturamento XMenu)</option>
         </select>
         <button id="btn-pct-full" style="padding:3px 10px;border:1px solid rgba(255,255,255,.3);border-radius:6px;font-size:12px;background:rgba(255,255,255,.15);color:#fff;cursor:pointer;font-weight:600" onclick="togglePct()" title="Mostrar % de cada categoria sobre a receita total">% Custos</button>
         <button onclick="gerarExcelDRE()" style="padding:3px 10px;border:1px solid rgba(255,255,255,.3);border-radius:6px;font-size:12px;background:rgba(255,255,255,.15);color:#fff;cursor:pointer;font-weight:600" title="Exportar Excel com formatação">📤 Excel</button>
@@ -705,7 +705,34 @@ let _inicializado = false;
 window.onBBReady = () => init();
 if (api.token()) init();
 
-async function init() {
+async function carregarFaturamentoMensal() {
+  // Carrega NFC-e + MEI por mês para o modo Competência
+  // Tenta API primeiro, cai no localStorage como fallback
+  try {
+    const d = await api.get('/api/faturamento/resumo');
+    if (d.ok && d.data?.length) {
+      const fatMap = {}, nfceMap = {};
+      d.data.forEach(m => {
+        const total = parseFloat(m.fat_nfce||0) + parseFloat(m.fat_mei||0);
+        if (total > 0) fatMap[m.mes] = total;
+        if (parseFloat(m.fat_nfce||0) > 0) nfceMap[m.mes] = parseFloat(m.fat_nfce);
+      });
+      window._fatPorMes  = fatMap;
+      window._nfcePorMes = nfceMap;
+      try {
+        localStorage.setItem('bb_fat_por_mes',  JSON.stringify(fatMap));
+        localStorage.setItem('bb_nfce_por_mes', JSON.stringify(nfceMap));
+      } catch(_) {}
+    }
+  } catch(_) {
+    // Fallback: localStorage já populado pelo módulo Faturamento
+    try { window._fatPorMes  = JSON.parse(localStorage.getItem('bb_fat_por_mes')  || '{}'); } catch(_) { window._fatPorMes  = {}; }
+    try { window._nfcePorMes = JSON.parse(localStorage.getItem('bb_nfce_por_mes') || '{}'); } catch(_) { window._nfcePorMes = {}; }
+  }
+}
+
+
+async function inicializar() {
   // Se já inicializou E já tem dados em memória, não recarrega do banco
   // (evita perder classificações ao trocar de aba e voltar)
   if (_inicializado && TXS.length > 0) {
@@ -729,6 +756,7 @@ async function init() {
     }
   } catch(_) {}
   await carregarCategorias();
+  await carregarFaturamentoMensal(); // carrega NFC-e+MEI para modo Competência
   await carregarSessao();
   // Só adiciona listener de troca de mês DEPOIS de carregar (evita loop)
   const fMesEl = document.getElementById('f-mesref');
@@ -1957,8 +1985,35 @@ function togglePct() {
   renderDRE();
   if (document.getElementById('m-dre')?.classList.contains('open')) renderDREFull();
 }
-function renderDRE(){_buildDRE(document.getElementById('dre-body'),false);}
-function renderDREFull(){_buildDRE(document.getElementById('dre-full-body'),true);}
+function renderDRE(){
+  _garantirFatPorMes().then(() => _buildDRE(document.getElementById('dre-body'),false));
+}
+function renderDREFull(){
+  _garantirFatPorMes().then(() => _buildDRE(document.getElementById('dre-full-body'),true));
+}
+
+// Garante que bb_fat_por_mes está carregado — busca da API se localStorage vazio
+async function _garantirFatPorMes() {
+  try {
+    const cached = JSON.parse(localStorage.getItem('bb_fat_por_mes') || '{}');
+    if (Object.keys(cached).length > 0) {
+      window._fatPorMes = cached;
+      return; // já tem dados
+    }
+    // localStorage vazio — busca da API
+    const d = await api.get('/api/faturamento/resumo');
+    if (!d.ok || !d.data) return;
+    const fatMap = {};
+    d.data.forEach(m => {
+      const total = parseFloat(m.fat_nfce||0) + parseFloat(m.fat_mei||0);
+      if (total > 0) fatMap[m.mes] = total;
+    });
+    if (Object.keys(fatMap).length > 0) {
+      try { localStorage.setItem('bb_fat_por_mes', JSON.stringify(fatMap)); } catch(_) {}
+      window._fatPorMes = fatMap;
+    }
+  } catch(_) {}
+}
 
 function setEstoqueFinal(mesEnc, valor) {
   const mes = mesEnc.replace('_', '/');
@@ -2160,10 +2215,13 @@ function _buildDRE(el, full) {
 
   // ── BLOCO 1: RECEITA BRUTA ────────────────────────────────────────────────
   const isComp = getModo() === 'comp';
-  const fatMesDisp = (() => { try { return JSON.parse(localStorage.getItem('bb_fat_por_mes')||'{}'); } catch(_) { return {}; } })();
+  // Garante leitura mais recente do faturamento
+  const fatMesDisp = window._fatPorMes || (() => { try { return JSON.parse(localStorage.getItem('bb_fat_por_mes')||'{}'); } catch(_) { return {}; } })();
   const temFaturamento = Object.values(fatMesDisp).some(v => v > 0);
   const labelReceita = isComp
-    ? `1. RECEITA BRUTA ${temFaturamento ? '<span style="font-size:9px;background:#e8f5ee;color:#1a7a4a;padding:1px 6px;border-radius:3px;margin-left:6px;font-weight:600">📊 Faturamento XMenu</span>' : '<span style="font-size:9px;background:#fff3cd;color:#856404;padding:1px 6px;border-radius:3px;margin-left:6px">⚠️ Importe o Faturamento para usar competência</span>'}`
+    ? `1. RECEITA BRUTA ${temFaturamento
+        ? '<span style="font-size:9px;background:#e8f5ee;color:#1a7a4a;padding:1px 6px;border-radius:3px;margin-left:6px;font-weight:600">📊 Faturamento XMenu</span>'
+        : '<span style="font-size:9px;background:#fff3cd;color:#856404;padding:1px 6px;border-radius:3px;margin-left:6px">⚠️ Sem dados — abra o módulo Faturamento</span>'}`
     : '1. RECEITA BRUTA <span style="font-size:9px;background:#e8f0ff;color:#1a5c8a;padding:1px 6px;border-radius:3px;margin-left:6px;font-weight:600">🏦 Extrato Bancário</span>';
   h += renderSecLabel(labelReceita);
   h += renderGrupo('RECEITAS');
@@ -2959,7 +3017,7 @@ function exportXLS(){
                   '07':'Jul','08':'Ago','09':'Set','10':'Out','11':'Nov','12':'Dez'};
   const nomeMes = m => { const [mm,yy]=m.split('/'); return (MESES_PT[mm]||mm)+'/'+yy; };
 
-  // Agrupa
+  // Agrupa — mesmo do _buildDRE
   const dataD={};
   for (const t of at) {
     const gk=catGrupo(t.categoria)||'OUTROS';
@@ -2967,6 +3025,20 @@ function exportXLS(){
     if(!dataD[gk])dataD[gk]={};
     if(!dataD[gk][t.categoria])dataD[gk][t.categoria]={};
     dataD[gk][t.categoria][m]=(dataD[gk][t.categoria][m]||0)+v;
+  }
+
+  // Modo Competência: substitui receitas pelo Faturamento XMenu (igual ao _buildDRE)
+  if (getModo() === 'comp') {
+    const fatMes = window._fatPorMes || {};
+    Object.keys(fatMes).filter(m => fatMes[m] > 0).forEach(m => {
+      if (dataD['RECEITAS']) {
+        Object.keys(dataD['RECEITAS']).forEach(cat => { delete dataD['RECEITAS'][cat][m]; });
+      }
+      if (!dataD['RECEITAS']) dataD['RECEITAS'] = {};
+      if (!dataD['RECEITAS']['VENDAS DE MERCADORIAS']) dataD['RECEITAS']['VENDAS DE MERCADORIAS'] = {};
+      dataD['RECEITAS']['VENDAS DE MERCADORIAS'][m] = fatMes[m];
+      mesesSet.add(m);
+    });
   }
   const sg=(gk,m)=>Object.values(dataD[gk]||{}).reduce((s,c)=>s+(c[m]||0),0);
   const sgt=(gk)=>meses.reduce((s,m)=>s+sg(gk,m),0);
@@ -3105,7 +3177,50 @@ function exportXLS(){
 
   addSecLabelXLS('2. (-) CUSTO DA MERCADORIA VENDIDA (CMV)');
   addGrupoXLS('CMV','st-cmv');
-  meses.forEach(m=>{ lucBruto[m]=(lucBruto[m]||0)+sg('CMV',m); });
+
+  // Ajuste de estoque no Excel
+  const ESTxls = window._estoquesMes || _estoquesMes || {};
+  const temEstoque = Object.keys(ESTxls).length > 0 && meses.some(m => {
+    const [mm,yy] = m.split('/');
+    const dtAnt = new Date(parseInt(yy), parseInt(mm)-2, 1);
+    const mAnt = `${String(dtAnt.getMonth()+1).padStart(2,'0')}/${dtAnt.getFullYear()}`;
+    return parseFloat(ESTxls[m]||0) > 0 || parseFloat(ESTxls[mAnt]||0) > 0;
+  });
+  if (temEstoque) {
+    // Linha: Ajuste de Estoque
+    html += `<tr><td class="cat-row left" colspan="1">&nbsp;&nbsp;&nbsp;&nbsp;· Ajuste de Estoque (+Ini −Fin)</td>`;
+    let totAjuste = 0;
+    meses.forEach(m => {
+      const [mm,yy] = m.split('/');
+      const dtAnt = new Date(parseInt(yy), parseInt(mm)-2, 1);
+      const mAnt = `${String(dtAnt.getMonth()+1).padStart(2,'0')}/${dtAnt.getFullYear()}`;
+      const estIni = parseFloat(ESTxls[mAnt]||0);
+      const estFin = parseFloat(ESTxls[m]||0);
+      const ajuste = estIni - estFin; // positivo = aumenta CMV; negativo = reduz CMV
+      totAjuste += ajuste;
+      html += `<td class="cat-row mono ${ajuste===0?'val-zero':ajuste>0?'val-neg':'val-pos'}">${ajuste===0?'—':brl2(ajuste)}</td>`;
+    });
+    if (showTot) html += `<td class="mono bold ${totAjuste===0?'val-zero':totAjuste>0?'val-neg':'val-pos'}">${totAjuste===0?'—':brl2(totAjuste)}</td>`;
+    html += `</tr>`;
+
+    // Linha: Estoque Final informado
+    html += `<tr><td class="cat-row left" colspan="1">&nbsp;&nbsp;&nbsp;&nbsp;· Estoque Final</td>`;
+    meses.forEach(m => {
+      const v = parseFloat(ESTxls[m]||0);
+      html += `<td class="cat-row mono val-zero">${v>0?brl2(v):'—'}</td>`;
+    });
+    if (showTot) html += `<td class="mono bold">—</td>`;
+    html += `</tr>`;
+  }
+
+  // Lucro bruto com ajuste de estoque
+  meses.forEach(m => {
+    const [mm,yy] = m.split('/');
+    const dtAnt = new Date(parseInt(yy), parseInt(mm)-2, 1);
+    const mAnt = `${String(dtAnt.getMonth()+1).padStart(2,'0')}/${dtAnt.getFullYear()}`;
+    const ajuste = parseFloat((window._estoquesMes||{})[mAnt]||0) - parseFloat((window._estoquesMes||{})[m]||0);
+    lucBruto[m] = (lucBruto[m]||0) + sg('CMV',m) + ajuste;
+  });
 
   addResultadoXLS('LUCRO BRUTO','🟢',lucBruto,'res-bruto','res-bruto');
   meses.forEach(m=>{ lucOp[m]=lucBruto[m]||0; });
