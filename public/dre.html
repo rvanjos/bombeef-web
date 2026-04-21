@@ -319,8 +319,8 @@ td{padding:5px 9px;vertical-align:middle;}
       <span>DRE — <span id="dre-mes-label">—</span></span>
       <div style="display:flex;gap:5px;align-items:center">
         <select id="dre-modo" onchange="renderDRE()" style="padding:2px 6px;border:1px solid var(--border);border-radius:5px;font-size:11px">
-          <option value="comp">Competência</option>
           <option value="caixa">Caixa</option>
+          <option value="comp">Competência</option>
         </select>
         <button id="btn-pct" class="btn bn" style="padding:2px 7px;font-size:11px" onclick="togglePct()" title="Mostrar % de cada categoria sobre a receita total">%</button>
         <button class="btn bn" style="padding:2px 9px;font-size:11px" onclick="abrirDREModal()">⛶</button>
@@ -492,8 +492,8 @@ td{padding:5px 9px;vertical-align:middle;}
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
         <h3 style="color:#fff;font-size:15px">📊 DRE — DEMONSTRATIVO POR MÊS</h3>
         <select id="dre-modo-full" onchange="sincModo()" style="padding:3px 8px;border:1px solid rgba(255,255,255,.3);border-radius:6px;font-size:12px;background:rgba(255,255,255,.15);color:#fff">
-          <option value="comp">Competência (data da compra)</option>
           <option value="caixa">Caixa (data do pagamento)</option>
+          <option value="comp">Competência (data da venda)</option>
         </select>
         <button id="btn-pct-full" style="padding:3px 10px;border:1px solid rgba(255,255,255,.3);border-radius:6px;font-size:12px;background:rgba(255,255,255,.15);color:#fff;cursor:pointer;font-weight:600" onclick="togglePct()" title="Mostrar % de cada categoria sobre a receita total">% Custos</button>
         <button onclick="gerarExcelDRE()" style="padding:3px 10px;border:1px solid rgba(255,255,255,.3);border-radius:6px;font-size:12px;background:rgba(255,255,255,.15);color:#fff;cursor:pointer;font-weight:600" title="Exportar Excel com formatação">📤 Excel</button>
@@ -1935,7 +1935,7 @@ function updStats() {
 }
 
 // ─── DRE VISUAL ───────────────────────────────────────────────────────────────
-function getModo(){return document.getElementById('dre-modo')?.value||'comp';}
+function getModo(){return document.getElementById('dre-modo')?.value||'caixa';}
 function sincModo(){
   const v=document.getElementById('dre-modo-full')?.value||'comp';
   const el=document.getElementById('dre-modo'); if(el) el.value=v;
@@ -2017,6 +2017,13 @@ function _buildDRE(el, full) {
     return;
   }
   const mesesSet=new Set(at.map(t=>getMesTx(t)));
+  // Modo Competência: inclui meses com faturamento mesmo sem lançamentos de despesa
+  if (getModo() === 'comp') {
+    try {
+      const fm = JSON.parse(localStorage.getItem('bb_fat_por_mes') || '{}');
+      Object.keys(fm).forEach(m => { if (fm[m] > 0) mesesSet.add(m); });
+    } catch(_) {}
+  }
   const meses=[...mesesSet].sort((a,b)=>{const p=s=>{const[m,y]=s.split('/');return(+y)*12+(+m);};return p(a)-p(b);});
   const showTot=meses.length>1||full;
 
@@ -2028,6 +2035,30 @@ function _buildDRE(el, full) {
     if(!data[g])data[g]={};
     if(!data[g][t.categoria])data[g][t.categoria]={};
     data[g][t.categoria][m]=(data[g][t.categoria][m]||0)+v;
+  }
+
+  // ── Modo Competência: substitui receitas do extrato pelo Faturamento real ──
+  // No extrato, PIX/TED de clientes podem entrar em mês diferente do da venda.
+  // Para competência, o correto é usar o faturamento real do XMenu (NFC-e + MEI).
+  if (getModo() === 'comp') {
+    try { window._fatPorMes = JSON.parse(localStorage.getItem('bb_fat_por_mes') || '{}'); } catch(_) { window._fatPorMes = {}; }
+    const fatMes = window._fatPorMes || {};
+    // Para cada mês com dados de faturamento, substitui o grupo RECEITAS
+    const mesesFat = Object.keys(fatMes).filter(m => fatMes[m] > 0);
+    if (mesesFat.length > 0) {
+      // Zera receitas do extrato para meses que têm dados de faturamento
+      for (const m of mesesFat) {
+        if (data['RECEITAS']) {
+          for (const cat of Object.keys(data['RECEITAS'])) {
+            delete data['RECEITAS'][cat][m];
+          }
+        }
+        // Injeta o faturamento real como "VENDAS DE MERCADORIAS"
+        if (!data['RECEITAS']) data['RECEITAS'] = {};
+        if (!data['RECEITAS']['VENDAS DE MERCADORIAS']) data['RECEITAS']['VENDAS DE MERCADORIAS'] = {};
+        data['RECEITAS']['VENDAS DE MERCADORIAS'][m] = fatMes[m];
+      }
+    }
   }
 
   const sg=(gk,m)=>Object.values(data[gk]||{}).reduce((s,c)=>s+(c[m]||0),0);
@@ -2128,7 +2159,13 @@ function _buildDRE(el, full) {
   const resAntRetMes = Object.fromEntries(meses.map(m=>[m,0]));
 
   // ── BLOCO 1: RECEITA BRUTA ────────────────────────────────────────────────
-  h += renderSecLabel('1. RECEITA BRUTA');
+  const isComp = getModo() === 'comp';
+  const fatMesDisp = (() => { try { return JSON.parse(localStorage.getItem('bb_fat_por_mes')||'{}'); } catch(_) { return {}; } })();
+  const temFaturamento = Object.values(fatMesDisp).some(v => v > 0);
+  const labelReceita = isComp
+    ? `1. RECEITA BRUTA ${temFaturamento ? '<span style="font-size:9px;background:#e8f5ee;color:#1a7a4a;padding:1px 6px;border-radius:3px;margin-left:6px;font-weight:600">📊 Faturamento XMenu</span>' : '<span style="font-size:9px;background:#fff3cd;color:#856404;padding:1px 6px;border-radius:3px;margin-left:6px">⚠️ Importe o Faturamento para usar competência</span>'}`
+    : '1. RECEITA BRUTA <span style="font-size:9px;background:#e8f0ff;color:#1a5c8a;padding:1px 6px;border-radius:3px;margin-left:6px;font-weight:600">🏦 Extrato Bancário</span>';
+  h += renderSecLabel(labelReceita);
   h += renderGrupo('RECEITAS');
   h += renderSubtotal('RECEITAS', lucBrutoMes);
 

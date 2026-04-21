@@ -1158,11 +1158,18 @@ async function carregarMensal(){
 
   // Expõe NFC-e por mês via localStorage para o DRE calcular DAS estimado
   const nfceMap = {};
+  const fatMap  = {}; // total faturamento XMenu (NFC-e + MEI) por mês — usado pelo DRE modo Competência
   _dadosMensal.forEach(m => {
     if (m.fat_nfce > 0) nfceMap[m.mes] = parseFloat(m.fat_nfce);
+    const total = parseFloat(m.fat_nfce||0) + parseFloat(m.fat_mei||0);
+    if (total > 0) fatMap[m.mes] = total;
   });
-  try { localStorage.setItem('bb_nfce_por_mes', JSON.stringify(nfceMap)); } catch(_) {}
+  try {
+    localStorage.setItem('bb_nfce_por_mes', JSON.stringify(nfceMap));
+    localStorage.setItem('bb_fat_por_mes',  JSON.stringify(fatMap));
+  } catch(_) {}
   window._nfcePorMes = nfceMap;
+  window._fatPorMes  = fatMap;
 
   const hoje = new Date();
   const anoAtual = hoje.getFullYear();
