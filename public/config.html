@@ -61,6 +61,74 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
 .mobile-nav::-webkit-scrollbar{display:none;}
 .mobile-nav-btn{padding:10px 12px;font-size:11px;font-weight:600;color:var(--muted);cursor:pointer;border:none;background:none;white-space:nowrap;border-bottom:3px solid transparent;font-family:'DM Sans',sans-serif;}
 .mobile-nav-btn.active{color:var(--red);border-bottom-color:var(--red);}
+
+/* ── Normalização bb-base — injetado automaticamente ─────────────────────── */
+/* Header: todos vermelho escuro, mesmo padding e sombra */
+.ph, .page-header, header:not(.bb-skip) {
+  background: var(--red) !important;
+  padding: 12px 22px !important;
+  box-shadow: 0 2px 12px rgba(139,0,0,.3) !important;
+  color: #fff !important;
+}
+.ph h2, .page-header h2, header h2 {
+  font-family: 'Playfair Display', serif !important;
+  font-size: 17px !important;
+  font-weight: 700 !important;
+  color: #fff !important;
+}
+/* Botão primário: vermelho uniforme */
+.btn-p, .btn-primary, .btn-red {
+  background: var(--red) !important;
+  color: #fff !important;
+  padding: 8px 16px !important;
+  border-radius: 7px !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  border: none !important;
+}
+.btn-p:hover, .btn-primary:hover, .btn-red:hover {
+  background: var(--red-l) !important;
+}
+/* Botão secundário: uniforme */
+.btn-s, .btn-gray, .btn-secondary {
+  background: var(--white) !important;
+  color: var(--text) !important;
+  border: 1px solid var(--border) !important;
+  padding: 8px 16px !important;
+  border-radius: 7px !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+}
+/* Cards: border-radius uniforme, mesmo shadow */
+.card {
+  border-radius: 10px !important;
+  box-shadow: 0 2px 12px rgba(0,0,0,.08) !important;
+  background: var(--white) !important;
+  border: 1px solid var(--border) !important;
+}
+/* Tabela: header uniforme */
+.tbl th {
+  background: #fdf9f5 !important;
+  font-size: 10px !important;
+  text-transform: uppercase !important;
+  letter-spacing: .6px !important;
+  color: var(--muted) !important;
+  font-weight: 700 !important;
+  padding: 9px 12px !important;
+  border-bottom: 2px solid var(--border) !important;
+}
+.tbl td {
+  padding: 9px 12px !important;
+  border-bottom: 1px solid #f5efe8 !important;
+}
+/* Tabs: padrão uniforme */
+.tab, .tab-btn, .mobile-nav-btn {
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  font-family: 'DM Sans', sans-serif !important;
+}
+/* ─────────────────────────────────────────────────────────────────────────── */
+
 </style>
 </head>
 <body>

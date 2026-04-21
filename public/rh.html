@@ -157,6 +157,74 @@ main{padding:16px 24px;max-width:1400px;margin:0 auto;}
   body{background:#fff;}
   .rel-func{box-shadow:none;border:1px solid #ddd;page-break-inside:avoid;}
 }
+
+/* ── Normalização bb-base — injetado automaticamente ─────────────────────── */
+/* Header: todos vermelho escuro, mesmo padding e sombra */
+.ph, .page-header, header:not(.bb-skip) {
+  background: var(--red) !important;
+  padding: 12px 22px !important;
+  box-shadow: 0 2px 12px rgba(139,0,0,.3) !important;
+  color: #fff !important;
+}
+.ph h2, .page-header h2, header h2 {
+  font-family: 'Playfair Display', serif !important;
+  font-size: 17px !important;
+  font-weight: 700 !important;
+  color: #fff !important;
+}
+/* Botão primário: vermelho uniforme */
+.btn-p, .btn-primary, .btn-red {
+  background: var(--red) !important;
+  color: #fff !important;
+  padding: 8px 16px !important;
+  border-radius: 7px !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  border: none !important;
+}
+.btn-p:hover, .btn-primary:hover, .btn-red:hover {
+  background: var(--red-l) !important;
+}
+/* Botão secundário: uniforme */
+.btn-s, .btn-gray, .btn-secondary {
+  background: var(--white) !important;
+  color: var(--text) !important;
+  border: 1px solid var(--border) !important;
+  padding: 8px 16px !important;
+  border-radius: 7px !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+}
+/* Cards: border-radius uniforme, mesmo shadow */
+.card {
+  border-radius: 10px !important;
+  box-shadow: 0 2px 12px rgba(0,0,0,.08) !important;
+  background: var(--white) !important;
+  border: 1px solid var(--border) !important;
+}
+/* Tabela: header uniforme */
+.tbl th {
+  background: #fdf9f5 !important;
+  font-size: 10px !important;
+  text-transform: uppercase !important;
+  letter-spacing: .6px !important;
+  color: var(--muted) !important;
+  font-weight: 700 !important;
+  padding: 9px 12px !important;
+  border-bottom: 2px solid var(--border) !important;
+}
+.tbl td {
+  padding: 9px 12px !important;
+  border-bottom: 1px solid #f5efe8 !important;
+}
+/* Tabs: padrão uniforme */
+.tab, .tab-btn, .mobile-nav-btn {
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  font-family: 'DM Sans', sans-serif !important;
+}
+/* ─────────────────────────────────────────────────────────────────────────── */
+
 </style>
 </head>
 <body>
@@ -194,6 +262,7 @@ main{padding:16px 24px;max-width:1400px;margin:0 auto;}
     <div class="toolbar">
       <label>Lançamentos pendentes de aprovação</label>
       <button class="btn btn-red" onclick="carregarPendentes()">🔄 Atualizar</button>
+      <button class="btn" style="background:#5b21b6;color:#fff" onclick="abrirModalLanc()">＋ Novo Lançamento</button>
     </div>
     <div id="pendentes-container"><div class="loading">Carregando...</div></div>
   </div>
@@ -353,12 +422,23 @@ main{padding:16px 24px;max-width:1400px;margin:0 auto;}
 
 <!-- Modal novo lançamento -->
 <div class="modal-overlay" id="modal-lanc" style="display:none">
-  <div class="modal-box" style="max-width:480px">
+  <div class="modal-box" style="max-width:520px">
     <div class="modal-header" style="background:var(--red)">
       <h3>📝 Novo Lançamento</h3>
       <button class="modal-close" onclick="fecharModal('modal-lanc')">×</button>
     </div>
     <div class="modal-body">
+
+      <!-- Seletor de funcionários — visível apenas para admin -->
+      <div class="form-group" id="lanc-funcs-wrap" style="display:none">
+        <label>Funcionário(s) *
+          <span style="float:right;font-size:11px;color:var(--blue);cursor:pointer" onclick="toggleSelecionarTodosFuncs()">☑️ Selecionar todos</span>
+        </label>
+        <div id="lanc-funcs-list" style="max-height:130px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:6px 8px;background:#fafafa;display:flex;flex-direction:column;gap:4px">
+          <!-- Checkboxes de funcionários carregados dinamicamente -->
+        </div>
+      </div>
+
       <div class="form-row">
         <div class="form-group">
           <label>Tipo *</label>
@@ -367,6 +447,9 @@ main{padding:16px 24px;max-width:1400px;margin:0 auto;}
             <option value="adicional_noturno">🌙 Adicional Noturno</option>
             <option value="falta">❌ Falta</option>
             <option value="comissao">💰 Comissão</option>
+            <option value="bonus">🎁 Bônus</option>
+            <option value="desconto">↘️ Desconto</option>
+            <option value="outro">📌 Outro</option>
           </select>
         </div>
         <div class="form-group">
@@ -391,13 +474,13 @@ main{padding:16px 24px;max-width:1400px;margin:0 auto;}
       <div id="lanc-calc" style="background:#f0faf4;border-radius:8px;padding:10px 14px;font-size:13px;margin-top:4px;display:none">
         Valor total: <strong id="lanc-vtotal" style="color:var(--green)">R$ 0,00</strong>
       </div>
-      <div class="info-box ib-blue" style="margin-top:12px;font-size:12px">
+      <div class="info-box ib-blue" id="lanc-info-box" style="margin-top:12px;font-size:12px">
         ℹ️ Seu lançamento ficará <strong>pendente</strong> até o admin aprovar. Você receberá confirmação na tela.
       </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-gray" onclick="fecharModal('modal-lanc')">Cancelar</button>
-      <button class="btn btn-red" onclick="salvarLancamento()">📤 Enviar para Aprovação</button>
+      <button class="btn btn-red" onclick="salvarLancamento()" id="btn-salvar-lanc">📤 Enviar para Aprovação</button>
     </div>
   </div>
 </div>
@@ -617,8 +700,100 @@ function abrirModalLanc() {
   document.getElementById('lanc-tipo').value = 'hora_extra';
   document.getElementById('lanc-calc').style.display = 'none';
   atualizarCamposLanc();
+
+  const isAdmin = _perfil === 'admin';
+  const funcsWrap = document.getElementById('lanc-funcs-wrap');
+  const infoBox   = document.getElementById('lanc-info-box');
+  const btnSalvar = document.getElementById('btn-salvar-lanc');
+
+  if (isAdmin) {
+    // Admin: mostra seletor de funcionários, esconde info de pendência
+    funcsWrap.style.display = '';
+    infoBox.style.display = 'none';
+    btnSalvar.textContent = '💾 Lançar';
+    // Popula checkboxes
+    const lista = document.getElementById('lanc-funcs-list');
+    const funcs = window._todasFuncs || [];
+    if (funcs.length) {
+      lista.innerHTML = funcs.map(f =>
+        `<label style="display:flex;align-items:center;gap:8px;padding:4px 6px;border-radius:5px;cursor:pointer;font-size:13px;hover:background:#f5f0eb">
+          <input type="checkbox" class="cb-func" value="${f.id}" style="width:15px;height:15px">
+          <span>${f.nome}</span><span style="font-size:11px;color:var(--muted);margin-left:4px">${f.cargo||''}</span>
+        </label>`
+      ).join('');
+    } else {
+      lista.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:6px">Nenhum funcionário cadastrado</div>';
+    }
+  } else {
+    // Funcionário: esconde seletor
+    funcsWrap.style.display = 'none';
+    infoBox.style.display = '';
+    btnSalvar.textContent = '📤 Enviar para Aprovação';
+  }
+
   document.getElementById('modal-lanc').style.display = 'flex';
 }
+
+function toggleSelecionarTodosFuncs() {
+  const cbs = document.querySelectorAll('#lanc-funcs-list .cb-func');
+  const algumDesmarcado = [...cbs].some(cb => !cb.checked);
+  cbs.forEach(cb => cb.checked = algumDesmarcado);
+}
+
+async function salvarLancamento() {
+  const isAdmin = _perfil === 'admin';
+  const tipo         = document.getElementById('lanc-tipo').value;
+  const descricao    = document.getElementById('lanc-desc').value.trim();
+  const quantidade   = parseFloat(document.getElementById('lanc-qtd').value)||0;
+  const valor_unit   = parseFloat(document.getElementById('lanc-vunit').value)||0;
+  const data_ref     = document.getElementById('lanc-data').value;
+  const somenteQtd   = (tipo === 'hora_extra' || tipo === 'adicional_noturno');
+
+  if (!descricao)                         { toast('⚠️ Informe a descrição'); return; }
+  if (!quantidade)                        { toast('⚠️ Informe a quantidade'); return; }
+  if (!somenteQtd && !valor_unit)         { toast('⚠️ Informe o valor'); return; }
+
+  if (isAdmin) {
+    // Admin: lança para todos os funcionários selecionados
+    const selecionados = [...document.querySelectorAll('#lanc-funcs-list .cb-func:checked')]
+      .map(cb => parseInt(cb.value));
+    if (!selecionados.length) { toast('⚠️ Selecione pelo menos um funcionário'); return; }
+
+    const mes_ref = ymToMmYyyy(document.getElementById('sel-mes')?.value || _mesAtual);
+    const btn = document.getElementById('btn-salvar-lanc');
+    btn.disabled = true; btn.textContent = '⏳ Lançando...';
+
+    let ok = 0, erros = 0;
+    for (const fid of selecionados) {
+      const d = await post('/api/rh/lancamento', {
+        funcionario_id: fid, mes_ref, tipo, descricao,
+        quantidade, valor_unitario: valor_unit, data_ref
+      });
+      if (d.ok) ok++; else erros++;
+    }
+
+    btn.disabled = false; btn.textContent = '💾 Lançar';
+    toast(erros === 0
+      ? `✅ ${ok} lançamento(s) criado(s)!`
+      : `⚠️ ${ok} ok · ${erros} erro(s)`);
+    fecharModal('modal-lanc');
+    carregarPendentes();
+
+  } else {
+    // Funcionário: lança apenas para si
+    if (!_meuFuncId) { toast('⚠️ Usuário não vinculado a funcionário. Fale com o admin.'); return; }
+    const mes_ref = ymToMmYyyy(document.getElementById('sel-mes-meus').value || _mesAtual);
+    const d = await post('/api/rh/lancamento', {
+      funcionario_id: _meuFuncId, mes_ref, tipo, descricao,
+      quantidade, valor_unitario: valor_unit, data_ref
+    });
+    if (!d.ok) { toast('❌ ' + d.erro); return; }
+    toast('✅ Enviado para aprovação!');
+    fecharModal('modal-lanc');
+    carregarMeusLanc();
+  }
+}
+
 function atualizarCamposLanc() {
   const tipo = document.getElementById('lanc-tipo').value;
   const qL   = document.getElementById('lanc-qtd-label');
@@ -737,6 +912,7 @@ async function init() {
       // Vincular funcionário: 1º por usuario_id (vínculo explícito), 2º por email
       const funcs = await get('/api/rh/funcionarios');
       if (funcs.ok && funcs.data) {
+        window._todasFuncs = funcs.data; // salva para uso no modal de lançamento admin
         const match =
           funcs.data.find(f => userId && f.usuario_id && parseInt(f.usuario_id) === parseInt(userId)) ||
           funcs.data.find(f => email && f.email && f.email.toLowerCase() === email.toLowerCase());
