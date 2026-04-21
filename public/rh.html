@@ -15,9 +15,15 @@ header p{font-size:10px;color:rgba(255,255,255,.7);letter-spacing:1px;text-trans
 main{padding:16px 24px;max-width:1400px;margin:0 auto;}
 
 /* Tabs */
-.tabs{display:flex;gap:4px;margin-bottom:16px;background:var(--white);border-radius:10px;padding:4px;box-shadow:var(--shadow);}
-.tab{padding:8px 16px;border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;color:var(--muted);background:none;transition:.15s;}
-.tab.active{background:var(--red);color:#fff;}
+.tabs{display:flex;gap:0;padding:0 4px;background:var(--white);border-bottom:2px solid var(--border);overflow-x:auto;scrollbar-width:none;}
+.tab,.tab-btn{
+  padding:10px 16px;font-size:12px;font-weight:600;cursor:pointer;
+  border:none;background:none;color:var(--muted);
+  border-bottom:3px solid transparent;margin-bottom:-2px;
+  transition:all .15s;white-space:nowrap;font-family:'DM Sans',sans-serif;
+}
+.tab:hover,.tab-btn:hover{color:var(--red);}
+.tab.active,.tab.a,.tab-btn.active{color:var(--red);border-bottom-color:var(--red);}
 .tab-content{display:none;} .tab-content.active{display:block;}
 
 /* Toolbar */

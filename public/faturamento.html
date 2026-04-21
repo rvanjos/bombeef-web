@@ -31,9 +31,14 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
 .kpi-s{font-size:11px;color:var(--muted);margin-top:3px;}
 /* Tabs */
 .tabs{display:flex;gap:4px;margin-bottom:12px;border-bottom:2px solid var(--border);padding-bottom:0;}
-.tab{padding:8px 16px;border:none;background:none;font-family:'DM Sans',sans-serif;font-size:13px;
-  font-weight:500;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;}
-.tab.active{color:var(--green);border-bottom-color:var(--green);font-weight:700;}
+.tab,.tab-btn{
+  padding:10px 16px;font-size:12px;font-weight:600;cursor:pointer;
+  border:none;background:none;color:var(--muted);
+  border-bottom:3px solid transparent;margin-bottom:-2px;
+  transition:all .15s;white-space:nowrap;font-family:'DM Sans',sans-serif;
+}
+.tab:hover,.tab-btn:hover{color:var(--red);}
+.tab.active,.tab.a,.tab-btn.active{color:var(--red);border-bottom-color:var(--red);}
 /* Cards e tabelas */
 .card{background:var(--white);border-radius:10px;box-shadow:var(--shadow);overflow:hidden;margin-bottom:12px;}
 .tbl{width:100%;border-collapse:collapse;font-size:12px;}
