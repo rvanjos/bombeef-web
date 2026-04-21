@@ -514,6 +514,9 @@ const {api, fmt, toast} = BB;
 let TXS=[], sessId=null, mesRef='', files=[], supMem={}, selIds=new Set(), _sv;
 let _estoquesMes = {}; // { 'MM/YYYY': valorEstoqueFinal }
 try { _estoquesMes = JSON.parse(localStorage.getItem('bb_estoques_mes') || '{}'); window._estoquesMes = _estoquesMes; } catch(_) {}
+
+let _fatManualMes = {}; // { 'MM/YYYY': faturamentoManual } — meses sem XMenu
+try { _fatManualMes = JSON.parse(localStorage.getItem('bb_fat_manual_mes') || '{}'); window._fatManualMes = _fatManualMes; } catch(_) {}
 let _ignorarTrocarMes = false;
 const MO=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
@@ -2043,6 +2046,19 @@ function setEstoqueFinal(mesEnc, valor) {
   autoSv();
 }
 
+function setFatManual(mesEnc, valor) {
+  const mes = mesEnc.replace('_', '/');
+  const val = parseFloat(valor) || 0;
+  if (!window._fatManualMes) window._fatManualMes = {};
+  if (val > 0) window._fatManualMes[mes] = val;
+  else delete window._fatManualMes[mes];
+  _fatManualMes = window._fatManualMes;
+  try { localStorage.setItem('bb_fat_manual_mes', JSON.stringify(_fatManualMes)); } catch(_) {}
+  renderDRE();
+  if (document.getElementById('m-dre')?.classList.contains('open')) renderDREFull();
+  toast(`💾 Faturamento manual de ${mes} salvo`);
+}
+
 let _dreIsFS = false;
 function toggleDREFullscreen() {
   _dreIsFS = !_dreIsFS;
@@ -2117,25 +2133,23 @@ function _buildDRE(el, full) {
   }
 
   // ── Modo Competência: substitui receitas do extrato pelo Faturamento real ──
-  // No extrato, PIX/TED de clientes podem entrar em mês diferente do da venda.
-  // Para competência, o correto é usar o faturamento real do XMenu (NFC-e + MEI).
+  // Usa XMenu quando disponível; faturamento manual para meses anteriores sem XMenu
   if (getModo() === 'comp') {
     try { window._fatPorMes = JSON.parse(localStorage.getItem('bb_fat_por_mes') || '{}'); } catch(_) { window._fatPorMes = {}; }
-    const fatMes = window._fatPorMes || {};
-    // Para cada mês com dados de faturamento, substitui o grupo RECEITAS
-    const mesesFat = Object.keys(fatMes).filter(m => fatMes[m] > 0);
+    try { window._fatManualMes = JSON.parse(localStorage.getItem('bb_fat_manual_mes') || '{}'); } catch(_) { window._fatManualMes = {}; }
+    // Fonte combinada: XMenu tem prioridade; manual preenche meses sem XMenu
+    const fatCombinado = { ...(window._fatManualMes||{}), ...(window._fatPorMes||{}) };
+    const mesesFat = Object.keys(fatCombinado).filter(m => fatCombinado[m] > 0);
     if (mesesFat.length > 0) {
-      // Zera receitas do extrato para meses que têm dados de faturamento
       for (const m of mesesFat) {
         if (data['RECEITAS']) {
           for (const cat of Object.keys(data['RECEITAS'])) {
             delete data['RECEITAS'][cat][m];
           }
         }
-        // Injeta o faturamento real como "VENDAS DE MERCADORIAS"
         if (!data['RECEITAS']) data['RECEITAS'] = {};
         if (!data['RECEITAS']['VENDAS DE MERCADORIAS']) data['RECEITAS']['VENDAS DE MERCADORIAS'] = {};
-        data['RECEITAS']['VENDAS DE MERCADORIAS'][m] = fatMes[m];
+        data['RECEITAS']['VENDAS DE MERCADORIAS'][m] = fatCombinado[m];
       }
     }
   }
@@ -2240,15 +2254,57 @@ function _buildDRE(el, full) {
   // ── BLOCO 1: RECEITA BRUTA ────────────────────────────────────────────────
   const isComp = getModo() === 'comp';
   // Garante leitura mais recente do faturamento
-  const fatMesDisp = window._fatPorMes || (() => { try { return JSON.parse(localStorage.getItem('bb_fat_por_mes')||'{}'); } catch(_) { return {}; } })();
-  const temFaturamento = Object.values(fatMesDisp).some(v => v > 0);
+  const fatXMenu   = window._fatPorMes    || (() => { try { return JSON.parse(localStorage.getItem('bb_fat_por_mes')||'{}'); } catch(_) { return {}; } })();
+  const fatManual  = window._fatManualMes || (() => { try { return JSON.parse(localStorage.getItem('bb_fat_manual_mes')||'{}'); } catch(_) { return {}; } })();
+  const temFatXMenu  = Object.values(fatXMenu).some(v => v > 0);
+  const temFatManual = Object.values(fatManual).some(v => v > 0);
   const labelReceita = isComp
-    ? `1. RECEITA BRUTA ${temFaturamento
-        ? '<span style="font-size:9px;background:#e8f5ee;color:#1a7a4a;padding:1px 6px;border-radius:3px;margin-left:6px;font-weight:600">📊 Faturamento XMenu</span>'
-        : '<span style="font-size:9px;background:#fff3cd;color:#856404;padding:1px 6px;border-radius:3px;margin-left:6px">⚠️ Sem dados — abra o módulo Faturamento</span>'}`
+    ? `1. RECEITA BRUTA ${temFatXMenu
+        ? '<span style="font-size:9px;background:#e8f5ee;color:#1a7a4a;padding:1px 6px;border-radius:3px;margin-left:4px;font-weight:600">📊 XMenu</span>'
+        : ''}${temFatManual
+        ? '<span style="font-size:9px;background:#ede9fe;color:#5b21b6;padding:1px 6px;border-radius:3px;margin-left:4px;font-weight:600">✏️ Manual</span>'
+        : ''}${!temFatXMenu && !temFatManual
+        ? '<span style="font-size:9px;background:#fff3cd;color:#856404;padding:1px 6px;border-radius:3px;margin-left:4px">⚠️ Sem faturamento — abra o módulo Faturamento ou insira manualmente</span>'
+        : ''}`
     : '1. RECEITA BRUTA <span style="font-size:9px;background:#e8f0ff;color:#1a5c8a;padding:1px 6px;border-radius:3px;margin-left:6px;font-weight:600">🏦 Extrato Bancário</span>';
   h += renderSecLabel(labelReceita);
   h += renderGrupo('RECEITAS');
+
+  // Linha de faturamento manual — só aparece no modo Competência
+  // Para meses sem dados do XMenu, permite informar o faturamento real
+  if (isComp) {
+    let fatManLinha = `<tr style="background:#f5f0ff">
+      <td style="${TDL};color:#5b21b6;font-size:11px;font-style:italic;padding-left:${full?'28':'20'}px">
+        ✏️ Faturamento Manual
+        <span style="font-size:9px;color:#aaa;margin-left:4px" title="Informe o faturamento real para meses anteriores sem dados do XMenu. O XMenu tem prioridade quando disponível.">ⓘ Use para meses sem XMenu</span>
+      </td>`;
+    for (const m of meses) {
+      const mEnc = m.replace('/', '_');
+      const val = parseFloat(fatManual[m] || 0);
+      const temXMenu = fatXMenu[m] > 0;
+      if (temXMenu) {
+        // Mês com XMenu: mostra que o XMenu está sendo usado
+        fatManLinha += `<td style="${TD};font-size:11px;color:#aaa;font-style:italic">
+          <span title="XMenu disponível — valor manual ignorado">XMenu ✓</span>
+        </td>`;
+      } else {
+        fatManLinha += `<td style="${TD};padding:3px 6px">
+          <input type="number" step="100" min="0"
+            value="${val || ''}"
+            placeholder="0,00"
+            title="Faturamento real de ${m}"
+            style="width:90px;text-align:right;font-size:11px;font-family:'DM Mono',monospace;border:1px solid #c4b5fd;border-radius:4px;padding:2px 5px;background:#faf5ff"
+            onchange="setFatManual('${mEnc}', this.value)"
+            onclick="event.stopPropagation()"
+          >
+        </td>`;
+      }
+    }
+    if (showTot) fatManLinha += `<td style="${TD}"></td>`;
+    fatManLinha += '</tr>';
+    h += fatManLinha;
+  }
+
   h += renderSubtotal('RECEITAS', lucBrutoMes);
 
   // ── BLOCO 2: CMV ──────────────────────────────────────────────────────────
@@ -3073,16 +3129,18 @@ function exportXLS(){
     dataD[gk][t.categoria][m]=(dataD[gk][t.categoria][m]||0)+v;
   }
 
-  // Modo Competência: substitui receitas pelo Faturamento XMenu (igual ao _buildDRE)
+  // Modo Competência: substitui receitas pelo Faturamento combinado (XMenu + manual)
   if (getModo() === 'comp') {
-    const fatMes = window._fatPorMes || {};
-    Object.keys(fatMes).filter(m => fatMes[m] > 0).forEach(m => {
+    const fatXMenuXLS  = window._fatPorMes    || {};
+    const fatManualXLS = window._fatManualMes || {};
+    const fatCombXLS   = { ...fatManualXLS, ...fatXMenuXLS }; // XMenu tem prioridade
+    Object.keys(fatCombXLS).filter(m => fatCombXLS[m] > 0).forEach(m => {
       if (dataD['RECEITAS']) {
         Object.keys(dataD['RECEITAS']).forEach(cat => { delete dataD['RECEITAS'][cat][m]; });
       }
       if (!dataD['RECEITAS']) dataD['RECEITAS'] = {};
       if (!dataD['RECEITAS']['VENDAS DE MERCADORIAS']) dataD['RECEITAS']['VENDAS DE MERCADORIAS'] = {};
-      dataD['RECEITAS']['VENDAS DE MERCADORIAS'][m] = fatMes[m];
+      dataD['RECEITAS']['VENDAS DE MERCADORIAS'][m] = fatCombXLS[m];
       mesesSet.add(m);
     });
   }
