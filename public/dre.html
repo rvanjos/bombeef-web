@@ -135,71 +135,29 @@ td{padding:5px 9px;vertical-align:middle;}
 }
 .cat-input:focus { outline: none; border-color: var(--blue); }
 
-/* ── Normalização bb-base — injetado automaticamente ─────────────────────── */
-/* Header: todos vermelho escuro, mesmo padding e sombra */
-.ph, .page-header, header:not(.bb-skip) {
-  background: var(--red) !important;
-  padding: 12px 22px !important;
-  box-shadow: 0 2px 12px rgba(139,0,0,.3) !important;
-  color: #fff !important;
-}
-.ph h2, .page-header h2, header h2 {
-  font-family: 'Playfair Display', serif !important;
-  font-size: 17px !important;
-  font-weight: 700 !important;
-  color: #fff !important;
-}
-/* Botão primário: vermelho uniforme */
-.btn-p, .btn-primary, .btn-red {
-  background: var(--red) !important;
-  color: #fff !important;
-  padding: 8px 16px !important;
-  border-radius: 7px !important;
-  font-size: 12px !important;
-  font-weight: 600 !important;
-  border: none !important;
-}
-.btn-p:hover, .btn-primary:hover, .btn-red:hover {
-  background: var(--red-l) !important;
-}
-/* Botão secundário: uniforme */
-.btn-s, .btn-gray, .btn-secondary {
-  background: var(--white) !important;
-  color: var(--text) !important;
-  border: 1px solid var(--border) !important;
-  padding: 8px 16px !important;
-  border-radius: 7px !important;
-  font-size: 12px !important;
-  font-weight: 600 !important;
-}
-/* Cards: border-radius uniforme, mesmo shadow */
-.card {
-  border-radius: 10px !important;
-  box-shadow: 0 2px 12px rgba(0,0,0,.08) !important;
-  background: var(--white) !important;
-  border: 1px solid var(--border) !important;
-}
-/* Tabela: header uniforme */
-.tbl th {
-  background: #fdf9f5 !important;
-  font-size: 10px !important;
-  text-transform: uppercase !important;
-  letter-spacing: .6px !important;
-  color: var(--muted) !important;
-  font-weight: 700 !important;
-  padding: 9px 12px !important;
-  border-bottom: 2px solid var(--border) !important;
-}
-.tbl td {
-  padding: 9px 12px !important;
-  border-bottom: 1px solid #f5efe8 !important;
-}
-/* Tabs: padrão uniforme */
-.tab, .tab-btn, .mobile-nav-btn {
-  font-size: 12px !important;
-  font-weight: 600 !important;
-  font-family: 'DM Sans', sans-serif !important;
-}
+/* ── Normalização bb-base ────────────────────────────────────────────────── */
+/* Botão primário */
+.btn-p { background: var(--red); color: #fff; padding: 8px 16px; border-radius: 7px; font-size: 12px; font-weight: 600; border: none; }
+.btn-p:hover { background: var(--red-l); }
+/* Botão secundário */
+.btn-s { background: var(--white); color: var(--text); border: 1px solid var(--border); padding: 8px 16px; border-radius: 7px; font-size: 12px; font-weight: 600; }
+.btn-s:hover { border-color: var(--red); color: var(--red); }
+/* Botão verde */
+.btn-g { background: var(--green); color: #fff; padding: 8px 16px; border-radius: 7px; font-size: 12px; font-weight: 600; border: none; }
+.btn-g:hover { filter: brightness(1.1); }
+/* Botão azul */
+.btn-b, .btn-blue { background: var(--blue); color: #fff; padding: 8px 16px; border-radius: 7px; font-size: 12px; font-weight: 600; border: none; }
+/* Botão laranja */
+.btn-o { background: var(--orange); color: #fff; padding: 8px 16px; border-radius: 7px; font-size: 12px; font-weight: 600; border: none; }
+/* Cards */
+.card { border-radius: 10px; box-shadow: 0 2px 12px rgba(0,0,0,.08); background: var(--white); border: 1px solid var(--border); }
+/* Tabela */
+.tbl th { background: #fdf9f5; font-size: 10px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); font-weight: 700; padding: 9px 12px; border-bottom: 2px solid var(--border); }
+.tbl td { padding: 9px 12px; border-bottom: 1px solid #f5efe8; }
+/* Tabs */
+.tab { font-size: 12px; font-weight: 600; font-family: 'DM Sans', sans-serif; }
+/* Footer: nunca mostra dentro de iframe */
+.bb-footer { display: none !important; }
 /* ─────────────────────────────────────────────────────────────────────────── */
 
 </style>
