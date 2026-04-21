@@ -790,22 +790,6 @@ function calcLanc() {
   el.style.display = total>0?'':'none';
   if (total>0) document.getElementById('lanc-vtotal').textContent = brl(total);
 }
-async function salvarLancamento() {
-  if (!_meuFuncId) { toast('⚠️ Usuário não vinculado a funcionário. Fale com o admin.'); return; }
-  const tipo = document.getElementById('lanc-tipo').value;
-  const descricao = document.getElementById('lanc-desc').value.trim();
-  const quantidade = parseFloat(document.getElementById('lanc-qtd').value)||0;
-  const valor_unitario = parseFloat(document.getElementById('lanc-vunit').value)||0;
-  const data_ref = document.getElementById('lanc-data').value;
-  const mes_ref = ymToMmYyyy(document.getElementById('sel-mes-meus').value||_mesAtual);
-  if (!descricao) { toast('⚠️ Informe a descrição'); return; }
-  const somenteQtd = (tipo === 'hora_extra' || tipo === 'adicional_noturno');
-  if (!quantidade) { toast('⚠️ Informe a quantidade'); return; }
-  if (!somenteQtd && !valor_unitario) { toast('⚠️ Informe o valor'); return; }
-  const d = await post('/api/rh/lancamento', { funcionario_id:_meuFuncId, mes_ref, tipo, descricao, quantidade, valor_unitario, data_ref });
-  if (!d.ok) { toast('❌ '+d.erro); return; }
-  toast('✅ Enviado para aprovação!'); fecharModal('modal-lanc'); carregarMeusLanc();
-}
 
 // Inicia imediatamente se já tem token no storage
 if (getToken()) { _inited = true; init(); }
