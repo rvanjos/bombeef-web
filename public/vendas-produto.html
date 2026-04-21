@@ -307,6 +307,7 @@ let _dados = { kpis:{}, dias:[], top10:[], produtos:[], diasem:[], topDsem:[] };
 let _linhasImport = [];
 let _nomeArqImport = '';
 let _charts = {};
+let _pronto = false; // true após receber token e inicializar
 
 // ── Tabs ────────────────────────────────────────────────────────────────────
 function showSec(id, btn) {
@@ -314,6 +315,7 @@ function showSec(id, btn) {
   document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
   document.getElementById('sec-'+id).classList.add('active');
   if(btn) btn.classList.add('active');
+  if(!_pronto) return; // aguarda init antes de carregar dados
   if(id==='produtos') carregarProdutos();
   if(id==='diasemana') carregarDiaSemana();
   if(id==='diario') carregarDiario();
@@ -705,9 +707,11 @@ function toast(msg,dur=3500){
 
 // ── Init ─────────────────────────────────────────────────────────────────────
 window.onBBReady = () => init();
-if(api.token()) init();
+if (typeof api !== 'undefined' && api.token()) init();
 
 async function init() {
+  if (_pronto) return;
+  _pronto = true;
   // Define período padrão: mês atual
   const hoje = new Date();
   const ini = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}-01`;
