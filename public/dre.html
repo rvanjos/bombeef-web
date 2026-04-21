@@ -513,6 +513,7 @@ td{padding:5px 9px;vertical-align:middle;}
 const {api, fmt, toast} = BB;
 let TXS=[], sessId=null, mesRef='', files=[], supMem={}, selIds=new Set(), _sv;
 let _estoquesMes = {}; // { 'MM/YYYY': valorEstoqueFinal }
+try { _estoquesMes = JSON.parse(localStorage.getItem('bb_estoques_mes') || '{}'); window._estoquesMes = _estoquesMes; } catch(_) {}
 let _ignorarTrocarMes = false;
 const MO=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
@@ -884,6 +885,8 @@ async function carregarSessao() {
       if (dados.estoquesMes) {
         window._estoquesMes = { ...(window._estoquesMes||{}), ...dados.estoquesMes };
         _estoquesMes = window._estoquesMes;
+        // Persiste no localStorage para sobreviver a recarregamentos
+        try { localStorage.setItem('bb_estoques_mes', JSON.stringify(_estoquesMes)); } catch(_) {}
       }
       window._sessoesPorMes[r.data.mes_ref] = r.data.id;
     }
@@ -2022,6 +2025,7 @@ function setEstoqueFinal(mesEnc, valor) {
   if (val > 0) window._estoquesMes[mes] = val;
   else delete window._estoquesMes[mes];
   _estoquesMes = window._estoquesMes;
+  try { localStorage.setItem('bb_estoques_mes', JSON.stringify(_estoquesMes)); } catch(_) {}
   renderDRE();
   if (document.getElementById('m-dre')?.classList.contains('open')) renderDREFull();
   autoSv();
