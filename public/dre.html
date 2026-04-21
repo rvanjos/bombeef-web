@@ -537,7 +537,19 @@ const GRUPO_LABELS = {
   FINANCEIRAS:'DESPESAS FINANCEIRAS',
   OUTRAS:     'OUTRAS DESPESAS OPERACIONAIS',
   IMPOSTOS:   'IMPOSTOS, TAXAS E CONTRIBUIÇÕES',
+  NAO_OPER:   'NÃO OPERACIONAL (conferência)',  // não impacta resultado
 };
+
+// Categorias que aparecem na tela mas NÃO impactam resultado (nem receita nem despesa)
+const CATS_NAO_OPERACIONAIS = new Set([
+  'Transferência entre contas',
+]);
+
+// Categorias de retirada de sócios — impactam SOMENTE após resultado operacional+financeiro
+const CATS_RETIRADA_SOCIO = new Set([
+  'Retirada Sócio',
+  'Enviado Rafael Vieira Dos Anjos',
+]);
 
 function buildCATSFromDB(rows) {
   const cats = {};
@@ -2087,7 +2099,15 @@ function _buildDRE(el, full) {
   const showTot=meses.length>1||full;
 
   const data={};
+  const dataNaoOper={}; // categorias que aparecem mas NÃO impactam resultado
   for (const t of at) {
+    // Categorias não-operacionais: mostrar em bloco próprio, fora dos cálculos
+    if (CATS_NAO_OPERACIONAIS.has(t.categoria)) {
+      const m=getMesTx(t); const v=parseFloat(t.valor||0);
+      if(!dataNaoOper[t.categoria])dataNaoOper[t.categoria]={};
+      dataNaoOper[t.categoria][m]=(dataNaoOper[t.categoria][m]||0)+v;
+      continue;
+    }
     const g=catGrupo(t.categoria)||'OUTROS';
     const m=getMesTx(t);
     const v=parseFloat(t.valor||0);
@@ -2322,32 +2342,27 @@ function _buildDRE(el, full) {
   }
 
   // ── DAS / Simples Nacional estimado ───────────────────────────────────────
-  // Regra: para cada mês, verifica se já existe lançamento "Simples Nacional" classificado.
-  // Se não existe (pagamento ainda não feito), mostra estimativa = NFC-e mês anterior × %
   const pctDAS = parseFloat(localStorage.getItem('bb_pct_simples') || '8') / 100;
   const CAT_SIMPLES = 'Simples Nacional';
-  // Carrega NFC-e por mês do Faturamento (salvo pelo iframe de Faturamento)
   try { window._nfcePorMes = JSON.parse(localStorage.getItem('bb_nfce_por_mes') || '{}'); } catch(_) { window._nfcePorMes = {}; }
-
-  // Verifica quais meses já têm pagamento real do Simples
   const mesesComSimples = new Set(
     TXS.filter(t => !t.ignorar && t.categoria === CAT_SIMPLES).map(t => t.mes || mesRef)
   );
-
-  // Para estimar o DAS de um mês M, precisa do NFC-e do mês anterior
-  // Busca NFC-e por mês a partir dos dados do Faturamento (se disponível) ou suprime
   const dasEstMes = {};
   for (const m of meses) {
-    if (mesesComSimples.has(m)) continue; // já tem o real, não mostra estimativa
-    // Calcula mês anterior
+    if (mesesComSimples.has(m)) continue;
     const [mm, yy] = m.split('/');
-    const dtAnterior = new Date(parseInt(yy), parseInt(mm) - 2, 1);
-    const mAnterior = `${String(dtAnterior.getMonth()+1).padStart(2,'0')}/${dtAnterior.getFullYear()}`;
-    // Busca NFC-e do mês anterior em window._nfcePorMes (carregado pelo Faturamento)
-    const nfceAnt = parseFloat((window._nfcePorMes||{})[mAnterior] || 0);
-    if (nfceAnt > 0) {
-      dasEstMes[m] = Math.round(nfceAnt * pctDAS * 100) / 100;
+    // Competência: usa NFC-e do MESMO mês (imposto é sobre a venda do mês)
+    // Caixa: usa NFC-e do mês anterior (paga no dia 20 do mês seguinte)
+    let mRef;
+    if (getModo() === 'comp') {
+      mRef = m; // mesmo mês da venda
+    } else {
+      const dtAnt = new Date(parseInt(yy), parseInt(mm) - 2, 1);
+      mRef = `${String(dtAnt.getMonth()+1).padStart(2,'0')}/${dtAnt.getFullYear()}`;
     }
+    const nfce = parseFloat((window._nfcePorMes||{})[mRef] || 0);
+    if (nfce > 0) dasEstMes[m] = Math.round(nfce * pctDAS * 100) / 100;
   }
 
   if (Object.values(dasEstMes).some(v => v > 0)) {
@@ -2355,13 +2370,13 @@ function _buildDRE(el, full) {
       <td style="${TDL};color:#854d0e;font-size:11px;font-style:italic;padding-left:${full?'28':'20'}px">
         🏛️ DAS / Simples Nacional
         <span style="font-size:10px;background:#fef3c7;color:#854d0e;border:1px solid #fcd34d;border-radius:3px;padding:0 4px;margin-left:4px">estimado</span>
-        <span style="font-size:9px;color:#aaa;margin-left:4px" title="8% sobre NFC-e do mês anterior. Ajuste em Faturamento → Mensal → ⚙️ ajustar %">ⓘ</span>
+        <span style="font-size:9px;color:#aaa;margin-left:4px" title="${getModo()==='comp'?'8% sobre NFC-e do mesmo mês (competência)':'8% sobre NFC-e do mês anterior (caixa)'}">ⓘ</span>
       </td>`;
     let totalDas = 0;
     for (const m of meses) {
       const v = dasEstMes[m] || 0;
       totalDas += v;
-      lucOpMes[m] = (lucOpMes[m] || 0) - v; // desconta do resultado
+      lucOpMes[m] = (lucOpMes[m] || 0) - v;
       dasHtml += `<td style="${TD}">${v > 0
         ? `<span style="font-family:'DM Mono',monospace;color:#e74c3c">-${fmt.brl(v)}</span>`
         : '<span style="color:#bbb;font-family:\'DM Mono\',monospace">—</span>'
@@ -2382,7 +2397,7 @@ function _buildDRE(el, full) {
 
   // ── BLOCO 4: RESULTADO FINANCEIRO ─────────────────────────────────────────
   if (data['FINANCEIRAS']) {
-    h += renderSecLabel('4. (-) RESULTADO FINANCEIRO');
+    h += renderSecLabel('4. (-) DESPESAS FINANCEIRAS');
     h += renderGrupo('FINANCEIRAS');
     meses.forEach(m=>{ resFinMes[m]=(resFinMes[m]||0)+sg('FINANCEIRAS',m); });
     h += renderSubtotal('FINANCEIRAS', null);
@@ -2392,9 +2407,9 @@ function _buildDRE(el, full) {
   h += renderResultado('RESULTADO ANTES DAS RETIRADAS', '🟡', resFinMes, '#fffbeb', '#f59e0b');
   meses.forEach(m=>{ resAntRetMes[m]=resFinMes[m]||0; });
 
-  // ── BLOCO 5: RETIRADAS / OUTROS ───────────────────────────────────────────
+  // ── BLOCO 5: RETIRADAS DOS SÓCIOS ─────────────────────────────────────────
   if (data['OUTROS']) {
-    h += renderSecLabel('5. (-) RETIRADAS DOS SÓCIOS / OUTROS');
+    h += renderSecLabel('5. (-) RETIRADAS DOS SÓCIOS');
     h += renderGrupo('OUTROS');
     meses.forEach(m=>{ resAntRetMes[m]=(resAntRetMes[m]||0)+sg('OUTROS',m); });
     h += renderSubtotal('OUTROS', null);
@@ -2408,6 +2423,25 @@ function _buildDRE(el, full) {
       return '<td style="padding:12px 10px;text-align:right;font-family:\'DM Mono\',monospace;font-weight:800;font-size:14px;border-right:1px solid rgba(255,255,255,.1);color:'+(v>=0?'#2ecc71':'#e74c3c')+'">'+(v>=0?'+':'')+fmt.brl(v)+'</td>';}).join('')
     +(showTot?'<td style="padding:12px 10px;text-align:right;font-family:\'DM Mono\',monospace;font-weight:800;font-size:14px;background:#2d2d2d;color:'+(totFinal>=0?'#2ecc71':'#e74c3c')+'">'+(totFinal>=0?'+':'')+fmt.brl(totFinal)+'</td>':'')
     +'</tr>';
+
+  // ── BLOCO 6: NÃO OPERACIONAL (conferência, não impacta resultado) ──────────
+  if (Object.keys(dataNaoOper).length > 0) {
+    h += `<tr><td colspan="${cols}" style="padding:8px 14px 4px;background:#f0f0f0;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#888;border-top:2px solid #ddd">
+      TRANSFERÊNCIAS (conferência — não impacta resultado)
+      <span style="font-size:9px;font-weight:400;font-style:italic;margin-left:6px">valores visíveis apenas para conferência</span>
+    </td></tr>`;
+    for (const [cat, porMes] of Object.entries(dataNaoOper)) {
+      const totCat = Object.values(porMes).reduce((s,v)=>s+v,0);
+      h += `<tr style="background:#f8f8f8;opacity:.8">
+        <td style="${TDL};color:#888;font-size:11px;padding-left:${full?'28':'20'}px">&nbsp;&nbsp;· ${cat}</td>`;
+      meses.forEach(m => {
+        const v = porMes[m]||0;
+        h += `<td style="${TD};color:#aaa;font-size:11px">${v===0?'—':fmt.brl(v)}</td>`;
+      });
+      if (showTot) h += `<td style="${TD};color:#aaa;font-size:11px">${totCat===0?'—':fmt.brl(totCat)}</td>`;
+      h += '</tr>';
+    }
+  }
 
   h+='</tbody></table></div>';
 
@@ -3023,7 +3057,15 @@ function exportXLS(){
 
   // Agrupa — mesmo do _buildDRE
   const dataD={};
+  const dataNaoOperXLS={};
   for (const t of at) {
+    // Não-operacionais: só para conferência
+    if (CATS_NAO_OPERACIONAIS.has(t.categoria)) {
+      const m=getMesTx(t); const v=parseFloat(t.valor||0);
+      if(!dataNaoOperXLS[t.categoria])dataNaoOperXLS[t.categoria]={};
+      dataNaoOperXLS[t.categoria][m]=(dataNaoOperXLS[t.categoria][m]||0)+v;
+      continue;
+    }
     const gk=catGrupo(t.categoria)||'OUTROS';
     const m=getMesTx(t); const v=parseFloat(t.valor||0);
     if(!dataD[gk])dataD[gk]={};
@@ -3236,11 +3278,32 @@ function exportXLS(){
     meses.forEach(m=>{ lucOp[m]=(lucOp[m]||0)+sg(gk,m); });
   });
 
+  // DAS estimado no Excel — mesmo ajuste de modo do _buildDRE
+  const pctDASxls = parseFloat(localStorage.getItem('bb_pct_simples')||'8')/100;
+  const nfcePorMesXLS = window._nfcePorMes || {};
+  const mesesComSimplesXLS = new Set(TXS.filter(t=>!t.ignorar&&t.categoria==='Simples Nacional').map(t=>t.mes||mesRef));
+  meses.forEach(m => {
+    if (mesesComSimplesXLS.has(m)) return;
+    const [mm,yy]=m.split('/');
+    let mRef;
+    if (getModo()==='comp') {
+      mRef=m;
+    } else {
+      const dtA=new Date(parseInt(yy),parseInt(mm)-2,1);
+      mRef=`${String(dtA.getMonth()+1).padStart(2,'0')}/${dtA.getFullYear()}`;
+    }
+    const nfce=parseFloat(nfcePorMesXLS[mRef]||0);
+    if(nfce>0) {
+      const das=Math.round(nfce*pctDASxls*100)/100;
+      lucOp[m]=(lucOp[m]||0)-das;
+    }
+  });
+
   addResultadoXLS('LUCRO OPERACIONAL','🔵',lucOp,'res-op','res-op');
   meses.forEach(m=>{ resFin[m]=lucOp[m]||0; });
 
   if(dataD['FINANCEIRAS']) {
-    addSecLabelXLS('4. (-) RESULTADO FINANCEIRO');
+    addSecLabelXLS('4. (-) DESPESAS FINANCEIRAS');
     addGrupoXLS('FINANCEIRAS','st-oper');
     meses.forEach(m=>{ resFin[m]=(resFin[m]||0)+sg('FINANCEIRAS',m); });
   }
@@ -3249,15 +3312,29 @@ function exportXLS(){
   meses.forEach(m=>{ resAntRet[m]=resFin[m]||0; });
 
   if(dataD['OUTROS']) {
-    addSecLabelXLS('5. (-) RETIRADAS DOS SÓCIOS / OUTROS');
+    addSecLabelXLS('5. (-) RETIRADAS DOS SÓCIOS');
     addGrupoXLS('OUTROS','st-oper');
     meses.forEach(m=>{ resAntRet[m]=(resAntRet[m]||0)+sg('OUTROS',m); });
   }
 
   addResultadoXLS('RESULTADO FINAL (LUCRO / PREJUÍZO REAL)','💰',resAntRet,'res-fin','res-fin');
 
-  html += `</table>
-</body></html>`;
+  // Bloco não-operacional (conferência)
+  if(Object.keys(dataNaoOperXLS).length > 0) {
+    html += `<tr><td colspan="${lastCol}" style="background:#f0f0f0;color:#888;font-size:9pt;font-weight:bold;padding:6px 8px;text-transform:uppercase;letter-spacing:1px">
+      TRANSFERÊNCIAS (conferência — não impacta resultado)</td></tr>`;
+    for(const [cat, porMes] of Object.entries(dataNaoOperXLS)) {
+      html += `<tr><td class="left" style="color:#aaa;padding-left:20px">&nbsp;&nbsp;· ${cat}</td>`;
+      meses.forEach(m => {
+        const v=porMes[m]||0;
+        html+=`<td class="mono" style="color:#bbb">${v===0?'':brl2(v)}</td>`;
+      });
+      if(showTot) html+=`<td class="mono" style="color:#bbb"></td>`;
+      html+=`</tr>`;
+    }
+  }
+
+  html += `</table>\n</body></html>`;
 
   // Download como .xls (Excel abre HTML com formatação)
   const blob = new Blob([html], {type:'application/vnd.ms-excel;charset=utf-8'});
