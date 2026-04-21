@@ -425,30 +425,26 @@ module.exports = function (pool) {
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
-  // ── POST /encerrar-multiplos — marca vários como vendido/descartado ─────────
+  // ── POST /encerrar-multiplos — marca vários como vendido/descartado/vencido ──
   r.post('/encerrar-multiplos', async (req, res) => {
     const { ids, resolucao } = req.body;
     if (!ids?.length) return res.status(400).json({ ok: false, erro: 'Informe os IDs' });
     const idsNum = ids.map(Number).filter(n => !isNaN(n) && n > 0);
     if (!idsNum.length) return res.status(400).json({ ok: false, erro: 'IDs inválidos' });
     const motivo = resolucao || 'vendido';
+    // Para resolucao='vencimento', o status vira 'descartado' para entrar no histórico
+    const novoStatus = motivo === 'vencimento' ? 'descartado' : motivo;
     try {
       const result = await pool.query(`
         UPDATE validade_items
-        SET status=$1, resolucao=$1, dt_resolucao=CURRENT_DATE, atualizado_em=NOW()
-        WHERE id=ANY($2::int[])
+        SET status=$1, resolucao=$2, dt_resolucao=CURRENT_DATE, atualizado_em=NOW()
+        WHERE id=ANY($3::int[])
         RETURNING id, status, resolucao, atualizado_em
-      `, [motivo, idsNum]);
-      console.log(`[validade] encerrar-multiplos: ids=${idsNum} motivo=${motivo} rowCount=${result.rowCount} returning=${JSON.stringify(result.rows)}`);
-      if (result.rowCount === 0) {
+      `, [novoStatus, motivo, idsNum]);
+      console.log(`[validade] encerrar-multiplos: ids=${idsNum} motivo=${motivo} status=${novoStatus} rowCount=${result.rowCount}`);
+      if (result.rowCount === 0)
         return res.status(404).json({ ok: false, erro: 'Nenhum item encontrado com esses IDs' });
-      }
-      // Verificação imediata: confirmar que o banco realmente salvou
-      const check = await pool.query(
-        `SELECT id, status FROM validade_items WHERE id=ANY($1::int[])`, [idsNum]
-      );
-      console.log(`[validade] encerrar-multiplos CHECK pós-update: ${JSON.stringify(check.rows)}`);
-      res.json({ ok: true, atualizados: result.rowCount, motivo, check: check.rows });
+      res.json({ ok: true, atualizados: result.rowCount, motivo });
     } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
@@ -499,19 +495,44 @@ module.exports = function (pool) {
   r.get('/historico', async (req, res) => {
     try {
       const { resolucao, de, ate, busca } = req.query;
-      const conds = [`status IN ('descartado','vendido')`], params = [];
+      // Histórico = encerrados (descartado/vendido) + vencidos ainda ativos
+      const conds = [`(status IN ('descartado','vendido') OR status = 'vencido')`], params = [];
       if (resolucao && resolucao !== 'todos') {
-        params.push(resolucao); conds.push(`resolucao=$${params.length}`);
+        if (resolucao === 'vencimento') {
+          // Filtra por resolucao='vencimento' OU status='vencido' (não encerrado ainda)
+          params.push('%'); // dummy para manter índice
+          conds.push(`(resolucao='vencimento' OR status='vencido')`);
+        } else {
+          params.push(resolucao); conds.push(`resolucao=$${params.length}`);
+        }
       }
-      if (de)  { params.push(de);  conds.push(`dt_resolucao>=$${params.length}::date`); }
-      if (ate) { params.push(ate); conds.push(`dt_resolucao<=$${params.length}::date`); }
+      if (de)  { params.push(de);  conds.push(`COALESCE(dt_resolucao, data_validade)>=$${params.length}::date`); }
+      if (ate) { params.push(ate); conds.push(`COALESCE(dt_resolucao, data_validade)<=$${params.length}::date`); }
       if (busca) {
         params.push(`%${busca}%`);
         conds.push(`(descricao ILIKE $${params.length} OR COALESCE(codigo,'') ILIKE $${params.length})`);
       }
+      // Remove o dummy param se foi adicionado para vencimento
+      const cleanParams = params.filter(p => p !== '%');
+      const cleanConds  = conds.map(c => c.replace('$'+(params.indexOf('%')+1), "'vencimento'")).filter(c => !c.includes('$NaN'));
+      // Monta query mais simples sem o dummy
+      const conds2 = [`(status IN ('descartado','vendido') OR status = 'vencido')`], params2 = [];
+      if (resolucao && resolucao !== 'todos') {
+        if (resolucao === 'vencimento') {
+          conds2.push(`(resolucao='vencimento' OR status='vencido')`);
+        } else {
+          params2.push(resolucao); conds2.push(`resolucao=$${params2.length}`);
+        }
+      }
+      if (de)  { params2.push(de);  conds2.push(`COALESCE(dt_resolucao, data_validade)>=$${params2.length}::date`); }
+      if (ate) { params2.push(ate); conds2.push(`COALESCE(dt_resolucao, data_validade)<=$${params2.length}::date`); }
+      if (busca) {
+        params2.push(`%${busca}%`);
+        conds2.push(`(descricao ILIKE $${params2.length} OR COALESCE(codigo,'') ILIKE $${params2.length})`);
+      }
       const { rows } = await pool.query(
-        `SELECT * FROM validade_items WHERE ${conds.join(' AND ')}
-         ORDER BY dt_resolucao DESC NULLS LAST, atualizado_em DESC`, params
+        `SELECT * FROM validade_items WHERE ${conds2.join(' AND ')}
+         ORDER BY COALESCE(dt_resolucao, data_validade) DESC NULLS LAST, atualizado_em DESC`, params2
       );
       const fmt = v => v instanceof Date ? v.toISOString().slice(0,10) : v ? String(v).slice(0,10) : null;
       const data = rows.map(r => ({
@@ -522,6 +543,31 @@ module.exports = function (pool) {
       }));
       res.json({ ok: true, data, total: data.length });
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ── PUT /historico/:id — editar item do histórico ──────────────────────────
+  r.put('/historico/:id', async (req, res) => {
+    const { descricao, codigo, data_validade, dt_resolucao, resolucao, obs_resolucao, qtd_unidades, peso_total_kg, preco_custo, lote } = req.body;
+    try {
+      await pool.query(`
+        UPDATE validade_items SET
+          descricao       = COALESCE($1, descricao),
+          codigo          = $2,
+          data_validade   = COALESCE($3::date, data_validade),
+          dt_resolucao    = COALESCE($4::date, dt_resolucao),
+          resolucao       = COALESCE($5, resolucao),
+          obs_resolucao   = $6,
+          qtd_unidades    = COALESCE($7, qtd_unidades),
+          peso_total_kg   = COALESCE($8, peso_total_kg),
+          preco_custo     = COALESCE($9, preco_custo),
+          lote            = $10,
+          atualizado_em   = NOW()
+        WHERE id = $11
+      `, [descricao||null, codigo||null, data_validade||null, dt_resolucao||null,
+          resolucao||null, obs_resolucao||null, qtd_unidades||null, peso_total_kg||null,
+          preco_custo||null, lote||null, parseInt(req.params.id)]);
+      res.json({ ok: true });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
   // ── POST /import ───────────────────────────────────────────────────────────

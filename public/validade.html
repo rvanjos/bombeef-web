@@ -522,10 +522,51 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
       <thead><tr>
         <th>Código</th><th>Produto</th><th>Validade</th>
         <th>Encerrado em</th><th>Motivo</th><th>Ação Prev.</th><th>Observação</th><th>Responsável</th>
+        <th style="text-align:center">Ações</th>
       </tr></thead>
       <tbody id="tbody-hist"></tbody>
     </table>
     <div class="empty" id="empty-hist" style="display:none"><p>Nenhum item no histórico.</p></div>
+  </div>
+</div>
+
+<!-- Modal Editar Histórico -->
+<div class="modal-bg" id="modal-edit-hist">
+  <div class="modal" style="max-width:500px">
+    <div class="modal-head"><h3>✏️ Editar Registro do Histórico</h3><button class="modal-close" onclick="fecharModal('modal-edit-hist')">×</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="edit-hist-id">
+      <div class="fg-row">
+        <div class="fg"><label>Código</label><input id="edit-hist-codigo" placeholder="Código do produto"></div>
+        <div class="fg"><label>Data de Validade</label><input type="date" id="edit-hist-validade"></div>
+      </div>
+      <div class="fg"><label>Descrição / Produto *</label><input id="edit-hist-descricao"></div>
+      <div class="fg-row">
+        <div class="fg"><label>Data de Encerramento</label><input type="date" id="edit-hist-dt-resolucao"></div>
+        <div class="fg">
+          <label>Motivo</label>
+          <select id="edit-hist-resolucao">
+            <option value="vendido">✅ Vendido</option>
+            <option value="vencimento">💀 Vencido/Descartado</option>
+            <option value="acao">📋 Ação realizada</option>
+            <option value="outro">Outro</option>
+          </select>
+        </div>
+      </div>
+      <div class="fg-row">
+        <div class="fg"><label>Qtd. Unidades</label><input type="number" id="edit-hist-qtd" min="0"></div>
+        <div class="fg"><label>Peso (kg)</label><input type="number" id="edit-hist-peso" min="0" step="0.001"></div>
+      </div>
+      <div class="fg-row">
+        <div class="fg"><label>Lote</label><input id="edit-hist-lote"></div>
+        <div class="fg"><label>Custo (R$)</label><input type="number" id="edit-hist-custo" min="0" step="0.01"></div>
+      </div>
+      <div class="fg"><label>Observação</label><textarea id="edit-hist-obs" rows="2"></textarea></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-s" onclick="fecharModal('modal-edit-hist')">Cancelar</button>
+      <button class="btn btn-p" onclick="salvarEditHist()">💾 Salvar</button>
+    </div>
   </div>
 </div>
 
@@ -1653,19 +1694,27 @@ async function carregarHistorico(){
     acao:       '<span style="background:#fff3cd;color:#856404;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700">📋 Ação</span>',
     outro:      '<span style="background:#e2e3e5;color:#383d41;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700">🔄 Outro</span>',
   };
-  _histData = d.data; // cacheia para exportação
+  // Badge para item vencido ainda não encerrado formalmente
+  const badgeVencidoAtivo = '<span style="background:#ffd6d6;color:#8B0000;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700">💀 Vencido</span>';
+  _histData = d.data;
   const countEl = document.getElementById('hist-count');
   if(countEl) countEl.textContent = `${d.data.length} registro(s)`;
-  tbody.innerHTML = d.data.map(v=>`<tr>
-    <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted)">${v.codigo||'—'}</td>
-    <td style="font-weight:600;font-size:12px">${v.descricao}</td>
-    <td style="font-size:11px;white-space:nowrap">${fmt.date(v.data_validade)||'—'}</td>
-    <td style="font-size:11px;white-space:nowrap">${fmt.date(v.dt_resolucao)||'—'}</td>
-    <td>${RL[v.resolucao]||v.resolucao||'—'}</td>
-    <td style="font-size:11px;color:var(--muted)">${v.acao_antes_vencer||'—'}</td>
-    <td style="font-size:11px;color:var(--muted);max-width:160px;overflow:hidden;text-overflow:ellipsis">${v.obs_resolucao||'—'}</td>
-    <td style="font-size:11px">${v.encerrado_por||'—'}</td>
-  </tr>`).join('');
+  tbody.innerHTML = d.data.map(v=>{
+    const badge = v.status === 'vencido' ? badgeVencidoAtivo : (RL[v.resolucao]||v.resolucao||'—');
+    const dtEnc = v.dt_resolucao || (v.status==='vencido' ? v.data_validade : null);
+    return `<tr${v.status==='vencido'?' style="background:#fff8f8"':''}>
+      <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted)">${v.codigo||'—'}</td>
+      <td style="font-weight:600;font-size:12px">${v.descricao}</td>
+      <td style="font-size:11px;white-space:nowrap">${fmt.date(v.data_validade)||'—'}</td>
+      <td style="font-size:11px;white-space:nowrap">${fmt.date(dtEnc)||'—'}</td>
+      <td>${badge}</td>
+      <td style="font-size:11px;color:var(--muted)">${v.acao_antes_vencer||'—'}</td>
+      <td style="font-size:11px;color:var(--muted);max-width:160px;overflow:hidden;text-overflow:ellipsis">${v.obs_resolucao||'—'}</td>
+      <td style="font-size:11px">${v.encerrado_por||'—'}</td>
+      <td style="text-align:center">
+        <button onclick="abrirEditHist(${v.id})" style="background:none;border:1px solid var(--border);border-radius:5px;padding:3px 8px;cursor:pointer;font-size:11px" title="Editar este registro">✏️</button>
+      </td>
+    </tr>`;}).join('');
 }
 
 function limparFiltrosHist(){
@@ -1673,6 +1722,46 @@ function limparFiltrosHist(){
   if(document.getElementById('flt-hist-de'))   document.getElementById('flt-hist-de').value='';
   if(document.getElementById('flt-hist-ate'))  document.getElementById('flt-hist-ate').value='';
   if(document.getElementById('busca-hist'))    document.getElementById('busca-hist').value='';
+  carregarHistorico();
+}
+
+function abrirEditHist(id) {
+  const v = _histData.find(x => x.id === id);
+  if (!v) return;
+  document.getElementById('edit-hist-id').value       = id;
+  document.getElementById('edit-hist-codigo').value   = v.codigo||'';
+  document.getElementById('edit-hist-descricao').value= v.descricao||'';
+  document.getElementById('edit-hist-validade').value = v.data_validade||'';
+  document.getElementById('edit-hist-dt-resolucao').value = v.dt_resolucao||'';
+  document.getElementById('edit-hist-resolucao').value    = v.resolucao||'vencimento';
+  document.getElementById('edit-hist-qtd').value   = v.qtd_unidades||'';
+  document.getElementById('edit-hist-peso').value  = v.peso_total_kg||'';
+  document.getElementById('edit-hist-lote').value  = v.lote||'';
+  document.getElementById('edit-hist-custo').value = v.preco_custo||'';
+  document.getElementById('edit-hist-obs').value   = v.obs_resolucao||'';
+  document.getElementById('modal-edit-hist').classList.add('open');
+}
+
+async function salvarEditHist() {
+  const id = document.getElementById('edit-hist-id').value;
+  if (!id) return;
+  const body = {
+    codigo:         document.getElementById('edit-hist-codigo').value.trim()||null,
+    descricao:      document.getElementById('edit-hist-descricao').value.trim(),
+    data_validade:  document.getElementById('edit-hist-validade').value||null,
+    dt_resolucao:   document.getElementById('edit-hist-dt-resolucao').value||null,
+    resolucao:      document.getElementById('edit-hist-resolucao').value,
+    qtd_unidades:   parseFloat(document.getElementById('edit-hist-qtd').value)||null,
+    peso_total_kg:  parseFloat(document.getElementById('edit-hist-peso').value)||null,
+    lote:           document.getElementById('edit-hist-lote').value.trim()||null,
+    preco_custo:    parseFloat(document.getElementById('edit-hist-custo').value)||null,
+    obs_resolucao:  document.getElementById('edit-hist-obs').value.trim()||null,
+  };
+  if (!body.descricao) { toast('⚠️ Descrição obrigatória'); return; }
+  const d = await api.put(`/api/validade/historico/${id}`, body);
+  if (!d.ok) { toast('❌ Erro: ' + d.erro); return; }
+  toast('✅ Registro atualizado!');
+  fecharModal('modal-edit-hist');
   carregarHistorico();
 }
 
