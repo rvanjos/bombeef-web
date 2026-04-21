@@ -336,17 +336,16 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
       <div class="fg"><label>Observação</label><textarea id="f-obs" rows="2"></textarea></div>
       <div class="fg">
         <label>💳 Pago com Cartão de Crédito?</label>
-        <select id="f-cartao">
+        <select id="f-cartao" onchange="autoVencCartao(this.value)">
           <option value="">— Não (boleto/PIX/débito) —</option>
-          <option value="Itaú Visa">Itaú Visa</option>
-          <option value="Itaú Mastercard">Itaú Mastercard</option>
-          <option value="Nubank">Nubank</option>
-          <option value="BB Ourocard">BB Ourocard</option>
-          <option value="Bradesco">Bradesco</option>
-          <option value="Santander">Santander</option>
-          <option value="XP Visa">XP Visa</option>
-          <option value="Outro Cartão">Outro Cartão</option>
+          <option value="Caixa">Caixa (vence dia 12)</option>
+          <option value="C6">C6 (vence dia 15)</option>
+          <option value="Itaú Empresas">Itaú Empresas (vence dia 20)</option>
+          <option value="Itaú Empresas Novo">Itaú Empresas Novo (vence dia 22)</option>
         </select>
+        <div id="f-cartao-hint" style="font-size:11px;color:var(--muted);margin-top:4px;display:none">
+          📅 Vencimento ajustado automaticamente para o fechamento do cartão
+        </div>
       </div>
     </div>
     <div class="modal-foot">
@@ -942,6 +941,38 @@ function abrirModal(dbId){
   document.getElementById('modal-boleto').classList.add('open');
 }
 function fecharModal(){ document.getElementById('modal-boleto').classList.remove('open'); }
+
+// Dias de vencimento por cartão
+const VENC_CARTAO = {
+  'Caixa': 12,
+  'C6': 15,
+  'Itaú Empresas': 20,
+  'Itaú Empresas Novo': 22,
+};
+
+function autoVencCartao(cartao) {
+  const hint = document.getElementById('f-cartao-hint');
+  const diaVenc = VENC_CARTAO[cartao];
+  if (!diaVenc) { if (hint) hint.style.display = 'none'; return; }
+
+  // Calcula próxima data de vencimento a partir de hoje
+  const hoje = new Date();
+  let ano = hoje.getFullYear();
+  let mes = hoje.getMonth(); // 0-based
+
+  // Se hoje já passou do dia de vencimento, usa o próximo mês
+  if (hoje.getDate() >= diaVenc) mes++;
+  if (mes > 11) { mes = 0; ano++; }
+
+  const dtVenc = `${ano}-${String(mes+1).padStart(2,'0')}-${String(diaVenc).padStart(2,'0')}`;
+
+  // Só define se o campo ainda não foi preenchido manualmente
+  const fVenc = document.getElementById('f-venc');
+  if (fVenc && !fVenc.value) {
+    fVenc.value = dtVenc;
+  }
+  if (hint) hint.style.display = '';
+}
 
 async function salvar(){
   const dbId = document.getElementById('f-dbid').value;

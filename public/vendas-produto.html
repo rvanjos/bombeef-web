@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Análise de Vendas</title>
+<script src="/js/api.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
+:root{--red:#8B0000;--red-l:#C0392B;--green:#1a7a4a;--orange:#c76b00;--blue:#1a5c8a;--purple:#6c3483;
+  --bg:#f7f4f0;--white:#fff;--text:#1a1a1a;--muted:#7a7068;--border:#e8e0d8;
+  --shadow:0 2px 12px rgba(0,0,0,.08);}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+.ph{background:var(--red);padding:12px 22px;display:flex;align-items:center;gap:10px;box-shadow:0 2px 12px rgba(139,0,0,.3);flex-shrink:0;}
+.ph h2{color:#fff;font-size:16px;font-weight:700;}
+.ph-sub{margin-left:auto;font-size:11px;color:rgba(255,255,255,.7);}
+.tabs{display:flex;background:var(--white);border-bottom:2px solid var(--border);flex-shrink:0;overflow-x:auto;scrollbar-width:none;}
+.tab{padding:10px 18px;font-size:12px;font-weight:600;cursor:pointer;border:none;background:none;
+  color:var(--muted);border-bottom:3px solid transparent;margin-bottom:-2px;white-space:nowrap;font-family:'DM Sans',sans-serif;transition:.15s;}
+.tab:hover{color:var(--red);}
+.tab.active{color:var(--red);border-bottom-color:var(--red);}
+.body{flex:1;overflow-y:auto;padding:14px;}
+.sec{display:none;} .sec.active{display:block;}
+/* KPI grid */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:14px;}
+.kpi{background:var(--white);border-radius:10px;padding:12px 14px;box-shadow:var(--shadow);border-left:4px solid var(--border);}
+.kpi.g{border-left-color:var(--green);} .kpi.r{border-left-color:var(--red);} .kpi.b{border-left-color:var(--blue);}
+.kpi.o{border-left-color:var(--orange);} .kpi.p{border-left-color:var(--purple);}
+.kpi-l{font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);margin-bottom:3px;}
+.kpi-v{font-size:19px;font-weight:700;font-family:'DM Mono',monospace;line-height:1.2;}
+.kpi-s{font-size:11px;color:var(--muted);margin-top:2px;}
+/* Cards */
+.card{background:var(--white);border-radius:10px;box-shadow:var(--shadow);overflow:hidden;margin-bottom:12px;}
+.card-head{padding:12px 16px;border-bottom:1px solid var(--border);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);}
+.card-body{padding:14px 16px;}
+/* Tabela */
+.tbl{width:100%;border-collapse:collapse;font-size:12px;}
+.tbl th{padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);background:#f8f4f0;border-bottom:2px solid var(--border);white-space:nowrap;}
+.tbl th.r,.tbl td.r{text-align:right;}
+.tbl td{padding:8px 12px;border-bottom:1px solid #f5efe8;vertical-align:middle;}
+.tbl tr:last-child td{border-bottom:none;}
+.tbl tbody tr:hover td{background:#fafaf8;}
+.mono{font-family:'DM Mono',monospace;}
+/* Toolbar */
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px;}
+.btn{padding:7px 14px;border:none;border-radius:7px;cursor:pointer;font-family:'DM Sans',sans-serif;
+  font-size:12px;font-weight:600;transition:.15s;white-space:nowrap;display:inline-flex;align-items:center;gap:5px;}
+.btn-p{background:var(--red);color:#fff;} .btn-p:hover{background:var(--red-l);}
+.btn-g{background:var(--green);color:#fff;} .btn-g:hover{filter:brightness(1.1);}
+.btn-b{background:var(--blue);color:#fff;}
+.btn-s{background:var(--white);color:var(--text);border:1px solid var(--border);}
+.btn-s:hover{border-color:var(--red);color:var(--red);}
+.btn-sm{padding:4px 10px;font-size:11px;}
+.flt{padding:6px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;background:var(--white);font-family:'DM Sans',sans-serif;}
+/* Upload */
+.dz{border:2px dashed var(--border);border-radius:10px;padding:32px;text-align:center;cursor:pointer;background:var(--white);transition:.2s;}
+.dz:hover,.dz.drag{border-color:var(--green);background:#f0fff8;}
+.dz-icon{font-size:36px;margin-bottom:8px;}
+.dz-txt{font-weight:600;font-size:14px;margin-bottom:4px;}
+.dz-sub{font-size:12px;color:var(--muted);}
+/* ABC badges */
+.abc-a{background:#d1e7dd;color:#0a4a22;padding:2px 8px;border-radius:6px;font-size:10px;font-weight:700;}
+.abc-b{background:#fff3cd;color:#856404;padding:2px 8px;border-radius:6px;font-size:10px;font-weight:700;}
+.abc-c{background:#f8d7da;color:#721c24;padding:2px 8px;border-radius:6px;font-size:10px;font-weight:700;}
+/* Charts grid */
+.charts-2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;}
+.charts-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px;}
+.chart-wrap{background:var(--white);border-radius:10px;box-shadow:var(--shadow);padding:14px;}
+.chart-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-bottom:10px;}
+/* Barra horizontal */
+.bar-row{display:flex;align-items:center;gap:8px;margin-bottom:5px;font-size:12px;}
+.bar-fill{height:8px;border-radius:4px;background:var(--green);min-width:2px;transition:.4s;}
+.bar-label{min-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px;}
+.bar-val{margin-left:auto;font-family:'DM Mono',monospace;font-size:11px;font-weight:600;white-space:nowrap;}
+.bar-pct{color:var(--muted);font-size:10px;min-width:38px;text-align:right;}
+/* Heatmap */
+.heatmap{overflow-x:auto;}
+.heatmap table{border-collapse:collapse;font-size:11px;}
+.heatmap td,.heatmap th{padding:4px 8px;border:1px solid var(--border);text-align:right;white-space:nowrap;}
+.heatmap th{background:#f8f4f0;font-weight:700;font-size:10px;color:var(--muted);}
+/* Toast */
+#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(60px);
+  background:#1a1a1a;color:#fff;padding:9px 20px;border-radius:9px;font-size:13px;
+  z-index:9999;transition:transform .3s;pointer-events:none;max-width:90vw;}
+#toast.show{transform:translateX(-50%) translateY(0);}
+/* Import history */
+.imp-card{background:var(--white);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;gap:12px;}
+.imp-info{flex:1;}
+.imp-nome{font-weight:600;font-size:13px;}
+.imp-meta{font-size:11px;color:var(--muted);margin-top:2px;}
+/* Semáforo */
+.dot-g{color:var(--green);} .dot-o{color:var(--orange);} .dot-r{color:var(--red-l);}
+@media(max-width:700px){.charts-2,.charts-3{grid-template-columns:1fr;} .kpi-grid{grid-template-columns:1fr 1fr;}}
+/* Normalização bb-base */
+.btn-p { background: var(--red); color: #fff; padding: 8px 16px; border-radius: 7px; font-size: 12px; font-weight: 600; border: none; }
+.btn-p:hover { background: var(--red-l); }
+.btn-s { background: var(--white); color: var(--text); border: 1px solid var(--border); padding: 8px 16px; border-radius: 7px; font-size: 12px; font-weight: 600; }
+.btn-s:hover { border-color: var(--red); color: var(--red); }
+.card { border-radius: 10px; box-shadow: 0 2px 12px rgba(0,0,0,.08); background: var(--white); border: 1px solid var(--border); }
+.tbl th { background: #fdf9f5; font-size: 10px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); font-weight: 700; padding: 9px 12px; border-bottom: 2px solid var(--border); }
+.tbl td { padding: 9px 12px; border-bottom: 1px solid #f5efe8; }
+</style>
+</head>
+<body>
+
+<div class="ph">
+  <span style="font-size:22px">📊</span>
+  <h2>Análise de Vendas por Produto</h2>
+  <span class="ph-sub" id="ph-periodo">—</span>
+</div>
+
+<div class="tabs">
+  <button class="tab active" onclick="showSec('dashboard',this)">📊 Dashboard</button>
+  <button class="tab" onclick="showSec('produtos',this)">🏆 Ranking Produtos</button>
+  <button class="tab" onclick="showSec('diasemana',this)">📅 Por Dia da Semana</button>
+  <button class="tab" onclick="showSec('diario',this)">📈 Análise Diária</button>
+  <button class="tab" onclick="showSec('abc',this)">🔤 Curva ABC</button>
+  <button class="tab" onclick="showSec('importar',this)">📥 Importar</button>
+</div>
+
+<div class="body">
+
+<!-- ── FILTROS GLOBAIS ── -->
+<div class="card" style="margin-bottom:12px;padding:12px 16px;">
+  <div class="toolbar" style="margin:0">
+    <label style="font-size:11px;font-weight:600;color:var(--muted)">Período:</label>
+    <input type="date" id="f-ini" class="flt" onchange="aplicarFiltros()">
+    <span style="font-size:11px;color:var(--muted)">até</span>
+    <input type="date" id="f-fim" class="flt" onchange="aplicarFiltros()">
+    <select id="f-semana" class="flt" onchange="aplicarFiltros()">
+      <option value="">Todos os dias</option>
+      <option value="0">Domingo</option>
+      <option value="1">Segunda</option>
+      <option value="2">Terça</option>
+      <option value="3">Quarta</option>
+      <option value="4">Quinta</option>
+      <option value="5">Sexta</option>
+      <option value="6">Sábado</option>
+    </select>
+    <label style="font-size:11px;display:flex;align-items:center;gap:4px;cursor:pointer">
+      <input type="checkbox" id="f-sem-taxa" onchange="aplicarFiltros()"> Excluir taxas
+    </label>
+    <label style="font-size:11px;display:flex;align-items:center;gap:4px;cursor:pointer">
+      <input type="checkbox" id="f-sem-bebida" onchange="aplicarFiltros()"> Excluir bebidas
+    </label>
+    <label style="font-size:11px;display:flex;align-items:center;gap:4px;cursor:pointer">
+      <input type="checkbox" id="f-sem-kit" onchange="aplicarFiltros()"> Excluir kits
+    </label>
+    <button class="btn btn-s btn-sm" onclick="limparFiltros()">✕ Limpar</button>
+    <button class="btn btn-p btn-sm" onclick="aplicarFiltros()">🔄 Atualizar</button>
+  </div>
+</div>
+
+<!-- ── DASHBOARD ── -->
+<div id="sec-dashboard" class="sec active">
+  <div id="kpi-grid" class="kpi-grid"></div>
+
+  <div class="charts-2">
+    <div class="chart-wrap">
+      <div class="chart-title">📈 Faturamento por Dia</div>
+      <canvas id="ch-fat-dia" height="180"></canvas>
+    </div>
+    <div class="chart-wrap">
+      <div class="chart-title">📅 Faturamento por Dia da Semana</div>
+      <canvas id="ch-fat-dsem" height="180"></canvas>
+    </div>
+  </div>
+
+  <div class="charts-2">
+    <div class="chart-wrap">
+      <div class="chart-title">🏆 Top 10 Produtos — Faturamento</div>
+      <div id="top10-fat"></div>
+    </div>
+    <div class="chart-wrap">
+      <div class="chart-title">🔢 Top 10 Produtos — Quantidade</div>
+      <div id="top10-qtd"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── RANKING PRODUTOS ── -->
+<div id="sec-produtos" class="sec">
+  <div class="toolbar">
+    <input type="text" id="busca-prod" class="flt" placeholder="🔍 Buscar produto..." oninput="filtrarTabela()" style="min-width:220px">
+    <select id="ordem-prod" class="flt" onchange="carregarProdutos()">
+      <option value="fat">Por Faturamento</option>
+      <option value="qtd">Por Quantidade</option>
+      <option value="freq">Por Frequência</option>
+    </select>
+    <button class="btn btn-s btn-sm" onclick="exportarRanking()">📤 Exportar</button>
+  </div>
+  <div class="card" style="overflow-x:auto">
+    <table class="tbl" id="tbl-produtos">
+      <thead><tr>
+        <th>#</th><th>Código</th><th>Produto</th>
+        <th class="r">Faturamento</th><th class="r">Qtd</th>
+        <th class="r">Preço Médio</th><th class="r">Freq.</th><th>ABC</th>
+      </tr></thead>
+      <tbody id="tbody-produtos"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ── DIA DA SEMANA ── -->
+<div id="sec-diasemana" class="sec">
+  <div class="charts-2">
+    <div class="chart-wrap">
+      <div class="chart-title">💰 Faturamento por Dia da Semana</div>
+      <canvas id="ch-dsem-fat" height="200"></canvas>
+    </div>
+    <div class="chart-wrap">
+      <div class="chart-title">📦 Quantidade por Dia da Semana</div>
+      <canvas id="ch-dsem-qtd" height="200"></canvas>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">Top 5 Produtos por Dia da Semana</div>
+    <div class="card-body" id="top-dsem-grid"></div>
+  </div>
+</div>
+
+<!-- ── ANÁLISE DIÁRIA ── -->
+<div id="sec-diario" class="sec">
+  <div class="chart-wrap" style="margin-bottom:12px">
+    <div class="chart-title">📈 Evolução Diária de Faturamento</div>
+    <canvas id="ch-diario-fat" height="160"></canvas>
+  </div>
+  <div class="card" style="overflow-x:auto">
+    <div class="card-head">Resumo por Dia</div>
+    <table class="tbl">
+      <thead><tr>
+        <th>Data</th><th>Dia Semana</th>
+        <th class="r">Faturamento</th><th class="r">Quantidade</th>
+        <th class="r">Produtos</th><th></th>
+      </tr></thead>
+      <tbody id="tbody-diario"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ── CURVA ABC ── -->
+<div id="sec-abc" class="sec">
+  <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr)">
+    <div class="kpi g"><div class="kpi-l">Classe A (80%)</div><div class="kpi-v" id="abc-a-qtd">—</div><div class="kpi-s">produtos representam 80% fat</div></div>
+    <div class="kpi o"><div class="kpi-l">Classe B (15%)</div><div class="kpi-v" id="abc-b-qtd">—</div><div class="kpi-s">produtos representam 15% fat</div></div>
+    <div class="kpi r"><div class="kpi-l">Classe C (5%)</div><div class="kpi-v" id="abc-c-qtd">—</div><div class="kpi-s">cauda longa</div></div>
+  </div>
+  <div class="card" style="overflow-x:auto">
+    <table class="tbl" id="tbl-abc">
+      <thead><tr>
+        <th>ABC</th><th>#</th><th>Produto</th>
+        <th class="r">Faturamento</th><th class="r">% Fat</th>
+        <th class="r">% Acum.</th><th class="r">Qtd</th>
+      </tr></thead>
+      <tbody id="tbody-abc"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ── IMPORTAR ── -->
+<div id="sec-importar" class="sec">
+  <div class="card" style="margin-bottom:12px;padding:16px">
+    <div class="card-head" style="margin:-16px -16px 14px">📥 Importar Relatório de Vendas (Relatório 101)</div>
+
+    <div class="dz" id="dz" ondragover="ev(event)" ondragleave="this.classList.remove('drag')" ondrop="onDrop(event)" onclick="document.getElementById('f-xls').click()">
+      <div class="dz-icon">📊</div>
+      <div class="dz-txt">Clique ou arraste o arquivo aqui</div>
+      <div class="dz-sub">Relatório de Vendas por Produto (.xlsx) — Relatório 101 do XMenu</div>
+    </div>
+    <input type="file" id="f-xls" accept=".xlsx,.xls" style="display:none" onchange="onArquivo(this)">
+
+    <div id="preview-import" style="display:none;margin-top:14px">
+      <div style="font-size:12px;font-weight:600;margin-bottom:8px">📋 Preview da importação:</div>
+      <div id="preview-info" style="font-size:12px;color:var(--muted);margin-bottom:10px"></div>
+      <label style="font-size:12px;display:flex;align-items:center;gap:6px;margin-bottom:10px;cursor:pointer">
+        <input type="checkbox" id="f-substituir" checked>
+        <strong>Substituir dados do mesmo período</strong>
+        <span style="color:var(--muted)">(recomendado para evitar duplicatas)</span>
+      </label>
+      <button class="btn btn-g" onclick="confirmarImport()">💾 Importar</button>
+      <button class="btn btn-s" onclick="cancelarImport()" style="margin-left:8px">✕ Cancelar</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">📁 Histórico de Importações</div>
+    <div id="historico-import" style="padding:12px"></div>
+  </div>
+</div>
+
+</div><!-- /.body -->
+<div id="toast"></div>
+
+<script>
+const DIAS_PT = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
+const fmt = {
+  brl: v => 'R$ ' + parseFloat(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}),
+  n:   v => parseFloat(v||0).toLocaleString('pt-BR',{minimumFractionDigits:0,maximumFractionDigits:2}),
+  pct: v => parseFloat(v||0).toFixed(1) + '%',
+};
+
+let _dados = { kpis:{}, dias:[], top10:[], produtos:[], diasem:[], topDsem:[] };
+let _linhasImport = [];
+let _nomeArqImport = '';
+let _charts = {};
+
+// ── Tabs ────────────────────────────────────────────────────────────────────
+function showSec(id, btn) {
+  document.querySelectorAll('.sec').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+  document.getElementById('sec-'+id).classList.add('active');
+  if(btn) btn.classList.add('active');
+  if(id==='produtos') carregarProdutos();
+  if(id==='diasemana') carregarDiaSemana();
+  if(id==='diario') carregarDiario();
+  if(id==='abc') carregarABC();
+  if(id==='importar') carregarHistorico();
+}
+
+// ── Filtros ─────────────────────────────────────────────────────────────────
+function getFiltros() {
+  return {
+    ini: document.getElementById('f-ini').value,
+    fim: document.getElementById('f-fim').value,
+    semTaxa:   document.getElementById('f-sem-taxa').checked ? '1':'0',
+    semBebida: document.getElementById('f-sem-bebida').checked ? '1':'0',
+    semKit:    document.getElementById('f-sem-kit').checked ? '1':'0',
+  };
+}
+
+function limparFiltros() {
+  document.getElementById('f-ini').value='';
+  document.getElementById('f-fim').value='';
+  document.getElementById('f-semana').value='';
+  document.getElementById('f-sem-taxa').checked=false;
+  document.getElementById('f-sem-bebida').checked=false;
+  document.getElementById('f-sem-kit').checked=false;
+  aplicarFiltros();
+}
+
+function aplicarFiltros() {
+  carregarDashboard();
+  const sec = document.querySelector('.sec.active');
+  if(!sec) return;
+  const id = sec.id.replace('sec-','');
+  if(id==='produtos') carregarProdutos();
+  else if(id==='diasemana') carregarDiaSemana();
+  else if(id==='diario') carregarDiario();
+  else if(id==='abc') carregarABC();
+}
+
+function queryStr(extras={}) {
+  const f = getFiltros();
+  const p = new URLSearchParams();
+  if(f.ini) p.set('ini',f.ini);
+  if(f.fim) p.set('fim',f.fim);
+  if(f.semTaxa==='1')   p.set('sem_taxa','1');
+  if(f.semBebida==='1') p.set('sem_bebida','1');
+  if(f.semKit==='1')    p.set('sem_kit','1');
+  Object.entries(extras).forEach(([k,v])=>p.set(k,v));
+  return p.toString() ? '?'+p.toString() : '';
+}
+
+// ── Dashboard ───────────────────────────────────────────────────────────────
+async function carregarDashboard() {
+  const d = await api.get('/api/vendas-produto/resumo'+queryStr());
+  if(!d.ok) return;
+  const k = d.data.kpis;
+  const dias = d.data.dias || [];
+  const top = d.data.top10 || [];
+
+  // Atualiza período no header
+  if(dias.length) {
+    const f = getFiltros();
+    document.getElementById('ph-periodo').textContent =
+      f.ini && f.fim ? `${f.ini} → ${f.fim}` :
+      dias.length ? `${dias[dias.length-1]?.data_venda||''} → ${dias[0]?.data_venda||''}` : '';
+  }
+
+  // KPIs
+  const melhorDia = dias[0];
+  const piorDia   = [...dias].sort((a,b)=>parseFloat(a.fat_dia)-parseFloat(b.fat_dia))[0];
+  const fatMedio  = k.dias_com_venda > 0 ? parseFloat(k.fat_total)/parseInt(k.dias_com_venda) : 0;
+  const topProd   = top[0];
+
+  document.getElementById('kpi-grid').innerHTML = `
+    <div class="kpi g"><div class="kpi-l">Faturamento Total</div><div class="kpi-v">${fmt.brl(k.fat_total)}</div><div class="kpi-s">${k.dias_com_venda} dias de venda</div></div>
+    <div class="kpi b"><div class="kpi-l">Quantidade Total</div><div class="kpi-v">${fmt.n(k.qtd_total)}</div><div class="kpi-s">unidades/kg vendidos</div></div>
+    <div class="kpi o"><div class="kpi-l">Produtos Distintos</div><div class="kpi-v">${k.produtos_distintos}</div><div class="kpi-s">itens diferentes</div></div>
+    <div class="kpi p"><div class="kpi-l">Fat. Médio/Dia</div><div class="kpi-v">${fmt.brl(fatMedio)}</div><div class="kpi-s">média diária</div></div>
+    <div class="kpi g"><div class="kpi-l">Melhor Dia</div><div class="kpi-v">${fmt.brl(melhorDia?.fat_dia)}</div><div class="kpi-s">${melhorDia?.data_venda||'—'}</div></div>
+    <div class="kpi r"><div class="kpi-l">Pior Dia</div><div class="kpi-v">${fmt.brl(piorDia?.fat_dia)}</div><div class="kpi-s">${piorDia?.data_venda||'—'}</div></div>
+    <div class="kpi b"><div class="kpi-l">Campeão Fat.</div><div class="kpi-v" style="font-size:13px">${topProd?.nome?.slice(0,20)||'—'}</div><div class="kpi-s">${fmt.brl(topProd?.fat_total)}</div></div>
+    <div class="kpi o"><div class="kpi-l">Ticket Médio/Item</div><div class="kpi-v">${fmt.brl(k.ticket_medio_item)}</div><div class="kpi-s">por item vendido</div></div>
+  `;
+
+  // Gráfico faturamento por dia
+  const diasOrd = [...dias].sort((a,b)=>a.data_venda.localeCompare(b.data_venda));
+  renderChart('ch-fat-dia','line',diasOrd.map(d=>d.data_venda.slice(5)),diasOrd.map(d=>parseFloat(d.fat_dia)),'Faturamento','rgba(26,122,74,0.7)','rgba(26,122,74,0.2)');
+
+  // Gráfico por dia da semana (do resumo)
+  const porDsem = {};
+  diasOrd.forEach(d=>{
+    const dow = new Date(d.data_venda+'T12:00:00').getDay();
+    if(!porDsem[dow]) porDsem[dow]={fat:0,n:0};
+    porDsem[dow].fat+=parseFloat(d.fat_dia); porDsem[dow].n++;
+  });
+  const dsemLabels=[], dsemVals=[];
+  [0,1,2,3,4,5,6].forEach(i=>{ if(porDsem[i]){dsemLabels.push(DIAS_PT[i]); dsemVals.push(Math.round(porDsem[i].fat/porDsem[i].n));} });
+  renderChart('ch-fat-dsem','bar',dsemLabels,dsemVals,'Média/Dia','rgba(139,0,0,0.7)','rgba(139,0,0,0.2)');
+
+  // Top 10 barras
+  renderBarras('top10-fat', top.slice(0,10), 'fat_total', r=>fmt.brl(r.fat_total));
+  const topQtd=[...top].sort((a,b)=>parseFloat(b.qtd_total)-parseFloat(a.qtd_total)).slice(0,10);
+  renderBarras('top10-qtd', topQtd, 'qtd_total', r=>fmt.n(r.qtd_total), '#1a5c8a');
+}
+
+function renderChart(id, tipo, labels, data, label, cor, bgCor) {
+  if(_charts[id]) { _charts[id].destroy(); delete _charts[id]; }
+  const ctx = document.getElementById(id);
+  if(!ctx) return;
+  _charts[id] = new Chart(ctx, {
+    type: tipo,
+    data: {
+      labels,
+      datasets:[{ label, data, borderColor:cor, backgroundColor:bgCor||cor,
+        borderWidth:2, pointRadius:tipo==='line'?3:0, tension:.3, fill:tipo==='line' }]
+    },
+    options:{responsive:true,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'R$ '+c.raw.toLocaleString('pt-BR',{minimumFractionDigits:2})}}},
+      scales:{y:{ticks:{callback:v=>'R$'+Math.round(v/1000)+'k'},grid:{color:'#f5efe8'}},x:{grid:{display:false}}}}
+  });
+}
+
+function renderBarras(elId, rows, campo, fmtVal, cor='#1a7a4a') {
+  const el = document.getElementById(elId); if(!el) return;
+  const max = rows.reduce((m,r)=>Math.max(m,parseFloat(r[campo])),0);
+  el.innerHTML = rows.map((r,i)=>`
+    <div class="bar-row">
+      <span class="bar-label" title="${r.nome}">${i+1}. ${r.nome?.slice(0,22)||r.codigo}</span>
+      <div style="flex:1;background:#f5efe8;border-radius:4px;height:8px;min-width:60px">
+        <div class="bar-fill" style="width:${max>0?parseFloat(r[campo])/max*100:0}%;background:${cor}"></div>
+      </div>
+      <span class="bar-val">${fmtVal(r)}</span>
+    </div>`).join('');
+}
+
+// ── Produtos ─────────────────────────────────────────────────────────────────
+async function carregarProdutos() {
+  const ordem = document.getElementById('ordem-prod').value;
+  const d = await api.get('/api/vendas-produto/produtos'+queryStr({ordem}));
+  if(!d.ok) return;
+  _dados.produtos = d.data.data || [];
+  renderProdutos(_dados.produtos);
+}
+
+function renderProdutos(rows) {
+  const busca = (document.getElementById('busca-prod').value||'').toLowerCase();
+  const filtrado = busca ? rows.filter(r=>(r.nome||'').toLowerCase().includes(busca)||(r.codigo||'').includes(busca)) : rows;
+  const fatTotal = filtrado.reduce((s,r)=>s+parseFloat(r.fat_total),0);
+  document.getElementById('tbody-produtos').innerHTML = filtrado.map((r,i)=>`
+    <tr>
+      <td class="mono" style="color:var(--muted)">${i+1}</td>
+      <td class="mono" style="font-size:11px">${r.codigo}</td>
+      <td style="max-width:260px">${r.nome}</td>
+      <td class="r mono">${fmt.brl(r.fat_total)}</td>
+      <td class="r mono">${fmt.n(r.qtd_total)}</td>
+      <td class="r mono">${fmt.brl(r.preco_medio)}</td>
+      <td class="r" style="color:var(--muted)">${r.frequencia}x</td>
+      <td><span class="abc-${r.abc?.toLowerCase()}">${r.abc}</span></td>
+    </tr>`).join('');
+}
+
+function filtrarTabela() { renderProdutos(_dados.produtos); }
+
+// ── Dia da Semana ────────────────────────────────────────────────────────────
+async function carregarDiaSemana() {
+  const [d1, d2] = await Promise.all([
+    api.get('/api/vendas-produto/por-dia-semana'+queryStr()),
+    api.get('/api/vendas-produto/top-por-dia-semana'+queryStr({limite:'5'}))
+  ]);
+  if(!d1.ok || !d2.ok) return;
+  const rows = d1.data.data || [];
+  const tops  = d2.data.data || [];
+
+  // Gráficos
+  if(_charts['ch-dsem-fat']){_charts['ch-dsem-fat'].destroy();}
+  if(_charts['ch-dsem-qtd']){_charts['ch-dsem-qtd'].destroy();}
+  const ctx1 = document.getElementById('ch-dsem-fat');
+  const ctx2 = document.getElementById('ch-dsem-qtd');
+  const lbls = rows.map(r=>DIAS_PT[parseInt(r.dow)]||r.dia_semana?.trim());
+  _charts['ch-dsem-fat'] = new Chart(ctx1,{type:'bar',data:{labels:lbls,datasets:[{data:rows.map(r=>parseFloat(r.fat_medio_dia)),backgroundColor:'rgba(139,0,0,.7)',borderRadius:4}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>'R$'+Math.round(v/1000)+'k'}},x:{grid:{display:false}}}}});
+  _charts['ch-dsem-qtd'] = new Chart(ctx2,{type:'bar',data:{labels:lbls,datasets:[{data:rows.map(r=>parseFloat(r.qtd_total)),backgroundColor:'rgba(26,92,138,.7)',borderRadius:4}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{grid:{display:false}}}}});
+
+  // Top por dia da semana
+  const topGrid = document.getElementById('top-dsem-grid');
+  const porDow = {};
+  tops.forEach(t=>{ const d=parseInt(t.dow); if(!porDow[d]) porDow[d]=[]; porDow[d].push(t); });
+  topGrid.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px">
+    ${[0,1,2,3,4,5,6].filter(d=>porDow[d]).map(d=>`
+      <div style="border:1px solid var(--border);border-radius:8px;padding:10px">
+        <div style="font-weight:700;font-size:12px;margin-bottom:8px;color:var(--red)">${DIAS_PT[d]}</div>
+        ${porDow[d].map((p,i)=>`<div style="font-size:11px;padding:2px 0;display:flex;justify-content:space-between">
+          <span style="color:var(--muted)">${i+1}. ${(p.nome||'').slice(0,20)}</span>
+          <span class="mono">${fmt.brl(p.fat_total)}</span>
+        </div>`).join('')}
+      </div>`).join('')}
+  </div>`;
+}
+
+// ── Diário ───────────────────────────────────────────────────────────────────
+async function carregarDiario() {
+  const d = await api.get('/api/vendas-produto/por-data'+queryStr());
+  if(!d.ok) return;
+  const rows = d.data.data || [];
+  const sorted = [...rows].sort((a,b)=>a.data_venda.localeCompare(b.data_venda));
+
+  if(_charts['ch-diario-fat']){_charts['ch-diario-fat'].destroy();}
+  const ctx = document.getElementById('ch-diario-fat');
+  _charts['ch-diario-fat'] = new Chart(ctx,{type:'line',data:{labels:sorted.map(r=>r.data_venda.slice(5)),datasets:[{data:sorted.map(r=>parseFloat(r.fat_total)),borderColor:'rgba(26,122,74,.8)',backgroundColor:'rgba(26,122,74,.1)',borderWidth:2,pointRadius:4,tension:.3,fill:true}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>'R$'+Math.round(v/1000)+'k'}},x:{grid:{display:false}}}}});
+
+  document.getElementById('tbody-diario').innerHTML = [...rows].sort((a,b)=>b.data_venda.localeCompare(a.data_venda)).map(r=>{
+    const dt = new Date(r.data_venda+'T12:00:00');
+    const dow = DIAS_PT[dt.getDay()];
+    const pct = rows.reduce((s,x)=>s+parseFloat(x.fat_total),0);
+    const bar = pct>0 ? Math.round(parseFloat(r.fat_total)/pct*100) : 0;
+    return `<tr>
+      <td>${r.data_venda}</td>
+      <td>${dow}</td>
+      <td class="r mono" style="color:var(--green);font-weight:700">${fmt.brl(r.fat_total)}</td>
+      <td class="r mono">${fmt.n(r.qtd_total)}</td>
+      <td class="r">${r.produtos_distintos}</td>
+      <td><div style="background:#f0ebe4;border-radius:4px;height:6px;width:80px"><div style="background:var(--green);height:100%;border-radius:4px;width:${bar}%"></div></div></td>
+    </tr>`;}).join('');
+}
+
+// ── Curva ABC ────────────────────────────────────────────────────────────────
+async function carregarABC() {
+  const d = await api.get('/api/vendas-produto/produtos'+queryStr({ordem:'fat'}));
+  if(!d.ok) return;
+  const rows = d.data.data || [];
+  const fatTotal = rows.reduce((s,r)=>s+parseFloat(r.fat_total),0);
+
+  const cntA = rows.filter(r=>r.abc==='A').length;
+  const cntB = rows.filter(r=>r.abc==='B').length;
+  const cntC = rows.filter(r=>r.abc==='C').length;
+  document.getElementById('abc-a-qtd').textContent = cntA + ' produtos';
+  document.getElementById('abc-b-qtd').textContent = cntB + ' produtos';
+  document.getElementById('abc-c-qtd').textContent = cntC + ' produtos';
+
+  let acum = 0;
+  document.getElementById('tbody-abc').innerHTML = rows.map((r,i)=>{
+    acum += parseFloat(r.fat_total);
+    const pctAcum = fatTotal>0 ? acum/fatTotal*100 : 0;
+    const pctItem = fatTotal>0 ? parseFloat(r.fat_total)/fatTotal*100 : 0;
+    return `<tr>
+      <td><span class="abc-${r.abc?.toLowerCase()}">${r.abc}</span></td>
+      <td class="mono" style="color:var(--muted)">${i+1}</td>
+      <td style="max-width:240px;font-size:11px">${r.nome}</td>
+      <td class="r mono">${fmt.brl(r.fat_total)}</td>
+      <td class="r">${fmt.pct(pctItem)}</td>
+      <td class="r" style="font-weight:600;color:${pctAcum<=80?'var(--green)':pctAcum<=95?'var(--orange)':'var(--red-l)'}">${fmt.pct(pctAcum)}</td>
+      <td class="r mono">${fmt.n(r.qtd_total)}</td>
+    </tr>`;}).join('');
+}
+
+// ── Importação ───────────────────────────────────────────────────────────────
+function ev(e){e.preventDefault();document.getElementById('dz').classList.add('drag');}
+function onDrop(e){e.preventDefault();document.getElementById('dz').classList.remove('drag');const f=e.dataTransfer.files[0];if(f)processarArquivo(f);}
+function onArquivo(input){const f=input.files[0];if(f)processarArquivo(f);}
+
+function parseBRL(str) {
+  if(!str) return 0;
+  return parseFloat(String(str).replace('R$','').replace(/\s/g,'').replace(/\./g,'').replace(',','.')) || 0;
+}
+
+function processarArquivo(arquivo) {
+  _nomeArqImport = arquivo.name;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const wb = XLSX.read(e.target.result, {type:'array'});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const raw = XLSX.utils.sheet_to_json(ws, {header:1, raw:false, defval:''});
+
+      _linhasImport = [];
+      let dataAtual = null;
+
+      for(let i=1; i<raw.length; i++) {
+        const row = raw[i];
+        const col0 = String(row[0]||'').trim();
+
+        // Linha de data
+        if(col0.startsWith('Data:')) {
+          const dtStr = col0.replace('Data:','').trim().slice(0,10);
+          dataAtual = dtStr;
+          continue;
+        }
+
+        // Linha de total geral (código numérico sem nome = total)
+        if(!row[1] || String(row[1]).trim()==='') continue;
+
+        // Linha de produto
+        const codigo = String(row[0]||'').trim();
+        const nome   = String(row[1]||'').trim();
+        const qtd    = parseBRL(String(row[2]||'0'));
+        const val    = parseBRL(String(row[3]||'0'));
+
+        if(!codigo || !nome || !dataAtual) continue;
+        if(isNaN(parseInt(codigo))) continue; // ignora linhas não-produto
+
+        _linhasImport.push({
+          data_venda: dataAtual,
+          codigo, nome, quantidade: qtd, valor_total: val
+        });
+      }
+
+      if(!_linhasImport.length) { toast('❌ Nenhuma linha válida encontrada'); return; }
+
+      const datas = [...new Set(_linhasImport.map(l=>l.data_venda))].sort();
+      const fat = _linhasImport.reduce((s,l)=>s+l.valor_total,0);
+
+      document.getElementById('preview-info').innerHTML =
+        `<strong>${_linhasImport.length}</strong> produtos · <strong>${datas.length}</strong> dias (${datas[0]} → ${datas[datas.length-1]}) · <strong>${fmt.brl(fat)}</strong>`;
+      document.getElementById('preview-import').style.display='';
+      toast(`✅ Arquivo lido: ${_linhasImport.length} linhas`);
+    } catch(err) {
+      toast('❌ Erro ao ler arquivo: '+err.message);
+    }
+  };
+  reader.readAsArrayBuffer(arquivo);
+}
+
+async function confirmarImport() {
+  if(!_linhasImport.length) return;
+  const substituir = document.getElementById('f-substituir').checked;
+  const d = await api.post('/api/vendas-produto/importar', {
+    nome_arquivo: _nomeArqImport,
+    linhas: _linhasImport,
+    substituir
+  });
+  if(!d.ok) { toast('❌ '+d.erro); return; }
+  toast(`✅ ${d.total} registros importados!`);
+  document.getElementById('preview-import').style.display='none';
+  _linhasImport=[];
+  document.getElementById('f-xls').value='';
+  carregarHistorico();
+  carregarDashboard();
+}
+
+function cancelarImport() {
+  _linhasImport=[];
+  document.getElementById('preview-import').style.display='none';
+  document.getElementById('f-xls').value='';
+}
+
+async function carregarHistorico() {
+  const d = await api.get('/api/vendas-produto/importacoes');
+  if(!d.ok) return;
+  const el = document.getElementById('historico-import');
+  if(!d.data?.length) { el.innerHTML='<div style="color:var(--muted);font-size:12px">Nenhuma importação ainda.</div>'; return; }
+  el.innerHTML = d.data.map(imp=>`
+    <div class="imp-card">
+      <span style="font-size:20px">📊</span>
+      <div class="imp-info">
+        <div class="imp-nome">${imp.nome_arquivo}</div>
+        <div class="imp-meta">${imp.periodo_ini} → ${imp.periodo_fim} · ${imp.total_linhas} produtos · ${fmt.brl(imp.total_valor)}</div>
+        <div class="imp-meta" style="margin-top:2px">Importado em ${new Date(imp.criado_em).toLocaleString('pt-BR')}</div>
+      </div>
+      <button class="btn btn-s btn-sm" onclick="excluirImport(${imp.id})" style="color:var(--red-l)">🗑 Excluir</button>
+    </div>`).join('');
+}
+
+async function excluirImport(id) {
+  if(!confirm('Excluir esta importação e todos os seus dados?')) return;
+  const d = await api.delete('/api/vendas-produto/importacoes/'+id);
+  if(!d.ok) { toast('❌ Erro: '+d.erro); return; }
+  toast('✅ Importação excluída');
+  carregarHistorico();
+  carregarDashboard();
+}
+
+// ── Export ───────────────────────────────────────────────────────────────────
+function exportarRanking() {
+  const rows = _dados.produtos;
+  if(!rows.length) { toast('Sem dados'); return; }
+  let csv = 'Codigo,Nome,Faturamento,Quantidade,Preco Medio,Frequencia,ABC\n';
+  rows.forEach(r=>{
+    csv += `"${r.codigo}","${r.nome}",${r.fat_total},${r.qtd_total},${r.preco_medio},${r.frequencia},"${r.abc}"\n`;
+  });
+  const blob = new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download='ranking_produtos.csv'; a.click();
+}
+
+// ── Toast ────────────────────────────────────────────────────────────────────
+function toast(msg,dur=3500){
+  const el=document.getElementById('toast');
+  el.textContent=msg;el.classList.add('show');
+  setTimeout(()=>el.classList.remove('show'),dur);
+}
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+window.onBBReady = () => init();
+if(api.token()) init();
+
+async function init() {
+  // Define período padrão: mês atual
+  const hoje = new Date();
+  const ini = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}-01`;
+  const lastDay = new Date(hoje.getFullYear(), hoje.getMonth()+1, 0).getDate();
+  const fim = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}-${lastDay}`;
+  document.getElementById('f-ini').value = ini;
+  document.getElementById('f-fim').value = fim;
+  await carregarDashboard();
+}
+</script>
+</body>
+</html>
