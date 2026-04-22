@@ -301,6 +301,27 @@ module.exports = function (pool) {
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
+  // ── PUT /apontamento/:id — editar apontamento ────────────────────────────────
+  r.put('/apontamento/:id', async (req, res) => {
+    const { tipo, descricao, quantidade, valor_unitario, data_ref } = req.body;
+    try {
+      const qtd  = parseFloat(quantidade  || 0);
+      const vUnit = parseFloat(valor_unitario || 0);
+      await pool.query(`
+        UPDATE rh_apontamentos SET
+          tipo = COALESCE($1, tipo),
+          descricao = $2,
+          quantidade = $3,
+          valor_unitario = $4,
+          valor_total = $5,
+          data_ref = $6,
+          atualizado_em = NOW()
+        WHERE id = $7
+      `, [tipo||null, descricao||null, qtd, vUnit, qtd*vUnit, data_ref||null, parseInt(req.params.id)]);
+      res.json({ ok: true });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
   // ── DELETE /apontamento/:id ────────────────────────────────────────────────
   r.delete('/apontamento/:id', async (req, res) => {
     try {

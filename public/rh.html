@@ -452,6 +452,57 @@ main{padding:16px 24px;max-width:1400px;margin:0 auto;}
 
 <!-- Modal rejeitar -->
 <div class="modal-bg" id="modal-rejeitar">
+
+<!-- Modal editar apontamento -->
+<div class="modal-bg" id="modal-edit-apont">
+  <div class="modal-box" style="max-width:420px">
+    <div class="modal-header" style="background:var(--red)">
+      <h3>✏️ Editar Apontamento</h3>
+      <button class="modal-close" onclick="fecharModal('modal-edit-apont')">×</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="ea-id">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Tipo</label>
+          <select id="ea-tipo">
+            <option value="hora_extra">⏱️ Hora Extra</option>
+            <option value="adicional_noturno">🌙 Adicional Noturno</option>
+            <option value="feriado">🎉 Feriado</option>
+            <option value="falta">❌ Falta</option>
+            <option value="bonus">🎁 Bônus</option>
+            <option value="entrega">🚚 Entrega</option>
+            <option value="grelhado">🥩 Grelhado</option>
+            <option value="desconto">↘️ Desconto</option>
+            <option value="outro">📌 Outro</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Data</label>
+          <input type="date" id="ea-data">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Descrição</label>
+        <input type="text" id="ea-desc">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label id="ea-qtd-label">Quantidade / Horas</label>
+          <input type="number" id="ea-qtd" step="0.5" min="0">
+        </div>
+        <div class="form-group">
+          <label id="ea-vunit-label">Valor Unitário (R$)</label>
+          <input type="number" id="ea-vunit" step="0.01" min="0">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-gray" onclick="fecharModal('modal-edit-apont')">Cancelar</button>
+      <button class="btn btn-red" onclick="salvarEditApontamento()">💾 Salvar</button>
+    </div>
+  </div>
+</div>
   <div class="modal-box" style="max-width:400px">
     <div class="modal-header" style="background:#dc2626">
       <h3>❌ Rejeitar Lançamento</h3>
@@ -1040,17 +1091,49 @@ function calcResumo(d) {
 
 function renderApontamentos(lista) {
   if (!lista?.length) { document.getElementById('lista-apontamentos').innerHTML = '<p style="font-size:12px;color:var(--muted);padding:6px 0;">Nenhum apontamento</p>'; return; }
-  const TIPOS = {hora_extra:'⏰ H.Extra',feriado:'🎉 Feriado',falta:'❌ Falta',desconto:'💸 Desconto',bonus:'🎁 Bônus',outro:'📝 Outro'};
-  let html = '<table class="apont-table"><thead><tr><th>Tipo</th><th>Descrição</th><th>Data</th><th>Horas</th><th></th></tr></thead><tbody>';
-  for (const a of lista) {
-    const dt = a.data_ref ? fmtData(a.data_ref) : '—';
-    html += `<tr><td><span class="tipo-badge tipo-${a.tipo}">${TIPOS[a.tipo]||a.tipo}</span></td>
-      <td>${a.descricao||'—'}</td><td>${dt}</td>
-      <td>${parseFloat(a.quantidade||0).toFixed(1)}h</td>
-      <td><button class="btn-del" onclick="delApontamento(${a.id})">🗑</button></td></tr>`;
+  const TIPOS = {
+    hora_extra:'⏰ H.Extra', adicional_noturno:'🌙 Ad.Noturno',
+    feriado:'🎉 Feriado', falta:'❌ Falta', desconto:'💸 Desconto',
+    bonus:'🎁 Bônus', entrega:'🚚 Entrega', grelhado:'🥩 Grelhado',
+    comissao:'💰 Comissão', outro:'📝 Outro'
+  };
+  const TIPO_VALOR = new Set(['bonus','entrega','grelhado','comissao','desconto','outro']);
+  const apHoras = lista.filter(a => !TIPO_VALOR.has(a.tipo));
+  const apValor = lista.filter(a => TIPO_VALOR.has(a.tipo));
+
+  let html = '';
+  if (apHoras.length) {
+    html += '<table class="apont-table"><thead><tr><th>Tipo</th><th>Descrição</th><th>Data</th><th>Horas</th><th></th></tr></thead><tbody>';
+    for (const a of apHoras) {
+      const dt = a.data_ref ? fmtData(a.data_ref) : '—';
+      html += `<tr><td><span class="tipo-badge tipo-${a.tipo}">${TIPOS[a.tipo]||a.tipo}</span></td>
+        <td>${a.descricao||'—'}</td><td>${dt}</td>
+        <td>${parseFloat(a.quantidade||0).toFixed(1)}h</td>
+        <td>
+          <button class="btn-del" onclick="editarApontamento(${a.id})" title="Editar" style="margin-right:2px">✏️</button>
+          <button class="btn-del" onclick="delApontamento(${a.id})">🗑</button>
+        </td></tr>`;
+    }
+    html += '</tbody></table>';
   }
-  html += '</tbody></table>';
-  document.getElementById('lista-apontamentos').innerHTML = html;
+  if (apValor.length) {
+    html += '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin:8px 0 4px">Bônus / Extras</div>';
+    html += '<table class="apont-table"><thead><tr><th>Tipo</th><th>Descrição</th><th>Data</th><th>Valor</th><th></th></tr></thead><tbody>';
+    for (const a of apValor) {
+      const dt  = a.data_ref ? fmtData(a.data_ref) : '—';
+      const val = parseFloat(a.valor_total || 0);
+      const obs = a.tipo === 'grelhado' ? ' <span style="font-size:10px;color:var(--muted)">(35% taxa)</span>' : '';
+      html += `<tr><td><span class="tipo-badge tipo-${a.tipo}">${TIPOS[a.tipo]||a.tipo}</span></td>
+        <td>${a.descricao||'—'}${obs}</td><td>${dt}</td>
+        <td style="font-weight:700;color:var(--green)">${brl(val)}</td>
+        <td>
+          <button class="btn-del" onclick="editarApontamento(${a.id})" title="Editar" style="margin-right:2px">✏️</button>
+          <button class="btn-del" onclick="delApontamento(${a.id})">🗑</button>
+        </td></tr>`;
+    }
+    html += '</tbody></table>';
+  }
+  document.getElementById('lista-apontamentos').innerHTML = html || '<p style="font-size:12px;color:var(--muted)">Nenhum apontamento</p>';
 }
 
 function renderPagamentos(lista) {
@@ -1105,6 +1188,39 @@ async function delApontamento(id) {
   const d = await del(`/api/rh/apontamento/${id}`);
   if (!d.ok) { toast('❌ ' + d.erro); return; }
   toast('🗑 Removido');
+  const mes = ymToMmYyyy(_mesAtual);
+  const fd = await get(`/api/rh/ficha?funcionario_id=${_funcAtual}&mes=${encodeURIComponent(mes)}`);
+  if (fd.ok) { _fichaAtual = fd; renderApontamentos(fd.apontamentos); calcResumo(fd); }
+}
+
+function editarApontamento(id) {
+  const a = _fichaAtual?.apontamentos?.find(x => x.id === id);
+  if (!a) { toast('⚠️ Apontamento não encontrado'); return; }
+  document.getElementById('ea-id').value    = id;
+  document.getElementById('ea-tipo').value  = a.tipo||'hora_extra';
+  document.getElementById('ea-data').value  = a.data_ref ? String(a.data_ref).slice(0,10) : '';
+  document.getElementById('ea-desc').value  = a.descricao||'';
+  document.getElementById('ea-qtd').value   = a.quantidade||'';
+  document.getElementById('ea-vunit').value = a.valor_unitario||'';
+  document.getElementById('modal-edit-apont').classList.add('open');
+}
+
+async function salvarEditApontamento() {
+  const id = document.getElementById('ea-id').value;
+  if (!id) return;
+  const tipo = document.getElementById('ea-tipo').value;
+  const descricao = document.getElementById('ea-desc').value.trim();
+  let qtd   = parseFloat(document.getElementById('ea-qtd').value)||0;
+  let vunit = parseFloat(document.getElementById('ea-vunit').value)||0;
+  if (tipo === 'bonus')    { qtd = 1; }
+  if (tipo === 'grelhado') { vunit = vunit * 0.35; qtd = 1; }
+  const d = await put(`/api/rh/apontamento/${id}`, {
+    tipo, descricao, quantidade: qtd, valor_unitario: vunit,
+    data_ref: document.getElementById('ea-data').value||null
+  });
+  if (!d.ok) { toast('❌ ' + d.erro); return; }
+  toast('✅ Atualizado!');
+  fecharModal('modal-edit-apont');
   const mes = ymToMmYyyy(_mesAtual);
   const fd = await get(`/api/rh/ficha?funcionario_id=${_funcAtual}&mes=${encodeURIComponent(mes)}`);
   if (fd.ok) { _fichaAtual = fd; renderApontamentos(fd.apontamentos); calcResumo(fd); }
