@@ -188,17 +188,63 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
 
   <!-- KITS -->
   <div id="sec-kits" style="display:none">
-    <div class="toolbar">
-      <button class="btn btn-g" onclick="abrirKit()">＋ Novo Kit</button>
-      <div class="search-w"><input type="text" id="busca-k" placeholder="Código ou nome do kit..." oninput="filtrarK()"></div>
+    <!-- Subtabs dentro de Kits -->
+    <div style="display:flex;gap:0;border-bottom:2px solid var(--border);background:var(--white);margin:-14px -14px 14px;padding:0 14px;">
+      <button class="tab active" id="ktab-lista" onclick="showKTab('lista',this)">🎁 Kits Cadastrados</button>
+      <button class="tab" id="ktab-semanas" onclick="showKTab('semanas',this)">📊 Histórico Semanal</button>
+      <button class="tab" id="ktab-ranking" onclick="showKTab('ranking',this)">🏆 Ranking</button>
     </div>
-    <!-- Lista de kits salvos -->
-    <div class="card" style="margin-bottom:16px">
-      <table class="tbl">
-        <thead><tr><th>Código</th><th>Nome</th><th>Custo Mat.</th><th>Custo Total</th><th>Preço Venda</th><th>Margem Real</th><th>Itens</th><th>Ações</th></tr></thead>
-        <tbody id="tbody-k"></tbody>
-      </table>
-      <div class="empty" id="empty-k" style="display:none"><p>Nenhum kit cadastrado</p></div>
+
+    <!-- Lista de Kits -->
+    <div id="ksec-lista">
+      <div class="toolbar">
+        <button class="btn btn-g" onclick="abrirKit()">＋ Novo Kit</button>
+        <div class="search-w"><input type="text" id="busca-k" placeholder="Código ou nome do kit..." oninput="filtrarK()"></div>
+      </div>
+      <div class="card" style="margin-bottom:16px">
+        <table class="tbl">
+          <thead><tr><th>Código</th><th>Nome</th><th>Custo Mat.</th><th>Custo Total</th><th>Preço Venda</th><th>Margem Real</th><th>Itens</th><th>Ações</th></tr></thead>
+          <tbody id="tbody-k"></tbody>
+        </table>
+        <div class="empty" id="empty-k" style="display:none"><p>Nenhum kit cadastrado</p></div>
+      </div>
+    </div>
+
+    <!-- Histórico Semanal -->
+    <div id="ksec-semanas" style="display:none">
+      <div class="toolbar">
+        <button class="btn btn-p" onclick="abrirModalSemana()">＋ Registrar Semana</button>
+        <input type="date" id="ks-de" class="flt" onchange="carregarSemanas()" style="padding:6px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px">
+        <span style="font-size:12px;color:var(--muted)">até</span>
+        <input type="date" id="ks-ate" class="flt" onchange="carregarSemanas()" style="padding:6px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px">
+        <select id="ks-kit-flt" onchange="carregarSemanas()" style="padding:6px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;background:var(--white)">
+          <option value="">Todos os kits</option>
+        </select>
+        <button class="btn btn-s btn-sm" onclick="document.getElementById('ks-de').value='';document.getElementById('ks-ate').value='';document.getElementById('ks-kit-flt').value='';carregarSemanas()">✕</button>
+      </div>
+      <div class="card" style="overflow-x:auto">
+        <table class="tbl">
+          <thead><tr>
+            <th>Semana</th><th>Kit</th>
+            <th class="r">Produzido</th><th class="r">Vendido</th>
+            <th class="r">% Vendido</th><th>Obs</th><th>Ações</th>
+          </tr></thead>
+          <tbody id="tbody-semanas"></tbody>
+        </table>
+        <div class="empty" id="empty-semanas" style="display:none;padding:24px;text-align:center;color:var(--muted)">Nenhum registro. Clique em "+ Registrar Semana".</div>
+      </div>
+    </div>
+
+    <!-- Ranking de Kits -->
+    <div id="ksec-ranking" style="display:none">
+      <div class="toolbar">
+        <label style="font-size:12px;color:var(--muted)">Período:</label>
+        <input type="date" id="kr-de"  onchange="carregarRanking()" style="padding:6px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px">
+        <span style="font-size:12px;color:var(--muted)">até</span>
+        <input type="date" id="kr-ate" onchange="carregarRanking()" style="padding:6px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px">
+        <button class="btn btn-s btn-sm" onclick="document.getElementById('kr-de').value='';document.getElementById('kr-ate').value='';carregarRanking()">✕ Limpar</button>
+      </div>
+      <div id="ranking-kits"></div>
     </div>
   </div>
 
@@ -247,6 +293,44 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
       <div id="p-marg" style="font-size:12px;text-align:right;margin-top:-6px;margin-bottom:10px;color:var(--green)"></div>
     </div>
     <div class="mdf"><button class="btn btn-s" onclick="fecharProd()">Cancelar</button><button class="btn btn-g" onclick="salvarProd()">💾 Salvar</button></div>
+  </div>
+</div>
+
+<!-- Modal Semana Kit -->
+<div class="mbg" id="m-semana">
+  <div class="md" style="max-width:440px">
+    <div class="mdh"><h3 id="semana-t">📊 Registrar Semana</h3><button class="mdx" onclick="fecharSemana()">×</button></div>
+    <div class="mdb">
+      <input type="hidden" id="s-id">
+      <div class="fg"><label>Kit *</label>
+        <select id="s-kit" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:7px;font-size:13px">
+          <option value="">— Selecione o kit —</option>
+        </select>
+      </div>
+      <div class="fg"><label>Semana (início — segunda-feira) *</label>
+        <input type="date" id="s-ini" onchange="calcFimSemana()">
+        <div id="s-semana-label" style="font-size:11px;color:var(--muted);margin-top:3px"></div>
+      </div>
+      <div class="fgr">
+        <div class="fg"><label>Qtd. Produzida</label>
+          <input type="number" id="s-prod" min="0" value="0" oninput="calcPctSemana()">
+        </div>
+        <div class="fg"><label>Qtd. Vendida</label>
+          <input type="number" id="s-vend" min="0" value="0" oninput="calcPctSemana()">
+        </div>
+      </div>
+      <div id="s-pct-preview" style="display:none;background:#f0faf4;border-radius:7px;padding:10px 12px;font-size:13px;margin:4px 0 8px">
+        Taxa de venda: <strong id="s-pct-val" style="color:var(--green)">0%</strong>
+        <span id="s-pct-badge" style="margin-left:8px;padding:2px 8px;border-radius:5px;font-size:11px;font-weight:700"></span>
+      </div>
+      <div class="fg"><label>Observação</label>
+        <input type="text" id="s-obs" placeholder="Ex: Semana do Dia das Mães, promoção...">
+      </div>
+    </div>
+    <div class="mdf">
+      <button class="btn btn-s" onclick="fecharSemana()">Cancelar</button>
+      <button class="btn btn-g" onclick="salvarSemana()">💾 Salvar</button>
+    </div>
   </div>
 </div>
 
@@ -518,6 +602,212 @@ async function carregarKits(){
   kits=d.data;
   document.getElementById('k-kt').textContent=fmt.n(kits.filter(k=>k.ativo).length);
   filtrarK();
+}
+
+// ── Subtabs da aba Kits ──────────────────────────────────────────────────────
+function showKTab(id, btn) {
+  ['lista','semanas','ranking'].forEach(t => {
+    const el = document.getElementById('ksec-'+t);
+    if (el) el.style.display = t === id ? '' : 'none';
+  });
+  document.querySelectorAll('[id^="ktab-"]').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  if (id === 'semanas') carregarSemanas();
+  if (id === 'ranking') carregarRanking();
+}
+
+const fmt2 = {
+  brl: v => 'R$ ' + parseFloat(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}),
+  date: v => v ? new Date(v+'T12:00:00').toLocaleDateString('pt-BR') : '—',
+};
+
+// ── Semanas ──────────────────────────────────────────────────────────────────
+let _semanas = [];
+
+function calcFimSemana() {
+  const ini = document.getElementById('s-ini').value;
+  if (!ini) return;
+  const d = new Date(ini+'T12:00:00');
+  const dow = d.getDay(); // 0=Dom, 1=Seg...
+  if (dow !== 1) {
+    // Ajusta para a segunda-feira mais próxima
+    const diff = dow === 0 ? -6 : 1 - dow;
+    d.setDate(d.getDate() + diff);
+    document.getElementById('s-ini').value = d.toISOString().slice(0,10);
+  }
+  const fim = new Date(d); fim.setDate(fim.getDate() + 6);
+  document.getElementById('s-semana-label').textContent =
+    `Semana: ${d.toLocaleDateString('pt-BR')} até ${fim.toLocaleDateString('pt-BR')}`;
+}
+
+function calcPctSemana() {
+  const prod = parseInt(document.getElementById('s-prod').value)||0;
+  const vend = parseInt(document.getElementById('s-vend').value)||0;
+  const el = document.getElementById('s-pct-preview');
+  const pctEl = document.getElementById('s-pct-val');
+  const badge = document.getElementById('s-pct-badge');
+  if (prod > 0) {
+    const pct = Math.round(vend/prod*100);
+    pctEl.textContent = pct + '%';
+    if (pct >= 90) { badge.textContent = '🔥 Ótimo'; badge.style.cssText = 'background:#d1e7dd;color:#0a4a22;margin-left:8px;padding:2px 8px;border-radius:5px;font-size:11px;font-weight:700'; }
+    else if (pct >= 60) { badge.textContent = '✅ Bom'; badge.style.cssText = 'background:#fff3cd;color:#856404;margin-left:8px;padding:2px 8px;border-radius:5px;font-size:11px;font-weight:700'; }
+    else { badge.textContent = '⚠️ Baixo'; badge.style.cssText = 'background:#f8d7da;color:#721c24;margin-left:8px;padding:2px 8px;border-radius:5px;font-size:11px;font-weight:700'; }
+    el.style.display = '';
+  } else {
+    el.style.display = 'none';
+  }
+}
+
+function abrirModalSemana(id) {
+  // Popula select de kits
+  const sel = document.getElementById('s-kit');
+  sel.innerHTML = '<option value="">— Selecione o kit —</option>' +
+    kits.map(k => `<option value="${k.id}">${k.codigo ? k.codigo+' — ' : ''}${k.nome}</option>`).join('');
+  document.getElementById('s-kit').innerHTML = sel.innerHTML;
+
+  // Popula select de filtro também
+  const flt = document.getElementById('ks-kit-flt');
+  if (flt) {
+    const val = flt.value;
+    flt.innerHTML = '<option value="">Todos os kits</option>' +
+      kits.map(k => `<option value="${k.id}"${String(k.id)===val?' selected':''}>${k.codigo?k.codigo+' — ':''}${k.nome}</option>`).join('');
+  }
+
+  if (id) {
+    const s = _semanas.find(x => x.id === id);
+    if (!s) return;
+    document.getElementById('semana-t').textContent = '✏️ Editar Semana';
+    document.getElementById('s-id').value   = s.id;
+    document.getElementById('s-kit').value  = s.kit_id;
+    document.getElementById('s-ini').value  = s.semana_ini?.slice(0,10)||'';
+    document.getElementById('s-prod').value = s.qtd_produzida||0;
+    document.getElementById('s-vend').value = s.qtd_vendida||0;
+    document.getElementById('s-obs').value  = s.obs||'';
+    calcFimSemana(); calcPctSemana();
+  } else {
+    document.getElementById('semana-t').textContent = '📊 Registrar Semana';
+    document.getElementById('s-id').value   = '';
+    document.getElementById('s-kit').value  = '';
+    // Sugere segunda-feira da semana atual
+    const hoje = new Date();
+    const diff = hoje.getDay() === 0 ? -6 : 1 - hoje.getDay();
+    const seg = new Date(hoje); seg.setDate(hoje.getDate() + diff);
+    document.getElementById('s-ini').value  = seg.toISOString().slice(0,10);
+    document.getElementById('s-prod').value = '';
+    document.getElementById('s-vend').value = '';
+    document.getElementById('s-obs').value  = '';
+    calcFimSemana(); calcPctSemana();
+  }
+  document.getElementById('m-semana').classList.add('open');
+}
+
+function fecharSemana() { document.getElementById('m-semana').classList.remove('open'); }
+
+async function salvarSemana() {
+  const id   = document.getElementById('s-id').value;
+  const kitId= document.getElementById('s-kit').value;
+  const ini  = document.getElementById('s-ini').value;
+  const prod = parseInt(document.getElementById('s-prod').value)||0;
+  const vend = parseInt(document.getElementById('s-vend').value)||0;
+  const obs  = document.getElementById('s-obs').value.trim();
+  if (!kitId) { toast('⚠️ Selecione um kit'); return; }
+  if (!ini)   { toast('⚠️ Informe a semana'); return; }
+
+  let d;
+  if (id) {
+    d = await api.put(`/api/kits/semanas/${id}`, { qtd_produzida: prod, qtd_vendida: vend, obs });
+  } else {
+    d = await api.post('/api/kits/semanas', { kit_id: kitId, semana_ini: ini, qtd_produzida: prod, qtd_vendida: vend, obs });
+  }
+  if (!d.ok) { toast('❌ ' + d.erro); return; }
+  toast('✅ Semana registrada!');
+  fecharSemana();
+  carregarSemanas();
+}
+
+async function carregarSemanas() {
+  const de  = document.getElementById('ks-de')?.value||'';
+  const ate = document.getElementById('ks-ate')?.value||'';
+  const kit = document.getElementById('ks-kit-flt')?.value||'';
+  let url = '/api/kits/semanas';
+  const p = []; if(de) p.push('de='+de); if(ate) p.push('ate='+ate); if(kit) p.push('kit_id='+kit);
+  if(p.length) url += '?'+p.join('&');
+  const d = await api.get(url);
+  if (!d.ok) return;
+  _semanas = d.data || [];
+  const tbody = document.getElementById('tbody-semanas');
+  const empty = document.getElementById('empty-semanas');
+  if (!_semanas.length) { tbody.innerHTML = ''; empty.style.display = ''; return; }
+  empty.style.display = 'none';
+  tbody.innerHTML = _semanas.map(s => {
+    const pct = parseFloat(s.pct_vendido||0);
+    const pctCor = pct >= 90 ? 'var(--green)' : pct >= 60 ? 'var(--orange)' : 'var(--red-l)';
+    const ini = s.semana_ini ? new Date(s.semana_ini+'T12:00:00').toLocaleDateString('pt-BR') : '—';
+    const fim = s.semana_fim ? new Date(s.semana_fim+'T12:00:00').toLocaleDateString('pt-BR') : '—';
+    return `<tr>
+      <td style="font-size:12px;white-space:nowrap">${ini} – ${fim}</td>
+      <td style="font-weight:600">${s.kit_codigo?s.kit_codigo+' — ':''}${s.kit_nome}</td>
+      <td style="text-align:right;font-family:'DM Mono',monospace">${s.qtd_produzida}</td>
+      <td style="text-align:right;font-family:'DM Mono',monospace;font-weight:700;color:var(--green)">${s.qtd_vendida}</td>
+      <td style="text-align:right;font-weight:700;color:${pctCor}">${pct}%</td>
+      <td style="font-size:11px;color:var(--muted)">${s.obs||'—'}</td>
+      <td>
+        <button onclick="abrirModalSemana(${s.id})" title="Editar" style="background:none;border:1px solid var(--border);border-radius:5px;padding:3px 7px;cursor:pointer;font-size:11px">✏️</button>
+        <button onclick="excluirSemana(${s.id})" style="background:none;border:1px solid var(--border);border-radius:5px;padding:3px 7px;cursor:pointer;font-size:11px;color:var(--red-l)">🗑</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+async function excluirSemana(id) {
+  if (!confirm('Excluir este registro?')) return;
+  const d = await api.delete(`/api/kits/semanas/${id}`);
+  if (!d.ok) { toast('❌ '+d.erro); return; }
+  toast('✅ Removido'); carregarSemanas();
+}
+
+async function carregarRanking() {
+  const de  = document.getElementById('kr-de')?.value||'';
+  const ate = document.getElementById('kr-ate')?.value||'';
+  let url = '/api/kits/semanas/ranking';
+  const p = []; if(de) p.push('de='+de); if(ate) p.push('ate='+ate);
+  if(p.length) url += '?'+p.join('&');
+  const d = await api.get(url);
+  if (!d.ok) return;
+  const rows = d.data || [];
+  const el = document.getElementById('ranking-kits');
+  if (!rows.length) { el.innerHTML = '<div style="text-align:center;padding:32px;color:var(--muted)">Nenhum dado. Registre semanas primeiro.</div>'; return; }
+  const maxVend = rows.reduce((m,r)=>Math.max(m,parseInt(r.total_vendido)),0);
+  el.innerHTML = `
+    <div class="card" style="overflow-x:auto">
+      <table class="tbl">
+        <thead><tr>
+          <th>#</th><th>Kit</th>
+          <th class="r">Total Produzido</th><th class="r">Total Vendido</th>
+          <th class="r">% Médio</th><th class="r">Semanas</th><th>Performance</th>
+        </tr></thead>
+        <tbody>
+          ${rows.map((r,i) => {
+            const pct = parseFloat(r.pct_medio||0);
+            const pctCor = pct>=90?'var(--green)':pct>=60?'var(--orange)':'var(--red-l)';
+            const barW = maxVend>0?Math.round(parseInt(r.total_vendido)/maxVend*100):0;
+            return `<tr>
+              <td style="font-weight:700;color:var(--muted);font-size:13px">${i+1}</td>
+              <td style="font-weight:600">${r.codigo?r.codigo+' — ':''}${r.nome}</td>
+              <td style="text-align:right;font-family:'DM Mono',monospace">${r.total_produzido}</td>
+              <td style="text-align:right;font-family:'DM Mono',monospace;font-weight:700;color:var(--green)">${r.total_vendido}</td>
+              <td style="text-align:right;font-weight:700;color:${pctCor}">${pct}%</td>
+              <td style="text-align:right;color:var(--muted)">${r.num_semanas}</td>
+              <td style="min-width:120px">
+                <div style="background:#f0ebe4;border-radius:4px;height:8px">
+                  <div style="background:var(--green);width:${barW}%;height:100%;border-radius:4px;transition:.4s"></div>
+                </div>
+              </td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>`;
 }
 
 function filtrarK(){

@@ -68,6 +68,22 @@ module.exports = function (pool) {
 
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_kit_itens_kit ON kit_itens(kit_id)`).catch(() => {});
 
+    // Tabela de histórico semanal de kits
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS kit_semanas (
+        id           SERIAL PRIMARY KEY,
+        kit_id       INTEGER NOT NULL,
+        semana_ini   DATE NOT NULL,          -- segunda-feira da semana
+        semana_fim   DATE NOT NULL,          -- domingo da semana
+        qtd_produzida INTEGER DEFAULT 0,
+        qtd_vendida   INTEGER DEFAULT 0,
+        obs           TEXT,
+        criado_em    TIMESTAMPTZ DEFAULT NOW()
+      )
+    `).catch(() => {});
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_ks_kit    ON kit_semanas(kit_id)`).catch(() => {});
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_ks_semana ON kit_semanas(semana_ini)`).catch(() => {});
+
     // Remove FKs indevidas em kit_itens (codigo_produto não deve ter FK)
     await pool.query(`
       DO $$ DECLARE r RECORD; BEGIN
@@ -282,6 +298,85 @@ module.exports = function (pool) {
       }
       res.json({ ok: true });
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ── GET /semanas — histórico semanal ─────────────────────────────────────
+  r.get('/semanas', async (req, res) => {
+    const { kit_id, de, ate } = req.query;
+    try {
+      const conds = [], params = [];
+      if (kit_id) { params.push(parseInt(kit_id)); conds.push(`ks.kit_id=$${params.length}`); }
+      if (de)     { params.push(de);               conds.push(`ks.semana_ini>=$${params.length}::date`); }
+      if (ate)    { params.push(ate);               conds.push(`ks.semana_ini<=$${params.length}::date`); }
+      const where = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
+      const { rows } = await pool.query(`
+        SELECT ks.*, k.nome AS kit_nome, k.codigo AS kit_codigo,
+          ROUND(ks.qtd_vendida::numeric/NULLIF(ks.qtd_produzida,0)*100, 1) AS pct_vendido
+        FROM kit_semanas ks
+        JOIN kits k ON k.id = ks.kit_id
+        ${where}
+        ORDER BY ks.semana_ini DESC, k.nome
+      `, params);
+      res.json({ ok: true, data: rows });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ── GET /semanas/ranking — ranking de kits por vendas ────────────────────
+  r.get('/semanas/ranking', async (req, res) => {
+    const { de, ate } = req.query;
+    try {
+      const conds = ['1=1'];
+      const params = [];
+      if (de)  { params.push(de);  conds.push(`ks.semana_ini>=$${params.length}::date`); }
+      if (ate) { params.push(ate); conds.push(`ks.semana_ini<=$${params.length}::date`); }
+      const { rows } = await pool.query(`
+        SELECT k.id, k.nome, k.codigo,
+          SUM(ks.qtd_produzida) AS total_produzido,
+          SUM(ks.qtd_vendida)   AS total_vendido,
+          COUNT(ks.id)          AS num_semanas,
+          ROUND(AVG(ks.qtd_vendida::numeric/NULLIF(ks.qtd_produzida,0)*100), 1) AS pct_medio
+        FROM kit_semanas ks
+        JOIN kits k ON k.id = ks.kit_id
+        WHERE ${conds.join(' AND ')}
+        GROUP BY k.id, k.nome, k.codigo
+        ORDER BY total_vendido DESC
+      `, params);
+      res.json({ ok: true, data: rows });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ── POST /semanas — registrar semana ──────────────────────────────────────
+  r.post('/semanas', async (req, res) => {
+    const { kit_id, semana_ini, qtd_produzida, qtd_vendida, obs } = req.body;
+    if (!kit_id || !semana_ini) return res.status(400).json({ ok: false, erro: 'kit_id e semana_ini obrigatórios' });
+    try {
+      // semana_fim = semana_ini + 6 dias
+      const { rows } = await pool.query(`
+        INSERT INTO kit_semanas (kit_id, semana_ini, semana_fim, qtd_produzida, qtd_vendida, obs)
+        VALUES ($1, $2::date, $2::date + 6, $3, $4, $5)
+        RETURNING *
+      `, [parseInt(kit_id), semana_ini, parseInt(qtd_produzida||0), parseInt(qtd_vendida||0), obs||null]);
+      res.json({ ok: true, data: rows[0] });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ── PUT /semanas/:id ───────────────────────────────────────────────────────
+  r.put('/semanas/:id', async (req, res) => {
+    const { qtd_produzida, qtd_vendida, obs } = req.body;
+    try {
+      await pool.query(`
+        UPDATE kit_semanas SET qtd_produzida=$1, qtd_vendida=$2, obs=$3 WHERE id=$4
+      `, [parseInt(qtd_produzida||0), parseInt(qtd_vendida||0), obs||null, parseInt(req.params.id)]);
+      res.json({ ok: true });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ── DELETE /semanas/:id ────────────────────────────────────────────────────
+  r.delete('/semanas/:id', async (req, res) => {
+    try {
+      await pool.query(`DELETE FROM kit_semanas WHERE id=$1`, [parseInt(req.params.id)]);
+      res.json({ ok: true });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
   return r;
