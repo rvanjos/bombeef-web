@@ -410,7 +410,8 @@ main{padding:16px 24px;max-width:1400px;margin:0 auto;}
             <option value="hora_extra">⏱️ Hora Extra</option>
             <option value="adicional_noturno">🌙 Adicional Noturno</option>
             <option value="falta">❌ Falta</option>
-            <option value="comissao">💰 Comissão</option>
+            <option value="entrega">🚚 Entrega</option>
+            <option value="grelhado">🥩 Grelhado (35% da taxa)</option>
             <option value="bonus">🎁 Bônus</option>
             <option value="desconto">↘️ Desconto</option>
             <option value="outro">📌 Outro</option>
@@ -708,17 +709,23 @@ async function salvarLancamento() {
   const isAdmin = _perfil === 'admin';
   const tipo         = document.getElementById('lanc-tipo').value;
   const descricao    = document.getElementById('lanc-desc').value.trim();
-  const quantidade   = parseFloat(document.getElementById('lanc-qtd').value)||0;
-  const valor_unit   = parseFloat(document.getElementById('lanc-vunit').value)||0;
   const data_ref     = document.getElementById('lanc-data').value;
   const somenteQtd   = (tipo === 'hora_extra' || tipo === 'adicional_noturno');
+  const semQtd       = (tipo === 'bonus' || tipo === 'grelhado');
 
-  if (!descricao)                         { toast('⚠️ Informe a descrição'); return; }
-  if (!quantidade)                        { toast('⚠️ Informe a quantidade'); return; }
-  if (!somenteQtd && !valor_unit)         { toast('⚠️ Informe o valor'); return; }
+  let quantidade   = parseFloat(document.getElementById('lanc-qtd').value)||0;
+  let valor_unit   = parseFloat(document.getElementById('lanc-vunit').value)||0;
+
+  // Bônus: qtd=1, valor=vunit (sem quantidade)
+  if (tipo === 'bonus') { quantidade = 1; }
+  // Grelhado: valor enviado é 35% da taxa
+  if (tipo === 'grelhado') { valor_unit = valor_unit * 0.35; quantidade = 1; }
+
+  if (!descricao)                               { toast('⚠️ Informe a descrição'); return; }
+  if (!semQtd && !somenteQtd && !quantidade)    { toast('⚠️ Informe a quantidade'); return; }
+  if (!somenteQtd && !valor_unit)               { toast('⚠️ Informe o valor'); return; }
 
   if (isAdmin) {
-    // Admin: lança para todos os funcionários selecionados
     const selecionados = [...document.querySelectorAll('#lanc-funcs-list .cb-func:checked')]
       .map(cb => parseInt(cb.value));
     if (!selecionados.length) { toast('⚠️ Selecione pelo menos um funcionário'); return; }
@@ -744,7 +751,6 @@ async function salvarLancamento() {
     carregarPendentes();
 
   } else {
-    // Funcionário: lança apenas para si
     if (!_meuFuncId) { toast('⚠️ Usuário não vinculado a funcionário. Fale com o admin.'); return; }
     const mes_ref = ymToMmYyyy(document.getElementById('sel-mes-meus').value || _mesAtual);
     const d = await post('/api/rh/lancamento', {
@@ -759,42 +765,76 @@ async function salvarLancamento() {
 }
 
 function atualizarCamposLanc() {
-  const tipo = document.getElementById('lanc-tipo').value;
-  const qL   = document.getElementById('lanc-qtd-label');
-  const vL   = document.getElementById('lanc-vunit-label');
+  const tipo  = document.getElementById('lanc-tipo').value;
+  const qWrap = document.getElementById('lanc-qtd-wrap');
+  const qL    = document.getElementById('lanc-qtd-label');
+  const vL    = document.getElementById('lanc-vunit-label');
   const vWrap = document.getElementById('lanc-vunit').closest('.form-group') || document.getElementById('lanc-vunit').parentElement;
+  const info  = document.getElementById('lanc-info-box');
 
-  // Hora extra e adicional noturno: admin informa o valor/hora, funcionário só informa horas
-  const somenteQtd = (tipo === 'hora_extra' || tipo === 'adicional_noturno');
+  // Reseta hint
+  if (info) info.style.display = '';
 
-  if (tipo === 'falta') {
-    qL.textContent = 'Quantidade (dias)';
-    vL.textContent = 'Desconto por dia (R$)';
-    vWrap.style.display = '';
-  } else if (tipo === 'hora_extra') {
-    qL.textContent = 'Quantidade de horas';
+  if (tipo === 'hora_extra') {
+    qWrap.style.display = ''; qL.textContent = 'Quantidade de horas';
     vWrap.style.display = 'none'; // admin define o valor/hora
+
   } else if (tipo === 'adicional_noturno') {
-    qL.textContent = 'Horas noturnas';
-    vWrap.style.display = 'none'; // admin define o valor/hora
-  } else if (tipo === 'comissao') {
-    qL.textContent = 'Quantidade';
-    vL.textContent = 'Valor (R$)';
-    vWrap.style.display = '';
+    qWrap.style.display = ''; qL.textContent = 'Horas noturnas';
+    vWrap.style.display = 'none';
+
+  } else if (tipo === 'falta') {
+    qWrap.style.display = ''; qL.textContent = 'Quantidade (dias)';
+    vWrap.style.display = ''; vL.textContent = 'Desconto por dia (R$)';
+
+  } else if (tipo === 'bonus') {
+    // Bônus: só valor total, sem quantidade
+    qWrap.style.display = 'none';
+    vWrap.style.display = ''; vL.textContent = 'Valor do Bônus (R$)';
+
+  } else if (tipo === 'entrega') {
+    qWrap.style.display = ''; qL.textContent = 'Quantidade de entregas';
+    vWrap.style.display = ''; vL.textContent = 'Valor por entrega (R$)';
+
+  } else if (tipo === 'grelhado') {
+    // Grelhado: informa valor da taxa de grelha, sistema paga 35%
+    qWrap.style.display = 'none';
+    vWrap.style.display = ''; vL.textContent = 'Valor da taxa de grelha (R$) — será pago 35%';
+    if (info) {
+      info.innerHTML = '🥩 <strong>Grelhado:</strong> Informe o valor total da taxa de grelha. O funcionário receberá <strong>35%</strong> desse valor.';
+      info.style.display = '';
+    }
+
   } else {
-    qL.textContent = 'Quantidade';
-    vL.textContent = 'Valor (R$)';
-    vWrap.style.display = '';
+    // desconto, outro
+    qWrap.style.display = ''; qL.textContent = 'Quantidade';
+    vWrap.style.display = ''; vL.textContent = 'Valor (R$)';
   }
   calcLanc();
 }
+
 function calcLanc() {
-  const qtd = parseFloat(document.getElementById('lanc-qtd').value)||0;
-  const vu  = parseFloat(document.getElementById('lanc-vunit').value)||0;
-  const total = qtd*vu;
-  const el = document.getElementById('lanc-calc');
-  el.style.display = total>0?'':'none';
-  if (total>0) document.getElementById('lanc-vtotal').textContent = brl(total);
+  const tipo  = document.getElementById('lanc-tipo').value;
+  const qtd   = parseFloat(document.getElementById('lanc-qtd').value)||0;
+  const vu    = parseFloat(document.getElementById('lanc-vunit').value)||0;
+  const el    = document.getElementById('lanc-calc');
+  const elTxt = document.getElementById('lanc-vtotal');
+
+  let total = 0;
+  if (tipo === 'bonus') {
+    total = vu; // bônus: valor direto sem quantidade
+  } else if (tipo === 'grelhado') {
+    total = vu * 0.35; // 35% da taxa de grelha
+  } else {
+    total = qtd * vu;
+  }
+
+  el.style.display = (total > 0 || vu > 0) ? '' : 'none';
+  if (tipo === 'grelhado' && vu > 0) {
+    el.innerHTML = `Taxa de grelha: <strong>${brl(vu)}</strong> → Valor a pagar (35%): <strong id="lanc-vtotal" style="color:var(--green)">${brl(total)}</strong>`;
+  } else if (total > 0) {
+    el.innerHTML = `Valor total: <strong id="lanc-vtotal" style="color:var(--green)">${brl(total)}</strong>`;
+  }
 }
 
 // Inicia imediatamente se já tem token no storage
@@ -1284,7 +1324,15 @@ async function gerarRelatorio() {
   const d = await get(`/api/rh/relatorio?mes=${encodeURIComponent(mes)}&ids=${ids}`);
   if (!d.ok) { document.getElementById('rel-container').innerHTML = `<div class="empty"><div class="icon">⚠️</div><p>${d.erro}</p></div>`; return; }
 
-  const TIPOS_AP = {hora_extra:'H.Extra',feriado:'Feriado',falta:'Falta',desconto:'Desconto',bonus:'Bônus',outro:'Outro'};
+  const TIPOS_AP = {
+    hora_extra:'H.Extra', adicional_noturno:'Ad.Noturno',
+    feriado:'Feriado', falta:'Falta', desconto:'Desconto',
+    bonus:'🎁 Bônus', entrega:'🚚 Entrega', grelhado:'🥩 Grelhado',
+    outro:'Outro'
+  };
+  // Tipos que mostram valor em vez de horas
+  const TIPO_VALOR = new Set(['bonus','entrega','grelhado','comissao','desconto','outro']);
+
   let html = `<h2 style="font-family:'Playfair Display',serif;margin-bottom:16px;font-size:17px">Relatório RH — ${mes}</h2>`;
 
   for (const f of d.data) {
@@ -1306,13 +1354,35 @@ async function gerarRelatorio() {
         </div>`;
 
     if (f.apontamentos?.length) {
-      html += `<div style="margin-bottom:10px;"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px;">Apontamentos</div>
-        <table class="apont-table" style="font-size:11px;"><thead><tr><th>Tipo</th><th>Descrição</th><th>Data</th><th>Horas</th></tr></thead><tbody>`;
-      for (const a of f.apontamentos) {
-        const dt = a.data_ref ? fmtData(a.data_ref) : '—';
-        html += `<tr><td>${TIPOS_AP[a.tipo]||a.tipo}</td><td>${a.descricao||'—'}</td><td>${dt}</td><td>${parseFloat(a.quantidade||0).toFixed(1)}h</td></tr>`;
+      // Separa apontamentos de horas dos de valor
+      const apHoras  = f.apontamentos.filter(a => !TIPO_VALOR.has(a.tipo));
+      const apValor  = f.apontamentos.filter(a => TIPO_VALOR.has(a.tipo));
+
+      if (apHoras.length) {
+        html += `<div style="margin-bottom:10px;"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px;">Apontamentos</div>
+          <table class="apont-table" style="font-size:11px;"><thead><tr><th>Tipo</th><th>Descrição</th><th>Data</th><th>Horas</th></tr></thead><tbody>`;
+        for (const a of apHoras) {
+          html += `<tr><td>${TIPOS_AP[a.tipo]||a.tipo}</td><td>${a.descricao||'—'}</td><td>${a.data_ref?fmtData(a.data_ref):'—'}</td><td>${parseFloat(a.quantidade||0).toFixed(1)}h</td></tr>`;
+        }
+        html += '</tbody></table></div>';
       }
-      html += '</tbody></table></div>';
+
+      if (apValor.length) {
+        html += `<div style="margin-bottom:10px;"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px;">Bônus / Extras</div>
+          <table class="apont-table" style="font-size:11px;"><thead><tr><th>Tipo</th><th>Descrição</th><th>Data</th><th>Valor</th><th>Obs</th></tr></thead><tbody>`;
+        for (const a of apValor) {
+          const val = parseFloat(a.valor_total || 0);
+          const obs = a.tipo === 'grelhado' ? `<span style="font-size:10px;color:var(--muted)">(35% taxa)</span>` : '';
+          html += `<tr>
+            <td><span style="font-weight:600">${TIPOS_AP[a.tipo]||a.tipo}</span></td>
+            <td>${a.descricao||'—'}</td>
+            <td>${a.data_ref?fmtData(a.data_ref):'—'}</td>
+            <td style="font-weight:700;color:var(--green)">${brl(val)}</td>
+            <td>${obs}</td>
+          </tr>`;
+        }
+        html += '</tbody></table></div>';
+      }
     }
 
     if (f.retiradas_detalhe?.length) {
