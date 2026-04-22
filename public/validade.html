@@ -648,8 +648,9 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
 <!-- Modal Perda -->
 <div class="modal-bg" id="modal-perda">
   <div class="modal" style="max-width:480px">
-    <div class="modal-head"><h3>🗑️ Registrar Perda</h3><button class="modal-close" onclick="fecharModal('modal-perda')">×</button></div>
+    <div class="modal-head"><h3 id="modal-perda-titulo">🗑️ Registrar Perda</h3><button class="modal-close" onclick="fecharModal('modal-perda')">×</button></div>
     <div class="modal-body">
+      <input type="hidden" id="pd-id">
       <input type="hidden" id="pd-vid">
       <div class="fg"><label>Descrição / Produto *</label><input id="pd-desc" placeholder="Nome do produto perdido"></div>
       <div class="fg-row">
@@ -685,7 +686,7 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
     </div>
     <div class="modal-foot">
       <button class="btn btn-s" onclick="fecharModal('modal-perda')">Cancelar</button>
-      <button class="btn btn-r" onclick="salvarPerda()">🗑️ Registrar Perda</button>
+      <button class="btn btn-r" id="btn-salvar-perda" onclick="salvarPerda()">🗑️ Registrar Perda</button>
     </div>
   </div>
 </div>
@@ -1865,6 +1866,7 @@ function exportarHistXLS(){
 async function perdaRapida(validadeItemId){
   const v = itens.find(x=>x.id===validadeItemId);
   if(!v) return;
+  document.getElementById('pd-id').value    = '';
   document.getElementById('pd-vid').value   = validadeItemId;
   document.getElementById('pd-desc').value  = v.descricao;
   document.getElementById('pd-qtd').value   = v.qtd_unidades||1;
@@ -1872,16 +1874,39 @@ async function perdaRapida(validadeItemId){
   document.getElementById('pd-dt').value    = new Date().toISOString().slice(0,10);
   document.getElementById('pd-obs').value   = '';
   document.getElementById('pd-motivo').value= 'vencimento';
+  document.getElementById('modal-perda-titulo').textContent = '🗑️ Registrar Perda';
+  document.getElementById('btn-salvar-perda').textContent = '🗑️ Registrar Perda';
   calcPerda();
   document.getElementById('modal-perda').classList.add('open');
 }
 
 function abrirPerda(){
+  document.getElementById('pd-id').value  = '';
   document.getElementById('pd-vid').value = '';
   document.getElementById('pd-dt').value  = new Date().toISOString().slice(0,10);
   document.getElementById('pd-desc').value=document.getElementById('pd-qtd').value='';
   document.getElementById('pd-custo').value=document.getElementById('pd-valor').value='';
   document.getElementById('pd-obs').value='';
+  document.getElementById('modal-perda-titulo').textContent = '🗑️ Registrar Perda';
+  document.getElementById('btn-salvar-perda').textContent = '🗑️ Registrar Perda';
+  document.getElementById('modal-perda').classList.add('open');
+}
+
+function editarPerda(id) {
+  const p = perdas.find(x => String(x.id) === String(id));
+  if (!p) { toast('⚠️ Perda não encontrada'); return; }
+  document.getElementById('pd-id').value    = p.id;
+  document.getElementById('pd-vid').value   = p.validade_item_id||'';
+  document.getElementById('pd-desc').value  = p.descricao||'';
+  document.getElementById('pd-motivo').value= p.motivo||'vencimento';
+  document.getElementById('pd-dt').value    = p.dt_perda||'';
+  document.getElementById('pd-qtd').value   = p.qtd_unidades||0;
+  document.getElementById('pd-custo').value = '';
+  document.getElementById('pd-valor').value = parseFloat(p.valor_perda||0).toFixed(2);
+  document.getElementById('pd-func').value  = p.funcionario_id||'';
+  document.getElementById('pd-obs').value   = p.observacao||'';
+  document.getElementById('modal-perda-titulo').textContent = '✏️ Editar Perda';
+  document.getElementById('btn-salvar-perda').textContent = '💾 Salvar Alterações';
   document.getElementById('modal-perda').classList.add('open');
 }
 
@@ -1893,6 +1918,7 @@ function calcPerda(){
 }
 
 async function salvarPerda(){
+  const perdaId      = document.getElementById('pd-id').value;
   const validadeItemId = document.getElementById('pd-vid').value;
   const body = {
     descricao:       document.getElementById('pd-desc').value.trim(),
@@ -1905,9 +1931,19 @@ async function salvarPerda(){
     validadeItemId:  validadeItemId||null,
   };
   if(!body.descricao){ toast('Descrição obrigatória'); return; }
-  const d = await api.post('/api/perdas', body);
-  if(!d.ok){ toast('Erro: '+d.erro); return; }
-  toast('🗑️ Perda registrada!');
+
+  let d;
+  if (perdaId) {
+    // Edição — usa PUT
+    d = await api.put(`/api/perdas/${perdaId}`, body);
+    if(!d.ok){ toast('Erro ao salvar: '+d.erro); return; }
+    toast('✅ Perda atualizada!');
+  } else {
+    // Novo registro — usa POST
+    d = await api.post('/api/perdas', body);
+    if(!d.ok){ toast('Erro: '+d.erro); return; }
+    toast('🗑️ Perda registrada!');
+  }
   fecharModal('modal-perda'); carregarPerdas(); carregar(); carregarKPIs();
   try { window.parent.postMessage({type:'bb_refresh_kpis'},'*'); } catch(_) {}
 }
@@ -1942,7 +1978,10 @@ async function carregarPerdas(){
     <td style="font-family:'DM Mono',monospace">${p.qtd_unidades||0}</td>
     <td style="font-family:'DM Mono',monospace;font-weight:700;color:var(--red-l)">${fmt.brl(p.valor_perda)}</td>
     <td>${p.funcionario_nome||'—'}</td>
-    <td><button class="act-btn" onclick="excluirPerda(${p.id})" style="color:var(--red-l)">🗑</button></td>
+    <td>
+      <button class="act-btn" onclick="editarPerda(${p.id})" title="Editar">✏️</button>
+      <button class="act-btn" onclick="excluirPerda(${p.id})" style="color:var(--red-l)" title="Excluir">🗑</button>
+    </td>
   </tr>`).join('');
 }
 

@@ -1674,7 +1674,10 @@ function _chaveFornecedor(t) {
 function setCat(id, cat) {
   const t = TXS.find(x => String(x.id)===String(id)); if (!t) return;
   t.categoria = cat;
-  if (cat) t.needsReview = false; // classificação manual remove o aviso de revisão
+  if (cat) t.needsReview = false;
+  // Garante que t.mes está preenchido — evita que lançamento fique "sem mês"
+  if (!t.mes) t.mes = mesRef;
+  if (!t.mesCaixa) t.mesCaixa = mesRef;
   // Só salva no supMem se for uma categoria válida do CATS
   const catValida = cat && Object.values(CATS).some(g => g.s.includes(cat));
   if (catValida) {
@@ -1682,14 +1685,16 @@ function setCat(id, cat) {
     if (k) {
       supMem[k] = cat;
       TXS.forEach(tx => {
-        if (!tx.categoria && _chaveFornecedor(tx) === k) tx.categoria = cat;
+        if (!tx.categoria && _chaveFornecedor(tx) === k) {
+          tx.categoria = cat;
+          if (!tx.mes) tx.mes = tx.mesCaixa || mesRef;
+        }
       });
     }
   }
   const row = document.getElementById('tr-'+id);
   if (row) row.className = t.ignorar?'ign':cat?t.fonte==='CC'?'cc-row':t.needsReview?'boleto-review':t.fonte?.startsWith('BOLETO')?'boleto-row':'':'uncat';
   updStats();
-  // Salva na sessão correta do mês deste lançamento
   const mesLanc = t.mes || mesRef;
   salvarMesDebounce(mesLanc);
 }
@@ -1701,13 +1706,14 @@ function salvarMesDebounce(mes) {
 }
 
 async function salvarMes(mes, silent=false) {
-  // Exclui lançamentos de projeção — são recalculados dinamicamente
-  // Lançamentos sem t.mes só pertencem ao mesRef atual — não os inclui em saves de outros meses
   const txsMes = TXS.filter(t => {
     if (t.fonte === 'PREV_RECEITA') return false;
     if (t.fonte === 'PREV_DAS') return false;
-    const mTx = t.mes || (mes === mesRef ? mesRef : null);
-    return mTx === mes;
+    // Lançamento com mes definido — pertence ao seu mês
+    if (t.mes) return t.mes === mes;
+    // Lançamento sem mes — pertence ao mesRef atual
+    // Isso acontece com lançamentos antigos importados antes do campo mes ser garantido
+    return mes === mesRef;
   });
   console.log(`[salvarMes] mes=${mes} txs=${txsMes.length} sid=${(window._sessoesPorMes||{})[mes]} mesRef=${mesRef}`);
   if (!txsMes.length) { console.warn('[salvarMes] nenhum lançamento para', mes); return; }
