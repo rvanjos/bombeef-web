@@ -64,9 +64,10 @@ module.exports = function (pool) {
         safeQuery(
           `SELECT COALESCE(SUM(valor_total),0) AS total FROM retiradas WHERE mes=$1`, [mes]
         ),
-        // M2: DRE
+        // M2: DRE — lê resultado calculado e salvo (res_final) + transactions para fallback
         safeQuery(
-          `SELECT dados_json FROM dre_sessoes WHERE mes_ref=$1 ORDER BY atualizado_em DESC LIMIT 1`, [mes]
+          `SELECT dados_json, res_receitas, res_despesas, res_cmv, res_lucro_bruto, res_lucro_op, res_final
+           FROM dre_sessoes WHERE mes_ref=$1 ORDER BY atualizado_em DESC LIMIT 1`, [mes]
         ),
         // M6: Meta
         safeQuery(`SELECT * FROM metas WHERE mes=$1 LIMIT 1`, [mes]),
@@ -78,27 +79,33 @@ module.exports = function (pool) {
         `, [mes]),
       ]);
 
-      // Calcula receitas/despesas do DRE — filtra mês e ignora boletos/previsões
-      let dreReceitas=0, dreDespesas=0;
-      if (dreRow.dados_json) {
-        const txs = dreRow.dados_json.transactions || [];
-        for (const t of txs) {
-          if (t.ignorar) continue;
-          // Ignorar fontes que não são lançamentos reais classificados
-          if (!t.categoria) continue; // apenas classificados
-          if (t.fonte === 'PREV_RECEITA') continue;
-          if (t.fonte === 'BOLETO_PREV') continue; // boletos a vencer não são receita/despesa realizada
-          // Filtra pelo mês DRE (competência)
-          const tMes = t.mes;
-          if (tMes && tMes !== mes) continue;
-          const v=parseFloat(t.valor||0);
-          if (v>0) dreReceitas+=v; else dreDespesas+=Math.abs(v);
+      // Usa resultado calculado e salvo pelo DRE quando disponível (opção 2)
+      // Fallback: recalcula a partir das transactions (comportamento anterior)
+      let dreReceitas=0, dreDespesas=0, dreResultado=0;
+      const temResultadoSalvo = dreRow.res_final != null;
+
+      if (temResultadoSalvo) {
+        // Resultado exato do DRE — inclui CMV, estoque, DAS, retiradas
+        dreReceitas  = parseFloat(dreRow.res_receitas  || 0);
+        dreDespesas  = parseFloat(dreRow.res_despesas  || 0);
+        dreResultado = parseFloat(dreRow.res_final     || 0);
+      } else {
+        // Fallback: calcula a partir das transactions (sem CMV/estoque/DAS)
+        if (dreRow.dados_json) {
+          const txs = dreRow.dados_json.transactions || [];
+          for (const t of txs) {
+            if (t.ignorar || !t.categoria) continue;
+            if (t.fonte === 'PREV_RECEITA' || t.fonte === 'BOLETO_PREV') continue;
+            const tMes = t.mes;
+            if (tMes && tMes !== mes) continue;
+            const v = parseFloat(t.valor||0);
+            if (v>0) dreReceitas+=v; else dreDespesas+=Math.abs(v);
+          }
+          dreResultado = dreReceitas - dreDespesas;
         }
       }
 
       const faturamentoMeta = parseFloat(metaRow.faturamento_meta||0);
-      // Prioridade: Faturamento real (módulo Faturamento) > DRE receitas
-      // Não usa mais metas.faturamento_real (campo manual desatualizado)
       const fatRealModulo = parseFloat(fatRow.total||0);
       const faturamentoReal = fatRealModulo > 0 ? fatRealModulo : dreReceitas;
       const metaPerdaPct    = parseFloat(metaRow.meta_perda_pct||0);
@@ -114,7 +121,8 @@ module.exports = function (pool) {
           boletosValorVence7d: parseFloat(bRow.valor_vence_7d||0),
           boletosAberto:       parseFloat(bRow.total_aberto||0),
           dreReceitas, dreDespesas,
-          dreResultado: dreReceitas - dreDespesas,
+          dreResultado,
+          dreResultadoFonte: temResultadoSalvo ? 'salvo' : 'calculado',
           validadeAlerta:      parseInt(vRow.alerta||0),
           validadeVencidos:    parseInt(vRow.vencidos||0),
           perdasMes:           totalPerdas,

@@ -1728,10 +1728,14 @@ async function salvarMes(mes, silent=false) {
     } catch(_) {}
   }
   try {
+    // Calcula resultado do mês para salvar junto (Dashboard usa esse valor)
+    const resultado = calcResultadoDRE(mes);
+
     const d = await api.post('/api/dre/salvar', {
       sessao_id: sid,
       mes_ref: mes,
       descricao: `Sessão ${mes} — ${txsMes.length} lançamentos`,
+      resultado, // resultado calculado pelo frontend
       dados_json: {
         transactions: txsMes,
         loadedFiles: mes === mesRef ? files : [],
@@ -2503,6 +2507,67 @@ function _buildDRE(el, full) {
 
   document.getElementById('dre-mes-label').textContent=meses.map(fmtMes).join(' · ');
   el.innerHTML=h;
+}
+
+// Calcula resultado do DRE para um mês específico — mesma lógica do _buildDRE
+// Retorna { receitas, despesas, cmv, lucroBruto, lucroOp, final }
+function calcResultadoDRE(mesAlvo) {
+  const at = TXS.filter(t => !t.ignorar && t.categoria && !CATS_NAO_OPERACIONAIS.has(t.categoria));
+  const data = {};
+  const fatCombinado = getModo() === 'comp'
+    ? { ...(window._fatManualMes||{}), ...(window._fatPorMes||{}) }
+    : {};
+
+  for (const t of at) {
+    const g = catGrupo(t.categoria) || 'OUTROS';
+    const m = getMesTx(t);
+    if (m !== mesAlvo) continue;
+    const v = parseFloat(t.valor||0);
+    if (!data[g]) data[g] = {};
+    if (!data[g][t.categoria]) data[g][t.categoria] = {};
+    data[g][t.categoria][mesAlvo] = (data[g][t.categoria][mesAlvo]||0) + v;
+  }
+
+  // Modo Competência: substitui receitas
+  if (getModo() === 'comp' && fatCombinado[mesAlvo] > 0) {
+    data['RECEITAS'] = { 'VENDAS DE MERCADORIAS': { [mesAlvo]: fatCombinado[mesAlvo] } };
+  }
+
+  const sg = (gk) => Object.values(data[gk]||{}).reduce((s,c) => s+(c[mesAlvo]||0), 0);
+
+  const receitas = sg('RECEITAS');
+
+  // CMV + ajuste de estoque
+  const cmvBruto = sg('CMV');
+  const [mm, yy] = mesAlvo.split('/');
+  const dtAnt = new Date(parseInt(yy), parseInt(mm)-2, 1);
+  const mAnt = `${String(dtAnt.getMonth()+1).padStart(2,'0')}/${dtAnt.getFullYear()}`;
+  const estIni = parseFloat((window._estoquesMes||{})[mAnt]||0);
+  const estFin = parseFloat((window._estoquesMes||{})[mesAlvo]||0);
+  const cmv = cmvBruto + (estIni - estFin);
+
+  const lucroBruto = receitas + cmv; // cmv é negativo
+
+  // Despesas operacionais
+  const OPER = ['PESSOAL','VENDAS_CAT','CONSUMO','TERCEIROS','MATERIAL','OUTRAS','IMPOSTOS'];
+  let despOper = OPER.reduce((s, gk) => s + sg(gk), 0);
+
+  // DAS estimado
+  const pctDAS = parseFloat(localStorage.getItem('bb_pct_simples')||'8') / 100;
+  const mesesComSimples = new Set(TXS.filter(t => !t.ignorar && t.categoria==='Simples Nacional').map(t => t.mes||mesRef));
+  if (!mesesComSimples.has(mesAlvo)) {
+    const mRefDAS = getModo()==='comp' ? mesAlvo : mAnt;
+    const nfce = parseFloat((window._nfcePorMes||{})[mRefDAS]||0);
+    if (nfce > 0) despOper -= Math.round(nfce * pctDAS * 100) / 100;
+  }
+
+  const lucroOp = lucroBruto + despOper;
+  const fin = sg('FINANCEIRAS');
+  const retiradas = sg('OUTROS');
+  const final = lucroOp + fin + retiradas;
+  const despesas = Math.abs(cmv) + Math.abs(despOper) + Math.abs(fin) + Math.abs(retiradas);
+
+  return { receitas, despesas, cmv, lucroBruto, lucroOp, final };
 }
 
 // ─── MANUAL ───────────────────────────────────────────────────────────────────

@@ -1012,7 +1012,19 @@ async function carregarKPIs() {
       const res = d.dreResultado || 0;
       $('k-resultado').textContent = fmtBRL(res);
       $('k-resultado').className   = 'kpi-val ' + (res >= 0 ? 'c-green' : 'c-red');
+      const fonte = d.dreResultadoFonte === 'salvo'
+        ? 'DRE salvo (resultado exato)'
+        : 'Estimado (abra o DRE e salve para valor exato)';
       $('k-resultado-sub').textContent = `Rec: ${fmtBRL(d.dreReceitas||0)} | Desp: ${fmtBRL(d.dreDespesas||0)}`;
+      $('k-resultado-sub').title = fonte;
+      // Indicador visual de fonte
+      const kCard = $('k-resultado')?.closest('.kpi-card');
+      if (kCard) {
+        let badge = kCard.querySelector('.dre-fonte-badge');
+        if (!badge) { badge = document.createElement('div'); badge.className='dre-fonte-badge'; badge.style.cssText='font-size:10px;margin-top:2px;'; kCard.appendChild(badge); }
+        badge.textContent = d.dreResultadoFonte === 'salvo' ? '✅ DRE salvo' : '⚠️ Estimado';
+        badge.style.color = d.dreResultadoFonte === 'salvo' ? 'var(--green)' : 'var(--orange)';
+      }
       // DRE bars
       const dreCard = $('dash-dre-card'); if(dreCard) dreCard.style.display='';
       const maxDre = Math.max(d.dreReceitas||0, d.dreDespesas||0, 1);

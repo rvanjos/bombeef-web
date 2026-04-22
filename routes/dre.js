@@ -387,7 +387,17 @@ module.exports = function (pool) {
     ]) {
       await pool.query(`ALTER TABLE dre_lancamentos ADD COLUMN IF NOT EXISTS ${col} ${def}`).catch(()=>{});
     }
-    // Índice por fitid para deduplicação rápida
+    // Garante colunas de resultado calculado (para o Dashboard ler sem recalcular)
+    for (const [col, def] of [
+      ['res_receitas', 'NUMERIC(14,2)'],
+      ['res_despesas', 'NUMERIC(14,2)'],
+      ['res_cmv',      'NUMERIC(14,2)'],
+      ['res_lucro_bruto', 'NUMERIC(14,2)'],
+      ['res_lucro_op',    'NUMERIC(14,2)'],
+      ['res_final',       'NUMERIC(14,2)'],
+    ]) {
+      await pool.query(`ALTER TABLE dre_sessoes ADD COLUMN IF NOT EXISTS ${col} ${def}`).catch(()=>{});
+    }
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_dre_lanc_fitid ON dre_lancamentos(fitid) WHERE fitid IS NOT NULL`).catch(()=>{});
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_dre_sessoes_mes  ON dre_sessoes(mes_ref)`).catch(()=>{});
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_dre_lanc_sessao  ON dre_lancamentos(sessao_id)`).catch(()=>{});
@@ -622,49 +632,79 @@ module.exports = function (pool) {
 
   // ── POST /salvar ───────────────────────────────────────────────────────────
   r.post('/salvar', async (req, res) => {
-    const { sessao_id, mes_ref, descricao, dados_json } = req.body;
+    const { sessao_id, mes_ref, descricao, dados_json, resultado } = req.body;
     if (!mes_ref) return res.status(400).json({ ok: false, erro: 'mes_ref obrigatório' });
     try {
       const uid  = req.user?.id || null;
       const desc = descricao || `Sessão ${mes_ref}`;
       const dadosStr = JSON.stringify(dados_json);
+
+      // Resultado calculado pelo frontend (se enviado)
+      const res_receitas   = resultado?.receitas   != null ? parseFloat(resultado.receitas)   : null;
+      const res_despesas   = resultado?.despesas   != null ? parseFloat(resultado.despesas)   : null;
+      const res_cmv        = resultado?.cmv        != null ? parseFloat(resultado.cmv)        : null;
+      const res_lucro_bruto= resultado?.lucroBruto != null ? parseFloat(resultado.lucroBruto) : null;
+      const res_lucro_op   = resultado?.lucroOp    != null ? parseFloat(resultado.lucroOp)    : null;
+      const res_final      = resultado?.final      != null ? parseFloat(resultado.final)      : null;
+
+      // Colunas de resultado (só atualiza se enviado)
+      const resUpdate = resultado ? `,
+        res_receitas    = COALESCE($RES1, res_receitas),
+        res_despesas    = COALESCE($RES2, res_despesas),
+        res_cmv         = COALESCE($RES3, res_cmv),
+        res_lucro_bruto = COALESCE($RES4, res_lucro_bruto),
+        res_lucro_op    = COALESCE($RES5, res_lucro_op),
+        res_final       = COALESCE($RES6, res_final)` : '';
+
+      function buildParams(base, extraParams=[]) {
+        return [...base, ...(resultado ? [res_receitas, res_despesas, res_cmv, res_lucro_bruto, res_lucro_op, res_final] : []), ...extraParams];
+      }
+
       let sid = null;
 
-      // 1) Tenta atualizar pelo sessao_id (caminho mais comum e seguro)
+      // 1) Tenta atualizar pelo sessao_id
       if (sessao_id) {
-        const upd = await pool.query(
-          `UPDATE dre_sessoes SET descricao=$1, dados_json=$2, atualizado_em=NOW()
-           WHERE id=$3 RETURNING id`,
-          [desc, dadosStr, sessao_id]
-        );
+        const sql = `UPDATE dre_sessoes SET descricao=$1, dados_json=$2, atualizado_em=NOW()
+          ${resultado ? `,res_receitas=$4,res_despesas=$5,res_cmv=$6,res_lucro_bruto=$7,res_lucro_op=$8,res_final=$9` : ''}
+          WHERE id=$3 RETURNING id`;
+        const params = resultado
+          ? [desc, dadosStr, sessao_id, res_receitas, res_despesas, res_cmv, res_lucro_bruto, res_lucro_op, res_final]
+          : [desc, dadosStr, sessao_id];
+        const upd = await pool.query(sql, params);
         if (upd.rows.length) {
           sid = upd.rows[0].id;
-          console.log(`[dre/salvar] UPDATE by id: mes=${mes_ref} sid=${sid} txs=${(dados_json?.transactions||[]).length}`);
+          console.log(`[dre/salvar] UPDATE by id: mes=${mes_ref} sid=${sid} txs=${(dados_json?.transactions||[]).length} resultado=${JSON.stringify(resultado)}`);
         } else {
-          console.warn(`[dre/salvar] sessao_id=${sessao_id} não encontrada no banco para mes=${mes_ref}`);
+          console.warn(`[dre/salvar] sessao_id=${sessao_id} não encontrada para mes=${mes_ref}`);
         }
       }
 
-      // 2) Se não achou pelo id, busca sessão do mesmo mês e atualiza
+      // 2) Busca por mes_ref e atualiza
       if (!sid) {
         const existing = await pool.query(
           `SELECT id FROM dre_sessoes WHERE mes_ref=$1 ORDER BY atualizado_em DESC LIMIT 1`,
           [mes_ref]
         );
         if (existing.rows.length) {
-          await pool.query(
-            `UPDATE dre_sessoes SET descricao=$1, dados_json=$2, usuario_id=COALESCE($3, usuario_id), atualizado_em=NOW()
-             WHERE id=$4`,
-            [desc, dadosStr, uid, existing.rows[0].id]
-          );
+          const sql = resultado
+            ? `UPDATE dre_sessoes SET descricao=$1,dados_json=$2,usuario_id=COALESCE($3,usuario_id),atualizado_em=NOW(),
+               res_receitas=$5,res_despesas=$6,res_cmv=$7,res_lucro_bruto=$8,res_lucro_op=$9,res_final=$10 WHERE id=$4`
+            : `UPDATE dre_sessoes SET descricao=$1,dados_json=$2,usuario_id=COALESCE($3,usuario_id),atualizado_em=NOW() WHERE id=$4`;
+          const params = resultado
+            ? [desc, dadosStr, uid, existing.rows[0].id, res_receitas, res_despesas, res_cmv, res_lucro_bruto, res_lucro_op, res_final]
+            : [desc, dadosStr, uid, existing.rows[0].id];
+          await pool.query(sql, params);
           sid = existing.rows[0].id;
         } else {
           // 3) Cria nova sessão
-          const ins = await pool.query(
-            `INSERT INTO dre_sessoes (mes_ref, descricao, dados_json, usuario_id)
-             VALUES ($1,$2,$3,$4) RETURNING id`,
-            [mes_ref, desc, dadosStr, uid]
-          );
+          const sql = resultado
+            ? `INSERT INTO dre_sessoes (mes_ref,descricao,dados_json,usuario_id,res_receitas,res_despesas,res_cmv,res_lucro_bruto,res_lucro_op,res_final)
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`
+            : `INSERT INTO dre_sessoes (mes_ref,descricao,dados_json,usuario_id) VALUES ($1,$2,$3,$4) RETURNING id`;
+          const params = resultado
+            ? [mes_ref, desc, dadosStr, uid, res_receitas, res_despesas, res_cmv, res_lucro_bruto, res_lucro_op, res_final]
+            : [mes_ref, desc, dadosStr, uid];
+          const ins = await pool.query(sql, params);
           sid = ins.rows[0]?.id;
         }
       }
