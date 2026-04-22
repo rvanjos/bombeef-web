@@ -184,7 +184,10 @@ module.exports = function (pool) {
       if (ate)    { params.push(ate);               conds.push(`ks.semana_ini<=$${params.length}::date`); }
       const where = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
       const { rows } = await pool.query(`
-        SELECT ks.*, k.nome AS kit_nome, k.codigo AS kit_codigo,
+        SELECT ks.id, ks.kit_id, ks.qtd_produzida, ks.qtd_vendida, ks.obs,
+          TO_CHAR(ks.semana_ini,'YYYY-MM-DD') AS semana_ini,
+          TO_CHAR(ks.semana_fim,'YYYY-MM-DD') AS semana_fim,
+          k.nome AS kit_nome, k.codigo AS kit_codigo,
           ROUND(ks.qtd_vendida::numeric/NULLIF(ks.qtd_produzida,0)*100, 1) AS pct_vendido
         FROM kit_semanas ks JOIN kits k ON k.id = ks.kit_id
         ${where} ORDER BY ks.semana_ini DESC, k.nome

@@ -742,8 +742,10 @@ async function carregarSemanas() {
   tbody.innerHTML = _semanas.map(s => {
     const pct = parseFloat(s.pct_vendido||0);
     const pctCor = pct >= 90 ? 'var(--green)' : pct >= 60 ? 'var(--orange)' : 'var(--red-l)';
-    const ini = s.semana_ini ? new Date(s.semana_ini+'T12:00:00').toLocaleDateString('pt-BR') : '—';
-    const fim = s.semana_fim ? new Date(s.semana_fim+'T12:00:00').toLocaleDateString('pt-BR') : '—';
+    const iniStr = s.semana_ini ? String(s.semana_ini).slice(0,10) : null;
+    const fimStr = s.semana_fim ? String(s.semana_fim).slice(0,10) : null;
+    const ini = iniStr ? new Date(iniStr+'T12:00:00').toLocaleDateString('pt-BR') : '—';
+    const fim = fimStr ? new Date(fimStr+'T12:00:00').toLocaleDateString('pt-BR') : '—';
     return `<tr>
       <td style="font-size:12px;white-space:nowrap">${ini} – ${fim}</td>
       <td style="font-weight:600">${s.kit_codigo?s.kit_codigo+' — ':''}${s.kit_nome}</td>
