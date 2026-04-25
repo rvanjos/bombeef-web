@@ -5,8 +5,6 @@
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Análise de Vendas</title>
 <script src="/js/api.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
 :root{--red:#8B0000;--red-l:#C0392B;--green:#1a7a4a;--orange:#c76b00;--blue:#1a5c8a;--purple:#6c3483;
@@ -740,11 +738,7 @@ function toast(msg,dur=3500){
 
 // ── Init ─────────────────────────────────────────────────────────────────────
 window.onBBReady = () => init();
-// Tenta init imediatamente se api já tem token
 if (typeof api !== 'undefined' && api.token()) init();
-// Fallback: tenta novamente após 1s e 3s caso o postMessage demore
-setTimeout(() => { if (!_pronto && typeof api !== 'undefined' && api.token()) init(); }, 1000);
-setTimeout(() => { if (!_pronto && typeof api !== 'undefined' && api.token()) init(); }, 3000);
 
 async function init() {
   if (_pronto) return;
@@ -756,11 +750,12 @@ async function init() {
   document.getElementById('f-ini').value = ini;
   document.getElementById('f-fim').value = fim;
   await carregarDashboard();
-  // Se estiver na aba importar, carrega o histórico agora
   if (document.getElementById('sec-importar')?.classList.contains('active')) {
     carregarHistorico();
   }
 }
 </script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 </body>
 </html>
