@@ -2778,13 +2778,10 @@ async function salvarCategorias() {
 
 // ─── PROVISÃO MÚLTIPLOS MESES ────────────────────────────────────────────────
 // ─── ROYALTIES AUTOMÁTICOS ────────────────────────────────────────────────────
-// Chamado no inicializar() após carregar os dados.
-// Gera/atualiza provisão de royalties para os meses que têm faturamento disponível.
-// Regra: 4,75% do faturamento do mês M → 2 parcelas no mês M+1 (dia 15 e último dia)
-// Se o boleto de royalties já foi pago (existe lançamento com categoria 'Royalties'
-// e fonte diferente de 'ROYALTIES'), remove a provisão automática daquele mês.
+// Regra: taxa configurável (padrão 4,75%) do faturamento do mês M → 2 parcelas no mês M+1
+// Taxa configurável via localStorage('bb_taxa_royalties') ou na aba Config / DRE
 async function gerarRoyaltiesAutomatico() {
-  const TAXA = 0.0475;
+  const TAXA = parseFloat(localStorage.getItem('bb_taxa_royalties') || '4.75') / 100;
   const CAT  = 'Royalties';
 
   // Coleta faturamento disponível por mês (XMenu > meta)
@@ -2836,7 +2833,7 @@ async function gerarRoyaltiesAutomatico() {
     const ultimoDia = new Date(av, mv, 0).getDate();
     const dt1 = `${av}-${String(mv).padStart(2,'0')}-15`;
     const dt2 = `${av}-${String(mv).padStart(2,'0')}-${ultimoDia}`;
-    const desc = `Royalties 4,75% s/ fat ${mesFat}`;
+    const desc = `Royalties ${(TAXA*100).toFixed(2)}% s/ fat ${mesFat}`;
 
     [dt1, dt2].forEach((dt, idx) => {
       TXS.push({

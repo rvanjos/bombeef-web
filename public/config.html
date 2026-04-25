@@ -165,6 +165,29 @@ if(window.self !== window.top){
         </div>
       </div>
       <div class="card">
+        <div class="card-title">🏢 Parâmetros Fiscais</div>
+        <div class="fg-row">
+          <div class="fg">
+            <label>Taxa de Royalties (%)</label>
+            <input type="number" id="cfg-taxa-royalties" value="4.75" step="0.01" min="0" max="100"
+              placeholder="4.75">
+            <div style="font-size:11px;color:var(--muted);margin-top:4px">
+              Usado para calcular a provisão automática de royalties no DRE
+              (2 parcelas: dia 15 e último dia do mês seguinte)
+            </div>
+          </div>
+          <div class="fg">
+            <label>Alíquota Simples Nacional (%)</label>
+            <input type="number" id="cfg-pct-simples" value="8" step="0.01" min="0" max="100"
+              placeholder="8">
+            <div style="font-size:11px;color:var(--muted);margin-top:4px">
+              Estimativa de DAS no DRE (modo Competência = mês atual,
+              modo Caixa = mês anterior)
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
         <div class="card-title">Retiradas de Funcionários</div>
         <div class="fg"><label>Desconto Padrão (%)</label><input type="number" id="cfg-desc" value="100" min="0" max="100">
           <div style="font-size:11px;color:var(--muted);margin-top:4px">100% = produto gratuito · 0% = preço cheio</div>
@@ -376,6 +399,9 @@ async function carregarConfig(){
   document.getElementById('cfg-emoji').value    = c.logo_emoji||'🥩';
   document.getElementById('cfg-dias-val').value = c.dias_alerta_val||7;
   document.getElementById('cfg-desc').value     = c.taxa_desconto_fun||100;
+  // Parâmetros fiscais — lidos do localStorage (compartilhado com DRE e Faturamento)
+  document.getElementById('cfg-taxa-royalties').value = localStorage.getItem('bb_taxa_royalties') || '4.75';
+  document.getElementById('cfg-pct-simples').value    = localStorage.getItem('bb_pct_simples')    || '8';
 }
 
 async function salvarConfig(){
@@ -386,8 +412,15 @@ async function salvarConfig(){
     taxa_desconto_fun:document.getElementById('cfg-desc').value,
   };
   const d = await api.put('/api/config/sistema', body);
-  if(d.ok) toast('✅ Configurações salvas!');
-  else toast('Erro: '+d.erro);
+  if (!d.ok) { toast('Erro: '+d.erro); return; }
+
+  // Salva parâmetros fiscais no localStorage (compartilhado entre DRE e Faturamento)
+  const taxaRoy = parseFloat(document.getElementById('cfg-taxa-royalties').value);
+  const pctSimp = parseFloat(document.getElementById('cfg-pct-simples').value);
+  if (!isNaN(taxaRoy) && taxaRoy >= 0) localStorage.setItem('bb_taxa_royalties', taxaRoy.toString());
+  if (!isNaN(pctSimp) && pctSimp >= 0) localStorage.setItem('bb_pct_simples', pctSimp.toString());
+
+  toast('✅ Configurações salvas!');
 }
 
 // ── Usuários ───────────────────────────────────────────────────────────────
