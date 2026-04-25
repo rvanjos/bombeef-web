@@ -593,9 +593,19 @@ function processarArquivo(arquivo) {
     try {
       const wb = XLSX.read(e.target.result, {type:'array'});
       const ws = wb.Sheets[wb.SheetNames[0]];
-      // raw:true retorna valores nativos (number, string, etc.)
-      // mais confiável que raw:false que depende do locale do Excel
       const raw = XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:null});
+
+      // LOG DE DIAGNÓSTICO — primeiras 5 linhas reais
+      console.log('[vendas] Total linhas SheetJS:', raw.length);
+      console.log('[vendas] Linha 0 (header):', JSON.stringify(raw[0]));
+      console.log('[vendas] Linha 1:', JSON.stringify(raw[1]));
+      console.log('[vendas] Linha 2:', JSON.stringify(raw[2]));
+      console.log('[vendas] Linha 3:', JSON.stringify(raw[3]));
+      if(raw[1]) {
+        const c0 = raw[1][0];
+        console.log('[vendas] col0 type:', typeof c0, 'value:', c0, 'str:', String(c0||''), 'startsWith:', String(c0||'').startsWith('Data:'));
+      }
+      toast('🔍 Diagnóstico no console — abre DevTools (F12) → Console');
 
       _linhasImport = [];
       let dataAtual = null;
