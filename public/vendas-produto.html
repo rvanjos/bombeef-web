@@ -247,12 +247,22 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
     <div class="kpi o"><div class="kpi-l">Classe B (15%)</div><div class="kpi-v" id="abc-b-qtd">—</div><div class="kpi-s">produtos representam 15% fat</div></div>
     <div class="kpi r"><div class="kpi-l">Classe C (5%)</div><div class="kpi-v" id="abc-c-qtd">—</div><div class="kpi-s">cauda longa</div></div>
   </div>
+
+  <!-- Painel de insights estratégicos -->
+  <div class="card" style="margin-bottom:12px;padding:14px 16px">
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);margin-bottom:10px">💡 Análise Estratégica</div>
+    <div id="abc-insights" style="display:flex;flex-direction:column;gap:8px">
+      <div style="color:var(--muted);font-size:12px">Carregando...</div>
+    </div>
+  </div>
+
   <div class="card" style="overflow-x:auto">
     <table class="tbl" id="tbl-abc">
       <thead><tr>
         <th>ABC</th><th>#</th><th>Produto</th>
         <th class="r">Faturamento</th><th class="r">% Fat</th>
         <th class="r">% Acum.</th><th class="r">Qtd</th>
+        <th class="r">Freq.</th><th class="r">Preço Médio</th>
       </tr></thead>
       <tbody id="tbody-abc"></tbody>
     </table>
@@ -498,19 +508,33 @@ async function carregarDiaSemana() {
   _charts['ch-dsem-fat'] = new Chart(ctx1,{type:'bar',data:{labels:lbls,datasets:[{data:rows.map(r=>parseFloat(r.fat_medio_dia)),backgroundColor:'rgba(139,0,0,.7)',borderRadius:4}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>'R$'+Math.round(v/1000)+'k'}},x:{grid:{display:false}}}}});
   _charts['ch-dsem-qtd'] = new Chart(ctx2,{type:'bar',data:{labels:lbls,datasets:[{data:rows.map(r=>parseFloat(r.qtd_total)),backgroundColor:'rgba(26,92,138,.7)',borderRadius:4}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{grid:{display:false}}}}});
 
-  // Top por dia da semana
+  // Top por dia da semana — visualização melhorada
   const topGrid = document.getElementById('top-dsem-grid');
   const porDow = {};
   tops.forEach(t=>{ const d=parseInt(t.dow); if(!porDow[d]) porDow[d]=[]; porDow[d].push(t); });
-  topGrid.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px">
-    ${[0,1,2,3,4,5,6].filter(d=>porDow[d]).map(d=>`
-      <div style="border:1px solid var(--border);border-radius:8px;padding:10px">
-        <div style="font-weight:700;font-size:12px;margin-bottom:8px;color:var(--red)">${DIAS_PT[d]}</div>
-        ${porDow[d].map((p,i)=>`<div style="font-size:11px;padding:2px 0;display:flex;justify-content:space-between">
-          <span style="color:var(--muted)">${i+1}. ${(p.nome||'').slice(0,20)}</span>
-          <span class="mono">${fmt.brl(p.fat_total)}</span>
-        </div>`).join('')}
-      </div>`).join('')}
+  const diasOrdem = [1,2,3,4,5,6,0]; // Seg→Dom
+  const CORES_DIA = {0:'#dc2626',1:'#6366f1',2:'#0891b2',3:'#16a34a',4:'#9333ea',5:'#ea580c',6:'#b91c1c'};
+  topGrid.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;margin-top:4px">
+    ${diasOrdem.filter(d=>porDow[d]).map(d=>{
+      const cor = CORES_DIA[d] || 'var(--red)';
+      const maxFat = parseFloat(porDow[d][0]?.fat_total||0);
+      return `<div style="border:1px solid #eee;border-top:3px solid ${cor};border-radius:10px;padding:14px;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.06)">
+        <div style="font-weight:800;font-size:13px;margin-bottom:10px;color:${cor};letter-spacing:.5px">${DIAS_PT[d].toUpperCase()}</div>
+        ${porDow[d].map((p,i)=>{
+          const pct = maxFat>0 ? Math.round(parseFloat(p.fat_total)/maxFat*100) : 0;
+          return `<div style="margin-bottom:8px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+              <span style="font-size:11px;font-weight:600;color:#333;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+                title="${p.nome}">${i+1}. ${(p.nome||'').slice(0,22)}</span>
+              <span style="font-size:11px;font-family:'DM Mono',monospace;font-weight:700;color:${cor};white-space:nowrap;margin-left:6px">${fmt.brl(p.fat_total)}</span>
+            </div>
+            <div style="background:#f0ebe4;border-radius:3px;height:4px">
+              <div style="background:${cor};width:${pct}%;height:100%;border-radius:3px;opacity:.7"></div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>`;
+    }).join('')}
   </div>`;
 }
 
@@ -523,7 +547,12 @@ async function carregarDiario() {
 
   if(_charts['ch-diario-fat']){_charts['ch-diario-fat'].destroy();}
   const ctx = document.getElementById('ch-diario-fat');
-  _charts['ch-diario-fat'] = new Chart(ctx,{type:'line',data:{labels:sorted.map(r=>r.data_venda.slice(5)),datasets:[{data:sorted.map(r=>parseFloat(r.fat_total)),borderColor:'rgba(26,122,74,.8)',backgroundColor:'rgba(26,122,74,.1)',borderWidth:2,pointRadius:4,tension:.3,fill:true}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>'R$'+Math.round(v/1000)+'k'}},x:{grid:{display:false}}}}});
+  // Formata labels como DD/MM
+  const labels = sorted.map(r => {
+    const s = String(r.data_venda).slice(0,10);
+    return s.slice(8,10)+'/'+s.slice(5,7);
+  });
+  _charts['ch-diario-fat'] = new Chart(ctx,{type:'line',data:{labels,datasets:[{data:sorted.map(r=>parseFloat(r.fat_total)),borderColor:'rgba(26,122,74,.8)',backgroundColor:'rgba(26,122,74,.1)',borderWidth:2,pointRadius:4,tension:.3,fill:true}]},options:{responsive:true,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'R$ '+c.raw.toLocaleString('pt-BR',{minimumFractionDigits:2})}}},scales:{y:{ticks:{callback:v=>'R$'+Math.round(v/1000)+'k'}},x:{grid:{display:false}}}}});
 
   document.getElementById('tbody-diario').innerHTML = [...rows].sort((a,b)=>String(a.data_venda).localeCompare(String(b.data_venda))*-1).map(r=>{
     // Formatar data corretamente (pode vir como string ISO ou Date object)
@@ -550,18 +579,49 @@ async function carregarABC() {
   const rows = d.data || [];
   const fatTotal = rows.reduce((s,r)=>s+parseFloat(r.fat_total),0);
 
-  const cntA = rows.filter(r=>r.abc==='A').length;
-  const cntB = rows.filter(r=>r.abc==='B').length;
-  const cntC = rows.filter(r=>r.abc==='C').length;
-  document.getElementById('abc-a-qtd').textContent = cntA + ' produtos';
-  document.getElementById('abc-b-qtd').textContent = cntB + ' produtos';
-  document.getElementById('abc-c-qtd').textContent = cntC + ' produtos';
+  const rowsA = rows.filter(r=>r.abc==='A');
+  const rowsB = rows.filter(r=>r.abc==='B');
+  const rowsC = rows.filter(r=>r.abc==='C');
+
+  document.getElementById('abc-a-qtd').textContent = rowsA.length + ' produtos';
+  document.getElementById('abc-b-qtd').textContent = rowsB.length + ' produtos';
+  document.getElementById('abc-c-qtd').textContent = rowsC.length + ' produtos';
+
+  // ── Análise estratégica ────────────────────────────────────────────────────
+  const top1     = rows[0];
+  const top1pct  = fatTotal>0 ? (parseFloat(top1?.fat_total||0)/fatTotal*100).toFixed(1) : 0;
+  const top3pct  = fatTotal>0 ? (rowsA.slice(0,3).reduce((s,r)=>s+parseFloat(r.fat_total),0)/fatTotal*100).toFixed(1) : 0;
+  const semVenda = rowsC.filter(r=>parseFloat(r.qtd_total)<2).length;
+  // Produtos A com alta frequência (aparecem quase todo dia)
+  const diasTotal = rows.reduce((m,r)=>Math.max(m,parseInt(r.frequencia||0)),0);
+  const altaFreq  = rowsA.filter(r=>parseInt(r.frequencia||0) >= diasTotal*0.7).length;
+  // Produtos A com baixa frequência (vendem muito em poucos dias — sazonais)
+  const sazonal   = rowsA.filter(r=>parseInt(r.frequencia||0) < diasTotal*0.3 && parseFloat(r.fat_total)>0);
+
+  const insights = [
+    { ico:'🎯', cor:'#1a7a4a', txt:`<strong>Top 1 produto</strong> (${top1?.nome?.slice(0,25)}) representa <strong>${top1pct}%</strong> do faturamento total — dependência de produto único.` },
+    { ico:'📦', cor:'#1a5c8a', txt:`Os <strong>3 primeiros produtos</strong> juntos representam <strong>${top3pct}%</strong> do faturamento. ${parseFloat(top3pct)>30?'Alta concentração — risco se algum faltar.':'Boa diversificação no top.'}` },
+    { ico:'🔁', cor:'#6c3483', txt:`<strong>${altaFreq} produto(s) Classe A</strong> vendem quase todos os dias — são a base do estoque. Nunca devem faltar.` },
+    rowsC.length > 0 ? { ico:'⚠️', cor:'#c76b00', txt:`<strong>${rowsC.length} produtos Classe C</strong> representam apenas 5% do faturamento. ${semVenda} deles venderam menos de 2 unidades — candidatos a corte de mix.` } : null,
+    sazonal.length > 0 ? { ico:'📅', cor:'#b91c1c', txt:`<strong>${sazonal.length} produto(s) Classe A</strong> vendem muito mas com baixa frequência (${sazonal.map(r=>r.nome?.slice(0,18)).slice(0,2).join(', ')}...) — produtos sazonais/especiais. Monitorar disponibilidade.` } : null,
+  ].filter(Boolean);
+
+  const insightsEl = document.getElementById('abc-insights');
+  if (insightsEl) {
+    insightsEl.innerHTML = insights.map(ins=>`
+      <div style="display:flex;gap:10px;align-items:flex-start;padding:10px 12px;background:#fff;border-radius:8px;border-left:3px solid ${ins.cor};box-shadow:0 1px 4px rgba(0,0,0,.06)">
+        <span style="font-size:18px;flex-shrink:0">${ins.ico}</span>
+        <span style="font-size:12px;color:#444;line-height:1.5">${ins.txt}</span>
+      </div>`).join('');
+  }
 
   let acum = 0;
   document.getElementById('tbody-abc').innerHTML = rows.map((r,i)=>{
     acum += parseFloat(r.fat_total);
     const pctAcum = fatTotal>0 ? acum/fatTotal*100 : 0;
     const pctItem = fatTotal>0 ? parseFloat(r.fat_total)/fatTotal*100 : 0;
+    const freq    = parseInt(r.frequencia||0);
+    const freqCor = freq >= diasTotal*0.7 ? 'var(--green)' : freq >= diasTotal*0.3 ? 'var(--orange)' : 'var(--red-l)';
     return `<tr>
       <td><span class="abc-${r.abc?.toLowerCase()}">${r.abc}</span></td>
       <td class="mono" style="color:var(--muted)">${i+1}</td>
@@ -570,6 +630,8 @@ async function carregarABC() {
       <td class="r">${fmt.pct(pctItem)}</td>
       <td class="r" style="font-weight:600;color:${pctAcum<=80?'var(--green)':pctAcum<=95?'var(--orange)':'var(--red-l)'}">${fmt.pct(pctAcum)}</td>
       <td class="r mono">${fmt.n(r.qtd_total)}</td>
+      <td class="r" style="font-size:11px;color:${freqCor};font-weight:600">${freq}x</td>
+      <td class="r mono" style="font-size:11px">${fmt.brl(r.preco_medio)}</td>
     </tr>`;}).join('');
 }
 
