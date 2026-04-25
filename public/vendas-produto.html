@@ -670,6 +670,7 @@ function processarArquivo(arquivo) {
 
 async function confirmarImport() {
   if(!_linhasImport.length) return;
+  if(typeof api === 'undefined') { toast('⚠️ Aguarde o carregamento...'); return; }
   const substituir = document.getElementById('f-substituir').checked;
   const d = await api.post('/api/vendas-produto/importar', {
     nome_arquivo: _nomeArqImport,
@@ -739,12 +740,15 @@ function toast(msg,dur=3500){
 
 // ── Init ─────────────────────────────────────────────────────────────────────
 window.onBBReady = () => init();
+// Tenta init imediatamente se api já tem token
 if (typeof api !== 'undefined' && api.token()) init();
+// Fallback: tenta novamente após 1s e 3s caso o postMessage demore
+setTimeout(() => { if (!_pronto && typeof api !== 'undefined' && api.token()) init(); }, 1000);
+setTimeout(() => { if (!_pronto && typeof api !== 'undefined' && api.token()) init(); }, 3000);
 
 async function init() {
   if (_pronto) return;
   _pronto = true;
-  // Define período padrão: mês atual
   const hoje = new Date();
   const ini = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}-01`;
   const lastDay = new Date(hoje.getFullYear(), hoje.getMonth()+1, 0).getDate();
@@ -752,6 +756,10 @@ async function init() {
   document.getElementById('f-ini').value = ini;
   document.getElementById('f-fim').value = fim;
   await carregarDashboard();
+  // Se estiver na aba importar, carrega o histórico agora
+  if (document.getElementById('sec-importar')?.classList.contains('active')) {
+    carregarHistorico();
+  }
 }
 </script>
 </body>
