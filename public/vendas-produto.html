@@ -399,16 +399,18 @@ async function carregarDashboard() {
     <div class="kpi o"><div class="kpi-l">Ticket Médio/Item</div><div class="kpi-v">${fmt.brl(k.ticket_medio_item)}</div><div class="kpi-s">por item vendido</div></div>
   `;
 
-  // Gráfico faturamento por dia
-  const diasOrd = [...dias].sort((a,b)=>a.data_venda.localeCompare(b.data_venda));
-  renderChart('ch-fat-dia','line',diasOrd.map(d=>d.data_venda.slice(5)),diasOrd.map(d=>parseFloat(d.fat_dia)),'Faturamento','rgba(26,122,74,0.7)','rgba(26,122,74,0.2)');
+  // Gráfico faturamento por dia — normaliza datas (pode vir como ISO timestamp)
+  const diasOrd = [...dias].sort((a,b)=>String(a.data_venda).localeCompare(String(b.data_venda)));
+  const diasLabels = diasOrd.map(d => String(d.data_venda).slice(5,10)); // MM-DD
+  renderChart('ch-fat-dia','line', diasLabels, diasOrd.map(d=>parseFloat(d.fat_dia)),'Faturamento','rgba(26,122,74,0.7)','rgba(26,122,74,0.2)');
 
-  // Gráfico por dia da semana (do resumo)
+  // Gráfico por dia da semana
   const porDsem = {};
   diasOrd.forEach(d=>{
-    const dow = new Date(d.data_venda+'T12:00:00').getDay();
+    const dtStr = String(d.data_venda).slice(0,10);
+    const dow = new Date(dtStr+'T12:00:00').getDay();
     if(!porDsem[dow]) porDsem[dow]={fat:0,n:0};
-    porDsem[dow].fat+=parseFloat(d.fat_dia); porDsem[dow].n++;
+    porDsem[dow].fat+=parseFloat(d.fat_dia||0); porDsem[dow].n++;
   });
   const dsemLabels=[], dsemVals=[];
   [0,1,2,3,4,5,6].forEach(i=>{ if(porDsem[i]){dsemLabels.push(DIAS_PT[i]); dsemVals.push(Math.round(porDsem[i].fat/porDsem[i].n));} });
@@ -523,13 +525,16 @@ async function carregarDiario() {
   const ctx = document.getElementById('ch-diario-fat');
   _charts['ch-diario-fat'] = new Chart(ctx,{type:'line',data:{labels:sorted.map(r=>r.data_venda.slice(5)),datasets:[{data:sorted.map(r=>parseFloat(r.fat_total)),borderColor:'rgba(26,122,74,.8)',backgroundColor:'rgba(26,122,74,.1)',borderWidth:2,pointRadius:4,tension:.3,fill:true}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>'R$'+Math.round(v/1000)+'k'}},x:{grid:{display:false}}}}});
 
-  document.getElementById('tbody-diario').innerHTML = [...rows].sort((a,b)=>b.data_venda.localeCompare(a.data_venda)).map(r=>{
-    const dt = new Date(r.data_venda+'T12:00:00');
-    const dow = DIAS_PT[dt.getDay()];
-    const pct = rows.reduce((s,x)=>s+parseFloat(x.fat_total),0);
-    const bar = pct>0 ? Math.round(parseFloat(r.fat_total)/pct*100) : 0;
+  document.getElementById('tbody-diario').innerHTML = [...rows].sort((a,b)=>String(a.data_venda).localeCompare(String(b.data_venda))*-1).map(r=>{
+    // Formatar data corretamente (pode vir como string ISO ou Date object)
+    const dtStr = String(r.data_venda).slice(0,10); // pega só YYYY-MM-DD
+    const dt    = new Date(dtStr+'T12:00:00');
+    const dtFmt = dt.toLocaleDateString('pt-BR');
+    const dow   = DIAS_PT[dt.getDay()];
+    const fatTotal = rows.reduce((s,x)=>s+parseFloat(x.fat_total),0);
+    const bar = fatTotal>0 ? Math.round(parseFloat(r.fat_total)/fatTotal*100) : 0;
     return `<tr>
-      <td>${r.data_venda}</td>
+      <td>${dtFmt}</td>
       <td>${dow}</td>
       <td class="r mono" style="color:var(--green);font-weight:700">${fmt.brl(r.fat_total)}</td>
       <td class="r mono">${fmt.n(r.qtd_total)}</td>

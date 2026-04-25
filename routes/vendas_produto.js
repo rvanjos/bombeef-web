@@ -113,7 +113,8 @@ module.exports = (pool) => {
         FROM vendas_produto ${where}
       `);
       const { rows: dias } = await pool.query(`
-        SELECT data_venda, SUM(valor_total) AS fat_dia, SUM(quantidade) AS qtd_dia
+        SELECT TO_CHAR(data_venda,'YYYY-MM-DD') AS data_venda,
+          SUM(valor_total) AS fat_dia, SUM(quantidade) AS qtd_dia
         FROM vendas_produto ${where}
         GROUP BY data_venda ORDER BY fat_dia DESC
       `);
@@ -220,7 +221,7 @@ module.exports = (pool) => {
     try {
       const where = ini && fim ? `WHERE data_venda BETWEEN '${ini}' AND '${fim}'` : '';
       const { rows } = await pool.query(`
-        SELECT data_venda,
+        SELECT TO_CHAR(data_venda,'YYYY-MM-DD') AS data_venda,
           SUM(valor_total)           AS fat_total,
           SUM(quantidade)            AS qtd_total,
           COUNT(DISTINCT codigo)     AS produtos_distintos,
