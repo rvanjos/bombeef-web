@@ -279,6 +279,7 @@ td{padding:5px 9px;vertical-align:middle;}
         <button class="btn bs" style="padding:4px 10px;font-size:11px" onclick="importBoletos()" title="Importar boletos e provisões do sistema">📄 Boletos DB</button>
         <button class="btn bs" style="padding:4px 10px;font-size:11px" onclick="abrirManual()" title="Adicionar lançamento manual">＋ Manual</button>
         <button class="btn bs" style="padding:4px 10px;font-size:11px" onclick="abrirProvisao()" title="Provisão recorrente em múltiplos meses">📅 Provisão</button>
+        <button class="btn bs" style="padding:4px 10px;font-size:11px;background:#fef3c7;border-color:#fcd34d;color:#854d0e" onclick="abrirRoyalties()" title="Gerar provisão automática de royalties (4,75% do faturamento)">🏢 Royalties</button>
         <button class="btn bs" style="padding:4px 10px;font-size:11px" onclick="abrirCategorias()" title="Gerenciar categorias DRE">⚙️ Categorias</button>
         <button class="btn bs" style="padding:4px 10px;font-size:11px" id="btn-expand" onclick="toggleExpandido()" title="Expandir/compactar área da tabela">⤢ Expandir</button>
       </div>
@@ -422,6 +423,45 @@ td{padding:5px 9px;vertical-align:middle;}
 
 <!-- Modal Provisão Múltiplos Meses -->
 <div class="mbg" id="m-provisao">
+
+<!-- Modal Royalties -->
+<div class="mbg" id="m-royalties">
+  <div class="md" style="max-width:480px">
+    <div class="mdh"><h3>🏢 Provisão de Royalties</h3><button class="mdx" onclick="fecharModal('m-royalties')">×</button></div>
+    <div class="mdb">
+      <div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:12px 14px;margin-bottom:14px;font-size:12px;color:#854d0e">
+        <strong>Regra:</strong> 4,75% do faturamento do mês anterior · 2 parcelas iguais ·
+        vencimento dia 15 e último dia do mês seguinte
+      </div>
+      <div class="fgr">
+        <div class="fg">
+          <label>Mês base do faturamento *</label>
+          <input type="text" id="ry-mes-base" placeholder="MM/YYYY" maxlength="7"
+            oninput="calcRoyalties()" style="font-family:'DM Mono',monospace">
+        </div>
+        <div class="fg">
+          <label>Taxa (%)</label>
+          <input type="number" id="ry-taxa" value="4.75" step="0.01" min="0"
+            oninput="calcRoyalties()" style="font-family:'DM Mono',monospace">
+        </div>
+      </div>
+      <div class="fg">
+        <label>Faturamento base (R$)</label>
+        <input type="number" id="ry-fat" step="100" min="0" placeholder="Será buscado automaticamente"
+          oninput="calcRoyalties()">
+        <div id="ry-fat-hint" style="font-size:11px;color:var(--muted);margin-top:3px"></div>
+      </div>
+      <div id="ry-preview" style="display:none;background:#f0faf4;border-radius:8px;padding:12px 14px;margin-top:8px">
+        <div style="font-size:12px;font-weight:700;color:var(--green);margin-bottom:8px">📋 Parcelas a gerar:</div>
+        <div id="ry-preview-body" style="font-size:12px"></div>
+      </div>
+    </div>
+    <div class="mdf">
+      <button class="btn bs" onclick="fecharModal('m-royalties')">Cancelar</button>
+      <button class="btn bg" onclick="salvarRoyalties()">✅ Gerar Royalties</button>
+    </div>
+  </div>
+</div>
   <div class="md" style="max-width:520px">
     <div class="mdh"><h3>📅 Provisão de Despesa</h3><button class="mdx" onclick="fecharModal('m-provisao')">×</button></div>
     <div class="mdb">
@@ -540,7 +580,7 @@ const GRUPO_LABELS = {
   FINANCEIRAS:'DESPESAS FINANCEIRAS',
   OUTRAS:     'OUTRAS DESPESAS OPERACIONAIS',
   IMPOSTOS:   'IMPOSTOS, TAXAS E CONTRIBUIÇÕES',
-  NAO_OPER:   'NÃO OPERACIONAL (conferência)',  // não impacta resultado
+  NAO_OPER:   'NÃO OPERACIONAL (conferência)',
 };
 
 // Categorias que aparecem na tela mas NÃO impactam resultado (nem receita nem despesa)
@@ -2682,6 +2722,142 @@ async function salvarCategorias() {
 }
 
 // ─── PROVISÃO MÚLTIPLOS MESES ────────────────────────────────────────────────
+// ─── ROYALTIES ────────────────────────────────────────────────────────────────
+function abrirRoyalties() {
+  // Sugere mês atual como base (faturamento do mês atual → royalties no próximo)
+  document.getElementById('ry-mes-base').value = mesRef;
+  document.getElementById('ry-taxa').value = '4.75';
+  document.getElementById('ry-fat').value = '';
+  document.getElementById('ry-preview').style.display = 'none';
+
+  // Tenta buscar faturamento automaticamente
+  _buscarFatRoyalties(mesRef);
+  document.getElementById('m-royalties').classList.add('open');
+}
+
+async function _buscarFatRoyalties(mes) {
+  const hint = document.getElementById('ry-fat-hint');
+  hint.textContent = '⏳ Buscando faturamento...';
+
+  // 1. Tenta do localStorage (Faturamento XMenu)
+  try {
+    const fatMes = JSON.parse(localStorage.getItem('bb_fat_por_mes') || '{}');
+    if (fatMes[mes] > 0) {
+      document.getElementById('ry-fat').value = fatMes[mes].toFixed(2);
+      hint.textContent = `✅ Faturamento XMenu de ${mes}: ${fmt.brl(fatMes[mes])}`;
+      calcRoyalties();
+      return;
+    }
+  } catch(_) {}
+
+  // 2. Tenta buscar meta/expectativa do módulo Faturamento
+  try {
+    const d = await api.get('/api/faturamento/metas');
+    if (d.ok && d.data) {
+      const meta = d.data.find(m => m.mes_ref === mes);
+      if (meta?.meta > 0) {
+        document.getElementById('ry-fat').value = parseFloat(meta.meta).toFixed(2);
+        hint.textContent = `📊 Meta de faturamento de ${mes}: ${fmt.brl(meta.meta)} (faturamento real não disponível)`;
+        calcRoyalties();
+        return;
+      }
+    }
+  } catch(_) {}
+
+  hint.textContent = '⚠️ Faturamento não encontrado — informe manualmente';
+  calcRoyalties();
+}
+
+function calcRoyalties() {
+  const mesBase = document.getElementById('ry-mes-base').value.trim();
+  const taxa    = parseFloat(document.getElementById('ry-taxa').value) / 100;
+  const fat     = parseFloat(document.getElementById('ry-fat').value) || 0;
+  const preview = document.getElementById('ry-preview');
+  const body    = document.getElementById('ry-preview-body');
+
+  if (!mesBase || !fat || !taxa) { preview.style.display = 'none'; return; }
+
+  const [mm, yy] = mesBase.split('/');
+  if (!mm || !yy) { preview.style.display = 'none'; return; }
+
+  // Mês de vencimento = mês seguinte ao base
+  let mesVenc = parseInt(mm) + 1;
+  let anoVenc = parseInt(yy);
+  if (mesVenc > 12) { mesVenc = 1; anoVenc++; }
+  const mesVencStr = String(mesVenc).padStart(2,'0') + '/' + anoVenc;
+
+  // Último dia do mês de vencimento
+  const ultimoDia = new Date(anoVenc, mesVenc, 0).getDate();
+  const dt1 = `${anoVenc}-${String(mesVenc).padStart(2,'0')}-15`;
+  const dt2 = `${anoVenc}-${String(mesVenc).padStart(2,'0')}-${ultimoDia}`;
+
+  const parcela = fat * taxa;
+  const total   = parcela * 2;
+
+  preview.style.display = '';
+  body.innerHTML = `
+    <div style="display:grid;gap:6px">
+      <div style="display:flex;justify-content:space-between;padding:6px 8px;background:#fff;border-radius:5px;border:1px solid #d1fae5">
+        <span>📅 Parcela 1 — vence <strong>${dt1.split('-').reverse().join('/')}</strong></span>
+        <span style="font-family:'DM Mono',monospace;font-weight:700;color:var(--red-l)">-${fmt.brl(parcela)}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;padding:6px 8px;background:#fff;border-radius:5px;border:1px solid #d1fae5">
+        <span>📅 Parcela 2 — vence <strong>${dt2.split('-').reverse().join('/')}</strong></span>
+        <span style="font-family:'DM Mono',monospace;font-weight:700;color:var(--red-l)">-${fmt.brl(parcela)}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;padding:6px 8px;background:#f0fdf4;border-radius:5px;font-weight:700">
+        <span>Total Royalties (${(taxa*100).toFixed(2)}% × 2)</span>
+        <span style="font-family:'DM Mono',monospace;color:var(--red-l)">-${fmt.brl(total)}</span>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:2px">
+        Base: ${fmt.brl(fat)} × ${(taxa*100).toFixed(2)}% = ${fmt.brl(parcela)}/parcela · Mês de competência: ${mesVencStr}
+      </div>
+    </div>`;
+}
+
+function salvarRoyalties() {
+  const mesBase = document.getElementById('ry-mes-base').value.trim();
+  const taxa    = parseFloat(document.getElementById('ry-taxa').value) / 100;
+  const fat     = parseFloat(document.getElementById('ry-fat').value) || 0;
+
+  if (!mesBase || !fat || !taxa) { toast('⚠️ Preencha o mês base e o faturamento'); return; }
+
+  const [mm, yy] = mesBase.split('/');
+  if (!mm || !yy) { toast('⚠️ Mês base inválido. Use MM/YYYY'); return; }
+
+  let mesVenc = parseInt(mm) + 1;
+  let anoVenc = parseInt(yy);
+  if (mesVenc > 12) { mesVenc = 1; anoVenc++; }
+  const mesStr = String(mesVenc).padStart(2,'0') + '/' + anoVenc;
+  const ultimoDia = new Date(anoVenc, mesVenc, 0).getDate();
+  const dt1 = `${anoVenc}-${String(mesVenc).padStart(2,'0')}-15`;
+  const dt2 = `${anoVenc}-${String(mesVenc).padStart(2,'0')}-${ultimoDia}`;
+  const parcela = fat * taxa;
+  const desc    = `Royalties ${(taxa*100).toFixed(2)}% s/ fat ${mesBase}`;
+
+  // Remove royalties anteriores do mesmo mês para evitar duplicata
+  TXS = TXS.filter(t => !(t.fonte === 'ROYALTIES' && t.mes === mesStr));
+
+  // Adiciona 2 parcelas
+  ['1', '2'].forEach((parc, idx) => {
+    TXS.push({
+      id:         'roy_' + Date.now() + '_' + idx,
+      lancamento: desc + ` P${parc}/2`,
+      valor:      -parcela,
+      data:       idx === 0 ? dt1 : dt2,
+      mes:        mesStr,
+      mesCaixa:   mesStr,
+      categoria:  'Royalties',
+      fonte:      'ROYALTIES',
+      razaoSocial: 'Franquia / Royalties',
+    });
+  });
+
+  toast(`✅ 2 parcelas de royalties adicionadas em ${mesStr}`);
+  fecharModal('m-royalties');
+  showTable(); updMesFiltro(); render(); updStats(); renderDRE(); autoSv();
+}
+
 function abrirProvisao(){
   const hoje = new Date().toISOString().slice(0,10);
   document.getElementById('pv-dt').value = hoje;
