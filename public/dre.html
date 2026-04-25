@@ -1182,14 +1182,14 @@ function parseFaturaC6(text) {
 }
 
 function parseFaturaCaixa(text) {
-  // Ano de vencimento
+  // Ano de referência: usa data de vencimento se disponível
   const anoMatch = text.match(/(\d{2})\/(\d{2})\/(\d{4})/);
-  const anoRef = anoMatch ? parseInt(anoMatch[3]) : new Date().getFullYear();
+  const anoRef   = anoMatch ? parseInt(anoMatch[3]) : new Date().getFullYear();
   const mesVencNum = anoMatch ? parseInt(anoMatch[2]) : 1;
 
   const result = [];
   let portadorAtual = '';
-  let emLancamentos = false;
+  let emCompras = false; // dentro de seção COMPRAS ou ANUIDADE
 
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
 
@@ -1197,60 +1197,100 @@ function parseFaturaCaixa(text) {
     const line = lines[i];
 
     // Portador: "RAFAEL VIEIRA DOS ANJOS (Cartão 9284)"
-    const mPortador = line.match(/^([A-ZÁÀÃÂÉÊÍÓÔÕÚÇ\s]+)\s*\(Cart[aã]o\s+(\d+)\)/i);
-    if (mPortador) {
-      portadorAtual = `${mPortador[1].trim()} (Caixa ${mPortador[2]})`;
-      emLancamentos = false;
+    const mPort = line.match(/([A-ZÁÀÃÂÉÊÍÓÔÕÚÇ\s]+)\s*\(Cart[aã]o\s+(\d+)\)/i);
+    if (mPort) {
+      portadorAtual = `${mPort[1].trim()} (Caixa ${mPort[2]})`;
+      emCompras = false;
       continue;
     }
 
-    // Cabeçalho de seção de lançamentos
-    if (/^(COMPRAS|ANUIDADE|COMPRAS PARCELADAS)/i.test(line)) {
-      emLancamentos = true;
+    // Início de seção de compras/anuidade
+    if (/^(COMPRAS|ANUIDADE|COMPRAS PARCELADAS)\s*(\(|$)/i.test(line)) {
+      emCompras = true;
       continue;
     }
 
-    // Total — encerra seção
-    if (/^Total\s+(COMPRAS|ANUIDADE|final|de\s+lançamentos)/i.test(line)) {
-      emLancamentos = false;
+    // Fim de seção (totais)
+    if (/^Total\s+(COMPRAS|ANUIDADE|final|de\s+lançamentos|PARCELADAS)/i.test(line)) {
+      emCompras = false;
       continue;
     }
+    if (/^Valor total desta fatura/i.test(line)) break; // fim do demonstrativo
 
-    // Ignora linhas de header da tabela
+    // Ignora cabeçalhos de tabela e linhas de pagamento
     if (/^Data\s+Descri/i.test(line)) continue;
+    if (/^(TOTAL DA FATURA|OBRIGADO PELO|CASHBACK ANUIDADE|AJUSTE CREDITO PARC)/i.test(line)) continue;
 
-    if (!emLancamentos) continue;
-
-    // Lançamento Caixa: "06/12 TENDA ATACADO S A CAMPINAS 10,75D"
-    // ou sem cidade: "22/12 Amazon Kindle Unltd SAO PAULO 24,90D"
-    // Padrão: DD/MM DESCRIÇÃO [CIDADE] VALOR[D|C]
-    const mLanc = line.match(/^(\d{2})\/(\d{2})\s+(.+?)\s+([\d.,]+)\s*([DC])\s*$/i);
-    if (mLanc) {
-      const dia = mLanc[1], mm = mLanc[2];
-      const ano = parseInt(mm) > mesVencNum + 1 ? anoRef - 1 : anoRef;
-      const dt  = `${ano}-${mm}-${dia}`;
-      const descRaw = mLanc[3].trim();
-      const tipo    = mLanc[5].toUpperCase(); // D=débito, C=crédito
-
-      // Ignora créditos (pagamentos, estornos que zero o saldo)
-      // Cashback mantém pois é receita — mas aqui só importamos despesas
-      if (tipo === 'C' && /pagamento|cashback/i.test(descRaw)) continue;
-
-      let v = parseFloat(mLanc[4].replace(/\./g,'').replace(',','.')) || 0;
+    // ANUIDADE sem data: "ANUIDADE DIFERENCIADA TIT 05/ 12 6,90D"
+    const mAnuid = line.match(/^(ANUIDADE\s+.+?)\s+([\d.,]+)\s*D\s*$/i);
+    if (mAnuid && emCompras) {
+      const desc = mAnuid[1].trim();
+      const v    = -Math.abs(parseFloat(mAnuid[2].replace(/\./g,'').replace(',','.')) || 0);
       if (!v) continue;
-      v = tipo === 'C' ? Math.abs(v) : -Math.abs(v); // C = crédito/estorno positivo
-
-      const mes = `${mm}/${ano}`;
+      // Usa data de vencimento como referência
+      const mm = String(mesVencNum).padStart(2,'0');
       result.push({
-        id: 'cc_'+Date.now()+'_'+i,
-        lancamento: portadorAtual || descRaw,
-        valor: v, data: dt, mes, mesCaixa: mes,
-        categoria: autoClassificar(descRaw, portadorAtual),
+        id: 'cc_'+Date.now()+'_anu_'+i,
+        lancamento: desc,
+        valor: v,
+        data: `${anoRef}-${mm}-01`,
+        mes: `${mm}/${anoRef}`,
+        mesCaixa: `${mm}/${anoRef}`,
+        categoria: autoClassificar(desc, portadorAtual),
         fonte: 'CC',
         portador: portadorAtual,
-        razaoSocial: descRaw,
+        razaoSocial: desc,
       });
+      continue;
     }
+
+    // Lançamento padrão: "DD/MM DESCRIÇÃO [PARCELA] CIDADE VALOR[D|C]"
+    // Ex: "09/01 CLUBE DA PICANHA SUMARE 1.237,71D"
+    // Ex: "24/06 AUTOMACAO 2000 08 DE 12 SAO BERNARDO 510,00D"
+    const mLanc = line.match(/^(\d{2})\/(\d{2})\s+(.+?)\s+([\d.,]+)\s*([DC])\s*$/i);
+    if (!mLanc) continue;
+
+    const dia = mLanc[1], mm = mLanc[2];
+    const ano = parseInt(mm) > mesVencNum + 2 ? anoRef - 1 : anoRef;
+    const dt  = `${ano}-${mm}-${dia}`;
+    const descRaw = mLanc[3].trim();
+    const tipo    = mLanc[5].toUpperCase();
+
+    // Ignora créditos de pagamento/cashback
+    if (tipo === 'C' && /pagamento|cashback|obrigado|ajuste credito/i.test(descRaw)) continue;
+
+    let v = parseFloat(mLanc[4].replace(/\./g,'').replace(',','.')) || 0;
+    if (!v) continue;
+    v = tipo === 'C' ? Math.abs(v) : -Math.abs(v);
+
+    // Limpa "08 DE 12" (parcela) da descrição e extrai info de parcela
+    const mParc = descRaw.match(/^(.+?)\s+(\d{2})\s+DE\s+(\d{2})\s+(.*)$/i);
+    let descFinal, parcelaInfo;
+    if (mParc) {
+      // Remove a cidade (última palavra) para ficar mais limpo
+      const semCidade = mParc[1].trim();
+      parcelaInfo = `Parc ${mParc[2]}/${mParc[3]}`;
+      descFinal = `${semCidade} (${parcelaInfo})`;
+    } else {
+      // Remove última palavra que geralmente é a cidade
+      const partes = descRaw.split(/\s+/);
+      const cidade = partes.pop();
+      descFinal = partes.join(' ') || descRaw;
+    }
+
+    const mesStr = `${mm}/${ano}`;
+    result.push({
+      id: 'cc_'+Date.now()+'_'+i,
+      lancamento: descFinal || descRaw,
+      valor: v,
+      data: dt,
+      mes: mesStr,
+      mesCaixa: mesStr,
+      categoria: autoClassificar(descFinal || descRaw, portadorAtual),
+      fonte: 'CC',
+      portador: portadorAtual,
+      razaoSocial: descFinal || descRaw,
+    });
   }
   return result;
 }
