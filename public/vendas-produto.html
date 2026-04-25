@@ -593,37 +593,46 @@ function processarArquivo(arquivo) {
     try {
       const wb = XLSX.read(e.target.result, {type:'array'});
       const ws = wb.Sheets[wb.SheetNames[0]];
-      const raw = XLSX.utils.sheet_to_json(ws, {header:1, raw:false, defval:''});
+      // raw:true retorna valores nativos (number, string, etc.)
+      // mais confiável que raw:false que depende do locale do Excel
+      const raw = XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:null});
 
       _linhasImport = [];
       let dataAtual = null;
 
       for(let i=1; i<raw.length; i++) {
         const row = raw[i];
-        const col0 = String(row[0]||'').trim();
+        if(!row || row.length === 0) continue;
 
-        // Linha de data
-        if(col0.startsWith('Data:')) {
-          const dtStr = col0.replace('Data:','').trim().slice(0,10);
+        const col0 = row[0];
+        const col0str = col0 !== null && col0 !== undefined ? String(col0).trim() : '';
+
+        // Linha de data: começa com 'Data:'
+        if(col0str.startsWith('Data:')) {
+          const dtStr = col0str.replace('Data:','').trim().slice(0,10);
           dataAtual = dtStr;
           continue;
         }
 
-        // Linha de total geral (código numérico sem nome = total)
-        if(!row[1] || String(row[1]).trim()==='') continue;
+        // Linha de total geral ou inválida: sem nome
+        const col1 = row[1];
+        if(col1 === null || col1 === undefined || String(col1).trim() === '') continue;
 
         // Linha de produto
-        const codigo = String(row[0]||'').trim();
-        const nome   = String(row[1]||'').trim();
-        const qtd    = parseBRL(String(row[2]||'0'));
-        const val    = parseBRL(String(row[3]||'0'));
+        const codigo = col0str;
+        const nome   = String(col1).trim();
+        const qtd    = parseBRL(row[2]);
+        const val    = parseBRL(row[3]);
 
-        if(!codigo || !nome || !dataAtual) continue;
-        if(isNaN(parseInt(codigo))) continue; // ignora linhas não-produto
+        // Código deve ser numérico
+        if(!codigo || isNaN(parseInt(codigo))) continue;
+        if(!nome || !dataAtual) continue;
 
         _linhasImport.push({
           data_venda: dataAtual,
-          codigo, nome, quantidade: qtd, valor_total: val
+          codigo, nome,
+          quantidade:  qtd,
+          valor_total: val
         });
       }
 
