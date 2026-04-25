@@ -294,6 +294,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
 <div id="toast"></div>
 
 <script>
+const {api} = BB;  // ← exposto pelo api.js como window.BB.api
 const DIAS_PT = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
 const fmt = {
   brl: v => 'R$ ' + parseFloat(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}),
