@@ -370,9 +370,9 @@ function queryStr(extras={}) {
 async function carregarDashboard() {
   const d = await api.get('/api/vendas-produto/resumo'+queryStr());
   if(!d.ok) return;
-  const k = d.data.kpis;
-  const dias = d.data.dias || [];
-  const top = d.data.top10 || [];
+  const k    = d.kpis  || { fat_total:0, qtd_total:0, produtos_distintos:0, dias_com_venda:0, ticket_medio_item:0 };
+  const dias = d.dias  || [];
+  const top  = d.top10 || [];
 
   // Atualiza período no header
   if(dias.length) {
@@ -454,7 +454,7 @@ async function carregarProdutos() {
   const ordem = document.getElementById('ordem-prod').value;
   const d = await api.get('/api/vendas-produto/produtos'+queryStr({ordem}));
   if(!d.ok) return;
-  _dados.produtos = d.data.data || [];
+  _dados.produtos = d.data || [];
   renderProdutos(_dados.produtos);
 }
 
@@ -484,8 +484,8 @@ async function carregarDiaSemana() {
     api.get('/api/vendas-produto/top-por-dia-semana'+queryStr({limite:'5'}))
   ]);
   if(!d1.ok || !d2.ok) return;
-  const rows = d1.data.data || [];
-  const tops  = d2.data.data || [];
+  const rows = d1.data || [];
+  const tops  = d2.data || [];
 
   // Gráficos
   if(_charts['ch-dsem-fat']){_charts['ch-dsem-fat'].destroy();}
@@ -516,7 +516,7 @@ async function carregarDiaSemana() {
 async function carregarDiario() {
   const d = await api.get('/api/vendas-produto/por-data'+queryStr());
   if(!d.ok) return;
-  const rows = d.data.data || [];
+  const rows = d.data || [];
   const sorted = [...rows].sort((a,b)=>a.data_venda.localeCompare(b.data_venda));
 
   if(_charts['ch-diario-fat']){_charts['ch-diario-fat'].destroy();}
@@ -542,7 +542,7 @@ async function carregarDiario() {
 async function carregarABC() {
   const d = await api.get('/api/vendas-produto/produtos'+queryStr({ordem:'fat'}));
   if(!d.ok) return;
-  const rows = d.data.data || [];
+  const rows = d.data || [];
   const fatTotal = rows.reduce((s,r)=>s+parseFloat(r.fat_total),0);
 
   const cntA = rows.filter(r=>r.abc==='A').length;
