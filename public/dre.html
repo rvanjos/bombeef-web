@@ -546,6 +546,7 @@ const GRUPO_LABELS = {
 // Categorias que aparecem na tela mas NÃO impactam resultado (nem receita nem despesa)
 const CATS_NAO_OPERACIONAIS = new Set([
   'Transferência entre contas',
+  'Pagamento de Cartão',  // pagamento da fatura → neutro, pois os itens da fatura já são as despesas
 ]);
 
 // Categorias de retirada de sócios — impactam SOMENTE após resultado operacional+financeiro
@@ -1692,10 +1693,15 @@ function setCat(id, cat) {
   const t = TXS.find(x => String(x.id)===String(id)); if (!t) return;
   t.categoria = cat;
   if (cat) t.needsReview = false;
-  // Garante que t.mes está preenchido — evita que lançamento fique "sem mês"
   if (!t.mes) t.mes = mesRef;
   if (!t.mesCaixa) t.mesCaixa = mesRef;
-  // Só salva no supMem se for uma categoria válida do CATS
+
+  // Quando classifica como "Pagamento de Cartão", vincula automaticamente
+  // os lançamentos CC do mesmo mês/valor se ainda não vinculados
+  if (cat === 'Pagamento de Cartão') {
+    vincularFaturaCartao(t);
+  }
+
   const catValida = cat && Object.values(CATS).some(g => g.s.includes(cat));
   if (catValida) {
     const k = _chaveFornecedor(t);
@@ -1714,6 +1720,38 @@ function setCat(id, cat) {
   updStats();
   const mesLanc = t.mes || mesRef;
   salvarMesDebounce(mesLanc);
+}
+
+// Vincula lançamento de pagamento de cartão aos itens da fatura CC
+function vincularFaturaCartao(pagTx) {
+  const valorPag = Math.abs(parseFloat(pagTx.valor||0));
+  if (valorPag < 1) return;
+
+  // Busca lançamentos CC do mesmo mês (ou mês anterior — fatura pode ser do mês anterior)
+  const [mm, yy] = (pagTx.mesCaixa || pagTx.mes || mesRef).split('/');
+  const mesAnterior = parseInt(mm) === 1
+    ? `12/${parseInt(yy)-1}`
+    : `${String(parseInt(mm)-1).padStart(2,'0')}/${yy}`;
+
+  const itensFatura = TXS.filter(t =>
+    t.fonte === 'CC' &&
+    (t.mes === pagTx.mes || t.mes === mesAnterior)
+  );
+
+  if (!itensFatura.length) return;
+
+  const totalFatura = Math.abs(itensFatura.reduce((s,t) => s + parseFloat(t.valor||0), 0));
+  const diff = Math.abs(valorPag - totalFatura);
+  const bateValor = diff < valorPag * 0.05; // tolerância de 5%
+
+  if (bateValor) {
+    // Vincula: marca o pagamento com referência à fatura
+    pagTx.vinculadoFaturaCC = true;
+    pagTx.totalFaturaCC = totalFatura;
+    toast(`✅ Pagamento vinculado à fatura CC: ${fmt.brl(totalFatura)} (${itensFatura.length} lançamentos)`, 5000);
+  } else {
+    toast(`⚠️ Pagamento de cartão: valor ${fmt.brl(valorPag)} difere da fatura CC importada (${fmt.brl(totalFatura)}). Verifique se a fatura foi importada.`, 6000);
+  }
 }
 
 const _svMes = {}; // debounce por mês
