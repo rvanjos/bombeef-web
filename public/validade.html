@@ -59,7 +59,9 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
 select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px;background:var(--white);cursor:pointer;}
 
 /* ── TABELA COM CORES POR URGÊNCIA ── */
-.card{background:var(--white);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);overflow:hidden;}
+.card{background:var(--white);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);}
+tr[onclick]{touch-action:pan-y;-webkit-tap-highlight-color:rgba(0,0,0,0.05);}
+*{-webkit-overflow-scrolling:touch;}
 .tbl{width:100%;border-collapse:collapse;}
 .tbl th{background:#fdf6ee;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700;padding:9px 12px;text-align:left;border-bottom:2px solid var(--border);}
 .tbl td{padding:8px 12px;font-size:12px;border-bottom:1px solid #f5efe8;vertical-align:middle;}
@@ -771,7 +773,7 @@ function _mkDashRow(v) {
   const acao = v.acao_antes_vencer?`<span style="font-size:10px;color:var(--muted);margin-left:8px">📋 ${v.acao_antes_vencer}</span>`:'';
   const loc  = v.localizacao?`<span style="font-size:10px;color:var(--blue);margin-left:8px">📍 ${v.localizacao}</span>`:'';
   const qtd  = v.qtd_unidades?`<span style="font-size:11px;color:var(--muted)">${v.qtd_unidades} un.</span>`:'';
-  return `<tr style="background:${bgRow};border-bottom:1px solid #f0e8e0;cursor:pointer" onclick="abrirModal(${v.id})">
+  return `<tr style="background:${bgRow};border-bottom:1px solid #f0e8e0;cursor:pointer;touch-action:pan-y" onclick="abrirModal(${v.id})">
     <td style="padding:7px 12px;font-family:'DM Mono',monospace;font-size:11px;color:var(--muted)">${v.codigo||'—'}</td>
     <td style="padding:7px 12px;font-weight:600;font-size:13px">${v.descricao}${acao}${loc}</td>
     <td style="padding:7px 12px;font-size:11px;text-align:center">${qtd}</td>
@@ -787,7 +789,7 @@ function _mkDashRow(v) {
 
 function _mkDashTable(lista) {
   if(!lista.length) return '';
-  return `<div style="background:var(--white);border-radius:0 0 9px 9px;box-shadow:var(--shadow);overflow:hidden">
+  return `<div style="background:var(--white);border-radius:0 0 9px 9px;box-shadow:var(--shadow);overflow-x:auto;-webkit-overflow-scrolling:touch">
     <table style="width:100%;border-collapse:collapse;font-size:12px">
       <thead><tr style="background:#f8f4f0">
         <th style="padding:6px 12px;font-size:10px;text-transform:uppercase;color:var(--muted);text-align:left;border-bottom:1px solid var(--border)">Código</th>
