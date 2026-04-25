@@ -1182,115 +1182,93 @@ function parseFaturaC6(text) {
 }
 
 function parseFaturaCaixa(text) {
-  // Ano de referência: usa data de vencimento se disponível
-  const anoMatch = text.match(/(\d{2})\/(\d{2})\/(\d{4})/);
-  const anoRef   = anoMatch ? parseInt(anoMatch[3]) : new Date().getFullYear();
+  // Ano de referência: usa data de vencimento
+  const anoMatch = text.match(/VENCIMENTO[\s\S]{0,20}(\d{2})\/(\d{2})\/(\d{4})/i)
+    || text.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+  const anoRef     = anoMatch ? parseInt(anoMatch[3]) : new Date().getFullYear();
   const mesVencNum = anoMatch ? parseInt(anoMatch[2]) : 1;
 
   const result = [];
   let portadorAtual = '';
-  let emCompras = false; // dentro de seção COMPRAS ou ANUIDADE
 
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
 
-    // Portador: "RAFAEL VIEIRA DOS ANJOS (Cartão 9284)"
-    const mPort = line.match(/([A-ZÁÀÃÂÉÊÍÓÔÕÚÇ\s]+)\s*\(Cart[aã]o\s+(\d+)\)/i);
+    // Para quando chega em "Valor total desta fatura"
+    if (/Valor total desta fatura/i.test(line)) break;
+
+    // Detecta portador: "RAFAEL VIEIRA DOS ANJOS (Cartão 9284)"
+    const mPort = line.match(/([A-ZÁÀÃÂÉÊÍÓÔÕÚÇ\s]{5,})\s*\(Cart[aã]o\s+(\d+)\)/i);
     if (mPort) {
       portadorAtual = `${mPort[1].trim()} (Caixa ${mPort[2]})`;
-      emCompras = false;
       continue;
     }
 
-    // Início de seção de compras/anuidade
-    if (/^(COMPRAS|ANUIDADE|COMPRAS PARCELADAS)\s*(\(|$)/i.test(line)) {
-      emCompras = true;
+    // ANUIDADE sem data: busca padrão "ANUIDADE ... VALOR D" em qualquer posição
+    const mAnuid = line.match(/\b(ANUIDADE\s+(?:DIFERENCIADA\s+)?[^\d]*?)\s+([\d.]+,\d{2})\s*D\b/i);
+    if (mAnuid && portadorAtual) {
+      const v = -Math.abs(parseFloat(mAnuid[2].replace(/\./g,'').replace(',','.')) || 0);
+      if (v && !/(PARCELADO|FATURA|ROTATIVO|MORA|CET|MULTA)/i.test(mAnuid[1])) {
+        const mm = String(mesVencNum).padStart(2,'0');
+        result.push({
+          id: 'cc_caixa_anu_'+Date.now()+'_'+i,
+          lancamento: 'ANUIDADE CARTÃO CAIXA',
+          valor: v,
+          data: `${anoRef}-${mm}-01`,
+          mes: `${mm}/${anoRef}`, mesCaixa: `${mm}/${anoRef}`,
+          categoria: 'Tarifas e IOF',
+          fonte: 'CC', portador: portadorAtual, razaoSocial: 'Anuidade Cartão Caixa',
+        });
+      }
       continue;
     }
 
-    // Fim de seção (totais)
-    if (/^Total\s+(COMPRAS|ANUIDADE|final|de\s+lançamentos|PARCELADAS)/i.test(line)) {
-      emCompras = false;
-      continue;
-    }
-    if (/^Valor total desta fatura/i.test(line)) break; // fim do demonstrativo
+    // Lançamentos: busca todos os padrões "DD/MM DESC VALOR[D|C]" na linha
+    // A linha pode ter prefixo de outra coluna (ex: "Fator Conversão 2,30 03/01 PAYU...")
+    const reLanc = /\b(\d{2})\/(\d{2})\s+([A-Za-z0-9*\s,./\-]+?)\s+([\d.]+,\d{2})\s*([DC])\b/g;
+    let m;
+    while ((m = reLanc.exec(line)) !== null) {
+      const dia = m[1], mm = m[2];
+      const descRaw = m[3].trim();
+      const tipo = m[5].toUpperCase();
 
-    // Ignora cabeçalhos de tabela e linhas de pagamento
-    if (/^Data\s+Descri/i.test(line)) continue;
-    if (/^(TOTAL DA FATURA|OBRIGADO PELO|CASHBACK ANUIDADE|AJUSTE CREDITO PARC)/i.test(line)) continue;
+      // Ignora pagamentos/ajustes/cashback
+      if (/PAGAMENTO|CASHBACK|AJUSTE CREDITO|TOTAL DA FATURA|OBRIGADO/i.test(descRaw)) continue;
+      // Ignora taxas/juros de encargos
+      if (/MULTA|MORA|ROTATIVO|SAQUES|CET\s/i.test(descRaw)) continue;
 
-    // ANUIDADE sem data: "ANUIDADE DIFERENCIADA TIT 05/ 12 6,90D"
-    const mAnuid = line.match(/^(ANUIDADE\s+.+?)\s+([\d.,]+)\s*D\s*$/i);
-    if (mAnuid && emCompras) {
-      const desc = mAnuid[1].trim();
-      const v    = -Math.abs(parseFloat(mAnuid[2].replace(/\./g,'').replace(',','.')) || 0);
+      let v = parseFloat(m[4].replace(/\./g,'').replace(',','.')) || 0;
       if (!v) continue;
-      // Usa data de vencimento como referência
-      const mm = String(mesVencNum).padStart(2,'0');
+      v = tipo === 'C' ? Math.abs(v) : -Math.abs(v);
+
+      const ano = parseInt(mm) > mesVencNum + 2 ? anoRef - 1 : anoRef;
+      const mesStr = `${mm}/${ano}`;
+
+      // Extrai info de parcela e remove cidade do final
+      const mParc = descRaw.match(/^(.+?)\s+(\d{2})\s+DE\s+(\d{2})\s*(.*)$/i);
+      let descFinal;
+      if (mParc) {
+        descFinal = `${mParc[1].trim()} (Parc ${mParc[2]}/${mParc[3]})`;
+      } else {
+        // Remove última palavra (cidade) se tiver 3+ palavras
+        const partes = descRaw.split(/\s+/);
+        descFinal = partes.length > 2 ? partes.slice(0,-1).join(' ') : descRaw;
+      }
+
       result.push({
-        id: 'cc_'+Date.now()+'_anu_'+i,
-        lancamento: desc,
+        id: 'cc_caixa_'+Date.now()+'_'+i+'_'+result.length,
+        lancamento: descFinal || descRaw,
         valor: v,
-        data: `${anoRef}-${mm}-01`,
-        mes: `${mm}/${anoRef}`,
-        mesCaixa: `${mm}/${anoRef}`,
-        categoria: autoClassificar(desc, portadorAtual),
+        data: `${ano}-${mm}-${dia}`,
+        mes: mesStr, mesCaixa: mesStr,
+        categoria: autoClassificar(descFinal || descRaw, portadorAtual),
         fonte: 'CC',
         portador: portadorAtual,
-        razaoSocial: desc,
+        razaoSocial: descFinal || descRaw,
       });
-      continue;
     }
-
-    // Lançamento padrão: "DD/MM DESCRIÇÃO [PARCELA] CIDADE VALOR[D|C]"
-    // Ex: "09/01 CLUBE DA PICANHA SUMARE 1.237,71D"
-    // Ex: "24/06 AUTOMACAO 2000 08 DE 12 SAO BERNARDO 510,00D"
-    const mLanc = line.match(/^(\d{2})\/(\d{2})\s+(.+?)\s+([\d.,]+)\s*([DC])\s*$/i);
-    if (!mLanc) continue;
-
-    const dia = mLanc[1], mm = mLanc[2];
-    const ano = parseInt(mm) > mesVencNum + 2 ? anoRef - 1 : anoRef;
-    const dt  = `${ano}-${mm}-${dia}`;
-    const descRaw = mLanc[3].trim();
-    const tipo    = mLanc[5].toUpperCase();
-
-    // Ignora créditos de pagamento/cashback
-    if (tipo === 'C' && /pagamento|cashback|obrigado|ajuste credito/i.test(descRaw)) continue;
-
-    let v = parseFloat(mLanc[4].replace(/\./g,'').replace(',','.')) || 0;
-    if (!v) continue;
-    v = tipo === 'C' ? Math.abs(v) : -Math.abs(v);
-
-    // Limpa "08 DE 12" (parcela) da descrição e extrai info de parcela
-    const mParc = descRaw.match(/^(.+?)\s+(\d{2})\s+DE\s+(\d{2})\s+(.*)$/i);
-    let descFinal, parcelaInfo;
-    if (mParc) {
-      // Remove a cidade (última palavra) para ficar mais limpo
-      const semCidade = mParc[1].trim();
-      parcelaInfo = `Parc ${mParc[2]}/${mParc[3]}`;
-      descFinal = `${semCidade} (${parcelaInfo})`;
-    } else {
-      // Remove última palavra que geralmente é a cidade
-      const partes = descRaw.split(/\s+/);
-      const cidade = partes.pop();
-      descFinal = partes.join(' ') || descRaw;
-    }
-
-    const mesStr = `${mm}/${ano}`;
-    result.push({
-      id: 'cc_'+Date.now()+'_'+i,
-      lancamento: descFinal || descRaw,
-      valor: v,
-      data: dt,
-      mes: mesStr,
-      mesCaixa: mesStr,
-      categoria: autoClassificar(descFinal || descRaw, portadorAtual),
-      fonte: 'CC',
-      portador: portadorAtual,
-      razaoSocial: descFinal || descRaw,
-    });
   }
   return result;
 }
