@@ -575,8 +575,15 @@ function onDrop(e){e.preventDefault();document.getElementById('dz').classList.re
 function onArquivo(input){const f=input.files[0];if(f)processarArquivo(f);}
 
 function parseBRL(str) {
-  if(!str) return 0;
-  return parseFloat(String(str).replace('R$','').replace(/\s/g,'').replace(/\./g,'').replace(',','.')) || 0;
+  if(!str && str !== 0) return 0;
+  // Remove R$, espaços normais, espaços não-quebráveis (\xa0), e outros caracteres
+  const s = String(str)
+    .replace(/R\$\s*/gi, '')   // Remove R$ com espaço
+    .replace(/\xa0/g, '')       // Remove non-breaking space
+    .replace(/\s+/g, '')        // Remove qualquer espaço
+    .replace(/\./g, '')         // Remove separador de milhar
+    .replace(',', '.');         // Troca vírgula decimal por ponto
+  return parseFloat(s) || 0;
 }
 
 function processarArquivo(arquivo) {
@@ -620,15 +627,20 @@ function processarArquivo(arquivo) {
         });
       }
 
-      if(!_linhasImport.length) { toast('❌ Nenhuma linha válida encontrada'); return; }
+      if(!_linhasImport.length) {
+        toast('❌ Nenhuma linha válida encontrada. Verifique se o arquivo é o Relatório de Vendas por Produto do XMenu.');
+        return;
+      }
 
       const datas = [...new Set(_linhasImport.map(l=>l.data_venda))].sort();
       const fat = _linhasImport.reduce((s,l)=>s+l.valor_total,0);
+      const semValor = _linhasImport.filter(l=>l.valor_total===0).length;
 
       document.getElementById('preview-info').innerHTML =
-        `<strong>${_linhasImport.length}</strong> produtos · <strong>${datas.length}</strong> dias (${datas[0]} → ${datas[datas.length-1]}) · <strong>${fmt.brl(fat)}</strong>`;
+        `<strong>${_linhasImport.length}</strong> produtos · <strong>${datas.length}</strong> dias (${datas[0]} → ${datas[datas.length-1]}) · <strong>${fmt.brl(fat)}</strong>`
+        + (semValor > 0 ? ` · <span style="color:var(--orange)">⚠️ ${semValor} itens sem valor</span>` : '');
       document.getElementById('preview-import').style.display='';
-      toast(`✅ Arquivo lido: ${_linhasImport.length} linhas`);
+      toast(`✅ Arquivo lido: ${_linhasImport.length} produtos em ${datas.length} dias`);
     } catch(err) {
       toast('❌ Erro ao ler arquivo: '+err.message);
     }
