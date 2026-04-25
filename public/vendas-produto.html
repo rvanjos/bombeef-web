@@ -593,19 +593,20 @@ function processarArquivo(arquivo) {
     try {
       const wb = XLSX.read(e.target.result, {type:'array'});
       const ws = wb.Sheets[wb.SheetNames[0]];
-      const raw = XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:null});
 
-      // LOG DE DIAGNÓSTICO — primeiras 5 linhas reais
-      console.log('[vendas] Total linhas SheetJS:', raw.length);
-      console.log('[vendas] Linha 0 (header):', JSON.stringify(raw[0]));
-      console.log('[vendas] Linha 1:', JSON.stringify(raw[1]));
-      console.log('[vendas] Linha 2:', JSON.stringify(raw[2]));
-      console.log('[vendas] Linha 3:', JSON.stringify(raw[3]));
-      if(raw[1]) {
-        const c0 = raw[1][0];
-        console.log('[vendas] col0 type:', typeof c0, 'value:', c0, 'str:', String(c0||''), 'startsWith:', String(c0||'').startsWith('Data:'));
+      // O XMenu exporta com <dimension ref="A1:C1"> incorreto.
+      // SheetJS respeita esse valor e lê só 1 linha.
+      // Fix: se o range declarado tiver menos de 5 linhas, expande para 5000×4
+      if (ws['!ref']) {
+        try {
+          const dec = XLSX.utils.decode_range(ws['!ref']);
+          if (dec.e.r < 5) ws['!ref'] = 'A1:D5000';
+        } catch(_) { ws['!ref'] = 'A1:D5000'; }
+      } else {
+        ws['!ref'] = 'A1:D5000';
       }
-      toast('🔍 Diagnóstico no console — abre DevTools (F12) → Console');
+
+      const raw = XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:null});
 
       _linhasImport = [];
       let dataAtual = null;
