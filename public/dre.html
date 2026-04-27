@@ -1745,30 +1745,37 @@ function vincularFaturaCartao(pagTx) {
   const valorPag = Math.abs(parseFloat(pagTx.valor||0));
   if (valorPag < 1) return;
 
-  // Busca lançamentos CC do mesmo mês (ou mês anterior — fatura pode ser do mês anterior)
-  const [mm, yy] = (pagTx.mesCaixa || pagTx.mes || mesRef).split('/');
-  const mesAnterior = parseInt(mm) === 1
-    ? `12/${parseInt(yy)-1}`
-    : `${String(parseInt(mm)-1).padStart(2,'0')}/${yy}`;
+  // Busca lançamentos CC de qualquer mês (a fatura pode ser de 1-2 meses atrás)
+  const itensFatura = TXS.filter(t => t.fonte === 'CC');
+  if (!itensFatura.length) {
+    toast('⚠️ Nenhuma fatura CC importada. Importe a fatura do cartão via "Fatura CC".', 5000);
+    return;
+  }
 
-  const itensFatura = TXS.filter(t =>
-    t.fonte === 'CC' &&
-    (t.mes === pagTx.mes || t.mes === mesAnterior)
-  );
+  // Agrupa itens CC por mês para encontrar qual fatura tem valor mais próximo
+  const porMes = {};
+  itensFatura.forEach(t => {
+    const m = t.mes || '';
+    if (!porMes[m]) porMes[m] = 0;
+    porMes[m] += Math.abs(parseFloat(t.valor||0));
+  });
 
-  if (!itensFatura.length) return;
+  // Acha o mês cuja soma é mais próxima do pagamento
+  let melhorMes = '', melhorDiff = Infinity, melhorTotal = 0;
+  for (const [mes, total] of Object.entries(porMes)) {
+    const diff = Math.abs(valorPag - total);
+    if (diff < melhorDiff) { melhorDiff = diff; melhorMes = mes; melhorTotal = total; }
+  }
 
-  const totalFatura = Math.abs(itensFatura.reduce((s,t) => s + parseFloat(t.valor||0), 0));
-  const diff = Math.abs(valorPag - totalFatura);
-  const bateValor = diff < valorPag * 0.05; // tolerância de 5%
+  const qtd = itensFatura.filter(t => t.mes === melhorMes).length;
+  const tolerance = valorPag * 0.05;
 
-  if (bateValor) {
-    // Vincula: marca o pagamento com referência à fatura
+  if (melhorDiff <= tolerance) {
     pagTx.vinculadoFaturaCC = true;
-    pagTx.totalFaturaCC = totalFatura;
-    toast(`✅ Pagamento vinculado à fatura CC: ${fmt.brl(totalFatura)} (${itensFatura.length} lançamentos)`, 5000);
+    pagTx.totalFaturaCC = melhorTotal;
+    toast(`✅ Pagamento vinculado à fatura CC de ${melhorMes}: ${fmt.brl(melhorTotal)} (${qtd} lançamentos)`, 5000);
   } else {
-    toast(`⚠️ Pagamento de cartão: valor ${fmt.brl(valorPag)} difere da fatura CC importada (${fmt.brl(totalFatura)}). Verifique se a fatura foi importada.`, 6000);
+    toast(`ℹ️ Pagamento de cartão ${fmt.brl(valorPag)}. Fatura CC mais próxima: ${melhorMes} (${fmt.brl(melhorTotal)}). Valores diferentes — confira se a fatura correta foi importada.`, 7000);
   }
 }
 

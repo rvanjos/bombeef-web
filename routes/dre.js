@@ -403,16 +403,33 @@ module.exports = function (pool) {
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_dre_lanc_sessao  ON dre_lancamentos(sessao_id)`).catch(()=>{});
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_dre_lanc_mes     ON dre_lancamentos(mes)`).catch(()=>{});
 
-    // Garante categorias não-operacionais no banco
+    // Limpa duplicatas de categorias NAO_OPER que foram inseridas em deploys anteriores
+    await pool.query(`
+      DELETE FROM categorias_dre
+      WHERE id NOT IN (
+        SELECT MIN(id) FROM categorias_dre
+        WHERE grupo = 'NAO_OPER'
+        GROUP BY subgrupo
+      )
+      AND grupo = 'NAO_OPER'
+    `).catch(()=>{});
+
+    // Garante categorias não-operacionais no banco (sem duplicar)
     for (const [grupo, subgrupo, ordem] of [
       ['NAO_OPER', 'Transferência entre contas', 1],
       ['NAO_OPER', 'Pagamento de Cartão', 2],
     ]) {
-      await pool.query(`
-        INSERT INTO categorias_dre (grupo, subgrupo, label_exibicao, ordem)
-        VALUES ($1,$2,$2,$3)
-        ON CONFLICT DO NOTHING
-      `, [grupo, subgrupo, ordem]).catch(()=>{});
+      // Verifica se já existe antes de inserir
+      const exists = await pool.query(
+        `SELECT id FROM categorias_dre WHERE grupo=$1 AND subgrupo=$2 LIMIT 1`,
+        [grupo, subgrupo]
+      ).catch(()=>({rows:[]}));
+      if (!exists.rows.length) {
+        await pool.query(
+          `INSERT INTO categorias_dre (grupo, subgrupo, label_exibicao, ordem) VALUES ($1,$2,$2,$3)`,
+          [grupo, subgrupo, ordem]
+        ).catch(()=>{});
+      }
     }
     // Remove sessões duplicadas por mês — mantém apenas a mais recente com mais lançamentos
     await pool.query(`
