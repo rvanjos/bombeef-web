@@ -354,6 +354,7 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
       <button class="btn btn-p" onclick="abrirModal()">＋ Novo Item</button>
       <button class="btn btn-s" onclick="abrirImport()">📥 Importar Planilha</button>
       <button class="btn btn-s" onclick="limparDuplicatas()" id="btn-dedup" style="background:#fff3cd;color:#856404;border-color:#ffc107" title="Remove itens com mesma descrição e data de validade">🧹 Limpar Duplicatas</button>
+      <button class="btn btn-s" onclick="imprimirVencimento()" style="background:#eff6ff;color:#1a5c8a;border-color:#93c5fd" title="Relatório de itens a vencer">🖨️ Rel. Vencimento</button>
       <div class="search-w"><input type="text" id="busca-val" placeholder="Buscar produto, código, lote..." oninput="filtrarVal()"></div>
       <select class="flt" id="flt-status" onchange="carregar()">
         <option value="todos">Todos</option>
@@ -418,6 +419,7 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
     <div class="toolbar">
       <button class="btn btn-r" onclick="abrirPerda()">＋ Registrar Perda</button>
       <input type="month" id="flt-mes-perdas" class="flt" style="padding:7px 10px" onchange="carregarPerdas()">
+      <button class="btn btn-s" onclick="imprimirPerdas()" style="background:#fff0f0;color:#991b1b;border-color:#fca5a5" title="Relatório de perdas">🖨️ Rel. Perdas</button>
       <div style="margin-left:auto;font-size:13px" id="meta-perdas-info"></div>
     </div>
     <div class="card">
@@ -1377,7 +1379,179 @@ function renderVal(lista){
   }
 }
 
-// ── Modal Validade ─────────────────────────────────────────────────────────────
+// ── RELATÓRIOS IMPRIMÍVEIS ────────────────────────────────────────────────────
+
+function _cssRel() {
+  return `
+    <style>
+      * { margin:0; padding:0; box-sizing:border-box; }
+      body { font-family: Arial, Helvetica, sans-serif; font-size:12px; color:#1a1a1a; padding:20px; }
+      .header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:18px; padding-bottom:12px; border-bottom:2px solid #8B0000; }
+      .logo { font-size:20px; font-weight:800; color:#8B0000; }
+      .logo small { display:block; font-size:11px; color:#666; font-weight:400; }
+      .meta { text-align:right; font-size:11px; color:#666; }
+      h2 { font-size:15px; font-weight:700; margin-bottom:12px; color:#1a1a1a; }
+      table { width:100%; border-collapse:collapse; margin-bottom:16px; }
+      th { background:#8B0000; color:#fff; padding:7px 8px; text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.4px; }
+      td { padding:6px 8px; border-bottom:1px solid #e8e0d8; font-size:12px; vertical-align:top; }
+      tr:nth-child(even) td { background:#faf7f4; }
+      .badge { display:inline-block; padding:2px 7px; border-radius:4px; font-size:10px; font-weight:700; white-space:nowrap; }
+      .vencido { background:#fee2e2; color:#991b1b; }
+      .critico { background:#fee2e2; color:#c0392b; }
+      .alerta  { background:#fef3c7; color:#854d0e; }
+      .ok      { background:#dcfce7; color:#166534; }
+      .section { background:#f0f0f0; padding:5px 8px; font-weight:700; font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:#555; margin-top:8px; }
+      .total-row { background:#f8f4f0; font-weight:700; }
+      .total-row td { border-top:2px solid #8B0000; padding:8px; }
+      .assinatura { margin-top:40px; display:flex; gap:60px; }
+      .assinatura div { flex:1; border-top:1px solid #666; padding-top:6px; font-size:11px; color:#666; text-align:center; }
+      @media print {
+        @page { margin:15mm; }
+        body { padding:0; }
+        .no-print { display:none !important; }
+      }
+    </style>`;
+}
+
+function _headerRel(titulo, subtitulo) {
+  const agora = new Date().toLocaleString('pt-BR');
+  return `<div class="header">
+    <div class="logo">🥩 Bom Beef<small>Sistema de Gestão Integrado</small></div>
+    <div class="meta"><strong>${titulo}</strong><br>${subtitulo||''}<br>Emitido em: ${agora}</div>
+  </div>`;
+}
+
+function imprimirVencimento() {
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+
+  // Agrupa itens por urgência
+  const grupos = {
+    vencido: { label: '⚠️ VENCIDOS — Retirar imediatamente', items: [], cls: 'vencido' },
+    critico: { label: '🔴 CRÍTICO — Vence em até 3 dias',     items: [], cls: 'critico' },
+    alerta:  { label: '⚠️ ALERTA — Vence em até 7 dias',     items: [], cls: 'alerta'  },
+    breve:   { label: '📅 ATENÇÃO — Vence em até 30 dias',    items: [], cls: 'ok'      },
+  };
+
+  itens.filter(v => v.status !== 'descartado' && v.status !== 'vendido').forEach(v => {
+    const dias = calcDias(v.data_validade);
+    if (dias === null) return;
+    if (dias < 0)       grupos.vencido.items.push({...v, dias});
+    else if (dias <= 3) grupos.critico.items.push({...v, dias});
+    else if (dias <= 7) grupos.alerta.items.push({...v, dias});
+    else if (dias <= 30)grupos.breve.items.push({...v, dias});
+  });
+
+  const totalItens = Object.values(grupos).reduce((s,g)=>s+g.items.length,0);
+  const totalCusto = itens.filter(v=>v.status!=='descartado'&&v.preco_custo&&v.peso_total_kg)
+    .reduce((s,v)=>s+(parseFloat(v.peso_total_kg)*parseFloat(v.preco_custo)),0);
+
+  let rows = '';
+  for (const g of Object.values(grupos)) {
+    if (!g.items.length) continue;
+    rows += `<tr><td colspan="8" class="section">${g.label} (${g.items.length} produto(s))</td></tr>`;
+    g.items.sort((a,b)=>a.dias-b.dias).forEach(v => {
+      const diasTxt = v.dias < 0 ? `${Math.abs(v.dias)}d vencido` : v.dias === 0 ? 'Hoje' : `${v.dias}d`;
+      const custo = v.peso_total_kg && v.preco_custo
+        ? `R$ ${(parseFloat(v.peso_total_kg)*parseFloat(v.preco_custo)).toFixed(2)}`
+        : v.qtd_unidades && v.preco_custo
+        ? `R$ ${(parseInt(v.qtd_unidades)*parseFloat(v.preco_custo)).toFixed(2)}`
+        : '—';
+      rows += `<tr>
+        <td>${v.codigo||'—'}</td>
+        <td><strong>${v.descricao}</strong>${v.lote?`<br><small>Lote: ${v.lote}</small>`:''}</td>
+        <td>${v.qtd_unidades||'—'}</td>
+        <td>${v.peso_total_kg ? parseFloat(v.peso_total_kg).toFixed(3)+' kg' : '—'}</td>
+        <td>${v.localizacao||'—'}</td>
+        <td>${fmt.date(v.data_validade)||'—'}</td>
+        <td><span class="badge ${g.cls}">${diasTxt}</span></td>
+        <td style="color:#991b1b;font-weight:600">${custo}</td>
+      </tr>`;
+    });
+  }
+
+  const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+    <title>Relatório de Vencimentos — Bom Beef</title>${_cssRel()}</head><body>
+    ${_headerRel('Relatório de Itens a Vencer', `${totalItens} produto(s) monitorados`)}
+    <table>
+      <thead><tr>
+        <th>Código</th><th>Produto / Lote</th><th>Qtd</th><th>Peso</th>
+        <th>Local</th><th>Validade</th><th>Dias</th><th>Custo Est.</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+      ${totalCusto > 0 ? `<tfoot><tr class="total-row">
+        <td colspan="7"><strong>Custo total estimado em risco:</strong></td>
+        <td><strong>R$ ${totalCusto.toFixed(2)}</strong></td>
+      </tr></tfoot>` : ''}
+    </table>
+    <div class="assinatura">
+      <div>Responsável pela conferência</div>
+      <div>Data / Hora</div>
+      <div>Supervisor</div>
+    </div>
+    <div class="no-print" style="margin-top:20px;text-align:center">
+      <button onclick="window.print()" style="padding:10px 30px;background:#8B0000;color:#fff;border:none;border-radius:6px;font-size:14px;cursor:pointer">🖨️ Imprimir</button>
+      <button onclick="window.close()" style="padding:10px 20px;margin-left:10px;border:1px solid #ccc;border-radius:6px;font-size:14px;cursor:pointer">Fechar</button>
+    </div>
+  </body></html>`;
+
+  const w = window.open('','_blank','width=900,height=700');
+  w.document.write(html);
+  w.document.close();
+  setTimeout(() => w.print(), 800);
+}
+
+function imprimirPerdas() {
+  const perdas = window._perdasData || [];
+  if (!perdas.length) { toast('⚠️ Carregue as perdas do mês primeiro'); return; }
+
+  const mes = document.getElementById('flt-mes-perdas')?.value || '';
+  const mesLabel = mes ? new Date(mes+'-01').toLocaleDateString('pt-BR',{month:'long',year:'numeric'}) : 'Todos os meses';
+  const totalValor = perdas.reduce((s,p)=>s+(parseFloat(p.valor_perda)||0),0);
+  const totalQtd   = perdas.reduce((s,p)=>s+(parseFloat(p.qtd_unidades)||0),0);
+
+  const rows = perdas.map(p => `<tr>
+    <td>${p.data_perda ? new Date(p.data_perda+'T12:00:00').toLocaleDateString('pt-BR') : '—'}</td>
+    <td><strong>${p.descricao||'—'}</strong>${p.lote?`<br><small>Lote: ${p.lote}</small>`:''}</td>
+    <td>${p.motivo||'—'}</td>
+    <td style="text-align:center">${p.qtd_unidades||'—'}</td>
+    <td>${p.peso_total_kg ? parseFloat(p.peso_total_kg).toFixed(3)+' kg' : '—'}</td>
+    <td style="color:#991b1b;font-weight:600">${p.valor_perda ? 'R$ '+parseFloat(p.valor_perda).toFixed(2) : '—'}</td>
+    <td>${p.funcionario||'—'}</td>
+  </tr>`).join('');
+
+  const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+    <title>Relatório de Perdas — Bom Beef</title>${_cssRel()}</head><body>
+    ${_headerRel('Relatório de Perdas', mesLabel)}
+    <table>
+      <thead><tr>
+        <th>Data</th><th>Produto / Lote</th><th>Motivo</th>
+        <th>Qtd</th><th>Peso</th><th>Valor Perda</th><th>Funcionário</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+      <tfoot><tr class="total-row">
+        <td colspan="3"><strong>Total do período</strong></td>
+        <td style="text-align:center"><strong>${totalQtd}</strong></td>
+        <td>—</td>
+        <td><strong>R$ ${totalValor.toFixed(2)}</strong></td>
+        <td>—</td>
+      </tr></tfoot>
+    </table>
+    <div class="assinatura">
+      <div>Responsável pelo levantamento</div>
+      <div>Data / Hora</div>
+      <div>Supervisor</div>
+    </div>
+    <div class="no-print" style="margin-top:20px;text-align:center">
+      <button onclick="window.print()" style="padding:10px 30px;background:#8B0000;color:#fff;border:none;border-radius:6px;font-size:14px;cursor:pointer">🖨️ Imprimir</button>
+      <button onclick="window.close()" style="padding:10px 20px;margin-left:10px;border:1px solid #ccc;border-radius:6px;font-size:14px;cursor:pointer">Fechar</button>
+    </div>
+  </body></html>`;
+
+  const w = window.open('','_blank','width=900,height=700');
+  w.document.write(html);
+  w.document.close();
+  setTimeout(() => w.print(), 800);
+}
 function abrirModal(id){
   const v = id ? itens.find(x=>x.id===id) : null;
   document.getElementById('val-title').textContent = v?'Editar Item':'Novo Item de Validade';
@@ -2019,6 +2193,7 @@ async function carregarPerdas(){
   if(mesVal){ const[y,m]=mesVal.split('-'); mes=`${m}/${y}`; url+=`?mes=${mes}`; }
   const d = await api.get(url); if(!d.ok) return;
   perdas = d.data;
+  window._perdasData = perdas; // para relatório de impressão
 
   if(mes){
     const mt = await api.get(`/api/perdas/meta/${mes}`);
