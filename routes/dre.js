@@ -414,6 +414,22 @@ module.exports = function (pool) {
       AND grupo = 'NAO_OPER'
     `).catch(()=>{});
 
+    // Migração: Retirada Sócio deve estar no grupo OUTROS (após resultado),
+    // não em OUTRAS (despesas operacionais) — corrige distorção no Lucro Operacional
+    await pool.query(`
+      UPDATE categorias_dre
+      SET grupo = 'OUTROS'
+      WHERE subgrupo ILIKE '%retirada%s%cio%'
+        AND grupo = 'OUTRAS'
+    `).catch(()=>{});
+    // Também garante que 'Enviado Rafael Vieira Dos Anjos' fique em OUTROS
+    await pool.query(`
+      UPDATE categorias_dre
+      SET grupo = 'OUTROS'
+      WHERE subgrupo ILIKE '%enviado%anjos%'
+        AND grupo NOT IN ('OUTROS','NAO_OPER')
+    `).catch(()=>{});
+
     // Garante categorias não-operacionais no banco (sem duplicar)
     for (const [grupo, subgrupo, ordem] of [
       ['NAO_OPER', 'Transferência entre contas', 1],

@@ -75,7 +75,7 @@ body.modo-expandido #btn-expand { background: var(--blue); color:#fff; border-co
 /* TABELA */
 table{width:100%;border-collapse:collapse;font-size:12px;}
 thead tr{background:var(--red);}
-thead th{padding:7px 9px;text-align:left;color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;position:sticky;top:0;z-index:5;}
+thead th{padding:7px 9px;text-align:left;color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;position:sticky;top:39px;z-index:5;}
 tbody tr{border-bottom:1px solid #f0ebe4;}
 tbody tr:hover{background:#fdf9f6!important;}
 tbody tr.uncat{background:#fff8e6!important;}
@@ -275,8 +275,8 @@ td{padding:5px 9px;vertical-align:middle;}
 
     <!-- TABELA de lançamentos -->
     <div id="tbl-area" style="display:none;flex:1;overflow-y:auto">
-      <!-- Mini-barra de importação (sempre visível na tela de lançamentos) -->
-      <div style="display:flex;gap:6px;flex-wrap:wrap;padding:8px 14px;background:var(--white);border-bottom:1px solid var(--border);align-items:center">
+      <!-- Mini-barra de importação — sticky para ficar visível ao scrollar -->
+      <div style="display:flex;gap:6px;flex-wrap:wrap;padding:8px 14px;background:var(--white);border-bottom:1px solid var(--border);align-items:center;position:sticky;top:0;z-index:10">
         <span style="font-size:11px;color:var(--muted);font-weight:600;margin-right:2px">Adicionar:</span>
         <button class="btn bs" style="padding:4px 10px;font-size:11px" onclick="document.getElementById('f-ofx').click()" title="Importar extrato OFX ou XLSX">🏦 OFX/XLSX</button>
         <button class="btn bs" style="padding:4px 10px;font-size:11px" onclick="document.getElementById('f-cc').click()" title="Importar fatura do cartão de crédito">💳 Fatura CC</button>
