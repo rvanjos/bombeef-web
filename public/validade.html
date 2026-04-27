@@ -301,7 +301,21 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
 
     <!-- Lista de produtos críticos direta na tela -->
     <div id="dash-lista-wrap">
-      <!-- Seção Vencidos -->
+
+      <!-- ── BANNER DE AÇÕES PENDENTES ── -->
+      <div id="dash-acoes-banner" style="display:none;margin-bottom:16px">
+        <div style="background:#7c3aed;color:#fff;padding:8px 14px;border-radius:9px 9px 0 0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;display:flex;justify-content:space-between;align-items:center">
+          <span>📋 AÇÕES PENDENTES — Produtos com instrução do responsável</span>
+          <div style="display:flex;gap:8px;align-items:center">
+            <span id="dash-acoes-cnt" style="background:rgba(255,255,255,.2);padding:1px 8px;border-radius:10px"></span>
+            <button onclick="toggleBannerAcoes()" id="btn-toggle-acoes"
+              style="background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:5px;padding:1px 8px;cursor:pointer;font-size:11px">▾ ocultar</button>
+          </div>
+        </div>
+        <div id="dash-acoes-body" style="background:#fff;border-radius:0 0 9px 9px;box-shadow:0 2px 8px rgba(0,0,0,.1)">
+          <div id="dash-acoes-lista"></div>
+        </div>
+      </div>
       <div id="dash-sec-vencido" style="display:none;margin-bottom:16px">
         <div style="background:#8B0000;color:#fff;padding:8px 14px;border-radius:9px 9px 0 0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;display:flex;justify-content:space-between;align-items:center">
           <span>💀 VENCIDOS — Retirar imediatamente</span>
@@ -1429,12 +1443,21 @@ function renderPesagem(){
   lista.innerHTML = _pesagens.map((p,i)=>`
     <div style="display:flex;align-items:center;gap:6px">
       <span style="font-size:11px;color:var(--muted);min-width:20px;text-align:right">${i+1}.</span>
-      <input type="number" class="pes-input" value="${p.kg}" min="0" step="0.001" placeholder="0,000 kg"
-        oninput="_pesagens[${i}].kg=parseFloat(this.value)||0; calcPesagem();"
+      <input type="number" class="pes-input" data-idx="${i}" value="${p.kg||''}" min="0" step="0.001" placeholder="0,000 kg"
+        oninput="atualizarPesagem(this)"
         style="flex:1;padding:6px 9px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:'DM Mono',monospace">
       <span style="font-size:11px;color:var(--muted)">kg</span>
       <button type="button" onclick="removePesagem(${i})" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:16px;padding:0 4px">×</button>
     </div>`).join('');
+  calcPesagem();
+}
+
+function atualizarPesagem(input) {
+  const idx = parseInt(input.dataset.idx);
+  const val = input.value === '' ? '' : (parseFloat(input.value) || 0);
+  if (idx >= 0 && idx < _pesagens.length) {
+    _pesagens[idx].kg = val;
+  }
   calcPesagem();
 }
 

@@ -971,7 +971,7 @@ async function carregarAlertasValidade() {
   const el = $('dash-acoes-validade');
   if (!el) return;
   try {
-    const d = await apiFetch('/api/validade/alertas-dashboard?dias=7');
+    const d = await apiFetch('/api/validade/alertas-dashboard?dias=30');
     if (!d.ok || !d.data?.length) { el.style.display = 'none'; return; }
 
     const hoje = new Date(); hoje.setHours(0,0,0,0);
@@ -1016,7 +1016,7 @@ async function carregarAlertasValidade() {
         <div style="background:linear-gradient(135deg,#8B0000,#c0392b);padding:12px 16px;display:flex;justify-content:space-between;align-items:center">
           <div>
             <div style="color:#fff;font-weight:700;font-size:13px">🔔 Ações de Validade Pendentes</div>
-            <div style="color:rgba(255,255,255,.75);font-size:11px;margin-top:2px">${items.length} produto(s) com ação cadastrada · vencem em até 7 dias</div>
+            <div style="color:rgba(255,255,255,.75);font-size:11px;margin-top:2px">${items.length} produto(s) com ação cadastrada · vencem em até 30 dias</div>
           </div>
           <a href="javascript:showTab('validade')" style="background:rgba(255,255,255,.2);color:#fff;border:1px solid rgba(255,255,255,.4);border-radius:6px;padding:4px 10px;font-size:11px;text-decoration:none;cursor:pointer">Ver Validade →</a>
         </div>`;
