@@ -417,6 +417,9 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
       <!-- Alertas dinâmicos -->
       <div id="dash-alertas"></div>
 
+      <!-- Painel de ações de validade -->
+      <div id="dash-acoes-validade" style="display:none;margin-bottom:14px"></div>
+
       <!-- Hero: Meta de Faturamento -->
       <div class="fat-hero hidden" id="prog-fat">
         <div class="fat-hero-info">
@@ -964,7 +967,81 @@ async function carregarRHMini() {
   } catch(e) { el.innerHTML='<div style="font-size:11px;color:var(--muted)">—</div>'; }
 }
 
-async function carregarKPIs() {
+async function carregarAlertasValidade() {
+  const el = $('dash-acoes-validade');
+  if (!el) return;
+  try {
+    const d = await apiFetch('/api/validade/alertas-dashboard?dias=7');
+    if (!d.ok || !d.data?.length) { el.style.display = 'none'; return; }
+
+    const hoje = new Date(); hoje.setHours(0,0,0,0);
+    const items = d.data;
+
+    // Separa por urgência
+    const vencidos  = items.filter(r => parseInt(r.dias_restantes) < 0);
+    const hoje_     = items.filter(r => parseInt(r.dias_restantes) === 0);
+    const proximos  = items.filter(r => parseInt(r.dias_restantes) > 0);
+
+    function badge(r) {
+      const dias = parseInt(r.dias_restantes);
+      if (dias < 0)  return `<span style="background:#991b1b;color:#fff;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700">VENCIDO ${Math.abs(dias)}d</span>`;
+      if (dias === 0)return `<span style="background:#c76b00;color:#fff;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700">HOJE</span>`;
+      return `<span style="background:#1a5c8a;color:#fff;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700">${dias}d</span>`;
+    }
+
+    function row(r) {
+      const dtFmt = r.data_validade ? r.data_validade.slice(8)+'/'+r.data_validade.slice(5,7) : '—';
+      return `<div style="display:flex;align-items:flex-start;gap:10px;padding:8px 12px;border-bottom:1px solid #f5efe8">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12px;font-weight:600;color:#1a1a1a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+            title="${r.descricao}">${r.descricao}${r.lote?` <span style="font-size:10px;color:var(--muted)">(${r.lote})</span>`:''}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:1px">
+            ${r.quantidade||'?'} ${r.unidade||'un'} · Vence ${dtFmt}
+            ${r.local_estoque?`· 📍${r.local_estoque}`:''}
+          </div>
+        </div>
+        <div style="flex-shrink:0;text-align:right">
+          ${badge(r)}
+          <div style="font-size:10px;margin-top:3px;color:var(--muted)">Qtd ${r.quantidade||'?'}</div>
+        </div>
+      </div>
+      <div style="background:#fffbeb;padding:6px 12px;font-size:11px;color:#854d0e;display:flex;gap:6px;align-items:flex-start">
+        <span>🔔</span>
+        <span><strong>Ação:</strong> ${r.acao_antes_vencer}</span>
+      </div>`;
+    }
+
+    let html = `
+      <div style="background:#fff;border-radius:12px;border:1px solid #f0e8e0;box-shadow:0 2px 12px rgba(0,0,0,.08);overflow:hidden">
+        <div style="background:linear-gradient(135deg,#8B0000,#c0392b);padding:12px 16px;display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div style="color:#fff;font-weight:700;font-size:13px">🔔 Ações de Validade Pendentes</div>
+            <div style="color:rgba(255,255,255,.75);font-size:11px;margin-top:2px">${items.length} produto(s) com ação cadastrada · vencem em até 7 dias</div>
+          </div>
+          <a href="javascript:showTab('validade')" style="background:rgba(255,255,255,.2);color:#fff;border:1px solid rgba(255,255,255,.4);border-radius:6px;padding:4px 10px;font-size:11px;text-decoration:none;cursor:pointer">Ver Validade →</a>
+        </div>`;
+
+    if (vencidos.length) {
+      html += `<div style="background:#fff1f2;padding:6px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#991b1b">⚠️ VENCIDOS — Retirar imediatamente (${vencidos.length})</div>`;
+      html += vencidos.map(row).join('');
+    }
+    if (hoje_.length) {
+      html += `<div style="background:#fff7ed;padding:6px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#c76b00">🔴 VENCEM HOJE (${hoje_.length})</div>`;
+      html += hoje_.map(row).join('');
+    }
+    if (proximos.length) {
+      html += `<div style="background:#eff6ff;padding:6px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#1a5c8a">📅 PRÓXIMOS 7 DIAS (${proximos.length})</div>`;
+      html += proximos.map(row).join('');
+    }
+
+    html += `</div>`;
+    el.innerHTML = html;
+    el.style.display = '';
+  } catch(e) {
+    console.error('[alertas validade]', e);
+    el.style.display = 'none';
+  }
+}
   setSyncStatus('loading');
 
   // Pega o mês selecionado
@@ -1080,6 +1157,9 @@ async function carregarKPIs() {
       alertasHtml += window._alertaProdutos;
     }
     $('dash-alertas').innerHTML = alertasHtml;
+
+    // ── Alertas de ação de validade ───────────────────────────────────────
+    carregarAlertasValidade();
 
     // ── Fat Hero Bar ──────────────────────────────────────────────────────
     if (d.faturamentoMeta > 0) {

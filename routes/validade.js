@@ -212,6 +212,31 @@ module.exports = function (pool) {
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
+  // ── GET /alertas-dashboard ─────────────────────────────────────────────────
+  // Retorna produtos com ação cadastrada E próximos do vencimento (até 7 dias)
+  r.get('/alertas-dashboard', async (req, res) => {
+    try {
+      await atualizarStatus();
+      const diasAlerta = parseInt(req.query.dias || '7');
+      const { rows } = await pool.query(`
+        SELECT
+          id, codigo, descricao, lote, quantidade, unidade,
+          TO_CHAR(data_validade, 'YYYY-MM-DD') AS data_validade,
+          status, local_estoque, acao_antes_vencer,
+          CURRENT_DATE - data_validade::date AS dias_vencido,
+          data_validade::date - CURRENT_DATE AS dias_restantes
+        FROM validade_items
+        WHERE status NOT IN ('descartado','vendido')
+          AND acao_antes_vencer IS NOT NULL
+          AND acao_antes_vencer != ''
+          AND data_validade IS NOT NULL
+          AND data_validade::date <= CURRENT_DATE + $1
+        ORDER BY data_validade ASC, descricao ASC
+      `, [diasAlerta]);
+      res.json({ ok: true, data: rows, total: rows.length });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
   // ── POST / ─────────────────────────────────────────────────────────────────
   r.post('/', async (req, res) => {
     const v = req.body;
