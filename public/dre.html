@@ -197,14 +197,18 @@ td{padding:5px 9px;vertical-align:middle;}
   <div class="prog-bg"><div class="prog-fill" id="prog-f" style="width:0%"></div></div>
 </div>
 
-<!-- BANNER DE ARQUIVOS (só mostra arquivos, sem botões duplicados) -->
-<div class="banner" id="banner">
-  <span style="font-size:11px;font-weight:600;color:var(--muted)">Arquivos:</span>
+<!-- BANNER DE ARQUIVOS — oculto, revelado via botão na ctrl -->
+<div id="banner" style="display:none;background:#f8f4f0;border-bottom:1px solid var(--border);padding:5px 14px;flex-wrap:wrap;gap:4px;align-items:center;flex-shrink:0">
+  <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-right:4px">Arquivos importados:</span>
   <div id="ftags" style="display:flex;flex-wrap:wrap;gap:4px;flex:1"></div>
+  <button onclick="toggleArquivos()" style="background:none;border:none;cursor:pointer;font-size:11px;color:var(--muted);padding:0 4px" title="Fechar">✕</button>
 </div>
 
 <!-- BARRA DE CONTROLES -->
 <div class="ctrl">
+  <button id="btn-arq" onclick="toggleArquivos()"
+    style="display:none;background:#f0ebe4;border:1px solid var(--border);border-radius:6px;padding:3px 9px;font-size:11px;cursor:pointer;color:var(--muted);font-family:'DM Sans',sans-serif;white-space:nowrap"
+    title="Ver arquivos importados">📁 <span id="btn-arq-label">0</span></button>
   <input type="text" id="busca" placeholder="🔍 Buscar lançamento ou empresa..." oninput="render()">
   <select id="f-grp" onchange="onGrpChange()">
     <option value="">Todos os grupos</option>
@@ -1573,10 +1577,25 @@ function showTable() {
   document.getElementById('stats-grid').style.display='';
   document.getElementById('totals-row').style.display='';
   document.getElementById('prog-w').style.display='';
-  document.getElementById('banner').classList.add('show');
+  // Atualiza tags de arquivo no painel colapsável
   document.getElementById('ftags').innerHTML = files.map(f =>
     `<span class="ftag${/fatura|cc|cartao/i.test(f)?' cc':''}">${/fatura|cc|cartao/i.test(f)?'💳':'📄'} ${f}</span>`
   ).join('');
+  // Mostra botão compacto com contador
+  const btn = document.getElementById('btn-arq');
+  const label = document.getElementById('btn-arq-label');
+  if (files.length > 0) {
+    btn.style.display = '';
+    label.textContent = files.length + ' arquivo' + (files.length > 1 ? 's' : '');
+  } else {
+    btn.style.display = 'none';
+  }
+}
+
+function toggleArquivos() {
+  const banner = document.getElementById('banner');
+  const aberto = banner.style.display !== 'none';
+  banner.style.display = aberto ? 'none' : 'flex';
 }
 
 // ─── RENDER ───────────────────────────────────────────────────────────────────
@@ -3251,7 +3270,8 @@ function limpar(){
   document.getElementById('stats-grid').style.display='none';
   document.getElementById('totals-row').style.display='none';
   document.getElementById('prog-w').style.display='none';
-  document.getElementById('banner').classList.remove('show');
+  document.getElementById('banner').style.display = 'none';
+  document.getElementById('btn-arq').style.display = 'none';
   render(); updStats(); renderDRE();
 }
 
