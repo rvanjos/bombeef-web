@@ -116,6 +116,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
   <button class="tab" onclick="showSec('diasemana',this)">📅 Por Dia da Semana</button>
   <button class="tab" onclick="showSec('diario',this)">📈 Análise Diária</button>
   <button class="tab" onclick="showSec('abc',this)">🔤 Curva ABC</button>
+  <button class="tab" onclick="showSec('estrategia',this)">🎯 Estratégia</button>
   <button class="tab" onclick="showSec('importar',this)">📥 Importar</button>
 </div>
 
@@ -302,6 +303,72 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
   </div>
 </div>
 
+<!-- ── ESTRATÉGIA ── -->
+<div id="sec-estrategia" class="sec" style="display:none">
+
+  <!-- Margem ponderada -->
+  <div class="card" style="padding:16px 20px;margin-bottom:14px">
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);margin-bottom:12px">📊 Margem de Lucro Real</div>
+    <div id="estr-margem-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px"></div>
+  </div>
+
+  <!-- Classificação estratégica (Matriz) -->
+  <div class="card" style="padding:16px 20px;margin-bottom:14px">
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);margin-bottom:12px">🏷️ Classificação Estratégica de Produtos</div>
+    <div id="estr-matriz-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px"></div>
+  </div>
+
+  <!-- Alertas acionáveis -->
+  <div class="card" style="padding:16px 20px;margin-bottom:14px">
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);margin-bottom:12px">🚨 Alertas Acionáveis</div>
+    <div id="estr-alertas" style="display:flex;flex-direction:column;gap:8px"></div>
+  </div>
+
+  <!-- Rentabilidade por dia da semana -->
+  <div class="card" style="padding:16px 20px;margin-bottom:14px">
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);margin-bottom:12px">📅 Rentabilidade por Dia da Semana</div>
+    <div id="estr-dsem" style="overflow-x:auto">
+      <table class="tbl" style="width:100%">
+        <thead><tr>
+          <th>Dia</th><th class="r">Faturamento</th><th class="r">Lucro Bruto</th>
+          <th class="r">Margem %</th><th class="r">Ticket Médio</th><th class="r">Qtd</th>
+        </tr></thead>
+        <tbody id="estr-dsem-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Simulador de preço -->
+  <div class="card" style="padding:16px 20px">
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);margin-bottom:12px">💡 Simulador de Reajuste de Preço</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;align-items:flex-end">
+      <div>
+        <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:3px">Produto (código ou nome)</label>
+        <input id="sim-busca" type="text" placeholder="Ex: 4133 ou Picanha..." style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;width:260px" oninput="simBuscar()">
+      </div>
+    </div>
+    <div id="sim-resultado" style="display:none">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:12px">
+        <div style="background:#f8f4f0;border-radius:8px;padding:12px">
+          <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:8px">ATUAL</div>
+          <div id="sim-atual"></div>
+        </div>
+        <div style="background:#f0faf4;border-radius:8px;padding:12px">
+          <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:8px">SIMULADO</div>
+          <div style="margin-bottom:8px">
+            <label style="font-size:11px;color:var(--muted)">Novo preço (R$)</label>
+            <input id="sim-novo-preco" type="number" step="0.50" min="0" style="padding:5px 8px;border:1px solid #a7d7c5;border-radius:5px;font-size:13px;width:120px;margin-top:3px" oninput="simCalcular()">
+          </div>
+          <div id="sim-projetado"></div>
+        </div>
+      </div>
+      <div id="sim-impacto" style="display:none;padding:10px 14px;border-radius:8px;font-size:13px"></div>
+    </div>
+    <div id="sim-vazio" style="color:var(--muted);font-size:12px">Digite o código ou nome de um produto para simular um reajuste de preço.</div>
+  </div>
+
+</div>
+
 <!-- ── IMPORTAR ── -->
 <div id="sec-importar" class="sec">
   <div class="card" style="margin-bottom:12px;padding:16px">
@@ -358,11 +425,12 @@ function showSec(id, btn) {
   document.getElementById('sec-'+id).classList.add('active');
   if(btn) btn.classList.add('active');
   if(!_pronto) return; // aguarda init antes de carregar dados
-  if(id==='produtos') carregarProdutos();
-  if(id==='diasemana') carregarDiaSemana();
-  if(id==='diario') carregarDiario();
-  if(id==='abc') carregarABC();
-  if(id==='importar') carregarHistorico();
+  if(id==='produtos')   carregarProdutos();
+  if(id==='diasemana')  carregarDiaSemana();
+  if(id==='diario')     carregarDiario();
+  if(id==='abc')        carregarABC();
+  if(id==='estrategia') carregarEstrategia();
+  if(id==='importar')   carregarHistorico();
 }
 
 // ── Filtros ─────────────────────────────────────────────────────────────────
@@ -688,7 +756,284 @@ function renderABC() {
     </tr>`;}).join('');
 }
 
-// ── Curva ABC ────────────────────────────────────────────────────────────────
+// ── Estratégia ───────────────────────────────────────────────────────────────
+let _estrRows = []; // cache dos dados de produtos com margem
+
+async function carregarEstrategia() {
+  const d = await api.get('/api/vendas-produto/produtos'+queryStr({ordem:'fat'}));
+  if(!d.ok) return;
+  _estrRows = d.data || [];
+  _renderEstrMargemPonderada();
+  _renderEstrMatriz();
+  _renderEstrAlertas();
+  await _renderEstrDiaSemana();
+}
+
+// 1. Margem ponderada
+function _renderEstrMargemPonderada() {
+  const comMargem = _estrRows.filter(r => r.margem_pct !== null && r.margem_pct !== undefined && parseFloat(r.margem_pct) > 0);
+  const fatTotal  = _estrRows.reduce((s,r)=>s+parseFloat(r.fat_total),0);
+  const lucTotal  = comMargem.reduce((s,r)=>s+parseFloat(r.lucro_bruto||0),0);
+  const fatComMarg= comMargem.reduce((s,r)=>s+parseFloat(r.fat_total),0);
+
+  const margPond  = fatComMarg > 0 ? (lucTotal/fatComMarg*100).toFixed(1) : null;
+  const margMedia = comMargem.length > 0 ? (comMargem.reduce((s,r)=>s+parseFloat(r.margem_pct),0)/comMargem.length).toFixed(1) : null;
+  const diff      = margPond && margMedia ? (parseFloat(margPond)-parseFloat(margMedia)).toFixed(1) : null;
+
+  const cor = margPond === null ? '#999' : parseFloat(margPond) >= 40 ? 'var(--green)' : parseFloat(margPond) >= 30 ? 'var(--orange)' : 'var(--red-l)';
+  const alerta = margPond && parseFloat(margPond) < 30
+    ? `<div style="background:#fff3f3;border:1px solid #fca5a5;border-radius:6px;padding:8px 12px;font-size:12px;color:#991b1b;margin-top:10px">⚠️ Margem ponderada abaixo de 30% — revisar preços e custos com prioridade.</div>` : '';
+
+  document.getElementById('estr-margem-grid').innerHTML = `
+    <div style="background:#f0faf4;border-radius:10px;padding:14px;border-left:4px solid var(--green)">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Margem Média Simples</div>
+      <div style="font-size:24px;font-weight:800;color:var(--green)">${margMedia !== null ? margMedia+'%' : '—'}</div>
+      <div style="font-size:10px;color:var(--muted);margin-top:2px">Média aritmética dos produtos</div>
+    </div>
+    <div style="background:#f0f4ff;border-radius:10px;padding:14px;border-left:4px solid ${cor}">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Margem Real Ponderada ★</div>
+      <div style="font-size:24px;font-weight:800;color:${cor}">${margPond !== null ? margPond+'%' : '—'}</div>
+      <div style="font-size:10px;color:var(--muted);margin-top:2px">Lucro real / faturamento real</div>
+    </div>
+    <div style="background:#fafafa;border-radius:10px;padding:14px;border-left:4px solid var(--muted)">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Diferença</div>
+      <div style="font-size:24px;font-weight:800;color:${diff && parseFloat(diff)>=0?'var(--green)':'var(--red-l)'}">${diff !== null ? (parseFloat(diff)>=0?'+':'')+diff+'%' : '—'}</div>
+      <div style="font-size:10px;color:var(--muted);margin-top:2px">Ponderada vs média simples</div>
+    </div>
+    <div style="background:#fffbeb;border-radius:10px;padding:14px;border-left:4px solid var(--orange)">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Lucro Bruto Estimado</div>
+      <div style="font-size:22px;font-weight:800;color:var(--orange)">${fmt.brl(lucTotal)}</div>
+      <div style="font-size:10px;color:var(--muted);margin-top:2px">${comMargem.length} produtos com custo</div>
+    </div>
+    ${alerta}`;
+}
+
+// 2. Classificação estratégica (Matriz)
+function _renderEstrMatriz() {
+  const diasTotal = _estrRows.reduce((m,r)=>Math.max(m,parseInt(r.frequencia||0)),0);
+  const freqBaixa = diasTotal * 0.3;
+
+  const matriz = {
+    trator:      { label:'🚀 Trator',      cor:'#1a7a4a', bg:'#f0faf4', desc:'Alto fat. + alta margem → priorizar!',       items:[] },
+    vitrine:     { label:'🏪 Vitrine',     cor:'#c76b00', bg:'#fff7ed', desc:'Alto fat. + margem baixa → reajustar preço', items:[] },
+    oportunidade:{ label:'💎 Oportunidade',cor:'#1a5c8a', bg:'#eff6ff', desc:'Baixo fat. + alta margem → fazer campanha',  items:[] },
+    problema:    { label:'⚠️ Problema',    cor:'#991b1b', bg:'#fff1f2', desc:'Baixo fat. + margem baixa → revisar/cortar', items:[] },
+    sazonal:     { label:'📅 Sazonal',     cor:'#6c3483', bg:'#fdf4ff', desc:'Alto fat. + baixa freq. → garantir estoque', items:[] },
+  };
+
+  for (const r of _estrRows) {
+    const abc = r.abc;
+    const marg = r.margem_pct !== null ? parseFloat(r.margem_pct) : null;
+    const freq = parseInt(r.frequencia||0);
+    const isAltoFat = abc === 'A' || abc === 'B';
+
+    if (abc === 'A' && freq < freqBaixa) { matriz.sazonal.items.push(r); continue; }
+    if (marg === null) continue;
+    if (isAltoFat && marg >= 40)  { matriz.trator.items.push(r); continue; }
+    if (isAltoFat && marg < 30)   { matriz.vitrine.items.push(r); continue; }
+    if (!isAltoFat && marg >= 45) { matriz.oportunidade.items.push(r); continue; }
+    if (!isAltoFat && marg < 25)  { matriz.problema.items.push(r); continue; }
+  }
+
+  document.getElementById('estr-matriz-grid').innerHTML = Object.values(matriz).map(g => {
+    const fatG   = g.items.reduce((s,r)=>s+parseFloat(r.fat_total),0);
+    const lucG   = g.items.reduce((s,r)=>s+parseFloat(r.lucro_bruto||0),0);
+    const margG  = fatG > 0 ? (lucG/fatG*100).toFixed(1) : null;
+    const top    = g.items.slice(0,3);
+    return `<div style="background:${g.bg};border:1px solid ${g.cor}33;border-radius:10px;padding:14px">
+      <div style="font-weight:800;font-size:13px;color:${g.cor};margin-bottom:4px">${g.label}</div>
+      <div style="font-size:10px;color:#666;margin-bottom:10px">${g.desc}</div>
+      <div style="display:flex;gap:12px;margin-bottom:8px">
+        <div><div style="font-size:10px;color:var(--muted)">Produtos</div><div style="font-weight:700;font-size:16px">${g.items.length}</div></div>
+        <div><div style="font-size:10px;color:var(--muted)">Faturamento</div><div style="font-weight:700;font-size:13px">${fmt.brl(fatG)}</div></div>
+        ${margG ? `<div><div style="font-size:10px;color:var(--muted)">Margem</div><div style="font-weight:700;font-size:13px;color:${g.cor}">${margG}%</div></div>` : ''}
+      </div>
+      <div style="font-size:10px;color:var(--muted);margin-bottom:4px">Top produtos:</div>
+      ${top.map(r=>`<div style="font-size:11px;padding:2px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.nome}">${r.nome?.slice(0,32)}${r.margem_pct?` <span style="color:${g.cor};font-weight:600">(${parseFloat(r.margem_pct).toFixed(0)}%)</span>`:''}</div>`).join('')}
+      ${g.items.length > 3 ? `<div style="font-size:10px;color:var(--muted);margin-top:2px">+${g.items.length-3} mais</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+// 3. Alertas acionáveis
+function _renderEstrAlertas() {
+  const diasTotal = _estrRows.reduce((m,r)=>Math.max(m,parseInt(r.frequencia||0)),0);
+  const alertas = [];
+
+  // Alerta 1: Classe A com margem baixa
+  const aMargBaixa = _estrRows.filter(r=>r.abc==='A' && r.margem_pct!==null && parseFloat(r.margem_pct)<30);
+  if (aMargBaixa.length) alertas.push({
+    prio:'Alta', cor:'#991b1b', bg:'#fff1f2', ico:'🔴',
+    titulo: `${aMargBaixa.length} produto(s) Classe A com margem baixa`,
+    msg: 'Alto volume com margem baixa. Avaliar reajuste de preço ou negociação de custo.',
+    prods: aMargBaixa.slice(0,5).map(r=>`${r.nome?.slice(0,25)} (${parseFloat(r.margem_pct).toFixed(0)}%)`)
+  });
+
+  // Alerta 2: Alta margem + baixa saída
+  const altaMargBaixaFreq = _estrRows.filter(r=>r.margem_pct!==null && parseFloat(r.margem_pct)>=45 && parseInt(r.frequencia||0)<diasTotal*0.3 && parseFloat(r.fat_total)<3000);
+  if (altaMargBaixaFreq.length) alertas.push({
+    prio:'Média', cor:'#c76b00', bg:'#fff7ed', ico:'💡',
+    titulo: `${altaMargBaixaFreq.length} produto(s) rentável(is) com baixa saída`,
+    msg: 'Produto rentável com baixa saída. Candidato para campanha, exposição ou oferta no atendimento.',
+    prods: altaMargBaixaFreq.slice(0,5).map(r=>`${r.nome?.slice(0,25)} (${parseFloat(r.margem_pct).toFixed(0)}%)`)
+  });
+
+  // Alerta 3: Campeão com risco de ruptura
+  const campeoes = _estrRows.filter(r=>r.abc==='A' && parseInt(r.frequencia||0)>=diasTotal*0.7);
+  if (campeoes.length) alertas.push({
+    prio:'Alta', cor:'#1a5c8a', bg:'#eff6ff', ico:'📦',
+    titulo: `${campeoes.length} produto(s) essencial(is) — não podem faltar`,
+    msg: 'Produto de alta frequência e volume. Priorizar estoque e evitar ruptura.',
+    prods: campeoes.slice(0,5).map(r=>r.nome?.slice(0,30))
+  });
+
+  // Alerta 4: Sem custo cadastrado
+  const semCusto = _estrRows.filter(r=>!r.preco_custo_unit || parseFloat(r.preco_custo_unit||0)===0);
+  if (semCusto.length) alertas.push({
+    prio:'Baixa', cor:'#6b7280', bg:'#f9fafb', ico:'⚪',
+    titulo: `${semCusto.length} produto(s) sem custo cadastrado`,
+    msg: 'Margem incompleta. Acesse Produtos e cadastre o preço de custo para ver a análise completa.',
+    prods: semCusto.slice(0,3).map(r=>r.nome?.slice(0,30))
+  });
+
+  const prioCor = {'Alta':'#991b1b','Média':'#c76b00','Baixa':'#1a5c8a'};
+  document.getElementById('estr-alertas').innerHTML = alertas.length
+    ? alertas.map(a=>`
+      <div style="background:${a.bg};border:1px solid ${a.cor}33;border-radius:8px;padding:12px 14px;display:flex;gap:12px">
+        <span style="font-size:20px;flex-shrink:0">${a.ico}</span>
+        <div style="flex:1">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+            <span style="font-weight:700;font-size:12px;color:${a.cor}">${a.titulo}</span>
+            <span style="background:${prioCor[a.prio]};color:#fff;font-size:9px;font-weight:700;padding:1px 6px;border-radius:10px">${a.prio}</span>
+          </div>
+          <div style="font-size:11px;color:#555;margin-bottom:6px">${a.msg}</div>
+          <div style="display:flex;flex-wrap:wrap;gap:4px">
+            ${a.prods.map(p=>`<span style="background:rgba(0,0,0,.06);border-radius:4px;padding:1px 7px;font-size:10px">${p}</span>`).join('')}
+          </div>
+        </div>
+      </div>`).join('')
+    : '<div style="color:var(--muted);font-size:12px">Nenhum alerta identificado para o período selecionado.</div>';
+}
+
+// 4. Rentabilidade por dia da semana (com margem)
+async function _renderEstrDiaSemana() {
+  const d1 = await api.get('/api/vendas-produto/por-dia-semana'+queryStr());
+  const d2 = await api.get('/api/vendas-produto/top-por-dia-semana'+queryStr());
+  if(!d1.ok) return;
+  const rows = d1.data || [];
+  const DIAS = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
+
+  // Cruzar com custos dos produtos (_estrRows) para calcular lucro por dia
+  const custoMap = {};
+  _estrRows.forEach(r => { if(r.preco_custo_unit) custoMap[r.codigo] = parseFloat(r.preco_custo_unit); });
+
+  document.getElementById('estr-dsem-tbody').innerHTML = rows.map(r => {
+    const lucro = r.lucro_bruto !== null ? parseFloat(r.lucro_bruto||0) : null;
+    const fat   = parseFloat(r.fat_total||0);
+    const qtd   = parseFloat(r.qtd_total||0);
+    const marg  = fat > 0 && lucro !== null ? (lucro/fat*100).toFixed(1) : null;
+    const ticket= r.cupons > 0 ? (fat/r.cupons).toFixed(2) : null;
+    const margCor = marg === null ? '#ccc' : parseFloat(marg)>=40?'var(--green)':parseFloat(marg)>=25?'var(--orange)':'var(--red-l)';
+    return `<tr>
+      <td style="font-weight:600">${DIAS[parseInt(r.dow)]}</td>
+      <td class="r mono">${fmt.brl(fat)}</td>
+      <td class="r mono" style="color:${lucro!==null&&lucro>=0?'var(--green)':'var(--red-l)'}">${lucro!==null?fmt.brl(lucro):'—'}</td>
+      <td class="r" style="font-weight:700;color:${margCor}">${marg!==null?marg+'%':'—'}</td>
+      <td class="r mono" style="font-size:11px">${ticket?fmt.brl(parseFloat(ticket)):'—'}</td>
+      <td class="r mono">${fmt.n(qtd)}</td>
+    </tr>`;
+  }).join('');
+}
+
+// 5. Simulador de preço
+let _simProduto = null;
+function simBuscar() {
+  const q = (document.getElementById('sim-busca').value||'').toLowerCase().trim();
+  if (!q || !_estrRows.length) {
+    document.getElementById('sim-resultado').style.display='none';
+    document.getElementById('sim-vazio').style.display='';
+    return;
+  }
+  _simProduto = _estrRows.find(r =>
+    String(r.codigo||'').includes(q) ||
+    (r.nome||'').toLowerCase().includes(q)
+  ) || null;
+  if (!_simProduto) {
+    document.getElementById('sim-resultado').style.display='none';
+    document.getElementById('sim-vazio').textContent='Produto não encontrado no período selecionado.';
+    document.getElementById('sim-vazio').style.display='';
+    return;
+  }
+  document.getElementById('sim-resultado').style.display='';
+  document.getElementById('sim-vazio').style.display='none';
+  document.getElementById('sim-novo-preco').value = '';
+  document.getElementById('sim-impacto').style.display='none';
+
+  const p = _simProduto;
+  const custo   = parseFloat(p.preco_custo_unit||0);
+  const precoAt = parseFloat(p.preco_medio||0);
+  const qtd     = parseFloat(p.qtd_total||0);
+  const fatAt   = parseFloat(p.fat_total||0);
+  const lucAt   = custo > 0 ? (precoAt - custo) * qtd : null;
+  const margAt  = p.margem_pct !== null ? parseFloat(p.margem_pct) : null;
+
+  document.getElementById('sim-atual').innerHTML = `
+    <div style="font-size:12px;font-weight:700;margin-bottom:8px">${p.nome?.slice(0,35)}</div>
+    ${_simLinha('Preço médio', fmt.brl(precoAt))}
+    ${custo>0?_simLinha('Custo unitário', fmt.brl(custo)):'<div style="font-size:11px;color:var(--muted)">⚠️ Custo não cadastrado</div>'}
+    ${_simLinha('Qtd vendida', fmt.n(qtd))}
+    ${_simLinha('Faturamento', fmt.brl(fatAt))}
+    ${lucAt!==null?_simLinha('Lucro bruto', fmt.brl(lucAt), lucAt>=0?'var(--green)':'var(--red-l)'):''}
+    ${margAt!==null?_simLinha('Margem %', margAt.toFixed(1)+'%', margAt>=40?'var(--green)':margAt>=25?'var(--orange)':'var(--red-l)'):''}`;
+
+  simCalcular();
+}
+
+function _simLinha(label, val, cor='') {
+  return `<div style="display:flex;justify-content:space-between;font-size:11px;padding:2px 0">
+    <span style="color:var(--muted)">${label}</span>
+    <span style="font-weight:600;${cor?'color:'+cor:''}">${val}</span>
+  </div>`;
+}
+
+function simCalcular() {
+  if(!_simProduto) return;
+  const novoPreco = parseFloat(document.getElementById('sim-novo-preco').value||'0');
+  if(!novoPreco || novoPreco <= 0) {
+    document.getElementById('sim-projetado').innerHTML = '<div style="font-size:11px;color:var(--muted)">Informe o novo preço para ver a simulação.</div>';
+    document.getElementById('sim-impacto').style.display='none';
+    return;
+  }
+  const p = _simProduto;
+  const custo = parseFloat(p.preco_custo_unit||0);
+  const qtd   = parseFloat(p.qtd_total||0);
+  const precoAt = parseFloat(p.preco_medio||0);
+
+  const fatSim  = novoPreco * qtd;
+  const lucSim  = custo > 0 ? (novoPreco - custo) * qtd : null;
+  const margSim = custo > 0 && novoPreco > 0 ? ((novoPreco-custo)/novoPreco*100) : null;
+
+  const lucAt   = custo > 0 ? (precoAt - custo) * qtd : null;
+  const impacto = lucAt !== null && lucSim !== null ? lucSim - lucAt : null;
+  const varFat  = precoAt > 0 ? ((novoPreco-precoAt)/precoAt*100).toFixed(1) : null;
+
+  document.getElementById('sim-projetado').innerHTML = `
+    ${_simLinha('Novo preço', fmt.brl(novoPreco))}
+    ${_simLinha('Variação preço', varFat?(parseFloat(varFat)>=0?'+':'')+varFat+'%':'—', parseFloat(varFat||0)>=0?'var(--green)':'var(--red-l)')}
+    ${_simLinha('Faturamento sim.', fmt.brl(fatSim))}
+    ${lucSim!==null?_simLinha('Lucro sim.', fmt.brl(lucSim), lucSim>=0?'var(--green)':'var(--red-l)'):''}
+    ${margSim!==null?_simLinha('Margem sim.', margSim.toFixed(1)+'%', margSim>=40?'var(--green)':margSim>=25?'var(--orange)':'var(--red-l)'):''}`;
+
+  if(impacto !== null) {
+    const el = document.getElementById('sim-impacto');
+    el.style.display='';
+    const cor = impacto >= 0 ? '#f0faf4' : '#fff1f2';
+    const tcor = impacto >= 0 ? 'var(--green)' : 'var(--red-l)';
+    el.style.background = cor;
+    el.innerHTML = `<strong>Impacto no lucro:</strong> <span style="color:${tcor};font-weight:700">${impacto>=0?'+':''}${fmt.brl(impacto)}</span>
+      ${impacto>=0?' — reajuste melhora rentabilidade':' — reajuste reduz rentabilidade'}`;
+  }
+}
 async function carregarABC() {
   const d = await api.get('/api/vendas-produto/produtos'+queryStr({ordem:'fat'}));
   if(!d.ok) return;
