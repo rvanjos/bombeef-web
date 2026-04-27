@@ -1048,10 +1048,12 @@ async function confirmarImportCC() {
         fullText += '\n--- PAGE ---\n';
       }
       const lancs = parseFaturaPDF(fullText, file.name);
-      // LOG TEMPORÁRIO — remover após diagnóstico
-      console.log('=== PDF EXTRAÍDO ===');
-      console.log(fullText.slice(0, 3000));
-      console.log('=== FIM ===');
+      // LOG TEMPORÁRIO
+      console.log('=== PDF EXTRAÍDO PÁGINA 2 ===');
+      const pg2start = fullText.indexOf('--- PAGE ---');
+      console.log('Posição PAGE separator:', pg2start);
+      console.log('Total texto:', fullText.length, 'chars');
+      console.log('Texto completo p2:', fullText.slice(pg2start, pg2start + 2000));
       console.log('Lançamentos encontrados:', lancs.length);
       if (!lancs.length) { toast('⚠️ Nenhum lançamento encontrado no PDF'); return; }
       // Corrige mês dos lançamentos sem data para o mês confirmado
@@ -1340,7 +1342,13 @@ function parseFaturaGenerica(text) {
 function parseCCRows(rows) {
   if (rows.length < 2) return [];
 
-  // ── Detecta formato Itaú Empresas (fatura com cabeçalho livre) ──────────────
+  const h0 = rows[0].map(c => String(c).toLowerCase().trim()).join('|');
+
+  // ── Formato CSV Caixa (gerado por ChatGPT ou exportado manualmente) ──────────
+  // Colunas: data;cartao_final;tipo;descricao;cidade;parcela_atual;parcelas_total;valor;natureza
+  if (h0.includes('cartao_final') || h0.includes('cartão_final') || h0.includes('natureza')) {
+    return parseCCCaixaCSV(rows);
+  }
   // Heurística: se a linha 0 não tem colunas "data/descrição/valor" padronizadas,
   // trata como fatura Itaú onde os lançamentos ficam intercalados após linhas de seção.
   const h0 = rows[0].map(c => String(c).toLowerCase().trim()).join('|');
