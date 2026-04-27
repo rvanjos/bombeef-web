@@ -1367,7 +1367,6 @@ function parseCCRows(rows) {
   }
   // Heurística: se a linha 0 não tem colunas "data/descrição/valor" padronizadas,
   // trata como fatura Itaú onde os lançamentos ficam intercalados após linhas de seção.
-  const h0 = rows[0].map(c => String(c).toLowerCase().trim()).join('|');
   const isGeneric = ['data','descri','valor','lancamento','estabelecimento'].some(k => h0.includes(k));
 
   if (!isGeneric) {
