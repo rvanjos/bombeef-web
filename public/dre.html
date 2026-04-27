@@ -2087,28 +2087,48 @@ function updMesFiltro() {
 }
 
 function updStats() {
-  const at=TXS.filter(t=>!t.ignorar);
-  const cl=at.filter(t=>t.categoria).length;
-  const pend=at.length-cl;
-  const rec=at.filter(t=>parseFloat(t.valor||0)>0).reduce((s,t)=>s+parseFloat(t.valor),0);
-  const dep=at.filter(t=>parseFloat(t.valor||0)<0).reduce((s,t)=>s+Math.abs(parseFloat(t.valor)),0);
-  const lucro=rec-dep;
-  const pct=at.length?Math.round(cl/at.length*100):0;
+  // Para o header de totais, considera apenas lançamentos até o mês atual
+  // Meses futuros com provisões distorcem o lucro exibido
+  const hoje = new Date();
+  const mesAtualNum = hoje.getFullYear() * 100 + (hoje.getMonth() + 1); // ex: 202604
+  function mesParaNum(m) {
+    if (!m) return 0;
+    const [mm, yy] = m.split('/');
+    return parseInt(yy) * 100 + parseInt(mm);
+  }
 
-  document.getElementById('s-tot').textContent=fmt.n(TXS.length);
-  document.getElementById('s-cls').textContent=`${cl}/${at.length}`;
-  document.getElementById('s-pen').textContent=fmt.n(pend);
-  document.getElementById('s-rec').textContent=fmt.brl(rec);
-  document.getElementById('s-dep').textContent=fmt.brl(dep);
-  document.getElementById('t-rec').textContent=fmt.brl(rec);
-  document.getElementById('t-dep').textContent=fmt.brl(dep);
-  const lEl=document.getElementById('t-luc');
-  lEl.textContent=fmt.brl(lucro);
-  lEl.style.color=lucro>=0?'var(--green)':'var(--red-l)';
-  document.getElementById('tc-lucro').style.borderLeft=`3px solid ${lucro>=0?'var(--green)':'var(--red-l)'}`;
-  document.getElementById('prog-f').style.width=pct+'%';
-  document.getElementById('prog-p').textContent=pct+'%';
-  document.getElementById('ph-sub').textContent=`${mesRef} · ${TXS.length} lanç · ${pct}% classificado`;
+  const at  = TXS.filter(t => !t.ignorar);
+  const ate = at.filter(t => mesParaNum(t.mes || mesRef) <= mesAtualNum);
+
+  const cl   = at.filter(t => t.categoria).length;
+  const pend = at.length - cl;
+  const rec  = ate.filter(t => parseFloat(t.valor||0) > 0 && !CATS_NAO_OPERACIONAIS.has(t.categoria)).reduce((s,t)=>s+parseFloat(t.valor),0);
+  const dep  = ate.filter(t => parseFloat(t.valor||0) < 0 && !CATS_NAO_OPERACIONAIS.has(t.categoria)).reduce((s,t)=>s+Math.abs(parseFloat(t.valor)),0);
+  const lucro = rec - dep;
+  const pct  = at.length ? Math.round(cl/at.length*100) : 0;
+
+  // Receitas e despesas totais (todos os meses, para o contador)
+  const recAll = at.filter(t=>parseFloat(t.valor||0)>0).reduce((s,t)=>s+parseFloat(t.valor),0);
+  const depAll = at.filter(t=>parseFloat(t.valor||0)<0).reduce((s,t)=>s+Math.abs(parseFloat(t.valor)),0);
+
+  document.getElementById('s-tot').textContent = fmt.n(TXS.length);
+  document.getElementById('s-cls').textContent = `${cl}/${at.length}`;
+  document.getElementById('s-pen').textContent = fmt.n(pend);
+  document.getElementById('s-rec').textContent = fmt.brl(recAll);
+  document.getElementById('s-dep').textContent = fmt.brl(depAll);
+  document.getElementById('t-rec').textContent = fmt.brl(rec);
+  document.getElementById('t-dep').textContent = fmt.brl(dep);
+
+  const lEl = document.getElementById('t-luc');
+  lEl.textContent = fmt.brl(lucro);
+  lEl.style.color = lucro >= 0 ? 'var(--green)' : 'var(--red-l)';
+  document.getElementById('tc-lucro').style.borderLeft = `3px solid ${lucro>=0?'var(--green)':'var(--red-l)'}`;
+  document.getElementById('prog-f').style.width = pct+'%';
+  document.getElementById('prog-p').textContent = pct+'%';
+
+  // Label do header: indica que lucro é até o mês atual
+  const mesAtualStr = `${String(hoje.getMonth()+1).padStart(2,'0')}/${hoje.getFullYear()}`;
+  document.getElementById('ph-sub').textContent = `Até ${mesAtualStr} · ${TXS.length} lanç · ${pct}% classificado`;
 }
 
 // ─── DRE VISUAL ───────────────────────────────────────────────────────────────
@@ -2444,77 +2464,84 @@ function _buildDRE(el, full) {
 
   // Ajuste de estoque: CMV real = Compras + Estoque Inicial - Estoque Final
   // Estoque Inicial do mês M = Estoque Final do mês anterior
-  const EST = window._estoquesMes || {};
-  // Linha de ajuste de estoque no DRE
-  const estLinha = (() => {
-    let html = `<tr style="background:#fff8f0">
-      <td style="${TDL};color:#b35c00;font-size:11px;font-style:italic;padding-left:${full?'28':'20'}px">
-        📦 Ajuste de Estoque <span style="font-size:10px;color:#aaa">(+ini −fin)</span>
-      </td>`;
-    let totalAjuste = 0;
-    for (const m of meses) {
-      // Estoque inicial = estoque final do mês anterior
+  // Ajuste de estoque: SOMENTE no modo Competência
+  // No modo Caixa, o CMV já reflete o que foi pago — estoque distorceria o fluxo real
+  if (isComp) {
+    const EST = window._estoquesMes || {};
+
+    // Linha de ajuste de estoque (+ini −fin)
+    const estLinha = (() => {
+      let html = `<tr style="background:#fff8f0">
+        <td style="${TDL};color:#b35c00;font-size:11px;font-style:italic;padding-left:${full?'28':'20'}px">
+          📦 Ajuste de Estoque <span style="font-size:10px;color:#aaa">(+ini −fin)</span>
+        </td>`;
+      let totalAjuste = 0;
+      for (const m of meses) {
+        const [mm, yy] = m.split('/');
+        const dtAnterior = new Date(parseInt(yy), parseInt(mm) - 2, 1);
+        const mAnterior = `${String(dtAnterior.getMonth()+1).padStart(2,'0')}/${dtAnterior.getFullYear()}`;
+        const estIni = parseFloat(EST[mAnterior] || 0);
+        const estFin = parseFloat(EST[m] || 0);
+        const ajuste = estIni - estFin;
+        totalAjuste += ajuste;
+        const cor = ajuste > 0 ? '#e74c3c' : ajuste < 0 ? '#2ecc71' : '#bbb';
+        const txt = ajuste === 0
+          ? '<span style="color:#bbb;font-family:\'DM Mono\',monospace">—</span>'
+          : `<span style="font-family:'DM Mono',monospace;color:${cor}">${ajuste > 0 ? '-' : '+'}${fmt.brl(Math.abs(ajuste))}</span>`;
+        html += `<td style="${TD}">${txt}</td>`;
+      }
+      if (showTot) {
+        const cor = totalAjuste > 0 ? '#e74c3c' : totalAjuste < 0 ? '#2ecc71' : '#bbb';
+        html += `<td style="${TD};font-weight:700">${totalAjuste === 0 ? '—' : `<span style="font-family:'DM Mono',monospace;color:${cor}">${totalAjuste > 0 ? '-' : '+'}${fmt.brl(Math.abs(totalAjuste))}</span>`}</td>`;
+      }
+      html += '</tr>';
+      return html;
+    })();
+    h += estLinha;
+
+    // Linha editável de Estoque Final por mês
+    const estFinalLinha = (() => {
+      let html = `<tr style="background:#fff3e0">
+        <td style="${TDL};color:#b35c00;font-weight:600;font-size:11px;padding-left:${full?'28':'20'}px">
+          📦 Estoque Final (informar)
+        </td>`;
+      for (const m of meses) {
+        const val = parseFloat(EST[m] || 0);
+        const mEnc = m.replace('/', '_');
+        html += `<td style="${TD};padding:3px 6px">
+          <input type="number" step="100" min="0"
+            value="${val || ''}"
+            placeholder="0,00"
+            title="Estoque final de ${m}"
+            style="width:90px;text-align:right;font-size:11px;font-family:'DM Mono',monospace;border:1px solid #fcd34d;border-radius:4px;padding:2px 5px;background:#fffbeb"
+            onchange="setEstoqueFinal('${mEnc}', this.value)"
+            onclick="event.stopPropagation()"
+          >
+        </td>`;
+      }
+      if (showTot) html += `<td style="${TD}"></td>`;
+      html += '</tr>';
+      return html;
+    })();
+    h += estFinalLinha;
+
+    // Incorpora ajuste ao Lucro Bruto SOMENTE no modo Competência
+    meses.forEach(m => {
       const [mm, yy] = m.split('/');
       const dtAnterior = new Date(parseInt(yy), parseInt(mm) - 2, 1);
       const mAnterior = `${String(dtAnterior.getMonth()+1).padStart(2,'0')}/${dtAnterior.getFullYear()}`;
-      const estIni = parseFloat(EST[mAnterior] || 0);
-      const estFin = parseFloat(EST[m] || 0);
-      const ajuste = estIni - estFin; // positivo = consumiu estoque (aumenta CMV); negativo = estocou (reduz CMV)
-      totalAjuste += ajuste;
-      const cor = ajuste > 0 ? '#e74c3c' : ajuste < 0 ? '#2ecc71' : '#bbb';
-      const txt = ajuste === 0
-        ? '<span style="color:#bbb;font-family:\'DM Mono\',monospace">—</span>'
-        : `<span style="font-family:'DM Mono',monospace;color:${cor}">${ajuste > 0 ? '-' : '+'}${fmt.brl(Math.abs(ajuste))}</span>`;
-      html += `<td style="${TD}">${txt}</td>`;
-    }
-    if (showTot) {
-      const cor = totalAjuste > 0 ? '#e74c3c' : totalAjuste < 0 ? '#2ecc71' : '#bbb';
-      html += `<td style="${TD};font-weight:700">${totalAjuste === 0 ? '—' : `<span style="font-family:'DM Mono',monospace;color:${cor}">${totalAjuste > 0 ? '-' : '+'}${fmt.brl(Math.abs(totalAjuste))}</span>`}</td>`;
-    }
-    html += '</tr>';
-    return html;
-  })();
-  h += estLinha;
-
-  // Linha editável de Estoque Final por mês
-  const estFinalLinha = (() => {
-    let html = `<tr style="background:#fff3e0">
-      <td style="${TDL};color:#b35c00;font-weight:600;font-size:11px;padding-left:${full?'28':'20'}px">
-        📦 Estoque Final (informar)
-      </td>`;
-    for (const m of meses) {
-      const val = parseFloat(EST[m] || 0);
-      const mEnc = m.replace('/', '_');
-      html += `<td style="${TD};padding:3px 6px">
-        <input type="number" step="100" min="0"
-          value="${val || ''}"
-          placeholder="0,00"
-          title="Estoque final de ${m}"
-          style="width:90px;text-align:right;font-size:11px;font-family:'DM Mono',monospace;border:1px solid #fcd34d;border-radius:4px;padding:2px 5px;background:#fffbeb"
-          onchange="setEstoqueFinal('${mEnc}', this.value)"
-          onclick="event.stopPropagation()"
-        >
-      </td>`;
-    }
-    if (showTot) html += `<td style="${TD}"></td>`;
-    html += '</tr>';
-    return html;
-  })();
-  h += estFinalLinha;
-
-  // Incorpora ajuste ao CMV para o Lucro Bruto
-  meses.forEach(m => {
-    const [mm, yy] = m.split('/');
-    const dtAnterior = new Date(parseInt(yy), parseInt(mm) - 2, 1);
-    const mAnterior = `${String(dtAnterior.getMonth()+1).padStart(2,'0')}/${dtAnterior.getFullYear()}`;
-    const estIni = parseFloat((window._estoquesMes||{})[mAnterior] || 0);
-    const estFin = parseFloat((window._estoquesMes||{})[m] || 0);
-    const ajuste = estIni - estFin;
-    lucBrutoMes[m] = (lucBrutoMes[m] || 0) + sg('CMV', m) + ajuste;
-  });
+      const estIni = parseFloat((window._estoquesMes||{})[mAnterior] || 0);
+      const estFin = parseFloat((window._estoquesMes||{})[m] || 0);
+      const ajuste = estIni - estFin;
+      lucBrutoMes[m] = (lucBrutoMes[m] || 0) + sg('CMV', m) + ajuste;
+    });
+  } else {
+    // Modo Caixa: Lucro Bruto = Receitas + CMV pago (sem ajuste de estoque)
+    meses.forEach(m => {
+      lucBrutoMes[m] = (lucBrutoMes[m] || 0) + sg('CMV', m);
+    });
+  }
   h += renderSubtotal('CMV', null);
-
-  // ── RESULTADO 1: LUCRO BRUTO ───────────────────────────────────────────────
   h += renderResultado('LUCRO BRUTO', '🟢', lucBrutoMes, '#e8f7ef', '#22c55e');
   meses.forEach(m=>{ lucOpMes[m]=lucBrutoMes[m]||0; });
 
