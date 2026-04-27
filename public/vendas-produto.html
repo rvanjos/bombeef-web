@@ -242,10 +242,23 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
 
 <!-- ── CURVA ABC ── -->
 <div id="sec-abc" class="sec">
-  <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr)">
-    <div class="kpi g"><div class="kpi-l">Classe A (80%)</div><div class="kpi-v" id="abc-a-qtd">—</div><div class="kpi-s">produtos representam 80% fat</div></div>
-    <div class="kpi o"><div class="kpi-l">Classe B (15%)</div><div class="kpi-v" id="abc-b-qtd">—</div><div class="kpi-s">produtos representam 15% fat</div></div>
-    <div class="kpi r"><div class="kpi-l">Classe C (5%)</div><div class="kpi-v" id="abc-c-qtd">—</div><div class="kpi-s">cauda longa</div></div>
+  <!-- KPIs clicáveis como filtro -->
+  <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:8px">
+    <div class="kpi g" style="cursor:pointer;transition:.15s" id="kpi-abc-a" onclick="filtrarABC('A')" title="Clique para filtrar Classe A">
+      <div class="kpi-l">Classe A (80%) <span style="float:right;font-size:10px;opacity:.6">🔍</span></div>
+      <div class="kpi-v" id="abc-a-qtd">—</div>
+      <div class="kpi-s">produtos · 80% do faturamento</div>
+    </div>
+    <div class="kpi o" style="cursor:pointer;transition:.15s" id="kpi-abc-b" onclick="filtrarABC('B')" title="Clique para filtrar Classe B">
+      <div class="kpi-l">Classe B (15%) <span style="float:right;font-size:10px;opacity:.6">🔍</span></div>
+      <div class="kpi-v" id="abc-b-qtd">—</div>
+      <div class="kpi-s">produtos · 15% do faturamento</div>
+    </div>
+    <div class="kpi r" style="cursor:pointer;transition:.15s" id="kpi-abc-c" onclick="filtrarABC('C')" title="Clique para filtrar Classe C">
+      <div class="kpi-l">Classe C (5%) <span style="float:right;font-size:10px;opacity:.6">🔍</span></div>
+      <div class="kpi-v" id="abc-c-qtd">—</div>
+      <div class="kpi-s">produtos · cauda longa</div>
+    </div>
   </div>
 
   <!-- Painel de insights estratégicos -->
@@ -254,6 +267,22 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
     <div id="abc-insights" style="display:flex;flex-direction:column;gap:8px">
       <div style="color:var(--muted);font-size:12px">Carregando...</div>
     </div>
+  </div>
+
+  <!-- Toolbar com busca e filtro ABC -->
+  <div class="toolbar" style="margin-bottom:8px">
+    <input type="text" id="abc-busca" class="flt" placeholder="🔍 Buscar produto..." oninput="renderABC()"
+      style="min-width:220px">
+    <div style="display:flex;gap:4px">
+      <button id="abc-btn-all" class="btn btn-p btn-sm" onclick="filtrarABC('')">Todos</button>
+      <button id="abc-btn-a" class="btn btn-s btn-sm" onclick="filtrarABC('A')"
+        style="border-color:#1a7a4a;color:#1a7a4a;font-weight:700">A</button>
+      <button id="abc-btn-b" class="btn btn-s btn-sm" onclick="filtrarABC('B')"
+        style="border-color:#c76b00;color:#c76b00;font-weight:700">B</button>
+      <button id="abc-btn-c" class="btn btn-s btn-sm" onclick="filtrarABC('C')"
+        style="border-color:#C0392B;color:#C0392B;font-weight:700">C</button>
+    </div>
+    <span id="abc-count" style="font-size:11px;color:var(--muted);margin-left:auto"></span>
   </div>
 
   <div class="card" style="overflow-x:auto">
@@ -572,60 +601,54 @@ async function carregarDiario() {
     </tr>`;}).join('');
 }
 
-// ── Curva ABC ────────────────────────────────────────────────────────────────
-async function carregarABC() {
-  const d = await api.get('/api/vendas-produto/produtos'+queryStr({ordem:'fat'}));
-  if(!d.ok) return;
-  const rows = d.data || [];
-  const fatTotal = rows.reduce((s,r)=>s+parseFloat(r.fat_total),0);
+let _abcFiltro = ''; // '', 'A', 'B', 'C'
+let _abcRows = [];   // cache para re-filtrar sem nova chamada API
 
-  const rowsA = rows.filter(r=>r.abc==='A');
-  const rowsB = rows.filter(r=>r.abc==='B');
-  const rowsC = rows.filter(r=>r.abc==='C');
+function filtrarABC(classe) {
+  _abcFiltro = classe;
+  // Atualiza visual dos botões
+  ['','A','B','C'].forEach(c => {
+    const btn = document.getElementById('abc-btn-'+(c||'all'));
+    if (!btn) return;
+    btn.className = c === classe ? 'btn btn-p btn-sm' : 'btn btn-s btn-sm';
+    if (c === 'A') btn.style.cssText = c === classe ? '' : 'border-color:#1a7a4a;color:#1a7a4a;font-weight:700';
+    if (c === 'B') btn.style.cssText = c === classe ? '' : 'border-color:#c76b00;color:#c76b00;font-weight:700';
+    if (c === 'C') btn.style.cssText = c === classe ? '' : 'border-color:#C0392B;color:#C0392B;font-weight:700';
+  });
+  // Destaque nos KPIs
+  ['A','B','C'].forEach(c => {
+    const kpi = document.getElementById('kpi-abc-'+c.toLowerCase());
+    if (kpi) kpi.style.opacity = (!classe || classe===c) ? '1' : '0.4';
+  });
+  renderABC();
+}
 
-  document.getElementById('abc-a-qtd').textContent = rowsA.length + ' produtos';
-  document.getElementById('abc-b-qtd').textContent = rowsB.length + ' produtos';
-  document.getElementById('abc-c-qtd').textContent = rowsC.length + ' produtos';
+function renderABC() {
+  const busca   = (document.getElementById('abc-busca')?.value||'').toLowerCase();
+  const filtrado = _abcRows.filter(r => {
+    if (_abcFiltro && r.abc !== _abcFiltro) return false;
+    if (busca && !(r.nome||'').toLowerCase().includes(busca) && !String(r.codigo).includes(busca)) return false;
+    return true;
+  });
 
-  // ── Análise estratégica ────────────────────────────────────────────────────
-  const top1     = rows[0];
-  const top1pct  = fatTotal>0 ? (parseFloat(top1?.fat_total||0)/fatTotal*100).toFixed(1) : 0;
-  const top3pct  = fatTotal>0 ? (rowsA.slice(0,3).reduce((s,r)=>s+parseFloat(r.fat_total),0)/fatTotal*100).toFixed(1) : 0;
-  const semVenda = rowsC.filter(r=>parseFloat(r.qtd_total)<2).length;
-  // Produtos A com alta frequência (aparecem quase todo dia)
-  const diasTotal = rows.reduce((m,r)=>Math.max(m,parseInt(r.frequencia||0)),0);
-  const altaFreq  = rowsA.filter(r=>parseInt(r.frequencia||0) >= diasTotal*0.7).length;
-  // Produtos A com baixa frequência (vendem muito em poucos dias — sazonais)
-  const sazonal   = rowsA.filter(r=>parseInt(r.frequencia||0) < diasTotal*0.3 && parseFloat(r.fat_total)>0);
-
-  const insights = [
-    { ico:'🎯', cor:'#1a7a4a', txt:`<strong>Top 1 produto</strong> (${top1?.nome?.slice(0,25)}) representa <strong>${top1pct}%</strong> do faturamento total — dependência de produto único.` },
-    { ico:'📦', cor:'#1a5c8a', txt:`Os <strong>3 primeiros produtos</strong> juntos representam <strong>${top3pct}%</strong> do faturamento. ${parseFloat(top3pct)>30?'Alta concentração — risco se algum faltar.':'Boa diversificação no top.'}` },
-    { ico:'🔁', cor:'#6c3483', txt:`<strong>${altaFreq} produto(s) Classe A</strong> vendem quase todos os dias — são a base do estoque. Nunca devem faltar.` },
-    rowsC.length > 0 ? { ico:'⚠️', cor:'#c76b00', txt:`<strong>${rowsC.length} produtos Classe C</strong> representam apenas 5% do faturamento. ${semVenda} deles venderam menos de 2 unidades — candidatos a corte de mix.` } : null,
-    sazonal.length > 0 ? { ico:'📅', cor:'#b91c1c', txt:`<strong>${sazonal.length} produto(s) Classe A</strong> vendem muito mas com baixa frequência (${sazonal.map(r=>r.nome?.slice(0,18)).slice(0,2).join(', ')}...) — produtos sazonais/especiais. Monitorar disponibilidade.` } : null,
-  ].filter(Boolean);
-
-  const insightsEl = document.getElementById('abc-insights');
-  if (insightsEl) {
-    insightsEl.innerHTML = insights.map(ins=>`
-      <div style="display:flex;gap:10px;align-items:flex-start;padding:10px 12px;background:#fff;border-radius:8px;border-left:3px solid ${ins.cor};box-shadow:0 1px 4px rgba(0,0,0,.06)">
-        <span style="font-size:18px;flex-shrink:0">${ins.ico}</span>
-        <span style="font-size:12px;color:#444;line-height:1.5">${ins.txt}</span>
-      </div>`).join('');
-  }
+  const fatTotal = _abcRows.reduce((s,r)=>s+parseFloat(r.fat_total),0);
+  const countEl  = document.getElementById('abc-count');
+  if (countEl) countEl.textContent = `${filtrado.length} produto(s)`;
 
   let acum = 0;
-  document.getElementById('tbody-abc').innerHTML = rows.map((r,i)=>{
-    acum += parseFloat(r.fat_total);
+  document.getElementById('tbody-abc').innerHTML = filtrado.map((r,i)=>{
+    // % acum calculado sobre o total geral (não apenas do filtro)
+    const idxGlobal = _abcRows.findIndex(x => x.codigo === r.codigo);
+    acum = _abcRows.slice(0, idxGlobal+1).reduce((s,x)=>s+parseFloat(x.fat_total),0);
     const pctAcum = fatTotal>0 ? acum/fatTotal*100 : 0;
     const pctItem = fatTotal>0 ? parseFloat(r.fat_total)/fatTotal*100 : 0;
     const freq    = parseInt(r.frequencia||0);
+    const diasTotal = _abcRows.reduce((m,x)=>Math.max(m,parseInt(x.frequencia||0)),0);
     const freqCor = freq >= diasTotal*0.7 ? 'var(--green)' : freq >= diasTotal*0.3 ? 'var(--orange)' : 'var(--red-l)';
     return `<tr>
       <td><span class="abc-${r.abc?.toLowerCase()}">${r.abc}</span></td>
-      <td class="mono" style="color:var(--muted)">${i+1}</td>
-      <td style="max-width:240px;font-size:11px">${r.nome}</td>
+      <td class="mono" style="color:var(--muted)">${idxGlobal+1}</td>
+      <td style="max-width:240px;font-size:12px;font-weight:${r.abc==='A'?'600':'400'}">${r.nome}</td>
       <td class="r mono">${fmt.brl(r.fat_total)}</td>
       <td class="r">${fmt.pct(pctItem)}</td>
       <td class="r" style="font-weight:600;color:${pctAcum<=80?'var(--green)':pctAcum<=95?'var(--orange)':'var(--red-l)'}">${fmt.pct(pctAcum)}</td>
@@ -633,6 +656,64 @@ async function carregarABC() {
       <td class="r" style="font-size:11px;color:${freqCor};font-weight:600">${freq}x</td>
       <td class="r mono" style="font-size:11px">${fmt.brl(r.preco_medio)}</td>
     </tr>`;}).join('');
+}
+
+// ── Curva ABC ────────────────────────────────────────────────────────────────
+async function carregarABC() {
+  const d = await api.get('/api/vendas-produto/produtos'+queryStr({ordem:'fat'}));
+  if(!d.ok) return;
+  _abcRows = d.data || [];
+  _abcFiltro = '';
+
+  const fatTotal = _abcRows.reduce((s,r)=>s+parseFloat(r.fat_total),0);
+  const rowsA    = _abcRows.filter(r=>r.abc==='A');
+  const rowsB    = _abcRows.filter(r=>r.abc==='B');
+  const rowsC    = _abcRows.filter(r=>r.abc==='C');
+
+  document.getElementById('abc-a-qtd').textContent = rowsA.length + ' produtos';
+  document.getElementById('abc-b-qtd').textContent = rowsB.length + ' produtos';
+  document.getElementById('abc-c-qtd').textContent = rowsC.length + ' produtos';
+
+  // Reseta filtros visuais
+  filtrarABC('');
+
+  // ── Análise estratégica com lista expandível ───────────────────────────────
+  const top1    = _abcRows[0];
+  const top1pct = fatTotal>0 ? (parseFloat(top1?.fat_total||0)/fatTotal*100).toFixed(1) : 0;
+  const top3pct = fatTotal>0 ? (rowsA.slice(0,3).reduce((s,r)=>s+parseFloat(r.fat_total),0)/fatTotal*100).toFixed(1) : 0;
+  const semVenda= rowsC.filter(r=>parseFloat(r.qtd_total)<2).length;
+  const diasTotal = _abcRows.reduce((m,r)=>Math.max(m,parseInt(r.frequencia||0)),0);
+  const altaFreqList = rowsA.filter(r=>parseInt(r.frequencia||0) >= diasTotal*0.7);
+  const sazonalList  = rowsA.filter(r=>parseInt(r.frequencia||0) < diasTotal*0.3 && parseFloat(r.fat_total)>0);
+
+  function btnFiltrar(classe, txt) {
+    return `<button onclick="filtrarABC('${classe}')" style="background:none;border:1px solid currentColor;border-radius:4px;padding:1px 7px;font-size:10px;cursor:pointer;margin-left:6px;font-family:'DM Sans',sans-serif">${txt}</button>`;
+  }
+  function listaProdutos(rows, max=5) {
+    const vis = rows.slice(0,max);
+    const resto = rows.length - max;
+    let html = `<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px">`;
+    html += vis.map(r=>`<span style="background:#f8f4f0;border:1px solid #e8e0d8;border-radius:5px;padding:2px 8px;font-size:11px;font-weight:500">${r.nome?.slice(0,30)||r.codigo}</span>`).join('');
+    if (resto>0) html += `<span style="font-size:11px;color:var(--muted);padding:2px 4px">+${resto} mais</span>`;
+    html += `</div>`;
+    return html;
+  }
+
+  const insights = [
+    { ico:'🎯', cor:'#1a7a4a', txt:`<strong>Top 1 produto</strong> (${top1?.nome?.slice(0,25)}) representa <strong>${top1pct}%</strong> do faturamento total.` },
+    { ico:'📦', cor:'#1a5c8a', txt:`Os <strong>3 primeiros</strong> representam <strong>${top3pct}%</strong>. ${parseFloat(top3pct)>30?'Alta concentração.':'Boa diversificação.'}${btnFiltrar('A','ver Classe A')}` },
+    altaFreqList.length ? { ico:'🔁', cor:'#6c3483', txt:`<strong>${altaFreqList.length} produto(s) Classe A</strong> vendem quase todos os dias — nunca devem faltar.${listaProdutos(altaFreqList)}` } : null,
+    rowsC.length ? { ico:'⚠️', cor:'#c76b00', txt:`<strong>${rowsC.length} produtos Classe C</strong> — ${semVenda} venderam menos de 2 unidades. Candidatos a corte de mix.${btnFiltrar('C','ver Classe C')}` } : null,
+    sazonalList.length ? { ico:'📅', cor:'#b91c1c', txt:`<strong>${sazonalList.length} produto(s) Classe A sazonais</strong> — alto valor, baixa frequência. Monitorar disponibilidade.${listaProdutos(sazonalList)}` } : null,
+  ].filter(Boolean);
+
+  document.getElementById('abc-insights').innerHTML = insights.map(ins=>`
+    <div style="display:flex;gap:10px;align-items:flex-start;padding:10px 12px;background:#fff;border-radius:8px;border-left:3px solid ${ins.cor};box-shadow:0 1px 4px rgba(0,0,0,.06)">
+      <span style="font-size:18px;flex-shrink:0">${ins.ico}</span>
+      <span style="font-size:12px;color:#444;line-height:1.5">${ins.txt}</span>
+    </div>`).join('');
+
+  renderABC();
 }
 
 // ── Importação ───────────────────────────────────────────────────────────────
