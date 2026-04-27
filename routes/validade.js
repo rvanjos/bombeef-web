@@ -220,9 +220,11 @@ module.exports = function (pool) {
       const diasAlerta = parseInt(req.query.dias || '7');
       const { rows } = await pool.query(`
         SELECT
-          id, codigo, descricao, lote, quantidade, unidade,
+          id, codigo, descricao, lote,
+          qtd_unidades,
           TO_CHAR(data_validade, 'YYYY-MM-DD') AS data_validade,
           status, localizacao AS local_estoque, acao_antes_vencer,
+          peso_total_kg, preco_custo,
           CURRENT_DATE - data_validade::date AS dias_vencido,
           data_validade::date - CURRENT_DATE AS dias_restantes
         FROM validade_items

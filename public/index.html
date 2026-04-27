@@ -996,13 +996,14 @@ async function carregarAlertasValidade() {
           <div style="font-size:12px;font-weight:600;color:#1a1a1a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
             title="${r.descricao}">${r.descricao}${r.lote?` <span style="font-size:10px;color:var(--muted)">(${r.lote})</span>`:''}</div>
           <div style="font-size:11px;color:var(--muted);margin-top:1px">
-            ${r.quantidade||'?'} ${r.unidade||'un'} · Vence ${dtFmt}
+            ${r.qtd_unidades||'?'} un${r.peso_total_kg ? ` · ⚖️ ${parseFloat(r.peso_total_kg).toFixed(3)} kg` : ''}
+            · Vence ${dtFmt}
             ${r.local_estoque?`· 📍${r.local_estoque}`:''}
           </div>
         </div>
         <div style="flex-shrink:0;text-align:right">
           ${badge(r)}
-          <div style="font-size:10px;margin-top:3px;color:var(--muted)">Qtd ${r.quantidade||'?'}</div>
+          <div style="font-size:10px;margin-top:3px;color:var(--muted)">${r.qtd_unidades||'?'} un${r.peso_total_kg?` · ${parseFloat(r.peso_total_kg).toFixed(2)}kg`:''}</div>
         </div>
       </div>
       <div style="background:#fffbeb;padding:6px 12px;font-size:11px;color:#854d0e;display:flex;gap:6px;align-items:flex-start">
