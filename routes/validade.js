@@ -222,7 +222,7 @@ module.exports = function (pool) {
         SELECT
           id, codigo, descricao, lote, quantidade, unidade,
           TO_CHAR(data_validade, 'YYYY-MM-DD') AS data_validade,
-          status, local_estoque, acao_antes_vencer,
+          status, localizacao AS local_estoque, acao_antes_vencer,
           CURRENT_DATE - data_validade::date AS dias_vencido,
           data_validade::date - CURRENT_DATE AS dias_restantes
         FROM validade_items
