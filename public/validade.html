@@ -1310,6 +1310,8 @@ function renderVal(lista){
           <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:#555;margin-bottom:8px">
             <span>📅 ${fmt.date(v.data_validade)||'—'}</span>
             ${v.qtd_unidades?`<span>📦 ${v.qtd_unidades} un.</span>`:''}
+            ${v.peso_total_kg?`<span style="color:#1a5c8a;font-weight:700">⚖️ ${parseFloat(v.peso_total_kg).toFixed(3)} kg</span>`:''}
+            ${v.peso_total_kg && v.preco_custo?`<span style="color:var(--green);font-weight:700">💰 R$ ${(parseFloat(v.peso_total_kg)*parseFloat(v.preco_custo)).toFixed(2)}</span>`:''}
             ${v.localizacao?`<span>📍 ${v.localizacao}</span>`:''}
             ${v.responsavel?`<span>👤 ${v.responsavel}</span>`:''}
           </div>
@@ -1352,7 +1354,8 @@ function renderVal(lista){
           <b style="font-size:13px">${v.descricao}</b>
           ${v.desc_original && v.desc_original !== v.descricao
             ? `<br><small style="color:var(--orange);font-size:10px">📎 ${v.desc_original}</small>`:''}
-          ${v.qtd_unidades?`<br><small style="color:var(--muted)">${v.qtd_unidades} unidades</small>`:''}
+          ${v.qtd_unidades?`<br><small style="color:var(--muted)">${v.qtd_unidades} un.${v.peso_total_kg?` · <strong style="color:#1a5c8a">⚖️ ${parseFloat(v.peso_total_kg).toFixed(3)} kg</strong>`:''}${v.peso_total_kg && v.preco_custo ? ` · <span style="color:var(--green);font-weight:700">💰 R$ ${(parseFloat(v.peso_total_kg)*parseFloat(v.preco_custo)).toFixed(2)}</span>`:''}</small>`:''}
+          ${!v.qtd_unidades && v.peso_total_kg?`<br><small style="color:#1a5c8a;font-weight:700">⚖️ ${parseFloat(v.peso_total_kg).toFixed(3)} kg${v.preco_custo?` · <span style="color:var(--green)">💰 R$ ${(parseFloat(v.peso_total_kg)*parseFloat(v.preco_custo)).toFixed(2)}</span>`:''}</small>`:''}
           ${v.localizacao?`<br><small style="color:var(--blue)">📍 ${v.localizacao}</small>`:''}
         </td>
         <td style="font-size:11px">${v.lote||'—'}</td>
@@ -1394,8 +1397,35 @@ function abrirModal(id){
   document.getElementById('v-cod-info').textContent = '';
   document.getElementById('v-preco-wrap').style.display = 'none';
   document.getElementById('v-preco-custo-val').value = v?.preco_custo||0;
-  // Reset calculadora
+  // Reset calculadora — se item já tem peso, carrega e abre automaticamente
   resetPesagem(v?.qtd_unidades||0);
+  if (v?.peso_total_kg && parseFloat(v.peso_total_kg) > 0) {
+    // Tenta restaurar pesos individuais do campo observacao se salvos como JSON
+    let pesosRestaurados = false;
+    if (v.observacao) {
+      try {
+        const match = v.observacao.match(/PESOS_KG:([\d.,\[\]]+)/);
+        if (match) {
+          const pesos = JSON.parse(match[1]);
+          if (Array.isArray(pesos) && pesos.length) {
+            _pesagens = pesos.map(kg => ({ kg }));
+            pesosRestaurados = true;
+          }
+        }
+      } catch(_) {}
+    }
+    if (!pesosRestaurados) {
+      // Fallback: distribui o peso total igualmente pelas unidades
+      const n = v.qtd_unidades || 1;
+      const kgPorPeca = Math.round(parseFloat(v.peso_total_kg) / n * 1000) / 1000;
+      _pesagens = Array.from({length: n}, () => ({ kg: kgPorPeca }));
+    }
+    renderPesagem();
+    // Abre a calculadora automaticamente
+    _pesagemAberta = true;
+    document.getElementById('pesagem-corpo').style.display = '';
+    document.getElementById('pes-toggle-icon').textContent = '▲';
+  }
   document.getElementById('modal-val').classList.add('open');
   if(v?.codigo) buscarProdVal();
 }
@@ -1517,13 +1547,21 @@ async function salvarVal(){
   if (btnSalvar) { if (btnSalvar.disabled) return; btnSalvar.disabled = true; btnSalvar.textContent = '⏳ Salvando...'; }
   const id = document.getElementById('v-id').value;
   try {
-  // Calcular total kg da calculadora
-  const totalKg = _pesagens.reduce((s,p)=>s+(parseFloat(p.kg)||0),0);
+  // Calcular total kg da calculadora — inclui pesos individuais
+  const pesosValidos = _pesagens.map(p => parseFloat(p.kg)||0).filter(v => v > 0);
+  const totalKg = pesosValidos.reduce((s,v)=>s+v, 0);
+
+  // Guarda pesos individuais na observação (prefixado para não sobrescrever obs do usuário)
+  const obsBase = (document.getElementById('v-obs')?.value || '').replace(/\s*PESOS_KG:\[[\d.,]+\]/g,'').trim();
+  const obsComPesos = pesosValidos.length > 1
+    ? (obsBase ? obsBase + ' ' : '') + `PESOS_KG:${JSON.stringify(pesosValidos)}`
+    : obsBase || null;
+
   const body = {
     codigo:            document.getElementById('v-cod').value.trim()||null,
     descricao:         document.getElementById('v-desc').value.trim(),
     qtdUnidades:       parseInt(document.getElementById('v-qtd').value)||0,
-    pesoTotalKg:       totalKg > 0 ? totalKg : null,
+    pesoTotalKg:       totalKg > 0 ? Math.round(totalKg * 1000) / 1000 : null,
     dataValidade:      document.getElementById('v-val').value,
     dataRecebimento:   document.getElementById('v-receb').value || null,
     lote:              document.getElementById('v-lote').value,
@@ -1533,6 +1571,7 @@ async function salvarVal(){
     localizacao:       document.getElementById('v-local').value,
     diasAlerta:        parseInt(document.getElementById('v-alerta').value)||7,
     precoCusto:        parseFloat(document.getElementById('v-preco-custo-val').value)||0,
+    observacao:        obsComPesos,
   };
   if(!body.descricao){ toast('Descrição obrigatória'); return; }
   const d = id ? await api.put(`/api/validade/${id}`,body) : await api.post('/api/validade',body);
