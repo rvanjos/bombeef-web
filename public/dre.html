@@ -2301,9 +2301,9 @@ function _buildDRE(el, full) {
     return '<span style="font-family:\'DM Mono\',monospace;white-space:nowrap;color:'+col+'">'+sign+fmt.brl(Math.abs(v))+'</span>';
   };
 
-  const TH='padding:8px 10px;text-align:right;font-size:10px;color:#fff;font-weight:700;text-transform:uppercase;background:var(--red);white-space:nowrap;border-right:1px solid rgba(255,255,255,.1)';
-  const THL='padding:8px 14px;text-align:left;font-size:10px;color:#fff;font-weight:700;text-transform:uppercase;background:var(--red)';
-  const TD='padding:5px 10px;text-align:right;font-size:12px;border-bottom:1px solid #f5efe8;border-right:1px solid #f5efe8;transition:background .15s';
+  const TH ='padding:8px 10px;text-align:right;font-size:10px;color:#fff;font-weight:700;text-transform:uppercase;background:#5a0000;white-space:nowrap;border-right:1px solid rgba(255,255,255,.15);letter-spacing:.4px';
+  const THL='padding:8px 14px;text-align:left;font-size:10px;color:#fff;font-weight:700;text-transform:uppercase;background:#3d0000;letter-spacing:.4px';
+  const TD ='padding:5px 10px;text-align:right;font-size:12px;border-bottom:1px solid #f5efe8;border-right:1px solid #f5efe8;transition:background .15s';
   const TDL='padding:5px '+(full?'14':'10')+'px;text-align:left;font-size:12px;border-bottom:1px solid #f5efe8';
   const cols=meses.length+(showTot?2:1);
 
@@ -3318,10 +3318,10 @@ function drillDown(cat, mes) {
           : `<span style="font-size:10px;color:#e74c3c;cursor:pointer" title="Duplo clique para classificar">⚠️ Sem categoria</span>`;
         return `<tr style="border-bottom:1px solid #f5efe8" ondblclick="drillEditarCat('${t.id}')" title="Duplo clique para alterar a classificação">
           <td style="padding:7px 12px;font-family:'DM Mono',monospace;font-size:11px;white-space:nowrap">${t.data ? t.data.slice(0,10) : '—'}</td>
-          <td style="padding:7px 12px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(t.lancamento||'')}">${esc(t.lancamento||'—')}</td>
-          <td style="padding:7px 12px;font-size:11px;color:var(--muted);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(t.razaoSocial||'')}">${esc(t.razaoSocial||t.portador||'—')}</td>
+          <td style="padding:7px 12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(t.lancamento||'')}">${esc(t.lancamento||'—')}</td>
+          <td style="padding:7px 12px;font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(t.razaoSocial||'')}">${esc(t.razaoSocial||t.portador||'—')}</td>
           <td style="padding:7px 12px">${badge}</td>
-          <td id="drill-cat-${t.id}" style="padding:7px 12px;min-width:160px">${catBadge}</td>
+          <td id="drill-cat-${t.id}" style="padding:7px 12px;overflow:hidden">${catBadge}</td>
           <td style="padding:7px 12px;text-align:right;font-family:'DM Mono',monospace;font-weight:600;color:${vCol};white-space:nowrap">${fmt.brl(v)}</td>
         </tr>`;
       }).join('');
@@ -3933,7 +3933,7 @@ function toggleDREGrupo(gid) {
 </script>
 <!-- Modal Drill-Down DRE -->
 <div class="mbg" id="m-drill" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center">
-  <div style="background:var(--white);border-radius:13px;width:100%;max-width:700px;max-height:88vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.35)">
+  <div style="background:var(--white);border-radius:13px;width:96%;max-width:960px;max-height:90vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.35)">
     <div style="background:var(--red);padding:14px 20px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
       <div>
         <div id="drill-title" style="color:#fff;font-weight:700;font-size:15px"></div>
@@ -3941,15 +3941,23 @@ function toggleDREGrupo(gid) {
       </div>
       <button onclick="fecharModal('m-drill')" style="background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:6px;padding:4px 12px;cursor:pointer;font-size:18px">×</button>
     </div>
-    <div style="overflow-y:auto;flex:1">
-      <table style="width:100%;border-collapse:collapse;font-size:12px">
+    <div style="overflow-y:auto;overflow-x:hidden;flex:1">
+      <table style="width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed">
+        <colgroup>
+          <col style="width:90px">   <!-- Data -->
+          <col style="width:25%">    <!-- Operação -->
+          <col style="width:25%">    <!-- Fornecedor -->
+          <col style="width:72px">   <!-- Fonte -->
+          <col>                      <!-- Categoria (flex) -->
+          <col style="width:110px">  <!-- Valor -->
+        </colgroup>
         <thead>
           <tr style="background:#f8f4f0;position:sticky;top:0">
             <th style="padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--muted);border-bottom:2px solid var(--border)">Data</th>
             <th style="padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--muted);border-bottom:2px solid var(--border)">Operação</th>
             <th style="padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--muted);border-bottom:2px solid var(--border)">Fornecedor / Razão</th>
             <th style="padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--muted);border-bottom:2px solid var(--border)">Fonte</th>
-            <th style="padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--muted);border-bottom:2px solid var(--border)">Categoria <span style="font-weight:400;font-style:italic">(duplo clique para editar)</span></th>
+            <th style="padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--muted);border-bottom:2px solid var(--border)">Categoria <span style="font-weight:400;font-style:italic">(duplo clique)</span></th>
             <th style="padding:8px 12px;text-align:right;font-size:10px;text-transform:uppercase;color:var(--muted);border-bottom:2px solid var(--border)">Valor</th>
           </tr>
         </thead>
