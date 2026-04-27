@@ -665,7 +665,7 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
 
 <!-- Modal Perda -->
 <div class="modal-bg" id="modal-perda">
-  <div class="modal" style="max-width:480px">
+  <div class="modal" style="max-width:500px">
     <div class="modal-head"><h3 id="modal-perda-titulo">🗑️ Registrar Perda</h3><button class="modal-close" onclick="fecharModal('modal-perda')">×</button></div>
     <div class="modal-body">
       <input type="hidden" id="pd-id">
@@ -684,16 +684,37 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
         </div>
         <div class="fg"><label>Data</label><input type="date" id="pd-dt"></div>
       </div>
+
+      <!-- Calculadora de pesagem para perdas -->
+      <div style="background:#fff8f0;border:1px solid #fcd34d;border-radius:10px;padding:12px;margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;cursor:pointer" onclick="togglePerdaPesagem()">
+          <span style="font-size:12px;font-weight:700;color:#854d0e">⚖️ Calculadora de Peso <span style="font-weight:400;font-size:10px">(para carnes — opcional)</span></span>
+          <span id="pd-pes-icon" style="font-size:11px;color:#854d0e">▼</span>
+        </div>
+        <div id="pd-pes-corpo" style="display:none">
+          <div id="pd-pes-lista" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px"></div>
+          <button type="button" onclick="addPerdaPesagem()" style="background:#fff;border:1px dashed #fcd34d;border-radius:7px;padding:5px 12px;font-size:12px;cursor:pointer;color:#854d0e;width:100%">＋ Adicionar peça</button>
+          <div style="display:flex;gap:20px;margin-top:8px;padding-top:8px;border-top:1px solid #fde68a">
+            <div style="text-align:center"><div style="font-size:10px;color:#854d0e">TOTAL PEÇAS</div><div style="font-weight:800;font-size:18px" id="pd-pes-pecas">0</div></div>
+            <div style="text-align:center"><div style="font-size:10px;color:#854d0e">TOTAL KG</div><div style="font-weight:800;font-size:18px;color:#1a5c8a" id="pd-pes-kg">0.000 kg</div></div>
+            <div style="text-align:center;flex:1"><div style="font-size:10px;color:#854d0e">CUSTO EST.</div><div style="font-weight:800;font-size:18px;color:var(--red-l)" id="pd-pes-custo">R$ 0,00</div></div>
+          </div>
+        </div>
+      </div>
+
       <div class="fg-row">
-        <div class="fg"><label>Qtd Unidades</label><input type="number" id="pd-qtd" value="0" min="0" oninput="calcPerda()"></div>
         <div class="fg">
-          <label>Custo Unitário (R$)</label>
+          <label>Qtd Unidades <span style="font-size:10px;color:var(--muted)">(ou peças pesadas)</span></label>
+          <input type="number" id="pd-qtd" value="0" min="0" oninput="calcPerda()">
+        </div>
+        <div class="fg">
+          <label>Custo Unitário/kg (R$)</label>
           <input type="number" id="pd-custo" step="0.0001" placeholder="0,00" oninput="calcPerda()">
         </div>
       </div>
       <div class="fg">
         <label>Valor Total da Perda (R$)</label>
-        <input type="number" id="pd-valor" step="0.01" placeholder="0,00" style="font-weight:700;font-size:15px;color:var(--red-l)">
+        <input type="number" id="pd-valor" step="0.01" placeholder="0,00" style="font-weight:700;font-size:15px;color:var(--red-l)" oninput="calcPerda(true)">
         <div style="font-size:11px;color:var(--muted);margin-top:3px">Calculado automaticamente · pode editar</div>
       </div>
       <div class="fg">
@@ -2118,6 +2139,86 @@ async function perdaRapida(validadeItemId){
   document.getElementById('modal-perda').classList.add('open');
 }
 
+// ── Calculadora de peso — PERDAS ─────────────────────────────────────────────
+let _perdaPesagens = [];
+let _perdaPesagemAberta = false;
+
+function togglePerdaPesagem() {
+  _perdaPesagemAberta = !_perdaPesagemAberta;
+  document.getElementById('pd-pes-corpo').style.display = _perdaPesagemAberta ? '' : 'none';
+  document.getElementById('pd-pes-icon').textContent = _perdaPesagemAberta ? '▲' : '▼';
+}
+
+function addPerdaPesagem() {
+  _perdaPesagens.push({ kg: '' });
+  renderPerdaPesagem();
+  setTimeout(() => {
+    const inputs = document.querySelectorAll('.pd-pes-input');
+    if (inputs.length) inputs[inputs.length-1].focus();
+  }, 50);
+}
+
+function removePerdaPesagem(i) {
+  _perdaPesagens.splice(i, 1);
+  renderPerdaPesagem();
+}
+
+function atualizarPerdaPesagem(input) {
+  const idx = parseInt(input.dataset.idx);
+  const val = input.value === '' ? '' : (parseFloat(input.value) || 0);
+  if (idx >= 0 && idx < _perdaPesagens.length) _perdaPesagens[idx].kg = val;
+  calcPerdaPesagem();
+}
+
+function renderPerdaPesagem() {
+  document.getElementById('pd-pes-lista').innerHTML = _perdaPesagens.map((p,i) => `
+    <div style="display:flex;align-items:center;gap:6px">
+      <span style="font-size:11px;color:var(--muted);min-width:20px;text-align:right">${i+1}.</span>
+      <input type="number" class="pd-pes-input" data-idx="${i}" value="${p.kg||''}"
+        min="0" step="0.001" placeholder="0,000 kg"
+        oninput="atualizarPerdaPesagem(this)"
+        style="flex:1;padding:6px 9px;border:1px solid #fcd34d;border-radius:7px;font-size:13px;font-family:'DM Mono',monospace">
+      <span style="font-size:11px;color:var(--muted)">kg</span>
+      <button type="button" onclick="removePerdaPesagem(${i})" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:16px;padding:0 4px">×</button>
+    </div>`).join('');
+  calcPerdaPesagem();
+}
+
+function calcPerdaPesagem() {
+  const kgs = _perdaPesagens.map(p => parseFloat(p.kg)||0).filter(v => v > 0);
+  const totalKg = kgs.reduce((s,v)=>s+v, 0);
+  const totalPecas = kgs.length;
+  const custo = parseFloat(document.getElementById('pd-custo').value)||0;
+
+  document.getElementById('pd-pes-pecas').textContent = totalPecas;
+  document.getElementById('pd-pes-kg').textContent = totalKg.toFixed(3) + ' kg';
+
+  if (totalKg > 0) {
+    // Atualiza campo qtd com total de peças pesadas
+    document.getElementById('pd-qtd').value = totalPecas || kgs.length;
+    if (custo > 0) {
+      const valor = totalKg * custo;
+      document.getElementById('pd-valor').value = valor.toFixed(2);
+      document.getElementById('pd-pes-custo').textContent = 'R$ ' + valor.toFixed(2).replace('.', ',');
+    } else {
+      document.getElementById('pd-pes-custo').textContent = 'R$ 0,00';
+    }
+  } else {
+    document.getElementById('pd-pes-custo').textContent = 'R$ 0,00';
+  }
+}
+
+function resetPerdaPesagem() {
+  _perdaPesagens = [];
+  _perdaPesagemAberta = false;
+  document.getElementById('pd-pes-corpo').style.display = 'none';
+  document.getElementById('pd-pes-icon').textContent = '▼';
+  document.getElementById('pd-pes-lista').innerHTML = '';
+  document.getElementById('pd-pes-pecas').textContent = '0';
+  document.getElementById('pd-pes-kg').textContent = '0.000 kg';
+  document.getElementById('pd-pes-custo').textContent = 'R$ 0,00';
+}
+
 function abrirPerda(){
   document.getElementById('pd-id').value  = '';
   document.getElementById('pd-vid').value = '';
@@ -2127,10 +2228,26 @@ function abrirPerda(){
   document.getElementById('pd-obs').value='';
   document.getElementById('modal-perda-titulo').textContent = '🗑️ Registrar Perda';
   document.getElementById('btn-salvar-perda').textContent = '🗑️ Registrar Perda';
+  resetPerdaPesagem();
   document.getElementById('modal-perda').classList.add('open');
 }
 
-function editarPerda(id) {
+function calcPerda(manual) {
+  if (manual) return; // usuário editou diretamente — não recalcula
+  // Se calculadora de peso está ativa, usa peso × custo
+  const kgs = _perdaPesagens.map(p => parseFloat(p.kg)||0).filter(v => v > 0);
+  const totalKg = kgs.reduce((s,v)=>s+v, 0);
+  const custo = parseFloat(document.getElementById('pd-custo').value)||0;
+
+  if (totalKg > 0 && custo > 0) {
+    document.getElementById('pd-valor').value = (totalKg * custo).toFixed(2);
+    document.getElementById('pd-pes-custo').textContent = 'R$ ' + (totalKg * custo).toFixed(2).replace('.',',');
+  } else {
+    const qtd = parseFloat(document.getElementById('pd-qtd').value)||0;
+    if (qtd > 0 && custo > 0)
+      document.getElementById('pd-valor').value = (qtd * custo).toFixed(2);
+  }
+}
   const p = perdas.find(x => String(x.id) === String(id));
   if (!p) { toast('⚠️ Perda não encontrada'); return; }
   document.getElementById('pd-id').value    = p.id;
@@ -2145,39 +2262,47 @@ function editarPerda(id) {
   document.getElementById('pd-obs').value   = p.observacao||'';
   document.getElementById('modal-perda-titulo').textContent = '✏️ Editar Perda';
   document.getElementById('btn-salvar-perda').textContent = '💾 Salvar Alterações';
+  resetPerdaPesagem();
   document.getElementById('modal-perda').classList.add('open');
 }
 
-function calcPerda(){
-  const qtd   = parseFloat(document.getElementById('pd-qtd').value)||0;
-  const custo = parseFloat(document.getElementById('pd-custo').value)||0;
-  if(qtd>0 && custo>0)
-    document.getElementById('pd-valor').value = (qtd*custo).toFixed(2);
-}
+// calcPerda e salvarPerda foram movidos para cima (calculadora de peso)
 
 async function salvarPerda(){
-  const perdaId      = document.getElementById('pd-id').value;
+  const perdaId        = document.getElementById('pd-id').value;
   const validadeItemId = document.getElementById('pd-vid').value;
+
+  // Pega peso total da calculadora se disponível
+  const kgs = _perdaPesagens.map(p => parseFloat(p.kg)||0).filter(v => v > 0);
+  const totalKg = kgs.reduce((s,v)=>s+v, 0);
+  const nPecas  = kgs.length;
+
+  // Observação automática com pesos individuais
+  let obsAuto = document.getElementById('pd-obs').value.trim();
+  if (kgs.length > 1) {
+    const resumo = `${nPecas} PEÇAS: ${kgs.map(k=>k.toFixed(3)).join('+')}=${totalKg.toFixed(3)}KG`;
+    obsAuto = obsAuto ? obsAuto + '\n' + resumo : resumo;
+  }
+
   const body = {
     descricao:       document.getElementById('pd-desc').value.trim(),
     motivo:          document.getElementById('pd-motivo').value,
-    qtdUnidades:     parseInt(document.getElementById('pd-qtd').value)||0,
+    qtdUnidades:     nPecas || parseInt(document.getElementById('pd-qtd').value)||0,
+    pesoTotalKg:     totalKg > 0 ? Math.round(totalKg*1000)/1000 : null,
     valorPerda:      parseFloat(document.getElementById('pd-valor').value)||0,
     funcionarioId:   document.getElementById('pd-func').value||null,
     dtPerda:         document.getElementById('pd-dt').value,
-    observacao:      document.getElementById('pd-obs').value,
+    observacao:      obsAuto || null,
     validadeItemId:  validadeItemId||null,
   };
   if(!body.descricao){ toast('Descrição obrigatória'); return; }
 
   let d;
   if (perdaId) {
-    // Edição — usa PUT
     d = await api.put(`/api/perdas/${perdaId}`, body);
     if(!d.ok){ toast('Erro ao salvar: '+d.erro); return; }
     toast('✅ Perda atualizada!');
   } else {
-    // Novo registro — usa POST
     d = await api.post('/api/perdas', body);
     if(!d.ok){ toast('Erro: '+d.erro); return; }
     toast('🗑️ Perda registrada!');
