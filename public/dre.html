@@ -1054,6 +1054,11 @@ async function confirmarImportCC() {
         fullText += '\n--- PAGE ---\n';
       }
       const lancs = parseFaturaPDF(fullText, file.name);
+      // LOG TEMPORÁRIO — remover após diagnóstico
+      console.log('=== PDF EXTRAÍDO ===');
+      console.log(fullText.slice(0, 3000));
+      console.log('=== FIM ===');
+      console.log('Lançamentos encontrados:', lancs.length);
       if (!lancs.length) { toast('⚠️ Nenhum lançamento encontrado no PDF'); return; }
       // Corrige mês dos lançamentos sem data para o mês confirmado
       lancs.forEach(l => { if (!l.data || !l.mes || l.mes === mesRef) { l.mes = mesCC; l.mesCaixa = mesCC; } });
