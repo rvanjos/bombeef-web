@@ -1020,12 +1020,9 @@ async function confirmarImportCC() {
         const vp      = page.getViewport({ scale: 1 });
         const content = await page.getTextContent();
         const items   = content.items.filter(it => it.str && it.str.trim());
+        const midX    = vp.width * 0.45;
 
-        const midX   = vp.width * 0.45;
-
-        // No pdf.js, transform[5] é Y do sistema PDF (origem no canto inferior esquerdo)
-        // Convertemos para Y de cima para baixo: yTop = height - transform[5]
-        // Tolerância de 4pt para agrupar itens na mesma linha
+        // Agrupa por Y (origem inferior esquerdo → converte para topo)
         const linhasMap = new Map();
         for (const item of items) {
           const yTop = Math.round((vp.height - item.transform[5]) / 4) * 4;
@@ -1033,15 +1030,12 @@ async function confirmarImportCC() {
           linhasMap.get(yTop).push({ x: item.transform[4], str: item.str });
         }
 
-        // Ordena do topo para baixo (Y crescente)
         const ysOrdenados = [...linhasMap.keys()].sort((a, b) => a - b);
         for (const y of ysOrdenados) {
           const todosItems = linhasMap.get(y).sort((a, b) => a.x - b.x);
           const temEsq = todosItems.some(it => it.x < midX);
           const temDir = todosItems.some(it => it.x >= midX);
-
           if (temEsq && temDir) {
-            // Linha com 2 colunas — emite separado para evitar mistura
             const esq = todosItems.filter(it => it.x < midX).map(it => it.str).join(' ').trim();
             const dir = todosItems.filter(it => it.x >= midX).map(it => it.str).join(' ').trim();
             if (esq) fullText += esq + '\n';
@@ -1211,94 +1205,111 @@ function parseFaturaC6(text) {
 }
 
 function parseFaturaCaixa(text) {
-  // Ano de referência: usa data de vencimento
-  const anoMatch = text.match(/VENCIMENTO[\s\S]{0,20}(\d{2})\/(\d{2})\/(\d{4})/i)
-    || text.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+  const result = [];
+
+  // Estratégia: varrer o texto inteiro e extrair todos os padrões
+  // DD/MM DESCRIÇÃO VALOR[D|C] — em qualquer lugar do texto
+  const anoMatch = text.match(/(?:VENCIMENTO\s+)?(\d{2})\/(\d{2})\/(\d{4})/);
   const anoRef     = anoMatch ? parseInt(anoMatch[3]) : new Date().getFullYear();
   const mesVencNum = anoMatch ? parseInt(anoMatch[2]) : 1;
 
-  const result = [];
+  console.log('[parseFaturaCaixa] anoRef='+anoRef+' mesVenc='+mesVencNum);
+
   let portadorAtual = '';
 
-  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-
-    // Para quando chega em "Valor total desta fatura"
-    if (/Valor total desta fatura/i.test(line)) break;
-
-    // Detecta portador: "RAFAEL VIEIRA DOS ANJOS (Cartão 9284)"
-    const mPort = line.match(/([A-ZÁÀÃÂÉÊÍÓÔÕÚÇ\s]{5,})\s*\(Cart[aã]o\s+(\d+)\)/i);
-    if (mPort) {
-      portadorAtual = `${mPort[1].trim()} (Caixa ${mPort[2]})`;
-      continue;
-    }
-
-    // ANUIDADE sem data: busca padrão "ANUIDADE ... VALOR D" em qualquer posição
-    const mAnuid = line.match(/\b(ANUIDADE\s+(?:DIFERENCIADA\s+)?[^\d]*?)\s+([\d.]+,\d{2})\s*D\b/i);
-    if (mAnuid && portadorAtual) {
-      const v = -Math.abs(parseFloat(mAnuid[2].replace(/\./g,'').replace(',','.')) || 0);
-      if (v && !/(PARCELADO|FATURA|ROTATIVO|MORA|CET|MULTA)/i.test(mAnuid[1])) {
-        const mm = String(mesVencNum).padStart(2,'0');
-        result.push({
-          id: 'cc_caixa_anu_'+Date.now()+'_'+i,
-          lancamento: 'ANUIDADE CARTÃO CAIXA',
-          valor: v,
-          data: `${anoRef}-${mm}-01`,
-          mes: `${mm}/${anoRef}`, mesCaixa: `${mm}/${anoRef}`,
-          categoria: 'Tarifas e IOF',
-          fonte: 'CC', portador: portadorAtual, razaoSocial: 'Anuidade Cartão Caixa',
-        });
-      }
-      continue;
-    }
-
-    // Lançamentos: busca todos os padrões "DD/MM DESC VALOR[D|C]" na linha
-    // A linha pode ter prefixo de outra coluna (ex: "Fator Conversão 2,30 03/01 PAYU...")
-    const reLanc = /\b(\d{2})\/(\d{2})\s+([A-Za-z0-9*\s,./\-]+?)\s+([\d.]+,\d{2})\s*([DC])\b/g;
-    let m;
-    while ((m = reLanc.exec(line)) !== null) {
-      const dia = m[1], mm = m[2];
-      const descRaw = m[3].trim();
-      const tipo = m[5].toUpperCase();
-
-      // Ignora pagamentos/ajustes/cashback
-      if (/PAGAMENTO|CASHBACK|AJUSTE CREDITO|TOTAL DA FATURA|OBRIGADO/i.test(descRaw)) continue;
-      // Ignora taxas/juros de encargos
-      if (/MULTA|MORA|ROTATIVO|SAQUES|CET\s/i.test(descRaw)) continue;
-
-      let v = parseFloat(m[4].replace(/\./g,'').replace(',','.')) || 0;
-      if (!v) continue;
-      v = tipo === 'C' ? Math.abs(v) : -Math.abs(v);
-
-      const ano = parseInt(mm) > mesVencNum + 2 ? anoRef - 1 : anoRef;
-      const mesStr = `${mm}/${ano}`;
-
-      // Extrai info de parcela e remove cidade do final
-      const mParc = descRaw.match(/^(.+?)\s+(\d{2})\s+DE\s+(\d{2})\s*(.*)$/i);
-      let descFinal;
-      if (mParc) {
-        descFinal = `${mParc[1].trim()} (Parc ${mParc[2]}/${mParc[3]})`;
-      } else {
-        // Remove última palavra (cidade) se tiver 3+ palavras
-        const partes = descRaw.split(/\s+/);
-        descFinal = partes.length > 2 ? partes.slice(0,-1).join(' ') : descRaw;
-      }
-
-      result.push({
-        id: 'cc_caixa_'+Date.now()+'_'+i+'_'+result.length,
-        lancamento: descFinal || descRaw,
-        valor: v,
-        data: `${ano}-${mm}-${dia}`,
-        mes: mesStr, mesCaixa: mesStr,
-        categoria: autoClassificar(descFinal || descRaw, portadorAtual),
-        fonte: 'CC',
-        portador: portadorAtual,
-        razaoSocial: descFinal || descRaw,
-      });
-    }
+  // Detectar portador pelo padrão "... (Cartão NNNN)"
+  const portadorRe = /([A-ZÁÀÃÂÉÊÍÓÔÕÚÇ][A-ZÁÀÃÂÉÊÍÓÔÕÚÇa-záàãâéêíóôõúç\s]+)\s*\(Cart[aã]o\s+(\d+)\)/gi;
+  // Pré-mapear portadores por posição no texto
+  const portadores = [];
+  let mp;
+  while ((mp = portadorRe.exec(text)) !== null) {
+    portadores.push({ pos: mp.index, nome: `${mp[1].trim()} (Caixa ${mp[2]})` });
   }
+
+  // Extrair todos os lançamentos DD/MM ... VALOR D|C do texto completo
+  // O regex busca em QUALQUER posição — mesmo com prefixo de outra coluna
+  const reLanc = /\b(\d{2})\/(\d{2})\s+([A-Za-z0-9*\s,./\-'áàãâéêíóôõúçÁÀÃÂÉÊÍÓÔÕÚÇ]+?)\s+([\d]{1,3}(?:\.\d{3})*,\d{2})\s*([DC])\b/g;
+
+  let ml;
+  while ((ml = reLanc.exec(text)) !== null) {
+    const dia = ml[1], mm = ml[2], descRaw = ml[3].trim(), tipo = ml[5].toUpperCase();
+
+    // Ignora pagamentos, cashback e totais
+    if (/PAGAMENTO|CASHBACK|TOTAL DA FATURA|OBRIGADO|AJUSTE CREDITO|TOTAL COMPRAS|TOTAL FINAL|DISPONIVEL|UTILIZADO/i.test(descRaw)) continue;
+    // Ignora taxas de encargos
+    if (/MULTA|MORA\b|SAQUES|CET\b|ROTATIVO|PARCELAMENTO|NAO PAGAMENTO/i.test(descRaw)) continue;
+    // Ignora valores que são claramente saldo/limite (muito altos)
+    const v = parseFloat(ml[4].replace(/\./g,'').replace(',','.'));
+    if (!v || v > 50000) continue;
+
+    const vFinal = tipo === 'C' ? v : -v;
+    const ano    = parseInt(mm) > mesVencNum + 2 ? anoRef - 1 : anoRef;
+    const mesStr = `${mm}/${ano}`;
+
+    // Determina portador pela posição no texto
+    const pos = ml.index;
+    let portador = '';
+    for (const p of portadores) {
+      if (p.pos <= pos) portador = p.nome;
+    }
+
+    // Limpa descrição: remove info de parcela e cidade
+    const mParc = descRaw.match(/^(.+?)\s+(\d{2})\s+DE\s+(\d{2})\s*(.*)$/i);
+    let descFinal;
+    if (mParc) {
+      descFinal = `${mParc[1].trim()} (Parc ${mParc[2]}/${mParc[3]})`;
+    } else {
+      const partes = descRaw.split(/\s+/);
+      descFinal = partes.length > 2 ? partes.slice(0,-1).join(' ') : descRaw;
+    }
+
+    // Evita duplicatas (mesma data+valor)
+    const chave = `${dia}/${mm}/${vFinal}`;
+    if (result.some(r => r._chave === chave && r.lancamento === descFinal)) continue;
+
+    console.log(`[CC] ${dia}/${mm} | ${descFinal} | ${vFinal}`);
+
+    result.push({
+      id: 'cc_caixa_'+Date.now()+'_'+result.length,
+      _chave: chave,
+      lancamento: descFinal || descRaw,
+      valor: vFinal,
+      data: `${ano}-${mm}-${dia}`,
+      mes: mesStr, mesCaixa: mesStr,
+      categoria: autoClassificar(descFinal || descRaw, portador),
+      fonte: 'CC',
+      portador,
+      razaoSocial: descFinal || descRaw,
+    });
+  }
+
+  // Anuidade sem data
+  const reAnuid = /ANUIDADE\s+(?:DIFERENCIADA\s+)?[A-Z\s/0-9]+?\s+([\d]{1,3}(?:\.\d{3})*,\d{2})\s*D\b/gi;
+  let ma;
+  while ((ma = reAnuid.exec(text)) !== null) {
+    const v = parseFloat(ma[1].replace(/\./g,'').replace(',','.'));
+    if (!v || v > 1000) continue;
+    const mm  = String(mesVencNum).padStart(2,'0');
+    const chave = `anuidade/${v}`;
+    if (result.some(r=>r._chave===chave)) continue;
+    // Encontra portador próximo
+    let portador = '';
+    for (const p of portadores) { if (p.pos <= ma.index) portador = p.nome; }
+    console.log(`[CC] Anuidade | ${v}`);
+    result.push({
+      id: 'cc_caixa_anu_'+Date.now(),
+      _chave: chave,
+      lancamento: 'ANUIDADE CARTÃO CAIXA',
+      valor: -v,
+      data: `${anoRef}-${mm}-01`,
+      mes: `${mm}/${anoRef}`, mesCaixa: `${mm}/${anoRef}`,
+      categoria: 'Tarifas e IOF',
+      fonte: 'CC', portador,
+      razaoSocial: 'Anuidade Cartão Caixa',
+    });
+  }
+
+  console.log('[parseFaturaCaixa] total:', result.length);
   return result;
 }
 
