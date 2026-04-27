@@ -187,6 +187,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
       <option value="fat">Por Faturamento</option>
       <option value="qtd">Por Quantidade</option>
       <option value="freq">Por Frequência</option>
+      <option value="margem">Por Margem %</option>
     </select>
     <button class="btn btn-s btn-sm" onclick="exportarRanking()">📤 Exportar</button>
   </div>
@@ -195,7 +196,9 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
       <thead><tr>
         <th>#</th><th>Código</th><th>Produto</th>
         <th class="r">Faturamento</th><th class="r">Qtd</th>
-        <th class="r">Preço Médio</th><th class="r">Freq.</th><th>ABC</th>
+        <th class="r">Preço Médio</th><th class="r">Custo Unit.</th>
+        <th class="r">Lucro Bruto</th><th class="r">Margem %</th>
+        <th class="r">Freq.</th><th>ABC</th>
       </tr></thead>
       <tbody id="tbody-produtos"></tbody>
     </table>
@@ -291,6 +294,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
         <th>ABC</th><th>#</th><th>Produto</th>
         <th class="r">Faturamento</th><th class="r">% Fat</th>
         <th class="r">% Acum.</th><th class="r">Qtd</th>
+        <th class="r">Custo Unit.</th><th class="r">Margem %</th>
         <th class="r">Freq.</th><th class="r">Preço Médio</th>
       </tr></thead>
       <tbody id="tbody-abc"></tbody>
@@ -502,18 +506,37 @@ async function carregarProdutos() {
 function renderProdutos(rows) {
   const busca = (document.getElementById('busca-prod').value||'').toLowerCase();
   const filtrado = busca ? rows.filter(r=>(r.nome||'').toLowerCase().includes(busca)||(r.codigo||'').includes(busca)) : rows;
-  const fatTotal = filtrado.reduce((s,r)=>s+parseFloat(r.fat_total),0);
-  document.getElementById('tbody-produtos').innerHTML = filtrado.map((r,i)=>`
-    <tr>
+
+  document.getElementById('tbody-produtos').innerHTML = filtrado.map((r,i)=>{
+    const margem   = r.margem_pct !== null && r.margem_pct !== undefined ? parseFloat(r.margem_pct) : null;
+    const lucro    = r.lucro_bruto !== null && r.lucro_bruto !== undefined ? parseFloat(r.lucro_bruto) : null;
+    const custo    = r.preco_custo_unit ? parseFloat(r.preco_custo_unit) : null;
+    // Cor da margem: verde ≥ 40%, amarelo 20–40%, vermelho < 20%
+    const margemCor = margem === null ? 'var(--muted)'
+      : margem >= 40 ? 'var(--green)'
+      : margem >= 20 ? 'var(--orange)'
+      : 'var(--red-l)';
+    const margemBg  = margem === null ? 'transparent'
+      : margem >= 40 ? 'rgba(26,122,74,.08)'
+      : margem >= 20 ? 'rgba(199,107,0,.08)'
+      : 'rgba(192,57,43,.08)';
+    return `<tr>
       <td class="mono" style="color:var(--muted)">${i+1}</td>
       <td class="mono" style="font-size:11px">${r.codigo}</td>
-      <td style="max-width:260px">${r.nome}</td>
+      <td style="max-width:220px">${r.nome}</td>
       <td class="r mono">${fmt.brl(r.fat_total)}</td>
       <td class="r mono">${fmt.n(r.qtd_total)}</td>
       <td class="r mono">${fmt.brl(r.preco_medio)}</td>
+      <td class="r mono" style="color:var(--muted);font-size:11px">${custo !== null ? fmt.brl(custo) : '<span style="color:#ddd">—</span>'}</td>
+      <td class="r mono" style="color:${lucro !== null && lucro >= 0 ? 'var(--green)' : 'var(--red-l)'}">
+        ${lucro !== null ? fmt.brl(lucro) : '<span style="color:#ddd">—</span>'}
+      </td>
+      <td class="r" style="font-weight:700;color:${margemCor};background:${margemBg};border-radius:4px">
+        ${margem !== null ? margem.toFixed(1)+'%' : '<span style="color:#ddd;font-weight:400">sem custo</span>'}
+      </td>
       <td class="r" style="color:var(--muted)">${r.frequencia}x</td>
       <td><span class="abc-${r.abc?.toLowerCase()}">${r.abc}</span></td>
-    </tr>`).join('');
+    </tr>`;}).join('');
 }
 
 function filtrarTabela() { renderProdutos(_dados.produtos); }
@@ -642,17 +665,24 @@ function renderABC() {
     acum = _abcRows.slice(0, idxGlobal+1).reduce((s,x)=>s+parseFloat(x.fat_total),0);
     const pctAcum = fatTotal>0 ? acum/fatTotal*100 : 0;
     const pctItem = fatTotal>0 ? parseFloat(r.fat_total)/fatTotal*100 : 0;
-    const freq    = parseInt(r.frequencia||0);
+    const freq      = parseInt(r.frequencia||0);
     const diasTotal = _abcRows.reduce((m,x)=>Math.max(m,parseInt(x.frequencia||0)),0);
-    const freqCor = freq >= diasTotal*0.7 ? 'var(--green)' : freq >= diasTotal*0.3 ? 'var(--orange)' : 'var(--red-l)';
+    const freqCor   = freq >= diasTotal*0.7 ? 'var(--green)' : freq >= diasTotal*0.3 ? 'var(--orange)' : 'var(--red-l)';
+    const margem  = r.margem_pct !== null && r.margem_pct !== undefined ? parseFloat(r.margem_pct) : null;
+    const margemCor = margem === null ? '#ccc' : margem >= 40 ? 'var(--green)' : margem >= 20 ? 'var(--orange)' : 'var(--red-l)';
+    const margemBg  = margem === null ? '' : margem >= 40 ? 'background:rgba(26,122,74,.07)' : margem >= 20 ? 'background:rgba(199,107,0,.07)' : 'background:rgba(192,57,43,.07)';
     return `<tr>
       <td><span class="abc-${r.abc?.toLowerCase()}">${r.abc}</span></td>
       <td class="mono" style="color:var(--muted)">${idxGlobal+1}</td>
-      <td style="max-width:240px;font-size:12px;font-weight:${r.abc==='A'?'600':'400'}">${r.nome}</td>
+      <td style="max-width:220px;font-size:12px;font-weight:${r.abc==='A'?'600':'400'}">${r.nome}</td>
       <td class="r mono">${fmt.brl(r.fat_total)}</td>
       <td class="r">${fmt.pct(pctItem)}</td>
       <td class="r" style="font-weight:600;color:${pctAcum<=80?'var(--green)':pctAcum<=95?'var(--orange)':'var(--red-l)'}">${fmt.pct(pctAcum)}</td>
       <td class="r mono">${fmt.n(r.qtd_total)}</td>
+      <td class="r mono" style="font-size:11px;color:var(--muted)">${r.preco_custo_unit ? fmt.brl(r.preco_custo_unit) : '—'}</td>
+      <td class="r" style="font-weight:700;color:${margemCor};${margemBg};border-radius:3px;padding:3px 8px">
+        ${margem !== null ? margem.toFixed(1)+'%' : '<span style="color:#ccc;font-weight:400;font-size:10px">sem custo</span>'}
+      </td>
       <td class="r" style="font-size:11px;color:${freqCor};font-weight:600">${freq}x</td>
       <td class="r mono" style="font-size:11px">${fmt.brl(r.preco_medio)}</td>
     </tr>`;}).join('');
@@ -707,13 +737,40 @@ async function carregarABC() {
     sazonalList.length ? { ico:'📅', cor:'#b91c1c', txt:`<strong>${sazonalList.length} produto(s) Classe A sazonais</strong> — alto valor, baixa frequência. Monitorar disponibilidade.${listaProdutos(sazonalList)}` } : null,
   ].filter(Boolean);
 
-  document.getElementById('abc-insights').innerHTML = insights.map(ins=>`
-    <div style="display:flex;gap:10px;align-items:flex-start;padding:10px 12px;background:#fff;border-radius:8px;border-left:3px solid ${ins.cor};box-shadow:0 1px 4px rgba(0,0,0,.06)">
-      <span style="font-size:18px;flex-shrink:0">${ins.ico}</span>
-      <span style="font-size:12px;color:#444;line-height:1.5">${ins.txt}</span>
-    </div>`).join('');
+  // ── Análise de margem ──────────────────────────────────────────────────────
+  const comMargem    = _abcRows.filter(r => r.margem_pct !== null && r.margem_pct !== undefined);
+  const semCustoQtd  = _abcRows.filter(r => r.margem_pct === null || r.margem_pct === undefined).length;
+  const margemMedia  = comMargem.length ? (comMargem.reduce((s,r)=>s+parseFloat(r.margem_pct),0)/comMargem.length).toFixed(1) : null;
+  // Produtos A com margem baixa (<30%) — candidatos a reajuste
+  const aMargemBaixa = rowsA.filter(r => r.margem_pct !== null && parseFloat(r.margem_pct) < 30);
+  // Produtos A com melhor margem (>50%)
+  const aMelhorMarg  = rowsA.filter(r => r.margem_pct !== null && parseFloat(r.margem_pct) >= 50)
+    .sort((a,b) => parseFloat(b.margem_pct) - parseFloat(a.margem_pct));
 
-  renderABC();
+  if (comMargem.length > 0) {
+    const insightsMargem = [
+      margemMedia !== null ? { ico:'📊', cor:'#1a5c8a', txt:`Margem bruta média dos produtos com custo cadastrado: <strong>${margemMedia}%</strong>. ${parseFloat(margemMedia) < 35 ? '⚠️ Margem abaixo do ideal para um açougue.' : '✅ Margem saudável.'}` } : null,
+      aMargemBaixa.length ? { ico:'🔴', cor:'#b91c1c', txt:`<strong>${aMargemBaixa.length} produto(s) Classe A com margem abaixo de 30%</strong> — alto volume, pouco lucro. Candidatos a reajuste de preço:${listaProdutos(aMargemBaixa.map(r=>({...r, nome: r.nome+' ('+parseFloat(r.margem_pct).toFixed(0)+'%)'}) ), 6)}` } : null,
+      aMelhorMarg.length ? { ico:'💚', cor:'#1a7a4a', txt:`<strong>${aMelhorMarg.length} produto(s) Classe A com margem ≥ 50%</strong> — priorize o estoque desses:${listaProdutos(aMelhorMarg, 5)}` } : null,
+      semCustoQtd > 0 ? { ico:'⚠️', cor:'#c76b00', txt:`<strong>${semCustoQtd} produto(s) sem custo cadastrado</strong> — vá em Produtos e cadastre o preço de custo para ver a margem completa.` } : null,
+    ].filter(Boolean);
+
+    document.getElementById('abc-insights').innerHTML = [...insights, ...insightsMargem].map(ins=>`
+      <div style="display:flex;gap:10px;align-items:flex-start;padding:10px 12px;background:#fff;border-radius:8px;border-left:3px solid ${ins.cor};box-shadow:0 1px 4px rgba(0,0,0,.06)">
+        <span style="font-size:18px;flex-shrink:0">${ins.ico}</span>
+        <span style="font-size:12px;color:#444;line-height:1.5">${ins.txt}</span>
+      </div>`).join('');
+  } else {
+    document.getElementById('abc-insights').innerHTML = insights.map(ins=>`
+      <div style="display:flex;gap:10px;align-items:flex-start;padding:10px 12px;background:#fff;border-radius:8px;border-left:3px solid ${ins.cor};box-shadow:0 1px 4px rgba(0,0,0,.06)">
+        <span style="font-size:18px;flex-shrink:0">${ins.ico}</span>
+        <span style="font-size:12px;color:#444;line-height:1.5">${ins.txt}</span>
+      </div>`).join('')
+      + (semCustoQtd > 0 ? `<div style="display:flex;gap:10px;align-items:flex-start;padding:10px 12px;background:#fff;border-radius:8px;border-left:3px solid #c76b00;box-shadow:0 1px 4px rgba(0,0,0,.06)">
+        <span style="font-size:18px">⚠️</span>
+        <span style="font-size:12px;color:#444">Nenhum produto com custo cadastrado — cadastre o preço de custo em <strong>Produtos</strong> para ver a análise de margem.</span>
+      </div>` : '');
+  }
 }
 
 // ── Importação ───────────────────────────────────────────────────────────────

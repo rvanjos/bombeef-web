@@ -130,40 +130,65 @@ module.exports = (pool) => {
     } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
-  // ── GET /produtos — ranking completo ───────────────────────────────────────
+  // ── GET /produtos — ranking completo com margem de lucro ──────────────────
   r.get('/produtos', async (req, res) => {
     const { ini, fim, ordem = 'fat', sem_taxa = '0', sem_kit = '0', sem_bebida = '0' } = req.query;
     try {
       const conds = [];
       if (ini && fim) conds.push(`data_venda BETWEEN '${ini}' AND '${fim}'`);
-      if (sem_taxa  === '1') conds.push(`LOWER(nome) NOT LIKE '%taxa%'`);
-      if (sem_kit   === '1') conds.push(`LOWER(nome) NOT LIKE '%kit%'`);
-      if (sem_bebida === '1') conds.push(`LOWER(nome) NOT SIMILAR TO '%(cerveja|heineken|brahma|skol|corona|amstel|budweiser|spaten|stella|sprite|coca|pepsi|agua|suco|refrigerante|vinho|espumante|dose|whisky)%'`);
+      if (sem_taxa   === '1') conds.push(`LOWER(vp.nome) NOT LIKE '%taxa%'`);
+      if (sem_kit    === '1') conds.push(`LOWER(vp.nome) NOT LIKE '%kit%'`);
+      if (sem_bebida === '1') conds.push(`LOWER(vp.nome) NOT SIMILAR TO '%(cerveja|heineken|brahma|skol|corona|amstel|budweiser|spaten|stella|sprite|coca|pepsi|agua|suco|refrigerante|vinho|espumante|dose|whisky)%'`);
       const where = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
-      const orderBy = ordem === 'qtd' ? 'qtd_total DESC' : ordem === 'freq' ? 'frequencia DESC' : 'fat_total DESC';
+      const orderBy = ordem === 'qtd' ? 'qtd_total DESC' : ordem === 'freq' ? 'frequencia DESC' : ordem === 'margem' ? 'margem_pct DESC NULLS LAST' : 'fat_total DESC';
 
       const { rows } = await pool.query(`
         SELECT
-          codigo, nome,
-          SUM(valor_total)           AS fat_total,
-          SUM(quantidade)            AS qtd_total,
-          COUNT(DISTINCT data_venda) AS frequencia,
-          ROUND(SUM(valor_total)/NULLIF(SUM(quantidade),0), 2) AS preco_medio
-        FROM vendas_produto ${where}
-        GROUP BY codigo, nome
+          vp.codigo,
+          vp.nome,
+          SUM(vp.valor_total)            AS fat_total,
+          SUM(vp.quantidade)             AS qtd_total,
+          COUNT(DISTINCT vp.data_venda)  AS frequencia,
+          ROUND(SUM(vp.valor_total)/NULLIF(SUM(vp.quantidade),0), 2)  AS preco_medio,
+          -- Vincula com tabela de produtos pelo código
+          MAX(p.preco_custo)   AS preco_custo_unit,
+          MAX(p.preco_venda)   AS preco_venda_cad,
+          -- Custo total estimado = quantidade × custo unitário
+          ROUND(SUM(vp.quantidade) * COALESCE(MAX(p.preco_custo), 0), 2) AS custo_total,
+          -- Lucro bruto = faturamento - custo total
+          ROUND(SUM(vp.valor_total) - SUM(vp.quantidade) * COALESCE(MAX(p.preco_custo), 0), 2) AS lucro_bruto,
+          -- Margem % = lucro / faturamento
+          CASE
+            WHEN SUM(vp.valor_total) > 0 AND MAX(p.preco_custo) IS NOT NULL AND MAX(p.preco_custo) > 0
+            THEN ROUND((1 - SUM(vp.quantidade) * MAX(p.preco_custo) / SUM(vp.valor_total)) * 100, 1)
+            ELSE NULL
+          END AS margem_pct
+        FROM vendas_produto vp
+        LEFT JOIN produtos p ON p.codigo = vp.codigo AND p.ativo = true
+        ${where}
+        GROUP BY vp.codigo, vp.nome
         ORDER BY ${orderBy}
       `);
 
-      // Curva ABC
+      // Curva ABC por faturamento
       const fatTotal = rows.reduce((s,r)=>s+parseFloat(r.fat_total),0);
       let acum = 0;
-      const comABC = rows.map(r => {
-        acum += parseFloat(r.fat_total);
-        const pct = fatTotal > 0 ? acum/fatTotal*100 : 0;
-        return { ...r, abc: pct <= 80 ? 'A' : pct <= 95 ? 'B' : 'C' };
-      });
+      // Ordena por fat para calcular ABC mesmo se ordenação for outra
+      const porFat = [...rows].sort((a,b)=>parseFloat(b.fat_total)-parseFloat(a.fat_total));
+      const abcMap = {};
+      let acumAbc = 0;
+      for (const r of porFat) {
+        acumAbc += parseFloat(r.fat_total);
+        const pct = fatTotal > 0 ? acumAbc/fatTotal*100 : 0;
+        abcMap[r.codigo] = pct <= 80 ? 'A' : pct <= 95 ? 'B' : 'C';
+      }
+      const comABC = rows.map(r => ({ ...r, abc: abcMap[r.codigo] || 'C' }));
 
-      res.json({ ok: true, data: comABC, total: rows.length });
+      // Estatísticas de margem para insights
+      const comMargem = comABC.filter(r => r.margem_pct !== null);
+      const semCusto  = comABC.filter(r => r.margem_pct === null).length;
+
+      res.json({ ok: true, data: comABC, total: rows.length, semCusto });
     } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
