@@ -1014,47 +1014,63 @@ async function confirmarImportCC() {
     try {
       const buf = await file.arrayBuffer();
       const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
-      let fullText = '';
+      console.log('[PDF] numPages:', pdf.numPages);
+
+      // Coleta todos os items de todas as páginas com coordenadas
+      const allItems = [];
       for (let i = 1; i <= pdf.numPages; i++) {
         const page    = await pdf.getPage(i);
         const vp      = page.getViewport({ scale: 1 });
         const content = await page.getTextContent();
         const items   = content.items.filter(it => it.str && it.str.trim());
         const midX    = vp.width * 0.45;
-
-        // Agrupa por Y (origem inferior esquerdo → converte para topo)
-        const linhasMap = new Map();
-        for (const item of items) {
-          const yTop = Math.round((vp.height - item.transform[5]) / 4) * 4;
-          if (!linhasMap.has(yTop)) linhasMap.set(yTop, []);
-          linhasMap.get(yTop).push({ x: item.transform[4], str: item.str });
-        }
-
-        const ysOrdenados = [...linhasMap.keys()].sort((a, b) => a - b);
-        for (const y of ysOrdenados) {
-          const todosItems = linhasMap.get(y).sort((a, b) => a.x - b.x);
-          const temEsq = todosItems.some(it => it.x < midX);
-          const temDir = todosItems.some(it => it.x >= midX);
-          if (temEsq && temDir) {
-            const esq = todosItems.filter(it => it.x < midX).map(it => it.str).join(' ').trim();
-            const dir = todosItems.filter(it => it.x >= midX).map(it => it.str).join(' ').trim();
-            if (esq) fullText += esq + '\n';
-            if (dir) fullText += dir + '\n';
-          } else {
-            const texto = todosItems.map(it => it.str).join(' ').trim();
-            if (texto) fullText += texto + '\n';
-          }
-        }
-        fullText += '\n--- PAGE ---\n';
+        // Converte Y para cima→baixo e marca coluna
+        items.forEach(it => {
+          allItems.push({
+            str:  it.str,
+            x:    it.transform[4],
+            y:    Math.round((vp.height - it.transform[5]) / 2) * 2,
+            page: i,
+            midX,
+          });
+        });
       }
+
+      // Agrupa por página+Y para reconstruir linhas
+      const linhaKey = it => `${it.page}_${it.y}`;
+      const linhasMap = new Map();
+      for (const it of allItems) {
+        const k = linhaKey(it);
+        if (!linhasMap.has(k)) linhasMap.set(k, { page: it.page, y: it.y, midX: it.midX, items: [] });
+        linhasMap.get(k).items.push(it);
+      }
+
+      let fullText = '';
+      const linhas = [...linhasMap.values()].sort((a,b) => a.page!==b.page ? a.page-b.page : a.y-b.y);
+      let lastPage = 0;
+      for (const linha of linhas) {
+        if (linha.page !== lastPage) {
+          if (lastPage > 0) fullText += '\n--- PAGE ---\n';
+          lastPage = linha.page;
+        }
+        const sorted = linha.items.sort((a,b)=>a.x-b.x);
+        const temEsq = sorted.some(it=>it.x < linha.midX);
+        const temDir = sorted.some(it=>it.x >= linha.midX);
+        if (temEsq && temDir) {
+          const esq = sorted.filter(it=>it.x < linha.midX).map(it=>it.str).join(' ').trim();
+          const dir = sorted.filter(it=>it.x >= linha.midX).map(it=>it.str).join(' ').trim();
+          if (esq) fullText += esq + '\n';
+          if (dir) fullText += dir + '\n';
+        } else {
+          const txt = sorted.map(it=>it.str).join(' ').trim();
+          if (txt) fullText += txt + '\n';
+        }
+      }
+
+      console.log('[PDF] texto total:', fullText.length, 'chars');
+      console.log('[PDF] página 2 preview:', fullText.slice(fullText.indexOf('--- PAGE ---') + 12, fullText.indexOf('--- PAGE ---') + 800));
       const lancs = parseFaturaPDF(fullText, file.name);
-      // LOG TEMPORÁRIO
-      console.log('=== PDF EXTRAÍDO PÁGINA 2 ===');
-      const pg2start = fullText.indexOf('--- PAGE ---');
-      console.log('Posição PAGE separator:', pg2start);
-      console.log('Total texto:', fullText.length, 'chars');
-      console.log('Texto completo p2:', fullText.slice(pg2start, pg2start + 2000));
-      console.log('Lançamentos encontrados:', lancs.length);
+      console.log('[PDF] Lançamentos:', lancs.length, lancs.map(l=>l.lancamento+' '+l.valor));
       if (!lancs.length) { toast('⚠️ Nenhum lançamento encontrado no PDF'); return; }
       // Corrige mês dos lançamentos sem data para o mês confirmado
       lancs.forEach(l => { if (!l.data || !l.mes || l.mes === mesRef) { l.mes = mesCC; l.mesCaixa = mesCC; } });
