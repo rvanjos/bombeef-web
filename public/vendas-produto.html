@@ -330,8 +330,10 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
     <div id="estr-dsem" style="overflow-x:auto">
       <table class="tbl" style="width:100%">
         <thead><tr>
-          <th>Dia</th><th class="r">Faturamento</th><th class="r">Lucro Bruto</th>
-          <th class="r">Margem %</th><th class="r">Ticket Médio</th><th class="r">Qtd</th>
+          <th>Dia</th>
+          <th class="r">Faturamento</th><th class="r">% Fat</th>
+          <th class="r">Lucro Bruto</th><th class="r">Margem %</th>
+          <th class="r">Média/Dia</th><th class="r">Qtd</th>
         </tr></thead>
         <tbody id="estr-dsem-tbody"></tbody>
       </table>
@@ -459,10 +461,11 @@ function aplicarFiltros() {
   const sec = document.querySelector('.sec.active');
   if(!sec) return;
   const id = sec.id.replace('sec-','');
-  if(id==='produtos') carregarProdutos();
-  else if(id==='diasemana') carregarDiaSemana();
-  else if(id==='diario') carregarDiario();
-  else if(id==='abc') carregarABC();
+  if(id==='produtos')    carregarProdutos();
+  else if(id==='diasemana')  carregarDiaSemana();
+  else if(id==='diario')     carregarDiario();
+  else if(id==='abc')        carregarABC();
+  else if(id==='estrategia') carregarEstrategia();
 }
 
 function queryStr(extras={}) {
@@ -917,29 +920,30 @@ function _renderEstrAlertas() {
 
 // 4. Rentabilidade por dia da semana (com margem)
 async function _renderEstrDiaSemana() {
-  const d1 = await api.get('/api/vendas-produto/por-dia-semana'+queryStr());
-  const d2 = await api.get('/api/vendas-produto/top-por-dia-semana'+queryStr());
-  if(!d1.ok) return;
-  const rows = d1.data || [];
+  const d = await api.get('/api/vendas-produto/por-dia-semana'+queryStr());
+  if(!d.ok) return;
+  const rows = d.data || [];
   const DIAS = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
 
-  // Cruzar com custos dos produtos (_estrRows) para calcular lucro por dia
-  const custoMap = {};
-  _estrRows.forEach(r => { if(r.preco_custo_unit) custoMap[r.codigo] = parseFloat(r.preco_custo_unit); });
+  const fatTotal = rows.reduce((s,r)=>s+parseFloat(r.fat_total||0),0);
 
   document.getElementById('estr-dsem-tbody').innerHTML = rows.map(r => {
-    const lucro = r.lucro_bruto !== null ? parseFloat(r.lucro_bruto||0) : null;
     const fat   = parseFloat(r.fat_total||0);
+    const lucro = r.lucro_bruto !== null && r.lucro_bruto !== undefined ? parseFloat(r.lucro_bruto) : null;
     const qtd   = parseFloat(r.qtd_total||0);
-    const marg  = fat > 0 && lucro !== null ? (lucro/fat*100).toFixed(1) : null;
-    const ticket= r.cupons > 0 ? (fat/r.cupons).toFixed(2) : null;
-    const margCor = marg === null ? '#ccc' : parseFloat(marg)>=40?'var(--green)':parseFloat(marg)>=25?'var(--orange)':'var(--red-l)';
+    const nDias = parseInt(r.num_dias||1);
+    const marg  = r.margem_pct !== null && r.margem_pct !== undefined ? parseFloat(r.margem_pct) : null;
+    const ticket= nDias > 0 ? fat/nDias : 0; // ticket médio por dia
+    const pctFat= fatTotal > 0 ? (fat/fatTotal*100).toFixed(1) : '0';
+    const margCor = marg===null ? '#ccc' : marg>=40?'var(--green)':marg>=25?'var(--orange)':'var(--red-l)';
+    const dow = parseInt(r.dow);
     return `<tr>
-      <td style="font-weight:600">${DIAS[parseInt(r.dow)]}</td>
+      <td style="font-weight:600">${DIAS[dow]||dow}</td>
       <td class="r mono">${fmt.brl(fat)}</td>
+      <td class="r" style="font-size:10px;color:var(--muted)">${pctFat}%</td>
       <td class="r mono" style="color:${lucro!==null&&lucro>=0?'var(--green)':'var(--red-l)'}">${lucro!==null?fmt.brl(lucro):'—'}</td>
-      <td class="r" style="font-weight:700;color:${margCor}">${marg!==null?marg+'%':'—'}</td>
-      <td class="r mono" style="font-size:11px">${ticket?fmt.brl(parseFloat(ticket)):'—'}</td>
+      <td class="r" style="font-weight:700;color:${margCor}">${marg!==null?marg.toFixed(1)+'%':'—'}</td>
+      <td class="r mono" style="font-size:11px">${fmt.brl(ticket)}</td>
       <td class="r mono">${fmt.n(qtd)}</td>
     </tr>`;
   }).join('');

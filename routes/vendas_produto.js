@@ -196,18 +196,25 @@ module.exports = (pool) => {
   r.get('/por-dia-semana', async (req, res) => {
     const { ini, fim } = req.query;
     try {
-      const where = ini && fim ? `WHERE data_venda BETWEEN '${ini}' AND '${fim}'` : '';
+      const where = ini && fim ? `WHERE vp.data_venda BETWEEN '${ini}' AND '${fim}'` : '';
       const { rows } = await pool.query(`
         SELECT
-          EXTRACT(DOW FROM data_venda) AS dow,
-          TO_CHAR(data_venda,'Day')    AS dia_semana,
-          SUM(valor_total)             AS fat_total,
-          SUM(quantidade)              AS qtd_total,
-          COUNT(DISTINCT data_venda)   AS num_dias,
-          ROUND(SUM(valor_total)/NULLIF(COUNT(DISTINCT data_venda),0),2) AS fat_medio_dia
-        FROM vendas_produto ${where}
-        GROUP BY EXTRACT(DOW FROM data_venda), TO_CHAR(data_venda,'Day')
-        ORDER BY EXTRACT(DOW FROM data_venda)
+          EXTRACT(DOW FROM vp.data_venda)  AS dow,
+          SUM(vp.valor_total)              AS fat_total,
+          SUM(vp.quantidade)               AS qtd_total,
+          COUNT(DISTINCT vp.data_venda)    AS num_dias,
+          ROUND(SUM(vp.valor_total)/NULLIF(COUNT(DISTINCT vp.data_venda),0),2) AS fat_medio_dia,
+          -- Lucro bruto via JOIN com custos
+          ROUND(SUM(vp.valor_total) - SUM(vp.quantidade * COALESCE(p.preco_custo,0)), 2) AS lucro_bruto,
+          CASE WHEN SUM(vp.valor_total) > 0
+            THEN ROUND((1 - SUM(vp.quantidade * COALESCE(p.preco_custo,0)) / SUM(vp.valor_total)) * 100, 1)
+            ELSE NULL
+          END AS margem_pct
+        FROM vendas_produto vp
+        LEFT JOIN produtos p ON p.codigo = vp.codigo AND p.ativo = true
+        ${where}
+        GROUP BY EXTRACT(DOW FROM vp.data_venda)
+        ORDER BY EXTRACT(DOW FROM vp.data_venda)
       `);
       res.json({ ok: true, data: rows });
     } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
