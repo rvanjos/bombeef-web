@@ -2248,6 +2248,8 @@ function calcPerda(manual) {
       document.getElementById('pd-valor').value = (qtd * custo).toFixed(2);
   }
 }
+
+function editarPerda(id) {
   const p = perdas.find(x => String(x.id) === String(id));
   if (!p) { toast('⚠️ Perda não encontrada'); return; }
   document.getElementById('pd-id').value    = p.id;
