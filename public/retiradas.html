@@ -279,17 +279,22 @@ function renderizar(lista){
     const btnAtualizar = semCusto
       ? `<button class="act-btn" onclick="atualizarCusto(${r.id},${r.produto_id},${r.qtd||1})" title="Buscar custo atual do produto e atualizar" style="color:#d97706">🔄</button>`
       : '';
+    const _qtd = parseFloat(r.qtd||1);
+    const _preco = parseFloat(r.preco_unitario||0);
+    const celulaPreco = semCusto
+      ? `<span id="preco-txt-${r.id}" style="color:#d97706">—</span>`
+      : `<span id="preco-txt-${r.id}">${fmt.brl(_preco)}</span>`;
     return `<tr${semCusto?' style="background:#fffbeb"':''}>
       <td>${fmt.date(r.dt_retirada)}</td>
       <td><b>${r.funcionario_nome}</b></td>
       <td>${r.descricao}${badgeCusto}${r.prod_descricao&&r.prod_descricao!==r.descricao?`<br><small style="color:var(--muted)">${r.prod_descricao}</small>`:''}</td>
-      <td style="font-family:'DM Mono',monospace">${parseFloat(r.qtd||1).toFixed(3)}</td>
-      <td style="font-family:'DM Mono',monospace">${semCusto?'<span style="color:#d97706">—</span>':fmt.brl(r.preco_unitario)}</td>
+      <td style="font-family:'DM Mono',monospace">${_qtd.toFixed(3)}</td>
+      <td id="preco-cel-${r.id}" style="font-family:'DM Mono',monospace">${celulaPreco}</td>
       <td style="color:var(--green);font-weight:600">${parseFloat(r.desconto_pct||0).toFixed(0)}%</td>
-      <td style="font-family:'DM Mono',monospace;font-weight:700;color:${semCusto?'#d97706':'var(--purple)'}">
+      <td id="total-cel-${r.id}" style="font-family:'DM Mono',monospace;font-weight:700;color:${semCusto?'#d97706':'var(--purple)'}">
         ${semCusto?'<span style="color:#d97706">Pendente</span>':fmt.brl(r.valor_total)}
       </td>
-      <td>${btnAtualizar}<button class="act-btn" onclick="excluir(${r.id})" style="color:var(--red-l)">🗑</button></td>
+      <td>${btnAtualizar}<button class="act-btn" onclick="editarPreco(${r.id},${_preco},${_qtd})" title="Editar preço de custo" style="color:var(--purple)">✏️</button><button class="act-btn" onclick="excluir(${r.id})" style="color:var(--red-l)">🗑</button></td>
     </tr>`;
   }).join('');
 }
@@ -311,6 +316,49 @@ async function atualizarCusto(retId, prodId, qtd) {
   });
   if (!d.ok) { toast('Erro: ' + d.erro); return; }
   toast(`✅ Custo atualizado para ${fmt.brl(custo)}/un`);
+  carregar(); carregarLimites();
+}
+
+// ── Editar preço de custo inline ───────────────────────────────────────────
+function editarPreco(id, precoAtual, qtd) {
+  const cel = document.getElementById('preco-cel-' + id);
+  if (!cel) return;
+  // Já está em modo edição?
+  if (cel.querySelector('input')) return;
+
+  const val = precoAtual > 0 ? precoAtual.toFixed(4) : '';
+  cel.innerHTML = `
+    <div style="display:flex;align-items:center;gap:4px">
+      <input id="inp-preco-${id}" type="number" step="0.0001" min="0" value="${val}"
+        style="width:90px;padding:3px 6px;border:1px solid var(--purple);border-radius:6px;font-size:12px;font-family:'DM Mono',monospace"
+        onkeydown="if(event.key==='Enter')confirmarPreco(${id},${qtd});if(event.key==='Escape')cancelarEditarPreco(${id},${precoAtual})">
+      <button onclick="confirmarPreco(${id},${qtd})" style="background:var(--purple);color:#fff;border:none;border-radius:5px;padding:3px 7px;cursor:pointer;font-size:11px">✓</button>
+      <button onclick="cancelarEditarPreco(${id},${precoAtual})" style="background:#eee;border:none;border-radius:5px;padding:3px 7px;cursor:pointer;font-size:11px">✕</button>
+    </div>`;
+  document.getElementById('inp-preco-' + id).focus();
+  document.getElementById('inp-preco-' + id).select();
+}
+
+function cancelarEditarPreco(id, precoAtual) {
+  const cel = document.getElementById('preco-cel-' + id);
+  if (!cel) return;
+  cel.innerHTML = precoAtual > 0
+    ? `<span id="preco-txt-${id}">${fmt.brl(precoAtual)}</span>`
+    : `<span id="preco-txt-${id}" style="color:#d97706">—</span>`;
+}
+
+async function confirmarPreco(id, qtd) {
+  const inp = document.getElementById('inp-preco-' + id);
+  if (!inp) return;
+  const novoPreco = parseFloat(inp.value);
+  if (isNaN(novoPreco) || novoPreco < 0) { toast('⚠️ Valor inválido'); return; }
+  const novoTotal = parseFloat((novoPreco * qtd).toFixed(2));
+  const d = await api.put(`/api/retiradas/${id}`, {
+    precoUnitario: novoPreco,
+    valorTotal: novoTotal,
+  });
+  if (!d.ok) { toast('Erro: ' + d.erro); return; }
+  toast(`✅ Preço atualizado para ${fmt.brl(novoPreco)}/un`);
   carregar(); carregarLimites();
 }
 
