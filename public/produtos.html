@@ -451,7 +451,6 @@ const cfgSalva = localStorage.getItem('bb_kit_cfg');
 if(cfgSalva) try { CFG = {...CFG, ...JSON.parse(cfgSalva)}; } catch(_) {}
 
 window.onBBReady = () => { carregarKPIs(); carregarProd(); carregarKits(); carregarCfgUI(); };
-if(api.token()) { carregarKPIs(); carregarProd(); carregarKits(); carregarCfgUI(); }
 
 function showSec(s, btn) {
   ['sec-prod','sec-kits','sec-cfg'].forEach(id=>document.getElementById(id).style.display='none');

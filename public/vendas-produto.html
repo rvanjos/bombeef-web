@@ -1294,7 +1294,6 @@ function toast(msg,dur=3500){
 
 // ── Init ─────────────────────────────────────────────────────────────────────
 window.onBBReady = () => init();
-if (typeof api !== 'undefined' && api.token()) init();
 
 async function init() {
   if (_pronto) return;

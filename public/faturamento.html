@@ -553,7 +553,6 @@ const {api, fmt, toast} = BB;
 let periodos = [], chartFat = null, chartPag = null;
 
 window.onBBReady = () => init();
-if(api.token()) init();
 
 function init(){
   const ano = new Date().getFullYear();

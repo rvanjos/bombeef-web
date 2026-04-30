@@ -371,7 +371,6 @@ const {api,fmt,toast} = BB;
 let usuarios=[], funcionarios=[], metas=[], categorias=[];
 
 window.onBBReady = () => { init(); };
-if(api.token()) init();
 
 async function init(){
   await carregarConfig();

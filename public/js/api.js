@@ -19,12 +19,21 @@
 
   // ── Tratamento de 401 ─────────────────────────────────────────────────────
   // CRÍTICO: dentro de iframe NUNCA redirecionar com location.href
-  // Isso quebrava o portal inteiro no mobile (race condition de token)
+  // Só faz logout se o módulo já estava inicializado (_bbReady = true).
+  // Se ainda está na fase de inicialização, apenas descarta o token expirado
+  // e pede um novo ao portal — evita o bug de "precisa fazer login duas vezes"
+  // causado por token residual expirado no sessionStorage de sessão anterior.
   function handle401() {
     sessionStorage.removeItem('bb_token');
+    localStorage.removeItem('bb_token');
     if (_emIframe) {
-      // Avisa o portal para fazer logout — não move o iframe
-      try { w.parent.postMessage({ type: 'bb_logout' }, '*'); } catch (_) {}
+      if (_bbReady) {
+        // Sessão expirou durante uso normal → logout
+        try { w.parent.postMessage({ type: 'bb_logout' }, '*'); } catch (_) {}
+      } else {
+        // Token expirado encontrado na inicialização → pede token fresco ao portal
+        try { w.parent.postMessage({ type: 'bb_request_auth' }, '*'); } catch (_) {}
+      }
     } else {
       w.location.href = '/';
     }

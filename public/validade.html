@@ -752,7 +752,6 @@ const {api, fmt, toast} = BB;
 let itens=[], perdas=[], funcionarios=[];
 
 window.onBBReady = () => { init(); };
-if(api.token()) init();
 
 async function carregarAcoesValidade(){
   const d = await api.get('/api/config/acoes-validade');

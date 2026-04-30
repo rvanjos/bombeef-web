@@ -445,7 +445,6 @@ async function init() {
   carregarKPIs();
 }
 window.onBBReady = () => { init(); };
-if(api.token()) { init(); }
 
 // ── Fornecedores — autocomplete e CNPJ ──────────────────────────────────────
 let _fornTimer = null;

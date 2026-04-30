@@ -194,7 +194,6 @@ let retiradas=[], funcionarios=[], mesAtual='';
 
 let _initDone = false;
 window.onBBReady = () => { if(!_initDone){ _initDone=true; init(); } };
-if(api.token() && !_initDone) { _initDone=true; init(); }
 
 async function init(){
   const hoje = new Date();
