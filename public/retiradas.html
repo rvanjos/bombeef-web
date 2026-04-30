@@ -131,6 +131,13 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
     <div style="overflow-x:auto"><table class="tbl">
       <thead><tr><th>Data</th><th>Funcionário</th><th>Produto / Descrição</th><th>Qtd</th><th>Preço Unit.</th><th>Desconto</th><th>Total</th><th>Ações</th></tr></thead>
       <tbody id="tbody"></tbody>
+      <tfoot id="tfoot-total" style="display:none">
+        <tr style="background:#f7f4f0;border-top:2px solid var(--border)">
+          <td colspan="6" style="padding:10px 12px;font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px">Total do período</td>
+          <td id="tfoot-valor" style="padding:10px 12px;font-family:'DM Mono',monospace;font-weight:700;font-size:14px;color:var(--purple)"></td>
+          <td></td>
+        </tr>
+      </tfoot>
     </table></div>
     <div class="empty" id="empty" style="display:none"><p>Nenhuma retirada encontrada</p></div>
   </div>
@@ -269,7 +276,9 @@ async function carregar(){
 function renderizar(lista){
   const tb = document.getElementById('tbody');
   const em = document.getElementById('empty');
-  if(!lista.length){ tb.innerHTML=''; em.style.display=''; return; }
+  const tfoot = document.getElementById('tfoot-total');
+  const tfootVal = document.getElementById('tfoot-valor');
+  if(!lista.length){ tb.innerHTML=''; em.style.display=''; if(tfoot) tfoot.style.display='none'; return; }
   em.style.display='none';
   tb.innerHTML = lista.map(r=>{
     const semCusto = parseFloat(r.preco_unitario||0) === 0 && r.produto_id;
@@ -297,6 +306,13 @@ function renderizar(lista){
       <td>${btnAtualizar}<button class="act-btn" onclick="editarPreco(${r.id},${_preco},${_qtd})" title="Editar preço de custo" style="color:var(--purple)">✏️</button><button class="act-btn" onclick="excluir(${r.id})" style="color:var(--red-l)">🗑</button></td>
     </tr>`;
   }).join('');
+
+  // Rodapé com total
+  if (tfoot && tfootVal) {
+    const totalLista = lista.reduce((s, r) => s + parseFloat(r.valor_total || 0), 0);
+    tfootVal.textContent = fmt.brl(totalLista);
+    tfoot.style.display = '';
+  }
 }
 
 async function atualizarCusto(retId, prodId, qtd) {
