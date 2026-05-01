@@ -1499,91 +1499,77 @@ function parseCCRowsChatGPT(rows) {
   const result = [];
   if (!rows.length) return result;
 
-  // Detecta índices pelas colunas do cabeçalho (flexível a variações)
-  const header = rows[0].map(c => String(c||'').toLowerCase().trim());
-  const idx = (terms) => {
-    for (const t of terms) {
-      const i = header.findIndex(h => h.includes(t));
-      if (i >= 0) return i;
-    }
-    return -1;
-  };
+  // Encontra linha do cabeçalho (pode estar em row 0, 1 ou 2)
+  let headerRow = -1;
+  for (let i = 0; i < Math.min(5, rows.length); i++) {
+    const r = rows[i];
+    if (!r) continue;
+    const joined = r.map(c => String(c||'').toLowerCase()).join('|');
+    if (joined.includes('estabeleci') || joined.includes('descri')) { headerRow = i; break; }
+  }
+  if (headerRow < 0) return result;
 
-  const iComp    = idx(['competência','competencia']);
-  const iData    = idx(['data compra','data']);
-  const iBanco   = idx(['banco']);
-  const iFinal   = idx(['final']);
-  const iTipo    = idx(['tipo']);
-  const iEstab   = idx(['estabelecimento']);
-  const iParcAt  = idx(['parcela atual','parc atual']);
-  const iParcTot = idx(['qtd parcelas','qtd parc','total parcelas']);
-  const iValor   = idx(['valor dre','valor parcela']);
-  const iDC      = idx(['débito','debito','crédito','credito','d/c']);
-  const iImport  = idx(['importar']);
+  const header = rows[headerRow].map(c => String(c||'').toLowerCase().trim());
+  const idx = (...terms) => { for (const t of terms) { const i = header.findIndex(h => h.includes(t)); if (i >= 0) return i; } return -1; };
 
-  // Converte data para ISO — suporta: Date, serial Excel, DD/MM/YYYY, YYYY-MM-DD
-  function excelDateToISO(v) {
+  const iComp    = idx('competência', 'competencia');
+  const iData    = idx('data compra', 'data');
+  const iFinal   = idx('final');
+  const iEstab   = idx('estabelecimento', 'descrição', 'descricao');
+  const iParcAt  = idx('parcela atual', 'parc atual');
+  const iParcTot = idx('total parcelas', 'qtd parcelas', 'qtd parc');
+  const iValor   = idx('valor r$', 'valor dre', 'valor parcela', 'valor');
+  const iDC      = idx('débito/crédito', 'debito/credito', 'd/c');
+  const iImport  = idx('importar');
+  const iBanco   = idx('banco');
+
+  function toISO(v) {
     if (!v) return '';
     if (v instanceof Date) return v.toISOString().slice(0,10);
     const s = String(v).trim();
-    // DD/MM/YYYY
     const mBR = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-    if (mBR) return `${mBR[3]}-${mBR[2]}-${mBR[1]}`;
-    // YYYY-MM-DD
+    if (mBR) return mBR[3] + '-' + mBR[2] + '-' + mBR[1];
     if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-    // Serial Excel
     const n = parseInt(s);
-    if (n >= 40000 && n <= 60000) {
-      const d = new Date(Date.UTC(1899, 11, 30) + n * 86400000);
-      return d.toISOString().slice(0,10);
-    }
+    if (n >= 40000 && n <= 60000) return new Date(Date.UTC(1899,11,30) + n*86400000).toISOString().slice(0,10);
     return '';
   }
 
-  for (let i = 1; i < rows.length; i++) {
+  for (let i = headerRow + 1; i < rows.length; i++) {
     const row = rows[i];
     if (!row || !row.some(Boolean)) continue;
 
-    // Pula linhas marcadas como "Não importar"
-    const importar = iImport >= 0 ? String(row[iImport]||'').toLowerCase() : 'sim';
-    if (importar === 'não' || importar === 'nao' || importar === 'no') continue;
+    if (iImport >= 0) {
+      const imp = String(row[iImport]||'').toLowerCase().trim();
+      if (imp === 'não' || imp === 'nao' || imp === 'no' || imp === 'false') continue;
+    }
 
     const estab = String(row[iEstab] || '').trim();
     if (!estab) continue;
 
-    // Valor
-    let v = parseFloat(String(row[iValor] || 0).replace(/[^0-9,.-]/g,'').replace(',','.')) || 0;
+    let v = parseFloat(String(row[iValor] || 0).replace(/[^\d,.-]/g,'').replace(',','.')) || 0;
     if (!v) continue;
 
-    // Débito = despesa (negativo), Crédito = receita (positivo)
     const dc = String(row[iDC] || 'D').trim().toUpperCase();
-    v = dc === 'C' ? Math.abs(v) : -Math.abs(v);
+    v = dc.startsWith('C') ? Math.abs(v) : -Math.abs(v);
 
-    // Data da compra
-    const dataISO = excelDateToISO(row[iData]);
+    const dataISO = toISO(row[iData]);
+    let mesComp = String(row[iComp] || '').trim();
+    if (!mesComp && dataISO) { const [y,m] = dataISO.split('-'); mesComp = m + '/' + y; }
 
-    // Mês de competência
-    let mesComp = String(row[iComp] || '').trim(); // "03/2026"
-    if (!mesComp && dataISO) {
-      const [y, m] = dataISO.split('-');
-      mesComp = `${m}/${y}`;
-    }
+    const parcAt  = iParcAt  >= 0 && row[iParcAt]  ? String(row[iParcAt]).trim()  : '';
+    const parcTot = iParcTot >= 0 && row[iParcTot] ? String(row[iParcTot]).trim() : '';
+    const pA = parseInt(parcAt)||0, pT = parseInt(parcTot)||0;
+    const descFinal = (pA > 0 && pT > 0)
+      ? estab + ' (Parc ' + String(pA).padStart(2,'0') + '/' + String(pT).padStart(2,'0') + ')'
+      : estab;
 
-    // Descrição: estabelecimento + parcela se parcelado
-    const parcAt  = row[iParcAt]  ? String(row[iParcAt]).trim()  : '';
-    const parcTot = row[iParcTot] ? String(row[iParcTot]).trim() : '';
-    const descBase = estab;
-    const descFinal = (parcAt && parcTot && parcAt !== '0')
-      ? `${descBase} (Parc ${String(parcAt).padStart(2,'0')}/${String(parcTot).padStart(2,'0')})`
-      : descBase;
-
-    // Final do cartão para portador
-    const final = iFinal >= 0 ? String(row[iFinal]||'') : '';
-    const banco = iBanco >= 0 ? String(row[iBanco]||'') : '';
-    const portador = final ? `${banco} (Final ${final})` : banco;
+    const final   = iFinal >= 0 ? String(row[iFinal]||'').trim() : '';
+    const banco   = iBanco >= 0 ? String(row[iBanco]||'').trim() : 'CC';
+    const portador = final ? banco + ' (Final ' + final + ')' : banco;
 
     result.push({
-      id: 'cc_cgpt_' + Date.now() + '_' + i,
+      id: 'cc_cgpt_' + Date.now() + '_' + i + '_' + Math.random().toString(36).slice(2,5),
       lancamento: descFinal,
       razaoSocial: estab,
       valor: v,
