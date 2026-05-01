@@ -126,7 +126,7 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
   <!-- Tabela -->
   <div class="card">
     <div style="overflow-x:auto"><table class="tbl">
-      <thead><tr><th>Data</th><th>Funcionário</th><th>Produto / Descrição</th><th>Qtd</th><th>Preço Unit.</th><th>Desconto</th><th>Total</th><th>Ações</th></tr></thead>
+      <thead><tr><th>Data</th><th>Funcionário</th><th>Produto / Descrição</th><th>Qtd</th><th>Preço Unit.</th><th>Total</th><th>Ações</th></tr></thead>
       <tbody id="tbody"></tbody>
       <tfoot id="tfoot-total" style="display:none">
         <tr style="background:#f7f4f0;border-top:2px solid var(--border)">
@@ -296,7 +296,6 @@ function renderizar(lista){
       <td>${r.descricao}${badgeCusto}${r.prod_descricao&&r.prod_descricao!==r.descricao?`<br><small style="color:var(--muted)">${r.prod_descricao}</small>`:''}</td>
       <td style="font-family:'DM Mono',monospace">${_qtd.toFixed(3)}</td>
       <td id="preco-cel-${r.id}" style="font-family:'DM Mono',monospace">${celulaPreco}</td>
-      <td style="color:var(--green);font-weight:600">${parseFloat(r.desconto_pct||0).toFixed(0)}%</td>
       <td id="total-cel-${r.id}" style="font-family:'DM Mono',monospace;font-weight:700;color:${semCusto?'#d97706':'var(--purple)'}">
         ${semCusto?'<span style="color:#d97706">Pendente</span>':fmt.brl(r.valor_total)}
       </td>

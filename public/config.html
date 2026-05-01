@@ -136,7 +136,7 @@ if(window.self !== window.top){
           <div style="font-size:13px;font-weight:600;color:var(--red)">🗑️ Limpar Controle de Validade</div>
           <div style="font-size:11px;color:var(--muted)">Remove <b>todos</b> os itens de validade. Use antes de importar uma planilha atualizada.</div>
         </div>
-        <button class="btn" style="padding:6px 14px;background:var(--red);color:#fff" onclick="limparValidade()">Limpar Tudo</button>
+
       </div>
       <div style="margin-bottom:16px;background:var(--white);border-radius:10px;padding:16px;box-shadow:0 2px 8px rgba(0,0,0,.06)">
         <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">Logo do Sistema</div>
@@ -189,8 +189,7 @@ if(window.self !== window.top){
       </div>
       <div class="card">
         <div class="card-title">Retiradas de Funcionários</div>
-        <div class="fg"><label>Desconto Padrão (%)</label><input type="number" id="cfg-desc" value="100" min="0" max="100">
-          <div style="font-size:11px;color:var(--muted);margin-top:4px">100% = produto gratuito · 0% = preço cheio</div>
+
         </div>
       </div>
       <button class="btn btn-p" onclick="salvarConfig()">💾 Salvar Configurações</button>
@@ -397,7 +396,6 @@ async function carregarConfig(){
   document.getElementById('cfg-nome').value     = c.nome_empresa||'';
   document.getElementById('cfg-emoji').value    = c.logo_emoji||'🥩';
   document.getElementById('cfg-dias-val').value = c.dias_alerta_val||7;
-  document.getElementById('cfg-desc').value     = c.taxa_desconto_fun||100;
   // Parâmetros fiscais — lidos do localStorage (compartilhado com DRE e Faturamento)
   document.getElementById('cfg-taxa-royalties').value = localStorage.getItem('bb_taxa_royalties') || '4.75';
   document.getElementById('cfg-pct-simples').value    = localStorage.getItem('bb_pct_simples')    || '8';
@@ -408,7 +406,6 @@ async function salvarConfig(){
     nome_empresa:     document.getElementById('cfg-nome').value,
     logo_emoji:       document.getElementById('cfg-emoji').value,
     dias_alerta_val:  document.getElementById('cfg-dias-val').value,
-    taxa_desconto_fun:document.getElementById('cfg-desc').value,
   };
   const d = await api.put('/api/config/sistema', body);
   if (!d.ok) { toast('Erro: '+d.erro); return; }
@@ -1060,16 +1057,6 @@ async function salvarSenha(){
 </html>
 <script>
 // ── Limpar Validade ──────────────────────────────────────────────────────────
-async function limparValidade(){
-  if(!confirm('⚠️ ATENÇÃO\n\nIsso vai apagar TODOS os itens de validade cadastrados.\nEssa ação não pode ser desfeita.\n\nTem certeza?')) return;
-  if(!confirm('Confirmar limpeza total do controle de validade?')) return;
-  const d = await api.delete('/api/validade/limpar-tudo');
-  if(d.ok){
-    toast(`✅ ${d.removidos} itens removidos. Pode importar a planilha atualizada.`);
-  } else {
-    toast('❌ ' + (d.erro||'Erro ao limpar'));
-  }
-}
 
 // ── Senha própria ────────────────────────────────────────────────────────────
 function abrirSenhaPropia(){
