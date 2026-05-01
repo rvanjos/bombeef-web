@@ -239,6 +239,40 @@ main{padding:16px 24px;max-width:1400px;margin:0 auto;}
       <button class="btn btn-red" onclick="carregarMeusLanc()">🔄 Atualizar</button>
       <button class="btn btn-blue" onclick="abrirModalLanc()">＋ Novo Lançamento</button>
     </div>
+
+    <!-- Atalho rápido: pagamento extra (entrega/grelhado/comissão) — só para não-admin -->
+    <div id="quick-extra-wrap" style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:14px">
+      <div style="font-weight:700;font-size:13px;margin-bottom:10px;color:var(--text)">💵 Registrar Pagamento Extra</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;align-items:end">
+        <div>
+          <label style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.4px">Tipo</label>
+          <select id="qe-tipo" onchange="qeAtualizarCampos()" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-size:13px;margin-top:4px">
+            <option value="entrega">🚚 Entrega</option>
+            <option value="grelhado">🥩 Grelhado</option>
+            <option value="comissao">💰 Comissão</option>
+            <option value="bonus">🎁 Bônus</option>
+            <option value="outro">📌 Outro</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.4px">Descrição</label>
+          <input type="text" id="qe-desc" placeholder="Ex: Entrega bairro X" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-size:13px;margin-top:4px;box-sizing:border-box">
+        </div>
+        <div>
+          <label id="qe-valor-label" style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.4px">Valor (R$)</label>
+          <input type="number" id="qe-valor" step="0.01" min="0" placeholder="0,00" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-size:13px;margin-top:4px;box-sizing:border-box">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.4px">Data</label>
+          <input type="date" id="qe-data" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-size:13px;margin-top:4px;box-sizing:border-box">
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:10px">
+        <button class="btn btn-red" onclick="qeEnviar()" style="padding:8px 18px">📤 Enviar para Aprovação</button>
+        <span style="font-size:11px;color:var(--muted)">ℹ️ Ficará pendente até o admin aprovar.</span>
+      </div>
+    </div>
+
     <div id="meus-container"><div class="loading">Carregando...</div></div>
   </div>
 
@@ -707,6 +741,39 @@ async function carregarHistorico() {
   </table>`;
 }
 
+// ── Pagamento extra rápido (tela do funcionário) ─────────────────────────────
+function qeAtualizarCampos() {
+  const tipo = document.getElementById('qe-tipo').value;
+  const lbl  = document.getElementById('qe-valor-label');
+  if (lbl) lbl.textContent = tipo === 'entrega' ? 'Valor por entrega (R$)' : tipo === 'grelhado' ? 'Taxa do grelhado (R$)' : 'Valor (R$)';
+}
+
+async function qeEnviar() {
+  if (!_meuFuncId) { toast('⚠️ Usuário não vinculado a funcionário. Fale com o admin.'); return; }
+  const tipo      = document.getElementById('qe-tipo').value;
+  const descricao = (document.getElementById('qe-desc').value || '').trim();
+  const valor     = parseFloat(document.getElementById('qe-valor').value) || 0;
+  const data_ref  = document.getElementById('qe-data').value;
+  const mes_ref   = ymToMmYyyy(document.getElementById('sel-mes-meus').value || _mesAtual);
+
+  if (!descricao) { toast('⚠️ Informe a descrição'); return; }
+  if (!valor)     { toast('⚠️ Informe o valor'); return; }
+
+  // Grelhado: envia taxa completa, backend calcula 35%
+  const d = await post('/api/rh/lancamento', {
+    funcionario_id: _meuFuncId, mes_ref, tipo, descricao,
+    quantidade: 1, valor_unitario: valor, data_ref
+  });
+  if (!d.ok) { toast('❌ ' + d.erro); return; }
+
+  toast('✅ Enviado para aprovação!');
+  document.getElementById('qe-desc').value  = '';
+  document.getElementById('qe-valor').value = '';
+  const hoje = new Date().toISOString().slice(0,10);
+  document.getElementById('qe-data').value = hoje;
+  carregarMeusLanc();
+}
+
 function abrirModalLanc() {
   const hoje = new Date().toISOString().slice(0,10);
   document.getElementById('lanc-data').value = hoje;
@@ -984,6 +1051,9 @@ async function init() {
     if (btnRel)    btnRel.style.display    = '';
     if (btnAprov)  btnAprov.style.display  = '';
     if (btnMeus)   btnMeus.style.display   = '';
+    // Admin não precisa do atalho rápido (tem a ficha completa)
+    const qeWrap = document.getElementById('quick-extra-wrap');
+    if (qeWrap) qeWrap.style.display = 'none';
     const btnHist = document.getElementById('tab-btn-historico');
     if (btnHist)   btnHist.style.display   = '';
     carregarResumo();
@@ -997,6 +1067,14 @@ async function init() {
     if (btnRel)    btnRel.style.display    = 'none';
     if (btnAprov)  btnAprov.style.display  = 'none';
     if (btnMeus)   btnMeus.style.display   = '';
+    // Mostra atalho de pagamento extra para funcionários
+    const qeWrap = document.getElementById('quick-extra-wrap');
+    if (qeWrap) {
+      qeWrap.style.display = '';
+      // Preenche data com hoje
+      const hoje = new Date().toISOString().slice(0,10);
+      document.getElementById('qe-data').value = hoje;
+    }
     showTab('meus');
   }
 }
