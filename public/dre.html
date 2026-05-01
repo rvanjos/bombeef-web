@@ -102,6 +102,7 @@ td{padding:5px 9px;vertical-align:middle;}
 .mbg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;align-items:center;justify-content:center;padding:14px;}
 .mbg.open{display:flex;}
 .md{background:var(--white);border-radius:13px;width:100%;max-width:500px;max-height:92vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3);}
+.md-flex{overflow:hidden!important;display:flex;flex-direction:column;}
 .md-lg{max-width:1050px;}
 .md-fs{max-width:100vw!important;width:100vw!important;height:100vh!important;max-height:100vh!important;border-radius:0!important;margin:0!important;}
 .mbg.fs-mode{padding:0!important;align-items:stretch!important;}
@@ -397,8 +398,8 @@ td{padding:5px 9px;vertical-align:middle;}
 
 <!-- Modal Revisão Fatura CC -->
 <div class="mbg" id="m-cc-revisao">
-  <div class="md" style="max-width:860px;height:85vh;display:flex;flex-direction:column">
-    <div class="mdh" style="flex-shrink:0">
+  <div class="md md-flex" style="max-width:900px;width:100%;height:88vh">
+    <div class="mdh" style="flex-shrink:0;border-radius:13px 13px 0 0">
       <div>
         <h3>💳 Classificar Fatura — <span id="ccr-titulo">—</span></h3>
         <div style="font-size:11px;color:rgba(255,255,255,.7);margin-top:2px"><span id="ccr-subtitulo">—</span></div>
@@ -2523,31 +2524,31 @@ function ccrRenderGrupos() {
     const bgHeader = todasCat ? '#f0fdf4' : '#fffbeb';
 
     return `
-    <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;border-left:3px solid ${bordaCor}" id="ccrg-${gi}">
-      <!-- Header do grupo -->
-      <div style="background:${bgHeader};padding:8px 12px;display:flex;align-items:center;gap:8px;cursor:pointer" onclick="ccrToggleGrupo(${gi})">
-        <span style="font-size:13px;font-weight:700;flex:1;color:var(--text)">${g.nomeRef}</span>
-        <span style="font-size:11px;color:var(--muted)">${g.itens.length}x · ${fmt.brl(totalGrupo)}</span>
+    <div style="border:1px solid var(--border);border-radius:8px;border-left:3px solid ${bordaCor};background:#fff" id="ccrg-${gi}">
+      <!-- Header do grupo: clica para expandir/colapsar itens -->
+      <div style="background:${bgHeader};padding:9px 14px;display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:12px;cursor:pointer;border-radius:8px 8px 0 0" onclick="ccrToggleGrupo(${gi})">
+        <span style="font-size:13px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${g.nomeRef}</span>
+        <span style="font-size:11px;color:var(--muted);white-space:nowrap">${g.itens.length}x · ${fmt.brl(totalGrupo)}</span>
         <span id="ccrg-arr-${gi}" style="font-size:12px;color:var(--muted)">▼</span>
       </div>
-      <!-- Classificação do grupo inteiro -->
-      <div style="padding:6px 12px;background:#fafaf8;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px">
-        <span style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);white-space:nowrap">Categoria do grupo:</span>
-        <select onchange="ccrSetGrupo(${gi}, this.value)" style="flex:1;font-size:12px;padding:3px 6px;border:1px solid ${todasCat&&catUniforme?'var(--green)':'var(--orange)'};border-radius:6px;background:#fff">
+      <!-- Dropdown de categoria para o grupo inteiro -->
+      <div style="padding:6px 14px;background:#fafaf8;border-top:1px solid var(--border);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px">
+        <span style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);white-space:nowrap;flex-shrink:0">Categoria:</span>
+        <select onchange="ccrSetGrupo(${gi}, this.value)" style="flex:1;min-width:0;font-size:12px;padding:4px 8px;border:1px solid ${todasCat&&catUniforme?'var(--green)':'var(--orange)'};border-radius:6px;background:#fff">
           ${ccrCatOptions(catUniforme ? catGrupo : '')}
         </select>
-        ${!catUniforme && g.itens.length > 1 ? `<span style="font-size:10px;color:var(--orange)">⚠ variadas</span>` : ''}
+        ${!catUniforme && g.itens.length > 1 ? '<span style="font-size:10px;color:var(--orange);white-space:nowrap;flex-shrink:0">⚠ variadas</span>' : ''}
       </div>
-      <!-- Itens do grupo (colapsáveis) -->
+      <!-- Itens individuais (colapsáveis) -->
       <div id="ccrg-itens-${gi}" style="display:none">
-        ${g.itens.map((item, ii) => `
-        <div style="padding:5px 12px;border-bottom:1px solid #f0ece6;display:grid;grid-template-columns:80px 1fr 1fr 90px;gap:8px;align-items:center;font-size:12px">
-          <span style="color:var(--muted);font-family:'DM Mono',monospace">${item.data ? fmt.date(item.data) : '—'}</span>
-          <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${item.lancamento||''}">${item.lancamento||'—'}</span>
-          <select onchange="ccrSetItem('${item.id}', this.value)" style="font-size:11px;padding:2px 4px;border:1px solid var(--border);border-radius:4px">
+        ${g.itens.map((item) => `
+        <div style="padding:6px 14px;border-bottom:1px solid #f0ece6;display:grid;grid-template-columns:80px 1fr 180px 80px;gap:8px;align-items:center;font-size:12px">
+          <span style="color:var(--muted);font-family:'DM Mono',monospace;white-space:nowrap">${item.data ? fmt.date(item.data) : '—'}</span>
+          <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)" title="${item.lancamento||''}">${item.lancamento||'—'}</span>
+          <select onchange="ccrSetItem('${item.id}', this.value)" style="font-size:11px;padding:2px 6px;border:1px solid var(--border);border-radius:4px;width:100%">
             ${ccrCatOptions(item.categoria)}
           </select>
-          <span style="text-align:right;font-family:'DM Mono',monospace;font-weight:600;color:var(--red-l)">${fmt.brl(Math.abs(parseFloat(item.valor||0)))}</span>
+          <span style="text-align:right;font-family:'DM Mono',monospace;font-weight:600;color:var(--red-l);white-space:nowrap">${fmt.brl(Math.abs(parseFloat(item.valor||0)))}</span>
         </div>`).join('')}
       </div>
     </div>`;
