@@ -375,18 +375,75 @@ td{padding:5px 9px;vertical-align:middle;}
 
 <!-- Modal confirmação mês fatura CC -->
 <div class="mbg" id="m-cc-mes">
-  <div class="md" style="max-width:380px">
-    <div class="mdh"><h3>💳 Mês da Fatura</h3><button class="mdx" onclick="fecharModal('m-cc-mes')">×</button></div>
+  <div class="md" style="max-width:420px">
+    <div class="mdh"><h3>💳 Importar Fatura CC</h3><button class="mdx" onclick="fecharModal('m-cc-mes')">×</button></div>
     <div class="mdb">
-      <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Confirme o mês de competência desta fatura. Os lançamentos sem data serão atribuídos a este mês.</p>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Informe o mês de pagamento desta fatura. Os lançamentos serão exibidos para classificação antes de entrar no DRE.</p>
       <div class="fg">
-        <label>Mês da Fatura *</label>
+        <label>Mês de Pagamento da Fatura *</label>
         <input type="month" id="cc-mes-input" style="width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:8px;font-size:14px">
+      </div>
+      <div class="fg" style="margin-top:10px">
+        <label>Bandeira / Cartão (opcional)</label>
+        <input type="text" id="cc-bandeira-input" placeholder="ex: Visa, Master, Caixa..." style="width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:8px;font-size:14px">
       </div>
     </div>
     <div class="mdf" style="gap:10px">
       <button class="btn bn" onclick="fecharModal('m-cc-mes')">Cancelar</button>
-      <button class="btn bp" onclick="confirmarImportCC()">✅ Importar Fatura</button>
+      <button class="btn bp" onclick="confirmarImportCC()">Próximo: Classificar →</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Revisão Fatura CC -->
+<div class="mbg" id="m-cc-revisao">
+  <div class="md" style="max-width:860px;height:85vh;display:flex;flex-direction:column">
+    <div class="mdh" style="flex-shrink:0">
+      <div>
+        <h3>💳 Classificar Fatura — <span id="ccr-titulo">—</span></h3>
+        <div style="font-size:11px;color:rgba(255,255,255,.7);margin-top:2px"><span id="ccr-subtitulo">—</span></div>
+      </div>
+      <button class="mdx" onclick="fecharModal('m-cc-revisao')">×</button>
+    </div>
+
+    <!-- Barra de progresso de classificação -->
+    <div style="flex-shrink:0;padding:8px 16px;background:var(--bg);border-bottom:1px solid var(--border)">
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:4px">
+        <span>Progresso de classificação</span>
+        <span id="ccr-prog-txt">0%</span>
+      </div>
+      <div style="background:#ede8e0;border-radius:4px;height:6px">
+        <div id="ccr-prog-bar" style="background:var(--purple);border-radius:4px;height:100%;width:0%;transition:width .3s"></div>
+      </div>
+    </div>
+
+    <!-- Toolbar: classificar todos / filtro -->
+    <div style="flex-shrink:0;padding:8px 16px;background:var(--white);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <span style="font-size:12px;font-weight:600;color:var(--muted)">Classificar todos como:</span>
+      <select id="ccr-bulk-cat" style="font-size:12px;padding:4px 8px;border:1px solid var(--border);border-radius:6px;max-width:220px">
+        <option value="">— escolha —</option>
+      </select>
+      <button onclick="ccrBulkClassificar()" class="btn bp" style="padding:4px 12px;font-size:12px">Aplicar</button>
+      <div style="margin-left:auto;display:flex;gap:6px">
+        <button onclick="ccrFiltrar('todos')" id="ccrF-todos" class="btn bp" style="padding:3px 10px;font-size:11px">Todos</button>
+        <button onclick="ccrFiltrar('pendentes')" id="ccrF-pendentes" class="btn bn" style="padding:3px 10px;font-size:11px;color:var(--orange);border-color:var(--orange)">⚠ Pendentes</button>
+      </div>
+    </div>
+
+    <!-- Lista de grupos -->
+    <div id="ccr-grupos" style="flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:6px"></div>
+
+    <!-- Rodapé -->
+    <div style="flex-shrink:0;background:var(--white);border-top:1px solid var(--border);padding:10px 16px;display:flex;align-items:center;gap:12px">
+      <div style="font-size:12px;color:var(--muted)">
+        Total: <strong id="ccr-total-val" style="color:var(--red-l)">—</strong>
+        &nbsp;·&nbsp; <span id="ccr-n-lanc">0</span> lançamentos
+        &nbsp;·&nbsp; <span id="ccr-n-pend" style="color:var(--orange)">0 pendentes</span>
+      </div>
+      <div style="margin-left:auto;display:flex;gap:8px">
+        <button class="btn bn" onclick="fecharModal('m-cc-revisao')">Cancelar</button>
+        <button class="btn bp" id="ccr-btn-enviar" onclick="ccrEnviarParaDRE()" style="background:var(--green)">✅ Enviar para o DRE</button>
+      </div>
     </div>
   </div>
 </div>
@@ -584,7 +641,8 @@ const GRUPO_LABELS = {
 // Categorias que aparecem na tela mas NÃO impactam resultado (nem receita nem despesa)
 const CATS_NAO_OPERACIONAIS = new Set([
   'Transferência entre contas',
-  'Pagamento de Cartão',  // pagamento da fatura → neutro, pois os itens da fatura já são as despesas
+  'Pagamento de Cartão',        // pagamento da fatura → neutro, pois os itens da fatura já são as despesas
+  'Pagamento de Fatura CC',     // mesmo conceito — alias mais explícito usado no vínculo de faturas
 ]);
 
 // Categorias de retirada de sócios — impactam SOMENTE após resultado operacional+financeiro
@@ -1040,6 +1098,7 @@ async function confirmarImportCC() {
   const ymVal = document.getElementById('cc-mes-input').value;
   const [yyyy, mm] = ymVal.split('-');
   const mesCC = `${mm}/${yyyy}`; // ex: "02/2026"
+  const bandeira = (document.getElementById('cc-bandeira-input')?.value || '').trim();
 
   const ext = file.name.split('.').pop().toLowerCase();
   if (ext === 'pdf') {
@@ -1086,10 +1145,10 @@ async function confirmarImportCC() {
       // mes = mês da COMPRA (já vem do parser pela data real)
       // mesCaixa = mês do PAGAMENTO da fatura (sempre = mesCC, confirmado pelo usuário)
       lancs.forEach(l => {
-        if (!l.data || !l.mes || l.mes === mesRef) l.mes = mesCC; // sem data → competência = mês da fatura
-        l.mesCaixa = mesCC; // SEMPRE: caixa entra no mês do pagamento da fatura
+        if (!l.data || !l.mes || l.mes === mesRef) l.mes = mesCC;
+        l.mesCaixa = mesCC;
       });
-      addLancs(lancs, file.name);
+      abrirRevisaoCC(lancs, mesCC, bandeira, file.name);
     } catch(e) {
       console.error('[procCC PDF]', e);
       toast('❌ Erro ao ler PDF: ' + e.message);
@@ -1104,13 +1163,11 @@ async function confirmarImportCC() {
   const rows= XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
   const lancs = parseCCRows(rows);
   if (!lancs.length) { toast('⚠️ Nenhum lançamento encontrado na fatura'); return; }
-  // mes = mês da COMPRA (data real do lançamento)
-  // mesCaixa = mês do PAGAMENTO da fatura (sempre = mesCC, confirmado pelo usuário)
   lancs.forEach(l => {
     if (!l.data || !l.mes || l.mes === mesRef) l.mes = mesCC;
-    l.mesCaixa = mesCC; // SEMPRE: caixa entra no mês do pagamento da fatura
+    l.mesCaixa = mesCC;
   });
-  addLancs(lancs, file.name);
+  abrirRevisaoCC(lancs, mesCC, bandeira, file.name);
 }
 
 // ─── PARSER PDF FATURAS ───────────────────────────────────────────────────────
@@ -1720,7 +1777,7 @@ function render() {
       <td style="font-size:11px;white-space:nowrap;cursor:pointer;color:var(--muted);text-decoration:underline dotted" onclick="editMes('${t.id}','mesCaixa',this)">${fmtMes(t.mesCaixa||t.mes)}</td>
       <td>${badge}</td>
       <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500" title="${esc(t.lancamento)}">
-        ${t.lancamento}${isReview?needsReviewBadge:''}
+        ${t.lancamento}${isReview?needsReviewBadge:''}${ccrBadgeVinculo(t)}
         ${t.boletoId && t.fonte==='EXTRATO' ? `
           <br><span style="display:inline-flex;align-items:center;gap:3px;font-size:9px;background:#dbeafe;color:#1e40af;padding:1px 5px;border-radius:3px;margin-top:2px">
             <span style="cursor:pointer" onclick="verVinculoDRE('${t.id}')" title="Ver boleto vinculado">🔗 boleto vinculado</span>
@@ -2108,6 +2165,332 @@ function confirmarBulkMes(){
   TXS.forEach(t=>{if(!selIds.has(String(t.id)))return;if(ac)t.mes=v;if(ax)t.mesCaixa=v;});
   fecharModal('m-mes'); limparSel(); updMesFiltro(); render(); renderDRE(); autoSv();
   toast(`📅 Mês atualizado`);
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// REVISÃO DE FATURA CC
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Estado da revisão atual
+let _ccrLancs    = [];   // lançamentos pendentes de revisão
+let _ccrMesCC    = '';
+let _ccrBandeira = '';
+let _ccrFileName = '';
+let _ccrFiltro   = 'todos'; // 'todos' | 'pendentes'
+
+// Similaridade de tokens para agrupamento
+function tokenSim(a, b) {
+  const tok = s => s.toUpperCase().replace(/[^A-Z0-9]/g,' ').split(/\s+/).filter(Boolean);
+  const ta = new Set(tok(a)), tb = new Set(tok(b));
+  const inter = [...ta].filter(t => tb.has(t)).length;
+  return inter / Math.max(ta.size, tb.size, 1);
+}
+
+// Agrupa lançamentos por nome similar (limiar 0,45)
+function ccrAgrupar(lancs) {
+  const grupos = [];
+  for (const l of lancs) {
+    const nome = l.lancamento || l.razaoSocial || '';
+    let achado = null;
+    for (const g of grupos) {
+      if (tokenSim(nome, g.nomeRef) >= 0.45) { achado = g; break; }
+    }
+    if (achado) {
+      achado.itens.push(l);
+    } else {
+      grupos.push({ nomeRef: nome, itens: [l], categoria: l.categoria || '' });
+    }
+  }
+  // Ordena: grupos sem categoria primeiro, depois por valor total desc
+  grupos.sort((a, b) => {
+    const aOk = a.itens.every(i => i.categoria), bOk = b.itens.every(i => i.categoria);
+    if (aOk !== bOk) return aOk ? 1 : -1;
+    const av = a.itens.reduce((s,i) => s + Math.abs(parseFloat(i.valor||0)), 0);
+    const bv = b.itens.reduce((s,i) => s + Math.abs(parseFloat(i.valor||0)), 0);
+    return bv - av;
+  });
+  return grupos;
+}
+
+// Abre o modal de revisão com os lançamentos da fatura
+function abrirRevisaoCC(lancs, mesCC, bandeira, fileName) {
+  _ccrLancs    = lancs.map(l => ({...l, categoria: l.categoria || autoClassificar(l.lancamento, l.razaoSocial||'')}));
+  _ccrMesCC    = mesCC;
+  _ccrBandeira = bandeira;
+  _ccrFileName = fileName;
+  _ccrFiltro   = 'todos';
+
+  const label = bandeira ? `${bandeira} · ${mesCC}` : mesCC;
+  document.getElementById('ccr-titulo').textContent = label;
+  document.getElementById('ccr-subtitulo').textContent = `${lancs.length} lançamentos · arquivo: ${fileName}`;
+
+  // Popula select de classificação em massa com as categorias disponíveis
+  const sel = document.getElementById('ccr-bulk-cat');
+  sel.innerHTML = '<option value="">— escolha —</option>';
+  for (const [grp, gd] of Object.entries(CATS)) {
+    const og = document.createElement('optgroup');
+    og.label = gd.l || grp;
+    for (const s of (gd.s || [])) {
+      const o = document.createElement('option');
+      o.value = s; o.textContent = s;
+      og.appendChild(o);
+    }
+    sel.appendChild(og);
+  }
+
+  ccrRenderGrupos();
+  document.getElementById('m-cc-revisao').classList.add('open');
+}
+
+let _ccrGrupos = []; // estado dos grupos renderizados
+
+function ccrRenderGrupos() {
+  _ccrGrupos = ccrAgrupar(_ccrLancs);
+  const filtro = _ccrFiltro;
+  const container = document.getElementById('ccr-grupos');
+
+  // Filtra grupos conforme filtro ativo
+  const gruposVisiveis = filtro === 'pendentes'
+    ? _ccrGrupos.filter(g => g.itens.some(i => !i.categoria))
+    : _ccrGrupos;
+
+  const total = _ccrLancs.reduce((s, l) => s + Math.abs(parseFloat(l.valor||0)), 0);
+  const nPend = _ccrLancs.filter(l => !l.categoria).length;
+  const pct   = _ccrLancs.length ? Math.round((_ccrLancs.length - nPend) / _ccrLancs.length * 100) : 100;
+
+  document.getElementById('ccr-total-val').textContent = '-' + fmt.brl(total);
+  document.getElementById('ccr-n-lanc').textContent    = _ccrLancs.length + ' lançamentos';
+  document.getElementById('ccr-n-pend').textContent    = nPend ? `⚠ ${nPend} pendentes` : '✅ todos classificados';
+  document.getElementById('ccr-n-pend').style.color    = nPend ? 'var(--orange)' : 'var(--green)';
+  document.getElementById('ccr-prog-txt').textContent  = pct + '%';
+  document.getElementById('ccr-prog-bar').style.width  = pct + '%';
+  document.getElementById('ccr-prog-bar').style.background = pct === 100 ? 'var(--green)' : 'var(--purple)';
+
+  // Opções de categoria para cada linha
+  function catOptions(catAtual) {
+    let html = '<option value="">— pendente —</option>';
+    for (const [grp, gd] of Object.entries(CATS)) {
+      html += `<optgroup label="${gd.l || grp}">`;
+      for (const s of (gd.s || [])) {
+        html += `<option value="${s}"${s === catAtual ? ' selected' : ''}>${s}</option>`;
+      }
+      html += '</optgroup>';
+    }
+    return html;
+  }
+
+  container.innerHTML = gruposVisiveis.map((g, gi) => {
+    const totalGrupo = g.itens.reduce((s,i) => s + Math.abs(parseFloat(i.valor||0)), 0);
+    const todasCat   = g.itens.every(i => i.categoria);
+    const catGrupo   = g.itens[0]?.categoria || '';
+    // Verifica se todos os itens do grupo têm a mesma categoria
+    const catUniforme = g.itens.every(i => i.categoria === catGrupo);
+
+    const bordaCor = todasCat ? 'var(--green)' : 'var(--orange)';
+    const bgHeader = todasCat ? '#f0fdf4' : '#fffbeb';
+
+    return `
+    <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;border-left:3px solid ${bordaCor}" id="ccrg-${gi}">
+      <!-- Header do grupo -->
+      <div style="background:${bgHeader};padding:8px 12px;display:flex;align-items:center;gap:8px;cursor:pointer" onclick="ccrToggleGrupo(${gi})">
+        <span style="font-size:13px;font-weight:700;flex:1;color:var(--text)">${g.nomeRef}</span>
+        <span style="font-size:11px;color:var(--muted)">${g.itens.length}x · ${fmt.brl(totalGrupo)}</span>
+        <span id="ccrg-arr-${gi}" style="font-size:12px;color:var(--muted)">▼</span>
+      </div>
+      <!-- Classificação do grupo inteiro -->
+      <div style="padding:6px 12px;background:#fafaf8;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px">
+        <span style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);white-space:nowrap">Categoria do grupo:</span>
+        <select onchange="ccrSetGrupo(${gi}, this.value)" style="flex:1;font-size:12px;padding:3px 6px;border:1px solid ${todasCat&&catUniforme?'var(--green)':'var(--orange)'};border-radius:6px;background:#fff">
+          ${catOptions(catUniforme ? catGrupo : '')}
+        </select>
+        ${!catUniforme && g.itens.length > 1 ? `<span style="font-size:10px;color:var(--orange)">⚠ variadas</span>` : ''}
+      </div>
+      <!-- Itens do grupo (colapsáveis) -->
+      <div id="ccrg-itens-${gi}" style="display:none">
+        ${g.itens.map((item, ii) => `
+        <div style="padding:5px 12px;border-bottom:1px solid #f0ece6;display:grid;grid-template-columns:80px 1fr 1fr 90px;gap:8px;align-items:center;font-size:12px">
+          <span style="color:var(--muted);font-family:'DM Mono',monospace">${item.data ? fmt.date(item.data) : '—'}</span>
+          <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${item.lancamento||''}">${item.lancamento||'—'}</span>
+          <select onchange="ccrSetItem('${item.id}', this.value)" style="font-size:11px;padding:2px 4px;border:1px solid var(--border);border-radius:4px">
+            ${catOptions(item.categoria)}
+          </select>
+          <span style="text-align:right;font-family:'DM Mono',monospace;font-weight:600;color:var(--red-l)">${fmt.brl(Math.abs(parseFloat(item.valor||0)))}</span>
+        </div>`).join('')}
+      </div>
+    </div>`;
+  }).join('');
+
+  if (!gruposVisiveis.length) {
+    container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted)">✅ Nenhum lançamento pendente!</div>';
+  }
+}
+
+function ccrToggleGrupo(gi) {
+  const itens = document.getElementById(`ccrg-itens-${gi}`);
+  const arr   = document.getElementById(`ccrg-arr-${gi}`);
+  if (!itens) return;
+  const aberto = itens.style.display !== 'none';
+  itens.style.display = aberto ? 'none' : '';
+  if (arr) arr.textContent = aberto ? '▼' : '▲';
+}
+
+function ccrSetGrupo(gi, cat) {
+  const g = _ccrGrupos[gi];
+  if (!g) return;
+  g.itens.forEach(item => {
+    const l = _ccrLancs.find(x => x.id === item.id);
+    if (l) { l.categoria = cat; item.categoria = cat; }
+  });
+  ccrRenderGrupos();
+}
+
+function ccrSetItem(id, cat) {
+  const l = _ccrLancs.find(x => x.id === id);
+  if (l) l.categoria = cat;
+  // Re-renderiza apenas os contadores sem recriar tudo
+  const nPend = _ccrLancs.filter(l => !l.categoria).length;
+  const pct   = _ccrLancs.length ? Math.round((_ccrLancs.length - nPend) / _ccrLancs.length * 100) : 100;
+  document.getElementById('ccr-prog-txt').textContent  = pct + '%';
+  document.getElementById('ccr-prog-bar').style.width  = pct + '%';
+  document.getElementById('ccr-prog-bar').style.background = pct === 100 ? 'var(--green)' : 'var(--purple)';
+  document.getElementById('ccr-n-pend').textContent    = nPend ? `⚠ ${nPend} pendentes` : '✅ todos classificados';
+  document.getElementById('ccr-n-pend').style.color    = nPend ? 'var(--orange)' : 'var(--green)';
+}
+
+function ccrBulkClassificar() {
+  const cat = document.getElementById('ccr-bulk-cat').value;
+  if (!cat) { toast('Selecione uma categoria'); return; }
+  _ccrLancs.forEach(l => { l.categoria = cat; });
+  ccrRenderGrupos();
+  toast(`✅ Todos classificados como "${cat}"`);
+}
+
+function ccrFiltrar(tipo) {
+  _ccrFiltro = tipo;
+  ['todos','pendentes'].forEach(t => {
+    const b = document.getElementById(`ccrF-${t}`);
+    if (!b) return;
+    b.className = t === tipo ? 'btn bp' : 'btn bn';
+    if (t === 'pendentes') { b.style.color = t === tipo ? '' : 'var(--orange)'; b.style.borderColor = t === tipo ? '' : 'var(--orange)'; }
+  });
+  ccrRenderGrupos();
+}
+
+function ccrEnviarParaDRE() {
+  const nPend = _ccrLancs.filter(l => !l.categoria).length;
+  if (nPend > 0) {
+    const ok = confirm(`⚠️ ${nPend} lançamento(s) ainda sem categoria. Enviar assim mesmo?`);
+    if (!ok) return;
+  }
+  // Marca todos os lançamentos com a referência da fatura para rastrear vínculo
+  const faturaId = `CC_${_ccrMesCC.replace('/','_')}${_ccrBandeira ? '_' + _ccrBandeira.replace(/\s+/g,'') : ''}`;
+  _ccrLancs.forEach(l => { l.faturaCC = faturaId; l.bandeira = _ccrBandeira || ''; });
+  addLancs(_ccrLancs, _ccrFileName);
+  fecharModal('m-cc-revisao');
+  toast(`✅ ${_ccrLancs.length} lançamentos enviados para o DRE`);
+  // Verifica se há lançamento de pagamento de fatura sem vínculo
+  ccrAlertarPagamentoSemFatura(faturaId, _ccrMesCC, _ccrBandeira);
+}
+
+// Alerta se existe lançamento "Pagamento de Fatura CC" no mês sem vínculo
+function ccrAlertarPagamentoSemFatura(faturaId, mesCC, bandeira) {
+  const pagamentos = TXS.filter(t =>
+    (t.categoria === 'Pagamento de Fatura CC' || t.categoria === 'Pagamento de Cartão') &&
+    (t.mesCaixa === mesCC || t.mes === mesCC) &&
+    !t.faturaCC
+  );
+  if (!pagamentos.length) return;
+  const totalPag = pagamentos.reduce((s,t) => s + Math.abs(parseFloat(t.valor||0)), 0);
+  setTimeout(() => {
+    toast(`💡 Há ${pagamentos.length} pagamento(s) de fatura (${fmt.brl(totalPag)}) em ${mesCC} sem fatura vinculada. Use "Vincular" na coluna de ações.`);
+  }, 800);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// VINCULAÇÃO: pagamento de fatura ↔ fatura importada
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Lista faturas CC já importadas (agrupa por faturaId único)
+function ccrFaturasImportadas() {
+  const map = {};
+  TXS.filter(t => t.faturaCC).forEach(t => {
+    if (!map[t.faturaCC]) {
+      map[t.faturaCC] = {
+        faturaId: t.faturaCC,
+        bandeira: t.bandeira || '—',
+        mes: t.mesCaixa || t.mes,
+        total: 0,
+        n: 0
+      };
+    }
+    map[t.faturaCC].total += Math.abs(parseFloat(t.valor||0));
+    map[t.faturaCC].n++;
+  });
+  return Object.values(map);
+}
+
+// Abre modal de vínculo para um lançamento de pagamento de fatura
+function abrirVinculoFatura(txId) {
+  const tx = TXS.find(t => t.id == txId);
+  if (!tx) return;
+  const faturas = ccrFaturasImportadas();
+  if (!faturas.length) {
+    toast('⚠️ Nenhuma fatura CC importada ainda. Importe a fatura primeiro.');
+    return;
+  }
+  const atual = tx.faturaCC || '';
+  const lista = faturas.map(f => `
+    <label style="display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--border);border-radius:7px;cursor:pointer;background:${f.faturaId===atual?'#f0fdf4':'var(--bg)'}">
+      <input type="radio" name="vincFatura" value="${f.faturaId}" ${f.faturaId===atual?'checked':''}>
+      <span style="flex:1">
+        <strong>${f.bandeira}</strong> · ${f.mes}
+        <span style="font-size:11px;color:var(--muted);margin-left:8px">${f.n} lanç · ${fmt.brl(f.total)}</span>
+      </span>
+    </label>`).join('');
+  const html = `
+    <div class="mbg open" id="m-vinc-fatura" onclick="if(event.target===this)fecharModal('m-vinc-fatura')">
+      <div class="md" style="max-width:480px">
+        <div class="mdh"><h3>🔗 Vincular Fatura CC</h3><button class="mdx" onclick="fecharModal('m-vinc-fatura')">×</button></div>
+        <div class="mdb">
+          <p style="font-size:12px;color:var(--muted);margin-bottom:12px">
+            Pagamento: <strong>${tx.lancamento}</strong> · ${fmt.brl(Math.abs(parseFloat(tx.valor||0)))} · ${tx.mesCaixa||tx.mes}
+          </p>
+          <div style="display:flex;flex-direction:column;gap:6px">${lista}</div>
+          <label style="display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--border);border-radius:7px;cursor:pointer;margin-top:6px;background:var(--bg)">
+            <input type="radio" name="vincFatura" value=""> <span style="color:var(--muted)">Sem vínculo (desconectar)</span>
+          </label>
+        </div>
+        <div class="mdf">
+          <button class="btn bn" onclick="fecharModal('m-vinc-fatura')">Cancelar</button>
+          <button class="btn bp" onclick="confirmarVinculoFatura('${txId}')">🔗 Vincular</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+
+function confirmarVinculoFatura(txId) {
+  const sel = document.querySelector('input[name="vincFatura"]:checked');
+  if (!sel) return;
+  const tx = TXS.find(t => t.id == txId);
+  if (tx) { tx.faturaCC = sel.value || null; }
+  fecharModal('m-vinc-fatura');
+  document.getElementById('m-vinc-fatura')?.remove();
+  render(); autoSv();
+  toast('🔗 Vínculo salvo');
+}
+
+// Badge de status de vínculo para exibir na tabela
+function ccrBadgeVinculo(tx) {
+  const isPagFatura = tx.categoria === 'Pagamento de Fatura CC' || tx.categoria === 'Pagamento de Cartão';
+  if (!isPagFatura) return '';
+  if (tx.faturaCC) {
+    const f = ccrFaturasImportadas().find(f => f.faturaId === tx.faturaCC);
+    return `<button onclick="abrirVinculoFatura('${tx.id}')" title="Fatura vinculada: ${tx.faturaCC}" style="background:none;border:none;cursor:pointer;font-size:11px;background:#dcfce7;color:#166534;padding:1px 6px;border-radius:4px;margin-left:4px">🔗 ${f ? f.bandeira : tx.faturaCC}</button>`;
+  } else {
+    return `<button onclick="abrirVinculoFatura('${tx.id}')" title="Clique para vincular a uma fatura importada" style="background:none;border:none;cursor:pointer;font-size:11px;background:#fef9c3;color:#854d0e;padding:1px 6px;border-radius:4px;margin-left:4px">⚠ Vincular</button>`;
+  }
 }
 
 // ─── STATS ────────────────────────────────────────────────────────────────────
