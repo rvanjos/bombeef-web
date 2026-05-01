@@ -395,6 +395,7 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
     <button class="pnav-tab" onclick="showTab('vendasproduto')" data-tab="vendasproduto" data-perfil="admin,gestor"><span class="tab-icon">📊</span><span class="tab-label">Análise Vendas</span></button>
     <div class="pnav-section">Gestão</div>
     <button class="pnav-tab" onclick="showTab('rh')"        data-tab="rh"        data-perfil="admin,gestor,operador,caixa,estoque,financeiro,contabil"><span class="tab-icon">🧑‍💼</span><span class="tab-label">RH</span></button>
+    <button class="pnav-tab" onclick="showTab('auditoria')" data-tab="auditoria" data-perfil="admin,gestor,financeiro,contabil"><span class="tab-icon">🔍</span><span class="tab-label">Auditoria</span></button>
     <button class="pnav-tab" onclick="showTab('config')"    data-tab="config"    data-perfil="admin,gestor"><span class="tab-icon">⚙️</span><span class="tab-label">Config</span></button>
   </nav>
   <div class="portal-content">
@@ -631,6 +632,9 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
     </div>
     <div class="frame-container" id="frame-faturamento">
       <iframe class="module-frame" id="iframe-faturamento" src="faturamento.html"></iframe>
+    </div>
+    <div class="frame-container" id="frame-auditoria">
+      <iframe class="module-frame" id="iframe-auditoria" src="" data-src="auditoria.html"></iframe>
     </div>
     <div class="frame-container" id="frame-config">
       <iframe class="module-frame" id="iframe-config" src="config.html?v=1775328871"></iframe>
@@ -1287,6 +1291,43 @@ window.addEventListener('DOMContentLoaded', async () => {
 // ── Mensagens dos iframes ──────────────────────────────────────────────────
 window.addEventListener('message', e => {
   if (!e.data) return;
+
+  // Auditoria: iframe pede categorias do DRE
+  if (e.data.type === 'auditoria_get_cats') {
+    const ifrAudit = document.getElementById('iframe-auditoria');
+    const dreFrame = document.getElementById('iframe-dre');
+    if (dreFrame?.contentWindow && ifrAudit?.contentWindow) {
+      try { const cats = dreFrame.contentWindow.CATS; if (cats) ifrAudit.contentWindow.postMessage({ type: 'bb_cats', cats }, '*'); } catch(_) {}
+    }
+    return;
+  }
+  // Auditoria: atualiza categoria no DRE
+  if (e.data.type === 'auditoria_set_cat') {
+    try {
+      const txs = document.getElementById('iframe-dre')?.contentWindow?.TXS;
+      if (txs) {
+        const t = txs.find(x => String(x.id) === String(e.data.id));
+        if (t) {
+          t.categoria = e.data.categoria;
+          const dw = document.getElementById('iframe-dre').contentWindow;
+          dw.render(); dw.updStats(); dw.autoSv();
+        }
+      }
+    } catch(_) {}
+    return;
+  }
+  // Auditoria: ignorar lançamento no DRE
+  if (e.data.type === 'auditoria_ignorar') {
+    try {
+      const txs = document.getElementById('iframe-dre')?.contentWindow?.TXS;
+      if (txs) {
+        const t = txs.find(x => String(x.id) === String(e.data.id));
+        if (t) { t.ignorar = true; const dw = document.getElementById('iframe-dre').contentWindow; dw.render(); dw.autoSv(); }
+      }
+    } catch(_) {}
+    return;
+  }
+
   // Iframe pedindo token — responde a todos os iframes imediatamente
   if (e.data.type === 'bb_request_auth') {
     const tk = token();

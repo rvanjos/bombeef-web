@@ -764,13 +764,35 @@ function renderABC() {
 let _estrRows = []; // cache dos dados de produtos com margem
 
 async function carregarEstrategia() {
-  const d = await api.get('/api/vendas-produto/produtos'+queryStr({ordem:'fat'}));
-  if(!d.ok) return;
+  // Garante período padrão: últimos 90 dias se sem filtro
+  const f = getFiltros();
+  let extras = {ordem:'fat'};
+  if (!f.ini || !f.fim) {
+    const hoje = new Date();
+    const ini90 = new Date(hoje); ini90.setDate(hoje.getDate() - 90);
+    extras.ini = ini90.toISOString().slice(0,10);
+    extras.fim = hoje.toISOString().slice(0,10);
+  }
+
+  const elMarg = document.getElementById('estr-margem-grid');
+  const elMatriz = document.getElementById('estr-matriz-grid');
+  const elAlert = document.getElementById('estr-alertas');
+  if (elMarg) elMarg.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:12px">Carregando...</div>';
+
+  const d = await api.get('/api/vendas-produto/produtos'+queryStr(extras));
+  if (!d.ok) {
+    if (elMarg) elMarg.innerHTML = '<div style="color:var(--red-l);font-size:12px;padding:12px">Erro ao carregar dados</div>';
+    return;
+  }
   _estrRows = d.data || [];
+  if (!_estrRows.length) {
+    if (elMarg) elMarg.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:12px">Sem dados de vendas para o período selecionado.</div>';
+    return;
+  }
   _renderEstrMargemPonderada();
   _renderEstrMatriz();
   _renderEstrAlertas();
-  await _renderEstrDiaSemana();
+  await _renderEstrDiaSemana(extras);
 }
 
 // 1. Margem ponderada
@@ -920,15 +942,17 @@ function _renderEstrAlertas() {
 }
 
 // 4. Rentabilidade por dia da semana (com margem)
-async function _renderEstrDiaSemana() {
-  const d = await api.get('/api/vendas-produto/por-dia-semana'+queryStr());
+async function _renderEstrDiaSemana(extras={}) {
+  const d = await api.get('/api/vendas-produto/por-dia-semana'+queryStr(extras));
   if(!d.ok) return;
   const rows = d.data || [];
   const DIAS = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
 
   const fatTotal = rows.reduce((s,r)=>s+parseFloat(r.fat_total||0),0);
 
-  document.getElementById('estr-dsem-tbody').innerHTML = rows.map(r => {
+  const tbody = document.getElementById('estr-dsem-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = rows.map(r => {
     const fat   = parseFloat(r.fat_total||0);
     const lucro = r.lucro_bruto !== null && r.lucro_bruto !== undefined ? parseFloat(r.lucro_bruto) : null;
     const qtd   = parseFloat(r.qtd_total||0);

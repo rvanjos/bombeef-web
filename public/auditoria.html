@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Auditoria DRE</title>
+<script src="js/api.js"></script>
+<style>
+:root{--red:#8B0000;--red-l:#c0392b;--green:#16a34a;--orange:#d97706;--purple:#7c3aed;--blue:#2563eb;--bg:#f7f4f0;--white:#fff;--border:#e8e0d5;--text:#1a1a1a;--muted:#888;--shadow:0 1px 4px rgba(0,0,0,.08);}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden;}
+.ph{background:linear-gradient(135deg,var(--red),#c0392b);padding:12px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0;}
+.ph h2{color:#fff;font-size:16px;font-weight:700;}
+.ph-sub{font-size:11px;color:rgba(255,255,255,.7);margin-left:auto;}
+.toolbar{padding:10px 14px;background:var(--white);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex-shrink:0;}
+.body{flex:1;overflow-y:auto;padding:14px;}
+.card{background:var(--white);border-radius:10px;border:1px solid var(--border);margin-bottom:12px;box-shadow:var(--shadow);}
+.card-hd{padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;}
+.card-hd h3{font-size:13px;font-weight:700;flex:1;}
+.card-body{padding:0;}
+.badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;}
+.badge-ok{background:#dcfce7;color:#166534;}
+.badge-warn{background:#fef9c3;color:#854d0e;}
+.badge-err{background:#fee2e2;color:#991b1b;}
+.badge-info{background:#dbeafe;color:#1e40af;}
+.badge-purple{background:#ede9fe;color:#5b21b6;}
+.tbl{width:100%;border-collapse:collapse;}
+.tbl th{background:#f8f4f0;padding:7px 10px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:2;}
+.tbl td{padding:7px 10px;border-bottom:1px solid #f5efe8;font-size:12px;vertical-align:middle;}
+.tbl tr:last-child td{border-bottom:none;}
+.tbl tr:hover td{background:#faf7f4;}
+.tr-dup{background:#fffbeb!important;}
+.tr-pend{background:#fff1f2!important;}
+.tr-conf{background:#f5f3ff!important;}
+.tr-ok td{opacity:.7;}
+.val-neg{color:var(--red-l);font-weight:600;font-family:'DM Mono',monospace;}
+.val-pos{color:var(--green);font-weight:600;font-family:'DM Mono',monospace;}
+.val-neu{font-family:'DM Mono',monospace;}
+.btn{padding:5px 12px;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;transition:all .15s;}
+.btn-red{background:var(--red);color:#fff;}
+.btn-gray{background:#f0ebe4;color:#555;}
+.btn-green{background:var(--green);color:#fff;}
+.btn-orange{background:var(--orange);color:#fff;}
+.btn-blue{background:var(--blue);color:#fff;}
+.btn-sm{padding:3px 8px;font-size:11px;}
+select,input{padding:6px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;font-family:'DM Sans',sans-serif;background:#fff;}
+.cat-badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;background:#f0ebe4;color:#555;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.cat-badge.sem{background:#fee2e2;color:#991b1b;}
+.cat-badge.conf{background:#ede9fe;color:#5b21b6;}
+.section-toggle{display:flex;align-items:center;gap:6px;font-size:20px;width:24px;justify-content:center;transition:transform .2s;}
+.section-toggle.open{transform:rotate(0deg);}
+.section-toggle.closed{transform:rotate(-90deg);}
+.alerta-row{display:flex;align-items:flex-start;gap:10px;padding:8px 14px;border-bottom:1px solid #f5efe8;font-size:12px;}
+.alerta-icon{font-size:16px;flex-shrink:0;margin-top:1px;}
+.alerta-body{flex:1;min-width:0;}
+.alerta-title{font-weight:600;color:var(--text);}
+.alerta-sub{color:var(--muted);margin-top:2px;font-size:11px;}
+.alerta-actions{display:flex;gap:4px;flex-shrink:0;}
+.empty{text-align:center;padding:28px 14px;color:var(--muted);font-size:13px;}
+.prog-bar{background:#ede8e0;border-radius:4px;height:6px;margin-top:4px;}
+.prog-fill{height:100%;border-radius:4px;transition:width .4s;}
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px;}
+.stat-card{background:var(--white);border-radius:8px;padding:10px 14px;border:1px solid var(--border);border-left:3px solid var(--blue);}
+.stat-card.warn{border-left-color:var(--orange);}
+.stat-card.err{border-left-color:var(--red-l);}
+.stat-card.ok{border-left-color:var(--green);}
+.stat-card.purple{border-left-color:var(--purple);}
+.stat-label{font-size:9px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:700;}
+.stat-value{font-size:20px;font-weight:700;font-family:'DM Mono',monospace;margin-top:2px;}
+.tabs{display:flex;gap:4px;border-bottom:2px solid var(--border);padding:0 14px;background:var(--white);flex-shrink:0;}
+.tab{padding:8px 14px;border:none;background:none;cursor:pointer;font-size:12px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;transition:.15s;}
+.tab.active{color:var(--red);border-bottom-color:var(--red);}
+.tab-content{display:none;}
+.tab-content.active{display:block;}
+.inline-edit{display:none;}
+.editing .inline-edit{display:inline-block;}
+.editing .cat-badge{display:none;}
+.approved-icon{color:var(--green);font-size:14px;cursor:pointer;opacity:.4;}
+.approved-icon.done{opacity:1;}
+</style>
+</head>
+<body>
+<div class="ph">
+  <span style="font-size:20px">🔍</span>
+  <h2>Auditoria de Lançamentos</h2>
+  <div class="ph-sub" id="ph-sub">—</div>
+</div>
+
+<div class="toolbar">
+  <label style="font-size:12px;font-weight:600;color:var(--muted)">MÊS:</label>
+  <input type="month" id="sel-mes" onchange="carregar()">
+  <button class="btn btn-red" onclick="carregar()">🔄 Atualizar</button>
+  <button class="btn btn-gray" onclick="exportarRelatorio()">📋 Exportar Resumo</button>
+  <span style="margin-left:auto;font-size:11px;color:var(--muted)" id="status-txt">—</span>
+</div>
+
+<div class="tabs" id="tabs">
+  <button class="tab active" onclick="showAuditTab('pendentes')" id="tab-btn-pendentes">⚠️ Pendentes <span id="badge-pendentes" class="badge badge-err" style="margin-left:4px">0</span></button>
+  <button class="tab" onclick="showAuditTab('duplicatas')" id="tab-btn-duplicatas">🔁 Duplicatas <span id="badge-duplicatas" class="badge badge-warn" style="margin-left:4px">0</span></button>
+  <button class="tab" onclick="showAuditTab('conflitos')" id="tab-btn-conflitos">⚡ Conflitos <span id="badge-conflitos" class="badge badge-purple" style="margin-left:4px">0</span></button>
+  <button class="tab" onclick="showAuditTab('categorias')" id="tab-btn-categorias">📂 Por Categoria</button>
+</div>
+
+<div class="body">
+  <!-- Stats -->
+  <div class="stats-row" id="stats-row" style="display:none">
+    <div class="stat-card ok"><div class="stat-label">Classificados</div><div class="stat-value" id="st-cls">—</div></div>
+    <div class="stat-card err"><div class="stat-label">Pendentes</div><div class="stat-value" id="st-pend">—</div></div>
+    <div class="stat-card warn"><div class="stat-label">Duplicatas</div><div class="stat-value" id="st-dup">—</div></div>
+    <div class="stat-card purple"><div class="stat-label">Conflitos</div><div class="stat-value" id="st-conf">—</div></div>
+  </div>
+
+  <!-- Aba Pendentes -->
+  <div class="tab-content active" id="tab-pendentes">
+    <div id="lista-pendentes"><div class="empty">Selecione um mês para auditar</div></div>
+  </div>
+
+  <!-- Aba Duplicatas -->
+  <div class="tab-content" id="tab-duplicatas">
+    <div id="lista-duplicatas"><div class="empty">Selecione um mês para auditar</div></div>
+  </div>
+
+  <!-- Aba Conflitos -->
+  <div class="tab-content" id="tab-conflitos">
+    <div id="lista-conflitos"><div class="empty">Selecione um mês para auditar</div></div>
+  </div>
+
+  <!-- Aba Por Categoria -->
+  <div class="tab-content" id="tab-categorias">
+    <div id="lista-categorias"><div class="empty">Selecione um mês para auditar</div></div>
+  </div>
+</div>
+
+<script>
+const {api, fmt, toast} = BB;
+let _txs = [];         // lançamentos do mês atual
+let _txsTodos = [];    // lançamentos de todos os meses (para detectar conflitos)
+let _mesAtual = '';
+let _aprovados = new Set(); // IDs aprovados nesta sessão
+
+// ── Inicialização ─────────────────────────────────────────────────────────────
+async function init() {
+  const hoje = new Date();
+  const ym = hoje.getFullYear() + '-' + String(hoje.getMonth()+1).padStart(2,'0');
+  document.getElementById('sel-mes').value = ym;
+  await carregar();
+}
+
+async function carregar() {
+  const ym = document.getElementById('sel-mes').value;
+  if (!ym) return;
+  const [yyyy, mm] = ym.split('-');
+  _mesAtual = mm + '/' + yyyy;
+  document.getElementById('status-txt').textContent = 'Carregando...';
+  document.getElementById('stats-row').style.display = 'none';
+
+  try {
+    // Carrega todas as sessões do DRE
+    const lista = await api.get('/api/dre/sessoes?limit=24');
+    if (!lista.ok || !lista.data?.length) {
+      document.getElementById('status-txt').textContent = 'Sem dados no DRE';
+      return;
+    }
+    const sessoes = await Promise.all(lista.data.map(s => api.get('/api/dre/sessoes/' + s.id)));
+
+    _txsTodos = [];
+    for (const r of sessoes) {
+      if (!r.ok || !r.data?.dados_json) continue;
+      const dados = r.data.dados_json;
+      const txs = dados.transactions || (Array.isArray(dados) ? dados : []);
+      _txsTodos.push(...txs.filter(t => !t.ignorar));
+    }
+
+    _txs = _txsTodos.filter(t => {
+      const m = t.mesCaixa || t.mes || '';
+      return m === _mesAtual;
+    });
+
+    document.getElementById('ph-sub').textContent = _mesAtual + ' · ' + _txs.length + ' lançamentos';
+    renderTudo();
+  } catch(e) {
+    document.getElementById('status-txt').textContent = 'Erro: ' + e.message;
+  }
+}
+
+// ── Render principal ──────────────────────────────────────────────────────────
+function renderTudo() {
+  const pendentes  = detectarPendentes();
+  const duplicatas = detectarDuplicatas();
+  const conflitos  = detectarConflitos();
+
+  // Stats
+  document.getElementById('st-cls').textContent  = fmt.n(_txs.filter(t => t.categoria).length) + '/' + fmt.n(_txs.length);
+  document.getElementById('st-pend').textContent  = fmt.n(pendentes.length);
+  document.getElementById('st-dup').textContent   = fmt.n(duplicatas.length);
+  document.getElementById('st-conf').textContent  = fmt.n(conflitos.length);
+  document.getElementById('stats-row').style.display = '';
+
+  // Badges nas abas
+  document.getElementById('badge-pendentes').textContent  = pendentes.length;
+  document.getElementById('badge-duplicatas').textContent = duplicatas.length;
+  document.getElementById('badge-conflitos').textContent  = conflitos.length;
+
+  renderPendentes(pendentes);
+  renderDuplicatas(duplicatas);
+  renderConflitos(conflitos);
+  renderCategorias();
+
+  document.getElementById('status-txt').textContent = '✅ Auditado em ' + new Date().toLocaleTimeString('pt-BR');
+}
+
+// ── PENDENTES ─────────────────────────────────────────────────────────────────
+function detectarPendentes() {
+  return _txs.filter(t => !t.categoria && !t.ignorar);
+}
+
+function renderPendentes(lista) {
+  const el = document.getElementById('lista-pendentes');
+  if (!lista.length) { el.innerHTML = '<div class="empty">✅ Todos os lançamentos estão classificados!</div>'; return; }
+
+  el.innerHTML = '<div class="card"><div style="overflow-x:auto"><table class="tbl">' +
+    '<thead><tr><th>Data</th><th>Fonte</th><th>Lançamento</th><th>Fornecedor</th><th style="text-align:right">Valor</th><th>Categoria</th><th>✓</th></tr></thead>' +
+    '<tbody>' +
+    lista.map(t => {
+      const v = parseFloat(t.valor||0);
+      return `<tr class="tr-pend" id="row-${t.id}">
+        <td style="white-space:nowrap;color:var(--muted)">${t.data ? fmt.date(t.data) : '—'}</td>
+        <td><span class="badge badge-err">${t.fonte||'—'}</span></td>
+        <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500" title="${esc(t.lancamento||'')}">${t.lancamento||'—'}</td>
+        <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)" title="${esc(t.razaoSocial||'')}">${t.razaoSocial||'—'}</td>
+        <td style="text-align:right" class="${v>=0?'val-pos':'val-neg'}">${fmt.brl(v)}</td>
+        <td><div class="editing" id="edit-${t.id}">
+          ${catSelectHTML(t.id, '')}
+          <button class="btn btn-sm btn-green" style="margin-left:4px" onclick="aplicarCat('${t.id}')">✓ OK</button>
+        </div></td>
+        <td><span class="approved-icon ${_aprovados.has(t.id)?'done':''}" onclick="toggleAprovado('${t.id}')" title="Marcar como revisado">✅</span></td>
+      </tr>`;
+    }).join('') +
+    '</tbody></table></div></div>';
+}
+
+// ── DUPLICATAS ────────────────────────────────────────────────────────────────
+function detectarDuplicatas() {
+  const grupos = [];
+  const seen = new Set();
+
+  for (let i = 0; i < _txs.length; i++) {
+    if (seen.has(i)) continue;
+    const a = _txs[i];
+    const vA = Math.round(Math.abs(parseFloat(a.valor||0)) * 100);
+    const grupo = [a];
+
+    for (let j = i+1; j < _txs.length; j++) {
+      if (seen.has(j)) continue;
+      const b = _txs[j];
+      const vB = Math.round(Math.abs(parseFloat(b.valor||0)) * 100);
+      if (vA !== vB) continue;
+
+      // Duplicata exata: mesmo valor + mesma data
+      const mesmaData = a.data && b.data && a.data === b.data;
+      // Duplicata próxima: mesmo valor + mesmo fornecedor (primeiras 15 letras) + ±5 dias
+      const fornA = (a.lancamento||'').slice(0,15).toUpperCase();
+      const fornB = (b.lancamento||'').slice(0,15).toUpperCase();
+      const dtDiff = a.data && b.data
+        ? Math.abs(new Date(a.data) - new Date(b.data)) / 86400000
+        : 99;
+      const mesmForn = fornA && fornB && fornA === fornB && dtDiff <= 5;
+
+      if (mesmaData || mesmForn) {
+        grupo.push(b);
+        seen.add(j);
+      }
+    }
+
+    if (grupo.length > 1) {
+      seen.add(i);
+      grupos.push(grupo);
+    }
+  }
+  return grupos;
+}
+
+function renderDuplicatas(grupos) {
+  const el = document.getElementById('lista-duplicatas');
+  if (!grupos.length) { el.innerHTML = '<div class="empty">✅ Nenhuma duplicata detectada!</div>'; return; }
+
+  el.innerHTML = grupos.map((grupo, gi) => {
+    const total = grupo.reduce((s,t) => s + Math.abs(parseFloat(t.valor||0)), 0);
+    const tipo = grupo[0].data === grupo[1]?.data ? 'Mesma data e valor' : 'Mesmo fornecedor e valor';
+    return `<div class="card" style="margin-bottom:10px">
+      <div class="card-hd" style="background:#fffbeb;border-bottom:1px solid #fef08a" onclick="toggleCard('dup-${gi}')">
+        <span class="section-toggle open" id="arr-dup-${gi}">▼</span>
+        <h3>🔁 ${tipo} — ${fmt.brl(total)} (${grupo.length} lançamentos)</h3>
+        <span class="badge badge-warn">${grupo.length}x</span>
+      </div>
+      <div id="dup-${gi}">
+        <div style="overflow-x:auto"><table class="tbl">
+          <thead><tr><th>Data</th><th>Fonte</th><th>Lançamento</th><th>Categoria</th><th style="text-align:right">Valor</th><th>Ação</th></tr></thead>
+          <tbody>
+          ${grupo.map(t => {
+            const v = parseFloat(t.valor||0);
+            return `<tr class="tr-dup" id="row-${t.id}">
+              <td style="white-space:nowrap;color:var(--muted)">${t.data ? fmt.date(t.data) : '—'}</td>
+              <td><span class="badge badge-info">${t.fonte||'—'}</span></td>
+              <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(t.lancamento||'')}">${t.lancamento||'—'}</td>
+              <td><span class="cat-badge ${!t.categoria?'sem':''}">${t.categoria||'⚠ sem categoria'}</span></td>
+              <td style="text-align:right" class="${v>=0?'val-pos':'val-neg'}">${fmt.brl(v)}</td>
+              <td style="white-space:nowrap">
+                <button class="btn btn-sm btn-gray" onclick="ignorarLanc('${t.id}')" title="Marcar como ignorado (não conta no DRE)">🚫 Ignorar</button>
+                <button class="btn btn-sm btn-green" style="margin-left:2px" onclick="toggleAprovado('${t.id}')" title="Confirmar que é lançamento válido">✅</button>
+              </td>
+            </tr>`;
+          }).join('')}
+          </tbody>
+        </table></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── CONFLITOS DE CLASSIFICAÇÃO ────────────────────────────────────────────────
+function detectarConflitos() {
+  // Para cada fornecedor no mês atual, verifica se em outros meses
+  // o mesmo fornecedor foi classificado com categoria diferente
+  const conflitos = [];
+  const seenForn = new Set();
+
+  for (const t of _txs) {
+    if (!t.categoria || !t.lancamento) continue;
+    const chave = _chaveForn(t);
+    if (seenForn.has(chave)) continue;
+
+    // Outros lançamentos do mesmo fornecedor em outros meses com categoria diferente
+    const outrosMeses = _txsTodos.filter(x => {
+      if ((x.mesCaixa||x.mes) === _mesAtual) return false;
+      if (!x.categoria || x.categoria === t.categoria) return false;
+      return _chaveForn(x) === chave;
+    });
+
+    if (outrosMeses.length > 0) {
+      seenForn.add(chave);
+      const catsOutros = [...new Set(outrosMeses.map(x => x.categoria))];
+      conflitos.push({ tx: t, outrosMeses: outrosMeses.slice(0,5), catsOutros });
+    }
+  }
+  return conflitos;
+}
+
+function _chaveForn(t) {
+  return (t.lancamento||t.razaoSocial||'').toUpperCase()
+    .replace(/[^A-Z0-9]/g,'').slice(0,20);
+}
+
+function renderConflitos(lista) {
+  const el = document.getElementById('lista-conflitos');
+  if (!lista.length) { el.innerHTML = '<div class="empty">✅ Nenhum conflito de classificação encontrado!</div>'; return; }
+
+  el.innerHTML = `<div style="background:#faf5ff;border:1px solid #e9d5ff;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#6b21a8">
+    ⚡ <strong>${lista.length} fornecedor(es)</strong> foram classificados de forma diferente em outros meses. Revise se a categoria atual está correta.
+  </div>` +
+  lista.map((c, ci) => {
+    const v = parseFloat(c.tx.valor||0);
+    return `<div class="card" style="margin-bottom:10px">
+      <div class="card-hd" style="background:#f5f3ff" onclick="toggleCard('conf-${ci}')">
+        <span class="section-toggle open" id="arr-conf-${ci}">▼</span>
+        <h3>⚡ ${c.tx.lancamento||c.tx.razaoSocial||'—'}</h3>
+        <span class="badge badge-purple">${c.catsOutros.length} cat. diferente(s)</span>
+      </div>
+      <div id="conf-${ci}">
+        <div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;gap:16px;align-items:center;flex-wrap:wrap">
+          <div>
+            <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:3px">Categoria ATUAL (${_mesAtual})</div>
+            <span class="cat-badge conf">${c.tx.categoria}</span>
+            <span style="font-size:11px;color:var(--muted);margin-left:8px">${fmt.brl(v)}</span>
+          </div>
+          <div style="font-size:18px;color:var(--muted)">≠</div>
+          <div>
+            <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:3px">Categorias em outros meses</div>
+            <div style="display:flex;gap:4px;flex-wrap:wrap">
+              ${c.catsOutros.map(cat => `<span class="cat-badge">${cat}</span>`).join('')}
+            </div>
+          </div>
+          <div style="margin-left:auto;display:flex;gap:4px">
+            <button class="btn btn-sm btn-orange" onclick="corrigirCategoria('${c.tx.id}', '${esc(c.catsOutros[0]||'')}')">
+              Usar: ${c.catsOutros[0]||'—'}
+            </button>
+            <button class="btn btn-sm btn-green" onclick="toggleAprovado('${c.tx.id}')">✅ Manter atual</button>
+          </div>
+        </div>
+        <div style="overflow-x:auto"><table class="tbl">
+          <thead><tr><th>Mês</th><th>Lançamento</th><th>Categoria usada</th><th style="text-align:right">Valor</th></tr></thead>
+          <tbody>
+          ${c.outrosMeses.map(x => `<tr>
+            <td style="white-space:nowrap;color:var(--muted)">${x.mesCaixa||x.mes||'—'}</td>
+            <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(x.lancamento||'')}">${x.lancamento||'—'}</td>
+            <td><span class="cat-badge">${x.categoria}</span></td>
+            <td style="text-align:right" class="${parseFloat(x.valor||0)>=0?'val-pos':'val-neg'}">${fmt.brl(parseFloat(x.valor||0))}</td>
+          </tr>`).join('')}
+          </tbody>
+        </table></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── POR CATEGORIA ─────────────────────────────────────────────────────────────
+function renderCategorias() {
+  const el = document.getElementById('lista-categorias');
+
+  // Agrupa por categoria
+  const mapa = {};
+  for (const t of _txs) {
+    const cat = t.categoria || '⚠ SEM CATEGORIA';
+    if (!mapa[cat]) mapa[cat] = { txs: [], total: 0 };
+    mapa[cat].txs.push(t);
+    mapa[cat].total += parseFloat(t.valor||0);
+  }
+
+  // Ordena: sem categoria primeiro, depois por |total| desc
+  const cats = Object.keys(mapa).sort((a,b) => {
+    if (a.startsWith('⚠') && !b.startsWith('⚠')) return -1;
+    if (!a.startsWith('⚠') && b.startsWith('⚠')) return 1;
+    return Math.abs(mapa[b].total) - Math.abs(mapa[a].total);
+  });
+
+  if (!cats.length) { el.innerHTML = '<div class="empty">Nenhum lançamento encontrado</div>'; return; }
+
+  el.innerHTML = cats.map((cat, ci) => {
+    const { txs, total } = mapa[cat];
+    const semCat = cat.startsWith('⚠');
+    const cor = semCat ? '#fee2e2' : total < 0 ? '#fff1f2' : '#f0fdf4';
+    const bordaCor = semCat ? 'var(--red-l)' : total < 0 ? 'var(--orange)' : 'var(--green)';
+
+    return `<div class="card" style="margin-bottom:8px;border-left:3px solid ${bordaCor}">
+      <div class="card-hd" style="background:${cor}" onclick="toggleCard('cat-${ci}')">
+        <span class="section-toggle open" id="arr-cat-${ci}">▼</span>
+        <h3>${cat}</h3>
+        <span style="font-size:11px;color:var(--muted);margin-right:8px">${txs.length} lançamento(s)</span>
+        <span class="val-neu" style="font-family:'DM Mono',monospace;font-weight:700;color:${total>=0?'var(--green)':'var(--red-l)'}">${fmt.brl(total)}</span>
+      </div>
+      <div id="cat-${ci}">
+        <div style="overflow-x:auto"><table class="tbl">
+          <thead><tr><th>Data</th><th>Fonte</th><th>Lançamento</th><th>Fornecedor</th><th style="text-align:right">Valor</th><th>Categoria</th><th>✓</th></tr></thead>
+          <tbody>
+          ${txs.sort((a,b) => (a.data||'').localeCompare(b.data||'')).map(t => {
+            const v = parseFloat(t.valor||0);
+            const aprov = _aprovados.has(t.id);
+            return `<tr id="row-${t.id}" class="${aprov?'tr-ok':''}">
+              <td style="white-space:nowrap;color:var(--muted)">${t.data ? fmt.date(t.data) : '—'}</td>
+              <td><span class="badge badge-info" style="font-size:10px">${t.fonte||'—'}</span></td>
+              <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500" title="${esc(t.lancamento||'')}">${t.lancamento||'—'}</td>
+              <td style="max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)" title="${esc(t.razaoSocial||'')}">${t.razaoSocial||'—'}</td>
+              <td style="text-align:right" class="${v>=0?'val-pos':'val-neg'}">${fmt.brl(v)}</td>
+              <td>
+                <span class="cat-badge ${semCat?'sem':''}" id="catbadge-${t.id}" onclick="abrirEdicaoCat('${t.id}')" title="Clique para editar categoria" style="cursor:pointer">${t.categoria||'⚠ sem categoria'}</span>
+                <div id="catedit-${t.id}" style="display:none;margin-top:3px">
+                  ${catSelectHTML(t.id, t.categoria||'')}
+                  <button class="btn btn-sm btn-green" style="margin-top:2px" onclick="aplicarCat('${t.id}')">OK</button>
+                  <button class="btn btn-sm btn-gray" style="margin-top:2px" onclick="fecharEdicaoCat('${t.id}')">✕</button>
+                </div>
+              </td>
+              <td><span class="approved-icon ${aprov?'done':''}" onclick="toggleAprovado('${t.id}')" title="${aprov?'Revisado':'Marcar como revisado'}">✅</span></td>
+            </tr>`;
+          }).join('')}
+          </tbody>
+        </table></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── Ações ─────────────────────────────────────────────────────────────────────
+function abrirEdicaoCat(id) {
+  document.getElementById('catedit-'+id).style.display = '';
+  document.getElementById('catbadge-'+id).style.display = 'none';
+}
+function fecharEdicaoCat(id) {
+  document.getElementById('catedit-'+id).style.display = 'none';
+  document.getElementById('catbadge-'+id).style.display = '';
+}
+
+function catSelectHTML(id, catAtual) {
+  // Envia mensagem para o portal pedindo as categorias e cria select inline
+  return `<select id="catsel-${id}" style="font-size:11px;padding:2px 6px;border:1px solid var(--border);border-radius:5px;max-width:180px" onchange="previewCat('${id}',this.value)">
+    <option value="">— escolha —</option>
+  </select>`;
+}
+
+function previewCat(id, val) {
+  // Preview visual da categoria selecionada
+}
+
+async function aplicarCat(id) {
+  const sel = document.getElementById('catsel-'+id);
+  if (!sel) return;
+  const cat = sel.value;
+  if (!cat) { toast('Selecione uma categoria'); return; }
+
+  // Envia para o DRE via postMessage
+  window.parent.postMessage({ type: 'auditoria_set_cat', id, categoria: cat }, '*');
+  toast('✅ Categoria atualizada — salve o DRE para persistir');
+
+  // Atualiza visual
+  const t = _txs.find(x => x.id === id);
+  if (t) t.categoria = cat;
+  const badge = document.getElementById('catbadge-'+id);
+  if (badge) { badge.textContent = cat; badge.classList.remove('sem'); badge.style.display = ''; }
+  const edit = document.getElementById('catedit-'+id);
+  if (edit) edit.style.display = 'none';
+  toggleAprovado(id);
+  renderTudo();
+}
+
+function corrigirCategoria(id, cat) {
+  const t = _txs.find(x => x.id === id);
+  if (!t || !cat) return;
+  t.categoria = cat;
+  window.parent.postMessage({ type: 'auditoria_set_cat', id, categoria: cat }, '*');
+  toast('✅ Categoria corrigida para: ' + cat);
+  toggleAprovado(id);
+  renderTudo();
+}
+
+function ignorarLanc(id) {
+  if (!confirm('Marcar como ignorado? O lançamento não contará no DRE.')) return;
+  window.parent.postMessage({ type: 'auditoria_ignorar', id }, '*');
+  toast('🚫 Lançamento ignorado');
+  _txs = _txs.filter(t => t.id !== id);
+  renderTudo();
+}
+
+function toggleAprovado(id) {
+  if (_aprovados.has(id)) {
+    _aprovados.delete(id);
+  } else {
+    _aprovados.add(id);
+  }
+  // Atualiza visual nas linhas
+  const row = document.getElementById('row-'+id);
+  if (row) row.className = _aprovados.has(id) ? 'tr-ok' : '';
+  document.querySelectorAll('.approved-icon[onclick*="' + id + '"]').forEach(el => {
+    el.classList.toggle('done', _aprovados.has(id));
+  });
+}
+
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+function showAuditTab(tab) {
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-'+tab).classList.add('active');
+  document.getElementById('tab-btn-'+tab).classList.add('active');
+}
+
+function toggleCard(id) {
+  const el = document.getElementById(id);
+  const arr = document.getElementById('arr-'+id);
+  if (!el) return;
+  const aberto = el.style.display !== 'none';
+  el.style.display = aberto ? 'none' : '';
+  if (arr) { arr.classList.toggle('open', !aberto); arr.classList.toggle('closed', aberto); }
+}
+
+// ── Exportar resumo ───────────────────────────────────────────────────────────
+function exportarRelatorio() {
+  const pendentes  = detectarPendentes().length;
+  const duplicatas = detectarDuplicatas().length;
+  const conflitos  = detectarConflitos().length;
+  const total = _txs.reduce((s,t) => s + parseFloat(t.valor||0), 0);
+
+  let txt = `AUDITORIA DRE — ${_mesAtual}\n`;
+  txt += `${'='.repeat(40)}\n`;
+  txt += `Total lançamentos: ${_txs.length}\n`;
+  txt += `Classificados: ${_txs.filter(t=>t.categoria).length}\n`;
+  txt += `Pendentes: ${pendentes}\n`;
+  txt += `Duplicatas suspeitas: ${duplicatas} grupos\n`;
+  txt += `Conflitos de categoria: ${conflitos}\n`;
+  txt += `Resultado do mês: ${fmt.brl(total)}\n\n`;
+
+  txt += `LANÇAMENTOS SEM CATEGORIA:\n`;
+  detectarPendentes().forEach(t => {
+    txt += `  ${t.data||'—'} | ${t.lancamento||'—'} | ${fmt.brl(parseFloat(t.valor||0))}\n`;
+  });
+
+  const blob = new Blob([txt], {type:'text/plain'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `auditoria_${_mesAtual.replace('/','_')}.txt`;
+  a.click();
+}
+
+// ── Utilitários ───────────────────────────────────────────────────────────────
+function esc(s) { return String(s||'').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+
+// Recebe categorias do portal via postMessage
+window.addEventListener('message', (e) => {
+  if (e.data?.type === 'bb_cats' && e.data.cats) {
+    // Preenche todos os selects de categoria com as cats do DRE
+    window._cats = e.data.cats;
+    document.querySelectorAll('[id^="catsel-"]').forEach(sel => {
+      if (sel.options.length > 1) return; // já preenchido
+      const cur = sel.dataset.cat || '';
+      for (const [grp, gd] of Object.entries(e.data.cats)) {
+        const og = document.createElement('optgroup');
+        og.label = gd.l || grp;
+        for (const s of (gd.s||[])) {
+          const o = document.createElement('option');
+          o.value = s; o.textContent = s;
+          if (s === cur) o.selected = true;
+          og.appendChild(o);
+        }
+        sel.appendChild(og);
+      }
+    });
+  }
+});
+
+// Pede categorias ao portal quando pronto
+function pedirCats() {
+  window.parent.postMessage({ type: 'auditoria_get_cats' }, '*');
+  setTimeout(pedirCats, 3000); // re-pede periodicamente para novos selects
+}
+
+window.onBBReady = () => { init(); pedirCats(); };
+</script>
+</body>
+</html>
