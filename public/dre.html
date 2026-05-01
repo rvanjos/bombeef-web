@@ -958,12 +958,19 @@ async function carregarSessao() {
         if (t.boletoId) {
           const bid = String(t.boletoId);
           if (_seenBoleto.has(bid)) {
-            // Se o existente é BOLETO_PREV e o novo é BOLETO (pago), atualiza
+            // Já existe lançamento com este boletoId — atualiza se o novo é mais completo
             const existing = TXS.find(x => String(x.boletoId) === bid);
-            if (existing && t.fonte === 'BOLETO' && existing.fonte === 'BOLETO_PREV') {
-              existing.fonte = t.fonte;
-              existing.data = t.data || existing.data;
-              existing.vinculadoA = t.vinculadoA || existing.vinculadoA;
+            if (existing) {
+              // BOLETO_PREV → BOLETO: o boleto foi pago, promove
+              if (t.fonte === 'BOLETO' && existing.fonte === 'BOLETO_PREV') {
+                existing.fonte      = 'BOLETO';
+                existing.data       = t.data || existing.data;
+                existing.mesCaixa   = t.mesCaixa || existing.mesCaixa;
+                existing.vinculadoA = t.vinculadoA || existing.vinculadoA;
+                existing.categoria  = t.categoria || existing.categoria;
+              }
+              // BOLETO_PREV duplicado de sessões diferentes — ignora o mais antigo
+              // (o primeiro encontrado vence, já está no array)
             }
             continue;
           }
@@ -1700,14 +1707,17 @@ function render() {
   const pend  = document.getElementById('f-pend').checked;
 
   // Boletos PREV/BOLETO que já foram quitados pelo extrato → ocultar
-  // Regra 1: por boletoId explícito
+  // Regra 1a: por boletoId — o EXTRATO tem boletoId = boleto.boletoId
   const boletosQuitadosPorId = new Set(
     TXS.filter(t => t.fonte === 'EXTRATO' && t.boletoId).map(t => String(t.boletoId))
   );
+  // Regra 1b: por id inverso — o BOLETO/BOLETO_PREV tem vinculadoA = extrato.lancamento
+  // OU o extrato aponta para o id do boleto via campo boletoId
+  const boletosQuitadosPorVinculo = new Set(
+    TXS.filter(t => t.fonte?.startsWith('BOLETO') && t.vinculadoA).map(t => t.id)
+  );
 
-  // Regra 2: por valor+mês — se existe EXTRATO com mesmo valor absoluto no mesmo mês,
-  // o BOLETO_PREV/BOLETO provavelmente já foi quitado
-  // Monta Set de "valor|mes" dos EXTRATOs negativos
+  // Regra 2: por valor+mês (fallback quando não há boletoId)
   const extratoHashVlrMes = new Set(
     TXS
       .filter(t => t.fonte === 'EXTRATO' && parseFloat(t.valor||0) < 0)
@@ -1715,9 +1725,17 @@ function render() {
   );
 
   const lista = TXS.filter(t => {
-    // Esconde BOLETO_PREV se já existe EXTRATO vinculado por ID
+    // Esconde BOLETO_PREV se já existe EXTRATO vinculado por boletoId
     if (t.fonte === 'BOLETO_PREV' && t.boletoId && boletosQuitadosPorId.has(String(t.boletoId))) return false;
-    // Esconde BOLETO/BOLETO_PREV se EXTRATO tem mesmo valor no mesmo mês (pagamento real)
+    // Esconde BOLETO_PREV se o próprio boleto já tem vinculadoA (foi quitado)
+    if (t.fonte === 'BOLETO_PREV' && boletosQuitadosPorVinculo.has(t.id)) return false;
+    // Esconde BOLETO se já existe EXTRATO com mesmo boletoId (não duplicar)
+    if (t.fonte === 'BOLETO' && t.boletoId && boletosQuitadosPorId.has(String(t.boletoId))) {
+      // Só esconde o BOLETO se o EXTRATO já está presente (evita sumir sem o extrato)
+      const extratoExiste = TXS.some(x => x.fonte === 'EXTRATO' && String(x.boletoId) === String(t.boletoId));
+      if (extratoExiste) return false;
+    }
+    // Esconde BOLETO/BOLETO_PREV sem boletoId se EXTRATO tem mesmo valor+mês
     if ((t.fonte === 'BOLETO_PREV' || t.fonte === 'BOLETO') && !t.boletoId) {
       const hash = `${Math.round(Math.abs(parseFloat(t.valor||0))*100)}|${t.mesCaixa||t.mes}`;
       if (extratoHashVlrMes.has(hash)) return false;
@@ -1925,7 +1943,12 @@ async function salvarMes(mes, silent=false) {
     return mes === mesRef;
   });
   console.log(`[salvarMes] mes=${mes} txs=${txsMes.length} sid=${(window._sessoesPorMes||{})[mes]} mesRef=${mesRef}`);
-  if (!txsMes.length) { console.warn('[salvarMes] nenhum lançamento para', mes); return; }
+  // NÃO retorna mais quando vazio — meses que tiveram todos os lançamentos excluídos
+  // precisam ser salvos com array vazio para não reaparecer ao recarregar
+  if (!txsMes.length) {
+    console.log('[salvarMes] salvando sessão vazia para', mes, '(lançamentos foram excluídos)');
+    // Continua — salva com transactions: [] para sobrescrever o banco
+  }
 
   // Se não temos o sessao_id para este mês, busca do banco antes de salvar
   // (resolve o caso de fev/2026 que ficou fora dos últimos 24 carregados)
@@ -2030,7 +2053,13 @@ function togIgn(id) {
   const t=TXS.find(x=>x.id===id); if(t){t.ignorar=!t.ignorar; render(); updStats(); renderDRE(); autoSv();}
 }
 
-function delLanc(id) { TXS=TXS.filter(x=>x.id!==id); render(); updStats(); renderDRE(); autoSv(); }
+function delLanc(id) {
+  const tx = TXS.find(x => x.id === id);
+  const mesExcluido = tx ? (tx.mes || mesRef) : mesRef;
+  TXS = TXS.filter(x => x.id !== id);
+  render(); updStats(); renderDRE();
+  salvarMes(mesExcluido, true).then(() => autoSv());
+}
 
 // ─── SELEÇÃO / BULK ───────────────────────────────────────────────────────────
 function togSel(id, chk) { const k=String(id); chk?selIds.add(k):selIds.delete(k); updBulk(); }
@@ -3484,8 +3513,15 @@ function salvarEditLanc() {
 
 function excluirLanc(id) {
   if (!confirm('Excluir este lançamento?')) return;
+  const tx = TXS.find(x => x.id === id);
+  const mesExcluido = tx ? (tx.mes || mesRef) : mesRef;
   TXS = TXS.filter(x => x.id !== id);
-  render(); updStats(); renderDRE(); autoSv();
+  render(); updStats(); renderDRE();
+  // Força salvar o mês do lançamento excluído — mesmo que fique com 0 lançamentos
+  salvarMes(mesExcluido, true).then(() => {
+    // Se outros meses foram afetados (ex: lançamento sem mes), salva tudo
+    autoSv();
+  });
   toast('🗑️ Lançamento removido');
 }
 
