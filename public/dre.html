@@ -1189,11 +1189,30 @@ async function confirmarImportCC() {
   }
 
   if (!lancs.length) { toast('⚠️ Nenhum lançamento encontrado na fatura'); return; }
+
+  // Detecta meses distintos no arquivo
+  const mesesNoArquivo = [...new Set(lancs.map(l => l.mes).filter(Boolean))];
+
   lancs.forEach(l => {
-    if (!l.data || !l.mes || l.mes === mesRef) l.mes = mesCC;
-    l.mesCaixa = mesCC;
+    // Se o lançamento já tem mês definido (vem do ChatGPT), respeita
+    if (!l.mes) l.mes = mesCC;
+    // mesCaixa = mês de pagamento: se há múltiplos meses no arquivo,
+    // cada lançamento já sabe o seu mês de competência/caixa
+    // Para arquivo com mês único, usa mesCC (confirmado pelo usuário)
+    if (mesesNoArquivo.length === 1) {
+      l.mesCaixa = mesCC; // usuário confirmou o mês no modal
+    } else {
+      // Múltiplos meses: mesCaixa = vencimento da fatura correspondente ao mês do lançamento
+      // (mantém o que veio do arquivo — será ajustável no modal de revisão)
+      l.mesCaixa = l.mes;
+    }
   });
-  abrirRevisaoCC(lancs, mesCC, bandeira, file.name);
+
+  const tituloFatura = mesesNoArquivo.length > 1
+    ? mesesNoArquivo.join(' + ')
+    : mesCC;
+
+  abrirRevisaoCC(lancs, tituloFatura, bandeira, file.name);
 }
 
 // ─── PARSER PDF FATURAS ───────────────────────────────────────────────────────
@@ -2413,6 +2432,19 @@ function tokenSim(a, b) {
   return inter / Math.max(ta.size, tb.size, 1);
 }
 
+// Opções de categoria para selects do modal de revisão CC
+function ccrCatOptions(catAtual) {
+  let html = '<option value="">— pendente —</option>';
+  for (const [grp, gd] of Object.entries(CATS)) {
+    html += '<optgroup label="' + (gd.l || grp) + '">';
+    for (const s of (gd.s || [])) {
+      html += '<option value="' + s + '"' + (s === catAtual ? ' selected' : '') + '>' + s + '</option>';
+    }
+    html += '</optgroup>';
+  }
+  return html;
+}
+
 // Agrupa lançamentos por nome similar (limiar 0,45)
 function ccrAgrupar(lancs) {
   const grupos = [];
@@ -2494,18 +2526,6 @@ function ccrRenderGrupos() {
   document.getElementById('ccr-prog-bar').style.background = pct === 100 ? 'var(--green)' : 'var(--purple)';
 
   // Opções de categoria para cada linha
-  function catOptions(catAtual) {
-    let html = '<option value="">— pendente —</option>';
-    for (const [grp, gd] of Object.entries(CATS)) {
-      html += `<optgroup label="${gd.l || grp}">`;
-      for (const s of (gd.s || [])) {
-        html += `<option value="${s}"${s === catAtual ? ' selected' : ''}>${s}</option>`;
-      }
-      html += '</optgroup>';
-    }
-    return html;
-  }
-
   container.innerHTML = gruposVisiveis.map((g, gi) => {
     const totalGrupo = g.itens.reduce((s,i) => s + Math.abs(parseFloat(i.valor||0)), 0);
     const todasCat   = g.itens.every(i => i.categoria);
@@ -2528,7 +2548,7 @@ function ccrRenderGrupos() {
       <div style="padding:6px 12px;background:#fafaf8;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px">
         <span style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);white-space:nowrap">Categoria do grupo:</span>
         <select onchange="ccrSetGrupo(${gi}, this.value)" style="flex:1;font-size:12px;padding:3px 6px;border:1px solid ${todasCat&&catUniforme?'var(--green)':'var(--orange)'};border-radius:6px;background:#fff">
-          ${catOptions(catUniforme ? catGrupo : '')}
+          ${ccrCatOptions(catUniforme ? catGrupo : '')}
         </select>
         ${!catUniforme && g.itens.length > 1 ? `<span style="font-size:10px;color:var(--orange)">⚠ variadas</span>` : ''}
       </div>
@@ -2539,7 +2559,7 @@ function ccrRenderGrupos() {
           <span style="color:var(--muted);font-family:'DM Mono',monospace">${item.data ? fmt.date(item.data) : '—'}</span>
           <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${item.lancamento||''}">${item.lancamento||'—'}</span>
           <select onchange="ccrSetItem('${item.id}', this.value)" style="font-size:11px;padding:2px 4px;border:1px solid var(--border);border-radius:4px">
-            ${catOptions(item.categoria)}
+            ${ccrCatOptions(item.categoria)}
           </select>
           <span style="text-align:right;font-family:'DM Mono',monospace;font-weight:600;color:var(--red-l)">${fmt.brl(Math.abs(parseFloat(item.valor||0)))}</span>
         </div>`).join('')}
