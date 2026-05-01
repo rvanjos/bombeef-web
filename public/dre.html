@@ -1152,6 +1152,7 @@ async function confirmarImportCC() {
         }
         fullText += '\n--- PAGE ---\n';
       }
+      console.log('[PDF DEBUG] fullText primeiros 3000 chars:', fullText.slice(0, 3000));
       const lancs = parseFaturaPDF(fullText, file.name);
       if (!lancs.length) { toast('⚠️ Nenhum lançamento encontrado no PDF'); return; }
       // Corrige mês dos lançamentos sem data para o mês confirmado
