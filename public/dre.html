@@ -59,9 +59,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
 .split{display:flex;flex:1;overflow:hidden;min-height:0;}
 .main{flex:1;overflow-y:auto;display:flex;flex-direction:column;}
 /* Modo expandido — colapsa barras superiores */
-body.modo-expandido .stats-grid,
-body.modo-expandido .totals-row,
-body.modo-expandido .prog,
+body.modo-expandido #dre-dash,
 body.modo-expandido .banner.show { display:none !important; }
 body.modo-expandido .ctrl { padding:4px 12px; }
 #btn-expand { transition: all .15s; }
@@ -175,26 +173,62 @@ td{padding:5px 9px;vertical-align:middle;}
   <span style="font-size:11px;color:rgba(255,255,255,.5);margin-left:auto" id="ph-sub">—</span>
 </div>
 
-<!-- STATS GRID (igual ao sistema anterior) -->
-<div class="stats-grid" id="stats-grid" style="display:none">
-  <div class="sg"><div class="sg-l">Lançamentos</div><div class="sg-v" id="s-tot">0</div></div>
-  <div class="sg p"><div class="sg-l">Classificados</div><div class="sg-v" id="s-cls">0/0</div></div>
-  <div class="sg o"><div class="sg-l">Pendentes</div><div class="sg-v" id="s-pen" style="color:var(--orange)">0</div></div>
-  <div class="sg g"><div class="sg-l">Receitas</div><div class="sg-v" id="s-rec" style="color:var(--green)">—</div></div>
-  <div class="sg r"><div class="sg-l">Despesas</div><div class="sg-v" id="s-dep" style="color:var(--red-l)">—</div></div>
+<!-- DASHBOARD COMPACTO -->
+<div id="dre-dash" style="display:none;background:var(--white);border-bottom:1px solid var(--border);padding:8px 14px;flex-shrink:0">
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
+
+    <!-- Classificação -->
+    <div style="background:var(--bg);border-radius:8px;padding:8px 12px;border-left:3px solid var(--purple)">
+      <div style="font-size:9px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);font-weight:700;margin-bottom:4px">Classificados</div>
+      <div style="display:flex;align-items:baseline;gap:6px">
+        <span id="dash-cls-pct" style="font-size:18px;font-weight:700;font-family:'DM Mono',monospace;color:var(--purple)">0%</span>
+        <span id="dash-cls-sub" style="font-size:10px;color:var(--muted)">0/0 itens</span>
+      </div>
+      <div style="background:#ede8e0;border-radius:3px;height:4px;margin-top:5px">
+        <div id="dash-cls-bar" style="background:var(--purple);border-radius:3px;height:100%;width:0%;transition:width .4s"></div>
+      </div>
+    </div>
+
+    <!-- Lucro do mês -->
+    <div style="background:var(--bg);border-radius:8px;padding:8px 12px;border-left:3px solid var(--green)" id="dash-lucro-card">
+      <div style="font-size:9px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);font-weight:700;margin-bottom:4px">Lucro do Mês</div>
+      <div id="dash-lucro" style="font-size:18px;font-weight:700;font-family:'DM Mono',monospace;color:var(--green)">—</div>
+      <div style="font-size:10px;color:var(--muted);margin-top:2px">
+        <span style="color:var(--green)" id="dash-rec-mini">↑ —</span>
+        &nbsp;
+        <span style="color:var(--red-l)" id="dash-dep-mini">↓ —</span>
+      </div>
+    </div>
+
+    <!-- Meta de faturamento -->
+    <div style="background:var(--bg);border-radius:8px;padding:8px 12px;border-left:3px solid var(--blue)">
+      <div style="font-size:9px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);font-weight:700;margin-bottom:4px">Meta de Faturamento</div>
+      <div style="display:flex;align-items:baseline;gap:6px">
+        <span id="dash-fat-pct" style="font-size:18px;font-weight:700;font-family:'DM Mono',monospace;color:var(--blue)">—%</span>
+        <span id="dash-fat-sub" style="font-size:10px;color:var(--muted)">da meta</span>
+      </div>
+      <div style="background:#ede8e0;border-radius:3px;height:4px;margin-top:5px">
+        <div id="dash-fat-bar" style="background:var(--blue);border-radius:3px;height:100%;width:0%;transition:width .4s;max-width:100%"></div>
+      </div>
+    </div>
+
+    <!-- Previsão a pagar -->
+    <div style="background:var(--bg);border-radius:8px;padding:8px 12px;border-left:3px solid var(--orange)">
+      <div style="font-size:9px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);font-weight:700;margin-bottom:4px">Previsão a Pagar</div>
+      <div id="dash-prev" style="font-size:18px;font-weight:700;font-family:'DM Mono',monospace;color:var(--orange)">—</div>
+      <div id="dash-prev-sub" style="font-size:10px;color:var(--muted);margin-top:2px">boletos + provisões</div>
+    </div>
+
+  </div>
 </div>
 
-<!-- TOTALS ROW -->
-<div class="totals-row" id="totals-row" style="display:none">
-  <div class="tc"><div class="tc-icon">💹</div><div><div class="tc-l">Receitas Classificadas</div><div class="tc-v" id="t-rec" style="color:var(--green)">R$ 0</div></div></div>
-  <div class="tc"><div class="tc-icon">💸</div><div><div class="tc-l">Despesas Classificadas</div><div class="tc-v" id="t-dep" style="color:var(--red-l)">R$ 0</div></div></div>
-  <div class="tc" id="tc-lucro"><div class="tc-icon">📊</div><div><div class="tc-l">Lucro / Prejuízo</div><div class="tc-v" id="t-luc">R$ 0</div></div></div>
-</div>
-
-<!-- PROGRESSO -->
-<div class="prog" id="prog-w" style="display:none">
-  <div class="prog-lbl"><span>Progresso de classificação</span><span id="prog-p">0%</span></div>
-  <div class="prog-bg"><div class="prog-fill" id="prog-f" style="width:0%"></div></div>
+<!-- elementos legados mantidos para não quebrar JS existente -->
+<div style="display:none">
+  <span id="s-tot"></span><span id="s-cls"></span><span id="s-pen"></span>
+  <span id="s-rec"></span><span id="s-dep"></span>
+  <span id="t-rec"></span><span id="t-dep"></span>
+  <span id="tc-lucro"></span><span id="t-luc"></span>
+  <span id="prog-p"></span><span id="prog-f"></span>
 </div>
 
 <!-- BANNER DE ARQUIVOS — oculto, revelado via botão na ctrl -->
@@ -1049,7 +1083,12 @@ async function confirmarImportCC() {
       const lancs = parseFaturaPDF(fullText, file.name);
       if (!lancs.length) { toast('⚠️ Nenhum lançamento encontrado no PDF'); return; }
       // Corrige mês dos lançamentos sem data para o mês confirmado
-      lancs.forEach(l => { if (!l.data || !l.mes || l.mes === mesRef) { l.mes = mesCC; l.mesCaixa = mesCC; } });
+      // mes = mês da COMPRA (já vem do parser pela data real)
+      // mesCaixa = mês do PAGAMENTO da fatura (sempre = mesCC, confirmado pelo usuário)
+      lancs.forEach(l => {
+        if (!l.data || !l.mes || l.mes === mesRef) l.mes = mesCC; // sem data → competência = mês da fatura
+        l.mesCaixa = mesCC; // SEMPRE: caixa entra no mês do pagamento da fatura
+      });
       addLancs(lancs, file.name);
     } catch(e) {
       console.error('[procCC PDF]', e);
@@ -1065,8 +1104,12 @@ async function confirmarImportCC() {
   const rows= XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
   const lancs = parseCCRows(rows);
   if (!lancs.length) { toast('⚠️ Nenhum lançamento encontrado na fatura'); return; }
-  // Corrige mês dos lançamentos sem data para o mês confirmado pelo usuário
-  lancs.forEach(l => { if (!l.data || !l.mes || l.mes === mesRef) { l.mes = mesCC; l.mesCaixa = mesCC; } });
+  // mes = mês da COMPRA (data real do lançamento)
+  // mesCaixa = mês do PAGAMENTO da fatura (sempre = mesCC, confirmado pelo usuário)
+  lancs.forEach(l => {
+    if (!l.data || !l.mes || l.mes === mesRef) l.mes = mesCC;
+    l.mesCaixa = mesCC; // SEMPRE: caixa entra no mês do pagamento da fatura
+  });
   addLancs(lancs, file.name);
 }
 
@@ -1463,8 +1506,9 @@ function parseCCRows(rows) {
     }
     const mes = dt ? dt.slice(5,7)+'/'+dt.slice(0,4) : mesRef;
     const parc = cP>=0 ? String(row[cP]||'') : '';
+    // mesCaixa = mesRef como placeholder; será sobrescrito para mesCC (mês do pagamento da fatura)
     result.push({id:'cc_'+Date.now()+'_'+i, lancamento:parc?`${nome} (${parc})`:nome,
-      valor:v, data:dt, mes, mesCaixa:mes, categoria:autoClassificar(nome,''), fonte:'CC', razaoSocial:nome});
+      valor:v, data:dt, mes, mesCaixa:mesRef, categoria:autoClassificar(nome,''), fonte:'CC', razaoSocial:nome});
   }
   return result;
 }
@@ -2098,22 +2142,67 @@ function updStats() {
   const recAll = at.filter(t=>parseFloat(t.valor||0)>0).reduce((s,t)=>s+parseFloat(t.valor),0);
   const depAll = at.filter(t=>parseFloat(t.valor||0)<0).reduce((s,t)=>s+Math.abs(parseFloat(t.valor)),0);
 
+  // ── Novo dashboard compacto ──────────────────────────────────────────────
+  const dash = document.getElementById('dre-dash');
+  if (dash) {
+    dash.style.display = TXS.length ? '' : 'none';
+
+    // 1. Classificação
+    document.getElementById('dash-cls-pct').textContent = pct + '%';
+    document.getElementById('dash-cls-sub').textContent = `${cl}/${at.length} itens`;
+    document.getElementById('dash-cls-bar').style.width = pct + '%';
+
+    // 2. Lucro do mês atual
+    const lucroCard = document.getElementById('dash-lucro-card');
+    document.getElementById('dash-lucro').textContent = fmt.brl(lucro);
+    document.getElementById('dash-lucro').style.color = lucro >= 0 ? 'var(--green)' : 'var(--red-l)';
+    lucroCard.style.borderLeftColor = lucro >= 0 ? 'var(--green)' : 'var(--red-l)';
+    document.getElementById('dash-rec-mini').textContent = '↑ ' + fmt.brl(rec);
+    document.getElementById('dash-dep-mini').textContent = '↓ ' + fmt.brl(dep);
+
+    // 3. Meta de faturamento — usa faturamento do mês atual
+    const mesAtualStr2 = `${String(hoje.getMonth()+1).padStart(2,'0')}/${hoje.getFullYear()}`;
+    const fatReal = parseFloat(localStorage.getItem('bb_fat_por_mes') && JSON.parse(localStorage.getItem('bb_fat_por_mes') || '{}')[mesAtualStr2] || 0);
+    const metaFat = parseFloat(localStorage.getItem('bb_meta_faturamento') || 0) ||
+                    parseFloat((function(){try{const m=JSON.parse(localStorage.getItem('bb_metas')||'{}');const k=Object.keys(m).find(k=>k.includes(mesAtualStr2.split('/')[1]));return k?m[k].faturamento_meta||0:0;}catch(e){return 0;}})());
+    if (metaFat > 0 && fatReal > 0) {
+      const pctFat = Math.round(fatReal / metaFat * 100);
+      document.getElementById('dash-fat-pct').textContent = pctFat + '%';
+      document.getElementById('dash-fat-sub').textContent = fmt.brl(fatReal) + ' / ' + fmt.brl(metaFat);
+      document.getElementById('dash-fat-bar').style.width = Math.min(pctFat, 100) + '%';
+      document.getElementById('dash-fat-bar').style.background = pctFat >= 100 ? 'var(--green)' : pctFat >= 70 ? 'var(--blue)' : 'var(--orange)';
+    } else if (fatReal > 0) {
+      document.getElementById('dash-fat-pct').textContent = fmt.brl(fatReal);
+      document.getElementById('dash-fat-sub').textContent = 'sem meta definida';
+      document.getElementById('dash-fat-bar').style.width = '0%';
+    } else {
+      document.getElementById('dash-fat-pct').textContent = '—';
+      document.getElementById('dash-fat-sub').textContent = 'abra Faturamento';
+    }
+
+    // 4. Previsão a pagar no mês atual (modo caixa: mesCaixa; competência: mes)
+    const modo = getModo ? getModo() : 'caixa';
+    const prevPagar = TXS
+      .filter(t => {
+        const m = modo === 'caixa' ? (t.mesCaixa || t.mes) : t.mes;
+        return m === mesAtualStr2 && parseFloat(t.valor || 0) < 0 && !t.ignorar;
+      })
+      .reduce((s, t) => s + Math.abs(parseFloat(t.valor || 0)), 0);
+    const nPrev = TXS.filter(t => {
+      const m = modo === 'caixa' ? (t.mesCaixa || t.mes) : t.mes;
+      return m === mesAtualStr2 && parseFloat(t.valor || 0) < 0 && !t.ignorar;
+    }).length;
+    document.getElementById('dash-prev').textContent = fmt.brl(prevPagar);
+    document.getElementById('dash-prev-sub').textContent = nPrev + ' lançamentos de saída';
+  }
+
+  // elementos legados (para não quebrar outros lugares que referenciem)
   document.getElementById('s-tot').textContent = fmt.n(TXS.length);
   document.getElementById('s-cls').textContent = `${cl}/${at.length}`;
   document.getElementById('s-pen').textContent = fmt.n(pend);
-  document.getElementById('s-rec').textContent = fmt.brl(recAll);
-  document.getElementById('s-dep').textContent = fmt.brl(depAll);
-  document.getElementById('t-rec').textContent = fmt.brl(rec);
-  document.getElementById('t-dep').textContent = fmt.brl(dep);
-
-  const lEl = document.getElementById('t-luc');
-  lEl.textContent = fmt.brl(lucro);
-  lEl.style.color = lucro >= 0 ? 'var(--green)' : 'var(--red-l)';
-  document.getElementById('tc-lucro').style.borderLeft = `3px solid ${lucro>=0?'var(--green)':'var(--red-l)'}`;
-  document.getElementById('prog-f').style.width = pct+'%';
   document.getElementById('prog-p').textContent = pct+'%';
 
-  // Label do header: indica que lucro é até o mês atual
+  // Label do header
   const mesAtualStr = `${String(hoje.getMonth()+1).padStart(2,'0')}/${hoje.getFullYear()}`;
   document.getElementById('ph-sub').textContent = `Até ${mesAtualStr} · ${TXS.length} lanç · ${pct}% classificado`;
 }
