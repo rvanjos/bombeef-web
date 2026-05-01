@@ -1173,9 +1173,21 @@ async function confirmarImportCC() {
   toast('💳 Processando fatura CC...');
   const buf = await file.arrayBuffer();
   const wb  = XLSX.read(buf, {type:'array', cellDates:true});
-  const ws  = wb.Sheets[wb.SheetNames[0]];
-  const rows= XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
-  const lancs = parseCCRows(rows);
+
+  // Detecta se é o formato exportado pelo ChatGPT (aba "Importacao_DRE")
+  const abaImportacao = wb.SheetNames.find(n => /importa|dre/i.test(n));
+  let lancs;
+  if (abaImportacao) {
+    const ws = wb.Sheets[abaImportacao];
+    const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+    lancs = parseCCRowsChatGPT(rows);
+    toast(`💳 Formato ChatGPT detectado (aba "${abaImportacao}")`);
+  } else {
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+    lancs = parseCCRows(rows);
+  }
+
   if (!lancs.length) { toast('⚠️ Nenhum lançamento encontrado na fatura'); return; }
   lancs.forEach(l => {
     if (!l.data || !l.mes || l.mes === mesRef) l.mes = mesCC;
@@ -1455,6 +1467,107 @@ function parseFaturaGenerica(text) {
       data: '', mes: mesRef, mesCaixa: mesRef,
       categoria: autoClassificar(desc, ''), fonte: 'CC',
       razaoSocial: desc,
+    });
+  }
+  return result;
+}
+
+// Parser para o formato de XLSX gerado pelo ChatGPT a partir de faturas Caixa
+// Colunas: ID | Competência | Data Compra | Vencimento | Banco | Cartão | Final |
+//          Tipo | Estabelecimento | Cidade | Parc Atual | Qtd Parc | Valor Parcela |
+//          Débito/Crédito | Valor DRE | Valor Total | Categoria | Subcategoria | Importar | Obs
+function parseCCRowsChatGPT(rows) {
+  const result = [];
+  if (!rows.length) return result;
+
+  // Detecta índices pelas colunas do cabeçalho (flexível a variações)
+  const header = rows[0].map(c => String(c||'').toLowerCase().trim());
+  const idx = (terms) => {
+    for (const t of terms) {
+      const i = header.findIndex(h => h.includes(t));
+      if (i >= 0) return i;
+    }
+    return -1;
+  };
+
+  const iComp    = idx(['competência','competencia']);
+  const iData    = idx(['data compra','data']);
+  const iBanco   = idx(['banco']);
+  const iFinal   = idx(['final']);
+  const iTipo    = idx(['tipo']);
+  const iEstab   = idx(['estabelecimento']);
+  const iParcAt  = idx(['parcela atual','parc atual']);
+  const iParcTot = idx(['qtd parcelas','qtd parc','total parcelas']);
+  const iValor   = idx(['valor dre','valor parcela']);
+  const iDC      = idx(['débito','debito','crédito','credito','d/c']);
+  const iImport  = idx(['importar']);
+
+  // Converte número serial do Excel para data ISO
+  function excelDateToISO(v) {
+    if (!v) return '';
+    if (v instanceof Date) return v.toISOString().slice(0,10);
+    const n = parseInt(v);
+    if (!n || n < 40000 || n > 60000) return '';
+    // Serial do Excel: dias desde 30/12/1899
+    const msPerDay = 86400000;
+    const epoch = new Date(Date.UTC(1899, 11, 30));
+    const d = new Date(epoch.getTime() + n * msPerDay);
+    return d.toISOString().slice(0,10);
+  }
+
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row || !row.some(Boolean)) continue;
+
+    // Pula linhas marcadas como "Não importar"
+    const importar = iImport >= 0 ? String(row[iImport]||'').toLowerCase() : 'sim';
+    if (importar === 'não' || importar === 'nao' || importar === 'no') continue;
+
+    const estab = String(row[iEstab] || '').trim();
+    if (!estab) continue;
+
+    // Valor
+    let v = parseFloat(String(row[iValor] || 0).replace(/[^0-9,.-]/g,'').replace(',','.')) || 0;
+    if (!v) continue;
+
+    // Débito = despesa (negativo), Crédito = receita (positivo)
+    const dc = String(row[iDC] || 'D').trim().toUpperCase();
+    v = dc === 'C' ? Math.abs(v) : -Math.abs(v);
+
+    // Data da compra
+    const dataISO = excelDateToISO(row[iData]);
+
+    // Mês de competência
+    let mesComp = String(row[iComp] || '').trim(); // "03/2026"
+    if (!mesComp && dataISO) {
+      const [y, m] = dataISO.split('-');
+      mesComp = `${m}/${y}`;
+    }
+
+    // Descrição: estabelecimento + parcela se parcelado
+    const parcAt  = row[iParcAt]  ? String(row[iParcAt]).trim()  : '';
+    const parcTot = row[iParcTot] ? String(row[iParcTot]).trim() : '';
+    const descBase = estab;
+    const descFinal = (parcAt && parcTot && parcAt !== '0')
+      ? `${descBase} (Parc ${String(parcAt).padStart(2,'0')}/${String(parcTot).padStart(2,'0')})`
+      : descBase;
+
+    // Final do cartão para portador
+    const final = iFinal >= 0 ? String(row[iFinal]||'') : '';
+    const banco = iBanco >= 0 ? String(row[iBanco]||'') : '';
+    const portador = final ? `${banco} (Final ${final})` : banco;
+
+    result.push({
+      id: 'cc_cgpt_' + Date.now() + '_' + i,
+      lancamento: descFinal,
+      razaoSocial: estab,
+      valor: v,
+      data: dataISO,
+      mes: mesComp,
+      mesCaixa: mesComp,
+      categoria: autoClassificar(descFinal, estab),
+      fonte: 'CC',
+      portador,
     });
   }
   return result;
