@@ -225,14 +225,14 @@ module.exports = function (pool) {
           TO_CHAR(data_validade, 'YYYY-MM-DD') AS data_validade,
           status, localizacao AS local_estoque, acao_antes_vencer,
           peso_total_kg,
-          CURRENT_DATE - data_validade::date AS dias_vencido,
-          data_validade::date - CURRENT_DATE AS dias_restantes
+          (CURRENT_DATE - data_validade::date) AS dias_vencido,
+          (data_validade::date - CURRENT_DATE) AS dias_restantes
         FROM validade_items
         WHERE status NOT IN ('descartado','vendido')
           AND acao_antes_vencer IS NOT NULL
           AND acao_antes_vencer != ''
           AND data_validade IS NOT NULL
-          AND data_validade::date <= CURRENT_DATE + $1
+          AND data_validade::date <= CURRENT_DATE + ($1 || ' days')::INTERVAL
         ORDER BY data_validade ASC, descricao ASC
       `, [diasAlerta]);
       res.json({ ok: true, data: rows, total: rows.length });

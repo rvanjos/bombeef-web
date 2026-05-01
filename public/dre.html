@@ -958,19 +958,25 @@ async function carregarSessao() {
         if (t.boletoId) {
           const bid = String(t.boletoId);
           if (_seenBoleto.has(bid)) {
-            // Já existe lançamento com este boletoId — atualiza se o novo é mais completo
             const existing = TXS.find(x => String(x.boletoId) === bid);
             if (existing) {
-              // BOLETO_PREV → BOLETO: o boleto foi pago, promove
               if (t.fonte === 'BOLETO' && existing.fonte === 'BOLETO_PREV') {
+                // Promove PREV → pago
                 existing.fonte      = 'BOLETO';
                 existing.data       = t.data || existing.data;
                 existing.mesCaixa   = t.mesCaixa || existing.mesCaixa;
                 existing.vinculadoA = t.vinculadoA || existing.vinculadoA;
                 existing.categoria  = t.categoria || existing.categoria;
+              } else if (t.fonte === 'BOLETO_PREV' && existing.fonte === 'BOLETO_PREV') {
+                // Dois PREV com mesmo boletoId — mantém o que tem nome mais completo
+                if ((t.lancamento||'').length > (existing.lancamento||'').length) {
+                  existing.lancamento  = t.lancamento;
+                  existing.razaoSocial = t.razaoSocial || existing.razaoSocial;
+                  existing.categoria   = t.categoria   || existing.categoria;
+                  existing.data        = t.data        || existing.data;
+                  existing.mesCaixa    = t.mesCaixa    || existing.mesCaixa;
+                }
               }
-              // BOLETO_PREV duplicado de sessões diferentes — ignora o mais antigo
-              // (o primeiro encontrado vence, já está no array)
             }
             continue;
           }
@@ -1624,24 +1630,46 @@ function addLancs(novos, fileName) {
 
     // Se é lançamento do extrato (EXTRATO/OFX), verifica se já existe BOLETO_PREV com mesmo valor e data próxima
     // Se sim, vincula e atualiza em vez de criar duplicata
-    if ((l.fonte === 'EXTRATO' || l.fonte === 'OFX') && l.valor < 0) {
+    if ((l.fonte === 'EXTRATO' || l.fonte === 'OFX') && parseFloat(l.valor||0) < 0) {
       const valCents = Math.round(Math.abs(parseFloat(l.valor||0)) * 100);
       const dtL = l.data ? new Date(l.data) : null;
+      // Tenta vincular a BOLETO_PREV ou BOLETO com mesmo boletoId/valor
       const prevMatch = TXS.find(t => {
-        if (t.fonte !== 'BOLETO_PREV') return false;
+        if (!t.fonte?.startsWith('BOLETO')) return false;
         if (Math.round(Math.abs(parseFloat(t.valor||0)) * 100) !== valCents) return false;
         if (!dtL || !t.data) return true;
         const dtT = new Date(t.data);
-        return Math.abs(dtL - dtT) <= 4 * 86400000; // ±4 dias
+        return Math.abs(dtL - dtT) <= 5 * 86400000; // ±5 dias
       });
       if (prevMatch) {
-        // Vincula o extrato ao BOLETO_PREV existente — atualiza em vez de duplicar
-        prevMatch.fonte = 'BOLETO';
-        prevMatch.data = l.data;
-        prevMatch.fitid = l.fitid;
-        prevMatch.boletoId = prevMatch.boletoId; // mantém
+        prevMatch.fonte     = 'BOLETO';
+        prevMatch.data      = l.data;
+        prevMatch.mesCaixa  = l.mesCaixa || prevMatch.mesCaixa;
+        prevMatch.fitid     = l.fitid || prevMatch.fitid;
         prevMatch.vinculadoA = l.lancamento;
         if (l.fitid) exFitid.add(l.fitid);
+        atualiz++;
+        continue;
+      }
+    }
+
+    // Se é BOLETO pago importado do DB, verifica se já existe EXTRATO com mesmo valor+data
+    // (evita duplicar boleto pago + extrato do mesmo pagamento)
+    if (l.fonte === 'BOLETO' && l.boletoId) {
+      const valCents = Math.round(Math.abs(parseFloat(l.valor||0)) * 100);
+      const dtL = l.data ? new Date(l.data) : null;
+      const extratoExiste = TXS.find(t => {
+        if (t.fonte !== 'EXTRATO' && t.fonte !== 'OFX') return false;
+        if (Math.round(Math.abs(parseFloat(t.valor||0)) * 100) !== valCents) return false;
+        if (!dtL || !t.data) return false;
+        const dtT = new Date(t.data);
+        return Math.abs(dtL - dtT) <= 5 * 86400000;
+      });
+      if (extratoExiste) {
+        // Extrato já está presente — apenas transfere boletoId e vinculadoA para o extrato
+        if (!extratoExiste.boletoId) extratoExiste.boletoId = l.boletoId;
+        if (!extratoExiste.vinculadoA) extratoExiste.vinculadoA = l.lancamento;
+        if (!extratoExiste.categoria && l.categoria) extratoExiste.categoria = l.categoria;
         atualiz++;
         continue;
       }
@@ -1669,9 +1697,7 @@ function addLancs(novos, fileName) {
 function showTable() {
   document.getElementById('dz-area').style.display='none';
   document.getElementById('tbl-area').style.display='block';
-  document.getElementById('stats-grid').style.display='';
-  document.getElementById('totals-row').style.display='';
-  document.getElementById('prog-w').style.display='';
+  // stats-grid/totals-row/prog-w foram substituídos pelo #dre-dash — não referenciar mais
   // Atualiza tags de arquivo no painel colapsável
   document.getElementById('ftags').innerHTML = files.map(f =>
     `<span class="ftag${/fatura|cc|cartao/i.test(f)?' cc':''}">${/fatura|cc|cartao/i.test(f)?'💳':'📄'} ${f}</span>`
@@ -1731,8 +1757,18 @@ function render() {
     if (t.fonte === 'BOLETO_PREV' && boletosQuitadosPorVinculo.has(t.id)) return false;
     // Esconde BOLETO se já existe EXTRATO com mesmo boletoId (não duplicar)
     if (t.fonte === 'BOLETO' && t.boletoId && boletosQuitadosPorId.has(String(t.boletoId))) {
-      // Só esconde o BOLETO se o EXTRATO já está presente (evita sumir sem o extrato)
-      const extratoExiste = TXS.some(x => x.fonte === 'EXTRATO' && String(x.boletoId) === String(t.boletoId));
+      const extratoExiste = TXS.some(x => (x.fonte === 'EXTRATO' || x.fonte === 'OFX') && String(x.boletoId) === String(t.boletoId));
+      if (extratoExiste) return false;
+    }
+    // Esconde BOLETO pago se já existe EXTRATO com mesmo valor+mês (boleto pago sem boletoId no extrato)
+    if (t.fonte === 'BOLETO' && t.vinculadoA) {
+      const valCents = Math.round(Math.abs(parseFloat(t.valor||0)) * 100);
+      const mesT = t.mesCaixa || t.mes;
+      const extratoExiste = TXS.some(x =>
+        (x.fonte === 'EXTRATO' || x.fonte === 'OFX') &&
+        Math.round(Math.abs(parseFloat(x.valor||0)) * 100) === valCents &&
+        (x.mesCaixa || x.mes) === mesT
+      );
       if (extratoExiste) return false;
     }
     // Esconde BOLETO/BOLETO_PREV sem boletoId se EXTRATO tem mesmo valor+mês
@@ -2530,27 +2566,35 @@ function updMesFiltro() {
 }
 
 function updStats() {
-  // Para o header de totais, considera apenas lançamentos até o mês atual
-  // Meses futuros com provisões distorcem o lucro exibido
   const hoje = new Date();
-  const mesAtualNum = hoje.getFullYear() * 100 + (hoje.getMonth() + 1); // ex: 202604
-  function mesParaNum(m) {
-    if (!m) return 0;
-    const [mm, yy] = m.split('/');
-    return parseInt(yy) * 100 + parseInt(mm);
+  const hojeStr = hoje.toISOString().slice(0,10); // 'YYYY-MM-DD'
+  const mesAtualStr = `${String(hoje.getMonth()+1).padStart(2,'0')}/${hoje.getFullYear()}`; // 'MM/YYYY'
+  const modo = getModo ? getModo() : 'caixa';
+
+  // getMesTxDash: usa mesCaixa no modo caixa, mes no modo competência
+  function getMesTxDash(t) {
+    return modo === 'caixa' ? (t.mesCaixa || t.mes || mesRef) : (t.mes || mesRef);
   }
 
   const at  = TXS.filter(t => !t.ignorar);
-  const ate = at.filter(t => mesParaNum(t.mes || mesRef) <= mesAtualNum);
+  const pct = at.length ? Math.round(at.filter(t => t.categoria).length / at.length * 100) : 0;
+  const cl  = at.filter(t => t.categoria).length;
 
-  const cl   = at.filter(t => t.categoria).length;
-  const pend = at.length - cl;
-  const rec  = ate.filter(t => parseFloat(t.valor||0) > 0 && !CATS_NAO_OPERACIONAIS.has(t.categoria)).reduce((s,t)=>s+parseFloat(t.valor),0);
-  const dep  = ate.filter(t => parseFloat(t.valor||0) < 0 && !CATS_NAO_OPERACIONAIS.has(t.categoria)).reduce((s,t)=>s+Math.abs(parseFloat(t.valor)),0);
+  // Lucro do mês: APENAS lançamentos do mês atual, com data ≤ hoje
+  // (não soma meses anteriores nem dias futuros do mês)
+  const doMes = at.filter(t => {
+    if (CATS_NAO_OPERACIONAIS.has(t.categoria)) return false;
+    if (getMesTxDash(t) !== mesAtualStr) return false;
+    // Se tem data real, só conta até hoje (não dias futuros)
+    if (t.data && t.data > hojeStr) return false;
+    return true;
+  });
+
+  const rec   = doMes.filter(t => parseFloat(t.valor||0) > 0).reduce((s,t) => s + parseFloat(t.valor), 0);
+  const dep   = doMes.filter(t => parseFloat(t.valor||0) < 0).reduce((s,t) => s + Math.abs(parseFloat(t.valor)), 0);
   const lucro = rec - dep;
-  const pct  = at.length ? Math.round(cl/at.length*100) : 0;
 
-  // Receitas e despesas totais (todos os meses, para o contador)
+  // Receitas e despesas totais (todos os meses — para o contador de classificação)
   const recAll = at.filter(t=>parseFloat(t.valor||0)>0).reduce((s,t)=>s+parseFloat(t.valor),0);
   const depAll = at.filter(t=>parseFloat(t.valor||0)<0).reduce((s,t)=>s+Math.abs(parseFloat(t.valor)),0);
 
@@ -2615,8 +2659,7 @@ function updStats() {
   document.getElementById('prog-p').textContent = pct+'%';
 
   // Label do header
-  const mesAtualStr = `${String(hoje.getMonth()+1).padStart(2,'0')}/${hoje.getFullYear()}`;
-  document.getElementById('ph-sub').textContent = `Até ${mesAtualStr} · ${TXS.length} lanç · ${pct}% classificado`;
+  document.getElementById('ph-sub').textContent = `${mesAtualStr} · ${TXS.length} lanç · ${pct}% classificado`;
 }
 
 // ─── DRE VISUAL ───────────────────────────────────────────────────────────────
