@@ -615,10 +615,10 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
     </div>
 
     <div class="frame-container" id="frame-rh">
-      <iframe class="module-frame" id="iframe-rh" src="rh.html"></iframe>
+      <iframe class="module-frame" id="iframe-rh" src=""  data-src="rh.html"></iframe>
     </div>
     <div class="frame-container" id="frame-gestaokits">
-      <iframe class="module-frame" id="iframe-gestaokits" src="gestao-kits.html"></iframe>
+      <iframe class="module-frame" id="iframe-gestaokits" src=""  data-src="gestao-kits.html"></iframe>
     </div>
     <div class="frame-container" id="frame-validade">
       <iframe class="module-frame" id="iframe-validade" src="validade.html?v=1775328871"></iframe>
@@ -627,7 +627,7 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
       <iframe class="module-frame" id="iframe-retiradas" src="retiradas.html?v=1775328871"></iframe>
     </div>
     <div class="frame-container" id="frame-vendasproduto">
-      <iframe class="module-frame" id="iframe-vendasproduto" src="vendas-produto.html"></iframe>
+      <iframe class="module-frame" id="iframe-vendasproduto" src=""  data-src="vendas-produto.html"></iframe>
     </div>
     <div class="frame-container" id="frame-faturamento">
       <iframe class="module-frame" id="iframe-faturamento" src="faturamento.html"></iframe>
@@ -847,6 +847,11 @@ function showTab(tab) {
             );
           } catch(_) {}
         };
+        // Se o iframe tem data-src (lazy load), seta o src agora
+        if (!iframe.src || iframe.src === location.href || iframe.src === location.href + '#') {
+          const lazySrc = iframe.dataset.src;
+          if (lazySrc) iframe.src = lazySrc + '?v=' + Date.now();
+        }
         // Se o iframe ainda não carregou, aguarda o load
         if (!iframe.dataset.loaded) {
           iframe.addEventListener('load', () => {

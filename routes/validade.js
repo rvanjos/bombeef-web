@@ -224,7 +224,7 @@ module.exports = function (pool) {
           qtd_unidades,
           TO_CHAR(data_validade, 'YYYY-MM-DD') AS data_validade,
           status, localizacao AS local_estoque, acao_antes_vencer,
-          peso_total_kg, preco_custo,
+          peso_total_kg,
           CURRENT_DATE - data_validade::date AS dias_vencido,
           data_validade::date - CURRENT_DATE AS dias_restantes
         FROM validade_items
