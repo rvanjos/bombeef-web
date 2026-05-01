@@ -1502,17 +1502,23 @@ function parseCCRowsChatGPT(rows) {
   const iDC      = idx(['débito','debito','crédito','credito','d/c']);
   const iImport  = idx(['importar']);
 
-  // Converte número serial do Excel para data ISO
+  // Converte data para ISO — suporta: Date, serial Excel, DD/MM/YYYY, YYYY-MM-DD
   function excelDateToISO(v) {
     if (!v) return '';
     if (v instanceof Date) return v.toISOString().slice(0,10);
-    const n = parseInt(v);
-    if (!n || n < 40000 || n > 60000) return '';
-    // Serial do Excel: dias desde 30/12/1899
-    const msPerDay = 86400000;
-    const epoch = new Date(Date.UTC(1899, 11, 30));
-    const d = new Date(epoch.getTime() + n * msPerDay);
-    return d.toISOString().slice(0,10);
+    const s = String(v).trim();
+    // DD/MM/YYYY
+    const mBR = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (mBR) return `${mBR[3]}-${mBR[2]}-${mBR[1]}`;
+    // YYYY-MM-DD
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+    // Serial Excel
+    const n = parseInt(s);
+    if (n >= 40000 && n <= 60000) {
+      const d = new Date(Date.UTC(1899, 11, 30) + n * 86400000);
+      return d.toISOString().slice(0,10);
+    }
+    return '';
   }
 
   for (let i = 1; i < rows.length; i++) {
