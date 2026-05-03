@@ -70,19 +70,43 @@ module.exports = function (pool) {
 
   // Novo lançamento — funcionário envia para aprovação
   r.post('/lancamento', async (req, res) => {
-    const { funcionario_id, mes_ref, tipo, descricao, quantidade, valor_unitario, data_ref } = req.body;
+    const { funcionario_id, mes_ref, tipo, descricao, quantidade, valor_unitario, data_ref, obs } = req.body;
     if (!funcionario_id || !mes_ref || !tipo) return res.status(400).json({ ok: false, erro: 'funcionario_id, mes_ref e tipo obrigatórios' });
     try {
-      const qtd  = parseFloat(quantidade  || 0);
+      const qtd   = parseFloat(quantidade   || 0);
       const vUnit = parseFloat(valor_unitario || 0);
       const solicitante_nome = req.user?.nome || req.user?.email || 'Usuário';
-      const { rows } = await pool.query(`
-        INSERT INTO rh_apontamentos
-          (funcionario_id, mes_ref, tipo, descricao, quantidade, valor_unitario, valor_total, data_ref, status, solicitante_nome)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pendente',$9)
-        RETURNING id
-      `, [funcionario_id, mes_ref, tipo, descricao || null, qtd, vUnit, qtd * vUnit, data_ref || null, solicitante_nome]);
-      res.json({ ok: true, id: rows[0].id });
+
+      // Entrega e Grelhado vão para rh_pagamentos (tabela separada)
+      const isPagamento = ['entrega', 'grelhado'].includes(tipo);
+
+      if (isPagamento) {
+        // Grelhado: valor salvo é o valor a receber (35% da taxa cobrada)
+        const valorPagamento = tipo === 'grelhado'
+          ? parseFloat((vUnit * 0.35).toFixed(2))
+          : vUnit * (qtd || 1);
+
+        const descFinal = descricao || (tipo === 'grelhado' ? 'Grelhado' : 'Entrega');
+        const descComObs = obs ? descFinal + ' | ' + obs : descFinal;
+
+        const { rows } = await pool.query(`
+          INSERT INTO rh_pagamentos
+            (funcionario_id, mes_ref, tipo, descricao, valor, data_ref)
+          VALUES ($1,$2,$3,$4,$5,$6)
+          RETURNING id
+        `, [funcionario_id, mes_ref, tipo, descComObs, valorPagamento, data_ref || null]);
+        res.json({ ok: true, id: rows[0].id, tabela: 'rh_pagamentos', valor: valorPagamento });
+
+      } else {
+        // Demais tipos vão para rh_apontamentos
+        const { rows } = await pool.query(`
+          INSERT INTO rh_apontamentos
+            (funcionario_id, mes_ref, tipo, descricao, quantidade, valor_unitario, valor_total, data_ref, status, solicitante_nome)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pendente',$9)
+          RETURNING id
+        `, [funcionario_id, mes_ref, tipo, descricao || null, qtd, vUnit, qtd * vUnit, data_ref || null, solicitante_nome]);
+        res.json({ ok: true, id: rows[0].id, tabela: 'rh_apontamentos' });
+      }
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
