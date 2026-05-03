@@ -243,6 +243,11 @@ main{padding:16px 24px;max-width:1400px;margin:0 auto;}
     <!-- Atalho rápido: pagamento extra (entrega/grelhado/comissão) — só para não-admin -->
     <div id="quick-extra-wrap" style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:14px">
       <div style="font-weight:700;font-size:13px;margin-bottom:10px;color:var(--text)">💵 Registrar Pagamento Extra</div>
+      <!-- Seletor de funcionário para gestor -->
+      <div id="qe-func-wrap" style="display:none;margin-bottom:10px">
+        <label style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.4px">Funcionário</label>
+        <select id="qe-func-id" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-size:13px;margin-top:4px"><option value="">— selecione —</option></select>
+      </div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;align-items:end">
         <div>
           <label style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.4px">Tipo</label>
@@ -749,7 +754,16 @@ function qeAtualizarCampos() {
 }
 
 async function qeEnviar() {
-  if (!_meuFuncId) { toast('⚠️ Usuário não vinculado a funcionário. Fale com o admin.'); return; }
+  const isGestorQe = _perfil === 'gestor';
+  // Gestor usa o funcionário selecionado; funcionário usa o próprio ID
+  let funcId = _meuFuncId;
+  if (isGestorQe) {
+    const sel = document.getElementById('qe-func-id');
+    funcId = sel ? sel.value : '';
+    if (!funcId) { toast('⚠️ Selecione o funcionário'); return; }
+  } else if (!funcId) {
+    toast('⚠️ Usuário não vinculado a funcionário. Fale com o admin.'); return;
+  }
   const tipo      = document.getElementById('qe-tipo').value;
   const descricao = (document.getElementById('qe-desc').value || '').trim();
   const valor     = parseFloat(document.getElementById('qe-valor').value) || 0;
@@ -759,9 +773,8 @@ async function qeEnviar() {
   if (!descricao) { toast('⚠️ Informe a descrição'); return; }
   if (!valor)     { toast('⚠️ Informe o valor'); return; }
 
-  // Grelhado: envia taxa completa, backend calcula 35%
   const d = await post('/api/rh/lancamento', {
-    funcionario_id: _meuFuncId, mes_ref, tipo, descricao,
+    funcionario_id: funcId, mes_ref, tipo, descricao,
     quantidade: 1, valor_unitario: valor, data_ref
   });
   if (!d.ok) { toast('❌ ' + d.erro); return; }
@@ -789,17 +802,16 @@ function abrirModalLanc() {
   const infoBox   = document.getElementById('lanc-info-box');
   const btnSalvar = document.getElementById('btn-salvar-lanc');
 
-  if (isAdmin) {
-    // Admin: mostra seletor de funcionários, esconde info de pendência
+  if (isAdmin || _perfil === 'gestor') {
+    // Admin / Gestor: mostra seletor de funcionários para apontar para qualquer um
     funcsWrap.style.display = '';
     infoBox.style.display = 'none';
-    btnSalvar.textContent = '💾 Lançar';
-    // Popula checkboxes
+    btnSalvar.textContent = _perfil === 'gestor' ? '📤 Enviar para Aprovação' : '💾 Lançar';
     const lista = document.getElementById('lanc-funcs-list');
     const funcs = window._todasFuncs || [];
     if (funcs.length) {
       lista.innerHTML = funcs.map(f =>
-        `<label style="display:flex;align-items:center;gap:8px;padding:4px 6px;border-radius:5px;cursor:pointer;font-size:13px;hover:background:#f5f0eb">
+        `<label style="display:flex;align-items:center;gap:8px;padding:4px 6px;border-radius:5px;cursor:pointer;font-size:13px">
           <input type="checkbox" class="cb-func" value="${f.id}" style="width:15px;height:15px">
           <span>${f.nome}</span><span style="font-size:11px;color:var(--muted);margin-left:4px">${f.cargo||''}</span>
         </label>`
@@ -808,7 +820,7 @@ function abrirModalLanc() {
       lista.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:6px">Nenhum funcionário cadastrado</div>';
     }
   } else {
-    // Funcionário: esconde seletor
+    // Funcionário comum: só envia para si mesmo
     funcsWrap.style.display = 'none';
     infoBox.style.display = '';
     btnSalvar.textContent = '📤 Enviar para Aprovação';
@@ -825,6 +837,7 @@ function toggleSelecionarTodosFuncs() {
 
 async function salvarLancamento() {
   const isAdmin = _perfil === 'admin';
+  const isGestor2 = _perfil === 'gestor';
   const tipo         = document.getElementById('lanc-tipo').value;
   const descricao    = document.getElementById('lanc-desc').value.trim();
   const data_ref     = document.getElementById('lanc-data').value;
@@ -1044,6 +1057,8 @@ async function init() {
   const btnAprov  = document.getElementById('tab-btn-aprovacoes');
   const btnMeus   = document.getElementById('tab-btn-meus');
 
+  const isGestor = _perfil === 'gestor';
+
   if (isAdmin) {
     // Admin vê tudo
     if (btnFolha)  btnFolha.style.display  = '';
@@ -1051,29 +1066,59 @@ async function init() {
     if (btnRel)    btnRel.style.display    = '';
     if (btnAprov)  btnAprov.style.display  = '';
     if (btnMeus)   btnMeus.style.display   = '';
-    // Admin não precisa do atalho rápido (tem a ficha completa)
     const qeWrap = document.getElementById('quick-extra-wrap');
     if (qeWrap) qeWrap.style.display = 'none';
     const btnHist = document.getElementById('tab-btn-historico');
-    if (btnHist)   btnHist.style.display   = '';
+    if (btnHist) btnHist.style.display = '';
     carregarResumo();
     get('/api/rh/lancamentos-pendentes/count').then(d => {
       if (d.ok) atualizarBadge(d.total);
     });
+
+  } else if (isGestor) {
+    // Gestor: acessa apontamentos (pode lançar para qualquer funcionário)
+    // mas não vê folha, escala, relatório nem configurações
+    if (btnFolha)  btnFolha.style.display  = 'none';
+    if (btnEscala) btnEscala.style.display = 'none';
+    if (btnRel)    btnRel.style.display    = 'none';
+    if (btnAprov)  btnAprov.style.display  = '';  // vê aprovações
+    if (btnMeus)   btnMeus.style.display   = '';
+    const qeWrap = document.getElementById('quick-extra-wrap');
+    if (qeWrap) {
+      qeWrap.style.display = '';
+      const hoje = new Date().toISOString().slice(0,10);
+      const qeData = document.getElementById('qe-data');
+      if (qeData) qeData.value = hoje;
+      // Mostra seletor de funcionário para gestor
+      const qeFuncWrap = document.getElementById('qe-func-wrap');
+      if (qeFuncWrap) qeFuncWrap.style.display = '';
+    }
+    // Carrega lista de funcionários e popula o select
+    const df = await get('/api/rh/funcionarios?ativo=true');
+    if (df.ok && df.data?.length) {
+      window._todasFuncs = df.data;
+      const sel = document.getElementById('qe-func-id');
+      if (sel) sel.innerHTML = '<option value="">— selecione —</option>' +
+        df.data.map(f => `<option value="${f.id}">${f.nome}${f.cargo ? ' · '+f.cargo : ''}</option>`).join('');
+    }
+    get('/api/rh/lancamentos-pendentes/count').then(d => {
+      if (d.ok) atualizarBadge(d.total);
+    });
+    showTab('meus');
+
   } else {
-    // Todos os outros: apenas Meus Lançamentos
+    // Funcionário comum: apenas Meus Lançamentos
     if (btnFolha)  btnFolha.style.display  = 'none';
     if (btnEscala) btnEscala.style.display = 'none';
     if (btnRel)    btnRel.style.display    = 'none';
     if (btnAprov)  btnAprov.style.display  = 'none';
     if (btnMeus)   btnMeus.style.display   = '';
-    // Mostra atalho de pagamento extra para funcionários
     const qeWrap = document.getElementById('quick-extra-wrap');
     if (qeWrap) {
       qeWrap.style.display = '';
-      // Preenche data com hoje
       const hoje = new Date().toISOString().slice(0,10);
-      document.getElementById('qe-data').value = hoje;
+      const qeData = document.getElementById('qe-data');
+      if (qeData) qeData.value = hoje;
     }
     showTab('meus');
   }
