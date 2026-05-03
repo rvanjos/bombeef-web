@@ -764,7 +764,6 @@ function renderABC() {
 let _estrRows = []; // cache dos dados de produtos com margem
 
 async function carregarEstrategia() {
-  // Garante período padrão: últimos 90 dias se sem filtro
   const f = getFiltros();
   let extras = {ordem:'fat'};
   if (!f.ini || !f.fim) {
@@ -774,25 +773,34 @@ async function carregarEstrategia() {
     extras.fim = hoje.toISOString().slice(0,10);
   }
 
-  const elMarg = document.getElementById('estr-margem-grid');
+  const elMarg   = document.getElementById('estr-margem-grid');
   const elMatriz = document.getElementById('estr-matriz-grid');
-  const elAlert = document.getElementById('estr-alertas');
-  if (elMarg) elMarg.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:12px">Carregando...</div>';
+  const elAlert  = document.getElementById('estr-alertas');
+  const elDsem   = document.getElementById('estr-dsem-tbody');
 
-  const d = await api.get('/api/vendas-produto/produtos'+queryStr(extras));
-  if (!d.ok) {
-    if (elMarg) elMarg.innerHTML = '<div style="color:var(--red-l);font-size:12px;padding:12px">Erro ao carregar dados</div>';
-    return;
+  const loading = '<div style="color:var(--muted);font-size:12px;padding:16px;text-align:center">⏳ Carregando análise estratégica...</div>';
+  if (elMarg)   elMarg.innerHTML   = loading;
+  if (elMatriz) elMatriz.innerHTML = '';
+  if (elAlert)  elAlert.innerHTML  = '';
+
+  try {
+    const d = await api.get('/api/vendas-produto/produtos'+queryStr(extras));
+    if (!d.ok) throw new Error(d.erro || 'Erro na API');
+    _estrRows = d.data || [];
+    if (!_estrRows.length) {
+      if (elMarg) elMarg.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:16px;text-align:center">Nenhum dado de vendas para o período selecionado.<br><small>Ajuste o filtro de datas e clique em Atualizar.</small></div>';
+      if (elMatriz) elMatriz.innerHTML = '';
+      if (elAlert)  elAlert.innerHTML  = '';
+      return;
+    }
+    _renderEstrMargemPonderada();
+    _renderEstrMatriz();
+    _renderEstrAlertas();
+    await _renderEstrDiaSemana(extras);
+  } catch(e) {
+    console.error('[carregarEstrategia]', e);
+    if (elMarg) elMarg.innerHTML = '<div style="color:var(--red-l);font-size:12px;padding:16px;text-align:center">❌ Erro ao carregar: ' + e.message + '</div>';
   }
-  _estrRows = d.data || [];
-  if (!_estrRows.length) {
-    if (elMarg) elMarg.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:12px">Sem dados de vendas para o período selecionado.</div>';
-    return;
-  }
-  _renderEstrMargemPonderada();
-  _renderEstrMatriz();
-  _renderEstrAlertas();
-  await _renderEstrDiaSemana(extras);
 }
 
 // 1. Margem ponderada
