@@ -127,6 +127,8 @@ header{background:var(--red);color:#fff;padding:14px 16px 12px;display:flex;alig
             <option value="hora_extra">⏱️ Hora Extra</option>
             <option value="adicional_noturno">🌙 Ad. Noturno</option>
             <option value="falta">❌ Falta</option>
+            <option value="entrega">🚚 Entrega</option>
+            <option value="grelhado">🥩 Grelhado</option>
             <option value="comissao">💰 Comissão</option>
             <option value="bonus">🎁 Bônus</option>
             <option value="desconto">↘️ Desconto</option>
@@ -167,7 +169,7 @@ header{background:var(--red);color:#fff;padding:14px 16px 12px;display:flex;alig
 <script>
 const BASE  = window.location.origin;
 const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-const TIPO_LABEL = {hora_extra:'⏱️ Hora Extra',adicional_noturno:'🌙 Ad. Noturno',falta:'❌ Falta',comissao:'💰 Comissão',bonus:'🎁 Bônus',desconto:'↘️ Desconto',outro:'📌 Outro'};
+const TIPO_LABEL = {hora_extra:'⏱️ Hora Extra',adicional_noturno:'🌙 Ad. Noturno',falta:'❌ Falta',entrega:'🚚 Entrega',grelhado:'🥩 Grelhado',comissao:'💰 Comissão',bonus:'🎁 Bônus',desconto:'↘️ Desconto',outro:'📌 Outro'};
 
 let _token='', _funcId=null, _inited=false;
 let _escalaMes={ano:new Date().getFullYear(),mes:new Date().getMonth()};
@@ -292,6 +294,11 @@ function atualizarCampos(){
     qL.textContent='Quantidade de horas'; vWrap.style.display='none';
   } else if(tipo==='adicional_noturno'){
     qL.textContent='Horas noturnas'; vWrap.style.display='none';
+  } else if(tipo==='entrega'){
+    qL.textContent='Quantidade de entregas'; vL.textContent='Valor por entrega (R$)'; vWrap.style.display='';
+  } else if(tipo==='grelhado'){
+    qL.textContent='Taxa cobrada (R$)'; vL.textContent='Taxa (R$)'; vWrap.style.display='';
+    // Grelhado: usuário informa a taxa total, backend calcula 35%
   } else if(['comissao','bonus','desconto','outro'].includes(tipo)){
     qL.textContent='Quantidade'; vL.textContent='Valor (R$)'; vWrap.style.display='';
   } else {
