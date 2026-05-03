@@ -120,6 +120,7 @@ header{background:var(--red);color:#fff;padding:14px 16px 12px;display:flex;alig
       <button class="modal-close" onclick="fecharModal()">✕</button>
     </div>
     <div class="modal-body">
+      <!-- Tipo + Data -->
       <div class="form-row">
         <div class="form-group">
           <label>Tipo *</label>
@@ -140,21 +141,68 @@ header{background:var(--red);color:#fff;padding:14px 16px 12px;display:flex;alig
           <input type="date" id="lanc-data">
         </div>
       </div>
-      <div class="form-group">
-        <label>Descrição / Motivo *</label>
-        <input type="text" id="lanc-desc" placeholder="Ex: Hora extra dia 15/04...">
-      </div>
-      <div class="form-row">
+
+      <!-- Campos padrão (hora extra, falta, comissão, etc.) -->
+      <div id="campos-padrao">
         <div class="form-group">
-          <label id="lanc-qtd-label">Quantidade (horas)</label>
-          <input type="number" id="lanc-qtd" step="0.5" min="0" placeholder="0" oninput="calcTotal()">
+          <label>Descrição / Motivo *</label>
+          <input type="text" id="lanc-desc" placeholder="Ex: Hora extra dia 15/04...">
         </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label id="lanc-qtd-label">Quantidade (horas)</label>
+            <input type="number" id="lanc-qtd" step="0.5" min="0" placeholder="0" oninput="calcTotal()">
+          </div>
+          <div class="form-group" id="lanc-vunit-wrap">
+            <label id="lanc-vunit-label">Valor Unitário (R$)</label>
+            <input type="number" id="lanc-vunit" step="0.01" min="0" placeholder="0,00" oninput="calcTotal()">
+          </div>
+        </div>
+        <div id="lanc-calc" class="calc-preview">Total: <strong id="lanc-vtotal">R$ 0,00</strong></div>
+      </div>
+
+      <!-- Campos específicos: GRELHADO -->
+      <div id="campos-grelhado" style="display:none">
         <div class="form-group">
-          <label id="lanc-vunit-label">Valor Unitário (R$)</label>
-          <input type="number" id="lanc-vunit" step="0.01" min="0" placeholder="0,00" oninput="calcTotal()">
+          <label>Descrição (opcional)</label>
+          <input type="text" id="grel-desc" placeholder="Ex: Grelhado churrasqueira principal">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Taxa cobrada do cliente (R$) *</label>
+            <input type="number" id="grel-taxa" step="0.01" min="0" placeholder="0,00" oninput="calcGrelhado()">
+          </div>
+          <div class="form-group">
+            <label>Você recebe (35%)</label>
+            <div id="grel-resultado" style="padding:10px 12px;background:#f0faf4;border:1px solid #86efac;border-radius:8px;font-size:16px;font-weight:700;color:#16a34a;min-height:42px;display:flex;align-items:center">—</div>
+          </div>
         </div>
       </div>
-      <div id="lanc-calc" class="calc-preview">Total: <strong id="lanc-vtotal">R$ 0,00</strong></div>
+
+      <!-- Campos específicos: ENTREGA -->
+      <div id="campos-entrega" style="display:none">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Taxa de entrega (R$) *</label>
+            <input type="number" id="entr-taxa" step="0.01" min="0" placeholder="0,00">
+          </div>
+          <div class="form-group">
+            <label>Cliente</label>
+            <input type="text" id="entr-cliente" placeholder="Nome do cliente">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Nº Cupom Fiscal / NFC-e</label>
+            <input type="text" id="entr-cupom" placeholder="Ex: 001234">
+          </div>
+          <div class="form-group">
+            <label>Observação</label>
+            <input type="text" id="entr-obs" placeholder="Ex: Bairro Jardim das Flores">
+          </div>
+        </div>
+      </div>
+
       <div class="info-box">ℹ️ Seu lançamento ficará <strong>pendente</strong> até o admin aprovar. O status aparece aqui após envio.</div>
     </div>
     <div class="modal-footer">
@@ -283,28 +331,34 @@ function abrirModal(){
 }
 
 function atualizarCampos(){
-  const tipo=document.getElementById('lanc-tipo').value;
-  const qL=document.getElementById('lanc-qtd-label'), vL=document.getElementById('lanc-vunit-label');
-  const vInput=document.getElementById('lanc-vunit');
-  const vWrap=vInput.parentElement;
-  const somenteQtd=(tipo==='hora_extra'||tipo==='adicional_noturno');
-  if(tipo==='falta'){
-    qL.textContent='Dias'; vL.textContent='Desconto por dia (R$)'; vWrap.style.display='';
-  } else if(tipo==='hora_extra'){
-    qL.textContent='Quantidade de horas'; vWrap.style.display='none';
-  } else if(tipo==='adicional_noturno'){
-    qL.textContent='Horas noturnas'; vWrap.style.display='none';
-  } else if(tipo==='entrega'){
-    qL.textContent='Quantidade de entregas'; vL.textContent='Valor por entrega (R$)'; vWrap.style.display='';
-  } else if(tipo==='grelhado'){
-    qL.textContent='Taxa cobrada (R$)'; vL.textContent='Taxa (R$)'; vWrap.style.display='';
-    // Grelhado: usuário informa a taxa total, backend calcula 35%
-  } else if(['comissao','bonus','desconto','outro'].includes(tipo)){
-    qL.textContent='Quantidade'; vL.textContent='Valor (R$)'; vWrap.style.display='';
-  } else {
-    qL.textContent='Quantidade (horas)'; vL.textContent='Valor por hora (R$)'; vWrap.style.display='';
-  }
+  const tipo = document.getElementById('lanc-tipo').value;
+  const padrao  = document.getElementById('campos-padrao');
+  const grelhado= document.getElementById('campos-grelhado');
+  const entrega = document.getElementById('campos-entrega');
+
+  // Mostra/esconde painéis específicos
+  padrao.style.display   = (tipo==='grelhado'||tipo==='entrega') ? 'none' : '';
+  grelhado.style.display = tipo==='grelhado' ? '' : 'none';
+  entrega.style.display  = tipo==='entrega'  ? '' : 'none';
+
+  // Ajusta labels para tipos padrão
+  const qL = document.getElementById('lanc-qtd-label');
+  const vL = document.getElementById('lanc-vunit-label');
+  const vWrap = document.getElementById('lanc-vunit-wrap');
+  if(tipo==='hora_extra'){ qL.textContent='Quantidade de horas'; vWrap.style.display='none'; }
+  else if(tipo==='adicional_noturno'){ qL.textContent='Horas noturnas'; vWrap.style.display='none'; }
+  else if(tipo==='falta'){ qL.textContent='Dias'; vL.textContent='Desconto por dia (R$)'; vWrap.style.display=''; }
+  else { qL.textContent='Quantidade'; vL.textContent='Valor (R$)'; vWrap.style.display=''; }
+
   calcTotal();
+  calcGrelhado();
+}
+
+function calcGrelhado(){
+  const taxa = parseFloat(document.getElementById('grel-taxa')?.value) || 0;
+  const recebe = taxa * 0.35;
+  const el = document.getElementById('grel-resultado');
+  if(el) el.textContent = taxa > 0 ? 'R$ ' + recebe.toFixed(2).replace('.',',') : '—';
 }
 
 function calcTotal(){
@@ -318,19 +372,51 @@ function calcTotal(){
 
 async function enviarLancamento(){
   if(!_funcId){ toast('⚠️ Sem vínculo com funcionário'); return; }
-  const tipo=document.getElementById('lanc-tipo').value;
-  const descricao=document.getElementById('lanc-desc').value.trim();
-  const quantidade=parseFloat(document.getElementById('lanc-qtd').value)||0;
-  const valor_unit=parseFloat(document.getElementById('lanc-vunit').value)||0;
-  const data_ref=document.getElementById('lanc-data').value;
-  const mes_ref=ymToMes(document.getElementById('sel-mes').value);
-  if(!descricao){ toast('⚠️ Informe a descrição / motivo'); return; }
-  const somenteQtd=(tipo==='hora_extra'||tipo==='adicional_noturno');
-  if(!quantidade){ toast('⚠️ Informe a quantidade'); return; }
-  if(!somenteQtd&&!valor_unit){ toast('⚠️ Informe o valor'); return; }
-  const btn=document.getElementById('btn-enviar');
+  const tipo     = document.getElementById('lanc-tipo').value;
+  const data_ref = document.getElementById('lanc-data').value;
+  const mes_ref  = ymToMes(document.getElementById('sel-mes').value);
+  const btn      = document.getElementById('btn-enviar');
+
+  let payload = { funcionario_id:_funcId, mes_ref, tipo, data_ref };
+
+  if(tipo==='grelhado'){
+    const taxa = parseFloat(document.getElementById('grel-taxa').value)||0;
+    if(!taxa){ toast('⚠️ Informe a taxa cobrada'); return; }
+    const descOpt = document.getElementById('grel-desc').value.trim();
+    payload.descricao    = descOpt || 'Grelhado';
+    payload.quantidade   = 1;
+    payload.valor_unitario = taxa;  // backend calcula 35% para grelhado
+    payload.obs          = 'Taxa cobrada: R$ '+taxa.toFixed(2)+' | A receber (35%): R$ '+(taxa*0.35).toFixed(2);
+
+  } else if(tipo==='entrega'){
+    const taxa   = parseFloat(document.getElementById('entr-taxa').value)||0;
+    const cliente= document.getElementById('entr-cliente').value.trim();
+    const cupom  = document.getElementById('entr-cupom').value.trim();
+    const obs    = document.getElementById('entr-obs').value.trim();
+    if(!taxa){ toast('⚠️ Informe a taxa de entrega'); return; }
+    const descParts = ['Entrega'];
+    if(cliente) descParts.push('- '+cliente);
+    if(cupom)   descParts.push('| CF '+cupom);
+    payload.descricao    = descParts.join(' ');
+    payload.quantidade   = 1;
+    payload.valor_unitario = taxa;
+    if(obs) payload.obs  = obs;
+
+  } else {
+    const descricao = document.getElementById('lanc-desc').value.trim();
+    const quantidade= parseFloat(document.getElementById('lanc-qtd').value)||0;
+    const valor_unit= parseFloat(document.getElementById('lanc-vunit').value)||0;
+    const somenteQtd= (tipo==='hora_extra'||tipo==='adicional_noturno');
+    if(!descricao)  { toast('⚠️ Informe a descrição / motivo'); return; }
+    if(!quantidade) { toast('⚠️ Informe a quantidade'); return; }
+    if(!somenteQtd&&!valor_unit){ toast('⚠️ Informe o valor'); return; }
+    payload.descricao     = descricao;
+    payload.quantidade    = quantidade;
+    payload.valor_unitario= valor_unit;
+  }
+
   btn.disabled=true; btn.textContent='⏳ Enviando...';
-  const d=await post('/api/rh/lancamento',{funcionario_id:_funcId,mes_ref,tipo,descricao,quantidade,valor_unitario:valor_unit,data_ref});
+  const d = await post('/api/rh/lancamento', payload);
   btn.disabled=false; btn.textContent='📤 Enviar para Aprovação';
   if(!d.ok){ toast('❌ '+d.erro); return; }
   toast('✅ Enviado para aprovação!'); fecharModal(); carregarLanc();
