@@ -784,11 +784,15 @@ async function carregarEstrategia() {
   if (elAlert)  elAlert.innerHTML  = '';
 
   try {
-    const d = await api.get('/api/vendas-produto/produtos'+queryStr(extras));
-    if (!d.ok) throw new Error(d.erro || 'Erro na API');
+    const url = '/api/vendas-produto/produtos'+queryStr(extras);
+    console.log('[estrategia] GET', url);
+    const d = await api.get(url);
+    console.log('[estrategia] resp ok='+d.ok+' rows='+(d.data||[]).length);
+    if (!d.ok) throw new Error(d.erro || 'HTTP '+d.status);
     _estrRows = d.data || [];
     if (!_estrRows.length) {
-      if (elMarg) elMarg.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:16px;text-align:center">Nenhum dado de vendas para o período selecionado.<br><small>Ajuste o filtro de datas e clique em Atualizar.</small></div>';
+      const msg = '<div style="color:var(--muted);font-size:13px;padding:24px;text-align:center">📭 Nenhum dado de vendas para o período.<br><small style=\"color:var(--muted)\">Selecione um período com vendas importadas e clique em Atualizar.</small></div>';
+      if (elMarg)   elMarg.innerHTML   = msg;
       if (elMatriz) elMatriz.innerHTML = '';
       if (elAlert)  elAlert.innerHTML  = '';
       return;
@@ -798,8 +802,10 @@ async function carregarEstrategia() {
     _renderEstrAlertas();
     await _renderEstrDiaSemana(extras);
   } catch(e) {
-    console.error('[carregarEstrategia]', e);
-    if (elMarg) elMarg.innerHTML = '<div style="color:var(--red-l);font-size:12px;padding:16px;text-align:center">❌ Erro ao carregar: ' + e.message + '</div>';
+    console.error('[carregarEstrategia] erro:', e);
+    const errMsg = '<div style="background:#fff1f2;border:1px solid #fca5a5;border-radius:8px;padding:16px;margin:8px;font-size:12px;color:#991b1b">❌ Erro ao carregar análise estratégica:<br><strong>' + e.message + '</strong><br><small>Verifique se há dados de vendas importados para o período selecionado.</small></div>';
+    if (elMarg) elMarg.innerHTML = errMsg;
+    toast('❌ Estratégia: ' + e.message);
   }
 }
 
