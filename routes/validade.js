@@ -212,6 +212,84 @@ module.exports = function (pool) {
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
+  // ── Tabela de confirmações de validade ──────────────────────────────────────
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS validade_confirmacoes (
+      id              SERIAL PRIMARY KEY,
+      item_id         INTEGER NOT NULL,
+      usuario_id      INTEGER,
+      usuario_nome    TEXT,
+      acao_hash       TEXT,    -- hash da ação confirmada (detecta se mudou)
+      confirmado_em   TIMESTAMPTZ DEFAULT NOW()
+    )
+  `).catch(() => {});
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_val_conf_item ON validade_confirmacoes(item_id)`).catch(() => {});
+
+  // ── GET /alertas-confirmacao — produtos ≤7 dias com ação não confirmada ──────
+  r.get('/alertas-confirmacao', async (req, res) => {
+    try {
+      const usuario_id = req.usuario?.id;
+      const { rows } = await pool.query(`
+        SELECT
+          v.id, v.descricao, v.lote, v.qtd_unidades,
+          TO_CHAR(v.data_validade, 'YYYY-MM-DD') AS data_validade,
+          v.localizacao AS local_estoque, v.acao_antes_vencer,
+          v.peso_total_kg,
+          (v.data_validade::date - CURRENT_DATE) AS dias_restantes,
+          MD5(v.acao_antes_vencer) AS acao_hash
+        FROM validade_items v
+        WHERE v.status NOT IN ('descartado','vendido')
+          AND v.acao_antes_vencer IS NOT NULL AND v.acao_antes_vencer != ''
+          AND v.data_validade IS NOT NULL
+          AND v.data_validade::date <= CURRENT_DATE + INTERVAL '7 days'
+          AND NOT EXISTS (
+            SELECT 1 FROM validade_confirmacoes vc
+            WHERE vc.item_id = v.id
+              AND vc.usuario_id = $1
+              AND vc.acao_hash = MD5(v.acao_antes_vencer)
+          )
+        ORDER BY v.data_validade ASC
+      `, [usuario_id || 0]);
+      res.json({ ok: true, data: rows });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ── POST /confirmar-acoes — registra confirmação do usuário ──────────────────
+  r.post('/confirmar-acoes', async (req, res) => {
+    const { ids, usuario_nome } = req.body;
+    const usuario_id = req.usuario?.id;
+    if (!ids?.length) return res.json({ ok: true });
+    try {
+      // Busca hash atual de cada item
+      const { rows: itens } = await pool.query(
+        `SELECT id, MD5(acao_antes_vencer) AS acao_hash FROM validade_items WHERE id = ANY($1::int[])`,
+        [ids]
+      );
+      for (const item of itens) {
+        await pool.query(
+          `INSERT INTO validade_confirmacoes (item_id, usuario_id, usuario_nome, acao_hash)
+           VALUES ($1, $2, $3, $4)`,
+          [item.id, usuario_id || null, usuario_nome || null, item.acao_hash]
+        );
+      }
+      res.json({ ok: true, confirmados: itens.length });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ── GET /confirmacoes — histórico de confirmações (admin) ────────────────────
+  r.get('/confirmacoes', async (req, res) => {
+    try {
+      const { rows } = await pool.query(`
+        SELECT vc.*, vi.descricao, vi.data_validade, vi.acao_antes_vencer
+        FROM validade_confirmacoes vc
+        LEFT JOIN validade_items vi ON vi.id = vc.item_id
+        ORDER BY vc.confirmado_em DESC
+        LIMIT 200
+      `);
+      res.json({ ok: true, data: rows });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
   // ── GET /alertas-dashboard ─────────────────────────────────────────────────
   // Retorna produtos com ação cadastrada E próximos do vencimento (até 7 dias)
   r.get('/alertas-dashboard', async (req, res) => {

@@ -307,6 +307,8 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
   .ph{padding:8px 12px;}
   .ph-logo{width:28px;height:28px;}
 }
+#val-confirm-btn:not([disabled]){opacity:.9!important;}
+#val-confirm-btn:not([disabled]):hover{opacity:1!important;background:#6b0000!important;}
 </style>
 </head>
 <body>
@@ -734,6 +736,12 @@ function entrarNoPortal() {
   // Atualiza KPIs a cada 90 segundos
   kpiTimer = setInterval(carregarKPIs, 90000);
 
+  // Verificação obrigatória de validade para operadores/gestores
+  const perfisObrigatorios = ['operador','gestor','caixa','estoque'];
+  if (perfisObrigatorios.includes(usuario?.perfil)) {
+    verificarConfirmacaoValidade();
+  }
+
   // Broadcast do token para todos os iframes — crítico no mobile
   // Iframes que carregam antes do login ficam esperando este sinal
   const _broadcastToken = () => {
@@ -867,6 +875,108 @@ function showTab(tab) {
       }
     }
   }
+}
+
+// ── CONFIRMAÇÃO DE VALIDADE OBRIGATÓRIA ──────────────────────────────────────
+let _valPendentesConfirmar = [];
+
+async function verificarConfirmacaoValidade() {
+  try {
+    const d = await apiFetch('/api/validade/alertas-confirmacao');
+    if (!d.ok || !d.data?.length) return; // nada a confirmar
+    _valPendentesConfirmar = d.data;
+    abrirModalConfirmacaoValidade();
+  } catch(e) {
+    console.warn('[val confirm]', e);
+  }
+}
+
+function abrirModalConfirmacaoValidade() {
+  const modal = document.getElementById('modal-val-confirm');
+  const list  = document.getElementById('val-confirm-list');
+  const sub   = document.getElementById('val-confirm-subtitle');
+  const chk   = document.getElementById('val-confirm-check');
+  const btn   = document.getElementById('val-confirm-btn');
+  if (!modal || !list) return;
+
+  chk.checked = false;
+  btn.disabled = true;
+  btn.style.opacity = '.4';
+  sub.textContent = `${_valPendentesConfirmar.length} produto(s) precisam de sua atenção antes de continuar`;
+
+  // Bloqueia navegação
+  _bloquearNavegacao(true);
+
+  list.innerHTML = _valPendentesConfirmar.map(r => {
+    const dias = parseInt(r.dias_restantes);
+    const urgBg    = dias < 0  ? '#fff1f2' : dias === 0 ? '#fff7ed' : '#fffbeb';
+    const urgBorda = dias < 0  ? '#fca5a5' : dias === 0 ? '#fed7aa' : '#fde68a';
+    const urgLabel = dias < 0  ? `<span style="background:#dc2626;color:#fff;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700">VENCIDO ${Math.abs(dias)}d</span>`
+                   : dias === 0 ? `<span style="background:#ea580c;color:#fff;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700">HOJE</span>`
+                   : `<span style="background:#d97706;color:#fff;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700">${dias}d</span>`;
+    const dtFmt = r.data_validade ? r.data_validade.slice(8)+'/'+r.data_validade.slice(5,7) : '—';
+
+    return `<div style="background:${urgBg};border:1px solid ${urgBorda};border-radius:10px;padding:12px 14px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        ${urgLabel}
+        <span style="font-size:13px;font-weight:700;flex:1">${r.descricao}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:12px;color:#555;margin-bottom:8px">
+        ${r.local_estoque ? `<div>📍 <strong>Local:</strong> ${r.local_estoque}</div>` : ''}
+        ${r.qtd_unidades  ? `<div>📦 <strong>Qtd:</strong> ${r.qtd_unidades} un</div>` : ''}
+        ${r.peso_total_kg ? `<div>⚖️ <strong>Peso:</strong> ${parseFloat(r.peso_total_kg).toFixed(3)} kg</div>` : ''}
+        <div>📅 <strong>Vence:</strong> ${dtFmt}</div>
+      </div>
+      <div style="background:rgba(0,0,0,.06);border-radius:6px;padding:8px 10px;font-size:12px">
+        🔔 <strong>Ação a tomar:</strong> ${r.acao_antes_vencer}
+      </div>
+    </div>`;
+  }).join('');
+
+  modal.style.display = 'flex';
+}
+
+function _bloquearNavegacao(bloquear) {
+  // Bloqueia/desbloqueia cliques nas abas de navegação
+  document.querySelectorAll('.pnav-tab').forEach(tab => {
+    if (bloquear) {
+      tab.dataset.bloqueado = '1';
+      tab.style.opacity = '.4';
+      tab.style.pointerEvents = 'none';
+    } else {
+      delete tab.dataset.bloqueado;
+      tab.style.opacity = '';
+      tab.style.pointerEvents = '';
+    }
+  });
+  // Bloqueia menu mobile
+  const mob = document.getElementById('mob-nav-items');
+  if (mob) mob.style.pointerEvents = bloquear ? 'none' : '';
+}
+
+async function confirmarValidade() {
+  const btn = document.getElementById('val-confirm-btn');
+  btn.textContent = '⏳ Registrando...';
+  btn.disabled = true;
+
+  try {
+    const ids = _valPendentesConfirmar.map(r => r.id);
+    await apiFetch('/api/validade/confirmar-acoes', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ ids, usuario_nome: usuario?.nome, usuario_id: usuario?.id })
+    });
+  } catch(e) {
+    console.warn('[val confirm registrar]', e);
+  }
+
+  // Fecha modal e desbloqueia
+  document.getElementById('modal-val-confirm').style.display = 'none';
+  _bloquearNavegacao(false);
+  _valPendentesConfirmar = [];
+
+  // Atualiza badge no dashboard
+  carregarKPIs();
 }
 
 // ── KPIs ───────────────────────────────────────────────────────────────────
@@ -1461,6 +1571,30 @@ async function carregarLogoDoServidor() {
   if(window.self===window.top) f.style.display='block';
 })();
 </script>
+
+<!-- Modal: Confirmação de Validade Obrigatória -->
+<div id="modal-val-confirm" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;align-items:center;justify-content:center;padding:16px">
+  <div style="background:#fff;border-radius:14px;max-width:560px;width:100%;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.4);overflow:hidden">
+    <div style="background:linear-gradient(135deg,#8B0000,#c0392b);padding:16px 20px;flex-shrink:0">
+      <div style="color:#fff;font-size:16px;font-weight:700;margin-bottom:3px">⚠️ Ações de Validade Pendentes</div>
+      <div style="color:rgba(255,255,255,.8);font-size:12px" id="val-confirm-subtitle">Confirme que você viu e entendeu as ações antes de continuar</div>
+    </div>
+    <div id="val-confirm-list" style="flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:8px"></div>
+    <div style="flex-shrink:0;padding:14px 20px;border-top:1px solid #f0e8e0;background:#fdf9f7">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:600;color:#8B0000;margin-bottom:10px">
+        <input type="checkbox" id="val-confirm-check" onchange="document.getElementById('val-confirm-btn').disabled=!this.checked;document.getElementById('val-confirm-btn').style.opacity=this.checked?'1':'.4'" style="width:18px;height:18px;cursor:pointer;accent-color:#8B0000">
+        Confirmo que li e entendi todas as ações acima
+      </label>
+      <div style="display:flex;align-items:center;justify-content:flex-end">
+        <button id="val-confirm-btn" onclick="confirmarValidade()" disabled
+          style="padding:10px 24px;background:#8B0000;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;opacity:.4;transition:opacity .2s">
+          ✅ Confirmar e Entrar
+        </button>
+      </div>
+      <div style="font-size:11px;color:#888;margin-top:8px;text-align:right">Esta confirmação fica registrada com seu nome e horário.</div>
+    </div>
+  </div>
+</div>
 
 </body>
 </html>
