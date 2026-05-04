@@ -237,6 +237,17 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
 </head>
 <body>
 <div class="ph"><span style="font-size:20px">🗓</span><h2>Validade & Perdas</h2><div class="ph-sub" id="ph-sub">—</div></div>
+
+<!-- Loading overlay -->
+<div id="val-loading" style="position:fixed;inset:0;background:rgba(247,244,240,.95);z-index:999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px">
+  <div style="font-size:36px">🗓</div>
+  <div style="font-size:15px;font-weight:600;color:#8B0000">Carregando Validade...</div>
+  <div style="width:180px;background:#ede8e0;border-radius:8px;height:6px;overflow:hidden">
+    <div id="val-load-bar" style="background:#8B0000;height:100%;width:0%;border-radius:8px;transition:width .4s"></div>
+  </div>
+  <div id="val-load-msg" style="font-size:12px;color:#888">Aguardando conexão...</div>
+  <button id="val-retry-btn" onclick="init()" style="display:none;padding:8px 20px;background:#8B0000;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;margin-top:8px">🔄 Tentar Novamente</button>
+</div>
 <script>if(window.self!==window.top){var ph=document.querySelector('.ph');if(ph)ph.style.display='none';}</script>
 <div class="body">
 
@@ -763,16 +774,69 @@ async function carregarAcoesValidade(){
   if(cur) sel.value = cur;
 }
 
-async function init(){
-  await carregarFuncionarios();
-  carregarKPIs();
-  await carregarAcoesValidade(); // carrega ações do banco no select
-  await carregar();   // await garante que itens esteja pronto antes do dashboard
-  const hoje = new Date();
-  document.getElementById('flt-mes-perdas').value = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
-  // Abre direto no dashboard já com dados
+function _valLoadStep(pct, msg) {
+  const bar = document.getElementById('val-load-bar');
+  const txt = document.getElementById('val-load-msg');
+  if (bar) bar.style.width = pct + '%';
+  if (txt) txt.textContent = msg;
+}
 
-  try { window.parent.postMessage({type:'bb_refresh_kpis'}, '*'); } catch(_) {}
+function _valLoadHide() {
+  const el = document.getElementById('val-loading');
+  if (el) { el.style.opacity = '0'; el.style.transition = 'opacity .4s'; setTimeout(() => el.remove(), 400); }
+}
+
+function _valLoadError(msg) {
+  const txt = document.getElementById('val-load-msg');
+  const btn = document.getElementById('val-retry-btn');
+  const bar = document.getElementById('val-load-bar');
+  if (txt) { txt.textContent = msg; txt.style.color = '#dc2626'; }
+  if (btn) btn.style.display = '';
+  if (bar) bar.style.background = '#dc2626';
+}
+
+let _initTentativas = 0;
+async function init(){
+  _initTentativas++;
+  const btn = document.getElementById('val-retry-btn');
+  if (btn) btn.style.display = 'none';
+  const txt = document.getElementById('val-load-msg');
+  if (txt) txt.style.color = '#888';
+  const bar = document.getElementById('val-load-bar');
+  if (bar) bar.style.background = '#8B0000';
+
+  try {
+    _valLoadStep(10, 'Carregando funcionários...');
+    await carregarFuncionarios();
+
+    _valLoadStep(30, 'Carregando ações de validade...');
+    await carregarAcoesValidade();
+
+    _valLoadStep(55, 'Buscando itens do estoque...');
+    await carregar();
+
+    _valLoadStep(80, 'Carregando KPIs...');
+    carregarKPIs(); // não bloqueia
+
+    _valLoadStep(95, 'Finalizando...');
+    const hoje = new Date();
+    const mesEl = document.getElementById('flt-mes-perdas');
+    if (mesEl) mesEl.value = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
+
+    _valLoadStep(100, 'Pronto!');
+    setTimeout(_valLoadHide, 400);
+    try { window.parent.postMessage({type:'bb_refresh_kpis'}, '*'); } catch(_) {}
+
+  } catch(e) {
+    console.error('[validade init] erro:', e);
+    if (_initTentativas < 3) {
+      // Tenta de novo automaticamente após 2s
+      _valLoadStep(0, `Tentando novamente (${_initTentativas}/3)...`);
+      setTimeout(init, 2000);
+    } else {
+      _valLoadError('Erro ao carregar. Clique para tentar novamente.');
+    }
+  }
 }
 
 function showSection(s, btn){
