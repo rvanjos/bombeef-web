@@ -1021,32 +1021,57 @@ async function carregarAlertasValidade() {
       </div>`;
     }
 
+    // Cores por urgência para os chips do resumo
+    const urgColor = vencidos.length ? '#991b1b' : hoje_.length ? '#c76b00' : '#1a5c8a';
+    const urgIcon  = vencidos.length ? '🔴' : hoje_.length ? '🟠' : '🔵';
+
+    // Chips de resumo compactos
+    const chips = [
+      vencidos.length ? `<span style="background:#fee2e2;color:#991b1b;border-radius:4px;padding:2px 7px;font-size:11px;font-weight:700">⚠️ ${vencidos.length} vencido(s)</span>` : '',
+      hoje_.length    ? `<span style="background:#fff7ed;color:#c76b00;border-radius:4px;padding:2px 7px;font-size:11px;font-weight:700">🔴 ${hoje_.length} hoje</span>` : '',
+      proximos.length ? `<span style="background:#eff6ff;color:#1a5c8a;border-radius:4px;padding:2px 7px;font-size:11px;font-weight:700">📅 ${proximos.length} próximos</span>` : '',
+    ].filter(Boolean).join(' ');
+
+    // Painel colapsável — começa fechado
     let html = `
-      <div style="background:#fff;border-radius:12px;border:1px solid #f0e8e0;box-shadow:0 2px 12px rgba(0,0,0,.08);overflow:hidden">
-        <div style="background:linear-gradient(135deg,#8B0000,#c0392b);padding:12px 16px;display:flex;justify-content:space-between;align-items:center">
-          <div>
-            <div style="color:#fff;font-weight:700;font-size:13px">🔔 Ações de Validade Pendentes</div>
-            <div style="color:rgba(255,255,255,.75);font-size:11px;margin-top:2px">${items.length} produto(s) com ação cadastrada · vencem em até 30 dias</div>
-          </div>
-          <a href="javascript:showTab('validade')" style="background:rgba(255,255,255,.2);color:#fff;border:1px solid rgba(255,255,255,.4);border-radius:6px;padding:4px 10px;font-size:11px;text-decoration:none;cursor:pointer">Ver Validade →</a>
-        </div>`;
+      <div style="background:#fff;border-radius:10px;border:1px solid #f0e8e0;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.06)">
+        <!-- Barra de resumo — sempre visível, clicável -->
+        <div onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none';this.querySelector('.val-arr').textContent=this.nextElementSibling.style.display===''?'▲':'▼'"
+          style="padding:9px 14px;display:flex;align-items:center;gap:10px;cursor:pointer;background:#fdf9f7;border-bottom:1px solid transparent"
+          id="val-banner-hd">
+          <span style="font-size:13px">🔔</span>
+          <span style="font-size:12px;font-weight:700;color:${urgColor};flex:1">${items.length} produto(s) com ação de validade pendente</span>
+          ${chips}
+          <a onclick="event.stopPropagation();showTab('validade')" href="javascript:void(0)" style="font-size:11px;color:var(--red);font-weight:600;white-space:nowrap">Ver →</a>
+          <span class="val-arr" style="font-size:11px;color:var(--muted);margin-left:4px">▼</span>
+        </div>
+        <!-- Lista expansível — começa fechada -->
+        <div id="val-banner-body" style="display:none">`;
 
     if (vencidos.length) {
-      html += `<div style="background:#fff1f2;padding:6px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#991b1b">⚠️ VENCIDOS — Retirar imediatamente (${vencidos.length})</div>`;
+      html += `<div style="background:#fff1f2;padding:5px 14px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#991b1b">⚠️ VENCIDOS (${vencidos.length})</div>`;
       html += vencidos.map(row).join('');
     }
     if (hoje_.length) {
-      html += `<div style="background:#fff7ed;padding:6px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#c76b00">🔴 VENCEM HOJE (${hoje_.length})</div>`;
+      html += `<div style="background:#fff7ed;padding:5px 14px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#c76b00">🔴 VENCEM HOJE (${hoje_.length})</div>`;
       html += hoje_.map(row).join('');
     }
     if (proximos.length) {
-      html += `<div style="background:#eff6ff;padding:6px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#1a5c8a">📅 PRÓXIMOS 7 DIAS (${proximos.length})</div>`;
+      html += `<div style="background:#eff6ff;padding:5px 14px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#1a5c8a">📅 PRÓXIMOS 7 DIAS (${proximos.length})</div>`;
       html += proximos.map(row).join('');
     }
 
-    html += `</div>`;
+    html += `</div></div>`;
     el.innerHTML = html;
     el.style.display = '';
+
+    // Abre automaticamente se há vencidos ou vence hoje
+    if (vencidos.length || hoje_.length) {
+      const body = document.getElementById('val-banner-body');
+      const hd   = document.getElementById('val-banner-hd');
+      if (body) body.style.display = '';
+      if (hd)   { hd.style.borderBottomColor = '#f0e8e0'; hd.querySelector('.val-arr').textContent = '▲'; }
+    }
   } catch(e) {
     console.error('[alertas validade]', e);
     el.style.display = 'none';
