@@ -318,6 +318,7 @@ function renderDuplicatas(grupos) {
 }
 
 // ── CONFLITOS DE CLASSIFICAÇÃO ────────────────────────────────────────────────
+let _conflitosCache = [];
 function detectarConflitos() {
   // Para cada fornecedor no mês atual, verifica se em outros meses
   // o mesmo fornecedor foi classificado com categoria diferente
@@ -385,6 +386,7 @@ function renderConflitos(lista) {
       </div>
     </div>`;
 
+  _conflitosCache = lista; // cache para corrigirTodosHistorico
   lista.forEach((conf, ci) => {
     const tx = conf.tx;
     const v  = parseFloat(tx.valor||0);
@@ -398,7 +400,7 @@ function renderConflitos(lista) {
     const totalHistorico = conf.outrosMeses.reduce((s,x) => s + Math.abs(parseFloat(x.valor||0)), 0);
 
     html += `
-    <div class="card" style="margin-bottom:12px;border-left:3px solid #7c3aed">
+    <div class="card" id="conf-card-${ci}" style="margin-bottom:12px;border-left:3px solid #7c3aed">
       <!-- Cabeçalho do conflito -->
       <div style="padding:12px 16px;border-bottom:1px solid var(--border);background:#faf9ff">
         <div style="display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap">
@@ -433,7 +435,7 @@ function renderConflitos(lista) {
             style="padding:7px 14px;background:#7c3aed;color:#fff;border:none;border-radius:7px;cursor:pointer;font-size:12px;font-weight:600">
             🔄 Corrigir para "${esc(catMaisUsada)}"
           </button>
-          <button onclick="toggleAprovado('${tx.id}');this.textContent='✅ Marcado como correto';this.style.background='var(--green)'"
+          <button onclick="manterConflito(${ci},'${tx.id}')"
             style="padding:7px 14px;background:#f0ebe4;color:var(--text);border:1px solid var(--border);border-radius:7px;cursor:pointer;font-size:12px;font-weight:600">
             ✓ Está correto, manter ${tx.categoria}
           </button>
@@ -446,21 +448,29 @@ function renderConflitos(lista) {
 
       <!-- Histórico expandível -->
       <div id="conf-hist-${ci}" style="display:none;overflow-x:auto">
-        <div style="padding:8px 16px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border)">
-          Histórico de classificações deste fornecedor
+        <div style="padding:8px 16px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+          <span>Histórico de classificações deste fornecedor</span>
+          <button onclick="corrigirTodosHistorico(${ci},'${esc(tx.categoria)}')"
+            style="font-size:11px;padding:3px 10px;background:#ede9fe;color:#5b21b6;border:1px solid #c4b5fd;border-radius:5px;cursor:pointer;font-weight:600">
+            🔄 Corrigir todos para "${esc(tx.categoria)}"
+          </button>
         </div>
         <table class="tbl" style="font-size:12px">
           <thead><tr>
             <th>Mês</th><th>Lançamento</th><th>Fornecedor</th>
-            <th>Categoria usada</th><th style="text-align:right">Valor</th>
+            <th>Categoria usada</th><th style="text-align:right">Valor</th><th>Ação</th>
           </tr></thead>
           <tbody>
             ${conf.outrosMeses.map(x => `<tr>
               <td style="white-space:nowrap;color:var(--muted)">${x.mesCaixa||x.mes||'—'}</td>
-              <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(x.lancamento||'')}">${esc(x.lancamento||'—')}</td>
-              <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)" title="${esc(x.razaoSocial||'')}">${esc(x.razaoSocial||'—')}</td>
+              <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(x.lancamento||'')}">${esc(x.lancamento||'—')}</td>
+              <td style="max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)" title="${esc(x.razaoSocial||'')}">${esc(x.razaoSocial||'—')}</td>
               <td><span class="cat-badge">${x.categoria}</span></td>
               <td style="text-align:right" class="${parseFloat(x.valor||0)>=0?'val-pos':'val-neg'}">${fmt.brl(parseFloat(x.valor||0))}</td>
+              <td><button onclick="corrigirCategoria('${x.id}','${esc(tx.categoria)}')"
+                style="font-size:10px;padding:2px 7px;background:#ede9fe;color:#5b21b6;border:none;border-radius:4px;cursor:pointer">
+                Corrigir para ${esc(tx.categoria.slice(0,15))}…
+              </button></td>
             </tr>`).join('')}
           </tbody>
         </table>
@@ -577,6 +587,35 @@ async function aplicarCat(id) {
   if (edit) edit.style.display = 'none';
   toggleAprovado(id);
   renderTudo();
+}
+
+// Some o card de conflito quando marcado como correto
+function manterConflito(ci, id) {
+  toggleAprovado(id);
+  const card = document.getElementById('conf-card-' + ci);
+  if (card) {
+    card.style.transition = 'opacity .3s, max-height .4s';
+    card.style.opacity = '0';
+    card.style.overflow = 'hidden';
+    setTimeout(() => { card.style.display = 'none'; }, 350);
+  }
+  toast('✅ Marcado como correto — não aparecerá mais nesta auditoria');
+}
+
+// Corrige todos os lançamentos do histórico para a mesma categoria
+function corrigirTodosHistorico(ci, catAtual) {
+  const conf = _conflitosCache?.[ci];
+  if (!conf) return;
+  const ids = conf.outrosMeses.map(x => x.id);
+  if (!ids.length) return;
+  if (!confirm(`Corrigir ${ids.length} lançamento(s) do histórico para "${catAtual}"?`)) return;
+  ids.forEach(id => {
+    const t = _txsTodos.find(x => x.id === id);
+    if (t) t.categoria = catAtual;
+    window.parent.postMessage({ type: 'auditoria_set_cat', id, categoria: catAtual }, '*');
+  });
+  toast(`✅ ${ids.length} lançamento(s) corrigidos para "${catAtual}"`);
+  renderTudo(); // reanalisa conflitos
 }
 
 function corrigirCategoria(id, cat) {
