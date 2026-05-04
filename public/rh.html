@@ -583,6 +583,7 @@ main{padding:16px 24px;max-width:1400px;margin:0 auto;}
     <div class="modal-body">
       <p style="margin-bottom:12px;font-size:13px">Informe o motivo da rejeição (opcional):</p>
       <input type="hidden" id="rejeitar-id">
+      <input type="hidden" id="rejeitar-origem">
       <textarea id="rejeitar-motivo" rows="3" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:7px;font-size:13px" placeholder="Ex: Valor incorreto, não autorizado..."></textarea>
     </div>
     <div class="modal-footer">
@@ -664,27 +665,29 @@ async function carregarPendentes() {
         <div style="font-size:11px;color:var(--muted)">${a.quantidade} × ${brl(a.valor_unitario)}</div>
       </div>
       <div class="lanc-acoes" style="flex-direction:column">
-        <button class="btn" style="background:#16a34a;color:#fff;padding:6px 12px;font-size:12px" onclick="aprovarLanc(${a.id})">✅ Aprovar</button>
-        <button class="btn" style="background:#fee2e2;color:#dc2626;border:1px solid #fca5a5;padding:6px 12px;font-size:12px;margin-top:4px" onclick="abrirRejeitar(${a.id})">❌ Rejeitar</button>
+        <button class="btn" style="background:#16a34a;color:#fff;padding:6px 12px;font-size:12px" onclick="aprovarLanc(${a.id},'${a.origem||'apontamento'}')">✅ Aprovar</button>
+        <button class="btn" style="background:#fee2e2;color:#dc2626;border:1px solid #fca5a5;padding:6px 12px;font-size:12px;margin-top:4px" onclick="abrirRejeitar(${a.id},'${a.origem||'apontamento'}')">❌ Rejeitar</button>
       </div>
     </div>`).join('');
 }
 
-async function aprovarLanc(id) {
-  const d = await post('/api/rh/lancamento/'+id+'/aprovar', {});
+async function aprovarLanc(id, origem) {
+  const d = await post('/api/rh/lancamento/'+id+'/aprovar', { origem: origem||'apontamento' });
   if (!d.ok) { toast('❌ '+d.erro); return; }
   toast('✅ Aprovado — já entra na folha!'); carregarPendentes(); carregarResumo();
 }
 
 function abrirRejeitar(id) {
   document.getElementById('rejeitar-id').value = id;
+  document.getElementById('rejeitar-origem').value = origem || 'apontamento';
   document.getElementById('rejeitar-motivo').value = '';
   document.getElementById('modal-rejeitar').classList.add('open');
 }
 async function confirmarRejeitar() {
   const id = document.getElementById('rejeitar-id').value;
+  const origem = document.getElementById('rejeitar-origem').value || 'apontamento';
   const motivo = document.getElementById('rejeitar-motivo').value.trim();
-  const d = await post('/api/rh/lancamento/'+id+'/rejeitar', { motivo });
+  const d = await post('/api/rh/lancamento/'+id+'/rejeitar', { motivo, origem });
   if (!d.ok) { toast('❌ '+d.erro); return; }
   toast('Lançamento rejeitado.'); fecharModal('modal-rejeitar'); carregarPendentes();
 }

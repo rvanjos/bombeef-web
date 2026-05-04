@@ -89,12 +89,13 @@ module.exports = function (pool) {
         const descFinal = descricao || (tipo === 'grelhado' ? 'Grelhado' : 'Entrega');
         const descComObs = obs ? descFinal + ' | ' + obs : descFinal;
 
+        const solicitante_nome = req.user?.nome || req.user?.email || 'Usuário';
         const { rows } = await pool.query(`
           INSERT INTO rh_pagamentos
-            (funcionario_id, mes_ref, tipo, descricao, valor, data_ref)
-          VALUES ($1,$2,$3,$4,$5,$6)
+            (funcionario_id, mes_ref, tipo, descricao, valor, data_ref, status, solicitante_nome)
+          VALUES ($1,$2,$3,$4,$5,$6,'pendente',$7)
           RETURNING id
-        `, [funcionario_id, mes_ref, tipo, descComObs, valorPagamento, data_ref || null]);
+        `, [funcionario_id, mes_ref, tipo, descComObs, valorPagamento, data_ref || null, solicitante_nome]);
         res.json({ ok: true, id: rows[0].id, tabela: 'rh_pagamentos', valor: valorPagamento });
 
       } else {
@@ -199,9 +200,22 @@ module.exports = function (pool) {
         descricao           TEXT,
         valor               NUMERIC(10,2) DEFAULT 0,
         data_ref            DATE,
-        criado_em           TIMESTAMPTZ DEFAULT NOW()
+        status              TEXT NOT NULL DEFAULT 'pendente' CHECK (status IN ('pendente','aprovado','rejeitado')),
+        solicitante_nome    TEXT,
+        aprovador_id        INTEGER,
+        motivo_rejeicao     TEXT,
+        criado_em           TIMESTAMPTZ DEFAULT NOW(),
+        atualizado_em       TIMESTAMPTZ DEFAULT NOW()
       )
     `).catch(() => {});
+    // Garante colunas novas em tabela existente
+    for (const [col, def] of [
+      ['status',           "TEXT NOT NULL DEFAULT 'pendente'"],
+      ['solicitante_nome', 'TEXT'],
+      ['aprovador_id',     'INTEGER'],
+      ['motivo_rejeicao',  'TEXT'],
+      ['atualizado_em',    'TIMESTAMPTZ DEFAULT NOW()'],
+    ]) await pool.query(`ALTER TABLE rh_pagamentos ADD COLUMN IF NOT EXISTS ${col} ${def}`).catch(() => {});
 
     // Adiciona colunas extras em funcionarios se não existirem
     for (const [col, def] of [
@@ -253,7 +267,7 @@ module.exports = function (pool) {
       // Pagamentos extras
       const { rows: pagamentos } = await pool.query(`
         SELECT * FROM rh_pagamentos
-        WHERE funcionario_id = $1 AND mes_ref = $2
+        WHERE funcionario_id = $1 AND mes_ref = $2 AND status = 'aprovado'
         ORDER BY data_ref ASC, id ASC
       `, [funcionario_id, mes]);
 
@@ -509,18 +523,33 @@ module.exports = function (pool) {
   // ── GET /lancamentos-pendentes ───────────────────────────────────────────
   r.get('/lancamentos-pendentes', async (req, res) => {
     try {
-      const { rows } = await pool.query(`
-        SELECT a.*, f.nome AS funcionario_nome, f.cargo
+      const { rows: aponts } = await pool.query(`
+        SELECT a.*, f.nome AS funcionario_nome, f.cargo, 'apontamento' AS origem
         FROM rh_apontamentos a JOIN funcionarios f ON f.id=a.funcionario_id
         WHERE a.status='pendente' ORDER BY a.criado_em DESC
       `);
-      res.json({ ok: true, data: rows });
+      const { rows: pags } = await pool.query(`
+        SELECT p.*, f.nome AS funcionario_nome, f.cargo, 'pagamento' AS origem,
+               p.valor AS valor_total, 1 AS quantidade, p.valor AS valor_unitario
+        FROM rh_pagamentos p JOIN funcionarios f ON f.id=p.funcionario_id
+        WHERE p.status='pendente' ORDER BY p.criado_em DESC
+      `);
+      res.json({ ok: true, data: [...aponts, ...pags].sort((a,b) => new Date(b.criado_em)-new Date(a.criado_em)) });
     } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
   // ── POST /lancamento/:id/aprovar ─────────────────────────────────────────
   r.post('/lancamento/:id/aprovar', async (req, res) => {
+    const { origem } = req.body; // 'pagamento' ou undefined (apontamento)
     try {
+      if (origem === 'pagamento') {
+        const { rows } = await pool.query(`
+          UPDATE rh_pagamentos SET status='aprovado', aprovador_id=$1, atualizado_em=NOW()
+          WHERE id=$2 RETURNING *
+        `, [req.usuario?.id||null, parseInt(req.params.id)]);
+        if (!rows.length) return res.status(404).json({ ok:false, erro:'Não encontrado' });
+        return res.json({ ok: true, data: rows[0] });
+      }
       const { rows } = await pool.query(`
         UPDATE rh_apontamentos SET status='aprovado', aprovador_id=$1, atualizado_em=NOW()
         WHERE id=$2 RETURNING *
@@ -532,8 +561,17 @@ module.exports = function (pool) {
 
   // ── POST /lancamento/:id/rejeitar ────────────────────────────────────────
   r.post('/lancamento/:id/rejeitar', async (req, res) => {
-    const { motivo } = req.body;
+    const { motivo, origem } = req.body;
     try {
+      if (origem === 'pagamento') {
+        const { rows } = await pool.query(`
+          UPDATE rh_pagamentos SET status='rejeitado', aprovador_id=$1,
+            motivo_rejeicao=$2, atualizado_em=NOW()
+          WHERE id=$3 RETURNING *
+        `, [req.usuario?.id||null, motivo||null, parseInt(req.params.id)]);
+        if (!rows.length) return res.status(404).json({ ok:false, erro:'Não encontrado' });
+        return res.json({ ok: true, data: rows[0] });
+      }
       const { rows } = await pool.query(`
         UPDATE rh_apontamentos SET status='rejeitado', aprovador_id=$1,
           motivo_rejeicao=$2, atualizado_em=NOW()
@@ -563,7 +601,7 @@ module.exports = function (pool) {
           COALESCE((SELECT SUM(valor_total) FROM rh_apontamentos
                     WHERE funcionario_id=f.id AND mes_ref=$1 AND tipo IN ('falta','desconto')), 0) AS total_descontos,
           COALESCE((SELECT SUM(valor) FROM rh_pagamentos
-                    WHERE funcionario_id=f.id AND mes_ref=$1), 0) AS total_extras,
+                    WHERE funcionario_id=f.id AND mes_ref=$1 AND status='aprovado'), 0) AS total_extras,
           COALESCE((SELECT SUM(valor_total) FROM retiradas
                     WHERE funcionario_id=f.id AND mes=$1), 0) AS total_retiradas
         FROM funcionarios f
@@ -588,7 +626,7 @@ module.exports = function (pool) {
       const { rows: pagamentos } = await pool.query(`
         SELECT *, rh_pagamentos.data_ref::text AS data_ref
         FROM rh_pagamentos
-        WHERE funcionario_id = ANY($1::int[]) AND mes_ref = $2
+        WHERE funcionario_id = ANY($1::int[]) AND mes_ref = $2 AND status = 'aprovado'
         ORDER BY funcionario_id, rh_pagamentos.data_ref ASC NULLS LAST, id ASC
       `, [funcIds, mes]);
 
