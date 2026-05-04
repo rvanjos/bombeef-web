@@ -319,15 +319,48 @@ main{padding:16px 24px;max-width:1400px;margin:0 auto;}
 
   <!-- ── TAB RELATÓRIO ── -->
   <div id="tab-relatorio" class="tab-content">
-    <div class="toolbar">
-      <label>MÊS:</label>
-      <input type="month" id="sel-mes-rel">
-      <label>FUNCIONÁRIOS:</label>
-      <select id="sel-funcs-rel" multiple style="min-width:200px;height:60px;">
-      </select>
-      <button class="btn btn-red" onclick="gerarRelatorio()">📄 Gerar Relatório</button>
-      <button class="btn btn-gray" onclick="window.print()">🖨️ Imprimir</button>
+
+    <!-- Painel de configuração do relatório -->
+    <div style="background:var(--white);border:1px solid var(--border);border-radius:12px;padding:18px 20px;margin-bottom:16px">
+
+      <!-- Seletor de mês amigável -->
+      <div style="margin-bottom:16px">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:8px">Mês de referência</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <button onclick="relNavMes(-1)" style="width:34px;height:34px;border:1px solid var(--border);border-radius:8px;background:#fff;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center">‹</button>
+          <div id="rel-mes-display" style="flex:1;max-width:240px;text-align:center;font-size:16px;font-weight:700;color:var(--text);background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:7px 14px;cursor:pointer" onclick="relAbrirMeses()">—</div>
+          <button onclick="relNavMes(1)" style="width:34px;height:34px;border:1px solid var(--border);border-radius:8px;background:#fff;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center">›</button>
+          <input type="month" id="sel-mes-rel" style="display:none" onchange="relSincMes()">
+        </div>
+        <!-- Atalhos rápidos -->
+        <div id="rel-mes-atalhos" style="display:none;flex-wrap:wrap;gap:6px;margin-top:8px">
+        </div>
+      </div>
+
+      <!-- Seleção de funcionários com checkboxes visuais -->
+      <div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:8px;display:flex;align-items:center;justify-content:space-between">
+          <span>Funcionários</span>
+          <div style="display:flex;gap:6px">
+            <button onclick="relSelecionarTodos(true)" style="font-size:11px;padding:2px 8px;border:1px solid var(--border);border-radius:5px;background:#fff;cursor:pointer;color:var(--text)">Todos</button>
+            <button onclick="relSelecionarTodos(false)" style="font-size:11px;padding:2px 8px;border:1px solid var(--border);border-radius:5px;background:#fff;cursor:pointer;color:var(--muted)">Nenhum</button>
+          </div>
+        </div>
+        <div id="rel-funcs-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px">
+          <div style="color:var(--muted);font-size:12px">Carregando...</div>
+        </div>
+        <!-- select oculto para compatibilidade com gerarRelatorio() -->
+        <select id="sel-funcs-rel" multiple style="display:none"></select>
+      </div>
+
+      <!-- Ações -->
+      <div style="display:flex;gap:10px;margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
+        <button class="btn btn-red" onclick="gerarRelatorio()" style="padding:9px 20px">📄 Gerar Relatório</button>
+        <button class="btn btn-gray" onclick="window.print()" style="padding:9px 16px">🖨️ Imprimir</button>
+        <span id="rel-sel-count" style="font-size:12px;color:var(--muted);margin-left:4px;align-self:center"></span>
+      </div>
     </div>
+
     <div id="rel-container"></div>
   </div>
 </main>
@@ -1547,11 +1580,138 @@ async function salvarEscala(funcId) {
 }
 
 // ── Relatório ────────────────────────────────────────────────────────────────
+let _relMesAtual = '';
+let _relFuncs = [];
+
 async function carregarFuncsRelatorio() {
+  // Inicializa mês com o atual
+  const hoje = new Date();
+  const yyyy = hoje.getFullYear();
+  const mm   = String(hoje.getMonth()+1).padStart(2,'0');
+  document.getElementById('sel-mes-rel').value = `${yyyy}-${mm}`;
+  relSincMes();
+
   const d = await get('/api/rh/funcionarios');
   if (!d.ok) return;
+  _relFuncs = d.data;
+
+  // Popula select oculto (compatibilidade)
   const sel = document.getElementById('sel-funcs-rel');
   sel.innerHTML = d.data.map(f => `<option value="${f.id}" selected>${f.nome}</option>`).join('');
+
+  // Renderiza grid de checkboxes visuais
+  relRenderFuncs();
+}
+
+function relRenderFuncs() {
+  const grid = document.getElementById('rel-funcs-grid');
+  if (!grid || !_relFuncs.length) return;
+  grid.innerHTML = _relFuncs.map(f => `
+    <label style="display:flex;align-items:center;gap:10px;padding:9px 12px;border:2px solid var(--border);border-radius:8px;cursor:pointer;transition:all .15s;background:#fff" id="rel-func-label-${f.id}" onclick="relToggleFunc(${f.id})">
+      <div style="width:20px;height:20px;border:2px solid var(--border);border-radius:5px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s;background:#fff" id="rel-func-chk-${f.id}">
+        <span style="display:none;color:#fff;font-size:13px;font-weight:700">✓</span>
+      </div>
+      <div style="min-width:0">
+        <div style="font-size:13px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.nome}</div>
+        <div style="font-size:10px;color:var(--muted)">${f.cargo||'—'}</div>
+      </div>
+    </label>`).join('');
+  // Seleciona todos por padrão
+  relSelecionarTodos(true);
+}
+
+function relToggleFunc(id) {
+  const label = document.getElementById('rel-func-label-'+id);
+  const chk   = document.getElementById('rel-func-chk-'+id);
+  const sel   = document.getElementById('sel-funcs-rel');
+  const opt   = sel?.querySelector(`option[value="${id}"]`);
+  const ativo = label.dataset.ativo === '1';
+
+  if (ativo) {
+    label.dataset.ativo = '0';
+    label.style.borderColor = 'var(--border)';
+    label.style.background  = '#fff';
+    chk.style.background    = '#fff';
+    chk.style.borderColor   = 'var(--border)';
+    chk.querySelector('span').style.display = 'none';
+    if (opt) opt.selected = false;
+  } else {
+    label.dataset.ativo = '1';
+    label.style.borderColor = 'var(--red)';
+    label.style.background  = '#fff5f5';
+    chk.style.background    = 'var(--red)';
+    chk.style.borderColor   = 'var(--red)';
+    chk.querySelector('span').style.display = '';
+    if (opt) opt.selected = true;
+  }
+  relAtualizarCount();
+}
+
+function relSelecionarTodos(todos) {
+  _relFuncs.forEach(f => {
+    const label = document.getElementById('rel-func-label-'+f.id);
+    if (!label) return;
+    const atual = label.dataset.ativo === '1';
+    if (todos !== atual) relToggleFunc(f.id);
+  });
+}
+
+function relAtualizarCount() {
+  const sel = document.getElementById('sel-funcs-rel');
+  const n = sel ? Array.from(sel.options).filter(o => o.selected).length : 0;
+  const el = document.getElementById('rel-sel-count');
+  if (el) el.textContent = n === _relFuncs.length ? 'Todos selecionados' : `${n} de ${_relFuncs.length} selecionado(s)`;
+}
+
+// Seletor de mês amigável
+function relSincMes() {
+  const val = document.getElementById('sel-mes-rel').value;
+  if (!val) return;
+  const [yyyy, mm] = val.split('-');
+  const nomes = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  _relMesAtual = val;
+  const display = document.getElementById('rel-mes-display');
+  if (display) display.textContent = nomes[parseInt(mm)-1] + ' de ' + yyyy;
+}
+
+function relNavMes(delta) {
+  const inp = document.getElementById('sel-mes-rel');
+  if (!inp.value) {
+    const hoje = new Date();
+    inp.value = hoje.getFullYear()+'-'+String(hoje.getMonth()+1).padStart(2,'0');
+  }
+  const [yyyy, mm] = inp.value.split('-').map(Number);
+  const d = new Date(yyyy, mm - 1 + delta, 1);
+  inp.value = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+  relSincMes();
+}
+
+function relAbrirMeses() {
+  const atalhos = document.getElementById('rel-mes-atalhos');
+  if (!atalhos) return;
+  if (atalhos.style.display === 'none') {
+    // Gera últimos 12 meses como atalhos
+    const nomes = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+    const hoje = new Date();
+    let html = '';
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
+      const val = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+      const label = nomes[d.getMonth()]+'/'+String(d.getFullYear()).slice(2);
+      const ativo = val === document.getElementById('sel-mes-rel').value;
+      html += `<button onclick="relEscolherMes('${val}')" style="padding:5px 10px;border:1px solid ${ativo?'var(--red)':'var(--border)'};border-radius:6px;background:${ativo?'var(--red)':'#fff'};color:${ativo?'#fff':'var(--text)'};cursor:pointer;font-size:12px;font-weight:600">${label}</button>`;
+    }
+    atalhos.innerHTML = html;
+    atalhos.style.display = 'flex';
+  } else {
+    atalhos.style.display = 'none';
+  }
+}
+
+function relEscolherMes(val) {
+  document.getElementById('sel-mes-rel').value = val;
+  relSincMes();
+  document.getElementById('rel-mes-atalhos').style.display = 'none';
 }
 
 async function gerarRelatorio() {
