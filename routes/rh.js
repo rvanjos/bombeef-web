@@ -540,15 +540,19 @@ module.exports = function (pool) {
 
   // ── POST /lancamento/:id/editar ──────────────────────────────────────────
   r.post('/lancamento/:id/editar', async (req, res) => {
-    const { descricao, valor, origem } = req.body;
+    const { descricao, valor, data_ref, origem } = req.body;
     try {
       if (origem === 'pagamento') {
-        await pool.query(`UPDATE rh_pagamentos SET descricao=$1, valor=$2, atualizado_em=NOW() WHERE id=$3`,
-          [descricao||null, parseFloat(valor)||0, parseInt(req.params.id)]);
+        await pool.query(
+          `UPDATE rh_pagamentos SET descricao=$1, valor=$2, data_ref=$3, atualizado_em=NOW() WHERE id=$4`,
+          [descricao||null, parseFloat(valor)||0, data_ref||null, parseInt(req.params.id)]
+        );
       } else {
         const v = parseFloat(valor)||0;
-        await pool.query(`UPDATE rh_apontamentos SET descricao=$1, valor_total=$2, atualizado_em=NOW() WHERE id=$3`,
-          [descricao||null, v, parseInt(req.params.id)]);
+        await pool.query(
+          `UPDATE rh_apontamentos SET descricao=$1, valor_total=$2, data_ref=$3, atualizado_em=NOW() WHERE id=$4`,
+          [descricao||null, v, data_ref||null, parseInt(req.params.id)]
+        );
       }
       res.json({ ok: true });
     } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }

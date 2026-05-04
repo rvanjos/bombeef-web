@@ -713,10 +713,14 @@ function renderPendentes() {
             </div>
             <!-- Modo edição -->
             <div id="pend-edit-${a.id}" style="display:none">
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
                 <div>
                   <label style="font-size:10px;text-transform:uppercase;color:var(--muted);font-weight:700">Descrição</label>
                   <input id="edit-desc-${a.id}" type="text" value="${(a.descricao||'').replace(/"/g,'&quot;')}" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;margin-top:2px;box-sizing:border-box">
+                </div>
+                <div>
+                  <label style="font-size:10px;text-transform:uppercase;color:var(--muted);font-weight:700">Data</label>
+                  <input id="edit-data-${a.id}" type="date" value="${a.data_ref ? a.data_ref.slice(0,10) : ''}" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;margin-top:2px;box-sizing:border-box">
                 </div>
                 <div>
                   <label style="font-size:10px;text-transform:uppercase;color:var(--muted);font-weight:700">Valor (R$)</label>
@@ -793,10 +797,10 @@ function cancelarEdicaoPend(id) {
   document.getElementById('pend-btns-'+id).style.display = 'flex';
 }
 async function salvarEdicaoPend(id, origem) {
-  const desc = document.getElementById('edit-desc-'+id)?.value.trim();
-  const val  = parseFloat(document.getElementById('edit-val-'+id)?.value)||0;
-  // Salva edição no backend
-  await post('/api/rh/lancamento/'+id+'/editar', { descricao: desc, valor: val, origem });
+  const desc  = document.getElementById('edit-desc-'+id)?.value.trim();
+  const val   = parseFloat(document.getElementById('edit-val-'+id)?.value)||0;
+  const data  = document.getElementById('edit-data-'+id)?.value || null;
+  await post('/api/rh/lancamento/'+id+'/editar', { descricao: desc, valor: val, data_ref: data, origem });
   // Aprova depois de editar
   const d = await post('/api/rh/lancamento/'+id+'/aprovar', { origem });
   if (!d.ok) { toast('❌ '+d.erro); return; }
