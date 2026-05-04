@@ -642,42 +642,172 @@ let _perfil = '';
 let _meuFuncId = null;
 
 // ── APROVAÇÕES (admin/gestor) ─────────────────────────────────────────────────
+// ── Estado das aprovações ────────────────────────────────────────────────────
+let _pendentes = [];
+
 async function carregarPendentes() {
-  const c = document.getElementById('pendentes-container');
-  c.innerHTML = '<div class="loading">Carregando...</div>';
+  const container = document.getElementById('pendentes-container');
+  container.innerHTML = '<div class="loading">Carregando...</div>';
   const d = await get('/api/rh/lancamentos-pendentes');
-  if (!d.ok) { c.innerHTML = '<div class="empty"><div class="icon">⚠️</div><p>' + (d.erro||'Erro') + '</p></div>'; return; }
-  if (!d.data.length) { c.innerHTML = '<div class="empty"><div class="icon">✅</div><p>Nenhum lançamento pendente</p></div>'; atualizarBadge(0); return; }
-  atualizarBadge(d.data.length);
-  const tipoLabel = t => ({'hora_extra':'⏱️ Hora Extra','adicional_noturno':'🌙 Ad. Noturno','falta':'❌ Falta','comissao':'💰 Comissão','bonus':'🎁 Bônus','desconto':'↘️ Desconto','outro':'📌 Outro'}[t]||t);
-  c.innerHTML = d.data.map(a => `
-    <div class="lanc-card pendente">
-      <div class="lanc-info">
-        <div class="lanc-nome">${a.funcionario_nome} <span style="font-weight:400;color:var(--muted);font-size:12px">${a.cargo||''}</span></div>
-        <div class="lanc-meta">${tipoLabel(a.tipo)} · ${a.mes_ref}${a.data_ref?' · '+fmtData(a.data_ref):''}</div>
-        <div style="font-size:12px;margin-top:3px">${a.descricao||'—'}</div>
-        <div style="font-size:11px;color:var(--muted);margin-top:3px">Por: ${a.solicitante_nome||'—'} · ${new Date(a.criado_em).toLocaleString('pt-BR')}</div>
-      </div>
-      <div style="text-align:right;min-width:90px">
-        <div style="font-family:monospace;font-size:15px;font-weight:700;color:${a.tipo==='falta'||a.tipo==='desconto'?'#dc2626':'#16a34a'}">
-          ${a.tipo==='falta'||a.tipo==='desconto'?'- ':'+ '}${brl(a.valor_total)}
+  if (!d.ok) { container.innerHTML = '<div class="empty"><div class="icon">⚠️</div><p>'+(d.erro||'Erro')+'</p></div>'; return; }
+  _pendentes = d.data || [];
+  atualizarBadge(_pendentes.length);
+  const titulo = document.getElementById('pend-titulo');
+  if (titulo) titulo.textContent = _pendentes.length ? _pendentes.length + ' lançamento(s) aguardando aprovação' : 'Nenhum lançamento pendente';
+  renderPendentes();
+}
+
+function renderPendentes() {
+  const container = document.getElementById('pendentes-container');
+  if (!_pendentes.length) {
+    container.innerHTML = '<div class="empty"><div class="icon">✅</div><p>Tudo aprovado! Nenhum lançamento pendente.</p></div>';
+    return;
+  }
+
+  const TIPO_COR = { falta:'#dc2626', desconto:'#dc2626', entrega:'#2563eb', grelhado:'#7c3aed' };
+  const TIPO_LABEL = { hora_extra:'⏱️ Hora Extra', adicional_noturno:'🌙 Ad. Noturno', falta:'❌ Falta',
+    comissao:'💰 Meta/Comissão', bonus:'🎁 Meta/Bônus', desconto:'↘️ Desconto', outro:'📌 Outro',
+    entrega:'🚚 Entrega', grelhado:'🥩 Grelhado' };
+  const isNeg = t => t === 'falta' || t === 'desconto';
+
+  // Agrupa por funcionário
+  const porFunc = {};
+  _pendentes.forEach(a => {
+    const k = a.funcionario_id;
+    if (!porFunc[k]) porFunc[k] = { nome: a.funcionario_nome, cargo: a.cargo, itens: [] };
+    porFunc[k].itens.push(a);
+  });
+
+  container.innerHTML = Object.values(porFunc).map(func => `
+    <div style="background:var(--white);border:1px solid var(--border);border-radius:12px;margin-bottom:14px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.06)">
+      <!-- Header do funcionário -->
+      <div style="background:linear-gradient(135deg,#f7f4f0,#ede8e0);padding:10px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <span style="font-size:14px;font-weight:700">${func.nome}</span>
+          <span style="font-size:11px;color:var(--muted);margin-left:8px">${func.cargo||'—'}</span>
         </div>
-        <div style="font-size:11px;color:var(--muted)">${a.quantidade} × ${brl(a.valor_unitario)}</div>
+        <div style="display:flex;gap:6px">
+          <button onclick="aprovarTodosFunc(${func.itens[0].funcionario_id})" style="font-size:11px;padding:4px 10px;background:#16a34a;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600">✅ Aprovar todos</button>
+        </div>
       </div>
-      <div class="lanc-acoes" style="flex-direction:column">
-        <button class="btn" style="background:#16a34a;color:#fff;padding:6px 12px;font-size:12px" onclick="aprovarLanc(${a.id},'${a.origem||'apontamento'}')">✅ Aprovar</button>
-        <button class="btn" style="background:#fee2e2;color:#dc2626;border:1px solid #fca5a5;padding:6px 12px;font-size:12px;margin-top:4px" onclick="abrirRejeitar(${a.id},'${a.origem||'apontamento'}')">❌ Rejeitar</button>
-      </div>
+      <!-- Itens -->
+      ${func.itens.map(a => {
+        const val = parseFloat(a.valor_total||a.valor||0);
+        const neg = isNeg(a.tipo);
+        const corVal = neg ? '#dc2626' : (TIPO_COR[a.tipo]||'#16a34a');
+        const orig = a.origem||'apontamento';
+        const quant = a.quantidade && parseFloat(a.quantidade) !== 1
+          ? `<span style="font-size:10px;color:var(--muted)">${parseFloat(a.quantidade)} × ${brl(parseFloat(a.valor_unitario||0))}</span>`
+          : '';
+        return `
+        <div id="pend-item-${a.id}" style="padding:12px 16px;border-bottom:1px solid #f5efe8;display:grid;grid-template-columns:1fr auto;gap:12px;align-items:start">
+          <div>
+            <!-- Modo visualização -->
+            <div id="pend-view-${a.id}">
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+                <span style="font-size:12px;font-weight:700;color:${corVal}">${TIPO_LABEL[a.tipo]||a.tipo}</span>
+                <span style="font-size:11px;color:var(--muted)">· ${a.mes_ref}${a.data_ref?' · '+fmtData(a.data_ref):''}</span>
+              </div>
+              <div style="font-size:13px;color:var(--text);margin-bottom:3px">${a.descricao||'—'}</div>
+              <div style="font-size:10px;color:var(--muted)">📩 ${a.solicitante_nome||'—'} · ${new Date(a.criado_em).toLocaleString('pt-BR')}</div>
+            </div>
+            <!-- Modo edição -->
+            <div id="pend-edit-${a.id}" style="display:none">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+                <div>
+                  <label style="font-size:10px;text-transform:uppercase;color:var(--muted);font-weight:700">Descrição</label>
+                  <input id="edit-desc-${a.id}" type="text" value="${(a.descricao||'').replace(/"/g,'&quot;')}" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;margin-top:2px;box-sizing:border-box">
+                </div>
+                <div>
+                  <label style="font-size:10px;text-transform:uppercase;color:var(--muted);font-weight:700">Valor (R$)</label>
+                  <input id="edit-val-${a.id}" type="number" step="0.01" value="${val}" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;margin-top:2px;box-sizing:border-box">
+                </div>
+              </div>
+              <div style="display:flex;gap:6px">
+                <button onclick="salvarEdicaoPend(${a.id},'${orig}')" style="font-size:11px;padding:4px 10px;background:var(--purple);color:#fff;border:none;border-radius:6px;cursor:pointer">💾 Salvar e Aprovar</button>
+                <button onclick="cancelarEdicaoPend(${a.id})" style="font-size:11px;padding:4px 10px;background:#f0ebe4;color:#555;border:none;border-radius:6px;cursor:pointer">Cancelar</button>
+              </div>
+            </div>
+          </div>
+          <!-- Valor + ações -->
+          <div style="text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+            <div>
+              <div style="font-size:16px;font-weight:700;color:${corVal};font-family:'DM Mono',monospace">${neg?'- ':'+ '}${brl(val)}</div>
+              ${quant}
+            </div>
+            <div style="display:flex;gap:4px" id="pend-btns-${a.id}">
+              <button onclick="aprovarLanc(${a.id},'${orig}')" style="padding:5px 10px;background:#16a34a;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">✅</button>
+              <button onclick="editarPend(${a.id})" style="padding:5px 10px;background:#ede9fe;color:#5b21b6;border:none;border-radius:6px;cursor:pointer;font-size:12px" title="Editar antes de aprovar">✏️</button>
+              <button onclick="abrirRejeitar(${a.id},'${orig}')" style="padding:5px 10px;background:#fee2e2;color:#dc2626;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">✗</button>
+            </div>
+          </div>
+        </div>`;
+      }).join('')}
     </div>`).join('');
 }
 
+// Aprovar único
 async function aprovarLanc(id, origem) {
+  const btn = document.querySelector(`#pend-btns-${id} button`);
+  if (btn) btn.textContent = '⏳';
   const d = await post('/api/rh/lancamento/'+id+'/aprovar', { origem: origem||'apontamento' });
-  if (!d.ok) { toast('❌ '+d.erro); return; }
-  toast('✅ Aprovado — já entra na folha!'); carregarPendentes(); carregarResumo();
+  if (!d.ok) { toast('❌ '+d.erro); if (btn) btn.textContent = '✅'; return; }
+  // Remove o item visualmente sem recarregar tudo
+  _pendentes = _pendentes.filter(a => a.id !== id);
+  atualizarBadge(_pendentes.length);
+  const item = document.getElementById('pend-item-'+id);
+  if (item) {
+    item.style.transition = 'opacity .3s,max-height .3s';
+    item.style.opacity = '0';
+    item.style.overflow = 'hidden';
+    setTimeout(() => { renderPendentes(); carregarResumo(); }, 300);
+  }
+  toast('✅ Aprovado!');
 }
 
-function abrirRejeitar(id) {
+// Aprovar todos de um funcionário
+async function aprovarTodosFunc(funcId) {
+  const itens = _pendentes.filter(a => a.funcionario_id === funcId);
+  if (!itens.length) return;
+  let ok = 0;
+  for (const a of itens) {
+    const d = await post('/api/rh/lancamento/'+a.id+'/aprovar', { origem: a.origem||'apontamento' });
+    if (d.ok) ok++;
+  }
+  _pendentes = _pendentes.filter(a => a.funcionario_id !== funcId);
+  atualizarBadge(_pendentes.length);
+  toast(`✅ ${ok} lançamento(s) aprovado(s)!`);
+  renderPendentes();
+  carregarResumo();
+}
+
+// Edição inline
+function editarPend(id) {
+  document.getElementById('pend-view-'+id).style.display = 'none';
+  document.getElementById('pend-edit-'+id).style.display = '';
+  document.getElementById('pend-btns-'+id).style.display = 'none';
+}
+function cancelarEdicaoPend(id) {
+  document.getElementById('pend-view-'+id).style.display = '';
+  document.getElementById('pend-edit-'+id).style.display = 'none';
+  document.getElementById('pend-btns-'+id).style.display = 'flex';
+}
+async function salvarEdicaoPend(id, origem) {
+  const desc = document.getElementById('edit-desc-'+id)?.value.trim();
+  const val  = parseFloat(document.getElementById('edit-val-'+id)?.value)||0;
+  // Salva edição no backend
+  await post('/api/rh/lancamento/'+id+'/editar', { descricao: desc, valor: val, origem });
+  // Aprova depois de editar
+  const d = await post('/api/rh/lancamento/'+id+'/aprovar', { origem });
+  if (!d.ok) { toast('❌ '+d.erro); return; }
+  _pendentes = _pendentes.filter(a => a.id !== id);
+  atualizarBadge(_pendentes.length);
+  toast('✅ Editado e aprovado!');
+  renderPendentes();
+  carregarResumo();
+}
+
+function abrirRejeitar(id, origem) {
   document.getElementById('rejeitar-id').value = id;
   document.getElementById('rejeitar-origem').value = origem || 'apontamento';
   document.getElementById('rejeitar-motivo').value = '';
@@ -689,7 +819,11 @@ async function confirmarRejeitar() {
   const motivo = document.getElementById('rejeitar-motivo').value.trim();
   const d = await post('/api/rh/lancamento/'+id+'/rejeitar', { motivo, origem });
   if (!d.ok) { toast('❌ '+d.erro); return; }
-  toast('Lançamento rejeitado.'); fecharModal('modal-rejeitar'); carregarPendentes();
+  _pendentes = _pendentes.filter(a => String(a.id) !== String(id));
+  atualizarBadge(_pendentes.length);
+  fecharModal('modal-rejeitar');
+  toast('Lançamento rejeitado.');
+  renderPendentes();
 }
 function atualizarBadge(n) {
   const b = document.getElementById('badge-pendentes');

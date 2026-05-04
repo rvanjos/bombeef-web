@@ -538,6 +538,22 @@ module.exports = function (pool) {
     } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
+  // ── POST /lancamento/:id/editar ──────────────────────────────────────────
+  r.post('/lancamento/:id/editar', async (req, res) => {
+    const { descricao, valor, origem } = req.body;
+    try {
+      if (origem === 'pagamento') {
+        await pool.query(`UPDATE rh_pagamentos SET descricao=$1, valor=$2, atualizado_em=NOW() WHERE id=$3`,
+          [descricao||null, parseFloat(valor)||0, parseInt(req.params.id)]);
+      } else {
+        const v = parseFloat(valor)||0;
+        await pool.query(`UPDATE rh_apontamentos SET descricao=$1, valor_total=$2, atualizado_em=NOW() WHERE id=$3`,
+          [descricao||null, v, parseInt(req.params.id)]);
+      }
+      res.json({ ok: true });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
   // ── POST /lancamento/:id/aprovar ─────────────────────────────────────────
   r.post('/lancamento/:id/aprovar', async (req, res) => {
     const { origem } = req.body; // 'pagamento' ou undefined (apontamento)
