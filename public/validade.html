@@ -1554,7 +1554,7 @@ function _criarModalPeriodo(titulo, subtitulo, opcoes, callback) {
         <div style="display:flex;flex-direction:column;gap:8px" id="rel-opcoes">
           ${opcoes.map((op, i) => `
             <label style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:2px solid var(--border);border-radius:8px;cursor:pointer" 
-                   id="rel-op-label-${i}" onclick="relSelecionarOpcao(${i}, ${JSON.stringify(op)})">
+                   id="rel-op-label-${i}" onclick="relSelecionarOpcao(${i})">
               <div style="width:18px;height:18px;border:2px solid #ccc;border-radius:50%;flex-shrink:0" id="rel-op-radio-${i}"></div>
               <span style="font-size:13px;font-weight:600">${op.label}</span>
             </label>
@@ -1602,14 +1602,16 @@ function _criarModalPeriodo(titulo, subtitulo, opcoes, callback) {
 
   document.body.insertAdjacentHTML('beforeend', html);
   window._relCallback = callback;
+  window._relOpcoesCache = opcoes;
   window._relOpcaoSelecionada = null;
 
   // Seleciona primeira opção por padrão
-  setTimeout(() => relSelecionarOpcao(0, opcoes[0]), 50);
+  setTimeout(() => relSelecionarOpcao(0), 50);
 }
 
-let _relOpcoesCache = [];
-function relSelecionarOpcao(i, op) {
+function relSelecionarOpcao(i) {
+  const op = window._relOpcoesCache?.[i];
+  if (!op) return;
   window._relOpcaoSelecionada = op;
   // Atualiza visual
   document.querySelectorAll('[id^="rel-op-label-"]').forEach((el, j) => {
