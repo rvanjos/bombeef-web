@@ -572,14 +572,27 @@ module.exports = function (pool) {
         ORDER BY f.nome ASC
       `, params);
 
-      // Busca apontamentos detalhados de cada funcionário
+      // Busca detalhes de cada funcionário
       const funcIds = rows.map(r => r.id);
+
+      // Apontamentos (horas extras, faltas, metas/bônus, etc.)
       const { rows: aponts } = await pool.query(`
-        SELECT * FROM rh_apontamentos
+        SELECT *, data_ref::text AS data_ref
+        FROM rh_apontamentos
         WHERE funcionario_id = ANY($1::int[]) AND mes_ref = $2
-        ORDER BY funcionario_id, data_ref ASC, id ASC
+          AND status != 'rejeitado'
+        ORDER BY funcionario_id, data_ref ASC NULLS LAST, id ASC
       `, [funcIds, mes]);
 
+      // Pagamentos (entregas, grelhados) — tabela separada
+      const { rows: pagamentos } = await pool.query(`
+        SELECT *, data_ref::text AS data_ref
+        FROM rh_pagamentos
+        WHERE funcionario_id = ANY($1::int[]) AND mes_ref = $2
+        ORDER BY funcionario_id, data_ref ASC NULLS LAST, id ASC
+      `, [funcIds, mes]);
+
+      // Retiradas de produtos
       const { rows: retiradas } = await pool.query(`
         SELECT r.*, p.descricao AS produto_nome
         FROM retiradas r
@@ -597,6 +610,7 @@ module.exports = function (pool) {
         total_extras:      parseFloat(r.total_extras),
         total_retiradas:   parseFloat(r.total_retiradas),
         apontamentos:      aponts.filter(a => a.funcionario_id === r.id),
+        pagamentos:        pagamentos.filter(p => p.funcionario_id === r.id),
         retiradas_detalhe: retiradas.filter(ret => ret.funcionario_id === r.id),
       }));
 

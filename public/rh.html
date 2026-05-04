@@ -1572,69 +1572,117 @@ async function gerarRelatorio() {
   // Tipos que mostram valor em vez de horas
   const TIPO_VALOR = new Set(['bonus','entrega','grelhado','comissao','desconto','outro']);
 
+  // Helpers de ordenação por data
+  const sortByData = (arr, campo) => [...arr].sort((a,b) => {
+    const da = a[campo]||'', db = b[campo]||'';
+    return da.localeCompare(db);
+  });
+
   let html = `<h2 style="font-family:'Playfair Display',serif;margin-bottom:16px;font-size:17px">Relatório RH — ${mes}</h2>`;
 
   for (const f of d.data) {
-    const bruto = f.salario_base + f.vale_alimentacao + f.total_acrescimos + f.total_extras - f.total_descontos;
+    const bruto = f.vale_alimentacao + f.total_acrescimos + f.total_extras - f.total_descontos;
     const liq   = bruto - f.total_retiradas;
+
+    // Apontamentos unificados: vêm de rh_apontamentos + rh_pagamentos
+    const todos = [...(f.apontamentos||[]), ...(f.pagamentos||[])];
+
+    // Separa por tipo
+    const apHoras  = sortByData(todos.filter(a => ['hora_extra','adicional_noturno','feriado','falta'].includes(a.tipo)), 'data_ref');
+    const apMetas  = sortByData(todos.filter(a => ['bonus','comissao'].includes(a.tipo)), 'data_ref');
+    const apExtras = sortByData(todos.filter(a => ['entrega','grelhado'].includes(a.tipo)), 'data_ref');
+    const apOutros = sortByData(todos.filter(a => ['desconto','outro'].includes(a.tipo)), 'data_ref');
+
+    // Totais
+    const totalHoras = apHoras.reduce((s,a) => s + parseFloat(a.quantidade||0), 0);
+    const totalMetas = apMetas.reduce((s,a) => s + parseFloat(a.valor_total||a.valor||0), 0);
+    const totalExtras= apExtras.reduce((s,a) => s + parseFloat(a.valor_total||a.valor||0), 0);
+
     html += `<div class="rel-func">
       <div class="rel-head">
         <div><div class="nome">${f.nome}</div><div class="cargo">${f.cargo||'—'}</div></div>
-        <div style="font-size:13px;font-weight:700;color:${liq<0?'var(--red-l)':'var(--green)'}">A Receber: ${brl(liq)}</div>
+        <div style="font-size:14px;font-weight:700;color:${liq<0?'var(--red-l)':'var(--green)'}">💰 A Receber: ${brl(liq)}</div>
       </div>
       <div class="rel-body">
         <div class="rel-grid">
-          <div class="rel-item"><div class="lbl">Salário Base</div><div class="val">${brl(f.salario_base)}</div></div>
           <div class="rel-item"><div class="lbl">Vale Alimentação</div><div class="val">${brl(f.vale_alimentacao)}</div></div>
-          <div class="rel-item"><div class="lbl">Acréscimos</div><div class="val" style="color:var(--green)">+ ${brl(f.total_acrescimos)}</div></div>
-          <div class="rel-item"><div class="lbl">Extras</div><div class="val" style="color:var(--green)">+ ${brl(f.total_extras)}</div></div>
+          <div class="rel-item"><div class="lbl">Acréscimos H.E.</div><div class="val" style="color:var(--green)">+ ${brl(f.total_acrescimos)}</div></div>
+          <div class="rel-item"><div class="lbl">Metas / Extras</div><div class="val" style="color:var(--green)">+ ${brl(totalMetas + totalExtras)}</div></div>
           <div class="rel-item"><div class="lbl">Descontos</div><div class="val" style="color:var(--red-l)">- ${brl(f.total_descontos)}</div></div>
           <div class="rel-item"><div class="lbl">Retiradas</div><div class="val" style="color:var(--red-l)">- ${brl(f.total_retiradas)}</div></div>
         </div>`;
 
-    if (f.apontamentos?.length) {
-      // Separa apontamentos de horas dos de valor
-      const apHoras  = f.apontamentos.filter(a => !TIPO_VALOR.has(a.tipo));
-      const apValor  = f.apontamentos.filter(a => TIPO_VALOR.has(a.tipo));
-
-      if (apHoras.length) {
-        html += `<div style="margin-bottom:10px;"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px;">Apontamentos</div>
-          <table class="apont-table" style="font-size:11px;"><thead><tr><th>Tipo</th><th>Descrição</th><th>Data</th><th>Horas</th></tr></thead><tbody>`;
-        for (const a of apHoras) {
-          html += `<tr><td>${TIPOS_AP[a.tipo]||a.tipo}</td><td>${a.descricao||'—'}</td><td>${a.data_ref?fmtData(a.data_ref):'—'}</td><td>${parseFloat(a.quantidade||0).toFixed(1)}h</td></tr>`;
-        }
-        html += '</tbody></table></div>';
+    // ── 1. Horas Extras / Feriados / Faltas ──────────────────────────────────
+    if (apHoras.length) {
+      html += `<div style="margin-bottom:12px">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px;display:flex;justify-content:space-between">
+          <span>Apontamentos de Horas</span>
+          <span style="color:var(--text)">Total: ${totalHoras.toFixed(1)}h</span>
+        </div>
+        <table class="apont-table" style="font-size:11px"><thead><tr><th>Tipo</th><th>Descrição</th><th>Data</th><th style="text-align:right">Horas</th></tr></thead><tbody>`;
+      for (const a of apHoras) {
+        html += `<tr><td>${TIPOS_AP[a.tipo]||a.tipo}</td><td>${a.descricao||'—'}</td><td style="white-space:nowrap">${a.data_ref?fmtData(a.data_ref):'—'}</td><td style="text-align:right;font-family:'DM Mono',monospace">${parseFloat(a.quantidade||0).toFixed(1)}h</td></tr>`;
       }
-
-      if (apValor.length) {
-        html += `<div style="margin-bottom:10px;"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px;">Bônus / Extras</div>
-          <table class="apont-table" style="font-size:11px;"><thead><tr><th>Tipo</th><th>Descrição</th><th>Data</th><th>Valor</th><th>Obs</th></tr></thead><tbody>`;
-        for (const a of apValor) {
-          const val = parseFloat(a.valor_total || 0);
-          const obs = a.tipo === 'grelhado' ? `<span style="font-size:10px;color:var(--muted)">(35% taxa)</span>` : '';
-          html += `<tr>
-            <td><span style="font-weight:600">${TIPOS_AP[a.tipo]||a.tipo}</span></td>
-            <td>${a.descricao||'—'}</td>
-            <td>${a.data_ref?fmtData(a.data_ref):'—'}</td>
-            <td style="font-weight:700;color:var(--green)">${brl(val)}</td>
-            <td>${obs}</td>
-          </tr>`;
-        }
-        html += '</tbody></table></div>';
-      }
+      html += `</tbody><tfoot><tr><td colspan="3" style="font-weight:700;padding-top:4px">Total</td><td style="text-align:right;font-weight:700;font-family:'DM Mono',monospace">${totalHoras.toFixed(1)}h</td></tr></tfoot></table></div>`;
     }
 
-    if (f.retiradas_detalhe?.length) {
-      html += `<div><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px;">Retiradas de Produtos</div>
-        <table class="apont-table" style="font-size:11px;"><thead><tr><th>Produto</th><th>Data</th><th>Qtd</th><th>Valor</th></tr></thead><tbody>`;
-      for (const r of f.retiradas_detalhe) {
-        const dt = r.dt_retirada ? fmtData(r.dt_retirada) : '—';
-        html += `<tr><td>${r.produto_nome||r.produto||'—'}</td><td>${dt}</td><td>${r.quantidade||1}</td><td>${brl(r.valor_total||0)}</td></tr>`;
+    // ── 2. Metas ──────────────────────────────────────────────────────────────
+    if (apMetas.length) {
+      html += `<div style="margin-bottom:12px">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px;display:flex;justify-content:space-between">
+          <span>🎯 Metas</span>
+          <span style="color:var(--green)">${brl(totalMetas)}</span>
+        </div>
+        <table class="apont-table" style="font-size:11px"><thead><tr><th>Descrição</th><th>Data</th><th style="text-align:right">Valor</th></tr></thead><tbody>`;
+      for (const a of apMetas) {
+        const val = parseFloat(a.valor_total||a.valor||0);
+        html += `<tr><td>${a.descricao||'—'}</td><td style="white-space:nowrap">${a.data_ref?fmtData(a.data_ref):'—'}</td><td style="text-align:right;font-weight:600;color:var(--green);font-family:'DM Mono',monospace">${brl(val)}</td></tr>`;
+      }
+      html += `</tbody><tfoot><tr><td colspan="2" style="font-weight:700;padding-top:4px">Total</td><td style="text-align:right;font-weight:700;color:var(--green);font-family:'DM Mono',monospace">${brl(totalMetas)}</td></tr></tfoot></table></div>`;
+    }
+
+    // ── 3. Entregas / Grelhados ───────────────────────────────────────────────
+    if (apExtras.length) {
+      html += `<div style="margin-bottom:12px">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px;display:flex;justify-content:space-between">
+          <span>🚚 Entregas / Grelhados</span>
+          <span style="color:var(--green)">${brl(totalExtras)}</span>
+        </div>
+        <table class="apont-table" style="font-size:11px"><thead><tr><th>Tipo</th><th>Descrição</th><th>Data</th><th style="text-align:right">Valor</th></tr></thead><tbody>`;
+      for (const a of apExtras) {
+        const val = parseFloat(a.valor_total||a.valor||0);
+        const obs = a.tipo==='grelhado' ? '<span style="font-size:10px;color:var(--muted)"> (35%)</span>' : '';
+        html += `<tr><td>${TIPOS_AP[a.tipo]||a.tipo}${obs}</td><td>${a.descricao||'—'}</td><td style="white-space:nowrap">${a.data_ref?fmtData(a.data_ref):'—'}</td><td style="text-align:right;font-weight:600;color:var(--green);font-family:'DM Mono',monospace">${brl(val)}</td></tr>`;
+      }
+      html += `</tbody><tfoot><tr><td colspan="3" style="font-weight:700;padding-top:4px">Total</td><td style="text-align:right;font-weight:700;color:var(--green);font-family:'DM Mono',monospace">${brl(totalExtras)}</td></tr></tfoot></table></div>`;
+    }
+
+    // ── 4. Outros (descontos, outro) ──────────────────────────────────────────
+    if (apOutros.length) {
+      html += `<div style="margin-bottom:12px">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px">Outros Lançamentos</div>
+        <table class="apont-table" style="font-size:11px"><thead><tr><th>Tipo</th><th>Descrição</th><th>Data</th><th style="text-align:right">Valor</th></tr></thead><tbody>`;
+      for (const a of apOutros) {
+        const val = parseFloat(a.valor_total||a.valor||0);
+        html += `<tr><td>${TIPOS_AP[a.tipo]||a.tipo}</td><td>${a.descricao||'—'}</td><td style="white-space:nowrap">${a.data_ref?fmtData(a.data_ref):'—'}</td><td style="text-align:right;font-family:'DM Mono',monospace">${brl(val)}</td></tr>`;
       }
       html += '</tbody></table></div>';
     }
 
+    // ── 5. Retiradas ──────────────────────────────────────────────────────────
+    if (f.retiradas_detalhe?.length) {
+      const retSort = sortByData(f.retiradas_detalhe, 'dt_retirada');
+      html += `<div style="margin-bottom:12px">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px">Retiradas de Produtos</div>
+        <table class="apont-table" style="font-size:11px"><thead><tr><th>Produto</th><th>Data</th><th>Qtd</th><th style="text-align:right">Valor</th></tr></thead><tbody>`;
+      for (const r of retSort) {
+        html += `<tr><td>${r.produto_nome||r.produto||'—'}</td><td style="white-space:nowrap">${r.dt_retirada?fmtData(r.dt_retirada):'—'}</td><td>${r.quantidade||1}</td><td style="text-align:right;font-family:'DM Mono',monospace">${brl(r.valor_total||0)}</td></tr>`;
+      }
+      html += `</tbody><tfoot><tr><td colspan="3" style="font-weight:700;padding-top:4px">Total</td><td style="text-align:right;font-weight:700;font-family:'DM Mono',monospace;color:var(--red-l)">${brl(f.total_retiradas)}</td></tr></tfoot></table></div>`;
+    }
+
     if (f.observacao) html += `<div style="margin-top:8px;font-size:12px;color:var(--muted)">📝 ${f.observacao}</div>`;
+
     html += `<div class="rel-total ${liq<0?'neg':''}" style="margin-top:10px">
       <span>💰 TOTAL A RECEBER</span><span style="font-size:16px;font-weight:700">${brl(liq)}</span>
     </div></div></div>`;
