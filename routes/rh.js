@@ -577,19 +577,19 @@ module.exports = function (pool) {
 
       // Apontamentos (horas extras, faltas, metas/bônus, etc.)
       const { rows: aponts } = await pool.query(`
-        SELECT *, data_ref::text AS data_ref
+        SELECT *, rh_apontamentos.data_ref::text AS data_ref
         FROM rh_apontamentos
         WHERE funcionario_id = ANY($1::int[]) AND mes_ref = $2
           AND status != 'rejeitado'
-        ORDER BY funcionario_id, data_ref ASC NULLS LAST, id ASC
+        ORDER BY funcionario_id, rh_apontamentos.data_ref ASC NULLS LAST, id ASC
       `, [funcIds, mes]);
 
       // Pagamentos (entregas, grelhados) — tabela separada
       const { rows: pagamentos } = await pool.query(`
-        SELECT *, data_ref::text AS data_ref
+        SELECT *, rh_pagamentos.data_ref::text AS data_ref
         FROM rh_pagamentos
         WHERE funcionario_id = ANY($1::int[]) AND mes_ref = $2
-        ORDER BY funcionario_id, data_ref ASC NULLS LAST, id ASC
+        ORDER BY funcionario_id, rh_pagamentos.data_ref ASC NULLS LAST, id ASC
       `, [funcIds, mes]);
 
       // Retiradas de produtos
