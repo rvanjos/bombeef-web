@@ -365,7 +365,7 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
       <button class="btn btn-p" onclick="abrirModal()">＋ Novo Item</button>
       <button class="btn btn-s" onclick="abrirImport()">📥 Importar Planilha</button>
       <button class="btn btn-s" onclick="limparDuplicatas()" id="btn-dedup" style="background:#fff3cd;color:#856404;border-color:#ffc107" title="Remove itens com mesma descrição e data de validade">🧹 Limpar Duplicatas</button>
-      <button class="btn btn-s" onclick="imprimirVencimento()" style="background:#eff6ff;color:#1a5c8a;border-color:#93c5fd" title="Relatório de itens a vencer">🖨️ Rel. Vencimento</button>
+      <button class="btn btn-s" onclick="abrirRelVencimento()" style="background:#eff6ff;color:#1a5c8a;border-color:#93c5fd" title="Relatório de itens a vencer">🖨️ Rel. Vencimento</button>
       <div class="search-w"><input type="text" id="busca-val" placeholder="Buscar produto, código, lote..." oninput="filtrarVal()"></div>
       <select class="flt" id="flt-status" onchange="carregar()">
         <option value="todos">Todos</option>
@@ -430,7 +430,7 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
     <div class="toolbar">
       <button class="btn btn-r" onclick="abrirPerda()">＋ Registrar Perda</button>
       <input type="month" id="flt-mes-perdas" class="flt" style="padding:7px 10px" onchange="carregarPerdas()">
-      <button class="btn btn-s" onclick="imprimirPerdas()" style="background:#fff0f0;color:#991b1b;border-color:#fca5a5" title="Relatório de perdas">🖨️ Rel. Perdas</button>
+      <button class="btn btn-s" onclick="abrirRelPerdas()" style="background:#fff0f0;color:#991b1b;border-color:#fca5a5" title="Relatório de perdas">🖨️ Rel. Perdas</button>
       <div style="margin-left:auto;font-size:13px" id="meta-perdas-info"></div>
     </div>
     <div class="card">
@@ -1505,7 +1505,166 @@ function _headerRel(titulo, subtitulo) {
   </div>`;
 }
 
-function imprimirVencimento() {
+// ── Modal de período para relatórios ─────────────────────────────────────────
+function abrirRelVencimento() {
+  const hoje = new Date();
+  const modal = _criarModalPeriodo(
+    '🖨️ Relatório de Vencimentos',
+    'Selecione o período de validade a incluir no relatório:',
+    [
+      { label: 'Vencidos + próximos 7 dias',  ini: -999, fim: 7  },
+      { label: 'Próximos 30 dias',             ini: 0,   fim: 30 },
+      { label: 'Próximos 60 dias',             ini: 0,   fim: 60 },
+      { label: 'Período personalizado',        ini: null, fim: null },
+    ],
+    (diasIni, diasFim) => imprimirVencimento(diasIni, diasFim)
+  );
+}
+
+function abrirRelPerdas() {
+  _criarModalPeriodo(
+    '🖨️ Relatório de Perdas',
+    'Selecione o período das perdas:',
+    [
+      { label: 'Mês atual',      ini: null, fim: null, tipo: 'mes' },
+      { label: 'Últimos 3 meses', ini: null, fim: null, tipo: 'tri' },
+      { label: 'Período personalizado', ini: null, fim: null, tipo: 'custom' },
+    ],
+    (diasIni, diasFim, mesIni, mesFim) => imprimirPerdas(mesIni, mesFim)
+  );
+}
+
+function _criarModalPeriodo(titulo, subtitulo, opcoes, callback) {
+  // Remove modal anterior
+  document.getElementById('modal-rel-periodo')?.remove();
+
+  const hoje = new Date();
+  const fmtYM = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  const mesAtual = fmtYM(hoje);
+  const mes3atras = fmtYM(new Date(hoje.getFullYear(), hoje.getMonth()-2, 1));
+
+  const html = `
+  <div id="modal-rel-periodo" style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9000;display:flex;align-items:center;justify-content:center;padding:16px">
+    <div style="background:#fff;border-radius:14px;max-width:440px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.3);overflow:hidden">
+      <div style="background:linear-gradient(135deg,#8B0000,#c0392b);padding:14px 18px">
+        <div style="color:#fff;font-size:15px;font-weight:700">${titulo}</div>
+        <div style="color:rgba(255,255,255,.75);font-size:12px;margin-top:2px">${subtitulo}</div>
+      </div>
+      <div style="padding:16px 18px">
+        <div style="display:flex;flex-direction:column;gap:8px" id="rel-opcoes">
+          ${opcoes.map((op, i) => `
+            <label style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:2px solid var(--border);border-radius:8px;cursor:pointer" 
+                   id="rel-op-label-${i}" onclick="relSelecionarOpcao(${i}, ${JSON.stringify(op)})">
+              <div style="width:18px;height:18px;border:2px solid #ccc;border-radius:50%;flex-shrink:0" id="rel-op-radio-${i}"></div>
+              <span style="font-size:13px;font-weight:600">${op.label}</span>
+            </label>
+          `).join('')}
+        </div>
+
+        <!-- Período personalizado (mostrado quando selecionado) -->
+        <div id="rel-custom-wrap" style="display:none;margin-top:12px;padding:12px;background:#f7f4f0;border-radius:8px">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div>
+              <label style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase">De</label>
+              <input type="date" id="rel-data-ini" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;margin-top:3px;box-sizing:border-box">
+            </div>
+            <div>
+              <label style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase">Até</label>
+              <input type="date" id="rel-data-fim" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;margin-top:3px;box-sizing:border-box">
+            </div>
+          </div>
+        </div>
+
+        <!-- Mês de perdas (mostrado para perdas) -->
+        <div id="rel-mes-wrap" style="display:none;margin-top:12px;padding:12px;background:#f7f4f0;border-radius:8px">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div>
+              <label style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase">Mês inicial</label>
+              <input type="month" id="rel-mes-ini" value="${mes3atras}" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;margin-top:3px;box-sizing:border-box">
+            </div>
+            <div>
+              <label style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase">Mês final</label>
+              <input type="month" id="rel-mes-fim" value="${mesAtual}" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;margin-top:3px;box-sizing:border-box">
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="padding:12px 18px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end;background:#fdf9f7">
+        <button onclick="document.getElementById('modal-rel-periodo').remove()" 
+          style="padding:8px 18px;border:1px solid var(--border);border-radius:7px;background:#fff;cursor:pointer;font-size:13px">Cancelar</button>
+        <button id="rel-gerar-btn" onclick="relGerarComOpcao()" disabled
+          style="padding:8px 20px;background:#8B0000;color:#fff;border:none;border-radius:7px;cursor:pointer;font-size:13px;font-weight:700;opacity:.4">
+          🖨️ Gerar Relatório
+        </button>
+      </div>
+    </div>
+  </div>`;
+
+  document.body.insertAdjacentHTML('beforeend', html);
+  window._relCallback = callback;
+  window._relOpcaoSelecionada = null;
+
+  // Seleciona primeira opção por padrão
+  setTimeout(() => relSelecionarOpcao(0, opcoes[0]), 50);
+}
+
+let _relOpcoesCache = [];
+function relSelecionarOpcao(i, op) {
+  window._relOpcaoSelecionada = op;
+  // Atualiza visual
+  document.querySelectorAll('[id^="rel-op-label-"]').forEach((el, j) => {
+    const radio = document.getElementById('rel-op-radio-' + j);
+    if (j === i) {
+      el.style.borderColor = '#8B0000';
+      el.style.background  = '#fff5f5';
+      radio.style.background   = '#8B0000';
+      radio.style.borderColor  = '#8B0000';
+    } else {
+      el.style.borderColor = 'var(--border)';
+      el.style.background  = '';
+      radio.style.background  = '';
+      radio.style.borderColor = '#ccc';
+    }
+  });
+  // Mostra/esconde campos extras
+  const customWrap = document.getElementById('rel-custom-wrap');
+  const mesWrap    = document.getElementById('rel-mes-wrap');
+  if (customWrap) customWrap.style.display = (op.ini === null && !op.tipo) ? '' : 'none';
+  if (mesWrap)    mesWrap.style.display    = (op.tipo === 'tri' || op.tipo === 'custom') ? '' : 'none';
+
+  const btn = document.getElementById('rel-gerar-btn');
+  if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+}
+
+function relGerarComOpcao() {
+  const op = window._relOpcaoSelecionada;
+  if (!op) return;
+
+  let diasIni = op.ini, diasFim = op.fim;
+  let mesIni = null, mesFim = null;
+
+  if (op.ini === null && !op.tipo) {
+    // Personalizado por data
+    const ini = document.getElementById('rel-data-ini')?.value;
+    const fim = document.getElementById('rel-data-fim')?.value;
+    if (!ini || !fim) { alert('Selecione as datas'); return; }
+    // Converte datas para dias a partir de hoje
+    const hoje = new Date(); hoje.setHours(0,0,0,0);
+    diasIni = Math.round((new Date(ini) - hoje) / 86400000);
+    diasFim = Math.round((new Date(fim) - hoje) / 86400000);
+  } else if (op.tipo === 'mes') {
+    const m = document.getElementById('rel-mes-ini')?.value || document.getElementById('flt-mes-perdas')?.value;
+    mesIni = mesFim = m;
+  } else if (op.tipo === 'tri' || op.tipo === 'custom') {
+    mesIni = document.getElementById('rel-mes-ini')?.value;
+    mesFim = document.getElementById('rel-mes-fim')?.value;
+  }
+
+  document.getElementById('modal-rel-periodo')?.remove();
+  window._relCallback(diasIni, diasFim, mesIni, mesFim);
+}
+
+function imprimirVencimento(diasIni=-999, diasFim=30) {
   const hoje = new Date(); hoje.setHours(0,0,0,0);
 
   // Agrupa itens por urgência
@@ -1519,10 +1678,11 @@ function imprimirVencimento() {
   itens.filter(v => v.status !== 'descartado' && v.status !== 'vendido').forEach(v => {
     const dias = calcDias(v.data_validade);
     if (dias === null) return;
+    if (dias < diasIni || dias > diasFim) return; // filtro de período
     if (dias < 0)       grupos.vencido.items.push({...v, dias});
     else if (dias <= 3) grupos.critico.items.push({...v, dias});
     else if (dias <= 7) grupos.alerta.items.push({...v, dias});
-    else if (dias <= 30)grupos.breve.items.push({...v, dias});
+    else                grupos.breve.items.push({...v, dias});
   });
 
   const totalItens = Object.values(grupos).reduce((s,g)=>s+g.items.length,0);
@@ -1584,9 +1744,17 @@ function imprimirVencimento() {
   setTimeout(() => w.print(), 800);
 }
 
-function imprimirPerdas() {
-  const perdas = window._perdasData || [];
-  if (!perdas.length) { toast('⚠️ Carregue as perdas do mês primeiro'); return; }
+function imprimirPerdas(mesIni, mesFim) {
+  let perdas = window._perdasData || [];
+  if (!perdas.length) { toast('⚠️ Carregue as perdas primeiro'); return; }
+  // Filtra por período se informado
+  if (mesIni && mesFim) {
+    perdas = perdas.filter(p => {
+      const m = (p.mes_ref || '').slice(0,7); // YYYY-MM
+      return m >= mesIni && m <= mesFim;
+    });
+  }
+  if (!perdas.length) { toast('⚠️ Nenhuma perda no período selecionado'); return; }
 
   const mes = document.getElementById('flt-mes-perdas')?.value || '';
   const mesLabel = mes ? new Date(mes+'-01').toLocaleDateString('pt-BR',{month:'long',year:'numeric'}) : 'Todos os meses';
