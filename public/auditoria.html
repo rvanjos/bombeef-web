@@ -305,7 +305,8 @@ function renderDuplicatas(grupos) {
               <td><span class="cat-badge ${!t.categoria?'sem':''}">${t.categoria||'⚠ sem categoria'}</span></td>
               <td style="text-align:right" class="${v>=0?'val-pos':'val-neg'}">${fmt.brl(v)}</td>
               <td style="white-space:nowrap">
-                <button class="btn btn-sm btn-gray" onclick="ignorarLanc('${t.id}')" title="Marcar como ignorado (não conta no DRE)">🚫 Ignorar</button>
+                <button class="btn btn-sm btn-gray" onclick="ignorarLanc('${t.id}')" title="Ignorar — não conta no DRE">🚫 Ignorar</button>
+                <button class="btn btn-sm" style="background:#fee2e2;color:#dc2626;border:1px solid #fca5a5;margin-left:2px" onclick="excluirDoDRE('${t.id}')" title="Excluir este lançamento do DRE">🗑 Excluir</button>
                 <button class="btn btn-sm btn-green" style="margin-left:2px" onclick="toggleAprovado('${t.id}')" title="Confirmar que é lançamento válido">✅</button>
               </td>
             </tr>`;
@@ -609,9 +610,13 @@ function corrigirTodosHistorico(ci, catAtual) {
   const ids = conf.outrosMeses.map(x => x.id);
   if (!ids.length) return;
   if (!confirm(`Corrigir ${ids.length} lançamento(s) do histórico para "${catAtual}"?`)) return;
+  // Atualiza memória local
   ids.forEach(id => {
-    const t = _txsTodos.find(x => x.id === id);
+    const t = _txsTodos.find(x => String(x.id) === String(id));
     if (t) t.categoria = catAtual;
+  });
+  // Envia todos de uma vez para o portal salvar por mês
+  ids.forEach(id => {
     window.parent.postMessage({ type: 'auditoria_set_cat', id, categoria: catAtual }, '*');
   });
   toast(`✅ ${ids.length} lançamento(s) corrigidos para "${catAtual}"`);
@@ -619,12 +624,24 @@ function corrigirTodosHistorico(ci, catAtual) {
 }
 
 function corrigirCategoria(id, cat) {
-  const t = _txs.find(x => x.id === id);
-  if (!t || !cat) return;
-  t.categoria = cat;
+  if (!cat) return;
+  // Atualiza em _txs e _txsTodos
+  [_txs, _txsTodos].forEach(arr => {
+    const t = arr.find(x => String(x.id) === String(id));
+    if (t) t.categoria = cat;
+  });
   window.parent.postMessage({ type: 'auditoria_set_cat', id, categoria: cat }, '*');
   toast('✅ Categoria corrigida para: ' + cat);
   toggleAprovado(id);
+  renderTudo();
+}
+
+function excluirDoDRE(id) {
+  if (!confirm('Excluir este lançamento do DRE? Esta ação não pode ser desfeita.')) return;
+  window.parent.postMessage({ type: 'auditoria_excluir', id }, '*');
+  toast('🗑 Lançamento excluído do DRE');
+  _txs    = _txs.filter(t => String(t.id) !== String(id));
+  _txsTodos = _txsTodos.filter(t => String(t.id) !== String(id));
   renderTudo();
 }
 

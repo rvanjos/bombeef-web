@@ -1459,14 +1459,18 @@ window.addEventListener('message', e => {
   // Auditoria: atualiza categoria no DRE
   if (e.data.type === 'auditoria_set_cat') {
     try {
-      const txs = document.getElementById('iframe-dre')?.contentWindow?.TXS;
-      if (txs) {
-        const t = txs.find(x => String(x.id) === String(e.data.id));
-        if (t) {
-          t.categoria = e.data.categoria;
-          const dw = document.getElementById('iframe-dre').contentWindow;
-          dw.render(); dw.updStats(); dw.autoSv();
-        }
+      const dw  = document.getElementById('iframe-dre')?.contentWindow;
+      const txs = dw?.TXS;
+      if (txs && dw) {
+        const ids = Array.isArray(e.data.id) ? e.data.id : [e.data.id];
+        const mesesAfetados = new Set();
+        ids.forEach(id => {
+          const t = txs.find(x => String(x.id) === String(id));
+          if (t) { t.categoria = e.data.categoria; mesesAfetados.add(t.mes || dw.mesRef); }
+        });
+        dw.render(); dw.updStats();
+        // Salva cada mês afetado explicitamente
+        for (const mes of mesesAfetados) { dw.salvarMes(mes, true); }
       }
     } catch(_) {}
     return;
@@ -1474,10 +1478,29 @@ window.addEventListener('message', e => {
   // Auditoria: ignorar lançamento no DRE
   if (e.data.type === 'auditoria_ignorar') {
     try {
-      const txs = document.getElementById('iframe-dre')?.contentWindow?.TXS;
-      if (txs) {
+      const dw  = document.getElementById('iframe-dre')?.contentWindow;
+      const txs = dw?.TXS;
+      if (txs && dw) {
         const t = txs.find(x => String(x.id) === String(e.data.id));
-        if (t) { t.ignorar = true; const dw = document.getElementById('iframe-dre').contentWindow; dw.render(); dw.autoSv(); }
+        if (t) {
+          t.ignorar = true;
+          dw.render();
+          dw.salvarMes(t.mes || dw.mesRef, true);
+        }
+      }
+    } catch(_) {}
+    return;
+  }
+  // Auditoria: excluir lançamento do DRE
+  if (e.data.type === 'auditoria_excluir') {
+    try {
+      const dw  = document.getElementById('iframe-dre')?.contentWindow;
+      if (dw?.TXS) {
+        const t = dw.TXS.find(x => String(x.id) === String(e.data.id));
+        const mes = t?.mes || dw.mesRef;
+        dw.TXS = dw.TXS.filter(x => String(x.id) !== String(e.data.id));
+        dw.render(); dw.updStats();
+        dw.salvarMes(mes, true);
       }
     } catch(_) {}
     return;
