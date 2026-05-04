@@ -195,12 +195,17 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
   </div>
   <div class="card" style="overflow-x:auto">
     <table class="tbl" id="tbl-produtos">
-      <thead><tr>
-        <th>#</th><th>Código</th><th>Produto</th>
-        <th class="r">Faturamento</th><th class="r">Qtd</th>
-        <th class="r">Preço Médio</th><th class="r">Custo Unit.</th>
-        <th class="r">Lucro Bruto</th><th class="r">Margem %</th>
-        <th class="r">Freq.</th><th>ABC</th>
+      <thead><tr id="thead-produtos">
+        <th>#</th><th>Código</th>
+        <th onclick="sortProd('nome')" style="cursor:pointer;user-select:none">Produto <span id="sort-nome" style="font-size:10px;color:var(--muted)"></span></th>
+        <th class="r" onclick="sortProd('fat_total')" style="cursor:pointer;user-select:none">Faturamento <span id="sort-fat_total" style="font-size:10px">▼</span></th>
+        <th class="r" onclick="sortProd('qtd_total')" style="cursor:pointer;user-select:none">Qtd <span id="sort-qtd_total" style="font-size:10px;color:var(--muted)"></span></th>
+        <th class="r" onclick="sortProd('preco_medio')" style="cursor:pointer;user-select:none">Preço Médio <span id="sort-preco_medio" style="font-size:10px;color:var(--muted)"></span></th>
+        <th class="r" onclick="sortProd('preco_custo_unit')" style="cursor:pointer;user-select:none">Custo Unit. <span id="sort-preco_custo_unit" style="font-size:10px;color:var(--muted)"></span></th>
+        <th class="r" onclick="sortProd('lucro_bruto')" style="cursor:pointer;user-select:none">Lucro Bruto <span id="sort-lucro_bruto" style="font-size:10px;color:var(--muted)"></span></th>
+        <th class="r" onclick="sortProd('margem_pct')" style="cursor:pointer;user-select:none">Margem % <span id="sort-margem_pct" style="font-size:10px;color:var(--muted)"></span></th>
+        <th class="r" onclick="sortProd('frequencia')" style="cursor:pointer;user-select:none">Freq. <span id="sort-frequencia" style="font-size:10px;color:var(--muted)"></span></th>
+        <th>ABC</th>
       </tr></thead>
       <tbody id="tbody-produtos"></tbody>
     </table>
@@ -575,9 +580,46 @@ async function carregarProdutos() {
   renderProdutos(_dados.produtos);
 }
 
+// Estado de ordenação
+let _sortCol = 'fat_total';
+let _sortAsc  = false;
+
+function sortProd(col) {
+  if (_sortCol === col) {
+    _sortAsc = !_sortAsc; // inverte direção
+  } else {
+    _sortCol = col;
+    _sortAsc = false; // nova coluna começa descendente
+  }
+  // Atualiza indicadores visuais
+  document.querySelectorAll('[id^="sort-"]').forEach(el => {
+    el.textContent = '';
+    el.style.color = 'var(--muted)';
+  });
+  const ind = document.getElementById('sort-' + col);
+  if (ind) {
+    ind.textContent = _sortAsc ? '▲' : '▼';
+    ind.style.color = 'var(--red)';
+  }
+  renderProdutos(_dados?.produtos || []);
+}
+
 function renderProdutos(rows) {
   const busca = (document.getElementById('busca-prod').value||'').toLowerCase();
-  const filtrado = busca ? rows.filter(r=>(r.nome||'').toLowerCase().includes(busca)||(r.codigo||'').includes(busca)) : rows;
+  let filtrado = busca ? rows.filter(r=>(r.nome||'').toLowerCase().includes(busca)||(r.codigo||'').includes(busca)) : [...rows];
+
+  // Aplica ordenação
+  filtrado.sort((a, b) => {
+    let va = a[_sortCol], vb = b[_sortCol];
+    // Nulos vão pro fim
+    if (va === null || va === undefined) return 1;
+    if (vb === null || vb === undefined) return -1;
+    // String (nome, abc)
+    if (typeof va === 'string') va = va.toLowerCase(), vb = String(vb).toLowerCase();
+    else { va = parseFloat(va)||0; vb = parseFloat(vb)||0; }
+    const cmp = va < vb ? -1 : va > vb ? 1 : 0;
+    return _sortAsc ? cmp : -cmp;
+  });
 
   document.getElementById('tbody-produtos').innerHTML = filtrado.map((r,i)=>{
     const margem   = r.margem_pct !== null && r.margem_pct !== undefined ? parseFloat(r.margem_pct) : null;
