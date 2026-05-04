@@ -352,54 +352,107 @@ function _chaveForn(t) {
 
 function renderConflitos(lista) {
   const el = document.getElementById('lista-conflitos');
-  if (!lista.length) { el.innerHTML = '<div class="empty">✅ Nenhum conflito de classificação encontrado!</div>'; return; }
+  if (!lista.length) {
+    el.innerHTML = '<div class="empty">✅ Nenhum conflito de classificação encontrado!</div>';
+    return;
+  }
 
-  el.innerHTML = `<div style="background:#faf5ff;border:1px solid #e9d5ff;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#6b21a8">
-    ⚡ <strong>${lista.length} fornecedor(es)</strong> foram classificados de forma diferente em outros meses. Revise se a categoria atual está correta.
-  </div>` +
-  lista.map((c, ci) => {
-    const v = parseFloat(c.tx.valor||0);
-    return `<div class="card" style="margin-bottom:10px">
-      <div class="card-hd" style="background:#f5f3ff" onclick="toggleCard('conf-${ci}')">
-        <span class="section-toggle open" id="arr-conf-${ci}">▼</span>
-        <h3>⚡ ${c.tx.lancamento||c.tx.razaoSocial||'—'}</h3>
-        <span class="badge badge-purple">${c.catsOutros.length} cat. diferente(s)</span>
-      </div>
-      <div id="conf-${ci}">
-        <div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;gap:16px;align-items:center;flex-wrap:wrap">
-          <div>
-            <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:3px">Categoria ATUAL (${_mesAtual})</div>
-            <span class="cat-badge conf">${c.tx.categoria}</span>
-            <span style="font-size:11px;color:var(--muted);margin-left:8px">${fmt.brl(v)}</span>
-          </div>
-          <div style="font-size:18px;color:var(--muted)">≠</div>
-          <div>
-            <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:3px">Categorias em outros meses</div>
-            <div style="display:flex;gap:4px;flex-wrap:wrap">
-              ${c.catsOutros.map(cat => `<span class="cat-badge">${cat}</span>`).join('')}
-            </div>
-          </div>
-          <div style="margin-left:auto;display:flex;gap:4px">
-            <button class="btn btn-sm btn-orange" onclick="corrigirCategoria('${c.tx.id}', '${esc(c.catsOutros[0]||'')}')">
-              Usar: ${c.catsOutros[0]||'—'}
-            </button>
-            <button class="btn btn-sm btn-green" onclick="toggleAprovado('${c.tx.id}')">✅ Manter atual</button>
-          </div>
-        </div>
-        <div style="overflow-x:auto"><table class="tbl">
-          <thead><tr><th>Mês</th><th>Lançamento</th><th>Categoria usada</th><th style="text-align:right">Valor</th></tr></thead>
-          <tbody>
-          ${c.outrosMeses.map(x => `<tr>
-            <td style="white-space:nowrap;color:var(--muted)">${x.mesCaixa||x.mes||'—'}</td>
-            <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(x.lancamento||'')}">${x.lancamento||'—'}</td>
-            <td><span class="cat-badge">${x.categoria}</span></td>
-            <td style="text-align:right" class="${parseFloat(x.valor||0)>=0?'val-pos':'val-neg'}">${fmt.brl(parseFloat(x.valor||0))}</td>
-          </tr>`).join('')}
-          </tbody>
-        </table></div>
+  // Explicação no topo
+  let html = `
+    <div style="background:#faf5ff;border:1px solid #e9d5ff;border-radius:10px;padding:12px 16px;margin-bottom:16px">
+      <div style="font-size:13px;font-weight:700;color:#6b21a8;margin-bottom:4px">⚡ O que são conflitos?</div>
+      <div style="font-size:12px;color:#555;line-height:1.6">
+        Um conflito ocorre quando o <strong>mesmo fornecedor ou lançamento</strong> foi classificado em
+        <strong>categorias diferentes</strong> em meses distintos. Pode ser erro de classificação ou
+        uma mudança real (ex: um fornecedor que às vezes entrega carnes, às vezes embalagens).<br>
+        <strong>Ação:</strong> corrija para a categoria certa ou marque "Está correto" se a variação faz sentido.
       </div>
     </div>`;
-  }).join('');
+
+  lista.forEach((conf, ci) => {
+    const tx = conf.tx;
+    const v  = parseFloat(tx.valor||0);
+    const fornecedor = tx.razaoSocial || tx.lancamento || '—';
+    const lancamento = tx.lancamento  || '—';
+
+    // Conta quantas vezes cada categoria apareceu no histórico
+    const freq = {};
+    conf.outrosMeses.forEach(x => { freq[x.categoria] = (freq[x.categoria]||0) + 1; });
+    const catMaisUsada = Object.entries(freq).sort((a,b) => b[1]-a[1])[0]?.[0] || conf.catsOutros[0];
+    const totalHistorico = conf.outrosMeses.reduce((s,x) => s + Math.abs(parseFloat(x.valor||0)), 0);
+
+    html += `
+    <div class="card" style="margin-bottom:12px;border-left:3px solid #7c3aed">
+      <!-- Cabeçalho do conflito -->
+      <div style="padding:12px 16px;border-bottom:1px solid var(--border);background:#faf9ff">
+        <div style="display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap">
+          <div style="flex:1;min-width:200px">
+            <div style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:2px">Fornecedor / Lançamento</div>
+            <div style="font-size:14px;font-weight:700;color:var(--text)">${esc(fornecedor)}</div>
+            ${fornecedor !== lancamento ? `<div style="font-size:11px;color:var(--muted);margin-top:1px">${esc(lancamento)}</div>` : ''}
+          </div>
+          <div style="text-align:right;flex-shrink:0">
+            <div style="font-size:11px;color:var(--muted)">Valor em ${_mesAtual}</div>
+            <div style="font-size:15px;font-weight:700;font-family:'DM Mono',monospace;color:${v>=0?'var(--green)':'var(--red-l)'}">${fmt.brl(v)}</div>
+          </div>
+        </div>
+
+        <!-- Comparação visual: atual vs histórico -->
+        <div style="margin-top:12px;display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center">
+          <div style="background:#fff1f2;border:2px solid #fca5a5;border-radius:8px;padding:8px 12px">
+            <div style="font-size:10px;text-transform:uppercase;color:#991b1b;font-weight:700;margin-bottom:4px">Categoria atual (${_mesAtual})</div>
+            <div style="font-size:13px;font-weight:700;color:#991b1b">${tx.categoria}</div>
+          </div>
+          <div style="font-size:20px;color:var(--muted);text-align:center">≠</div>
+          <div style="background:#f5f3ff;border:2px solid #c4b5fd;border-radius:8px;padding:8px 12px">
+            <div style="font-size:10px;text-transform:uppercase;color:#6b21a8;font-weight:700;margin-bottom:4px">Mais usada no histórico</div>
+            <div style="font-size:13px;font-weight:700;color:#6b21a8">${catMaisUsada}</div>
+            <div style="font-size:10px;color:var(--muted);margin-top:2px">${conf.outrosMeses.length}x em outros meses · ${fmt.brl(totalHistorico)}</div>
+          </div>
+        </div>
+
+        <!-- Ações -->
+        <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+          <button onclick="corrigirCategoria('${tx.id}','${esc(catMaisUsada)}')"
+            style="padding:7px 14px;background:#7c3aed;color:#fff;border:none;border-radius:7px;cursor:pointer;font-size:12px;font-weight:600">
+            🔄 Corrigir para "${esc(catMaisUsada)}"
+          </button>
+          <button onclick="toggleAprovado('${tx.id}');this.textContent='✅ Marcado como correto';this.style.background='var(--green)'"
+            style="padding:7px 14px;background:#f0ebe4;color:var(--text);border:1px solid var(--border);border-radius:7px;cursor:pointer;font-size:12px;font-weight:600">
+            ✓ Está correto, manter ${tx.categoria}
+          </button>
+          <button onclick="toggleCard('conf-hist-${ci}')"
+            style="padding:7px 12px;background:#f0ebe4;color:var(--muted);border:1px solid var(--border);border-radius:7px;cursor:pointer;font-size:11px">
+            Ver histórico ▾
+          </button>
+        </div>
+      </div>
+
+      <!-- Histórico expandível -->
+      <div id="conf-hist-${ci}" style="display:none;overflow-x:auto">
+        <div style="padding:8px 16px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border)">
+          Histórico de classificações deste fornecedor
+        </div>
+        <table class="tbl" style="font-size:12px">
+          <thead><tr>
+            <th>Mês</th><th>Lançamento</th><th>Fornecedor</th>
+            <th>Categoria usada</th><th style="text-align:right">Valor</th>
+          </tr></thead>
+          <tbody>
+            ${conf.outrosMeses.map(x => `<tr>
+              <td style="white-space:nowrap;color:var(--muted)">${x.mesCaixa||x.mes||'—'}</td>
+              <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(x.lancamento||'')}">${esc(x.lancamento||'—')}</td>
+              <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)" title="${esc(x.razaoSocial||'')}">${esc(x.razaoSocial||'—')}</td>
+              <td><span class="cat-badge">${x.categoria}</span></td>
+              <td style="text-align:right" class="${parseFloat(x.valor||0)>=0?'val-pos':'val-neg'}">${fmt.brl(parseFloat(x.valor||0))}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+  });
+
+  el.innerHTML = html;
 }
 
 // ── POR CATEGORIA ─────────────────────────────────────────────────────────────
