@@ -881,6 +881,14 @@ function showTab(tab) {
 let _valPendentesConfirmar = [];
 
 async function verificarConfirmacaoValidade() {
+  // Aguarda o token estar disponível (máx 5s)
+  let tentativas = 0;
+  while (!token() && tentativas < 10) {
+    await new Promise(r => setTimeout(r, 500));
+    tentativas++;
+  }
+  if (!token()) return; // sem token, não bloqueia
+
   try {
     const d = await apiFetch('/api/validade/alertas-confirmacao');
     if (!d.ok || !d.data?.length) return; // nada a confirmar
@@ -888,6 +896,8 @@ async function verificarConfirmacaoValidade() {
     abrirModalConfirmacaoValidade();
   } catch(e) {
     console.warn('[val confirm]', e);
+    // Qualquer erro: NÃO bloqueia o sistema
+    _bloquearNavegacao(false);
   }
 }
 
@@ -936,8 +946,8 @@ function abrirModalConfirmacaoValidade() {
   modal.style.display = 'flex';
 }
 
+let _bloqueioTimer = null;
 function _bloquearNavegacao(bloquear) {
-  // Bloqueia/desbloqueia cliques nas abas de navegação
   document.querySelectorAll('.pnav-tab').forEach(tab => {
     if (bloquear) {
       tab.dataset.bloqueado = '1';
@@ -949,9 +959,19 @@ function _bloquearNavegacao(bloquear) {
       tab.style.pointerEvents = '';
     }
   });
-  // Bloqueia menu mobile
   const mob = document.getElementById('mob-nav-items');
   if (mob) mob.style.pointerEvents = bloquear ? 'none' : '';
+
+  // Timeout de segurança: desbloqueia automaticamente após 30s
+  if (_bloqueioTimer) clearTimeout(_bloqueioTimer);
+  if (bloquear) {
+    _bloqueioTimer = setTimeout(() => {
+      console.warn('[val confirm] timeout de segurança — desbloqueando');
+      _bloquearNavegacao(false);
+      const modal = document.getElementById('modal-val-confirm');
+      if (modal) modal.style.display = 'none';
+    }, 30000);
+  }
 }
 
 async function confirmarValidade() {
