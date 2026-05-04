@@ -19,9 +19,9 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
 .nav-item{display:flex;align-items:center;gap:9px;padding:9px 18px;cursor:pointer;font-size:13px;font-weight:500;color:var(--text);transition:all .15s;border-left:3px solid transparent;}
 .nav-item:hover{background:#faf5f0;color:var(--red);}
 .nav-item.active{background:#fff5f5;color:var(--red);font-weight:700;border-left-color:var(--red);}
-.content{background:var(--bg);padding:28px 28px;overflow:visible;}
+.content{background:var(--bg);padding:28px 28px;overflow:auto;min-width:0;}
 .page{display:none;}
-.page.active{display:block;}
+.page.active{display:block;width:100%;min-width:0;}
 .pg-title{font-family:'Playfair Display',serif;font-size:20px;color:var(--red);margin-bottom:4px;}
 .pg-sub{font-size:13px;color:var(--muted);margin-bottom:22px;}
 .card{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:16px;box-shadow:var(--shadow);}
@@ -269,14 +269,14 @@ if(window.self !== window.top){
         <button class="btn btn-p" onclick="abrirAcao()">＋ Nova Ação</button>
       </div>
       <div class="card">
-        <table class="tbl">
+        <div style="overflow-x:auto"><table class="tbl">
           <thead><tr>
             <th>Descrição</th>
             <th style="width:80px;text-align:center">Ordem</th>
             <th style="width:120px">Ações</th>
           </tr></thead>
           <tbody id="tbody-acoes"></tbody>
-        </table>
+        </table></div>
         <div class="empty" id="empty-acoes" style="display:none"><p>Nenhuma ação cadastrada.</p></div>
       </div>
     </div>
