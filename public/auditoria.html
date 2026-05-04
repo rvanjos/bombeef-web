@@ -327,13 +327,16 @@ function detectarConflitos() {
   for (const t of _txs) {
     if (!t.categoria || !t.lancamento) continue;
     const chave = _chaveForn(t);
+    if (!chave || chave.length < 4) continue; // ignora chaves muito curtas/genéricas
     if (seenForn.has(chave)) continue;
 
     // Outros lançamentos do mesmo fornecedor em outros meses com categoria diferente
     const outrosMeses = _txsTodos.filter(x => {
       if ((x.mesCaixa||x.mes) === _mesAtual) return false;
       if (!x.categoria || x.categoria === t.categoria) return false;
-      return _chaveForn(x) === chave;
+      const cx = _chaveForn(x);
+      if (!cx || cx.length < 4) return false;
+      return cx === chave;
     });
 
     if (outrosMeses.length > 0) {
@@ -346,8 +349,21 @@ function detectarConflitos() {
 }
 
 function _chaveForn(t) {
-  return (t.lancamento||t.razaoSocial||'').toUpperCase()
-    .replace(/[^A-Z0-9]/g,'').slice(0,20);
+  // Usa razaoSocial como chave principal (é o fornecedor real)
+  // Só cai para lancamento se razaoSocial estiver vazio ou for genérico
+  const genericos = /^(BOLETO|PIX|TED|DOC|PAGAMENTO|TRANSFERENCIA|DEBITO|SAQUE|TARIFA|TAXA|ESTORNO)$/i;
+  const base = (t.razaoSocial||'').trim();
+  // Se tem razaoSocial e não é genérico, usa ela
+  if (base && base.length > 3 && !genericos.test(base.replace(/\s+/g,''))) {
+    return base.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,30);
+  }
+  // Senão usa o lançamento (mas evita chaves genéricas)
+  const lanc = (t.lancamento||'').trim();
+  if (lanc && !genericos.test(lanc.split(/\s/)[0])) {
+    return lanc.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,30);
+  }
+  // Último recurso: lançamento completo
+  return lanc.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,30);
 }
 
 function renderConflitos(lista) {
