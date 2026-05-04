@@ -79,6 +79,19 @@ module.exports = function (pool) {
     // Remove constraint de status que pode conflitar
     await pool.query(`ALTER TABLE validade_items DROP CONSTRAINT IF EXISTS validade_items_status_check`).catch(() => {});
 
+    // Tabela de confirmações de validade
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS validade_confirmacoes (
+        id              SERIAL PRIMARY KEY,
+        item_id         INTEGER NOT NULL,
+        usuario_id      INTEGER,
+        usuario_nome    TEXT,
+        acao_hash       TEXT,
+        confirmado_em   TIMESTAMPTZ DEFAULT NOW()
+      )
+    `).catch(() => {});
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_val_conf_item ON validade_confirmacoes(item_id)`).catch(() => {});
+
     await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_val_codigo    ON validade_items(codigo);
       CREATE INDEX IF NOT EXISTS idx_val_validade  ON validade_items(data_validade);
@@ -211,19 +224,6 @@ module.exports = function (pool) {
       res.json({ ok: true, data, total: data.length });
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
-
-  // ── Tabela de confirmações de validade ──────────────────────────────────────
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS validade_confirmacoes (
-      id              SERIAL PRIMARY KEY,
-      item_id         INTEGER NOT NULL,
-      usuario_id      INTEGER,
-      usuario_nome    TEXT,
-      acao_hash       TEXT,    -- hash da ação confirmada (detecta se mudou)
-      confirmado_em   TIMESTAMPTZ DEFAULT NOW()
-    )
-  `).catch(() => {});
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_val_conf_item ON validade_confirmacoes(item_id)`).catch(() => {});
 
   // ── GET /alertas-confirmacao — produtos ≤7 dias com ação não confirmada ──────
   r.get('/alertas-confirmacao', async (req, res) => {
