@@ -225,6 +225,26 @@ module.exports = function (pool) {
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
+  // ── PUT /:id/reativar ────────────────────────────────────────────────────────
+  r.put('/:id/reativar', async (req, res) => {
+    const id = parseInt(req.params.id);
+    try {
+      const { rows } = await pool.query(`
+        UPDATE validade_items
+        SET status = 'ok',
+            resolucao = NULL,
+            obs_resolucao = NULL,
+            dt_resolucao = NULL,
+            encerrado_por = NULL,
+            atualizado_em = NOW()
+        WHERE id = $1
+        RETURNING id, descricao, status
+      `, [id]);
+      if (!rows.length) return res.status(404).json({ ok: false, erro: 'Item não encontrado' });
+      res.json({ ok: true, data: rows[0] });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
   // ── GET /alertas-confirmacao — produtos ≤7 dias com ação não confirmada ──────
   r.get('/alertas-confirmacao', async (req, res) => {
     try {

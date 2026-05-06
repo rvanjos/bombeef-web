@@ -2204,10 +2204,23 @@ async function carregarHistorico(){
       <td style="font-size:11px;color:var(--muted)">${v.acao_antes_vencer||'—'}</td>
       <td style="font-size:11px;color:var(--muted);max-width:160px;overflow:hidden;text-overflow:ellipsis">${v.obs_resolucao||'—'}</td>
       <td style="font-size:11px">${v.encerrado_por||'—'}</td>
-      <td style="text-align:center">
+      <td style="text-align:center;white-space:nowrap;display:flex;gap:4px;justify-content:center">
         <button onclick="abrirEditHist(${v.id})" style="background:none;border:1px solid var(--border);border-radius:5px;padding:3px 8px;cursor:pointer;font-size:11px" title="Editar este registro">✏️</button>
+        ${(v.resolucao==='vendido'||v.status==='vendido') ? `<button onclick="reativarItem(${v.id},'${v.descricao.replace(/'/g,"\\'")}')" style="background:#fff3cd;color:#856404;border:1px solid #ffc107;border-radius:5px;padding:3px 8px;cursor:pointer;font-size:11px" title="Reativar — desfazer marcação como vendido">🔄 Reativar</button>` : ''}
       </td>
     </tr>`;}).join('');
+}
+
+async function reativarItem(id, descricao) {
+  if (!confirm(`Reativar "${descricao}"?
+
+O item voltará para a listagem de validade com status OK.`)) return;
+  const d = await api.put(`/api/validade/${id}/reativar`, {});
+  if (!d.ok) { toast('❌ Erro: ' + (d.erro||'Falha ao reativar')); return; }
+  toast('✅ Item reativado e voltou para a listagem!');
+  carregarHistorico();
+  // Recarrega os itens ativos também
+  await carregar();
 }
 
 function limparFiltrosHist(){
