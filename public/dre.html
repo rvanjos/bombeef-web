@@ -3214,9 +3214,41 @@ function toggleDREPanel(){
   document.getElementById('btn-dre-lateral')?.classList.toggle('active');
 }
 
+// ── Deduplicação de boletos vs extrato (usada em render() e _buildDRE) ──────
+function _txsSemDuplicatas(txs) {
+  const boletosQuitadosPorId = new Set(
+    txs.filter(t => t.fonte === 'EXTRATO' && t.boletoId).map(t => String(t.boletoId))
+  );
+  const boletosQuitadosPorVinculo = new Set(
+    txs.filter(t => t.fonte?.startsWith('BOLETO') && t.vinculadoA).map(t => t.id)
+  );
+  const extratoHashVlrMes = new Set(
+    txs.filter(t => (t.fonte === 'EXTRATO' || t.fonte === 'OFX') && parseFloat(t.valor||0) < 0)
+       .map(t => `${Math.round(Math.abs(parseFloat(t.valor||0))*100)}|${t.mesCaixa||t.mes}`)
+  );
+  return txs.filter(t => {
+    if (t.ignorar) return false;
+    if (t.fonte === 'BOLETO_PREV' && t.boletoId && boletosQuitadosPorId.has(String(t.boletoId))) return false;
+    if (t.fonte === 'BOLETO_PREV' && boletosQuitadosPorVinculo.has(t.id)) return false;
+    if (t.fonte === 'BOLETO' && t.boletoId && boletosQuitadosPorId.has(String(t.boletoId))) {
+      if (txs.some(x => (x.fonte==='EXTRATO'||x.fonte==='OFX') && String(x.boletoId)===String(t.boletoId))) return false;
+    }
+    if (t.fonte === 'BOLETO' && t.vinculadoA) {
+      const valCents = Math.round(Math.abs(parseFloat(t.valor||0)) * 100);
+      const mesT = t.mesCaixa || t.mes;
+      if (txs.some(x => (x.fonte==='EXTRATO'||x.fonte==='OFX') && Math.round(Math.abs(parseFloat(x.valor||0))*100)===valCents && (x.mesCaixa||x.mes)===mesT)) return false;
+    }
+    if ((t.fonte==='BOLETO_PREV'||t.fonte==='BOLETO') && !t.boletoId) {
+      const hash = `${Math.round(Math.abs(parseFloat(t.valor||0))*100)}|${t.mesCaixa||t.mes}`;
+      if (extratoHashVlrMes.has(hash)) return false;
+    }
+    return true;
+  });
+}
+
 function _buildDRE(el, full) {
   if (!el) return;
-  const at=TXS.filter(t=>!t.ignorar&&t.categoria);
+  const at = _txsSemDuplicatas(TXS).filter(t => t.categoria);
   if (!at.length) {
     el.innerHTML='<div style="padding:20px;text-align:center;color:var(--muted);font-size:12px">Classifique os lançamentos para ver o DRE</div>';
     return;
