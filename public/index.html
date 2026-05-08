@@ -736,6 +736,10 @@ function entrarNoPortal() {
   // Atualiza KPIs a cada 90 segundos
   kpiTimer = setInterval(carregarKPIs, 90000);
 
+  // Renovação automática do token — verifica a cada 30min
+  setInterval(renovarTokenSeNecessario, 30 * 60 * 1000);
+  renovarTokenSeNecessario(); // verifica imediatamente
+
   // Verificação obrigatória de validade para operadores/gestores
   const perfisObrigatorios = ['operador','gestor','caixa','estoque'];
   if (perfisObrigatorios.includes(usuario?.perfil)) {
@@ -874,6 +878,32 @@ function showTab(tab) {
         enviarToken();
       }
     }
+  }
+}
+
+// ── RENOVAÇÃO AUTOMÁTICA DE TOKEN ────────────────────────────────────────────
+async function renovarTokenSeNecessario() {
+  const tk = token();
+  if (!tk) return;
+  try {
+    // Decodifica o payload sem verificar assinatura (só para checar exp)
+    const payload = JSON.parse(atob(tk.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
+    const agora = Math.floor(Date.now() / 1000);
+    const restam = payload.exp - agora;
+    // Renova se restar menos de 2 horas
+    if (restam < 7200) {
+      const r = await fetch('/auth/refresh', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + tk }
+      }).then(r => r.json());
+      if (r.ok && r.token) {
+        sessionStorage.setItem('bb_token', r.token);
+        _broadcastToken();
+        console.log('[auth] Token renovado automaticamente');
+      }
+    }
+  } catch(e) {
+    console.warn('[auth] Não foi possível renovar token:', e.message);
   }
 }
 

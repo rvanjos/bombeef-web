@@ -23,15 +23,20 @@
   // Se ainda está na fase de inicialização, apenas descarta o token expirado
   // e pede um novo ao portal — evita o bug de "precisa fazer login duas vezes"
   // causado por token residual expirado no sessionStorage de sessão anterior.
+  // Flag global para evitar múltiplos 401 simultâneos
+  let _logoutEmAndamento = false;
+
   function handle401() {
+    if (_logoutEmAndamento) return; // já está tratando
     sessionStorage.removeItem('bb_token');
     localStorage.removeItem('bb_token');
     if (_emIframe) {
       if (_bbReady) {
-        // Sessão expirou durante uso normal → logout
+        // Sessão expirou durante uso normal → logout único
+        _logoutEmAndamento = true;
         try { w.parent.postMessage({ type: 'bb_logout' }, '*'); } catch (_) {}
       } else {
-        // Token expirado encontrado na inicialização → pede token fresco ao portal
+        // Token expirado na inicialização → pede token fresco
         try { w.parent.postMessage({ type: 'bb_request_auth' }, '*'); } catch (_) {}
       }
     } else {

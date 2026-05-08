@@ -94,6 +94,30 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
       CHECK (perfil IN ('admin','gestor','financeiro','estoque','caixa','contabil'));
   `).catch(() => {}); // silencia se tabela ainda não existe
 
+  // ── POST /refresh — renova token sem precisar fazer login novamente ────────
+  r.post('/refresh', async (req, res) => {
+    const auth = req.headers.authorization || '';
+    const oldToken = auth.replace('Bearer ', '');
+    if (!oldToken) return res.status(401).json({ ok: false, erro: 'Token não fornecido' });
+    try {
+      // Verifica mesmo expirado (ignoreExpiration) para permitir renovação
+      const payload = jwt.verify(oldToken, process.env.JWT_SECRET, { ignoreExpiration: true });
+      // Só renova se expirou há menos de 1 dia (segurança)
+      const expiredAgo = Math.floor(Date.now()/1000) - payload.exp;
+      if (expiredAgo > 86400) return res.status(401).json({ ok: false, erro: 'Token muito antigo' });
+      // Verifica se usuário ainda existe e está ativo
+      const { rows } = await pool.query('SELECT id,nome,email,perfil FROM usuarios WHERE id=$1 AND ativo=true', [payload.id]);
+      if (!rows.length) return res.status(401).json({ ok: false, erro: 'Usuário inativo' });
+      const newToken = jwt.sign(
+        { id: rows[0].id, nome: rows[0].nome, email: rows[0].email, perfil: rows[0].perfil },
+        process.env.JWT_SECRET, { expiresIn: '24h' }
+      );
+      res.json({ ok: true, token: newToken, usuario: rows[0] });
+    } catch(e) {
+      res.status(401).json({ ok: false, erro: 'Token inválido' });
+    }
+  });
+
   // ── POST /login ────────────────────────────────────────────────────────────
   r.post('/login', async (req, res) => {
     const { email, senha } = req.body;
@@ -123,7 +147,7 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
       const token = jwt.sign(
         { id: usuario.id, nome: usuario.nome, email: usuario.email, perfil: usuario.perfil },
         process.env.JWT_SECRET,
-        { expiresIn: process.env.JWT_EXPIRES_IN || '8h' }
+        { expiresIn: process.env.JWT_EXPIRES_IN || '24h' }
       );
 
       res.json({
