@@ -2075,10 +2075,15 @@ function render() {
     TXS.filter(t => t.fonte?.startsWith('BOLETO') && t.vinculadoA).map(t => t.id)
   );
 
-  // Regra 2: por valor+mês (fallback quando não há boletoId)
+  // Regra 2: por valor+DATA (mais preciso que valor+mês)
+  const extratoHashVlrData = new Set(
+    TXS.filter(t => (t.fonte==='EXTRATO'||t.fonte==='OFX') && parseFloat(t.valor||0) < 0 && t.data)
+       .map(t => `${Math.round(Math.abs(parseFloat(t.valor||0))*100)}|${t.data}`)
+  );
+  // Regra 3: fallback valor+mês
   const extratoHashVlrMes = new Set(
     TXS
-      .filter(t => t.fonte === 'EXTRATO' && parseFloat(t.valor||0) < 0)
+      .filter(t => (t.fonte === 'EXTRATO'||t.fonte==='OFX') && parseFloat(t.valor||0) < 0)
       .map(t => `${Math.round(Math.abs(parseFloat(t.valor||0))*100)}|${t.mesCaixa||t.mes}`)
   );
 
@@ -2087,12 +2092,17 @@ function render() {
     if (t.fonte === 'BOLETO_PREV' && t.boletoId && boletosQuitadosPorId.has(String(t.boletoId))) return false;
     // Esconde BOLETO_PREV se o próprio boleto já tem vinculadoA (foi quitado)
     if (t.fonte === 'BOLETO_PREV' && boletosQuitadosPorVinculo.has(t.id)) return false;
+    // Esconde BOLETO_PREV/BOLETO se existe EXTRATO com mesmo valor+DATA
+    if ((t.fonte === 'BOLETO_PREV' || t.fonte === 'BOLETO') && t.data) {
+      const hd = `${Math.round(Math.abs(parseFloat(t.valor||0))*100)}|${t.data}`;
+      if (extratoHashVlrData.has(hd)) return false;
+    }
     // Esconde BOLETO se já existe EXTRATO com mesmo boletoId (não duplicar)
     if (t.fonte === 'BOLETO' && t.boletoId && boletosQuitadosPorId.has(String(t.boletoId))) {
       const extratoExiste = TXS.some(x => (x.fonte === 'EXTRATO' || x.fonte === 'OFX') && String(x.boletoId) === String(t.boletoId));
       if (extratoExiste) return false;
     }
-    // Esconde BOLETO pago se já existe EXTRATO com mesmo valor+mês (boleto pago sem boletoId no extrato)
+    // Esconde BOLETO pago se já existe EXTRATO com mesmo valor+mês
     if (t.fonte === 'BOLETO' && t.vinculadoA) {
       const valCents = Math.round(Math.abs(parseFloat(t.valor||0)) * 100);
       const mesT = t.mesCaixa || t.mes;
@@ -3215,34 +3225,62 @@ function toggleDREPanel(){
   document.getElementById('btn-dre-lateral')?.classList.toggle('active');
 }
 
-// ── Deduplicação de boletos vs extrato (usada em render() e _buildDRE) ──────
+// ── Deduplicação de boletos vs extrato ───────────────────────────────────────
 function _txsSemDuplicatas(txs) {
-  const boletosQuitadosPorId = new Set(
-    txs.filter(t => t.fonte === 'EXTRATO' && t.boletoId).map(t => String(t.boletoId))
+  // Regra 1: por boletoId — mais confiável
+  const extratoPorBoletoId = new Set(
+    txs.filter(t => (t.fonte==='EXTRATO'||t.fonte==='OFX') && t.boletoId).map(t => String(t.boletoId))
   );
-  const boletosQuitadosPorVinculo = new Set(
+  const boletosComVinculo = new Set(
     txs.filter(t => t.fonte?.startsWith('BOLETO') && t.vinculadoA).map(t => t.id)
   );
+
+  // Regra 2: EXTRATO com mesmo valor+DATA (não mês) — cobre casos sem boletoId
+  // Chave: |valor_cents|data_iso|
+  const extratoHashVlrData = new Set(
+    txs.filter(t => (t.fonte==='EXTRATO'||t.fonte==='OFX') && parseFloat(t.valor||0) < 0 && t.data)
+       .map(t => `${Math.round(Math.abs(parseFloat(t.valor||0))*100)}|${t.data}`)
+  );
+
+  // Regra 3: fallback valor+mês (quando não há data no boleto)
   const extratoHashVlrMes = new Set(
-    txs.filter(t => (t.fonte === 'EXTRATO' || t.fonte === 'OFX') && parseFloat(t.valor||0) < 0)
+    txs.filter(t => (t.fonte==='EXTRATO'||t.fonte==='OFX') && parseFloat(t.valor||0) < 0)
        .map(t => `${Math.round(Math.abs(parseFloat(t.valor||0))*100)}|${t.mesCaixa||t.mes}`)
   );
+
   return txs.filter(t => {
     if (t.ignorar) return false;
-    if (t.fonte === 'BOLETO_PREV' && t.boletoId && boletosQuitadosPorId.has(String(t.boletoId))) return false;
-    if (t.fonte === 'BOLETO_PREV' && boletosQuitadosPorVinculo.has(t.id)) return false;
-    if (t.fonte === 'BOLETO' && t.boletoId && boletosQuitadosPorId.has(String(t.boletoId))) {
-      if (txs.some(x => (x.fonte==='EXTRATO'||x.fonte==='OFX') && String(x.boletoId)===String(t.boletoId))) return false;
+
+    // BOLETO_PREV: oculta se extrato já tem o boletoId ou se tem vinculadoA
+    if (t.fonte === 'BOLETO_PREV') {
+      if (t.boletoId && extratoPorBoletoId.has(String(t.boletoId))) return false;
+      if (boletosComVinculo.has(t.id)) return false;
+      // Oculta se existe extrato com mesmo valor+data
+      if (t.data) {
+        const hd = `${Math.round(Math.abs(parseFloat(t.valor||0))*100)}|${t.data}`;
+        if (extratoHashVlrData.has(hd)) return false;
+      }
+      // Fallback: valor+mês
+      const hm = `${Math.round(Math.abs(parseFloat(t.valor||0))*100)}|${t.mesCaixa||t.mes}`;
+      if (extratoHashVlrMes.has(hm)) return false;
     }
-    if (t.fonte === 'BOLETO' && t.vinculadoA) {
-      const valCents = Math.round(Math.abs(parseFloat(t.valor||0)) * 100);
-      const mesT = t.mesCaixa || t.mes;
-      if (txs.some(x => (x.fonte==='EXTRATO'||x.fonte==='OFX') && Math.round(Math.abs(parseFloat(x.valor||0))*100)===valCents && (x.mesCaixa||x.mes)===mesT)) return false;
+
+    // BOLETO pago: oculta se extrato já cobre
+    if (t.fonte === 'BOLETO') {
+      if (t.boletoId && extratoPorBoletoId.has(String(t.boletoId))) return false;
+      if (boletosComVinculo.has(t.id)) return false;
+      // Mesmo valor+data → duplicata
+      if (t.data) {
+        const hd = `${Math.round(Math.abs(parseFloat(t.valor||0))*100)}|${t.data}`;
+        if (extratoHashVlrData.has(hd)) return false;
+      }
+      // vinculadoA + mesmo valor+mês → duplicata
+      if (t.vinculadoA) {
+        const hm = `${Math.round(Math.abs(parseFloat(t.valor||0))*100)}|${t.mesCaixa||t.mes}`;
+        if (extratoHashVlrMes.has(hm)) return false;
+      }
     }
-    if ((t.fonte==='BOLETO_PREV'||t.fonte==='BOLETO') && !t.boletoId) {
-      const hash = `${Math.round(Math.abs(parseFloat(t.valor||0))*100)}|${t.mesCaixa||t.mes}`;
-      if (extratoHashVlrMes.has(hash)) return false;
-    }
+
     return true;
   });
 }
