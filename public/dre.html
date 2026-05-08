@@ -92,6 +92,12 @@ td{padding:5px 9px;vertical-align:middle;}
 .vn{color:var(--red-l);font-weight:600;font-family:'DM Mono',monospace;}
 /* DRE PAINEL */
 .dre-p{width:340px;min-width:280px;border-left:1px solid var(--border);background:var(--white);overflow-y:auto;flex-shrink:0;transition:width .2s;}
+/* Scroll duplo no DRE modal */
+#dre-scroll-top{overflow-x:auto;overflow-y:hidden;height:12px;flex-shrink:0;border-bottom:1px solid var(--border);}
+#dre-scroll-top-inner{height:1px;}
+#dre-modal-scroll::-webkit-scrollbar{height:8px;width:8px;}
+#dre-modal-scroll::-webkit-scrollbar-thumb{background:#ccc;border-radius:4px;}
+#dre-modal-scroll::-webkit-scrollbar-track{background:transparent;}
 .dre-p.hid{width:0;min-width:0;overflow:hidden;}
 .dre-hd{padding:8px 12px;border-bottom:2px solid var(--border);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--blue);display:flex;justify-content:space-between;align-items:center;flex-shrink:0;}
 /* DROPZONE */
@@ -744,8 +750,12 @@ thead th{padding:6px 9px;}
         <button onclick="fecharModal('m-dre')" style="background:none;border:none;color:rgba(255,255,255,.8);font-size:22px;cursor:pointer;line-height:1">×</button>
       </div>
     </div>
-    <div style="overflow-y:auto;flex:1;min-height:0" id="dre-modal-scroll">
-      <div id="dre-full-body" style="padding:16px"></div>
+    <!-- Barra de scroll espelho no topo -->
+    <div id="dre-scroll-top">
+      <div id="dre-scroll-top-inner"></div>
+    </div>
+    <div style="overflow:auto;flex:1;min-height:0" id="dre-modal-scroll">
+      <div id="dre-full-body" style="padding:16px;min-width:max-content"></div>
     </div>
   </div>
 </div>
@@ -3093,6 +3103,11 @@ function togglePct() {
   if (document.getElementById('m-dre')?.classList.contains('open')) renderDREFull();
 }
 function renderDRE(){
+  setTimeout(()=>{
+    const inner=document.getElementById('dre-scroll-top-inner');
+    const scroll=document.getElementById('dre-modal-scroll');
+    if(inner&&scroll) inner.style.width=scroll.scrollWidth+'px';
+  },50);
   _garantirFatPorMes().then(() => _buildDRE(document.getElementById('dre-body'),false));
 }
 function renderDREFull(){
@@ -3174,10 +3189,24 @@ function toggleDREFullscreen() {
   }
 }
 
+// Scroll espelho no topo do modal DRE
+function initDREScrollEspelho() {
+  const scroll = document.getElementById('dre-modal-scroll');
+  const top    = document.getElementById('dre-scroll-top');
+  const inner  = document.getElementById('dre-scroll-top-inner');
+  if (!scroll || !top || !inner) return;
+  const sync = () => { inner.style.width = scroll.scrollWidth + 'px'; };
+  top.addEventListener('scroll',    () => { scroll.scrollLeft = top.scrollLeft; });
+  scroll.addEventListener('scroll', () => { top.scrollLeft = scroll.scrollLeft; });
+  if (window.ResizeObserver) new ResizeObserver(sync).observe(scroll);
+  sync();
+}
+
 function abrirDREModal(){
   document.getElementById('m-dre').classList.add('open');
   const el=document.getElementById('dre-modo-full'); if(el) el.value=getModo();
   renderDREFull();
+  setTimeout(initDREScrollEspelho, 150);
 }
 
 function toggleDREPanel(){
