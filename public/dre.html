@@ -3235,46 +3235,63 @@ function toggleDREPanel(){
 }
 
 // ── Re-vincula BOLETO_PREV com EXTRATOs após carregar sessões ────────────────
-// Necessário porque os dados vêm de sessões diferentes do banco
 function _revinculateBoletosPrev() {
-  // Indexa EXTRATOs por valor+data para busca rápida
+  // Passo 1: deduplicar dois PREVs com mesmo valor+data (mesmo boleto importado duas vezes)
+  const prevVistos = new Map(); // "valCents|data" → primeiro PREV
+  for (const t of TXS) {
+    if (!t.fonte?.startsWith('BOLETO') || !t.data || t.ignorar) continue;
+    const key = `${Math.round(Math.abs(parseFloat(t.valor||0))*100)}|${t.data}`;
+    if (prevVistos.has(key)) {
+      // Segundo PREV com mesmo valor+data → marca como ignorado
+      const primeiro = prevVistos.get(key);
+      // Mantém o que tem categoria ou o que tem nome mais completo
+      if (!primeiro.categoria && t.categoria) {
+        primeiro.categoria = t.categoria;
+      }
+      // Se o primeiro tem boletoId e o segundo não (ou vice-versa), herda
+      if (!primeiro.boletoId && t.boletoId) primeiro.boletoId = t.boletoId;
+      t.ignorar = true; // esconde o duplicado
+    } else {
+      prevVistos.set(key, t);
+    }
+  }
+
+  // Passo 2: indexa EXTRATOs por valor+data (incluindo os que já têm vinculadoA)
   const extratoIdx = new Map(); // "valCents|data" → tx
   for (const t of TXS) {
-    if ((t.fonte === 'EXTRATO' || t.fonte === 'OFX') && t.data && parseFloat(t.valor||0) < 0) {
+    if ((t.fonte === 'EXTRATO' || t.fonte === 'OFX') && t.data && parseFloat(t.valor||0) < 0 && !t.ignorar) {
       const key = `${Math.round(Math.abs(parseFloat(t.valor||0))*100)}|${t.data}`;
       if (!extratoIdx.has(key)) extratoIdx.set(key, t);
     }
   }
 
+  // Passo 3: vincula PREVs restantes ao EXTRATO correspondente
   let vinculados = 0;
   for (const t of TXS) {
-    if (!t.fonte?.startsWith('BOLETO')) continue;
+    if (!t.fonte?.startsWith('BOLETO') || t.ignorar) continue;
     if (t.vinculadoA) continue; // já vinculado
     if (!t.data) continue;
 
     const valCents = Math.round(Math.abs(parseFloat(t.valor||0))*100);
     const dtBase = new Date(t.data);
 
-    // Busca extrato com mesmo valor em ±3 dias
-    for (let d = -3; d <= 3; d++) {
+    // Busca extrato com mesmo valor em ±5 dias
+    for (let d = -5; d <= 5; d++) {
       const dt = new Date(dtBase);
       dt.setDate(dt.getDate() + d);
       const dateStr = dt.toISOString().slice(0,10);
-      const key = `${valCents}|${dateStr}`;
-      const extrato = extratoIdx.get(key);
-      if (extrato && !extrato.vinculadoA) {
-        // Vincula: o extrato é o lançamento real, o boleto some
+      const extrato = extratoIdx.get(`${valCents}|${dateStr}`);
+      if (extrato) {
         t.vinculadoA = extrato.lancamento || extrato.razaoSocial || 'extrato';
-        extrato.boletoId = extrato.boletoId || t.boletoId || t.id;
-        extrato.vinculadoA = extrato.vinculadoA || t.lancamento;
-        // Herda categoria se extrato não tem
+        if (!extrato.boletoId) extrato.boletoId = t.boletoId || t.id;
+        if (!extrato.vinculadoA) extrato.vinculadoA = t.lancamento;
         if (!extrato.categoria && t.categoria) extrato.categoria = t.categoria;
         vinculados++;
         break;
       }
     }
   }
-  if (vinculados > 0) console.log(`[revinculateBoletosPrev] ${vinculados} boleto(s) vinculado(s) ao extrato`);
+  if (vinculados > 0) console.log(`[revinculateBoletosPrev] ${vinculados} vinculado(s)`);
 }
 
 // ── Deduplicação de boletos vs extrato ───────────────────────────────────────
