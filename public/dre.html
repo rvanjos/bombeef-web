@@ -2995,6 +2995,8 @@ function updMesFiltro() {
   const meses=[...new Set(TXS.map(t=>t.mes).filter(Boolean))].sort((a,b)=>{const p=s=>{const[m,y]=s.split('/');return(+y)*12+(+m);};return p(a)-p(b);});
   const sel=document.getElementById('f-mes'),cur=sel.value;
   sel.innerHTML='<option value="">Todos os meses</option>'+meses.map(m=>`<option value="${m}"${m===cur?' selected':''}>${fmtMes(m)}</option>`).join('');
+  // Sincroniza sidebar imediatamente após popular
+  syncSidebarSelects();
 }
 
 function updStats() {
@@ -3252,8 +3254,20 @@ function _txsSemDuplicatas(txs) {
        .map(t => `${Math.round(Math.abs(parseFloat(t.valor||0))*100)}|${t.mesCaixa||t.mes}`)
   );
 
+  // Regra extra: dedup EXTRATO vs EXTRATO — mesmo valor+data (pode ter nome ligeiramente diferente)
+  // Quando o mesmo pagamento aparece duas vezes no extrato importado
+  const extratoVistos = new Set();
+
   return txs.filter(t => {
     if (t.ignorar) return false;
+
+    // Dedup EXTRATO duplicado: mesmo valor+data → manter só o primeiro
+    if ((t.fonte === 'EXTRATO' || t.fonte === 'OFX') && t.data && parseFloat(t.valor||0) < 0) {
+      // Usa valor+data+primeiros 8 chars do lançamento como chave
+      const chaveE = `${Math.round(Math.abs(parseFloat(t.valor||0))*100)}|${t.data}|${(t.lancamento||'').slice(0,8).toUpperCase()}`;
+      if (extratoVistos.has(chaveE)) return false;
+      extratoVistos.add(chaveE);
+    }
 
     // BOLETO_PREV: oculta se extrato já tem o boletoId ou se tem vinculadoA
     if (t.fonte === 'BOLETO_PREV') {
