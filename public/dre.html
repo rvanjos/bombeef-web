@@ -4836,8 +4836,188 @@ function exportXLS(){
   toast('📤 Excel exportado com formatação!');
 }
 
-// gerarExcelDRE é chamado pelo botão no modal — aponta para exportXLS
-function gerarExcelDRE(){ exportXLS(); }
+// gerarExcelDRE — gera XLSX real com duas abas: Competência + Fluxo de Caixa
+function gerarExcelDRE() {
+  if (!TXS.length) { toast('Sem dados'); return; }
+  if (typeof XLSX === 'undefined') { toast('⚠️ SheetJS não carregado'); exportXLS(); return; }
+
+  const MESES_PT = {'01':'Jan','02':'Fev','03':'Mar','04':'Abr','05':'Mai','06':'Jun',
+                    '07':'Jul','08':'Ago','09':'Set','10':'Out','11':'Nov','12':'Dez'};
+  const nomeMes = m => { const [mm,yy]=m.split('/'); return (MESES_PT[mm]||mm)+'/'+yy; };
+  const brl3 = v => v === 0 ? '' : new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(v);
+
+  // Monta dados do DRE para um modo específico
+  function montarDados(modo) {
+    const getMes = t => modo === 'comp' ? (t.mes || mesRef) : (t.mesCaixa || t.mes || mesRef);
+    const txs = _txsSemDuplicatas(TXS).filter(t => t.categoria && !CATS_NAO_OPERACIONAIS.has(t.categoria));
+    const mesesSet = new Set(txs.map(getMes));
+
+    // Adiciona meses com faturamento no modo competência
+    if (modo === 'comp') {
+      try {
+        const fm = JSON.parse(localStorage.getItem('bb_fat_por_mes') || '{}');
+        Object.keys(fm).forEach(m => { if (fm[m] > 0) mesesSet.add(m); });
+      } catch(_) {}
+    }
+
+    const meses = [...mesesSet].sort((a,b) => {
+      const p = s => { const [mm,yy] = s.split('/'); return (+yy)*12+(+mm); };
+      return p(a)-p(b);
+    });
+
+    const dataD = {};
+    for (const t of txs) {
+      const gk = catGrupo(t.categoria) || 'OUTROS';
+      const m = getMes(t);
+      const v = parseFloat(t.valor || 0);
+      if (!dataD[gk]) dataD[gk] = {};
+      if (!dataD[gk][t.categoria]) dataD[gk][t.categoria] = {};
+      dataD[gk][t.categoria][m] = (dataD[gk][t.categoria][m] || 0) + v;
+    }
+
+    const sg = (gk, m) => Object.values(dataD[gk] || {}).reduce((s, cats) => s + (cats[m] || 0), 0);
+    const nTotal = meses.length;
+
+    // Cabeçalhos
+    const rows = [];
+    const styles = []; // {row, col, style}
+
+    const addRow = (cells, tipo) => { rows.push(cells); styles.push(tipo); };
+
+    // Título
+    addRow(['DRE — BOM BEEF VALINHOS', ...Array(nTotal + 1).fill('')], 'title');
+    addRow([modo === 'comp' ? 'Modo: Competência (faturamento XMenu)' : 'Modo: Caixa (extrato bancário)',
+            ...Array(nTotal + 1).fill('')], 'subtitle');
+    addRow([], 'blank');
+
+    // Cabeçalho de meses
+    addRow(['GRUPO / CATEGORIA', ...meses.map(nomeMes), 'TOTAL'], 'header');
+
+    // Seção receitas
+    addRow(['1. RECEITAS', ...Array(nTotal + 1).fill('')], 'section');
+
+    // Faturamento (modo competência: XMenu; modo caixa: extrato)
+    const fatPorMes = {};
+    meses.forEach(m => {
+      if (modo === 'comp') {
+        try { fatPorMes[m] = parseFloat(JSON.parse(localStorage.getItem('bb_fat_por_mes') || '{}')[m] || 0); } catch(_) { fatPorMes[m] = 0; }
+      } else {
+        fatPorMes[m] = dataD['RECEITAS'] ? Object.values(dataD['RECEITAS']).reduce((s, cats) => s + (cats[m] || 0), 0) : 0;
+      }
+    });
+
+    if (dataD['RECEITAS']) {
+      Object.entries(dataD['RECEITAS']).forEach(([cat, porMes]) => {
+        const total = meses.reduce((s, m) => s + (porMes[m] || 0), 0);
+        addRow(['  · ' + cat, ...meses.map(m => porMes[m] || 0), total], 'cat');
+      });
+    }
+    const recTotais = meses.map(m => (dataD['RECEITAS'] ? Object.values(dataD['RECEITAS']).reduce((s, cats) => s + (cats[m] || 0), 0) : 0));
+    addRow(['SUBTOTAL RECEITAS', ...recTotais, recTotais.reduce((s, v) => s + v, 0)], 'subtotal');
+    addRow([], 'blank');
+
+    // CMV
+    addRow(['2. (-) CUSTO DA MERCADORIA VENDIDA', ...Array(nTotal + 1).fill('')], 'section');
+    if (dataD['CMV']) {
+      Object.entries(dataD['CMV']).forEach(([cat, porMes]) => {
+        const total = meses.reduce((s, m) => s + (porMes[m] || 0), 0);
+        addRow(['  · ' + cat, ...meses.map(m => porMes[m] || 0), total], 'cat');
+      });
+    }
+    const cmvTotais = meses.map(m => sg('CMV', m));
+    addRow(['SUBTOTAL CMV', ...cmvTotais, cmvTotais.reduce((s, v) => s + v, 0)], 'subtotal');
+    addRow([], 'blank');
+
+    // Lucro bruto
+    const lucBruto = meses.map((m, i) => recTotais[i] + cmvTotais[i]);
+    addRow(['LUCRO BRUTO', ...lucBruto, lucBruto.reduce((s, v) => s + v, 0)], 'resultado_verde');
+    addRow([], 'blank');
+
+    // Despesas operacionais
+    addRow(['3. (-) DESPESAS OPERACIONAIS', ...Array(nTotal + 1).fill('')], 'section');
+    let lucOp = [...lucBruto];
+    const grpOper = ['PESSOAL','VENDAS_CAT','CONSUMO','TERCEIROS','MATERIAL','OUTRAS','IMPOSTOS'];
+    const grpLabel = {
+      PESSOAL: 'DESPESA COM PESSOAL', VENDAS_CAT: 'DESPESAS COM VENDAS',
+      CONSUMO: 'DESPESAS DE CONSUMO', TERCEIROS: 'SERVIÇOS PRESTADOS POR TERCEIROS',
+      MATERIAL: 'MATERIAL DE USO/CONSUMO', OUTRAS: 'OUTRAS DESPESAS OPERACIONAIS',
+      IMPOSTOS: 'IMPOSTOS, TAXAS E CONTRIBUIÇÕES'
+    };
+    grpOper.forEach(gk => {
+      if (!dataD[gk]) return;
+      addRow([grpLabel[gk] || gk, ...Array(nTotal + 1).fill('')], 'group');
+      Object.entries(dataD[gk]).forEach(([cat, porMes]) => {
+        const total = meses.reduce((s, m) => s + (porMes[m] || 0), 0);
+        addRow(['  · ' + cat, ...meses.map(m => porMes[m] || 0), total], 'cat');
+      });
+      const subTot = meses.map(m => sg(gk, m));
+      addRow(['  Subtotal ' + (grpLabel[gk] || gk), ...subTot, subTot.reduce((s, v) => s + v, 0)], 'subtotal_small');
+      lucOp = lucOp.map((v, i) => v + subTot[i]);
+    });
+    addRow([], 'blank');
+    addRow(['LUCRO OPERACIONAL', ...lucOp, lucOp.reduce((s, v) => s + v, 0)], 'resultado_azul');
+    addRow([], 'blank');
+
+    // Despesas financeiras
+    if (dataD['FINANCEIRAS']) {
+      addRow(['4. (-) DESPESAS FINANCEIRAS', ...Array(nTotal + 1).fill('')], 'section');
+      Object.entries(dataD['FINANCEIRAS']).forEach(([cat, porMes]) => {
+        const total = meses.reduce((s, m) => s + (porMes[m] || 0), 0);
+        addRow(['  · ' + cat, ...meses.map(m => porMes[m] || 0), total], 'cat');
+      });
+    }
+    const resFin = lucOp.map((v, i) => v + (dataD['FINANCEIRAS'] ? meses.map(m => sg('FINANCEIRAS', m))[i] : 0));
+    addRow(['RESULTADO ANTES DAS RETIRADAS', ...resFin, resFin.reduce((s, v) => s + v, 0)], 'resultado_amarelo');
+    addRow([], 'blank');
+
+    // Retiradas
+    if (dataD['OUTROS']) {
+      addRow(['5. (-) RETIRADAS DOS SÓCIOS', ...Array(nTotal + 1).fill('')], 'section');
+      Object.entries(dataD['OUTROS']).forEach(([cat, porMes]) => {
+        const total = meses.reduce((s, m) => s + (porMes[m] || 0), 0);
+        addRow(['  · ' + cat, ...meses.map(m => porMes[m] || 0), total], 'cat');
+      });
+    }
+    const resFinal = resFin.map((v, i) => v + (dataD['OUTROS'] ? meses.map(m => sg('OUTROS', m))[i] : 0));
+    addRow(['RESULTADO FINAL (LUCRO / PREJUÍZO REAL)', ...resFinal, resFinal.reduce((s, v) => s + v, 0)], 'resultado_final');
+
+    return { rows, styles, meses };
+  }
+
+  // Converte para worksheet SheetJS
+  function toWorksheet(dados) {
+    const { rows, styles, meses } = dados;
+    const wsData = rows.map(row => row.map(cell => typeof cell === 'number' ? cell : (cell || '')));
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+    // Largura das colunas
+    ws['!cols'] = [{ wch: 42 }, ...meses.map(() => ({ wch: 14 })), { wch: 14 }];
+
+    // Aplicar estilos básicos (SheetJS community não suporta estilos — exportamos valores corretos)
+    return ws;
+  }
+
+  const modosExport = [
+    { modo: 'comp', nome: 'DRE Competência' },
+    { modo: 'caixa', nome: 'Fluxo de Caixa' }
+  ];
+
+  const wb = XLSX.utils.book_new();
+
+  modosExport.forEach(({ modo, nome }) => {
+    try {
+      const dados = montarDados(modo);
+      const ws = toWorksheet(dados);
+      XLSX.utils.book_append_sheet(wb, ws, nome);
+    } catch(e) {
+      console.error('[exportXLS] erro no modo', modo, e);
+    }
+  });
+
+  const ano = new Date().getFullYear();
+  XLSX.writeFile(wb, `DRE_BomBeef_${ano}.xlsx`);
+  toast('📤 Excel exportado com duas abas: Competência + Fluxo de Caixa!');
+}
 
 // ─── SALVAR / SESSÕES ────────────────────────────────────────────────────────
 function autoSv(){
