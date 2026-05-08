@@ -1003,7 +1003,7 @@ async function carregarFaturamentoMensal() {
 async function inicializar() {
   // Se já inicializou E já tem dados em memória, não recarrega do banco
   if (_inicializado && TXS.length > 0) {
-    render(); updStats(); renderDRE();
+    showTable(); render(); updStats(); renderDRE();
     return;
   }
   // Não marca como inicializado até carregar com sucesso
@@ -1189,12 +1189,16 @@ async function carregarSessao() {
       toast(`📂 ${TXS.length} lançamentos de ${lista.data.length} mês(es)`);
     }
     // Gera provisões de royalties automaticamente para meses com faturamento disponível
-    await gerarRoyaltiesAutomatico();
+    await gerarRoyaltiesAutomatico().catch(e => console.warn('[royalties]', e));
   } catch(e) {
     console.error('[carregarSessao]', e);
+    // Mesmo com erro, se já tem dados em memória, mostra a tabela
+    if (TXS.length) showTable();
   }
   setSt('ok');
   updMesFiltro(); render(); updStats(); renderDRE();
+  // Garante que a tabela esteja visível se há lançamentos
+  if (TXS.length) showTable();
 }
 
 async function trocarMes() {
