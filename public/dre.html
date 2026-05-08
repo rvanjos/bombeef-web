@@ -1002,12 +1002,12 @@ async function carregarFaturamentoMensal() {
 
 async function inicializar() {
   // Se já inicializou E já tem dados em memória, não recarrega do banco
-  // (evita perder classificações ao trocar de aba e voltar)
   if (_inicializado && TXS.length > 0) {
     render(); updStats(); renderDRE();
     return;
   }
-  _inicializado = true;
+  // Não marca como inicializado até carregar com sucesso
+  // (permite tentar novamente se falhar na primeira vez)
 
   const hoje = new Date();
   mesRef = fmt.mesAtual();
@@ -1024,8 +1024,9 @@ async function inicializar() {
     }
   } catch(_) {}
   await carregarCategorias();
-  await carregarFaturamentoMensal(); // carrega NFC-e+MEI para modo Competência
+  await carregarFaturamentoMensal();
   await carregarSessao();
+  _inicializado = true; // só marca após carregar com sucesso
   // Só adiciona listener de troca de mês DEPOIS de carregar (evita loop)
   const fMesEl = document.getElementById('f-mesref');
   if (!fMesEl._listenerAdded) {
@@ -4312,8 +4313,8 @@ function limpar(){
 function drillDown(cat, mes) {
   // Filtra lançamentos da categoria e mês clicados
   const modo = getModo();
-  const lancs = TXS.filter(t => {
-    if (t.ignorar || !t.categoria) return false;
+  const lancs = _txsSemDuplicatas(TXS).filter(t => {
+    if (!t.categoria) return false;
     if (t.categoria !== cat) return false;
     const mTx = modo === 'caixa' ? (t.mesCaixa || t.mes || mesRef) : (t.mes || mesRef);
     return mTx === mes;
