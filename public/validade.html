@@ -392,6 +392,9 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
       </div>
       <span id="preview-lote" style="font-size:11px;color:var(--green)"></span>
       <button class="btn btn-p" style="padding:5px 12px" onclick="vincularSelecionados()">🔗 Vincular selecionados</button>
+      <span style="color:var(--muted)">|</span>
+      <button class="btn" style="padding:5px 12px;background:#dcfce7;color:#166534;border:1px solid #86efac" onclick="encerrarSelecionadosVal('vendido')">✅ Marcar vendido</button>
+      <button class="btn" style="padding:5px 12px;background:#f1f5f9;color:#475569;border:1px solid #cbd5e1" onclick="encerrarSelecionadosVal('descartado')">🗑 Marcar descartado</button>
     </div>
     <div class="card">
       <table class="tbl" id="tbl-val">
@@ -881,6 +884,7 @@ function _mkDashRow(v) {
     <td style="padding:7px 12px;text-align:center"><span class="dias-badge ${dCls}">${diasTxt}</span></td>
     <td style="padding:7px 12px;font-size:11px;color:var(--muted)">${v.lote||'—'}</td>
     <td style="padding:7px 6px;text-align:center">
+      <button onclick="event.stopPropagation();marcarVendidoRapido(${v.id})" style="background:#dcfce7;color:#166534;border:1px solid #86efac;padding:3px 8px;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer" title="Marcar como vendido — não entra como perda">✅ Vendido</button>
       <button onclick="event.stopPropagation();abrirModal(${v.id})" class="act-btn" title="Editar">✏️</button>
       <button onclick="event.stopPropagation();perdaRapida(${v.id})" class="act-btn" style="color:var(--red-l)" title="Registrar perda">📉</button>
     </td>
@@ -1149,6 +1153,19 @@ function valLimparSel(){
   document.querySelectorAll('.val-item-sel, #val-sel-all').forEach(el => el.checked = false);
   document.getElementById('val-sel-bar').classList.remove('show');
   document.getElementById('sel-bar').classList.remove('show');
+}
+
+// Encerra itens selecionados na aba Validade (sel-bar)
+async function encerrarSelecionadosVal(resolucao) {
+  const ids = [...document.querySelectorAll('#tbl-val .row-sel:checked')].map(cb => parseInt(cb.dataset.id)).filter(Boolean);
+  if (!ids.length) { toast('⚠️ Selecione ao menos um item'); return; }
+  const label = resolucao === 'vendido' ? 'vendido' : 'descartado';
+  if (!confirm(`Marcar ${ids.length} item(s) como ${label}?`)) return;
+  const d = await api.post('/api/validade/encerrar-multiplos', { ids, resolucao });
+  if (!d.ok) { toast('❌ ' + d.erro); return; }
+  toast(`✅ ${ids.length} item(s) marcado(s) como ${label}`);
+  limparSelecao();
+  carregar();
 }
 
 async function encerrarSelecionados(resolucao){
@@ -1452,11 +1469,11 @@ function renderVal(lista){
         <td style="font-size:12px;font-weight:600">${v.responsavel||'—'}</td>
         <td>${urgBadge}</td>
         <td style="white-space:nowrap">
-          <button class="act-btn" onclick="abrirModal(${v.id})">✏️</button>
+          <button class="act-btn" onclick="abrirModal(${v.id})" title="Editar">✏️</button>
           ${!v.codigo?`<button class="act-btn" onclick="abrirVincular(${v.id})" title="Vincular código">🔗</button>`:''}
-          ${v.status!=='descartado'?`<button class="act-btn" onclick="perdaRapida(${v.id})" style="color:var(--red-l)" title="Registrar perda">📉</button>`:''}
-          <button class="act-btn" onclick="marcarVendidoRapido(${v.id})" style="color:var(--green)" title="Marcar como vendido">✅</button>
-          <button class="act-btn" onclick="excluirItem(${v.id})" style="color:var(--muted);font-size:13px" title="Descartar">×</button>
+          <button class="act-btn" onclick="marcarVendidoRapido(${v.id})" style="background:#dcfce7;color:#166534;border:1px solid #86efac;padding:3px 8px;border-radius:5px;font-size:11px;font-weight:600" title="Marcar como vendido — não entra como perda">✅ Vendido</button>
+          ${v.status!=='descartado'?`<button class="act-btn" onclick="perdaRapida(${v.id})" style="color:var(--red-l)" title="Registrar como perda/descarte">📉</button>`:''}
+          <button class="act-btn" onclick="excluirItem(${v.id})" style="color:var(--muted);font-size:13px" title="Excluir">×</button>
         </td>
       </tr>`;
     }).join('');
