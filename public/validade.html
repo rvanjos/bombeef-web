@@ -2398,6 +2398,39 @@ async function perdaRapida(validadeItemId){
   document.getElementById('pd-motivo').value= 'vencimento';
   document.getElementById('modal-perda-titulo').textContent = '🗑️ Registrar Perda';
   document.getElementById('btn-salvar-perda').textContent = '🗑️ Registrar Perda';
+
+  // Pré-popular calculadora de pesagem com pesos do item de validade
+  _perdaPesagens = [];
+  let pesagemAberta = false;
+  if (v.peso_total_kg && parseFloat(v.peso_total_kg) > 0) {
+    // Tenta recuperar pesos individuais da observação
+    const obsMatch = (v.observacao||'').match(/PESOS_KG:(\[[^\]]+\])/);
+    if (obsMatch) {
+      try {
+        const pesos = JSON.parse(obsMatch[1]);
+        if (Array.isArray(pesos) && pesos.length) {
+          _perdaPesagens = pesos.map(kg => ({ kg }));
+          pesagemAberta = true;
+        }
+      } catch(_) {}
+    }
+    // Fallback: distribui peso total por número de unidades
+    if (!_perdaPesagens.length && v.qtd_unidades > 0) {
+      const kgPorPeca = Math.round(parseFloat(v.peso_total_kg) / v.qtd_unidades * 1000) / 1000;
+      _perdaPesagens = Array.from({length: v.qtd_unidades}, () => ({ kg: kgPorPeca }));
+      pesagemAberta = true;
+    }
+  }
+
+  // Abre a calculadora se tem pesos
+  _perdaPesagemAberta = pesagemAberta;
+  const corpo = document.getElementById('pd-pes-corpo');
+  const icon  = document.getElementById('pd-pes-icon');
+  if (corpo) corpo.style.display = pesagemAberta ? '' : 'none';
+  if (icon)  icon.textContent    = pesagemAberta ? '▲' : '▼';
+  renderPerdaPesagem();
+  calcPerdaPesagem();
+
   calcPerda();
   document.getElementById('modal-perda').classList.add('open');
 }
