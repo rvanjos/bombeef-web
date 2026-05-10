@@ -817,13 +817,19 @@ function filtrarK(){
 }
 
 function calcCustoTotalKit(custoMat){
-  const op=CFG.cartao+CFG.royalties+CFG.desperdicio+CFG.imposto+CFG.fixos;
-  const mkOp=1/(1-op/100);
-  const mkIdeal=1/(1-(op+CFG.lucro)/100);
-  const pv=custoMat;
-  const precoMin=custoMat*mkOp;
-  const precoIdeal=custoMat*mkIdeal;
-  return{op,mkOp,mkIdeal,precoMin,precoIdeal};
+  // Cartão, royalties, impostos e fixos: % sobre preço de venda
+  // Desperdício: % sobre custo dos materiais
+  const opSobreVenda = CFG.cartao + CFG.royalties + CFG.imposto + CFG.fixos;
+  const despMat = custoMat * CFG.desperdicio / 100; // R$ fixo sobre custo
+  // Preço mínimo: cobre custo + desperdício + percentuais sobre venda
+  // precoMin = (custoMat + despMat) / (1 - opSobreVenda/100)
+  const mkOp   = 1 / (1 - opSobreVenda/100);
+  const mkIdeal= 1 / (1 - (opSobreVenda + CFG.lucro)/100);
+  const custoComDesp = custoMat + despMat;
+  const precoMin  = custoComDesp * mkOp;
+  const precoIdeal= custoComDesp * mkIdeal;
+  const op = opSobreVenda; // para compatibilidade
+  return{op,opSobreVenda,despMat,custoComDesp,mkOp,mkIdeal,precoMin,precoIdeal};
 }
 
 function renderK(lista){
@@ -1017,16 +1023,22 @@ function recalcKit(){
   const matDescartado=matReal-matMargem;
   const mat=matMargem; // preço mínimo calculado sem os itens próx. vencimento
   const pv=parseFloat(document.getElementById('k-pvenda').value)||0;
-  const op=CFG.cartao+CFG.royalties+CFG.desperdicio+CFG.imposto+CFG.fixos;
-  const mkOp=1/(1-op/100);
-  const mkIdeal=1/(1-(op+CFG.lucro)/100);
-  const precoMin=mat*mkOp;
-  const precoIdeal=mat*mkIdeal;
-  const custoTotal=pv>0?pv*(op/100)+mat:mat*mkOp;
-  const lucroR=pv>0?pv-mat-pv*(op/100):0;
-  const margR=pv>0?(lucroR/pv*100):0;
+  // Cartão, royalties, impostos, fixos: sobre preço de venda
+  // Desperdício: sobre custo dos materiais
+  const opSobreVenda = CFG.cartao + CFG.royalties + CFG.imposto + CFG.fixos;
+  const despMat = mat * CFG.desperdicio / 100;           // R$ sobre custo
+  const custoComDesp = mat + despMat;
+  const mkOp   = 1 / (1 - opSobreVenda/100);
+  const mkIdeal= 1 / (1 - (opSobreVenda + CFG.lucro)/100);
+  const precoMin  = custoComDesp * mkOp;
+  const precoIdeal= custoComDesp * mkIdeal;
+  const custoSobreVenda = pv > 0 ? pv * opSobreVenda / 100 : 0;
+  const custoTotal= custoComDesp + custoSobreVenda;
+  const lucroR = pv > 0 ? pv - custoTotal : 0;
+  const margR  = pv > 0 ? (lucroR / pv * 100) : 0;
+  const op = opSobreVenda; // para exibição
 
-  // Custo materiais: sempre mostra o total real, com nota de itens vencendo
+  // Custo materiais
   document.getElementById('kc-mat').textContent=
     matDescartado>0
       ? fmt.brl(matReal)+` (⏱ ${fmt.brl(matDescartado)} s/ margem)`
@@ -1034,10 +1046,10 @@ function recalcKit(){
   if(pv>0){
     document.getElementById('kc-cartao').textContent=fmt.brl(pv*CFG.cartao/100);
     document.getElementById('kc-roy').textContent=fmt.brl(pv*CFG.royalties/100);
-    document.getElementById('kc-desp').textContent=fmt.brl(pv*CFG.desperdicio/100);
+    document.getElementById('kc-desp').textContent=fmt.brl(despMat);   // sobre custo!
     document.getElementById('kc-imp').textContent=fmt.brl(pv*CFG.imposto/100);
     document.getElementById('kc-fix').textContent=fmt.brl(pv*CFG.fixos/100);
-    document.getElementById('kc-tot').textContent=fmt.brl(mat+pv*(op/100));
+    document.getElementById('kc-tot').textContent=fmt.brl(custoTotal);
   } else {
     ['kc-cartao','kc-roy','kc-desp','kc-imp','kc-fix','kc-tot'].forEach(id=>document.getElementById(id).textContent='—');
   }
