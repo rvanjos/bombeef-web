@@ -2942,47 +2942,110 @@ function renderStatusCartoes() {
   const grid = document.getElementById('cartoes-grid');
   if (!grid) return;
 
-  // Coleta todos os meses disponíveis nos TXS
   const mesesSet = new Set(TXS.map(t => t.mes || t.mesCaixa).filter(Boolean));
   const meses = [...mesesSet].sort((a,b) => {
     const p = s => { const [mm,yy]=s.split('/'); return (+yy)*12+(+mm); };
     return p(a)-p(b);
   });
+  const ultimos = meses.slice(-6);
 
-  // Para cada cartão, verifica quais meses têm importação
+  // Pagamentos de fatura no extrato
+  const pagamentos = TXS.filter(t =>
+    /pag.*fatura|pagamento.*cart|fatura.*cc|pagto.*cart/i.test(t.lancamento || '') &&
+    (t.fonte === 'EXTRATO' || t.fonte === 'OFX') && parseFloat(t.valor||0) < 0
+  );
+
+  // Faturas importadas agrupadas por faturaId
+  const faturasMap = {};
+  TXS.filter(t => t.faturaCC && t.fonte === 'CC').forEach(t => {
+    const fid = t.faturaCC;
+    if (!faturasMap[fid]) faturasMap[fid] = {
+      faturaId: fid, bandeira: t.bandeira||'', mes: t.mes||t.mesCaixa||'',
+      total: 0, n: 0, pendentes: 0, pagamentoVinculado: null
+    };
+    faturasMap[fid].total += Math.abs(parseFloat(t.valor||0));
+    faturasMap[fid].n++;
+    if (!t.categoria) faturasMap[fid].pendentes++;
+  });
+
+  // Verifica se cada fatura tem pagamento vinculado (por faturaCC no pagamento
+  // ou por proximidade de valor ±5%)
+  const faturas = Object.values(faturasMap);
+  faturas.forEach(f => {
+    // Pagamento com faturaCC explícito
+    const pag = TXS.find(t => t.vinculadoFaturaCC && Math.abs(Math.abs(parseFloat(t.valor||0)) - f.total) < f.total * 0.1);
+    if (pag) { f.pagamentoVinculado = pag; return; }
+    // Pagamento por proximidade de valor
+    const pagProx = pagamentos.find(t =>
+      Math.abs(Math.abs(parseFloat(t.valor||0)) - f.total) < f.total * 0.1
+    );
+    if (pagProx) f.pagamentoVinculado = pagProx;
+  });
+
   const html = CARTOES_MONITORADOS.map(cartao => {
-    // Busca lançamentos que combinam com o cartão (por bandeira, fonte CC, ou nome do arquivo)
     const txsCartao = TXS.filter(t => {
       const bandeira = (t.bandeira || '').toLowerCase();
-      const fonte    = (t.fonte    || '').toLowerCase();
-      const lanc     = (t.lancamento || '').toLowerCase();
       const fatCC    = (t.faturaCC  || '').toLowerCase();
+      const fonte    = (t.fonte || '').toLowerCase();
       return cartao.match.test(bandeira) || cartao.match.test(fatCC) ||
-             (fonte === 'cc' && cartao.match.test(lanc));
+             (fonte === 'cc' && cartao.match.test(t.lancamento||''));
     });
 
-    const mesesComDados = new Set(txsCartao.map(t => t.mes || t.mesCaixa).filter(Boolean));
-    const mesesPend = new Set(txsCartao.filter(t => !t.categoria).map(t => t.mes || t.mesCaixa).filter(Boolean));
+    if (!txsCartao.length) return `
+      <div style="background:#fdf9f7;border:1px solid var(--border);border-radius:8px;padding:10px 12px;opacity:.6">
+        <div style="font-size:12px;font-weight:700;margin-bottom:4px">${cartao.label}</div>
+        <div style="font-size:11px;color:var(--muted)">Sem faturas importadas</div>
+      </div>`;
 
-    // Meses mais recentes (últimos 6)
-    const ultimos = meses.slice(-6);
+    // Agrupa por faturaId
+    const faturasCartao = faturas.filter(f => cartao.match.test(f.bandeira));
+
+    // Badges por mês (importação de itens)
+    const mesesComDados = new Set(txsCartao.map(t => t.mes || t.mesCaixa).filter(Boolean));
+    const mesesPend = new Set(txsCartao.filter(t => !t.categoria).map(t => t.mes||t.mesCaixa).filter(Boolean));
     const badges = ultimos.map(m => {
-      if (!mesesComDados.has(m)) return `<span style="display:inline-block;padding:2px 6px;background:#f0ebe4;color:#aaa;border-radius:4px;font-size:10px;margin:1px">${m.slice(0,2)}/&apos;${m.slice(-2)}<br>—</span>`;
-      if (mesesPend.has(m))      return `<span style="display:inline-block;padding:2px 6px;background:#fef9c3;color:#854d0e;border-radius:4px;font-size:10px;margin:1px;font-weight:600">${m.slice(0,2)}/&apos;${m.slice(-2)}<br>⏳</span>`;
-      return `<span style="display:inline-block;padding:2px 6px;background:#dcfce7;color:#166534;border-radius:4px;font-size:10px;margin:1px;font-weight:600">${m.slice(0,2)}/&apos;${m.slice(-2)}<br>✅</span>`;
+      if (!mesesComDados.has(m)) return `<span style="display:inline-block;padding:1px 5px;background:#f0ebe4;color:#bbb;border-radius:4px;font-size:9px;margin:1px;text-align:center">${m.slice(0,2)}/${m.slice(-2)}<br>—</span>`;
+      if (mesesPend.has(m))      return `<span style="display:inline-block;padding:1px 5px;background:#fef9c3;color:#854d0e;border-radius:4px;font-size:9px;margin:1px;font-weight:700;text-align:center">${m.slice(0,2)}/${m.slice(-2)}<br>⏳</span>`;
+      return `<span style="display:inline-block;padding:1px 5px;background:#dcfce7;color:#166534;border-radius:4px;font-size:9px;margin:1px;font-weight:700;text-align:center">${m.slice(0,2)}/${m.slice(-2)}<br>✅</span>`;
     }).join('');
+
+    // Tabela de faturas com status de pagamento
+    const tabelaFaturas = faturasCartao.length ? `
+      <div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px">
+        <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px">Faturas importadas</div>
+        ${faturasCartao.map(f => {
+          const temPag = !!f.pagamentoVinculado;
+          const valPag = f.pagamentoVinculado ? Math.abs(parseFloat(f.pagamentoVinculado.valor||0)) : 0;
+          const diff   = temPag ? Math.abs(valPag - f.total) : null;
+          const bate   = diff !== null && diff < f.total * 0.01;
+          const pagStatus = !temPag
+            ? `<span style="color:#dc2626;font-weight:600;font-size:11px">❌ Pagamento não encontrado</span>`
+            : bate
+            ? `<span style="color:#16a34a;font-weight:600;font-size:11px">✅ Pago ${fmt.brl(valPag)}</span>`
+            : `<span style="color:#d97706;font-weight:600;font-size:11px">⚠️ Pago ${fmt.brl(valPag)} (diverge ${fmt.brl(diff)})</span>`;
+          return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 0;border-bottom:1px solid #f5efe8;flex-wrap:wrap">
+            <div>
+              <span style="font-size:11px;font-weight:600">${f.mes}</span>
+              <span style="font-size:10px;color:var(--muted);margin-left:6px">${f.n} itens · ${fmt.brl(f.total)}</span>
+              ${f.pendentes > 0 ? `<span style="font-size:10px;background:#fef9c3;color:#854d0e;padding:0 5px;border-radius:3px;margin-left:4px">⏳ ${f.pendentes} pend.</span>` : ''}
+            </div>
+            ${pagStatus}
+          </div>`;
+        }).join('')}
+      </div>` : '';
 
     const total = txsCartao.length;
     const pendentes = txsCartao.filter(t => !t.categoria).length;
 
     return `<div style="background:#fdf9f7;border:1px solid var(--border);border-radius:8px;padding:10px 12px">
       <div style="font-size:12px;font-weight:700;margin-bottom:6px">${cartao.label}</div>
-      <div style="display:flex;flex-wrap:wrap;gap:2px;margin-bottom:6px">${badges || '<span style="font-size:11px;color:var(--muted)">Sem dados importados</span>'}</div>
-      ${total > 0 ? `<div style="font-size:10px;color:var(--muted)">${total} lançamentos${pendentes > 0 ? ` · <span style="color:#854d0e;font-weight:600">${pendentes} pendentes</span>` : ' · todos classificados ✅'}</div>` : ''}
+      <div style="display:flex;flex-wrap:wrap;gap:2px;margin-bottom:4px">${badges}</div>
+      <div style="font-size:10px;color:var(--muted)">${total} lançamentos${pendentes > 0 ? ` · <span style="color:#854d0e;font-weight:600">${pendentes} pendentes</span>` : ' · todos classificados ✅'}</div>
+      ${tabelaFaturas}
     </div>`;
   }).join('');
 
-  grid.innerHTML = html || '<div style="color:var(--muted);font-size:12px">Nenhum lançamento de cartão encontrado. Importe faturas CC primeiro.</div>';
+  grid.innerHTML = html;
 }
 
 // ── SIDEBAR DE FILTROS ───────────────────────────────────────────────────────
