@@ -660,14 +660,21 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
 
 <!-- Modal Vincular (substitui prompt()) -->
 <div class="modal-bg" id="modal-vincular">
-  <div class="modal" style="max-width:420px">
+  <div class="modal" style="max-width:460px">
     <div class="modal-head"><h3>🔗 Vincular Produto</h3><button class="modal-close" onclick="fecharModal('modal-vincular')">×</button></div>
     <div class="modal-body">
       <input type="hidden" id="vinc-id">
-      <div class="fg">
-        <label>Código do Produto *</label>
-        <input id="vinc-cod" placeholder="Digite o código do PDV" oninput="previewVincular()">
-        <div class="fg-info" id="vinc-info"></div>
+      <input type="hidden" id="vinc-cod-selecionado">
+      <div class="fg" style="position:relative">
+        <label>Buscar por código ou nome *</label>
+        <input id="vinc-busca"
+          placeholder="Ex: 4161 ou Sprite Sem Açúcar..."
+          oninput="buscarVincular()"
+          autocomplete="off"
+          style="width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:8px;font-size:14px;box-sizing:border-box">
+        <!-- Dropdown de resultados -->
+        <div id="vinc-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid var(--border);border-radius:0 0 8px 8px;box-shadow:0 4px 16px rgba(0,0,0,.15);z-index:999;max-height:220px;overflow-y:auto;margin-top:-1px"></div>
+        <div id="vinc-info" style="margin-top:6px"></div>
       </div>
     </div>
     <div class="modal-foot">
@@ -2033,34 +2040,71 @@ async function salvarVal(){
 // ── Vincular código (modal próprio em vez de prompt) ──────────────────────────
 function abrirVincular(id){
   document.getElementById('vinc-id').value = id;
-  document.getElementById('vinc-cod').value = '';
-  document.getElementById('vinc-info').textContent = '';
+  document.getElementById('vinc-cod-selecionado').value = '';
+  document.getElementById('vinc-busca').value = '';
+  document.getElementById('vinc-info').innerHTML = '';
+  document.getElementById('vinc-dropdown').style.display = 'none';
   document.getElementById('modal-vincular').classList.add('open');
+  setTimeout(() => document.getElementById('vinc-busca').focus(), 100);
 }
 
-async function previewVincular(){
-  const cod = document.getElementById('vinc-cod').value.trim();
-  const info = document.getElementById('vinc-info');
-  if(cod.length<1){ info.innerHTML=''; return; }
-  const d = await api.get(`/api/produtos/${encodeURIComponent(cod)}`);
-  if(d.ok){
-    // Mostra nome do produto que será vinculado + nome atual para comparação
-    const id = document.getElementById('vinc-id').value;
-    const itemAtual = itens.find(x=>x.id==id);
-    const nomeAtual = itemAtual?.descricao||'';
-    const nomeProd  = d.data.descricao;
-    const muda = nomeAtual && nomeAtual.toUpperCase() !== nomeProd.toUpperCase();
-    info.innerHTML = `<span style="color:var(--green)">✅ <b>${nomeProd}</b></span>` +
-      (muda ? `<br><span style="font-size:10px;color:var(--orange)">📎 Nome atual: "${nomeAtual}" → será atualizado para o nome do cadastro</span>` : '');
-  } else {
-    info.innerHTML = '<span style="color:var(--red-l)">⚠️ Produto não encontrado no catálogo</span>';
-  }
+let _vincTimer = null;
+async function buscarVincular(){
+  const q = document.getElementById('vinc-busca').value.trim();
+  const info     = document.getElementById('vinc-info');
+  const dropdown = document.getElementById('vinc-dropdown');
+  document.getElementById('vinc-cod-selecionado').value = '';
+  info.innerHTML = '';
+
+  if (q.length < 2) { dropdown.style.display = 'none'; return; }
+
+  clearTimeout(_vincTimer);
+  _vincTimer = setTimeout(async () => {
+    // Busca por código exato primeiro
+    const dCod = await api.get(`/api/produtos/${encodeURIComponent(q)}`);
+    if (dCod.ok && dCod.data) {
+      // Código exato encontrado — seleciona direto
+      selecionarProdutoVincular(dCod.data.codigo, dCod.data.descricao);
+      dropdown.style.display = 'none';
+      return;
+    }
+    // Busca por nome
+    const dBusca = await api.get(`/api/produtos/buscar?q=${encodeURIComponent(q)}&limit=8`);
+    const resultados = dBusca.data || [];
+    if (!resultados.length) {
+      dropdown.innerHTML = '<div style="padding:10px 14px;font-size:12px;color:var(--muted)">Nenhum produto encontrado</div>';
+      dropdown.style.display = '';
+      return;
+    }
+    dropdown.innerHTML = resultados.map(p => `
+      <div onclick="selecionarProdutoVincular('${p.codigo}','${(p.descricao||'').replace(/'/g,"\'")}' )"
+        style="padding:9px 14px;cursor:pointer;font-size:13px;border-bottom:1px solid #f5efe8;display:flex;align-items:center;gap:8px"
+        onmouseover="this.style.background='#faf7f4'" onmouseout="this.style.background=''">
+        <span style="font-family:monospace;font-size:11px;color:var(--muted);min-width:50px">${p.codigo||'—'}</span>
+        <span style="font-weight:500">${p.descricao||'—'}</span>
+      </div>`).join('');
+    dropdown.style.display = '';
+  }, 300);
+}
+
+function selecionarProdutoVincular(cod, nome) {
+  document.getElementById('vinc-cod-selecionado').value = cod;
+  document.getElementById('vinc-busca').value = `${cod} — ${nome}`;
+  document.getElementById('vinc-dropdown').style.display = 'none';
+
+  const id = document.getElementById('vinc-id').value;
+  const itemAtual = itens.find(x => x.id == id);
+  const nomeAtual = itemAtual?.descricao || '';
+  const muda = nomeAtual && nomeAtual.toUpperCase() !== nome.toUpperCase();
+  document.getElementById('vinc-info').innerHTML =
+    `<span style="color:var(--green)">✅ <b>${nome}</b></span>` +
+    (muda ? `<br><span style="font-size:10px;color:var(--orange)">📎 Nome atual: "${nomeAtual}" → será atualizado</span>` : '');
 }
 
 async function confirmarVincular(){
   const id  = document.getElementById('vinc-id').value;
-  const cod = document.getElementById('vinc-cod').value.trim();
-  if(!cod){ toast('Informe o código'); return; }
+  const cod = document.getElementById('vinc-cod-selecionado').value.trim();
+  if(!cod){ toast('Selecione um produto da lista'); return; }
   const d = await api.post(`/api/validade/${id}/vincular`,{codigo:cod});
   if(d.ok){
     toast('✅ Produto vinculado: '+d.produto.descricao);
