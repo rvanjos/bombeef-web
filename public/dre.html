@@ -2964,33 +2964,59 @@ function confirmarPagFaturaExtrato(txId, cartaoId) {
 function abrirBuscarPagamentoFatura(faturaId, totalFatura, mesFatura, bandeira) {
   document.getElementById('m-busca-pag-fatura')?.remove();
 
-  // Candidatos: lançamentos do extrato com valor próximo ao total da fatura (±20%)
+  // Formata data de YYYY-MM-DD para DD/MM/YYYY
+  const fmtDt = s => {
+    if (!s) return '';
+    const d = s.slice(0,10).split('-');
+    return d.length === 3 ? `${d[2]}/${d[1]}/${d[0]}` : s.slice(0,10);
+  };
+
+  // Extrai MM/YYYY do mesFatura (ex: "04/2026" → 4, 2026)
+  const [mfMes, mfAno] = (mesFatura||'').split('/').map(Number);
+
+  // Score de proximidade temporal: mesmo mês = 0, ±1 mês = 1, etc.
+  const scoreMes = t => {
+    const m = t.mesCaixa || t.mes || '';
+    const [mm, aa] = m.split('/').map(Number);
+    if (!mm || !aa) return 99;
+    return Math.abs((aa * 12 + mm) - (mfAno * 12 + mfMes));
+  };
+
+  // Candidatos: mesmo mês da fatura primeiro, depois ±1 mês, max ±2 meses
   const todos = TXS.filter(t =>
     (t.fonte === 'EXTRATO' || t.fonte === 'OFX') &&
     parseFloat(t.valor||0) < 0 &&
-    Math.abs(Math.abs(parseFloat(t.valor||0)) - totalFatura) < totalFatura * 0.25
+    Math.abs(Math.abs(parseFloat(t.valor||0)) - totalFatura) < totalFatura * 0.25 &&
+    scoreMes(t) <= 2  // só ±2 meses da fatura
   ).sort((a,b) => {
-    // Prioriza os mais próximos em valor
+    // Prioriza: mesmo mês primeiro, depois mais próximo em valor
+    const sm = scoreMes(a) - scoreMes(b);
+    if (sm !== 0) return sm;
     const da = Math.abs(Math.abs(parseFloat(a.valor||0)) - totalFatura);
     const db = Math.abs(Math.abs(parseFloat(b.valor||0)) - totalFatura);
     return da - db;
-  }).slice(0, 20);
+  }).slice(0, 15);
 
   // Pagamento já vinculado a esta fatura
   const jaVinculado = TXS.find(t => t.faturaCC === faturaId && t.vinculadoFaturaCC);
 
   const itens = todos.map(t => {
-    const val = Math.abs(parseFloat(t.valor||0));
+    const val  = Math.abs(parseFloat(t.valor||0));
     const diff = Math.abs(val - totalFatura);
     const pct  = (diff / totalFatura * 100).toFixed(1);
     const corDiff = diff < totalFatura * 0.01 ? '#16a34a' : diff < totalFatura * 0.05 ? '#d97706' : '#dc2626';
     const selecionado = jaVinculado && jaVinculado.id === t.id;
+    const dtFmt = fmtDt(t.data);
+    const mesTx = t.mesCaixa || t.mes || '';
+    const mesmMes = scoreMes(t) === 0;
     return `
-      <label style="display:flex;align-items:center;gap:10px;padding:9px 12px;border:2px solid ${selecionado?'#16a34a':'var(--border)'};border-radius:8px;cursor:pointer;background:${selecionado?'#f0fdf4':'#fff'};margin-bottom:4px">
+      <label style="display:flex;align-items:center;gap:10px;padding:9px 12px;border:2px solid ${selecionado?'#16a34a':mesmMes?'#bfdbfe':'var(--border)'};border-radius:8px;cursor:pointer;background:${selecionado?'#f0fdf4':mesmMes?'#eff6ff':'#fff'};margin-bottom:4px">
         <input type="radio" name="pag-fatura-sel" value="${t.id}" ${selecionado?'checked':''} style="flex-shrink:0">
         <div style="flex:1;min-width:0">
           <div style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.lancamento||'—'}</div>
-          <div style="font-size:10px;color:var(--muted);margin-top:1px">${t.data?t.data.slice(0,10):''} · ${t.razaoSocial||''} · ${t.mesCaixa||t.mes||''}</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:1px">
+            ${dtFmt}${t.razaoSocial?' · '+t.razaoSocial:''} · <strong style="color:${mesmMes?'#1d4ed8':'var(--muted)'}">${mesTx}</strong>
+          </div>
         </div>
         <div style="text-align:right;flex-shrink:0">
           <div style="font-size:13px;font-weight:700;font-family:monospace;color:#dc2626">- ${fmt.brl(val)}</div>
