@@ -2856,6 +2856,110 @@ function ccrFaturasImportadas() {
   return Object.values(map);
 }
 
+// Fluxo: ao classificar um pagamento de extrato como "Pagamento de Fatura CC"
+function abrirVinculacaoPagFaturaFromExtrato(txId, cartao) {
+  const tx = TXS.find(t => t.id == txId);
+  if (!tx) return;
+  document.getElementById('m-pag-fatura-extrato')?.remove();
+
+  const valorPag = Math.abs(parseFloat(tx.valor||0));
+
+  // Faturas já importadas deste cartão
+  const faturasCartao = ccrFaturasImportadas().filter(f => cartao.match.test(f.bandeira));
+
+  // Candidatas por proximidade de valor (±20%)
+  const candidatas = faturasCartao.filter(f => Math.abs(f.total - valorPag) < valorPag * 0.2)
+    .sort((a,b) => Math.abs(a.total-valorPag) - Math.abs(b.total-valorPag));
+
+  const listaFaturas = candidatas.map(f => {
+    const diff = Math.abs(f.total - valorPag);
+    const pct  = (diff/valorPag*100).toFixed(1);
+    const bate = diff < valorPag * 0.01;
+    return `
+      <label style="display:flex;align-items:center;gap:10px;padding:9px 12px;border:2px solid ${bate?'#86efac':'var(--border)'};border-radius:8px;cursor:pointer;background:${bate?'#f0fdf4':'#fff'};margin-bottom:4px">
+        <input type="radio" name="ext-fatura-sel" value="${f.faturaId}" ${bate?'checked':''} style="flex-shrink:0">
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:600">${f.bandeira} · ${f.mes}</div>
+          <div style="font-size:11px;color:var(--muted)">${f.n} lançamentos · ${fmt.brl(f.total)}</div>
+        </div>
+        <div style="text-align:right;font-size:11px;color:${bate?'#16a34a':'#d97706'};font-weight:600">
+          ${bate ? '✅ Valor bate' : `Δ ${fmt.brl(diff)} (${pct}%)`}
+        </div>
+      </label>`;
+  }).join('');
+
+  const semFatura = `
+    <div style="margin-top:10px;padding:10px 12px;background:#fff3cd;border-radius:8px;font-size:12px;color:#856404">
+      <strong>⚠️ Nenhuma fatura ${cartao.label} importada ainda.</strong><br>
+      Classifique este lançamento como pagamento e importe a fatura depois via <strong>Fatura CC</strong>.
+    </div>`;
+
+  const html = `
+    <div class="mbg open" id="m-pag-fatura-extrato" onclick="if(event.target===this){this.remove()}">
+      <div class="md" style="max-width:500px">
+        <div class="mdh">
+          <div>
+            <h3>💳 Pagamento de Fatura — ${cartao.label}</h3>
+            <div style="font-size:11px;color:rgba(255,255,255,.75);margin-top:2px">
+              ${tx.lancamento||'—'} · ${fmt.brl(valorPag)} · ${tx.mesCaixa||tx.mes||''}
+            </div>
+          </div>
+          <button class="mdx" onclick="document.getElementById('m-pag-fatura-extrato').remove()">×</button>
+        </div>
+        <div class="mdb">
+          ${candidatas.length ? `
+            <p style="font-size:12px;color:var(--muted);margin-bottom:10px">
+              Selecione a fatura correspondente a este pagamento:
+            </p>
+            ${listaFaturas}
+            <label style="display:flex;align-items:center;gap:10px;padding:8px 12px;border:1px dashed var(--border);border-radius:8px;cursor:pointer;margin-top:4px;background:var(--bg)">
+              <input type="radio" name="ext-fatura-sel" value="sem-fatura">
+              <span style="font-size:12px;color:var(--muted)">Marcar como pagamento sem fatura vinculada (importar depois)</span>
+            </label>
+          ` : semFatura + `
+            <label style="display:flex;align-items:center;gap:10px;padding:8px 12px;border:1px dashed var(--border);border-radius:8px;cursor:pointer;margin-top:10px;background:var(--bg)">
+              <input type="radio" name="ext-fatura-sel" value="sem-fatura" checked>
+              <span style="font-size:12px;color:var(--muted)">Marcar como pagamento — vincular quando importar a fatura</span>
+            </label>
+          `}
+        </div>
+        <div class="mdf">
+          <button class="btn bn" onclick="document.getElementById('m-pag-fatura-extrato').remove()">Cancelar</button>
+          <button class="btn bp" onclick="confirmarPagFaturaExtrato('${txId}','${cartao.id}')">💳 Confirmar</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+
+function confirmarPagFaturaExtrato(txId, cartaoId) {
+  const tx = TXS.find(t => t.id == txId);
+  if (!tx) return;
+  const sel = document.querySelector('input[name="ext-fatura-sel"]:checked');
+  const cartao = CARTOES_MONITORADOS.find(k => k.id === cartaoId);
+
+  // Define categoria como Pagamento de Fatura CC
+  const catPag = 'Pagamento de Fatura CC';
+  setCat(txId, catPag);
+  tx.bandeira = cartao?.label || cartaoId;
+  tx.isPagamentoFatura = true;
+
+  if (sel?.value && sel.value !== 'sem-fatura') {
+    // Vincula à fatura selecionada
+    tx.faturaCC = sel.value;
+    tx.vinculadoFaturaCC = true;
+    toast(`✅ Classificado como pagamento de fatura ${cartao?.label} e vinculado!`);
+    // Marca os lançamentos da fatura com bandeira do cartão
+    TXS.filter(t => t.faturaCC === sel.value).forEach(t => { if (!t.bandeira) t.bandeira = cartao?.label || ''; });
+  } else {
+    toast(`💳 Marcado como pagamento de fatura ${cartao?.label} — vincule a fatura quando importá-la.`);
+  }
+
+  document.getElementById('m-pag-fatura-extrato').remove();
+  render(); renderDRE(); autoSv();
+  setTimeout(renderStatusCartoes, 200);
+}
+
 // Abre modal para vincular pagamento do extrato a uma fatura importada
 function abrirBuscarPagamentoFatura(faturaId, totalFatura, mesFatura, bandeira) {
   document.getElementById('m-busca-pag-fatura')?.remove();
@@ -4737,11 +4841,29 @@ function drillEditarCat(id) {
 
   const sel = document.createElement('select');
   sel.style.cssText = 'font-size:11px;padding:3px 6px;border:1px solid var(--red);border-radius:5px;background:#fff;width:100%;max-width:220px';
+  // Opção especial de pagamento de fatura CC no topo
+  const optFaturaCC = CARTOES_MONITORADOS.map(cartao =>
+    `<option value="__FATURA_CC__${cartao.id}">💳 Pagamento fatura — ${cartao.label}</option>`
+  ).join('');
+
   sel.innerHTML = '<option value="">— Sem categoria —</option>'
-    + opts.map(c => `<option value="${c}"${c === t.categoria ? ' selected' : ''}>${c}</option>`).join('');
+    + '<optgroup label="─── Pagamento de Fatura CC ───">' + optFaturaCC + '</optgroup>'
+    + '<optgroup label="─── Categorias DRE ───">'
+    + opts.map(c => `<option value="${c}"${c === t.categoria ? ' selected' : ''}>${c}</option>`).join('')
+    + '</optgroup>';
 
   sel.onchange = () => {
     const novaCat = sel.value;
+
+    // Intercepta seleção de pagamento de fatura CC
+    if (novaCat.startsWith('__FATURA_CC__')) {
+      const cartaoId = novaCat.replace('__FATURA_CC__', '');
+      const cartao = CARTOES_MONITORADOS.find(k => k.id === cartaoId);
+      sel.value = t.categoria || ''; // reverte o select
+      abrirVinculacaoPagFaturaFromExtrato(id, cartao);
+      return;
+    }
+
     setCat(id, novaCat); // reutiliza a função existente que salva e atualiza supMem
     // Atualiza visual da célula
     cel.innerHTML = novaCat
