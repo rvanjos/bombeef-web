@@ -398,6 +398,7 @@ thead th{padding:6px 9px;}
 
         <!-- Grupo: Visual -->
         <button class="btn bs" style="padding:5px 10px;font-size:11px" onclick="abrirCategorias()" title="Gerenciar categorias">⚙️ Categorias</button>
+        <button class="btn bs" style="padding:5px 10px;font-size:11px;background:#fff3cd;color:#856404;border-color:#ffc107" onclick="toggleStatusCartoes()" title="Ver status de importação por cartão">💳 Status Cartões</button>
         <button class="btn bs" style="padding:5px 10px;font-size:11px" id="btn-expand" onclick="toggleExpandido()" title="Expandir">⤢</button>
         <button class="btn bs" style="padding:5px 10px;font-size:11px" onclick="toggleColsPicker(event)" title="Escolher colunas">⊞ Colunas</button>
         <button class="btn bs" style="padding:5px 10px;font-size:11px" onclick="toggleSidebar()" id="toggle-sidebar-btn" title="Mostrar/ocultar filtros">☰ Filtros</button>
@@ -465,7 +466,17 @@ thead th{padding:6px 9px;}
           </div>
         </div>
 
-        <!-- TABELA -->
+        <!-- PAINEL STATUS CARTÕES -->
+      <div id="painel-cartoes" style="display:none;background:var(--white);border-bottom:1px solid var(--border);padding:12px 16px;flex-shrink:0;overflow-x:auto">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <span style="font-size:12px;font-weight:700;color:var(--text)">💳 Status de Importação — Faturas de Cartão</span>
+          <button onclick="toggleStatusCartoes()" style="background:none;border:none;cursor:pointer;font-size:16px;color:var(--muted)">✕</button>
+        </div>
+        <div id="cartoes-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px"></div>
+        <div style="font-size:10px;color:var(--muted);margin-top:8px">✅ = importado e classificado &nbsp;·&nbsp; ⏳ = importado, pendente classificação &nbsp;·&nbsp; — = sem importação</div>
+      </div>
+
+      <!-- TABELA -->
         <div style="flex:1;overflow-y:auto;overflow-x:auto;min-width:0">
           <table id="tbl-main">
             <thead><tr>
@@ -2906,6 +2917,72 @@ function ccrBadgeVinculo(tx) {
   } else {
     return `<button onclick="abrirVinculoFatura('${tx.id}')" title="Clique para vincular a uma fatura importada" style="background:none;border:none;cursor:pointer;font-size:11px;background:#fef9c3;color:#854d0e;padding:1px 6px;border-radius:4px;margin-left:4px">⚠ Vincular</button>`;
   }
+}
+
+// ── STATUS DE IMPORTAÇÃO DE CARTÕES ──────────────────────────────────────────
+const CARTOES_MONITORADOS = [
+  { id: 'caixa',      label: '🏦 Caixa',       match: /caixa/i },
+  { id: 'c6',         label: '🟠 C6',           match: /c6|banco c6/i },
+  { id: 'itau_novo',  label: '🔵 Itaú Novo',   match: /itau.novo|itaú.novo|novo.*itau|cc.*itau(?!.*antigo)/i },
+  { id: 'itau_antigo',label: '⚫ Itaú Antigo', match: /itau.antigo|itaú.antigo|antigo.*itau/i },
+];
+
+function toggleStatusCartoes() {
+  const painel = document.getElementById('painel-cartoes');
+  if (!painel) return;
+  if (painel.style.display === 'none') {
+    renderStatusCartoes();
+    painel.style.display = '';
+  } else {
+    painel.style.display = 'none';
+  }
+}
+
+function renderStatusCartoes() {
+  const grid = document.getElementById('cartoes-grid');
+  if (!grid) return;
+
+  // Coleta todos os meses disponíveis nos TXS
+  const mesesSet = new Set(TXS.map(t => t.mes || t.mesCaixa).filter(Boolean));
+  const meses = [...mesesSet].sort((a,b) => {
+    const p = s => { const [mm,yy]=s.split('/'); return (+yy)*12+(+mm); };
+    return p(a)-p(b);
+  });
+
+  // Para cada cartão, verifica quais meses têm importação
+  const html = CARTOES_MONITORADOS.map(cartao => {
+    // Busca lançamentos que combinam com o cartão (por bandeira, fonte CC, ou nome do arquivo)
+    const txsCartao = TXS.filter(t => {
+      const bandeira = (t.bandeira || '').toLowerCase();
+      const fonte    = (t.fonte    || '').toLowerCase();
+      const lanc     = (t.lancamento || '').toLowerCase();
+      const fatCC    = (t.faturaCC  || '').toLowerCase();
+      return cartao.match.test(bandeira) || cartao.match.test(fatCC) ||
+             (fonte === 'cc' && cartao.match.test(lanc));
+    });
+
+    const mesesComDados = new Set(txsCartao.map(t => t.mes || t.mesCaixa).filter(Boolean));
+    const mesesPend = new Set(txsCartao.filter(t => !t.categoria).map(t => t.mes || t.mesCaixa).filter(Boolean));
+
+    // Meses mais recentes (últimos 6)
+    const ultimos = meses.slice(-6);
+    const badges = ultimos.map(m => {
+      if (!mesesComDados.has(m)) return `<span style="display:inline-block;padding:2px 6px;background:#f0ebe4;color:#aaa;border-radius:4px;font-size:10px;margin:1px">${m.slice(0,2)}/&apos;${m.slice(-2)}<br>—</span>`;
+      if (mesesPend.has(m))      return `<span style="display:inline-block;padding:2px 6px;background:#fef9c3;color:#854d0e;border-radius:4px;font-size:10px;margin:1px;font-weight:600">${m.slice(0,2)}/&apos;${m.slice(-2)}<br>⏳</span>`;
+      return `<span style="display:inline-block;padding:2px 6px;background:#dcfce7;color:#166534;border-radius:4px;font-size:10px;margin:1px;font-weight:600">${m.slice(0,2)}/&apos;${m.slice(-2)}<br>✅</span>`;
+    }).join('');
+
+    const total = txsCartao.length;
+    const pendentes = txsCartao.filter(t => !t.categoria).length;
+
+    return `<div style="background:#fdf9f7;border:1px solid var(--border);border-radius:8px;padding:10px 12px">
+      <div style="font-size:12px;font-weight:700;margin-bottom:6px">${cartao.label}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:2px;margin-bottom:6px">${badges || '<span style="font-size:11px;color:var(--muted)">Sem dados importados</span>'}</div>
+      ${total > 0 ? `<div style="font-size:10px;color:var(--muted)">${total} lançamentos${pendentes > 0 ? ` · <span style="color:#854d0e;font-weight:600">${pendentes} pendentes</span>` : ' · todos classificados ✅'}</div>` : ''}
+    </div>`;
+  }).join('');
+
+  grid.innerHTML = html || '<div style="color:var(--muted);font-size:12px">Nenhum lançamento de cartão encontrado. Importe faturas CC primeiro.</div>';
 }
 
 // ── SIDEBAR DE FILTROS ───────────────────────────────────────────────────────

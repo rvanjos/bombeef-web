@@ -377,14 +377,18 @@ function renderConflitos(lista) {
 
   // Explicação no topo
   let html = `
-    <div style="background:#faf5ff;border:1px solid #e9d5ff;border-radius:10px;padding:12px 16px;margin-bottom:16px">
-      <div style="font-size:13px;font-weight:700;color:#6b21a8;margin-bottom:4px">⚡ O que são conflitos?</div>
-      <div style="font-size:12px;color:#555;line-height:1.6">
-        Um conflito ocorre quando o <strong>mesmo fornecedor ou lançamento</strong> foi classificado em
-        <strong>categorias diferentes</strong> em meses distintos. Pode ser erro de classificação ou
-        uma mudança real (ex: um fornecedor que às vezes entrega carnes, às vezes embalagens).<br>
-        <strong>Ação:</strong> corrija para a categoria certa ou marque "Está correto" se a variação faz sentido.
+    <div style="background:#faf5ff;border:1px solid #e9d5ff;border-radius:10px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap">
+      <div style="flex:1;min-width:240px">
+        <div style="font-size:13px;font-weight:700;color:#6b21a8;margin-bottom:4px">⚡ O que são conflitos?</div>
+        <div style="font-size:12px;color:#555;line-height:1.6">
+          Mesmo fornecedor classificado em categorias diferentes em meses distintos. Pode ser erro ou mudança real.<br>
+          <strong>Ação:</strong> corrija para a categoria certa ou marque "Está correto" se a variação faz sentido.
+        </div>
       </div>
+      <button onclick="ignorarTodosConflitos()"
+        style="flex-shrink:0;padding:9px 16px;background:#fff;color:#6b21a8;border:2px solid #c4b5fd;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;white-space:nowrap;align-self:center">
+        ✓ Todos estão corretos — ignorar todos
+      </button>
     </div>`;
 
   _conflitosCache = lista; // cache para corrigirTodosHistorico
@@ -591,6 +595,39 @@ async function aplicarCat(id) {
 }
 
 // Some o card de conflito quando marcado como correto
+// Ignorar todos os conflitos de uma vez
+function ignorarTodosConflitos() {
+  if (!_conflitosCache?.length) return;
+  if (!confirm(`Marcar todos os ${_conflitosCache.length} conflito(s) como corretos?
+
+Isso não altera nenhuma categoria — apenas oculta os conflitos desta sessão de auditoria.`)) return;
+  _conflitosCache.forEach((conf, ci) => {
+    toggleAprovado(conf.tx.id);
+    const card = document.getElementById('conf-card-' + ci);
+    if (card) card.style.display = 'none';
+  });
+  _conflitosCache = [];
+  atualizarBadgesAbas();
+  toast('✅ Todos os conflitos marcados como corretos');
+
+  // Atualiza a aba
+  const el = document.getElementById('lista-conflitos');
+  if (el) el.innerHTML = '<div class="empty">✅ Todos os conflitos foram revisados!</div>';
+}
+
+// Atualiza os badges das abas após ações
+function atualizarBadgesAbas() {
+  const p = detectarPendentes?.()?.length || 0;
+  const d = detectarDuplicatas?.()?.length || 0;
+  const conf = _conflitosCache?.length || 0;
+  const bp = document.getElementById('badge-pendentes');
+  const bd = document.getElementById('badge-duplicatas');
+  const bc = document.getElementById('badge-conflitos');
+  if (bp) bp.textContent = p;
+  if (bd) bd.textContent = d;
+  if (bc) bc.textContent = conf;
+}
+
 function manterConflito(ci, id) {
   toggleAprovado(id);
   const card = document.getElementById('conf-card-' + ci);
