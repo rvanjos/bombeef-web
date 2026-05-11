@@ -2856,6 +2856,97 @@ function ccrFaturasImportadas() {
   return Object.values(map);
 }
 
+// Abre modal para vincular pagamento do extrato a uma fatura importada
+function abrirBuscarPagamentoFatura(faturaId, totalFatura, mesFatura, bandeira) {
+  document.getElementById('m-busca-pag-fatura')?.remove();
+
+  // Candidatos: lançamentos do extrato com valor próximo ao total da fatura (±20%)
+  const todos = TXS.filter(t =>
+    (t.fonte === 'EXTRATO' || t.fonte === 'OFX') &&
+    parseFloat(t.valor||0) < 0 &&
+    Math.abs(Math.abs(parseFloat(t.valor||0)) - totalFatura) < totalFatura * 0.25
+  ).sort((a,b) => {
+    // Prioriza os mais próximos em valor
+    const da = Math.abs(Math.abs(parseFloat(a.valor||0)) - totalFatura);
+    const db = Math.abs(Math.abs(parseFloat(b.valor||0)) - totalFatura);
+    return da - db;
+  }).slice(0, 20);
+
+  // Pagamento já vinculado a esta fatura
+  const jaVinculado = TXS.find(t => t.faturaCC === faturaId && t.vinculadoFaturaCC);
+
+  const itens = todos.map(t => {
+    const val = Math.abs(parseFloat(t.valor||0));
+    const diff = Math.abs(val - totalFatura);
+    const pct  = (diff / totalFatura * 100).toFixed(1);
+    const corDiff = diff < totalFatura * 0.01 ? '#16a34a' : diff < totalFatura * 0.05 ? '#d97706' : '#dc2626';
+    const selecionado = jaVinculado && jaVinculado.id === t.id;
+    return `
+      <label style="display:flex;align-items:center;gap:10px;padding:9px 12px;border:2px solid ${selecionado?'#16a34a':'var(--border)'};border-radius:8px;cursor:pointer;background:${selecionado?'#f0fdf4':'#fff'};margin-bottom:4px">
+        <input type="radio" name="pag-fatura-sel" value="${t.id}" ${selecionado?'checked':''} style="flex-shrink:0">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.lancamento||'—'}</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:1px">${t.data?t.data.slice(0,10):''} · ${t.razaoSocial||''} · ${t.mesCaixa||t.mes||''}</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-size:13px;font-weight:700;font-family:monospace;color:#dc2626">- ${fmt.brl(val)}</div>
+          <div style="font-size:10px;color:${corDiff}">Δ ${fmt.brl(diff)} (${pct}%)</div>
+        </div>
+      </label>`;
+  }).join('');
+
+  const html = `
+    <div class="mbg open" id="m-busca-pag-fatura" onclick="if(event.target===this){this.remove()}">
+      <div class="md" style="max-width:540px">
+        <div class="mdh">
+          <div>
+            <h3>🔍 Vincular Pagamento à Fatura</h3>
+            <div style="font-size:11px;color:rgba(255,255,255,.7);margin-top:2px">${bandeira} · ${mesFatura} · Total: ${fmt.brl(totalFatura)}</div>
+          </div>
+          <button class="mdx" onclick="document.getElementById('m-busca-pag-fatura').remove()">×</button>
+        </div>
+        <div class="mdb" style="max-height:400px;overflow-y:auto">
+          <p style="font-size:12px;color:var(--muted);margin-bottom:12px">
+            Selecione o lançamento do extrato que corresponde ao <strong>pagamento desta fatura</strong>.<br>
+            Ordenado por proximidade de valor (Δ = diferença em relação ao total da fatura).
+          </p>
+          ${itens || '<div style="color:var(--muted);font-size:12px;text-align:center;padding:20px">Nenhum lançamento encontrado com valor próximo ao total da fatura.<br><small>Verifique se o extrato deste período foi importado.</small></div>'}
+          <label style="display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px dashed var(--border);border-radius:8px;cursor:pointer;margin-top:6px;background:var(--bg)">
+            <input type="radio" name="pag-fatura-sel" value=""> <span style="color:var(--muted);font-size:12px">Remover vínculo existente</span>
+          </label>
+        </div>
+        <div class="mdf">
+          <button class="btn bn" onclick="document.getElementById('m-busca-pag-fatura').remove()">Cancelar</button>
+          <button class="btn bp" onclick="confirmarVinculoPagFatura('${faturaId}')">🔗 Vincular</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+
+function confirmarVinculoPagFatura(faturaId) {
+  const sel = document.querySelector('input[name="pag-fatura-sel"]:checked');
+  if (!sel) { toast('Selecione um lançamento'); return; }
+
+  // Remove vínculo anterior se existir
+  TXS.forEach(t => { if (t.faturaCC === faturaId && t.vinculadoFaturaCC) { t.vinculadoFaturaCC = false; t.faturaCC = null; } });
+
+  if (sel.value) {
+    // Vincula o novo pagamento
+    const tx = TXS.find(t => t.id == sel.value);
+    if (tx) {
+      tx.faturaCC = faturaId;
+      tx.vinculadoFaturaCC = true;
+      toast('✅ Pagamento vinculado! O lançamento não entrará no DRE como despesa.');
+    }
+  }
+
+  document.getElementById('m-busca-pag-fatura').remove();
+  renderStatusCartoes(); // atualiza o painel
+  render();
+  autoSv();
+}
+
 // Abre modal de vínculo para um lançamento de pagamento de fatura
 function abrirVinculoFatura(txId) {
   const tx = TXS.find(t => t.id == txId);
@@ -3019,11 +3110,17 @@ function renderStatusCartoes() {
           const diff   = temPag ? Math.abs(valPag - f.total) : null;
           const bate   = diff !== null && diff < f.total * 0.01;
           const pagStatus = !temPag
-            ? `<span style="color:#dc2626;font-weight:600;font-size:11px">❌ Pagamento não encontrado</span>`
+            ? `<button onclick="abrirBuscarPagamentoFatura('${f.faturaId}',${f.total},'${f.mes}','${f.bandeira}')"
+                style="font-size:11px;padding:3px 9px;background:#fee2e2;color:#dc2626;border:1px solid #fca5a5;border-radius:5px;cursor:pointer;font-weight:600;white-space:nowrap">
+                ❌ Vincular pagamento
+               </button>`
             : bate
-            ? `<span style="color:#16a34a;font-weight:600;font-size:11px">✅ Pago ${fmt.brl(valPag)}</span>`
-            : `<span style="color:#d97706;font-weight:600;font-size:11px">⚠️ Pago ${fmt.brl(valPag)} (diverge ${fmt.brl(diff)})</span>`;
-          return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 0;border-bottom:1px solid #f5efe8;flex-wrap:wrap">
+            ? `<span style="color:#16a34a;font-weight:600;font-size:11px;cursor:pointer" onclick="abrirBuscarPagamentoFatura('${f.faturaId}',${f.total},'${f.mes}','${f.bandeira}')" title="Clique para alterar vínculo">✅ Pago ${fmt.brl(valPag)}</span>`
+            : `<button onclick="abrirBuscarPagamentoFatura('${f.faturaId}',${f.total},'${f.mes}','${f.bandeira}')"
+                style="font-size:11px;padding:3px 9px;background:#fef9c3;color:#854d0e;border:1px solid #fde68a;border-radius:5px;cursor:pointer;font-weight:600;white-space:nowrap">
+                ⚠️ ${fmt.brl(valPag)} (diverge)
+               </button>`;
+          return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 0;border-bottom:1px solid #f5efe8;flex-wrap:wrap">
             <div>
               <span style="font-size:11px;font-weight:600">${f.mes}</span>
               <span style="font-size:10px;color:var(--muted);margin-left:6px">${f.n} itens · ${fmt.brl(f.total)}</span>
