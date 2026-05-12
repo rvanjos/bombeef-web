@@ -2983,11 +2983,13 @@ function abrirBuscarPagamentoFatura(faturaId, totalFatura, mesFatura, bandeira) 
   };
 
   // Candidatos: mesmo mês da fatura primeiro, depois ±1 mês, max ±2 meses
+  // IMPORTANTE: busca em TODOS os TXS incluindo ignorados e já classificados
+  // (o pagamento pode estar classificado como Pagamento de Cartão ou ignorado)
   const todos = TXS.filter(t =>
     (t.fonte === 'EXTRATO' || t.fonte === 'OFX') &&
     parseFloat(t.valor||0) < 0 &&
     Math.abs(Math.abs(parseFloat(t.valor||0)) - totalFatura) < totalFatura * 0.25 &&
-    scoreMes(t) <= 2  // só ±2 meses da fatura
+    scoreMes(t) <= 2
   ).sort((a,b) => {
     // Prioriza: mesmo mês primeiro, depois mais próximo em valor
     const sm = scoreMes(a) - scoreMes(b);
@@ -3016,6 +3018,9 @@ function abrirBuscarPagamentoFatura(faturaId, totalFatura, mesFatura, bandeira) 
           <div style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.lancamento||'—'}</div>
           <div style="font-size:10px;color:var(--muted);margin-top:1px">
             ${dtFmt}${t.razaoSocial?' · '+t.razaoSocial:''} · <strong style="color:${mesmMes?'#1d4ed8':'var(--muted)'}">${mesTx}</strong>
+            ${t.ignorar?'<span style="background:#fee2e2;color:#dc2626;padding:0 4px;border-radius:3px;margin-left:4px">🚫 ignorado</span>':''}
+            ${t.categoria==='Pagamento de Fatura CC'||t.categoria==='Pagamento de Cartão'?'<span style="background:#dcfce7;color:#166534;padding:0 4px;border-radius:3px;margin-left:4px">✅ já classificado</span>':''}
+            ${t.vinculadoFaturaCC?'<span style="background:#dbeafe;color:#1d4ed8;padding:0 4px;border-radius:3px;margin-left:4px">🔗 vinculado</span>':''}
           </div>
         </div>
         <div style="text-align:right;flex-shrink:0">
@@ -3062,19 +3067,20 @@ function confirmarVinculoPagFatura(faturaId) {
   TXS.forEach(t => { if (t.faturaCC === faturaId && t.vinculadoFaturaCC) { t.vinculadoFaturaCC = false; t.faturaCC = null; } });
 
   if (sel.value) {
-    // Vincula o novo pagamento
     const tx = TXS.find(t => t.id == sel.value);
     if (tx) {
       tx.faturaCC = faturaId;
       tx.vinculadoFaturaCC = true;
-      toast('✅ Pagamento vinculado! O lançamento não entrará no DRE como despesa.');
+      // Se estava ignorado ou sem categoria, corrige
+      if (tx.ignorar) tx.ignorar = false;
+      if (!tx.categoria || tx.categoria === '') tx.categoria = 'Pagamento de Fatura CC';
+      toast('✅ Pagamento vinculado e classificado como Pagamento de Fatura CC!');
     }
   }
 
   document.getElementById('m-busca-pag-fatura').remove();
-  renderStatusCartoes(); // atualiza o painel
-  render();
-  autoSv();
+  renderStatusCartoes();
+  render(); renderDRE(); autoSv();
 }
 
 // Abre modal de vínculo para um lançamento de pagamento de fatura
@@ -3272,7 +3278,40 @@ function renderStatusCartoes() {
     </div>`;
   }).join('');
 
-  grid.innerHTML = html;
+  // Verificação de duplicatas: fatura importada + extrato do mesmo lançamento
+  const aviso = _verificarDuplicatasFaturaCC();
+  grid.innerHTML = html + (aviso ? `
+    <div style="grid-column:1/-1;background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:10px 14px;font-size:12px;color:#856404;margin-top:4px">
+      <strong>⚠️ Possível duplicata detectada:</strong><br>${aviso}
+    </div>` : '');
+}
+
+// Verifica se itens de fatura CC já constam no extrato (duplicata)
+function _verificarDuplicatasFaturaCC() {
+  // Pega todos os lançamentos de origem CC (fatura importada)
+  const txsCC = TXS.filter(t => t.fonte === 'CC' && t.categoria && !t.ignorar);
+  if (!txsCC.length) return null;
+
+  // Para cada lançamento CC, verifica se há extrato com mesmo valor e data próxima
+  const duplicatas = [];
+  for (const t of txsCC) {
+    const val = Math.abs(parseFloat(t.valor||0));
+    if (val < 10) continue; // ignora valores muito pequenos
+    const dtBase = t.data ? new Date(t.data) : null;
+    const dup = TXS.find(x => {
+      if (x.id === t.id || x.fonte === 'CC' || x.ignorar) return false;
+      if (Math.abs(Math.abs(parseFloat(x.valor||0)) - val) > val * 0.02) return false;
+      // Verifica se não é pagamento de fatura (que é o comportamento correto)
+      if (x.categoria === 'Pagamento de Fatura CC' || x.categoria === 'Pagamento de Cartão') return false;
+      if (x.vinculadoFaturaCC) return false;
+      if (!dtBase || !x.data) return false;
+      const dtX = new Date(x.data);
+      return Math.abs(dtX - dtBase) < 7 * 86400000; // ±7 dias
+    });
+    if (dup) duplicatas.push(`${t.lancamento||t.razaoSocial||'?'} (${fmt.brl(val)}) aparece na fatura CC e no extrato`);
+    if (duplicatas.length >= 3) break;
+  }
+  return duplicatas.length ? duplicatas.join('<br>') : null;
 }
 
 // ── SIDEBAR DE FILTROS ───────────────────────────────────────────────────────
