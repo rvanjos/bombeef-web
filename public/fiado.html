@@ -1,0 +1,1199 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Fiado / Contas de Clientes</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="js/api.js"></script>
+<style>
+:root{--red:#8B0000;--red-l:#C0392B;--green:#1a7a4a;--orange:#c76b00;--blue:#1a5c8a;--purple:#6c3483;
+  --bg:#f7f4f0;--white:#fff;--text:#1a1a1a;--muted:#7a7068;--border:#e8e0d8;--shadow:0 2px 12px rgba(0,0,0,.08);}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden;}
+.ph{background:linear-gradient(135deg,var(--red),var(--red-l));padding:11px 18px;display:flex;align-items:center;gap:10px;box-shadow:0 2px 12px rgba(139,0,0,.3);flex-shrink:0;}
+.ph h2{font-family:'Playfair Display',serif;font-size:16px;color:#fff;font-weight:700;}
+.ph-sub{font-size:11px;color:rgba(255,255,255,.75);margin-left:auto;}
+/* Tabs */
+.tabs-bar{background:var(--white);border-bottom:2px solid var(--border);display:flex;gap:0;flex-shrink:0;padding:0 16px;}
+.tab-btn{padding:10px 16px;border:none;background:none;cursor:pointer;font-size:12px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;transition:.15s;font-family:'DM Sans',sans-serif;}
+.tab-btn.active{color:var(--red);border-bottom-color:var(--red);}
+.tab-btn .badge{display:inline-block;background:var(--red-l);color:#fff;border-radius:9px;padding:1px 6px;font-size:10px;margin-left:4px;}
+.body{flex:1;overflow-y:auto;padding:16px;}
+/* KPIs */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;margin-bottom:16px;}
+.kc{background:var(--white);border:1px solid var(--border);border-radius:10px;padding:14px;border-left:4px solid var(--purple);box-shadow:var(--shadow);}
+.kc.g{border-left-color:var(--green);}.kc.o{border-left-color:var(--orange);}.kc.r{border-left-color:var(--red-l);}.kc.b{border-left-color:var(--blue);}
+.kc-l{font-size:9px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);font-weight:700;margin-bottom:4px;}
+.kc-v{font-size:20px;font-weight:700;font-family:'DM Mono',monospace;}
+.kc-s{font-size:10px;color:var(--muted);margin-top:2px;}
+/* Botões */
+.btn{padding:8px 14px;border-radius:8px;border:none;cursor:pointer;font-size:12px;font-weight:600;font-family:'DM Sans',sans-serif;transition:all .15s;display:inline-flex;align-items:center;gap:5px;}
+.btn-red{background:var(--red);color:#fff;}.btn-red:hover{background:var(--red-l);}
+.btn-green{background:var(--green);color:#fff;}
+.btn-blue{background:var(--blue);color:#fff;}
+.btn-gray{background:var(--white);color:var(--text);border:1px solid var(--border);}
+.btn-sm{padding:4px 10px;font-size:11px;}
+/* Toolbar */
+.toolbar{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap;}
+.flt{padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;background:var(--white);font-family:'DM Sans',sans-serif;}
+/* Tabela */
+.card{background:var(--white);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);overflow:hidden;}
+.tbl{width:100%;border-collapse:collapse;}
+.tbl th{background:#f8f4f0;font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:700;padding:9px 12px;text-align:left;border-bottom:2px solid var(--border);white-space:nowrap;}
+.tbl td{padding:9px 12px;border-bottom:1px solid #f5efe8;font-size:12px;vertical-align:middle;}
+.tbl tr:last-child td{border-bottom:none;}
+.tbl tr:hover td{background:#faf7f4;}
+.mono{font-family:'DM Mono',monospace;}
+/* Badges */
+.badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;gap:4px;}
+.badge-verde{background:#dcfce7;color:#166534;}
+.badge-laranja{background:#fef3c7;color:#92400e;}
+.badge-vermelho{background:#fee2e2;color:#991b1b;}
+.badge-roxo{background:#ede9fe;color:#5b21b6;}
+.badge-cinza{background:#f1f5f9;color:#475569;}
+.badge-azul{background:#dbeafe;color:#1e40af;}
+/* Modal */
+.mbg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:800;align-items:center;justify-content:center;padding:16px;}
+.mbg.open{display:flex;}
+.md{background:var(--white);border-radius:14px;width:100%;max-height:92vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.3);}
+.md-sm{max-width:440px;}.md-md{max-width:600px;}.md-lg{max-width:800px;}.md-xl{max-width:1000px;}
+.mdh{background:linear-gradient(135deg,var(--red),var(--red-l));padding:14px 18px;border-radius:14px 14px 0 0;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.mdh h3{color:#fff;font-size:15px;font-weight:700;font-family:'Playfair Display',serif;}
+.mdh .sub{color:rgba(255,255,255,.75);font-size:11px;margin-top:2px;}
+.mdx{background:none;border:none;color:rgba(255,255,255,.8);font-size:22px;cursor:pointer;line-height:1;padding:2px 6px;}
+.mdb{padding:18px;overflow-y:auto;flex:1;}
+.mdf{padding:12px 18px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;flex-shrink:0;}
+/* Form */
+.fg{margin-bottom:12px;}
+.fg label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:4px;}
+.fg input,.fg select,.fg textarea{width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:'DM Sans',sans-serif;background:var(--white);}
+.fg input:focus,.fg select:focus,.fg textarea:focus{outline:none;border-color:var(--red);}
+.fg-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.fg-row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
+/* Itens de venda */
+.item-linha{display:grid;grid-template-columns:80px 1fr 70px 100px 100px 80px 28px;gap:6px;align-items:center;padding:6px;background:var(--bg);border-radius:7px;margin-bottom:5px;}
+.item-linha input{padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:'DM Mono',monospace;}
+.item-label{font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);font-weight:700;}
+/* Saldo do cliente no lançamento */
+.saldo-box{background:#faf7f4;border:1px solid var(--border);border-radius:9px;padding:10px 14px;margin-bottom:12px;display:flex;gap:16px;flex-wrap:wrap;}
+.saldo-item{font-size:11px;color:var(--muted);}
+.saldo-item strong{font-size:14px;font-family:'DM Mono',monospace;display:block;color:var(--text);}
+.saldo-alerta{background:#fff3cd;border:1px solid #ffc107;color:#856404;padding:8px 12px;border-radius:7px;font-size:12px;margin-bottom:8px;}
+.saldo-perigo{background:#fee2e2;border:1px solid #fca5a5;color:#991b1b;padding:8px 12px;border-radius:7px;font-size:12px;margin-bottom:8px;}
+/* Venda cards */
+.venda-card{background:var(--white);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:8px;box-shadow:var(--shadow);}
+/* Status badges */
+.s-aberto{background:#dbeafe;color:#1e40af;}
+.s-parcial{background:#fef3c7;color:#92400e;}
+.s-pago{background:#dcfce7;color:#166534;}
+.s-aguardando{background:#ede9fe;color:#5b21b6;}
+.s-reprovado{background:#fee2e2;color:#991b1b;}
+.s-cancelado{background:#f1f5f9;color:#475569;}
+/* Detalhe cliente */
+.det-header{background:linear-gradient(135deg,var(--red),var(--red-l));padding:16px 18px;border-radius:12px;margin-bottom:14px;color:#fff;}
+.det-kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;margin-bottom:14px;}
+.det-kpi{background:var(--white);border:1px solid var(--border);border-radius:8px;padding:10px 12px;}
+.det-kpi .lbl{font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700;}
+.det-kpi .val{font-size:16px;font-weight:700;font-family:'DM Mono',monospace;margin-top:2px;}
+/* Autocomplete */
+.ac-wrap{position:relative;}
+.ac-list{position:absolute;top:100%;left:0;right:0;background:var(--white);border:1px solid var(--border);border-radius:0 0 8px 8px;box-shadow:0 6px 20px rgba(0,0,0,.12);z-index:100;max-height:200px;overflow-y:auto;display:none;}
+.ac-list.open{display:block;}
+.ac-item{padding:8px 12px;cursor:pointer;font-size:12px;border-bottom:1px solid #f5efe8;}
+.ac-item:hover{background:#faf7f4;}
+.ac-item .ac-nome{font-weight:600;}
+.ac-item .ac-sub{font-size:10px;color:var(--muted);}
+/* Aprovação */
+.aprov-card{background:var(--white);border:2px solid #c4b5fd;border-radius:10px;padding:14px;margin-bottom:10px;}
+.empty{text-align:center;padding:32px 16px;color:var(--muted);font-size:13px;}
+</style>
+</head>
+<body>
+<div class="ph">
+  <span style="font-size:20px">💳</span>
+  <h2>Fiado / Contas de Clientes</h2>
+  <div class="ph-sub" id="ph-sub">Carregando...</div>
+  <button class="btn btn-red btn-sm" style="margin-left:12px" onclick="abrirNovaVenda()">＋ Nova Venda</button>
+  <button class="btn btn-gray btn-sm" style="margin-left:6px" onclick="abrirPagamento()">💵 Pagamento</button>
+</div>
+
+<!-- Abas -->
+<div class="tabs-bar">
+  <button class="tab-btn active" onclick="showTab('painel',this)">📊 Painel</button>
+  <button class="tab-btn" onclick="showTab('clientes',this)">👥 Clientes</button>
+  <button class="tab-btn" onclick="showTab('vendas',this)">🛍 Vendas</button>
+  <button class="tab-btn" onclick="showTab('pagamentos',this)">💵 Pagamentos</button>
+  <button class="tab-btn" onclick="showTab('aprovacoes',this)" id="tab-aprov">⏳ Aprovações <span class="badge" id="badge-aprov" style="display:none">0</span></button>
+  <button class="tab-btn" onclick="showTab('relatorios',this)">📋 Relatórios</button>
+</div>
+
+<div class="body" id="body">
+
+<!-- ── PAINEL ─────────────────────────────────────────────────── -->
+<div id="sec-painel">
+  <div class="kpi-grid" id="kpi-grid">
+    <div class="kc r"><div class="kc-l">Total em Aberto</div><div class="kc-v mono" id="k-aberto">—</div><div class="kc-s" id="k-aberto-s"></div></div>
+    <div class="kc o"><div class="kc-l">Vendido no Mês</div><div class="kc-v mono" id="k-mes">—</div><div class="kc-s">mês atual</div></div>
+    <div class="kc g"><div class="kc-l">Recebido no Mês</div><div class="kc-v mono" id="k-rec">—</div><div class="kc-s">mês atual</div></div>
+    <div class="kc b"><div class="kc-l">Acima do Limite</div><div class="kc-v" id="k-limite">—</div><div class="kc-s">clientes</div></div>
+    <div class="kc" style="border-left-color:var(--purple)"><div class="kc-l">Pendentes Aprovação</div><div class="kc-v" id="k-pend">—</div><div class="kc-s">sócios</div></div>
+  </div>
+
+  <div class="toolbar">
+    <input class="flt" type="text" placeholder="🔍 Buscar cliente..." id="busca-painel" oninput="renderTabelaClientes()" style="min-width:220px">
+    <select class="flt" id="flt-tipo" onchange="renderTabelaClientes()">
+      <option value="">Todos os tipos</option>
+      <option value="normal">Normal</option>
+      <option value="especial">Especial</option>
+      <option value="socio">Sócio</option>
+    </select>
+    <select class="flt" id="flt-status-cli" onchange="renderTabelaClientes()">
+      <option value="">Todos</option>
+      <option value="ativo">Ativos</option>
+      <option value="inativo">Inativos</option>
+    </select>
+    <button class="btn btn-gray btn-sm" onclick="abrirNovoCliente()">＋ Novo cliente</button>
+    <button class="btn btn-gray btn-sm" onclick="carregarTudo()">🔄</button>
+  </div>
+
+  <div class="card">
+    <div style="overflow-x:auto">
+    <table class="tbl" id="tbl-clientes">
+      <thead><tr>
+        <th>Cliente</th><th>Tipo</th><th>Limite</th>
+        <th style="text-align:right">Saldo Aberto</th>
+        <th style="text-align:right">Comprado Mês</th>
+        <th>Último Pgto</th><th>Status</th><th>Ações</th>
+      </tr></thead>
+      <tbody id="tbody-clientes"></tbody>
+    </table>
+    </div>
+  </div>
+</div>
+
+<!-- ── CLIENTES ────────────────────────────────────────────────── -->
+<div id="sec-clientes" style="display:none">
+  <div class="toolbar">
+    <input class="flt" type="text" placeholder="🔍 Buscar..." id="busca-cli" oninput="renderListaClientes()" style="min-width:220px">
+    <button class="btn btn-red" onclick="abrirNovoCliente()">＋ Novo Cliente</button>
+  </div>
+  <div id="lista-clientes"></div>
+</div>
+
+<!-- ── VENDAS ──────────────────────────────────────────────────── -->
+<div id="sec-vendas" style="display:none">
+  <div class="toolbar">
+    <input class="flt" type="text" placeholder="🔍 Cliente ou produto..." id="busca-venda" oninput="renderVendas()" style="min-width:200px">
+    <select class="flt" id="flt-status-venda" onchange="renderVendas()">
+      <option value="">Todos os status</option>
+      <option value="aberto">Em aberto</option>
+      <option value="parcial">Pago parcial</option>
+      <option value="pago">Pago</option>
+      <option value="aguardando">Aguardando</option>
+      <option value="reprovado">Reprovado</option>
+      <option value="cancelado">Cancelado</option>
+    </select>
+    <button class="btn btn-red" onclick="abrirNovaVenda()">＋ Nova Venda</button>
+  </div>
+  <div id="lista-vendas"></div>
+</div>
+
+<!-- ── PAGAMENTOS ─────────────────────────────────────────────── -->
+<div id="sec-pagamentos" style="display:none">
+  <div class="toolbar">
+    <input class="flt" type="text" placeholder="🔍 Cliente..." id="busca-pag" oninput="renderPagamentos()" style="min-width:200px">
+    <button class="btn btn-green" onclick="abrirPagamento()">＋ Registrar Pagamento</button>
+  </div>
+  <div class="card"><div style="overflow-x:auto">
+  <table class="tbl">
+    <thead><tr><th>Data</th><th>Cliente</th><th>Valor Pago</th><th>Forma</th><th>Vendas Abatidas</th><th>Obs</th></tr></thead>
+    <tbody id="tbody-pag"></tbody>
+  </table></div></div>
+</div>
+
+<!-- ── APROVAÇÕES ────────────────────────────────────────────── -->
+<div id="sec-aprovacoes" style="display:none">
+  <div style="background:#faf5ff;border:1px solid #e9d5ff;border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:#6b21a8">
+    ⏳ Vendas de <strong>clientes sócios</strong> precisam de aprovação do admin antes de entrar no saldo.
+    Se reprovada, o cliente é convertido para <strong>cliente normal</strong> automaticamente.
+  </div>
+  <div id="lista-aprovacoes"></div>
+</div>
+
+<!-- ── RELATÓRIOS ─────────────────────────────────────────────── -->
+<div id="sec-relatorios" style="display:none">
+  <div class="card" style="padding:20px">
+    <div class="fg-row" style="margin-bottom:16px">
+      <div class="fg"><label>Cliente</label>
+        <select class="flt" id="rel-cliente" style="width:100%"><option value="">Todos</option></select>
+      </div>
+      <div class="fg"><label>Tipo</label>
+        <select class="flt" id="rel-tipo" style="width:100%">
+          <option value="">Todos</option><option value="normal">Normal</option>
+          <option value="especial">Especial</option><option value="socio">Sócio</option>
+        </select>
+      </div>
+      <div class="fg"><label>Status</label>
+        <select class="flt" id="rel-status" style="width:100%">
+          <option value="">Todos</option><option value="aberto">Em aberto</option>
+          <option value="pago">Pago</option>
+        </select>
+      </div>
+    </div>
+    <div class="fg-row" style="margin-bottom:16px">
+      <div class="fg"><label>Data Início</label><input type="date" id="rel-ini" class="flt" style="width:100%"></div>
+      <div class="fg"><label>Data Fim</label><input type="date" id="rel-fim" class="flt" style="width:100%"></div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-red" onclick="gerarRelatorio()">📋 Gerar Relatório</button>
+      <button class="btn btn-gray" onclick="exportarRelatorio()">📤 Exportar CSV</button>
+    </div>
+    <div id="rel-resultado" style="margin-top:16px"></div>
+  </div>
+</div>
+
+</div><!-- /body -->
+
+<!-- ══════════════════════ MODAIS ══════════════════════════════════ -->
+
+<!-- Modal: Novo/Editar Cliente -->
+<div class="mbg" id="m-cliente">
+  <div class="md md-md">
+    <div class="mdh"><div><h3 id="m-cli-titulo">Novo Cliente</h3></div><button class="mdx" onclick="fecharModal('m-cliente')">×</button></div>
+    <div class="mdb">
+      <input type="hidden" id="cli-id">
+      <div class="fg-row">
+        <div class="fg" style="grid-column:1/-1"><label>Nome *</label><input id="cli-nome" placeholder="Nome completo do cliente"></div>
+      </div>
+      <div class="fg-row">
+        <div class="fg"><label>Telefone / WhatsApp</label><input id="cli-tel" placeholder="(19) 99999-9999"></div>
+        <div class="fg"><label>Tipo de Cliente</label>
+          <select id="cli-tipo" onchange="atualizarCamposCliente()">
+            <option value="normal">👤 Normal</option>
+            <option value="especial">⭐ Especial</option>
+            <option value="socio">🤝 Sócio</option>
+          </select>
+        </div>
+      </div>
+      <div class="fg-row">
+        <div class="fg" id="fg-desconto" style="display:none">
+          <label>Desconto Padrão (%)</label>
+          <input id="cli-desc" type="number" step="0.5" min="0" max="50" placeholder="Ex: 10">
+        </div>
+        <div class="fg"><label>Limite de Crédito (R$)</label><input id="cli-limite" type="number" step="0.01" placeholder="Opcional"></div>
+        <div class="fg"><label>Status</label>
+          <select id="cli-status"><option value="ativo">✅ Ativo</option><option value="inativo">❌ Inativo</option></select>
+        </div>
+      </div>
+      <div class="fg"><label>Observações</label><textarea id="cli-obs" rows="2" placeholder="Informações adicionais..."></textarea></div>
+      <!-- Info por tipo -->
+      <div id="cli-tipo-info" style="font-size:11px;color:var(--muted);background:var(--bg);border-radius:7px;padding:8px 10px;display:none"></div>
+    </div>
+    <div class="mdf">
+      <button class="btn btn-gray" onclick="fecharModal('m-cliente')">Cancelar</button>
+      <button class="btn btn-red" onclick="salvarCliente()">💾 Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Nova Venda -->
+<div class="mbg" id="m-venda">
+  <div class="md md-xl">
+    <div class="mdh"><div><h3>🛍 Nova Venda Fiado</h3><div class="sub" id="m-venda-sub">Preencha os dados da venda</div></div><button class="mdx" onclick="fecharModal('m-venda')">×</button></div>
+    <div class="mdb">
+      <!-- Busca de cliente -->
+      <div class="fg-row">
+        <div class="fg" style="grid-column:1/-1">
+          <label>Cliente *</label>
+          <div class="ac-wrap">
+            <input id="venda-cli-busca" placeholder="🔍 Digite nome ou telefone..." oninput="buscarClienteVenda()" autocomplete="off">
+            <div class="ac-list" id="venda-cli-ac"></div>
+          </div>
+          <input type="hidden" id="venda-cli-id">
+        </div>
+      </div>
+      <!-- Saldo do cliente -->
+      <div id="venda-saldo-box" style="display:none" class="saldo-box">
+        <div class="saldo-item"><span>Tipo</span><strong id="vs-tipo">—</strong></div>
+        <div class="saldo-item"><span>Saldo Atual</span><strong id="vs-saldo" style="color:var(--red-l)">—</strong></div>
+        <div class="saldo-item"><span>Limite</span><strong id="vs-limite">—</strong></div>
+        <div class="saldo-item"><span>Desconto</span><strong id="vs-desc">—</strong></div>
+      </div>
+      <div id="venda-alerta" style="display:none"></div>
+
+      <div class="fg-row">
+        <div class="fg"><label>Data da Compra</label><input type="date" id="venda-data"></div>
+        <div class="fg"><label>Observações</label><input id="venda-obs" placeholder="Opcional"></div>
+      </div>
+
+      <!-- Itens -->
+      <div style="background:var(--bg);border-radius:9px;padding:12px;margin-bottom:12px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">Itens da Venda</span>
+          <button class="btn btn-gray btn-sm" onclick="adicionarItemVenda()">＋ Item</button>
+        </div>
+        <!-- Cabeçalho itens -->
+        <div style="display:grid;grid-template-columns:80px 1fr 70px 100px 100px 90px 28px;gap:6px;padding:0 6px;margin-bottom:4px">
+          <span class="item-label">Código</span><span class="item-label">Produto</span>
+          <span class="item-label">Qtd</span><span class="item-label">Vl. Venda</span>
+          <span class="item-label" id="col-custo-label">Vl. Custo</span>
+          <span class="item-label">Total</span><span></span>
+        </div>
+        <div id="itens-venda"></div>
+        <!-- Totais -->
+        <div style="border-top:1px solid var(--border);margin-top:10px;padding-top:10px;display:flex;justify-content:flex-end;gap:20px">
+          <div style="text-align:right">
+            <div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:2px">Subtotal</div>
+            <div class="mono" style="font-size:14px" id="venda-subtotal">R$ 0,00</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:2px">Desconto</div>
+            <div class="mono" style="font-size:14px;color:var(--orange)" id="venda-desconto">R$ 0,00</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:2px">Total Final</div>
+            <div class="mono" style="font-size:18px;font-weight:700;color:var(--red)" id="venda-total">R$ 0,00</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="mdf">
+      <button class="btn btn-gray" onclick="fecharModal('m-venda')">Cancelar</button>
+      <button class="btn btn-red" onclick="confirmarVenda()" id="btn-salvar-venda">💾 Lançar Venda</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Pagamento -->
+<div class="mbg" id="m-pag">
+  <div class="md md-md">
+    <div class="mdh"><div><h3>💵 Registrar Pagamento</h3></div><button class="mdx" onclick="fecharModal('m-pag')">×</button></div>
+    <div class="mdb">
+      <div class="fg">
+        <label>Cliente *</label>
+        <div class="ac-wrap">
+          <input id="pag-cli-busca" placeholder="🔍 Buscar cliente..." oninput="buscarClientePag()" autocomplete="off">
+          <div class="ac-list" id="pag-cli-ac"></div>
+        </div>
+        <input type="hidden" id="pag-cli-id">
+      </div>
+      <div id="pag-saldo-info" style="display:none" class="saldo-box" style="margin-bottom:10px">
+        <div class="saldo-item"><span>Saldo em Aberto</span><strong id="pag-saldo" style="color:var(--red-l)">—</strong></div>
+      </div>
+      <div class="fg-row">
+        <div class="fg"><label>Data do Pagamento</label><input type="date" id="pag-data"></div>
+        <div class="fg"><label>Valor Pago *</label><input type="number" id="pag-valor" step="0.01" min="0.01" placeholder="0,00" oninput="atualizarTotalPag()"></div>
+      </div>
+      <div class="fg-row">
+        <div class="fg"><label>Forma de Pagamento</label>
+          <select id="pag-forma">
+            <option value="dinheiro">💵 Dinheiro</option>
+            <option value="pix">📱 Pix</option>
+            <option value="debito">💳 Cartão Débito</option>
+            <option value="credito">💳 Cartão Crédito</option>
+            <option value="transferencia">🏦 Transferência</option>
+            <option value="outro">📌 Outro</option>
+          </select>
+        </div>
+        <div class="fg"><label>Venda Específica (opcional)</label>
+          <select id="pag-venda-id"><option value="">— Abater nas mais antigas —</option></select>
+        </div>
+      </div>
+      <div class="fg"><label>Observações</label><input id="pag-obs" placeholder="Opcional"></div>
+      <div id="pag-preview" style="display:none;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:10px 12px;font-size:12px;margin-top:4px">
+        <strong>💡 Prévia:</strong> <span id="pag-preview-txt"></span>
+      </div>
+    </div>
+    <div class="mdf">
+      <button class="btn btn-gray" onclick="fecharModal('m-pag')">Cancelar</button>
+      <button class="btn btn-green" onclick="confirmarPagamento()">✅ Confirmar Pagamento</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Reprovar venda -->
+<div class="mbg" id="m-reprovar">
+  <div class="md md-sm">
+    <div class="mdh"><h3>❌ Reprovar Venda</h3><button class="mdx" onclick="fecharModal('m-reprovar')">×</button></div>
+    <div class="mdb">
+      <input type="hidden" id="rep-venda-id">
+      <div class="fg"><label>Motivo da Reprovação *</label>
+        <textarea id="rep-motivo" rows="3" placeholder="Descreva o motivo da reprovação..."></textarea>
+      </div>
+      <div style="font-size:11px;color:var(--muted);background:#fef9c3;padding:8px;border-radius:6px">
+        ⚠️ O cliente sócio será convertido para <strong>cliente normal</strong> automaticamente.
+      </div>
+    </div>
+    <div class="mdf">
+      <button class="btn btn-gray" onclick="fecharModal('m-reprovar')">Cancelar</button>
+      <button class="btn" style="background:#dc2626;color:#fff" onclick="confirmarReprovacao()">❌ Reprovar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Cancelar venda -->
+<div class="mbg" id="m-cancelar">
+  <div class="md md-sm">
+    <div class="mdh"><h3>🚫 Cancelar Venda</h3><button class="mdx" onclick="fecharModal('m-cancelar')">×</button></div>
+    <div class="mdb">
+      <input type="hidden" id="canc-venda-id">
+      <div class="fg"><label>Motivo do Cancelamento *</label>
+        <textarea id="canc-motivo" rows="3" placeholder="Motivo obrigatório..."></textarea>
+      </div>
+    </div>
+    <div class="mdf">
+      <button class="btn btn-gray" onclick="fecharModal('m-cancelar')">Cancelar</button>
+      <button class="btn" style="background:#dc2626;color:#fff" onclick="confirmarCancelamento()">🚫 Cancelar Venda</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Detalhe do cliente -->
+<div class="mbg" id="m-detalhe">
+  <div class="md md-xl" style="max-height:96vh">
+    <div class="mdh"><div><h3 id="det-nome">Cliente</h3><div class="sub" id="det-sub"></div></div><button class="mdx" onclick="fecharModal('m-detalhe')">×</button></div>
+    <div class="mdb" style="padding:14px">
+      <div id="det-body"></div>
+    </div>
+    <div class="mdf">
+      <button class="btn btn-gray" onclick="fecharModal('m-detalhe')">Fechar</button>
+      <button class="btn btn-red" onclick="abrirNovaVendaCliente()">＋ Nova Venda</button>
+      <button class="btn btn-green" onclick="abrirPagamentoCliente()">💵 Pagamento</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const {api, fmt, toast} = BB;
+let _clientes=[], _vendas=[], _pagamentos=[], _clienteDetalhe=null;
+let _itemIdx=0;
+
+// ── Inicialização ──────────────────────────────────────────────────────────
+window.onBBReady = async () => {
+  const hoje = new Date().toISOString().slice(0,10);
+  document.getElementById('venda-data').value = hoje;
+  document.getElementById('pag-data').value   = hoje;
+  await carregarTudo();
+  adicionarItemVenda();
+};
+
+async function carregarTudo() {
+  document.getElementById('ph-sub').textContent = 'Carregando...';
+  const [rc, rv, rp, rk] = await Promise.all([
+    api.get('/api/fiado/clientes'),
+    api.get('/api/fiado/vendas'),
+    api.get('/api/fiado/pagamentos'),
+    api.get('/api/fiado/kpis'),
+  ]);
+  if (rc.ok) _clientes = rc.data;
+  if (rv.ok) _vendas   = rv.data;
+  if (rp.ok) _pagamentos = rp.data;
+  if (rk.ok) renderKPIs(rk.data);
+  renderTabelaClientes();
+  renderListaClientes();
+  renderVendas();
+  renderPagamentos();
+  renderAprovacoes();
+  popularSelects();
+  document.getElementById('ph-sub').textContent = `${_clientes.length} clientes · ${_vendas.filter(v=>v.status==='aberto'||v.status==='parcial').length} em aberto`;
+}
+
+function renderKPIs(k) {
+  const brl = v => fmt.brl(parseFloat(v||0));
+  document.getElementById('k-aberto').textContent  = brl(k.total_aberto);
+  document.getElementById('k-aberto-s').textContent= `${k.clientes_com_saldo} cliente(s)`;
+  document.getElementById('k-mes').textContent     = brl(k.vendido_mes);
+  document.getElementById('k-rec').textContent     = brl(k.recebido_mes);
+  document.getElementById('k-limite').textContent  = k.acima_limite;
+  document.getElementById('k-pend').textContent    = k.pendentes_aprovacao;
+  const badgeAprov = document.getElementById('badge-aprov');
+  const n = parseInt(k.pendentes_aprovacao||0);
+  badgeAprov.textContent = n;
+  badgeAprov.style.display = n > 0 ? '' : 'none';
+  // Notifica portal
+  window.parent?.postMessage({ type:'fiado_pendentes', total: n }, '*');
+}
+
+// ── Abas ────────────────────────────────────────────────────────────────────
+function showTab(tab, btn) {
+  document.querySelectorAll('[id^="sec-"]').forEach(s => s.style.display='none');
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('sec-'+tab).style.display = '';
+  if (btn) btn.classList.add('active');
+}
+
+// ── Tabela principal de clientes ────────────────────────────────────────────
+function renderTabelaClientes() {
+  const q  = (document.getElementById('busca-painel').value||'').toLowerCase();
+  const tp = document.getElementById('flt-tipo').value;
+  const st = document.getElementById('flt-status-cli').value;
+  const lista = _clientes.filter(c =>
+    (!q || c.nome.toLowerCase().includes(q) || (c.telefone||'').includes(q)) &&
+    (!tp || c.tipo_cliente===tp) &&
+    (!st || c.status===st)
+  );
+  const tbody = document.getElementById('tbody-clientes');
+  if (!lista.length) { tbody.innerHTML=`<tr><td colspan="8" class="empty">Nenhum cliente encontrado</td></tr>`; return; }
+  tbody.innerHTML = lista.map(c => {
+    const saldo   = parseFloat(c.saldo_aberto||0);
+    const limite  = parseFloat(c.limite_credito||0);
+    const excedeu = limite>0 && saldo>limite;
+    const badgeTipo = c.tipo_cliente==='socio'?`<span class="badge badge-roxo">Sócio</span>`:c.tipo_cliente==='especial'?`<span class="badge badge-azul">Especial ${c.desconto_pct||0}%</span>`:`<span class="badge badge-cinza">Normal</span>`;
+    const badgeSaldo = saldo===0?`<span class="badge badge-verde">Zerado</span>`:excedeu?`<span class="badge badge-vermelho">⚠️ Limite</span>`:saldo>0?`<span class="badge badge-laranja">Em aberto</span>`:`<span class="badge badge-verde">Zerado</span>`;
+    const pendentes = parseInt(c.vendas_pendentes||0);
+    return `<tr>
+      <td><div style="font-weight:600">${c.nome}${pendentes>0?` <span class="badge badge-roxo" style="font-size:9px">⏳${pendentes}</span>`:''}</div><div style="font-size:10px;color:var(--muted)">${c.telefone||'—'}</div></td>
+      <td>${badgeTipo}</td>
+      <td class="mono" style="font-size:11px">${limite>0?fmt.brl(limite):'—'}</td>
+      <td class="mono" style="text-align:right;color:${saldo>0?'var(--red-l)':'var(--green);'}font-weight:600">${fmt.brl(saldo)}</td>
+      <td class="mono" style="text-align:right">${fmt.brl(parseFloat(c.comprado_mes||0))}</td>
+      <td style="font-size:11px;color:var(--muted)">${c.ultimo_pagamento?c.ultimo_pagamento.slice(0,10).split('-').reverse().join('/'):'—'}</td>
+      <td>${badgeSaldo}</td>
+      <td style="white-space:nowrap">
+        <button class="btn btn-gray btn-sm" onclick="abrirDetalhe(${c.id})" title="Ver detalhes">👁</button>
+        <button class="btn btn-gray btn-sm" onclick="abrirNovaVendaCliente(${c.id})" title="Nova venda">＋</button>
+        <button class="btn btn-gray btn-sm" onclick="abrirPagamentoCliente(${c.id})" title="Pagamento">💵</button>
+        <button class="btn btn-gray btn-sm" onclick="editarCliente(${c.id})" title="Editar">✏️</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Lista de clientes ───────────────────────────────────────────────────────
+function renderListaClientes() {
+  const q = (document.getElementById('busca-cli').value||'').toLowerCase();
+  const lista = _clientes.filter(c => !q || c.nome.toLowerCase().includes(q) || (c.telefone||'').includes(q));
+  document.getElementById('lista-clientes').innerHTML = lista.map(c => `
+    <div class="venda-card" style="display:flex;align-items:center;gap:12px">
+      <div style="flex:1">
+        <div style="font-weight:700;font-size:13px">${c.nome}</div>
+        <div style="font-size:11px;color:var(--muted)">${c.telefone||'—'} · ${c.tipo_cliente==='socio'?'🤝 Sócio':c.tipo_cliente==='especial'?`⭐ Especial (${c.desconto_pct||0}% desc)`:'👤 Normal'} · ${c.status==='ativo'?'✅ Ativo':'❌ Inativo'}</div>
+      </div>
+      <div style="text-align:right;min-width:100px">
+        <div style="font-size:10px;color:var(--muted)">Saldo Aberto</div>
+        <div class="mono" style="font-size:15px;font-weight:700;color:${parseFloat(c.saldo_aberto||0)>0?'var(--red-l)':'var(--green)'}">${fmt.brl(parseFloat(c.saldo_aberto||0))}</div>
+      </div>
+      <div style="display:flex;gap:4px">
+        <button class="btn btn-gray btn-sm" onclick="abrirDetalhe(${c.id})">👁 Ver</button>
+        <button class="btn btn-gray btn-sm" onclick="editarCliente(${c.id})">✏️</button>
+      </div>
+    </div>`).join('') || '<div class="empty">Nenhum cliente cadastrado</div>';
+}
+
+// ── Vendas ──────────────────────────────────────────────────────────────────
+const STATUS_LABEL = {aberto:'Em Aberto',parcial:'Parcial',pago:'Pago',aguardando:'Aguardando',reprovado:'Reprovado',cancelado:'Cancelado'};
+const STATUS_CLASS = {aberto:'s-aberto',parcial:'s-parcial',pago:'s-pago',aguardando:'s-aguardando',reprovado:'s-reprovado',cancelado:'s-cancelado'};
+
+function renderVendas() {
+  const q = (document.getElementById('busca-venda').value||'').toLowerCase();
+  const st= document.getElementById('flt-status-venda').value;
+  const lista = _vendas.filter(v =>
+    (!q || v.cliente_nome?.toLowerCase().includes(q) || (v.itens||[]).some(i=>i.nome_produto?.toLowerCase().includes(q))) &&
+    (!st || v.status===st)
+  );
+  document.getElementById('lista-vendas').innerHTML = lista.map(v => `
+    <div class="venda-card">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap">
+        <div>
+          <div style="font-weight:700;font-size:13px">${v.cliente_nome} <span class="badge ${STATUS_CLASS[v.status]||''}">${STATUS_LABEL[v.status]||v.status}</span></div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">${v.data_compra?.slice(0,10).split('-').reverse().join('/')} · ${(v.itens||[]).length} iten(s) · por ${v.usuario_resp||'—'}</div>
+          ${v.status==='aguardando'?'<div style="font-size:10px;background:#ede9fe;color:#5b21b6;padding:2px 7px;border-radius:4px;display:inline-block;margin-top:3px">⏳ Aguardando aprovação do admin</div>':''}
+          ${v.status==='reprovado'?`<div style="font-size:10px;color:var(--red-l);margin-top:2px">❌ ${v.motivo_reprovacao||''}</div>`:''}
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:10px;color:var(--muted)">Total / Saldo</div>
+          <div class="mono" style="font-size:14px;font-weight:700">${fmt.brl(parseFloat(v.total_final||0))}</div>
+          ${parseFloat(v.saldo_restante||0)>0?`<div class="mono" style="font-size:11px;color:var(--red-l)">Restante: ${fmt.brl(parseFloat(v.saldo_restante||0))}</div>`:''}
+        </div>
+      </div>
+      <div style="display:flex;gap:5px;margin-top:8px;flex-wrap:wrap">
+        <button class="btn btn-gray btn-sm" onclick="verItensVenda(${v.id})">📋 Itens</button>
+        ${v.status==='aberto'||v.status==='parcial'?`<button class="btn btn-green btn-sm" onclick="abrirPagamentoVenda(${v.id},${v.cliente_id})">💵 Pagar</button>`:''}
+        ${v.status!=='cancelado'&&v.status!=='reprovado'&&v.status!=='pago'?`<button class="btn btn-gray btn-sm" onclick="abrirCancelar(${v.id})">🚫</button>`:''}
+      </div>
+    </div>`).join('') || '<div class="empty">Nenhuma venda encontrada</div>';
+}
+
+// ── Pagamentos ──────────────────────────────────────────────────────────────
+function renderPagamentos() {
+  const q = (document.getElementById('busca-pag').value||'').toLowerCase();
+  const FORMA_LABEL = {dinheiro:'💵 Dinheiro',pix:'📱 Pix',debito:'💳 Débito',credito:'💳 Crédito',transferencia:'🏦 Transf.',outro:'📌 Outro'};
+  const lista = _pagamentos.filter(p => !q || (_clientes.find(c=>c.id===p.cliente_id)?.nome||'').toLowerCase().includes(q));
+  const tbody = document.getElementById('tbody-pag');
+  tbody.innerHTML = lista.map(p => {
+    const cli = _clientes.find(c=>c.id===p.cliente_id);
+    const abatidas = (p.vendas_abatidas||[]).filter(Boolean).length;
+    return `<tr>
+      <td>${p.data_pagamento?.slice(0,10).split('-').reverse().join('/')}</td>
+      <td style="font-weight:600">${cli?.nome||'—'}</td>
+      <td class="mono" style="font-weight:700;color:var(--green)">${fmt.brl(parseFloat(p.valor_pago))}</td>
+      <td>${FORMA_LABEL[p.forma_pagamento]||p.forma_pagamento}</td>
+      <td style="font-size:11px;color:var(--muted)">${abatidas} venda(s)</td>
+      <td style="font-size:11px;color:var(--muted)">${p.observacoes||'—'}</td>
+    </tr>`;
+  }).join('') || `<tr><td colspan="6" class="empty">Nenhum pagamento registrado</td></tr>`;
+}
+
+// ── Aprovações ──────────────────────────────────────────────────────────────
+function renderAprovacoes() {
+  const pendentes = _vendas.filter(v => v.status==='aguardando');
+  const el = document.getElementById('lista-aprovacoes');
+  if (!pendentes.length) { el.innerHTML='<div class="empty">✅ Nenhuma venda aguardando aprovação</div>'; return; }
+  el.innerHTML = pendentes.map(v => {
+    const cli = _clientes.find(c=>c.id===v.cliente_id);
+    const total_custo = (v.itens||[]).reduce((s,i)=>s+parseFloat(i.valor_unit_custo||0)*parseFloat(i.quantidade||1),0);
+    const total_venda = parseFloat(v.subtotal_venda||0);
+    const diff = total_venda - parseFloat(v.total_final||0);
+    return `<div class="aprov-card">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
+        <div>
+          <div style="font-weight:700;font-size:14px">🤝 ${cli?.nome||'—'} <span class="badge badge-roxo">Sócio</span></div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">${v.data_compra?.slice(0,10).split('-').reverse().join('/')} · por ${v.usuario_resp||'—'} · ${(v.itens||[]).length} item(s)</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:10px;color:var(--muted)">Valor (Custo)</div>
+          <div class="mono" style="font-size:16px;font-weight:700;color:var(--purple)">${fmt.brl(parseFloat(v.total_final||0))}</div>
+          <div style="font-size:10px;color:var(--muted)">Venda normal seria ${fmt.brl(total_venda)} <span style="color:var(--green)">(+${fmt.brl(diff)})</span></div>
+        </div>
+      </div>
+      <div style="margin:8px 0;background:var(--bg);border-radius:7px;padding:8px">
+        ${(v.itens||[]).map(i=>`<div style="display:flex;justify-content:space-between;font-size:11px;padding:2px 0"><span>${i.nome_produto} × ${i.quantidade}</span><span class="mono">${fmt.brl(parseFloat(i.valor_unit_custo||0)*parseFloat(i.quantidade||1))} (custo)</span></div>`).join('')}
+      </div>
+      <div style="display:flex;gap:8px;margin-top:6px">
+        <button class="btn btn-green btn-sm" onclick="aprovarVenda(${v.id})">✅ Aprovar</button>
+        <button class="btn btn-sm" style="background:#fee2e2;color:#dc2626;border:1px solid #fca5a5" onclick="abrirReprovar(${v.id})">❌ Reprovar</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── Modal Cliente ───────────────────────────────────────────────────────────
+function abrirNovoCliente() {
+  document.getElementById('cli-id').value='';
+  document.getElementById('cli-nome').value='';
+  document.getElementById('cli-tel').value='';
+  document.getElementById('cli-tipo').value='normal';
+  document.getElementById('cli-desc').value='';
+  document.getElementById('cli-limite').value='';
+  document.getElementById('cli-obs').value='';
+  document.getElementById('cli-status').value='ativo';
+  document.getElementById('m-cli-titulo').textContent='Novo Cliente';
+  atualizarCamposCliente();
+  document.getElementById('m-cliente').classList.add('open');
+}
+
+function editarCliente(id) {
+  const c = _clientes.find(x=>x.id===id);
+  if (!c) return;
+  document.getElementById('cli-id').value=c.id;
+  document.getElementById('cli-nome').value=c.nome;
+  document.getElementById('cli-tel').value=c.telefone||'';
+  document.getElementById('cli-tipo').value=c.tipo_cliente;
+  document.getElementById('cli-desc').value=c.desconto_pct||'';
+  document.getElementById('cli-limite').value=c.limite_credito||'';
+  document.getElementById('cli-obs').value=c.observacoes||'';
+  document.getElementById('cli-status').value=c.status;
+  document.getElementById('m-cli-titulo').textContent='Editar Cliente';
+  atualizarCamposCliente();
+  document.getElementById('m-cliente').classList.add('open');
+}
+
+function atualizarCamposCliente() {
+  const tipo = document.getElementById('cli-tipo').value;
+  const fgDesc = document.getElementById('fg-desconto');
+  const info   = document.getElementById('cli-tipo-info');
+  fgDesc.style.display = tipo==='especial' ? '' : 'none';
+  const INFOS = {
+    normal: '👤 Compra pelo preço normal de venda do PDV.',
+    especial: '⭐ Compra com desconto sobre o preço de venda. Defina o % de desconto.',
+    socio: '🤝 Compra pelo valor de custo. A venda ficará aguardando aprovação do admin.'
+  };
+  info.textContent = INFOS[tipo]||'';
+  info.style.display = '';
+}
+
+async function salvarCliente() {
+  const id = document.getElementById('cli-id').value;
+  const body = {
+    nome:          document.getElementById('cli-nome').value.trim(),
+    telefone:      document.getElementById('cli-tel').value.trim(),
+    tipo_cliente:  document.getElementById('cli-tipo').value,
+    desconto_pct:  parseFloat(document.getElementById('cli-desc').value)||0,
+    limite_credito:parseFloat(document.getElementById('cli-limite').value)||null,
+    status:        document.getElementById('cli-status').value,
+    observacoes:   document.getElementById('cli-obs').value.trim(),
+  };
+  if (!body.nome) { toast('⚠️ Nome obrigatório'); return; }
+  const d = id ? await api.put(`/api/fiado/clientes/${id}`, body)
+                : await api.post('/api/fiado/clientes', body);
+  if (!d.ok) { toast('❌ '+d.erro); return; }
+  toast('✅ Cliente salvo!');
+  fecharModal('m-cliente');
+  await carregarTudo();
+}
+
+// ── Modal Venda ──────────────────────────────────────────────────────────────
+let _cliVendaAtual = null;
+
+function abrirNovaVenda() { _cliVendaAtual=null; resetVenda(); document.getElementById('m-venda').classList.add('open'); }
+function abrirNovaVendaCliente(id) {
+  resetVenda();
+  if (id) {
+    const c = _clientes.find(x=>x.id===id);
+    if (c) { selecionarClienteVenda(c); }
+  }
+  document.getElementById('m-venda').classList.add('open');
+}
+
+function resetVenda() {
+  document.getElementById('venda-cli-busca').value='';
+  document.getElementById('venda-cli-id').value='';
+  document.getElementById('venda-saldo-box').style.display='none';
+  document.getElementById('venda-alerta').style.display='none';
+  document.getElementById('itens-venda').innerHTML='';
+  _itemIdx=0; _cliVendaAtual=null;
+  document.getElementById('venda-data').value=new Date().toISOString().slice(0,10);
+  adicionarItemVenda();
+  calcTotaisVenda();
+}
+
+function buscarClienteVenda() {
+  const q = (document.getElementById('venda-cli-busca').value||'').toLowerCase();
+  const ac = document.getElementById('venda-cli-ac');
+  if (q.length < 2) { ac.classList.remove('open'); return; }
+  const res = _clientes.filter(c=>c.status==='ativo'&&(c.nome.toLowerCase().includes(q)||(c.telefone||'').includes(q))).slice(0,8);
+  ac.innerHTML = res.map(c=>`<div class="ac-item" onclick="selecionarClienteVenda(${JSON.stringify(c).replace(/"/g,'&quot;')})"><div class="ac-nome">${c.nome}</div><div class="ac-sub">${c.telefone||''} · ${c.tipo_cliente==='socio'?'🤝 Sócio':c.tipo_cliente==='especial'?`⭐ ${c.desconto_pct}% desc`:'👤 Normal'}</div></div>`).join('');
+  ac.classList.toggle('open', res.length>0);
+}
+
+function selecionarClienteVenda(c) {
+  if (typeof c==='string') c=JSON.parse(c);
+  _cliVendaAtual = c;
+  document.getElementById('venda-cli-busca').value=c.nome;
+  document.getElementById('venda-cli-id').value=c.id;
+  document.getElementById('venda-cli-ac').classList.remove('open');
+  // Mostrar saldo
+  const saldo = parseFloat(c.saldo_aberto||0);
+  const limite= parseFloat(c.limite_credito||0);
+  document.getElementById('vs-tipo').textContent   = c.tipo_cliente==='socio'?'🤝 Sócio':c.tipo_cliente==='especial'?`⭐ Especial`:' 👤 Normal';
+  document.getElementById('vs-saldo').textContent  = fmt.brl(saldo);
+  document.getElementById('vs-limite').textContent = limite>0?fmt.brl(limite):'Sem limite';
+  document.getElementById('vs-desc').textContent   = c.tipo_cliente==='especial'?`${c.desconto_pct||0}%`:c.tipo_cliente==='socio'?'Pelo custo':'—';
+  document.getElementById('venda-saldo-box').style.display='flex';
+  // Coluna custo
+  document.getElementById('col-custo-label').textContent = c.tipo_cliente==='socio'?'Vl. Custo ⚡':'Vl. Custo';
+  // Alerta saldo alto
+  const alerta = document.getElementById('venda-alerta');
+  if (saldo>0) {
+    alerta.className='saldo-alerta'; alerta.style.display='';
+    alerta.textContent=`⚠️ Cliente tem R$ ${fmt.brl(saldo)} em aberto${limite>0&&saldo>limite*0.8?' — próximo do limite!':''}`;
+  } else { alerta.style.display='none'; }
+  if (c.tipo_cliente==='socio') {
+    document.getElementById('btn-salvar-venda').textContent='⏳ Enviar para Aprovação';
+  } else {
+    document.getElementById('btn-salvar-venda').textContent='💾 Lançar Venda';
+  }
+  // Atualizar itens com desconto do cliente
+  document.querySelectorAll('.item-desc').forEach(el => {
+    if (c.tipo_cliente==='especial') el.value=c.desconto_pct||0;
+    else el.value=0;
+    el.disabled=(c.tipo_cliente==='especial');
+  });
+  calcTotaisVenda();
+}
+
+async function adicionarItemVenda() {
+  const idx = _itemIdx++;
+  const div = document.createElement('div');
+  div.className='item-linha'; div.id=`item-${idx}`;
+  div.innerHTML=`
+    <input class="item-cod" placeholder="Código" data-idx="${idx}" oninput="buscarProdutoItem(${idx})">
+    <input class="item-nome" placeholder="Produto" data-idx="${idx}" oninput="calcTotaisVenda()">
+    <input class="item-qtd mono" type="number" step="0.001" min="0.001" value="1" data-idx="${idx}" oninput="calcItemVenda(${idx})">
+    <input class="item-venda mono" type="number" step="0.01" min="0" placeholder="0,00" data-idx="${idx}" oninput="calcItemVenda(${idx})">
+    <input class="item-custo mono" type="number" step="0.01" min="0" placeholder="0,00" data-idx="${idx}" oninput="calcItemVenda(${idx})">
+    <span class="item-total mono" style="font-weight:700;font-size:12px;color:var(--red);text-align:right" id="it-total-${idx}">R$ 0,00</span>
+    <button onclick="document.getElementById('item-${idx}').remove();calcTotaisVenda()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:16px;padding:2px">×</button>`;
+  document.getElementById('itens-venda').appendChild(div);
+}
+
+let _prodTimer={};
+async function buscarProdutoItem(idx) {
+  clearTimeout(_prodTimer[idx]);
+  const cod = document.getElementById(`item-${idx}`)?.querySelector('.item-cod')?.value?.trim();
+  if (!cod || cod.length < 2) return;
+  _prodTimer[idx] = setTimeout(async () => {
+    const d = await api.get(`/api/produtos/${encodeURIComponent(cod)}`);
+    if (d.ok && d.data) {
+      const row = document.getElementById(`item-${idx}`);
+      if (!row) return;
+      row.querySelector('.item-nome').value = d.data.descricao||'';
+      row.querySelector('.item-venda').value = parseFloat(d.data.preco_venda||0).toFixed(2);
+      row.querySelector('.item-custo').value = parseFloat(d.data.preco_custo||0).toFixed(2);
+      calcItemVenda(idx);
+    }
+  }, 400);
+}
+
+function calcItemVenda(idx) {
+  const row = document.getElementById(`item-${idx}`);
+  if (!row) return;
+  const qtd   = parseFloat(row.querySelector('.item-qtd').value)||1;
+  const venda = parseFloat(row.querySelector('.item-venda').value)||0;
+  const custo = parseFloat(row.querySelector('.item-custo').value)||0;
+  const c = _cliVendaAtual;
+  const desc  = c?.tipo_cliente==='especial' ? parseFloat(c.desconto_pct||0) : 0;
+  const base  = c?.tipo_cliente==='socio' ? custo : venda;
+  const total = base * qtd * (1 - desc/100);
+  const el = document.getElementById(`it-total-${idx}`);
+  if (el) el.textContent = fmt.brl(total);
+  calcTotaisVenda();
+}
+
+function calcTotaisVenda() {
+  let sub=0, desc=0, tot=0;
+  document.querySelectorAll('#itens-venda .item-linha').forEach(row => {
+    const idx = row.id.replace('item-','');
+    const qtd   = parseFloat(row.querySelector('.item-qtd')?.value)||1;
+    const venda = parseFloat(row.querySelector('.item-venda')?.value)||0;
+    const custo = parseFloat(row.querySelector('.item-custo')?.value)||0;
+    const c = _cliVendaAtual;
+    const d  = c?.tipo_cliente==='especial' ? parseFloat(c.desconto_pct||0) : 0;
+    const base = c?.tipo_cliente==='socio' ? custo : venda;
+    const vl   = base * qtd * (1 - d/100);
+    const s    = venda * qtd;
+    sub += s; desc += s - vl; tot += vl;
+  });
+  document.getElementById('venda-subtotal').textContent = fmt.brl(sub);
+  document.getElementById('venda-desconto').textContent = fmt.brl(desc);
+  document.getElementById('venda-total').textContent    = fmt.brl(tot);
+}
+
+async function confirmarVenda() {
+  const cli_id = parseInt(document.getElementById('venda-cli-id').value);
+  if (!cli_id) { toast('⚠️ Selecione um cliente'); return; }
+  const itens = [];
+  let valido = true;
+  document.querySelectorAll('#itens-venda .item-linha').forEach(row => {
+    const nome = row.querySelector('.item-nome')?.value?.trim();
+    const qtd  = parseFloat(row.querySelector('.item-qtd')?.value)||0;
+    const vend = parseFloat(row.querySelector('.item-venda')?.value)||0;
+    const cust = parseFloat(row.querySelector('.item-custo')?.value)||0;
+    if (!nome || qtd<=0) { valido=false; return; }
+    const c = _cliVendaAtual;
+    const desc = c?.tipo_cliente==='especial' ? parseFloat(c.desconto_pct||0) : 0;
+    itens.push({ codigo_produto: row.querySelector('.item-cod')?.value?.trim()||null,
+      nome_produto:nome, quantidade:qtd, valor_unit_venda:vend, valor_unit_custo:cust, desconto_pct:desc });
+  });
+  if (!valido || !itens.length) { toast('⚠️ Preencha todos os itens corretamente'); return; }
+  const d = await api.post('/api/fiado/vendas', {
+    cliente_id: cli_id,
+    data_compra: document.getElementById('venda-data').value,
+    itens,
+    observacoes: document.getElementById('venda-obs').value
+  });
+  if (!d.ok) {
+    if (d.limite_excedido) toast('❌ Limite de crédito excedido!');
+    else toast('❌ '+d.erro);
+    return;
+  }
+  if (d.aviso) toast('⚠️ '+d.aviso);
+  toast(_cliVendaAtual?.tipo_cliente==='socio'?'⏳ Venda enviada para aprovação!':'✅ Venda lançada!');
+  fecharModal('m-venda');
+  await carregarTudo();
+}
+
+// ── Modal Pagamento ──────────────────────────────────────────────────────────
+let _cliPagAtual = null;
+
+function abrirPagamento()       { _cliPagAtual=null; resetPag(); document.getElementById('m-pag').classList.add('open'); }
+function abrirPagamentoCliente(id) {
+  resetPag();
+  if (id) { const c=_clientes.find(x=>x.id===id); if(c) selecionarClientePag(c); }
+  document.getElementById('m-pag').classList.add('open');
+}
+function abrirPagamentoVenda(vid, cid) {
+  resetPag();
+  const c=_clientes.find(x=>x.id===cid);
+  if(c) selecionarClientePag(c);
+  setTimeout(()=>{ document.getElementById('pag-venda-id').value=vid; },100);
+  document.getElementById('m-pag').classList.add('open');
+}
+
+function resetPag() {
+  document.getElementById('pag-cli-busca').value='';
+  document.getElementById('pag-cli-id').value='';
+  document.getElementById('pag-valor').value='';
+  document.getElementById('pag-obs').value='';
+  document.getElementById('pag-data').value=new Date().toISOString().slice(0,10);
+  document.getElementById('pag-saldo-info').style.display='none';
+  document.getElementById('pag-preview').style.display='none';
+}
+
+function buscarClientePag() {
+  const q=(document.getElementById('pag-cli-busca').value||'').toLowerCase();
+  const ac=document.getElementById('pag-cli-ac');
+  if(q.length<2){ac.classList.remove('open');return;}
+  const res=_clientes.filter(c=>c.status==='ativo'&&(c.nome.toLowerCase().includes(q)||(c.telefone||'').includes(q))).slice(0,8);
+  ac.innerHTML=res.map(c=>`<div class="ac-item" onclick="selecionarClientePagById(${c.id})"><div class="ac-nome">${c.nome}</div><div class="ac-sub">${fmt.brl(parseFloat(c.saldo_aberto||0))} em aberto</div></div>`).join('');
+  ac.classList.toggle('open',res.length>0);
+}
+function selecionarClientePagById(id) { const c=_clientes.find(x=>x.id===id); if(c) selecionarClientePag(c); }
+function selecionarClientePag(c) {
+  _cliPagAtual=c;
+  document.getElementById('pag-cli-busca').value=c.nome;
+  document.getElementById('pag-cli-id').value=c.id;
+  document.getElementById('pag-cli-ac').classList.remove('open');
+  document.getElementById('pag-saldo').textContent=fmt.brl(parseFloat(c.saldo_aberto||0));
+  document.getElementById('pag-saldo-info').style.display='flex';
+  // Popular select de vendas em aberto
+  const vendasCli = _vendas.filter(v=>v.cliente_id===c.id&&(v.status==='aberto'||v.status==='parcial'));
+  const sel = document.getElementById('pag-venda-id');
+  sel.innerHTML=`<option value="">— Abater nas mais antigas —</option>`+
+    vendasCli.map(v=>`<option value="${v.id}">${v.data_compra?.slice(0,10)} · ${fmt.brl(parseFloat(v.saldo_restante||0))} restante</option>`).join('');
+  atualizarTotalPag();
+}
+
+function atualizarTotalPag() {
+  const val = parseFloat(document.getElementById('pag-valor').value)||0;
+  const prev = document.getElementById('pag-preview');
+  if (val>0 && _cliPagAtual) {
+    const saldo = parseFloat(_cliPagAtual.saldo_aberto||0);
+    const credito = Math.max(0, val-saldo);
+    document.getElementById('pag-preview-txt').textContent = val>=saldo
+      ? `Quita saldo de ${fmt.brl(saldo)}${credito>0?` + crédito de ${fmt.brl(credito)}`:''}`
+      : `Abate ${fmt.brl(val)} do saldo de ${fmt.brl(saldo)}. Restante: ${fmt.brl(saldo-val)}`;
+    prev.style.display='';
+  } else prev.style.display='none';
+}
+
+async function confirmarPagamento() {
+  const cli_id = parseInt(document.getElementById('pag-cli-id').value);
+  const valor  = parseFloat(document.getElementById('pag-valor').value)||0;
+  if (!cli_id) { toast('⚠️ Selecione o cliente'); return; }
+  if (!valor||valor<=0) { toast('⚠️ Informe o valor'); return; }
+  const body = {
+    cliente_id:      cli_id,
+    data_pagamento:  document.getElementById('pag-data').value,
+    valor_pago:      valor,
+    forma_pagamento: document.getElementById('pag-forma').value,
+    observacoes:     document.getElementById('pag-obs').value,
+    venda_id:        parseInt(document.getElementById('pag-venda-id').value)||null,
+  };
+  const d = await api.post('/api/fiado/pagamentos', body);
+  if (!d.ok) { toast('❌ '+d.erro); return; }
+  const msg = d.credito_gerado>0 ? `✅ Pagamento registrado! Crédito gerado: ${fmt.brl(d.credito_gerado)}` : '✅ Pagamento registrado!';
+  toast(msg);
+  fecharModal('m-pag');
+  await carregarTudo();
+}
+
+// ── Aprovações ───────────────────────────────────────────────────────────────
+async function aprovarVenda(id) {
+  if (!confirm('Aprovar esta venda sócio?')) return;
+  const d = await api.put(`/api/fiado/vendas/${id}/aprovar`, {});
+  if (!d.ok) { toast('❌ '+d.erro); return; }
+  toast('✅ Venda aprovada e incluída no saldo!');
+  await carregarTudo();
+}
+
+function abrirReprovar(id) {
+  document.getElementById('rep-venda-id').value=id;
+  document.getElementById('rep-motivo').value='';
+  document.getElementById('m-reprovar').classList.add('open');
+}
+async function confirmarReprovacao() {
+  const id = document.getElementById('rep-venda-id').value;
+  const motivo = document.getElementById('rep-motivo').value.trim();
+  if (!motivo) { toast('⚠️ Informe o motivo'); return; }
+  const d = await api.put(`/api/fiado/vendas/${id}/reprovar`, { motivo });
+  if (!d.ok) { toast('❌ '+d.erro); return; }
+  toast('❌ Reprovada. Cliente convertido para Normal.');
+  fecharModal('m-reprovar');
+  await carregarTudo();
+}
+
+// ── Cancelar venda ───────────────────────────────────────────────────────────
+function abrirCancelar(id) {
+  document.getElementById('canc-venda-id').value=id;
+  document.getElementById('canc-motivo').value='';
+  document.getElementById('m-cancelar').classList.add('open');
+}
+async function confirmarCancelamento() {
+  const id = document.getElementById('canc-venda-id').value;
+  const motivo = document.getElementById('canc-motivo').value.trim();
+  if (!motivo) { toast('⚠️ Informe o motivo'); return; }
+  const d = await api.put(`/api/fiado/vendas/${id}/cancelar`, { motivo });
+  if (!d.ok) { toast('❌ '+d.erro); return; }
+  toast('🚫 Venda cancelada');
+  fecharModal('m-cancelar');
+  await carregarTudo();
+}
+
+// ── Detalhe do cliente ───────────────────────────────────────────────────────
+async function abrirDetalhe(id) {
+  const c = _clientes.find(x=>x.id===id);
+  if (!c) return;
+  _clienteDetalhe = c;
+  document.getElementById('det-nome').textContent = c.nome;
+  document.getElementById('det-sub').textContent  = c.telefone||'';
+  // Buscar dados completos
+  const [rd, rh] = await Promise.all([
+    api.get(`/api/fiado/clientes/${id}`),
+    api.get(`/api/fiado/historico?cliente_id=${id}`),
+  ]);
+  const dc = rd.ok ? rd.data : c;
+  const hist = rh.ok ? rh.data : [];
+  const vendasCli = _vendas.filter(v=>v.cliente_id===id);
+  const pagsCli   = _pagamentos.filter(p=>p.cliente_id===id);
+  const saldo = parseFloat(dc.saldo_aberto||0);
+  const limite= parseFloat(dc.limite_credito||0);
+  document.getElementById('det-body').innerHTML = `
+    <!-- KPIs do cliente -->
+    <div class="det-kpis">
+      <div class="det-kpi"><div class="lbl">Saldo Aberto</div><div class="val" style="color:${saldo>0?'var(--red-l)':'var(--green)'}">${fmt.brl(saldo)}</div></div>
+      <div class="det-kpi"><div class="lbl">Limite</div><div class="val">${limite>0?fmt.brl(limite):'Sem limite'}</div></div>
+      <div class="det-kpi"><div class="lbl">Total Comprado</div><div class="val">${fmt.brl(parseFloat(dc.total_comprado||0))}</div></div>
+      <div class="det-kpi"><div class="lbl">Total Pago</div><div class="val">${fmt.brl(parseFloat(dc.total_pago||0))}</div></div>
+      <div class="det-kpi"><div class="lbl">Última Compra</div><div class="val" style="font-size:13px">${c.ultima_compra?.slice(0,10).split('-').reverse().join('/')||'—'}</div></div>
+      <div class="det-kpi"><div class="lbl">Tipo</div><div class="val" style="font-size:13px">${c.tipo_cliente==='socio'?'🤝 Sócio':c.tipo_cliente==='especial'?`⭐ Especial (${c.desconto_pct||0}%)`: '👤 Normal'}</div></div>
+    </div>
+
+    <!-- Abas internas -->
+    <div class="tabs-bar" style="padding:0;margin-bottom:12px">
+      <button class="tab-btn active" onclick="showDetTab('compras',this)">🛍 Compras (${vendasCli.length})</button>
+      <button class="tab-btn" onclick="showDetTab('pagtos',this)">💵 Pagamentos (${pagsCli.length})</button>
+      <button class="tab-btn" onclick="showDetTab('historico',this)">📋 Histórico</button>
+    </div>
+
+    <!-- Compras -->
+    <div id="det-compras">
+      ${vendasCli.length ? `<div style="overflow-x:auto"><table class="tbl">
+        <thead><tr><th>Data</th><th>Itens</th><th style="text-align:right">Total</th><th style="text-align:right">Saldo</th><th>Status</th><th>Ações</th></tr></thead>
+        <tbody>${vendasCli.map(v=>`<tr>
+          <td>${v.data_compra?.slice(0,10).split('-').reverse().join('/')}</td>
+          <td style="font-size:11px">${(v.itens||[]).map(i=>i.nome_produto).join(', ').slice(0,50)||'—'}</td>
+          <td class="mono" style="text-align:right">${fmt.brl(parseFloat(v.total_final||0))}</td>
+          <td class="mono" style="text-align:right;color:${parseFloat(v.saldo_restante||0)>0?'var(--red-l)':'var(--green)'}">${fmt.brl(parseFloat(v.saldo_restante||0))}</td>
+          <td><span class="badge ${STATUS_CLASS[v.status]||''}">${STATUS_LABEL[v.status]||v.status}</span></td>
+          <td><button class="btn btn-gray btn-sm" onclick="verItensVenda(${v.id})">Ver</button></td>
+        </tr>`).join('')}</tbody>
+      </table></div>` : '<div class="empty">Nenhuma compra</div>'}
+    </div>
+
+    <!-- Pagamentos -->
+    <div id="det-pagtos" style="display:none">
+      ${pagsCli.length ? `<div style="overflow-x:auto"><table class="tbl">
+        <thead><tr><th>Data</th><th>Valor</th><th>Forma</th><th>Obs</th></tr></thead>
+        <tbody>${pagsCli.map(p=>`<tr>
+          <td>${p.data_pagamento?.slice(0,10).split('-').reverse().join('/')}</td>
+          <td class="mono" style="color:var(--green);font-weight:700">${fmt.brl(parseFloat(p.valor_pago||0))}</td>
+          <td>${p.forma_pagamento}</td>
+          <td style="font-size:11px;color:var(--muted)">${p.observacoes||'—'}</td>
+        </tr>`).join('')}</tbody>
+      </table></div>` : '<div class="empty">Nenhum pagamento</div>'}
+    </div>
+
+    <!-- Histórico -->
+    <div id="det-historico" style="display:none">
+      ${hist.length ? hist.map(h=>`<div style="display:flex;gap:10px;padding:6px 0;border-bottom:1px solid #f5efe8">
+        <div style="font-size:10px;color:var(--muted);white-space:nowrap;min-width:130px">${h.data_evento?.slice(0,16).replace('T',' ')}</div>
+        <div style="font-size:11px">${h.descricao||h.tipo_evento}</div>
+        <div style="font-size:10px;color:var(--muted);margin-left:auto">${h.usuario||'—'}</div>
+      </div>`).join('') : '<div class="empty">Sem histórico</div>'}
+    </div>`;
+
+  document.getElementById('m-detalhe').classList.add('open');
+}
+
+function showDetTab(tab, btn) {
+  ['compras','pagtos','historico'].forEach(t => {
+    const el = document.getElementById('det-'+t);
+    if (el) el.style.display = t===tab?'':'none';
+  });
+  document.querySelectorAll('#det-body .tab-btn').forEach(b=>b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+}
+
+async function verItensVenda(id) {
+  const v = _vendas.find(x=>x.id===id);
+  if (!v) return;
+  const itens = v.itens||[];
+  const html = `<div style="padding:8px 0">
+    <div style="font-weight:700;margin-bottom:8px">${v.cliente_nome} — ${v.data_compra?.slice(0,10).split('-').reverse().join('/')}</div>
+    <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead><tr style="background:#f8f4f0"><th style="padding:6px;text-align:left">Produto</th><th style="padding:6px">Qtd</th><th style="padding:6px;text-align:right">Vl.Venda</th><th style="padding:6px;text-align:right">Vl.Custo</th><th style="padding:6px;text-align:right">Total</th></tr></thead>
+      <tbody>${itens.map(i=>`<tr style="border-bottom:1px solid #f5efe8"><td style="padding:6px">${i.nome_produto}</td><td style="padding:6px;text-align:center">${i.quantidade}</td><td style="padding:6px;text-align:right;font-family:monospace">${fmt.brl(parseFloat(i.valor_unit_venda||0))}</td><td style="padding:6px;text-align:right;font-family:monospace">${fmt.brl(parseFloat(i.valor_unit_custo||0))}</td><td style="padding:6px;text-align:right;font-family:monospace;font-weight:700">${fmt.brl(parseFloat(i.valor_final_item||0))}</td></tr>`).join('')}</tbody>
+    </table>
+    <div style="text-align:right;margin-top:10px;font-size:13px;font-weight:700">Total: ${fmt.brl(parseFloat(v.total_final||0))} · Saldo: <span style="color:${parseFloat(v.saldo_restante||0)>0?'var(--red-l)':'var(--green)'}">${fmt.brl(parseFloat(v.saldo_restante||0))}</span></div>
+  </div>`;
+  alert(html.replace(/<[^>]+>/g,' ').replace(/\s+/g,' '));
+  // TODO: substituir por modal bonito
+}
+
+// ── Relatórios ───────────────────────────────────────────────────────────────
+async function gerarRelatorio() {
+  const cli   = document.getElementById('rel-cliente').value;
+  const tipo  = document.getElementById('rel-tipo').value;
+  const st    = document.getElementById('rel-status').value;
+  const ini   = document.getElementById('rel-ini').value;
+  const fim   = document.getElementById('rel-fim').value;
+  let lista = _vendas.filter(v => {
+    const c = _clientes.find(x=>x.id===v.cliente_id);
+    return (!cli || v.cliente_id===parseInt(cli))
+      && (!tipo || c?.tipo_cliente===tipo)
+      && (!st   || v.status===st)
+      && (!ini  || v.data_compra>=ini)
+      && (!fim  || v.data_compra<=fim);
+  });
+  const totalAberto = lista.filter(v=>v.status==='aberto'||v.status==='parcial').reduce((s,v)=>s+parseFloat(v.saldo_restante||0),0);
+  const totalVendido= lista.reduce((s,v)=>s+parseFloat(v.total_final||0),0);
+  document.getElementById('rel-resultado').innerHTML = `
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px">
+      <div class="kc g"><div class="kc-l">Vendas</div><div class="kc-v">${lista.length}</div></div>
+      <div class="kc r"><div class="kc-l">Total Vendido</div><div class="kc-v mono">${fmt.brl(totalVendido)}</div></div>
+      <div class="kc o"><div class="kc-l">Em Aberto</div><div class="kc-v mono">${fmt.brl(totalAberto)}</div></div>
+    </div>
+    <div style="overflow-x:auto"><table class="tbl">
+      <thead><tr><th>Cliente</th><th>Tipo</th><th>Data</th><th style="text-align:right">Total</th><th style="text-align:right">Saldo</th><th>Status</th></tr></thead>
+      <tbody>${lista.map(v=>{const c=_clientes.find(x=>x.id===v.cliente_id);return`<tr><td>${c?.nome||'—'}</td><td>${c?.tipo_cliente||'—'}</td><td>${v.data_compra?.slice(0,10).split('-').reverse().join('/')}</td><td class="mono" style="text-align:right">${fmt.brl(parseFloat(v.total_final||0))}</td><td class="mono" style="text-align:right">${fmt.brl(parseFloat(v.saldo_restante||0))}</td><td><span class="badge ${STATUS_CLASS[v.status]||''}">${STATUS_LABEL[v.status]||v.status}</span></td></tr>`}).join('')}</tbody>
+    </table></div>`;
+}
+
+function exportarRelatorio() {
+  const linhas = [['Cliente','Tipo','Data','Total','Saldo','Status']];
+  _vendas.forEach(v => {
+    const c=_clientes.find(x=>x.id===v.cliente_id);
+    linhas.push([c?.nome||'',c?.tipo_cliente||'',v.data_compra?.slice(0,10)||'',parseFloat(v.total_final||0).toFixed(2),parseFloat(v.saldo_restante||0).toFixed(2),v.status]);
+  });
+  const csv = linhas.map(l=>l.join(';')).join('\n');
+  const a=document.createElement('a');
+  a.href='data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv);
+  a.download='fiado_relatorio.csv';
+  a.click();
+}
+
+// ── Populares selects de relatório ──────────────────────────────────────────
+function popularSelects() {
+  const sel = document.getElementById('rel-cliente');
+  if (!sel) return;
+  sel.innerHTML='<option value="">Todos</option>'+
+    _clientes.map(c=>`<option value="${c.id}">${c.nome}</option>`).join('');
+}
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
+function fecharModal(id) { document.getElementById(id)?.classList.remove('open'); }
+
+function abrirPagamentoCliente(id) {
+  if (id) { const c=_clientes.find(x=>x.id===id); if(c){ resetPag(); selecionarClientePag(c); document.getElementById('m-pag').classList.add('open'); return; } }
+  if (_clienteDetalhe) { resetPag(); selecionarClientePag(_clienteDetalhe); document.getElementById('m-pag').classList.add('open'); }
+}
+function abrirNovaVendaCliente(id) {
+  if (!id && _clienteDetalhe) id=_clienteDetalhe.id;
+  resetVenda();
+  if (id) { const c=_clientes.find(x=>x.id===id); if(c) selecionarClienteVenda(c); }
+  document.getElementById('m-venda').classList.add('open');
+}
+</script>
+</body>
+</html>
