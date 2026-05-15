@@ -251,6 +251,29 @@ app.use('/api/produtos',     require('./routes/produtos')(pool));
 app.use('/api/kits',         require('./routes/kits')(pool));
 app.use('/api/kits-campanha',require('./routes/kits_campanha')(pool));
 app.use('/api/validade',     require('./routes/validade')(pool));
+
+// ── POST /api/dre/exportar-excel — gera XLSX formatado via Python/openpyxl ──
+app.post('/api/dre/exportar-excel', require('./routes/auth').autenticar(), async (req, res) => {
+  const { spawn } = require('child_process');
+  const path = require('path');
+  const scriptPath = path.join(__dirname, 'utils', 'gerar_dre_excel.py');
+  const payload = JSON.stringify(req.body);
+  const py = spawn('python3', [scriptPath]);
+  let out = '', err = '';
+  py.stdin.write(payload); py.stdin.end();
+  py.stdout.on('data', d => out += d);
+  py.stderr.on('data', d => err += d);
+  py.on('close', code => {
+    if (code !== 0 || !out.trim()) {
+      console.error('[dre-excel]', err);
+      return res.status(500).json({ ok: false, erro: err || 'Erro ao gerar Excel' });
+    }
+    const buf = Buffer.from(out.trim(), 'base64');
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="DRE_BomBeef.xlsx"');
+    res.send(buf);
+  });
+});
 app.use('/api/perdas',       require('./routes/perdas')(pool));
 app.use('/api/retiradas',    require('./routes/retiradas')(pool));
 app.use('/api/config',       require('./routes/config')(pool));

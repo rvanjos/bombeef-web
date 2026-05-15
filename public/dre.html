@@ -5260,10 +5260,10 @@ function exportXLS(){
   toast('📤 Excel exportado com formatação!');
 }
 
-// gerarExcelDRE — gera XLSX real com duas abas: Competência + Fluxo de Caixa
-function gerarExcelDRE() {
-  if (!TXS.length) { toast('Sem dados'); return; }
-  if (typeof XLSX === 'undefined') { toast('⚠️ SheetJS não carregado'); exportXLS(); return; }
+// gerarExcelDRE — gera XLSX formatado via servidor (openpyxl)
+async function gerarExcelDRE() {
+  if (!TXS.length) { toast('Sem dados para exportar'); return; }
+  toast('⏳ Gerando Excel formatado...');
 
   const MESES_PT = {'01':'Jan','02':'Fev','03':'Mar','04':'Abr','05':'Mai','06':'Jun',
                     '07':'Jul','08':'Ago','09':'Set','10':'Out','11':'Nov','12':'Dez'};
@@ -5428,19 +5428,40 @@ function gerarExcelDRE() {
 
   const wb = XLSX.utils.book_new();
 
-  modosExport.forEach(({ modo, nome }) => {
+  // Monta payload para o servidor
+  const abas = [];
+  for (const { modo, nome } of modosExport) {
     try {
       const dados = montarDados(modo);
-      const ws = toWorksheet(dados);
-      XLSX.utils.book_append_sheet(wb, ws, nome);
-    } catch(e) {
-      console.error('[exportXLS] erro no modo', modo, e);
-    }
-  });
+      abas.push({ nome, meses: dados.meses, linhas: dados.rows.map((row, i) => ({
+        tipo: dados.styles[i] || 'cat',
+        label: row[0] || '',
+        values: row.slice(1, -1).map(v => typeof v === 'number' ? v : null),
+        total: typeof row[row.length-1] === 'number' ? row[row.length-1] : null
+      }))});
+    } catch(e) { console.error('[gerarExcelDRE] modo', modo, e); }
+  }
 
-  const ano = new Date().getFullYear();
-  XLSX.writeFile(wb, `DRE_BomBeef_${ano}.xlsx`);
-  toast('📤 Excel exportado com duas abas: Competência + Fluxo de Caixa!');
+  try {
+    const resp = await fetch('/api/dre/exportar-excel', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + BB.api.token() },
+      body: JSON.stringify({ abas })
+    });
+    if (!resp.ok) throw new Error('Erro HTTP ' + resp.status);
+    const blob = await resp.blob();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `DRE_BomBeef_${new Date().getFullYear()}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast('✅ DRE exportado com formatação profissional!');
+  } catch(e) {
+    console.error('[gerarExcelDRE]', e);
+    toast('⚠️ Erro no servidor — usando exportação básica');
+    exportXLS(); // fallback
+  }
 }
 
 // ─── SALVAR / SESSÕES ────────────────────────────────────────────────────────

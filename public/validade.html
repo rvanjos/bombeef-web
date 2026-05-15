@@ -495,10 +495,32 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
         <div class="fg"><label>Lote</label><input id="v-lote" placeholder="Número do lote"></div>
       </div>
       <div class="fg">
-        <label>Ação Antes de Vencer</label>
+        <label style="display:flex;align-items:center;justify-content:space-between">
+          Ação Antes de Vencer
+          <button type="button" onclick="abrirNovaAcaoInline()" 
+            style="font-size:11px;padding:2px 8px;background:#fff;border:1px solid var(--border);border-radius:5px;cursor:pointer;color:var(--red);font-weight:600;display:flex;align-items:center;gap:3px">
+            ＋ Nova ação
+          </button>
+        </label>
         <select id="v-acao">
           <option value="">— Selecione —</option>
         </select>
+        <!-- Campo inline para criar nova ação sem sair da página -->
+        <div id="nova-acao-inline" style="display:none;margin-top:6px;display:none">
+          <div style="display:flex;gap:6px">
+            <input id="nova-acao-txt" type="text" placeholder="Ex: Promover com 20% de desconto"
+              style="flex:1;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px"
+              onkeydown="if(event.key==='Enter'){salvarNovaAcaoInline();event.preventDefault()}">
+            <button onclick="salvarNovaAcaoInline()" 
+              style="padding:6px 12px;background:var(--red);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap">
+              Salvar
+            </button>
+            <button onclick="document.getElementById('nova-acao-inline').style.display='none'" 
+              style="padding:6px 10px;background:#f0ebe4;color:#555;border:none;border-radius:6px;cursor:pointer;font-size:12px">
+              ✕
+            </button>
+          </div>
+        </div>
       </div>
       <div class="fg-row">
         <div class="fg">
@@ -2282,6 +2304,32 @@ O item voltará para a listagem de validade com status OK.`)) return;
   carregarHistorico();
   // Recarrega os itens ativos também
   await carregar();
+}
+
+// Criar nova ação de validade diretamente no modal de edição
+function abrirNovaAcaoInline() {
+  const wrap = document.getElementById('nova-acao-inline');
+  if (!wrap) return;
+  wrap.style.display = wrap.style.display === 'none' ? '' : 'none';
+  if (wrap.style.display !== 'none') {
+    document.getElementById('nova-acao-txt').focus();
+  }
+}
+
+async function salvarNovaAcaoInline() {
+  const txt = document.getElementById('nova-acao-txt')?.value.trim();
+  if (!txt) { toast('⚠️ Digite a descrição da ação'); return; }
+  
+  const d = await api.post('/api/config/acoes-validade', { descricao: txt, ordem: 99 });
+  if (!d.ok) { toast('❌ Erro: ' + (d.erro||'Falha')); return; }
+  
+  toast('✅ Ação criada!');
+  // Recarrega as opções do select e seleciona a nova
+  await carregarAcoesValidade();
+  document.getElementById('v-acao').value = txt;
+  // Fecha o campo inline
+  document.getElementById('nova-acao-inline').style.display = 'none';
+  document.getElementById('nova-acao-txt').value = '';
 }
 
 function limparFiltrosHist(){
