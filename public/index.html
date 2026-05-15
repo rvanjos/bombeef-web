@@ -396,7 +396,7 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
     <button class="pnav-tab" onclick="showTab('retiradas')" data-tab="retiradas" data-perfil="admin,gestor,caixa"><span class="tab-icon">👥</span><span class="tab-label">Retiradas</span></button>
     <button class="pnav-tab" onclick="showTab('vendasproduto')" data-tab="vendasproduto" data-perfil="admin,gestor"><span class="tab-icon">📊</span><span class="tab-label">Análise Vendas</span></button>
     <div class="pnav-section">Gestão</div>
-    <button class="pnav-tab" onclick="showTab('fiado')" data-tab="fiado" data-perfil="admin,gestor,caixa"><span class="tab-icon">💳</span><span class="tab-label">Fiado</span><span id="nav-badge-fiado" style="display:none;background:#dc2626;color:#fff;border-radius:9px;padding:0 5px;font-size:10px;margin-left:3px;font-weight:700">0</span></button>
+    <button class="pnav-tab" onclick="showTab('fiado')" data-tab="fiado" data-perfil="admin,gestor,caixa"><span class="tab-icon">💳</span><span class="tab-label">Compras Pendentes</span><span id="nav-badge-fiado" style="display:none;background:#dc2626;color:#fff;border-radius:9px;padding:0 5px;font-size:10px;margin-left:3px;font-weight:700">0</span></button>
     <button class="pnav-tab" onclick="showTab('rh')"        data-tab="rh"        data-perfil="admin,gestor,operador,caixa,estoque,financeiro,contabil"><span class="tab-icon">🧑‍💼</span><span class="tab-label">RH</span></button>
     <button class="pnav-tab" onclick="showTab('auditoria')" data-tab="auditoria" data-perfil="admin"><span class="tab-icon">🔍</span><span class="tab-label">Auditoria</span></button>
     <button class="pnav-tab" onclick="showTab('config')"    data-tab="config"    data-perfil="admin,gestor"><span class="tab-icon">⚙️</span><span class="tab-label">Config</span></button>
@@ -424,14 +424,14 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
       <!-- Painel de ações de validade -->
       <div id="dash-acoes-validade" style="display:none;margin-bottom:14px"></div>
 
-      <!-- Card: Aprovações Fiado Pendentes (só aparece quando tem pendentes) -->
+      <!-- Card: Aprovações Compras Pendentes Pendentes (só aparece quando tem pendentes) -->
       <div id="dash-fiado-pendentes" style="display:none;margin-bottom:14px;background:linear-gradient(135deg,#5b21b6,#7c3aed);border-radius:12px;padding:14px 18px;cursor:pointer;box-shadow:0 4px 16px rgba(91,33,182,.3)" onclick="showTab('fiado')">
         <div style="display:flex;align-items:center;gap:14px">
           <span style="font-size:28px">⏳</span>
           <div style="flex:1">
-            <div style="font-size:12px;font-weight:700;color:rgba(255,255,255,.8);text-transform:uppercase;letter-spacing:.6px">Aprovações Pendentes — Fiado</div>
+            <div style="font-size:12px;font-weight:700;color:rgba(255,255,255,.8);text-transform:uppercase;letter-spacing:.6px">Aprovações Pendentes — Compras Pendentes</div>
             <div style="font-size:22px;font-weight:700;color:#fff;margin-top:2px"><span class="pend-count">0</span> venda(s) de sócios aguardando</div>
-            <div style="font-size:11px;color:rgba(255,255,255,.7);margin-top:2px">Clique para abrir a aba Fiado → Aprovações</div>
+            <div style="font-size:11px;color:rgba(255,255,255,.7);margin-top:2px">Clique para abrir a aba Compras Pendentes → Aprovações</div>
           </div>
           <span style="color:rgba(255,255,255,.6);font-size:22px">→</span>
         </div>
@@ -1557,7 +1557,7 @@ window.addEventListener('message', e => {
     return;
   }
   // Auditoria: excluir lançamento do DRE
-  if (e.data.type === 'fiado_pendentes') {
+  if (e.data.type === 'compras_pendentes') {
     const n = e.data.total || 0;
     const badge = document.getElementById('nav-badge-fiado');
     if (badge) { badge.textContent = n; badge.style.display = n > 0 ? '' : 'none'; }

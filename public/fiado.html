@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Fiado / Contas de Clientes</title>
+<title>Compras Pendentes</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="js/api.js"></script>
 <style>
@@ -111,7 +111,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
 <body>
 <div class="ph">
   <span style="font-size:20px">💳</span>
-  <h2>Fiado / Contas de Clientes</h2>
+  <h2>Compras Pendentes</h2>
   <div class="ph-sub" id="ph-sub">Carregando...</div>
   <button class="btn btn-red btn-sm" style="margin-left:12px" onclick="abrirNovaVenda()">＋ Nova Venda</button>
   <button class="btn btn-gray btn-sm" style="margin-left:6px" onclick="abrirPagamento()">💵 Pagamento</button>
@@ -299,7 +299,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
 <!-- Modal: Nova Venda -->
 <div class="mbg" id="m-venda">
   <div class="md md-xl">
-    <div class="mdh"><div><h3>🛍 Nova Venda Fiado</h3><div class="sub" id="m-venda-sub">Preencha os dados da venda</div></div><button class="mdx" onclick="fecharModal('m-venda')">×</button></div>
+    <div class="mdh"><div><h3>🛍 Nova Venda Compras Pendentes</h3><div class="sub" id="m-venda-sub">Preencha os dados da venda</div></div><button class="mdx" onclick="fecharModal('m-venda')">×</button></div>
     <div class="mdb">
       <!-- Busca de cliente -->
       <div class="fg-row">
@@ -511,7 +511,7 @@ function renderKPIs(k) {
   badgeAprov.textContent = n;
   badgeAprov.style.display = n > 0 ? '' : 'none';
   // Notifica portal
-  window.parent?.postMessage({ type:'fiado_pendentes', total: n }, '*');
+  window.parent?.postMessage({ type:'compras_pendentes', total: n }, '*');
 }
 
 // ── Abas ────────────────────────────────────────────────────────────────────
