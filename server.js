@@ -253,7 +253,7 @@ app.use('/api/kits-campanha',require('./routes/kits_campanha')(pool));
 app.use('/api/validade',     require('./routes/validade')(pool));
 
 // ── POST /api/dre/exportar-excel — gera XLSX formatado via Python/openpyxl ──
-app.post('/api/dre/exportar-excel', require('./routes/auth').autenticar(), async (req, res) => {
+app.post('/api/dre/exportar-excel', require('./middleware/auth')(), async (req, res) => {
   const { spawn } = require('child_process');
   const path = require('path');
   const scriptPath = path.join(__dirname, 'utils', 'gerar_dre_excel.py');
