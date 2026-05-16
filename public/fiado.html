@@ -448,6 +448,26 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
   </div>
 </div>
 
+<!-- Modal: Extrato cronológico do cliente -->
+<div class="mbg" id="m-extrato">
+  <div class="md md-lg" style="max-height:96vh">
+    <div class="mdh">
+      <div>
+        <h3 id="ext-titulo">Extrato</h3>
+        <div class="sub" id="ext-sub"></div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button onclick="imprimirExtrato()" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;padding:5px 10px;border-radius:6px;cursor:pointer;font-size:11px;font-family:'DM Sans',sans-serif">🖨️ Imprimir</button>
+        <button class="mdx" onclick="fecharModal('m-extrato')">×</button>
+      </div>
+    </div>
+    <div class="mdb" style="padding:0" id="ext-body"></div>
+    <div class="mdf">
+      <button class="btn btn-gray" onclick="fecharModal('m-extrato')">Fechar</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal: Detalhe do cliente -->
 <div class="mbg" id="m-detalhe">
   <div class="md md-xl" style="max-height:96vh">
@@ -550,6 +570,7 @@ function renderTabelaClientes() {
       <td style="font-size:11px;color:var(--muted)">${c.ultimo_pagamento?c.ultimo_pagamento.slice(0,10).split('-').reverse().join('/'):'—'}</td>
       <td>${badgeSaldo}</td>
       <td style="white-space:nowrap">
+        <button class="btn btn-gray btn-sm" onclick="verExtratoCli(${c.id})" title="Ver extrato">📋</button>
         <button class="btn btn-gray btn-sm" onclick="abrirDetalhe(${c.id})" title="Ver detalhes">👁</button>
         <button class="btn btn-gray btn-sm" onclick="abrirNovaVendaCliente(${c.id})" title="Nova venda">＋</button>
         <button class="btn btn-gray btn-sm" onclick="abrirPagamentoCliente(${c.id})" title="Pagamento">💵</button>
@@ -574,7 +595,8 @@ function renderListaClientes() {
         <div class="mono" style="font-size:15px;font-weight:700;color:${parseFloat(c.saldo_aberto||0)>0?'var(--red-l)':'var(--green)'}">${fmt.brl(parseFloat(c.saldo_aberto||0))}</div>
       </div>
       <div style="display:flex;gap:4px">
-        <button class="btn btn-gray btn-sm" onclick="abrirDetalhe(${c.id})">👁 Ver</button>
+        <button class="btn btn-gray btn-sm" onclick="verExtratoCli(${c.id})">📋 Extrato</button>
+        <button class="btn btn-gray btn-sm" onclick="abrirDetalhe(${c.id})">👁 Detalhe</button>
         <button class="btn btn-gray btn-sm" onclick="editarCliente(${c.id})">✏️</button>
       </div>
     </div>`).join('') || '<div class="empty">Nenhum cliente cadastrado</div>';
@@ -1115,20 +1137,164 @@ function showDetTab(tab, btn) {
   if (btn) btn.classList.add('active');
 }
 
+// Abre extrato cronológico completo de um cliente
+async function verExtratoCli(clienteId) {
+  const cli = _clientes.find(c=>c.id===clienteId);
+  if (!cli) return;
+  document.getElementById('ext-titulo').textContent = cli.nome;
+  document.getElementById('ext-sub').textContent    = `${cli.telefone||''} · ${cli.tipo_cliente==='socio'?'🤝 Sócio':cli.tipo_cliente==='especial'?`⭐ Especial (${cli.desconto_pct||0}% desc)`:'👤 Normal'}`;
+  window._extratoClienteId = clienteId;
+  renderExtrato(clienteId);
+  document.getElementById('m-extrato').classList.add('open');
+}
+
+function renderExtrato(clienteId) {
+  const vendasCli = _vendas
+    .filter(v=>v.cliente_id===clienteId && v.status!=='cancelado' && v.status!=='reprovado')
+    .sort((a,b)=> a.data_compra < b.data_compra ? -1 : 1);
+  const pagsCli = _pagamentos
+    .filter(p=>p.cliente_id===clienteId)
+    .sort((a,b)=> a.data_pagamento < b.data_pagamento ? -1 : 1);
+
+  // Mescla compras e pagamentos em ordem cronológica
+  const eventos = [
+    ...vendasCli.map(v=>({ tipo:'venda', data: v.data_compra, obj: v })),
+    ...pagsCli.map(p=>({ tipo:'pagamento', data: p.data_pagamento, obj: p })),
+  ].sort((a,b)=> a.data < b.data ? -1 : a.data > b.data ? 1 : a.tipo==='venda' ? -1 : 1);
+
+  let saldoAcum = 0;
+  const FORMA = {dinheiro:'💵 Dinheiro',pix:'📱 Pix',debito:'💳 Débito',credito:'💳 Crédito',transferencia:'🏦 Transf.',outro:'📌 Outro'};
+
+  const linhas = eventos.map(ev => {
+    if (ev.tipo === 'venda') {
+      const v = ev.obj;
+      const itens = v.itens||[];
+      saldoAcum += parseFloat(v.total_final||0);
+      const badge = v.status==='aguardando'
+        ? `<span style="background:#ede9fe;color:#5b21b6;padding:1px 6px;border-radius:4px;font-size:10px">⏳ Aguardando</span>`
+        : v.status==='pago' ? `<span style="background:#dcfce7;color:#166534;padding:1px 6px;border-radius:4px;font-size:10px">✅ Pago</span>` : '';
+      return `
+        <!-- Cabeçalho da venda -->
+        <tr style="background:#fff8f0;border-top:2px solid #f5e6d0">
+          <td style="padding:8px 12px;font-weight:700;font-size:12px;color:#5c1a1a">
+            📦 Compra — ${fmtDtBr(v.data_compra)} ${badge}
+          </td>
+          <td colspan="3" style="padding:8px 12px;text-align:right;font-size:11px;color:var(--muted)">
+            por ${v.usuario_resp||'—'}
+          </td>
+          <td style="padding:8px 12px;text-align:right;font-size:11px;font-weight:700;color:var(--red-l)">
+            +${fmt.brl(parseFloat(v.total_final||0))}
+          </td>
+          <td style="padding:8px 12px;text-align:right;font-size:11px;font-weight:700;font-family:'DM Mono',monospace;color:${saldoAcum>0?'var(--red-l)':'var(--green)'}">
+            ${fmt.brl(saldoAcum)}
+          </td>
+        </tr>
+        <!-- Itens da venda -->
+        ${itens.map(i => {
+          const vlBase = parseFloat(i.valor_unit_custo||0) > 0 && v.status==='aguardando'
+            ? parseFloat(i.valor_unit_custo||0) : parseFloat(i.valor_unit_venda||0);
+          return `<tr style="border-bottom:1px solid #f9f4ef">
+            <td style="padding:5px 12px 5px 24px;font-size:12px;color:#444">${i.nome_produto}</td>
+            <td style="padding:5px 8px;font-size:11px;text-align:center;color:var(--muted)">${parseFloat(i.quantidade||0).toLocaleString('pt-BR',{minimumFractionDigits:0,maximumFractionDigits:3})} un</td>
+            <td style="padding:5px 8px;font-size:11px;text-align:right;font-family:'DM Mono',monospace;color:var(--muted)">${fmt.brl(parseFloat(i.valor_unit_venda||0))}</td>
+            <td style="padding:5px 8px;font-size:11px;text-align:right;font-family:'DM Mono',monospace;color:var(--muted)">${fmt.brl(parseFloat(i.valor_unit_custo||0))}</td>
+            <td style="padding:5px 12px;font-size:12px;text-align:right;font-family:'DM Mono',monospace;font-weight:600">${fmt.brl(parseFloat(i.valor_final_item||0))}</td>
+            <td></td>
+          </tr>`;
+        }).join('')}
+        <!-- Subtotal da venda -->
+        <tr style="background:#fdf9f5">
+          <td colspan="4" style="padding:5px 12px;text-align:right;font-size:11px;color:var(--muted)">
+            ${parseFloat(v.desconto_total||0)>0?`Desconto: -${fmt.brl(parseFloat(v.desconto_total||0))} · `:''}
+            Subtotal venda:
+          </td>
+          <td style="padding:5px 12px;text-align:right;font-size:12px;font-weight:700;font-family:'DM Mono',monospace">
+            ${fmt.brl(parseFloat(v.total_final||0))}
+          </td>
+          <td></td>
+        </tr>`;
+    } else {
+      // Pagamento
+      const p = ev.obj;
+      saldoAcum -= parseFloat(p.valor_pago||0);
+      return `
+        <tr style="background:#f0fdf4;border-top:2px solid #86efac">
+          <td style="padding:8px 12px;font-weight:700;font-size:12px;color:#166534">
+            💵 Pagamento — ${fmtDtBr(p.data_pagamento)}
+          </td>
+          <td colspan="2" style="padding:8px 12px;font-size:11px;color:var(--muted)">${FORMA[p.forma_pagamento]||p.forma_pagamento}</td>
+          <td style="padding:8px 12px;font-size:11px;color:var(--muted)">${p.observacoes||''}</td>
+          <td style="padding:8px 12px;text-align:right;font-size:13px;font-weight:700;font-family:'DM Mono',monospace;color:var(--green)">
+            -${fmt.brl(parseFloat(p.valor_pago||0))}
+          </td>
+          <td style="padding:8px 12px;text-align:right;font-size:12px;font-weight:700;font-family:'DM Mono',monospace;color:${saldoAcum>0.005?'var(--red-l)':'var(--green)'}">
+            ${fmt.brl(Math.max(0,saldoAcum))}
+          </td>
+        </tr>`;
+    }
+  }).join('');
+
+  const saldoFinal = parseFloat(_clientes.find(c=>c.id===clienteId)?.saldo_aberto||0);
+  const totalComprado = vendasCli.reduce((s,v)=>s+parseFloat(v.total_final||0),0);
+  const totalPago     = pagsCli.reduce((s,p)=>s+parseFloat(p.valor_pago||0),0);
+
+  document.getElementById('ext-body').innerHTML = `
+    <!-- Totalizadores no topo -->
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0;border-bottom:2px solid var(--border)">
+      <div style="padding:12px 16px;border-right:1px solid var(--border)">
+        <div style="font-size:9px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:700">Total Comprado</div>
+        <div style="font-size:18px;font-weight:700;font-family:'DM Mono',monospace;color:var(--red-l);margin-top:2px">${fmt.brl(totalComprado)}</div>
+      </div>
+      <div style="padding:12px 16px;border-right:1px solid var(--border)">
+        <div style="font-size:9px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:700">Total Pago</div>
+        <div style="font-size:18px;font-weight:700;font-family:'DM Mono',monospace;color:var(--green);margin-top:2px">${fmt.brl(totalPago)}</div>
+      </div>
+      <div style="padding:12px 16px">
+        <div style="font-size:9px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:700">Saldo em Aberto</div>
+        <div style="font-size:18px;font-weight:700;font-family:'DM Mono',monospace;color:${saldoFinal>0?'var(--red-l)':'var(--green)'};margin-top:2px">${fmt.brl(saldoFinal)}</div>
+      </div>
+    </div>
+    <!-- Tabela cronológica -->
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;min-width:600px">
+        <thead>
+          <tr style="background:#f8f4f0;border-bottom:2px solid var(--border)">
+            <th style="padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700">Data / Produto</th>
+            <th style="padding:8px 8px;text-align:center;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700">Qtd</th>
+            <th style="padding:8px 8px;text-align:right;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700">Vl. Venda</th>
+            <th style="padding:8px 8px;text-align:right;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700">Vl. Custo</th>
+            <th style="padding:8px 12px;text-align:right;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700">Total</th>
+            <th style="padding:8px 12px;text-align:right;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700">Saldo</th>
+          </tr>
+        </thead>
+        <tbody>${linhas || '<tr><td colspan="6" style="padding:24px;text-align:center;color:var(--muted)">Nenhum lançamento</td></tr>'}</tbody>
+      </table>
+    </div>`;
+}
+
+function fmtDtBr(d) {
+  if (!d) return '—';
+  return d.slice(0,10).split('-').reverse().join('/');
+}
+
+function imprimirExtrato() {
+  const body = document.getElementById('ext-body')?.innerHTML||'';
+  const titulo = document.getElementById('ext-titulo')?.textContent||'Extrato';
+  const win = window.open('','_blank');
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${titulo}</title>
+    <style>body{font-family:Arial,sans-serif;padding:20px;font-size:12px}table{width:100%;border-collapse:collapse}
+    th,td{padding:6px 10px;border:1px solid #ddd;font-size:11px}th{background:#f5f0eb;font-weight:700}
+    h2{color:#8B0000;margin-bottom:4px}@media print{button{display:none}}</style></head>
+    <body><h2>🧾 Compras Pendentes — ${titulo}</h2>${body}
+    <br><button onclick="window.print()">🖨️ Imprimir</button></body></html>`);
+  win.document.close();
+}
+
+// Ver itens de uma venda específica (abre extrato do cliente)
 async function verItensVenda(id) {
   const v = _vendas.find(x=>x.id===id);
   if (!v) return;
-  const itens = v.itens||[];
-  const html = `<div style="padding:8px 0">
-    <div style="font-weight:700;margin-bottom:8px">${v.cliente_nome} — ${v.data_compra?.slice(0,10).split('-').reverse().join('/')}</div>
-    <table style="width:100%;border-collapse:collapse;font-size:12px">
-      <thead><tr style="background:#f8f4f0"><th style="padding:6px;text-align:left">Produto</th><th style="padding:6px">Qtd</th><th style="padding:6px;text-align:right">Vl.Venda</th><th style="padding:6px;text-align:right">Vl.Custo</th><th style="padding:6px;text-align:right">Total</th></tr></thead>
-      <tbody>${itens.map(i=>`<tr style="border-bottom:1px solid #f5efe8"><td style="padding:6px">${i.nome_produto}</td><td style="padding:6px;text-align:center">${i.quantidade}</td><td style="padding:6px;text-align:right;font-family:monospace">${fmt.brl(parseFloat(i.valor_unit_venda||0))}</td><td style="padding:6px;text-align:right;font-family:monospace">${fmt.brl(parseFloat(i.valor_unit_custo||0))}</td><td style="padding:6px;text-align:right;font-family:monospace;font-weight:700">${fmt.brl(parseFloat(i.valor_final_item||0))}</td></tr>`).join('')}</tbody>
-    </table>
-    <div style="text-align:right;margin-top:10px;font-size:13px;font-weight:700">Total: ${fmt.brl(parseFloat(v.total_final||0))} · Saldo: <span style="color:${parseFloat(v.saldo_restante||0)>0?'var(--red-l)':'var(--green)'}">${fmt.brl(parseFloat(v.saldo_restante||0))}</span></div>
-  </div>`;
-  alert(html.replace(/<[^>]+>/g,' ').replace(/\s+/g,' '));
-  // TODO: substituir por modal bonito
+  await verExtratoCli(v.cliente_id);
 }
 
 // ── Relatórios ───────────────────────────────────────────────────────────────
