@@ -160,7 +160,7 @@ module.exports = function(pool) {
          VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
         [nome.trim(), telefone||null, tipo_cliente, desconto_pct||0, limite_credito||null, status, observacoes||null]
       );
-      await log(rows[0].id, 'cadastro_criado', `Cliente "${nome}" cadastrado`, req.usuario?.nome);
+      await log(rows[0].id, 'cadastro_criado', `Cliente "${nome}" cadastrado`, req.user?.nome);
       res.json({ ok:true, data:rows[0] });
     } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
   });
@@ -175,7 +175,7 @@ module.exports = function(pool) {
         [nome, telefone||null, tipo_cliente, desconto_pct||0, limite_credito||null, status, observacoes||null, req.params.id]
       );
       if (!rows.length) return res.status(404).json({ ok:false, erro:'Não encontrado' });
-      await log(rows[0].id, 'cliente_editado', `Dados do cliente atualizados`, req.usuario?.nome);
+      await log(rows[0].id, 'cliente_editado', `Dados do cliente atualizados`, req.user?.nome);
       res.json({ ok:true, data:rows[0] });
     } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
   });
@@ -206,7 +206,7 @@ module.exports = function(pool) {
     const c = cli.rows[0];
     if (c.status !== 'ativo') return res.status(400).json({ ok:false, erro:'Cliente inativo' });
 
-    const usuario = req.usuario?.nome || 'Sistema';
+    const usuario = req.user?.nome || 'Sistema';
     const precisa = c.tipo_cliente === 'socio';
 
     // Calcula totais
@@ -266,33 +266,33 @@ module.exports = function(pool) {
   });
 
   r.put('/vendas/:id/aprovar', async (req, res) => {
-    if (!['admin','gestor'].includes(req.usuario?.perfil)) return res.status(403).json({ ok:false, erro:'Sem permissão' });
+    if (!['admin','gestor'].includes(req.user?.perfil)) return res.status(403).json({ ok:false, erro:'Sem permissão' });
     try {
       const { rows } = await pool.query(
         `UPDATE vendas_fiado SET status='aberto', saldo_restante=total_final,
          aprovado_por=$1, aprovado_em=NOW(), updated_at=NOW() WHERE id=$2 AND status='aguardando' RETURNING *`,
-        [req.usuario.nome, req.params.id]
+        [req.user.nome, req.params.id]
       );
       if (!rows.length) return res.status(404).json({ ok:false, erro:'Venda não encontrada ou já processada' });
-      await log(rows[0].cliente_id, 'venda_aprovada', `Venda aprovada por ${req.usuario.nome}`, req.usuario.nome, rows[0].id);
+      await log(rows[0].cliente_id, 'venda_aprovada', `Venda aprovada por ${req.user.nome}`, req.user.nome, rows[0].id);
       res.json({ ok:true, data:rows[0] });
     } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
   });
 
   r.put('/vendas/:id/reprovar', async (req, res) => {
-    if (!['admin','gestor'].includes(req.usuario?.perfil)) return res.status(403).json({ ok:false, erro:'Sem permissão' });
+    if (!['admin','gestor'].includes(req.user?.perfil)) return res.status(403).json({ ok:false, erro:'Sem permissão' });
     const { motivo } = req.body;
     if (!motivo?.trim()) return res.status(400).json({ ok:false, erro:'Motivo obrigatório' });
     try {
       const { rows } = await pool.query(
         `UPDATE vendas_fiado SET status='reprovado', motivo_reprovacao=$1, saldo_restante=0,
          aprovado_por=$2, aprovado_em=NOW(), updated_at=NOW() WHERE id=$3 AND status='aguardando' RETURNING *`,
-        [motivo, req.usuario.nome, req.params.id]
+        [motivo, req.user.nome, req.params.id]
       );
       if (!rows.length) return res.status(404).json({ ok:false, erro:'Não encontrada' });
       // Se reprovado, converter para cliente normal
       await pool.query(`UPDATE clientes_fiado SET tipo_cliente='normal' WHERE id=$1 AND tipo_cliente='socio'`, [rows[0].cliente_id]);
-      await log(rows[0].cliente_id, 'venda_reprovada', `Venda reprovada: ${motivo}`, req.usuario.nome, rows[0].id);
+      await log(rows[0].cliente_id, 'venda_reprovada', `Venda reprovada: ${motivo}`, req.user.nome, rows[0].id);
       res.json({ ok:true, data:rows[0] });
     } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
   });
@@ -308,7 +308,7 @@ module.exports = function(pool) {
         [motivo, req.params.id]
       );
       if (!rows.length) return res.status(404).json({ ok:false, erro:'Não encontrada' });
-      await log(rows[0].cliente_id, 'venda_cancelada', `Venda cancelada: ${motivo}`, req.usuario?.nome, rows[0].id);
+      await log(rows[0].cliente_id, 'venda_cancelada', `Venda cancelada: ${motivo}`, req.user?.nome, rows[0].id);
       res.json({ ok:true, data:rows[0] });
     } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
   });
@@ -317,7 +317,7 @@ module.exports = function(pool) {
   r.post('/pagamentos', async (req, res) => {
     const { cliente_id, data_pagamento, valor_pago, forma_pagamento='dinheiro', observacoes, venda_id } = req.body;
     if (!cliente_id || !valor_pago) return res.status(400).json({ ok:false, erro:'Campos obrigatórios faltando' });
-    const usuario = req.usuario?.nome || 'Sistema';
+    const usuario = req.user?.nome || 'Sistema';
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
