@@ -333,8 +333,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
           <button class="btn btn-gray btn-sm" onclick="adicionarItemVenda()">＋ Item</button>
         </div>
         <!-- Cabeçalho itens -->
-        <div style="display:grid;grid-template-columns:80px 1fr 70px 100px 100px 90px 28px;gap:6px;padding:0 6px;margin-bottom:4px">
-          <span class="item-label">Código</span><span class="item-label">Produto</span>
+        <div style="display:grid;grid-template-columns:1fr 60px 95px 95px 80px 28px;gap:6px;padding:0 6px;margin-bottom:4px">
+          <span class="item-label">Código ou Nome do Produto</span>
           <span class="item-label">Qtd</span><span class="item-label">Vl. Venda</span>
           <span class="item-label" id="col-custo-label">Vl. Custo</span>
           <span class="item-label">Total</span><span></span>
@@ -828,33 +828,81 @@ async function adicionarItemVenda() {
   const idx = _itemIdx++;
   const div = document.createElement('div');
   div.className='item-linha'; div.id=`item-${idx}`;
+  div.style.cssText='display:grid;grid-template-columns:1fr 60px 95px 95px 80px 28px;gap:6px;align-items:center;padding:6px;background:var(--bg);border-radius:7px;margin-bottom:5px;position:relative';
   div.innerHTML=`
-    <input class="item-cod" placeholder="Código" data-idx="${idx}" oninput="buscarProdutoItem(${idx})">
-    <input class="item-nome" placeholder="Produto" data-idx="${idx}" oninput="calcTotaisVenda()">
-    <input class="item-qtd mono" type="number" step="0.001" min="0.001" value="1" data-idx="${idx}" oninput="calcItemVenda(${idx})">
-    <input class="item-venda mono" type="number" step="0.01" min="0" placeholder="0,00" data-idx="${idx}" oninput="calcItemVenda(${idx})">
-    <input class="item-custo mono" type="number" step="0.01" min="0" placeholder="0,00" data-idx="${idx}" oninput="calcItemVenda(${idx})">
-    <span class="item-total mono" style="font-weight:700;font-size:12px;color:var(--red);text-align:right" id="it-total-${idx}">R$ 0,00</span>
-    <button onclick="document.getElementById('item-${idx}').remove();calcTotaisVenda()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:16px;padding:2px">×</button>`;
+    <div style="position:relative">
+      <input class="item-busca" placeholder="🔍 Código ou nome..." data-idx="${idx}"
+        oninput="buscarProdutoItem(${idx})" autocomplete="off"
+        style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;box-sizing:border-box">
+      <div class="item-ac" id="item-ac-${idx}"
+        style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid var(--border);border-radius:0 0 7px 7px;box-shadow:0 4px 16px rgba(0,0,0,.12);z-index:200;max-height:180px;overflow-y:auto"></div>
+      <input type="hidden" class="item-cod" data-idx="${idx}">
+      <input type="hidden" class="item-nome" data-idx="${idx}">
+    </div>
+    <input class="item-qtd mono" type="number" step="0.001" min="0.001" value="1" data-idx="${idx}" oninput="calcItemVenda(${idx})"
+      style="padding:6px 4px;border:1px solid var(--border);border-radius:6px;font-size:12px;text-align:center">
+    <input class="item-venda mono" type="number" step="0.01" min="0" placeholder="0,00" data-idx="${idx}" oninput="calcItemVenda(${idx})"
+      style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;text-align:right">
+    <input class="item-custo mono" type="number" step="0.01" min="0" placeholder="0,00" data-idx="${idx}" oninput="calcItemVenda(${idx})"
+      style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;text-align:right">
+    <span class="item-total mono" style="font-weight:700;font-size:12px;color:var(--red-l);text-align:right" id="it-total-${idx}">R$ 0,00</span>
+    <button onclick="document.getElementById('item-${idx}').remove();calcTotaisVenda()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:18px;line-height:1">×</button>`;
   document.getElementById('itens-venda').appendChild(div);
 }
 
 let _prodTimer={};
 async function buscarProdutoItem(idx) {
   clearTimeout(_prodTimer[idx]);
-  const cod = document.getElementById(`item-${idx}`)?.querySelector('.item-cod')?.value?.trim();
-  if (!cod || cod.length < 2) return;
+  const row = document.getElementById(`item-${idx}`);
+  if (!row) return;
+  const q = row.querySelector('.item-busca')?.value?.trim();
+  const ac = document.getElementById(`item-ac-${idx}`);
+  if (!q || q.length < 2) { if(ac) ac.style.display='none'; return; }
+
   _prodTimer[idx] = setTimeout(async () => {
-    const d = await api.get(`/api/produtos/${encodeURIComponent(cod)}`);
-    if (d.ok && d.data) {
-      const row = document.getElementById(`item-${idx}`);
-      if (!row) return;
-      row.querySelector('.item-nome').value = d.data.descricao||'';
-      row.querySelector('.item-venda').value = parseFloat(d.data.preco_venda||0).toFixed(2);
-      row.querySelector('.item-custo').value = parseFloat(d.data.preco_custo||0).toFixed(2);
-      calcItemVenda(idx);
+    // Tenta código exato primeiro
+    const dCod = await api.get(`/api/produtos/${encodeURIComponent(q)}`);
+    if (dCod.ok && dCod.data) {
+      selecionarProdutoItem(idx, dCod.data);
+      if(ac) ac.style.display='none';
+      return;
     }
-  }, 400);
+    // Busca por nome
+    const dBusca = await api.get(`/api/produtos/buscar?q=${encodeURIComponent(q)}&limit=8`);
+    const lista = dBusca.data||[];
+    if (!lista.length) { if(ac) { ac.innerHTML='<div style="padding:8px 12px;font-size:11px;color:var(--muted)">Nenhum produto encontrado</div>'; ac.style.display=''; } return; }
+    if(ac) {
+      ac.innerHTML = lista.map(p=>`
+        <div onclick="selecionarProdutoItem(${idx},${JSON.stringify(p).replace(/"/g,'&quot;')})"
+          style="padding:7px 12px;cursor:pointer;font-size:12px;border-bottom:1px solid #f5efe8;display:flex;justify-content:space-between;gap:8px"
+          onmouseover="this.style.background='#faf7f4'" onmouseout="this.style.background=''">
+          <span><strong>${p.descricao||'—'}</strong></span>
+          <span style="font-family:monospace;font-size:11px;color:var(--muted)">${p.codigo||''} · ${fmt.brl(parseFloat(p.preco_venda||0))}</span>
+        </div>`).join('');
+      ac.style.display='';
+    }
+  }, 350);
+}
+
+function selecionarProdutoItem(idx, p) {
+  if (typeof p === 'string') p = JSON.parse(p);
+  const row = document.getElementById(`item-${idx}`);
+  if (!row) return;
+  row.querySelector('.item-busca').value = `${p.codigo||''} — ${p.descricao||''}`.trim().replace(/^— /,'');
+  row.querySelector('.item-cod').value   = p.codigo||'';
+  row.querySelector('.item-nome').value  = p.descricao||'';
+  row.querySelector('.item-venda').value = parseFloat(p.preco_venda||0).toFixed(2);
+  row.querySelector('.item-custo').value = parseFloat(p.preco_custo||0).toFixed(2);
+  const ac = document.getElementById(`item-ac-${idx}`);
+  if(ac) ac.style.display='none';
+  // Aplica desconto do cliente especial
+  const c = _cliVendaAtual;
+  if (c?.tipo_cliente==='especial') {
+    // desconto já aplicado no calcItemVenda
+  }
+  calcItemVenda(idx);
+  // Foca na quantidade
+  row.querySelector('.item-qtd')?.focus();
 }
 
 function calcItemVenda(idx) {
@@ -897,7 +945,7 @@ async function confirmarVenda() {
   const itens = [];
   let valido = true;
   document.querySelectorAll('#itens-venda .item-linha').forEach(row => {
-    const nome = row.querySelector('.item-nome')?.value?.trim();
+    const nome = row.querySelector('.item-nome')?.value?.trim() || row.querySelector('.item-busca')?.value?.trim();
     const qtd  = parseFloat(row.querySelector('.item-qtd')?.value)||0;
     const vend = parseFloat(row.querySelector('.item-venda')?.value)||0;
     const cust = parseFloat(row.querySelector('.item-custo')?.value)||0;

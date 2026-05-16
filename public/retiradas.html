@@ -140,42 +140,58 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
   </div>
 </div>
 
-<!-- Modal Nova Retirada -->
+<!-- Modal Nova Retirada — múltiplos itens -->
 <div class="modal-bg" id="modal-ret">
-  <div class="modal">
+  <div class="modal" style="max-width:680px">
     <div class="modal-head"><h3 id="ret-title">Nova Retirada</h3><button class="modal-close" onclick="fecharModal()">×</button></div>
     <div class="modal-body">
       <div class="limite-alert" id="limite-info" style="display:none"></div>
-      <div class="fg"><label>Funcionário *</label>
-        <select id="r-func" onchange="atualizarLimite()">
-          <option value="">— Selecione —</option>
-        </select>
+      <div class="fg-row">
+        <div class="fg">
+          <label>Funcionário *</label>
+          <select id="r-func" onchange="atualizarLimite()">
+            <option value="">— Selecione —</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label>Data</label>
+          <input type="date" id="r-dt">
+        </div>
       </div>
-      <div class="fg" style="position:relative">
-        <label>Produto (código ou nome)</label>
-        <input id="r-busca" placeholder="Digite o código ou nome do produto..."
-          oninput="buscarProd()" onkeydown="navSugestoes(event)"
-          autocomplete="off"
-          style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-size:13px">
-        <div id="r-sugestoes" style="display:none;position:absolute;left:0;right:0;top:100%;background:#fff;border:1px solid var(--border);border-radius:0 0 8px 8px;box-shadow:0 4px 16px rgba(0,0,0,.12);z-index:100;max-height:220px;overflow-y:auto"></div>
-        <div id="r-prod-info" style="font-size:11px;color:var(--green);margin-top:4px"></div>
+
+      <!-- Itens -->
+      <div style="background:#faf7f4;border-radius:9px;padding:10px;margin-bottom:10px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">Produtos</span>
+          <button type="button" onclick="addItemRet()" style="font-size:11px;padding:3px 10px;background:#fff;border:1px solid var(--border);border-radius:6px;cursor:pointer;font-weight:600;color:var(--purple)">＋ Produto</button>
+        </div>
+        <!-- Cabeçalho -->
+        <div style="display:grid;grid-template-columns:1fr 65px 100px 70px 24px;gap:5px;padding:0 4px;margin-bottom:4px">
+          <span style="font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);font-weight:700">Produto</span>
+          <span style="font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);font-weight:700">Qtd</span>
+          <span style="font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);font-weight:700">Preço Custo</span>
+          <span style="font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);font-weight:700">Total</span>
+          <span></span>
+        </div>
+        <div id="ret-itens"></div>
+        <!-- Total geral -->
+        <div style="border-top:1px solid var(--border);margin-top:8px;padding-top:8px;display:flex;justify-content:flex-end;align-items:center;gap:12px">
+          <span style="font-size:12px;color:var(--muted)">Total da retirada:</span>
+          <span id="r-total" style="font-size:18px;font-weight:700;color:var(--purple);font-family:monospace">R$ 0,00</span>
+        </div>
       </div>
+
+      <!-- Campos ocultos de compatibilidade (preenchidos pelo primeiro item ao salvar) -->
       <input type="hidden" id="r-prod-id">
       <input type="hidden" id="r-cod">
-      <div class="fg"><label>Descrição *</label><input id="r-desc" placeholder="Descrição do produto"></div>
-      <div class="fg-row">
-        <div class="fg"><label>Data</label><input type="date" id="r-dt"></div>
-        <div class="fg"><label>Quantidade</label><input type="number" id="r-qtd" value="1" min="0.001" step="0.001" oninput="calcTotal()"></div>
-      </div>
-      <div class="fg">
-        <label>Preço Unitário — Custo (R$)</label>
-        <input type="number" id="r-preco" step="0.0001" placeholder="0,00" oninput="calcTotal()">
-        <div style="font-size:11px;color:var(--muted);margin-top:3px">Funcionário paga o preço de custo</div>
-      </div>
-      <div style="background:#f8f4fd;border-radius:8px;padding:12px;text-align:center;font-size:14px;font-weight:600;margin-bottom:10px">
-        Valor Total: <span id="r-total" style="color:var(--purple)">R$ 0,00</span>
-      </div>
-      <div class="fg"><label>Observação</label><textarea id="r-obs" rows="2"></textarea></div>
+      <input type="hidden" id="r-desc">
+      <input type="hidden" id="r-qtd">
+      <input type="hidden" id="r-preco">
+      <div id="r-prod-info" style="display:none"></div>
+      <div id="r-sugestoes" style="display:none"></div>
+      <div id="r-busca-wrap" style="display:none"><input id="r-busca"></div>
+
+      <div class="fg"><label>Observação</label><textarea id="r-obs" rows="2" placeholder="Opcional — vale para todos os itens"></textarea></div>
     </div>
     <div class="modal-foot">
       <button class="btn btn-s" onclick="fecharModal()">Cancelar</button>
@@ -376,21 +392,19 @@ async function confirmarPreco(id, qtd) {
 
 // ── Modal ──────────────────────────────────────────────────────────────────
 function abrirModal(){
-  document.getElementById('r-busca').value='';
-  document.getElementById('r-prod-info').innerHTML='';
-  const sug=document.getElementById('r-sugestoes'); if(sug) sug.style.display='none';
-  document.getElementById('r-prod-id').value='';
-  document.getElementById('r-cod').value='';
-  document.getElementById('r-desc').value='';
-  document.getElementById('r-qtd').value=1;
-  document.getElementById('r-preco').value='';
+  document.getElementById('ret-itens').innerHTML='';
+  _retItemIdx=0;
   document.getElementById('r-obs').value='';
-  document.getElementById('r-prod-info').innerHTML='';
   document.getElementById('r-total').textContent='R$ 0,00';
   document.getElementById('limite-info').style.display='none';
   document.getElementById('modal-ret').classList.add('open');
+  addItemRet(); // primeiro item automático
 }
-function fecharModal(){ document.getElementById('modal-ret').classList.remove('open'); }
+function fecharModal(){
+  document.getElementById('modal-ret').classList.remove('open');
+  document.getElementById('ret-itens').innerHTML='';
+  _retItemIdx=0;
+}
 
 let _buscarTimer = null;
 let _sugestaoIdx = -1;
@@ -499,24 +513,137 @@ async function atualizarLimite(){
   info.innerHTML = `👤 <b>${ld.funcionario}</b> — Usado: ${fmt.brl(ld.usado)} · Saldo: <b style="color:${ld.saldo<=0?'var(--red-l)':'var(--green)'}">${fmt.brl(ld.saldo)}</b> de ${fmt.brl(ld.limite)}`;
 }
 
+// ── Múltiplos itens na retirada ───────────────────────────────────────────
+let _retItemIdx = 0;
+let _retProdTimers = {};
+
+function addItemRet() {
+  const idx = _retItemIdx++;
+  const div = document.createElement('div');
+  div.id = `ret-item-${idx}`;
+  div.style.cssText = 'display:grid;grid-template-columns:1fr 65px 100px 70px 24px;gap:5px;margin-bottom:5px;position:relative';
+  div.innerHTML = `
+    <div style="position:relative">
+      <input id="ret-busca-${idx}" placeholder="🔍 Código ou nome..." autocomplete="off"
+        oninput="buscarProdRet(${idx})" onkeydown="navSugRet(event,${idx})"
+        style="width:100%;padding:6px 9px;border:1px solid var(--border);border-radius:6px;font-size:12px;box-sizing:border-box">
+      <div id="ret-ac-${idx}" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid var(--border);border-radius:0 0 7px 7px;box-shadow:0 4px 16px rgba(0,0,0,.12);z-index:300;max-height:200px;overflow-y:auto"></div>
+      <input type="hidden" id="ret-prodId-${idx}">
+      <input type="hidden" id="ret-cod-${idx}">
+      <input type="hidden" id="ret-desc-${idx}">
+    </div>
+    <input id="ret-qtd-${idx}" type="number" step="0.001" min="0.001" value="1"
+      oninput="calcTotalRet()"
+      style="padding:6px 4px;border:1px solid var(--border);border-radius:6px;font-size:12px;text-align:center">
+    <input id="ret-preco-${idx}" type="number" step="0.0001" min="0" placeholder="0,00"
+      oninput="calcTotalRet()"
+      style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;text-align:right;font-family:monospace">
+    <span id="ret-total-${idx}" style="display:flex;align-items:center;justify-content:flex-end;font-size:12px;font-weight:600;font-family:monospace;color:var(--purple)">—</span>
+    <button onclick="removerItemRet(${idx})" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:18px;line-height:1;padding:0 2px">×</button>`;
+  document.getElementById('ret-itens').appendChild(div);
+  document.getElementById(`ret-busca-${idx}`).focus();
+}
+
+function removerItemRet(idx) {
+  document.getElementById(`ret-item-${idx}`)?.remove();
+  calcTotalRet();
+}
+
+async function buscarProdRet(idx) {
+  clearTimeout(_retProdTimers[idx]);
+  const q = document.getElementById(`ret-busca-${idx}`)?.value?.trim();
+  const ac = document.getElementById(`ret-ac-${idx}`);
+  if (!q || q.length < 2) { if(ac) ac.style.display='none'; return; }
+  _retProdTimers[idx] = setTimeout(async () => {
+    // Código exato
+    const dCod = await api.get(`/api/produtos/${encodeURIComponent(q)}`);
+    if (dCod.ok && dCod.data) { selecionarProdRet(idx, dCod.data); return; }
+    // Busca por nome
+    const dB = await api.get(`/api/produtos/buscar?q=${encodeURIComponent(q)}&limit=8`);
+    const lista = dB.data||[];
+    if (!lista.length) { if(ac){ ac.innerHTML='<div style="padding:8px 12px;font-size:11px;color:var(--muted)">Produto não encontrado</div>'; ac.style.display=''; } return; }
+    if(ac) {
+      ac.innerHTML = lista.map(p=>`
+        <div onclick="selecionarProdRet(${idx},${JSON.stringify(p).replace(/"/g,'&quot;')})"
+          style="padding:7px 12px;cursor:pointer;font-size:12px;border-bottom:1px solid #f5efe8;display:flex;justify-content:space-between;gap:8px"
+          onmouseover="this.style.background='#faf7f4'" onmouseout="this.style.background=''">
+          <span><strong>${p.descricao||'—'}</strong></span>
+          <span style="font-size:11px;font-family:monospace;color:var(--muted)">${p.codigo||''} · custo: ${fmt.brl(parseFloat(p.preco_custo||0))}</span>
+        </div>`).join('');
+      ac.style.display='';
+    }
+  }, 350);
+}
+
+function selecionarProdRet(idx, p) {
+  if (typeof p === 'string') p = JSON.parse(p);
+  document.getElementById(`ret-busca-${idx}`).value = `${p.codigo||''} — ${p.descricao||''}`.replace(/^— /,'');
+  document.getElementById(`ret-prodId-${idx}`).value = p.id||'';
+  document.getElementById(`ret-cod-${idx}`).value    = p.codigo||'';
+  document.getElementById(`ret-desc-${idx}`).value   = p.descricao||'';
+  document.getElementById(`ret-preco-${idx}`).value  = parseFloat(p.preco_custo||0).toFixed(4);
+  const ac = document.getElementById(`ret-ac-${idx}`);
+  if(ac) ac.style.display='none';
+  calcTotalRet();
+  document.getElementById(`ret-qtd-${idx}`)?.focus();
+}
+
+function navSugRet(e, idx) {
+  if (e.key==='Escape') { document.getElementById(`ret-ac-${idx}`).style.display='none'; }
+}
+
+function calcTotalRet() {
+  let total = 0;
+  document.querySelectorAll('[id^="ret-item-"]').forEach(row => {
+    const idx = row.id.replace('ret-item-','');
+    const qtd   = parseFloat(document.getElementById(`ret-qtd-${idx}`)?.value)||0;
+    const preco = parseFloat(document.getElementById(`ret-preco-${idx}`)?.value)||0;
+    const sub   = qtd * preco;
+    const el    = document.getElementById(`ret-total-${idx}`);
+    if(el) el.textContent = sub>0 ? fmt.brl(sub) : '—';
+    total += sub;
+  });
+  document.getElementById('r-total').textContent = fmt.brl(total);
+}
+
 async function salvar(){
   const funcId = document.getElementById('r-func').value;
-  const desc   = document.getElementById('r-desc').value.trim();
-  if(!funcId||!desc){ toast('Funcionário e descrição são obrigatórios'); return; }
-  const preco = parseFloat(document.getElementById('r-preco').value)||0;
-  const body = {
-    funcionarioId: parseInt(funcId),
-    produtoId:     parseInt(document.getElementById('r-prod-id').value)||null,
-    descricao:     desc,
-    qtd:           parseFloat(document.getElementById('r-qtd').value)||1,
-    precoUnitario: preco,
-    descontoPct:   0,
-    dtRetirada:    document.getElementById('r-dt').value,
-    observacao:    document.getElementById('r-obs').value,
-  };
-  const d = await api.post('/api/retiradas', body);
-  if(!d.ok){ toast('Erro: '+d.erro); return; }
-  toast('✅ Retirada registrada!');
+  if(!funcId){ toast('Selecione o funcionário'); return; }
+  const obs = document.getElementById('r-obs').value;
+  const dt  = document.getElementById('r-dt').value;
+  const itens = [];
+  document.querySelectorAll('[id^="ret-item-"]').forEach(row => {
+    const idx   = row.id.replace('ret-item-','');
+    const desc  = document.getElementById(`ret-desc-${idx}`)?.value?.trim()
+                || document.getElementById(`ret-busca-${idx}`)?.value?.trim();
+    const qtd   = parseFloat(document.getElementById(`ret-qtd-${idx}`)?.value)||0;
+    const preco = parseFloat(document.getElementById(`ret-preco-${idx}`)?.value)||0;
+    if (desc && qtd>0) itens.push({
+      produtoId: parseInt(document.getElementById(`ret-prodId-${idx}`)?.value)||null,
+      descricao: desc, qtd, precoUnitario: preco,
+      cod: document.getElementById(`ret-cod-${idx}`)?.value||''
+    });
+  });
+  if (!itens.length){ toast('Adicione ao menos um produto'); return; }
+
+  // Salva cada item como uma retirada separada
+  let erros = 0;
+  for (const item of itens) {
+    const body = {
+      funcionarioId: parseInt(funcId),
+      produtoId:     item.produtoId,
+      descricao:     item.descricao,
+      qtd:           item.qtd,
+      precoUnitario: item.precoUnitario,
+      descontoPct:   0,
+      dtRetirada:    dt,
+      observacao:    obs,
+    };
+    const d = await api.post('/api/retiradas', body);
+    if(!d.ok) erros++;
+  }
+  if (erros) toast(`⚠️ ${erros} item(s) com erro ao salvar`);
+  else toast(`✅ ${itens.length} item(s) registrado(s)!`);
   fecharModal(); carregar(); carregarLimites();
 }
 
