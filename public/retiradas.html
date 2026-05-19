@@ -75,6 +75,13 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
 @media(min-width:701px){
   .ret-cards{display:none;}
 }
+/* Modal de retirada responsivo */
+@media(max-width:700px){
+  .ret-itens-header{display:none !important;}
+  .modal{max-width:100% !important;margin:8px;}
+  .ret-item-row{grid-template-columns:1fr !important;gap:6px !important;}
+  .ret-item-row .ret-item-sub{display:grid;grid-template-columns:1fr 1fr 24px;gap:5px;}
+}
 /* Cards de retirada para mobile */
 .ret-card{background:var(--white);border:1px solid var(--border);border-radius:10px;padding:11px 13px;margin-bottom:8px;box-shadow:0 1px 6px rgba(0,0,0,.06);}
 .ret-card-header{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px;}
@@ -177,8 +184,8 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
           <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">Produtos</span>
           <button type="button" onclick="addItemRet()" style="font-size:11px;padding:3px 10px;background:#fff;border:1px solid var(--border);border-radius:6px;cursor:pointer;font-weight:600;color:var(--purple)">＋ Produto</button>
         </div>
-        <!-- Cabeçalho -->
-        <div style="display:grid;grid-template-columns:1fr 65px 100px 70px 24px;gap:5px;padding:0 4px;margin-bottom:4px">
+        <!-- Cabeçalho (oculto no mobile, info fica nos placeholders) -->
+        <div class="ret-itens-header" style="display:grid;grid-template-columns:1fr 65px 100px 70px 24px;gap:5px;padding:0 4px;margin-bottom:4px">
           <span style="font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);font-weight:700">Produto</span>
           <span style="font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);font-weight:700">Qtd</span>
           <span style="font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);font-weight:700">Preço Custo</span>
@@ -565,17 +572,30 @@ function addItemRet() {
   const idx = _retItemIdx++;
   const div = document.createElement('div');
   div.id = `ret-item-${idx}`;
-  div.style.cssText = 'display:grid;grid-template-columns:1fr 65px 100px 70px 24px;gap:5px;margin-bottom:5px;position:relative';
+  div.className = 'ret-item-row';
+  div.style.cssText = 'display:grid;grid-template-columns:1fr 65px 100px 70px 24px;gap:5px;margin-bottom:5px;position:relative;align-items:center';
   div.innerHTML = `
     <div style="position:relative">
-      <input id="ret-busca-${idx}" placeholder="🔍 Código ou nome..." autocomplete="off"
+      <input id="ret-busca-${idx}" placeholder="🔍 Código ou nome do produto..." autocomplete="off"
         oninput="buscarProdRet(${idx})" onkeydown="navSugRet(event,${idx})"
-        style="width:100%;padding:6px 9px;border:1px solid var(--border);border-radius:6px;font-size:12px;box-sizing:border-box">
-      <div id="ret-ac-${idx}" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid var(--border);border-radius:0 0 7px 7px;box-shadow:0 4px 16px rgba(0,0,0,.12);z-index:300;max-height:200px;overflow-y:auto"></div>
+        style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-size:13px;box-sizing:border-box">
+      <div id="ret-ac-${idx}" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid var(--border);border-radius:0 0 8px 8px;box-shadow:0 4px 20px rgba(0,0,0,.15);z-index:300;max-height:220px;overflow-y:auto"></div>
       <input type="hidden" id="ret-prodId-${idx}">
       <input type="hidden" id="ret-cod-${idx}">
       <input type="hidden" id="ret-desc-${idx}">
+      <!-- Linha secundária mobile: qtd + preco + total + remover -->
+      <div class="ret-item-sub" style="display:none;margin-top:5px;grid-template-columns:1fr 1fr auto;gap:5px;align-items:center">
+        <input id="ret-qtd-m-${idx}" type="number" step="0.001" min="0.001" value="1"
+          oninput="syncRetMobile(${idx},'qtd')"
+          placeholder="Qtd" style="padding:7px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;text-align:center">
+        <input id="ret-preco-m-${idx}" type="number" step="0.0001" min="0" placeholder="R$ custo"
+          oninput="syncRetMobile(${idx},'preco')"
+          style="padding:7px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;text-align:right;font-family:monospace">
+        <button onclick="removerItemRet(${idx})" style="background:#fee2e2;border:none;cursor:pointer;color:#dc2626;font-size:16px;border-radius:6px;padding:6px 8px;line-height:1">×</button>
+      </div>
+      <div id="ret-total-m-${idx}" style="display:none;font-size:12px;font-weight:700;color:var(--purple);font-family:monospace;text-align:right;margin-top:3px"></div>
     </div>
+    <!-- Desktop: campos inline -->
     <input id="ret-qtd-${idx}" type="number" step="0.001" min="0.001" value="1"
       oninput="calcTotalRet()"
       style="padding:6px 4px;border:1px solid var(--border);border-radius:6px;font-size:12px;text-align:center">
@@ -584,6 +604,15 @@ function addItemRet() {
       style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;text-align:right;font-family:monospace">
     <span id="ret-total-${idx}" style="display:flex;align-items:center;justify-content:flex-end;font-size:12px;font-weight:600;font-family:monospace;color:var(--purple)">—</span>
     <button onclick="removerItemRet(${idx})" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:18px;line-height:1;padding:0 2px">×</button>`;
+
+  // Ativa layout mobile quando produto é selecionado
+  window[`_retShowMobile${idx}`] = function() {
+    const isMobile = window.innerWidth <= 700;
+    const subEl = div.querySelector('.ret-item-sub');
+    const totEl = document.getElementById(`ret-total-m-${idx}`);
+    if (isMobile && subEl) { subEl.style.display='grid'; }
+    if (isMobile && totEl) { totEl.style.display=''; }
+  };
   document.getElementById('ret-itens').appendChild(div);
   document.getElementById(`ret-busca-${idx}`).focus();
 }
@@ -621,15 +650,44 @@ async function buscarProdRet(idx) {
 
 function selecionarProdRet(idx, p) {
   if (typeof p === 'string') p = JSON.parse(p);
-  document.getElementById(`ret-busca-${idx}`).value = `${p.codigo||''} — ${p.descricao||''}`.replace(/^— /,'');
-  document.getElementById(`ret-prodId-${idx}`).value = p.id||'';
-  document.getElementById(`ret-cod-${idx}`).value    = p.codigo||'';
-  document.getElementById(`ret-desc-${idx}`).value   = p.descricao||'';
-  document.getElementById(`ret-preco-${idx}`).value  = parseFloat(p.preco_custo||0).toFixed(4);
+  const custo = parseFloat(p.preco_custo||0).toFixed(4);
+  document.getElementById(`ret-busca-${idx}`).value    = `${p.codigo||''} — ${p.descricao||''}`.replace(/^— /,'');
+  document.getElementById(`ret-prodId-${idx}`).value   = p.id||'';
+  document.getElementById(`ret-cod-${idx}`).value      = p.codigo||'';
+  document.getElementById(`ret-desc-${idx}`).value     = p.descricao||'';
+  document.getElementById(`ret-preco-${idx}`).value    = custo;
+  // Sync campos mobile
+  const mPreco = document.getElementById(`ret-preco-m-${idx}`);
+  if (mPreco) mPreco.value = custo;
   const ac = document.getElementById(`ret-ac-${idx}`);
   if(ac) ac.style.display='none';
+  // Mostrar sub-linha no mobile
+  window[`_retShowMobile${idx}`]?.();
   calcTotalRet();
-  document.getElementById(`ret-qtd-${idx}`)?.focus();
+  // Foca na quantidade (mobile ou desktop)
+  const qtdEl = window.innerWidth <= 700
+    ? document.getElementById(`ret-qtd-m-${idx}`)
+    : document.getElementById(`ret-qtd-${idx}`);
+  qtdEl?.focus();
+}
+
+function syncRetMobile(idx, campo) {
+  // Sincroniza campos mobile → desktop para o salvar funcionar
+  if (campo === 'qtd') {
+    const v = document.getElementById(`ret-qtd-m-${idx}`)?.value;
+    const el = document.getElementById(`ret-qtd-${idx}`);
+    if(el) el.value = v;
+  } else {
+    const v = document.getElementById(`ret-preco-m-${idx}`)?.value;
+    const el = document.getElementById(`ret-preco-${idx}`);
+    if(el) el.value = v;
+  }
+  calcTotalRet();
+  // Atualiza total mobile
+  const qtd   = parseFloat(document.getElementById(`ret-qtd-${idx}`)?.value)||0;
+  const preco = parseFloat(document.getElementById(`ret-preco-${idx}`)?.value)||0;
+  const totEl = document.getElementById(`ret-total-m-${idx}`);
+  if(totEl && qtd>0 && preco>0) totEl.textContent = fmt.brl(qtd*preco);
 }
 
 function navSugRet(e, idx) {
