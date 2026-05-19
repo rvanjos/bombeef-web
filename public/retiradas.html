@@ -64,16 +64,26 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
 .rel-table td{padding:8px 12px;border-bottom:1px solid var(--border);}
 
 @media(max-width:700px){
-  .card{overflow-x:auto;}
-  .tbl th,.tbl td{font-size:11px;padding:7px 8px;white-space:nowrap;}
-  /* Esconde colunas menos críticas: Desconto */
-  .tbl th:nth-child(6),.tbl td:nth-child(6){display:none;}
   .toolbar,.top-bar{flex-wrap:wrap;gap:6px;}
   .btn,button.btn{font-size:11px;padding:5px 9px;}
-  /* Funcionário não quebra demais */
-  .tbl td:nth-child(2){max-width:100px;white-space:normal;}
-  .tbl td:nth-child(3){max-width:120px;white-space:normal;}
+  /* Tabela de retiradas: esconde no mobile, usa cards */
+  .tbl-desktop{display:none !important;}
+  .ret-cards{display:block;}
+  .kpi-row{grid-template-columns:1fr 1fr;}
+  .limites-grid{grid-template-columns:1fr;}
 }
+@media(min-width:701px){
+  .ret-cards{display:none;}
+}
+/* Cards de retirada para mobile */
+.ret-card{background:var(--white);border:1px solid var(--border);border-radius:10px;padding:11px 13px;margin-bottom:8px;box-shadow:0 1px 6px rgba(0,0,0,.06);}
+.ret-card-header{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px;}
+.ret-card-nome{font-weight:700;font-size:13px;color:var(--text);}
+.ret-card-data{font-size:11px;color:var(--muted);}
+.ret-card-prod{font-size:12px;color:#444;margin-bottom:4px;}
+.ret-card-vals{display:flex;gap:10px;font-size:11px;color:var(--muted);}
+.ret-card-total{font-family:'DM Mono',monospace;font-weight:700;color:var(--purple);font-size:13px;}
+.ret-card-acoes{display:flex;gap:5px;margin-top:7px;}
 
 /* ── Normalização bb-base ────────────────────────────────────────────────── */
 /* Botão primário */
@@ -125,7 +135,7 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
 
   <!-- Tabela -->
   <div class="card">
-    <div style="overflow-x:auto"><table class="tbl">
+    <div style="overflow-x:auto"><table class="tbl tbl-desktop">
       <thead><tr><th>Data</th><th>Funcionário</th><th>Produto / Descrição</th><th>Qtd</th><th>Preço Unit.</th><th>Total</th><th>Ações</th></tr></thead>
       <tbody id="tbody"></tbody>
       <tfoot id="tfoot-total" style="display:none">
@@ -136,6 +146,8 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
         </tr>
       </tfoot>
     </table></div>
+    <!-- Cards para mobile -->
+    <div class="ret-cards" id="ret-cards" style="padding:10px 8px"></div>
     <div class="empty" id="empty" style="display:none"><p>Nenhuma retirada encontrada</p></div>
   </div>
 </div>
@@ -293,6 +305,9 @@ function renderizar(lista){
   const tfootVal = document.getElementById('tfoot-valor');
   if(!lista.length){ tb.innerHTML=''; em.style.display=''; if(tfoot) tfoot.style.display='none'; return; }
   em.style.display='none';
+  // Cards mobile
+  const cardsEl = document.getElementById('ret-cards');
+
   tb.innerHTML = lista.map(r=>{
     const semCusto = parseFloat(r.preco_unitario||0) === 0 && r.produto_id;
     const badgeCusto = semCusto
@@ -318,6 +333,35 @@ function renderizar(lista){
       <td>${btnAtualizar}<button class="act-btn" onclick="editarPreco(${r.id},${_preco},${_qtd})" title="Editar preço de custo" style="color:var(--purple)">✏️</button><button class="act-btn" onclick="excluir(${r.id})" style="color:var(--red-l)">🗑</button></td>
     </tr>`;
   }).join('');
+
+  // Cards mobile
+  if (cardsEl) {
+    cardsEl.innerHTML = lista.map(r => {
+      const semCusto = parseFloat(r.preco_unitario||0) === 0 && r.produto_id;
+      const _qtd   = parseFloat(r.qtd||1);
+      const _preco = parseFloat(r.preco_unitario||0);
+      const _total = r.valor_total ? parseFloat(r.valor_total) : _qtd*_preco;
+      return `<div class="ret-card${semCusto?' style="border-left:3px solid #d97706"':''}">
+        <div class="ret-card-header">
+          <div>
+            <div class="ret-card-nome">${r.funcionario_nome}</div>
+            <div class="ret-card-data">${fmt.date(r.dt_retirada)}</div>
+          </div>
+          <div class="ret-card-total">${semCusto?'<span style="color:#d97706;font-size:11px">Pendente</span>':fmt.brl(_total)}</div>
+        </div>
+        <div class="ret-card-prod">${r.descricao}${semCusto?' ⚠️':''}</div>
+        <div class="ret-card-vals">
+          <span>Qtd: <strong>${_qtd.toFixed(3)}</strong></span>
+          <span>Custo: <strong>${semCusto?'—':fmt.brl(_preco)}</strong></span>
+        </div>
+        <div class="ret-card-acoes">
+          <button class="act-btn" onclick="editarPreco(${r.id},${_preco},${_qtd})" style="color:var(--purple);font-size:13px;padding:4px 10px;border:1px solid var(--border);border-radius:6px;background:#fff;cursor:pointer">✏️ Editar</button>
+          <button class="act-btn" onclick="excluir(${r.id})" style="color:var(--red-l);font-size:13px;padding:4px 10px;border:1px solid #fca5a5;border-radius:6px;background:#fff5f5;cursor:pointer">🗑</button>
+          ${semCusto?`<button onclick="atualizarCusto(${r.id},${r.produto_id},${_qtd})" style="color:#d97706;font-size:13px;padding:4px 10px;border:1px solid #fcd34d;border-radius:6px;background:#fffbeb;cursor:pointer">🔄 Atualizar custo</button>`:''}
+        </div>
+      </div>`;
+    }).join('') || '<div style="text-align:center;padding:20px;color:var(--muted);font-size:13px">Nenhuma retirada no período</div>';
+  }
 
   // Rodapé com total
   if (tfoot && tfootVal) {
