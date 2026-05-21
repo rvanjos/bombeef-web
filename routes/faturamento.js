@@ -392,15 +392,18 @@ module.exports = function(pool) {
   // ── GET / — lista períodos ─────────────────────────────────────────────────
   r.get('/', async (req, res) => {
     try {
-      const { tipo, ano, limit = 50 } = req.query;
+      const { tipo, ano, mes, data_ini, data_fim, todos, limit = 500 } = req.query;
       const conds = [], params = [];
       if (tipo && tipo !== 'todos') { params.push(tipo); conds.push(`tipo_periodo=$${params.length}`); }
-      if (ano) { params.push(ano); conds.push(`EXTRACT(YEAR FROM data_inicio)=$${params.length}`); }
+      if (ano && !data_ini)  { params.push(ano);  conds.push(`EXTRACT(YEAR FROM data_inicio)=$${params.length}`); }
+      if (mes && ano)        { params.push(mes);  conds.push(`EXTRACT(MONTH FROM data_inicio)=$${params.length}`); }
+      if (data_ini)          { params.push(data_ini); conds.push(`data_inicio >= $${params.length}`); }
+      if (data_fim)          { params.push(data_fim); conds.push(`data_inicio <= $${params.length}`); }
       const where = conds.length ? 'WHERE '+conds.join(' AND ') : '';
       params.push(parseInt(limit));
       const { rows } = await pool.query(
         `SELECT * FROM faturamento_periodos ${where}
-         ORDER BY data_inicio DESC LIMIT $${params.length}`, params
+         ORDER BY data_inicio ASC LIMIT $${params.length}`, params
       );
       res.json({ ok: true, data: rows });
     } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }

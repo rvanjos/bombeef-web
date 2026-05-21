@@ -156,19 +156,52 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
 
   <!-- ── VISÃO GERAL ── -->
   <div id="sec-visao">
-    <div class="toolbar">
-      <select class="flt" id="flt-tipo" onchange="carregar()">
-        <option value="todos">Todos os períodos</option>
-        <option value="dia">Diário</option>
-        <option value="semana">Semanal</option>
-        <option value="mes">Mensal</option>
+    <div class="toolbar" style="flex-wrap:wrap;gap:6px;align-items:center">
+      <!-- Modo de período -->
+      <select class="flt" id="flt-modo" onchange="atualizarFiltrosPeriodo()" style="min-width:160px">
+        <option value="ano">📅 Ano completo</option>
+        <option value="mes">📆 Mês específico</option>
+        <option value="intervalo">🗓️ Intervalo de datas</option>
+        <option value="todos">📋 Todos os registros</option>
       </select>
-      <select class="flt" id="flt-ano" onchange="carregar()"></select>
-      <button class="btn btn-g" style="background:#1a5c8a" onclick="abrirImportListagem()">📋 Importar Listagem</button>
-      <button class="btn btn-g" style="background:#6040c0" onclick="abrirImportFormas()">💳 Importar Formas Pgto <span style="background:rgba(255,255,255,.25);border-radius:4px;padding:1px 6px;font-size:10px;font-weight:800">Rel. 205</span></button>
+
+      <!-- Seletor de ano (sempre visível) -->
+      <select class="flt" id="flt-ano" onchange="carregar()" style="min-width:90px"></select>
+
+      <!-- Seletor de mês (só no modo mês) -->
+      <select class="flt" id="flt-mes-sel" onchange="carregar()" style="display:none;min-width:130px">
+        <option value="01">Janeiro</option><option value="02">Fevereiro</option>
+        <option value="03">Março</option><option value="04">Abril</option>
+        <option value="05">Maio</option><option value="06">Junho</option>
+        <option value="07">Julho</option><option value="08">Agosto</option>
+        <option value="09">Setembro</option><option value="10">Outubro</option>
+        <option value="11">Novembro</option><option value="12">Dezembro</option>
+      </select>
+
+      <!-- Intervalo personalizado -->
+      <div id="flt-intervalo-wrap" style="display:none;display:none;align-items:center;gap:4px">
+        <input type="date" id="flt-data-ini" class="flt" onchange="carregar()" style="min-width:130px">
+        <span style="font-size:11px;color:var(--muted)">até</span>
+        <input type="date" id="flt-data-fim" class="flt" onchange="carregar()" style="min-width:130px">
+      </div>
+
+      <!-- Atalhos rápidos -->
+      <div id="flt-atalhos" style="display:flex;gap:4px;flex-wrap:wrap">
+        <button class="btn btn-s" onclick="atalhoFat('7d')"  style="font-size:11px;padding:4px 8px">7d</button>
+        <button class="btn btn-s" onclick="atalhoFat('15d')" style="font-size:11px;padding:4px 8px">15d</button>
+        <button class="btn btn-s" onclick="atalhoFat('30d')" style="font-size:11px;padding:4px 8px">30d</button>
+        <button class="btn btn-s" onclick="atalhoFat('mes')" style="font-size:11px;padding:4px 8px">Mês</button>
+        <button class="btn btn-s" onclick="atalhoFat('ant')" style="font-size:11px;padding:4px 8px">Mês ant.</button>
+      </div>
+
+      <div style="flex:1"></div>
+      <button class="btn btn-g" style="background:#1a5c8a" onclick="abrirImportListagem()">📋 Importar</button>
+      <button class="btn btn-g" style="background:#6040c0" onclick="abrirImportFormas()">💳 Formas Pgto <span style="background:rgba(255,255,255,.25);border-radius:4px;padding:1px 6px;font-size:10px;font-weight:800">Rel. 205</span></button>
       <button class="btn btn-s" onclick="exportarXLS()">📊 Excel</button>
-      <button class="btn btn-s" style="color:var(--red-l);margin-left:auto" onclick="limparFaturamento()">🗑️ Limpar dados</button>
+      <button class="btn btn-s" style="color:var(--red-l)" onclick="limparFaturamento()">🗑️ Limpar</button>
     </div>
+    <!-- Indicador do período selecionado -->
+    <div id="fat-periodo-label" style="font-size:11px;color:var(--muted);padding:4px 2px;margin-bottom:4px"></div>
 
     <div class="charts-row">
       <div class="chart-card">
@@ -841,7 +874,7 @@ async function carregarReconciliacao() {
 // ── LIMPAR ───────────────────────────────────────────────────────────────────
 async function limparFaturamento() {
   const ano = document.getElementById('flt-ano').value;
-  const tipo = document.getElementById('flt-tipo').value;
+  const tipo = 'todos'; // compatibilidade — filtro agora via flt-modo
   const msg = tipo !== 'todos'
     ? `Apagar TODOS os registros de faturamento de ${ano} do tipo "${tipo}"?
 
@@ -985,11 +1018,63 @@ async function salvarMeta() {
   carregarMetas();
 }
 
+// ── Controle de filtros de período ───────────────────────────────────────────
+function atualizarFiltrosPeriodo() {
+  const modo = document.getElementById('flt-modo').value;
+  const mesEl  = document.getElementById('flt-mes-sel');
+  const intEl  = document.getElementById('flt-intervalo-wrap');
+  const atalEl = document.getElementById('flt-atalhos');
+  const anoEl  = document.getElementById('flt-ano');
+  mesEl.style.display  = modo==='mes'       ? '' : 'none';
+  intEl.style.display  = modo==='intervalo' ? 'flex' : 'none';
+  atalEl.style.display = modo==='intervalo' ? 'flex' : 'none';
+  anoEl.style.display  = modo==='intervalo' ? 'none' : '';
+  carregar();
+}
+
+function atalhoFat(p) {
+  const hoje = new Date();
+  const fmt8 = d => d.toISOString().slice(0,10);
+  let ini, fim = fmt8(hoje);
+  if (p==='7d')  { const d=new Date(hoje); d.setDate(d.getDate()-6); ini=fmt8(d); }
+  if (p==='15d') { const d=new Date(hoje); d.setDate(d.getDate()-14); ini=fmt8(d); }
+  if (p==='30d') { const d=new Date(hoje); d.setDate(d.getDate()-29); ini=fmt8(d); }
+  if (p==='mes') { ini=fmt8(new Date(hoje.getFullYear(),hoje.getMonth(),1)); }
+  if (p==='ant') {
+    const m = new Date(hoje.getFullYear(),hoje.getMonth()-1,1);
+    ini=fmt8(m); fim=fmt8(new Date(hoje.getFullYear(),hoje.getMonth(),0));
+  }
+  document.getElementById('flt-modo').value='intervalo';
+  document.getElementById('flt-data-ini').value=ini;
+  document.getElementById('flt-data-fim').value=fim;
+  atualizarFiltrosPeriodo();
+}
+
 // ── Carregar visão geral ──────────────────────────────────────────────────────
 async function carregar(){
-  const tipo = document.getElementById('flt-tipo').value;
+  const modo = document.getElementById('flt-modo')?.value || 'ano';
   const ano  = document.getElementById('flt-ano').value;
-  const d = await api.get(`/api/faturamento?tipo=${tipo}&ano=${ano}&limit=100`);
+  const mes  = document.getElementById('flt-mes-sel')?.value;
+  const ini  = document.getElementById('flt-data-ini')?.value;
+  const fim  = document.getElementById('flt-data-fim')?.value;
+
+  let url = '/api/faturamento?limit=500';
+  if (modo === 'ano')       url += `&ano=${ano}`;
+  if (modo === 'mes')       url += `&ano=${ano}&mes=${mes}`;
+  if (modo === 'intervalo' && ini && fim) url += `&data_ini=${ini}&data_fim=${fim}`;
+  if (modo === 'todos')     url += '&todos=1';
+
+  // Label descritivo
+  const label = document.getElementById('fat-periodo-label');
+  if (label) {
+    const MESES=['','Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+    if (modo==='ano')       label.textContent=`Exibindo: ano ${ano}`;
+    else if (modo==='mes')  label.textContent=`Exibindo: ${MESES[parseInt(mes)]}/${ano}`;
+    else if (modo==='intervalo' && ini && fim) label.textContent=`Exibindo: ${ini.split('-').reverse().join('/')} a ${fim.split('-').reverse().join('/')}`;
+    else label.textContent='Exibindo: todos os registros';
+  }
+
+  const d = await api.get(url);
   if(!d.ok) return;
   periodos = d.data;
   renderKPIs();
