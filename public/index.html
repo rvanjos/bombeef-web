@@ -870,18 +870,18 @@ function fecharMobMenu() {
 
 function showTab(tab) {
   // Mostra spinner enquanto iframe carrega
-  const overlay = document.getElementById('aba-loading-global');
-  const label   = document.getElementById('aba-loading-label');
+  const abrOverlay = document.getElementById('aba-loading-global');
+  const abrLabel   = document.getElementById('aba-loading-label');
   const frameId = 'iframe-' + tab;
   const iframe  = document.getElementById(frameId);
-  if (overlay && iframe) {
+  if (abrOverlay && iframe) {
     const loaded = iframe.dataset.loaded === '1';
     if (!loaded) {
-      if (label) label.textContent = 'Carregando ' + tab.charAt(0).toUpperCase() + tab.slice(1) + '...';
-      overlay.classList.add('ativo');
+      if (abrLabel) abrLabel.textContent = 'Carregando ' + tab.charAt(0).toUpperCase() + tab.slice(1) + '...';
+      abrOverlay.style.display = 'flex';
       iframe.onload = () => {
         iframe.dataset.loaded = '1';
-        overlay.classList.remove('ativo');
+        abrOverlay.style.display = 'none';
       };
     }
   }
