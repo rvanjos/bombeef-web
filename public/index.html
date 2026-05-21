@@ -309,6 +309,20 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
 }
 #val-confirm-btn:not([disabled]){opacity:.9!important;}
 #val-confirm-btn:not([disabled]):hover{opacity:1!important;background:#6b0000!important;}
+
+/* ── Spinner de carregamento de abas ─────────────────────────────────────── */
+.aba-loading{
+  display:none;position:absolute;inset:0;background:rgba(247,244,240,.85);
+  z-index:200;align-items:center;justify-content:center;flex-direction:column;gap:12px;
+}
+.aba-loading.ativo{display:flex;}
+.spinner{
+  width:38px;height:38px;border:4px solid #e8e0d8;
+  border-top-color:var(--red);border-radius:50%;
+  animation:spin .75s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg);}}
+.spinner-label{font-size:12px;color:var(--muted);font-weight:600;letter-spacing:.3px;}
 </style>
 </head>
 <body>
@@ -618,6 +632,11 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
     </div><!-- /dashboard -->
 
     <!-- IFRAMES dos módulos -->
+    <!-- Overlay de carregamento das abas -->
+    <div class="aba-loading" id="aba-loading-global" style="position:fixed;inset:0;background:rgba(247,244,240,.9);z-index:500;display:none;align-items:center;justify-content:center;flex-direction:column;gap:12px">
+      <div class="spinner"></div>
+      <div class="spinner-label" id="aba-loading-label">Carregando...</div>
+    </div>
     <div class="frame-container" id="frame-boletos">
       <iframe class="module-frame" id="iframe-boletos" src="boletos.html?v=1775328871"></iframe>
     </div>
@@ -850,6 +869,22 @@ function fecharMobMenu() {
 }
 
 function showTab(tab) {
+  // Mostra spinner enquanto iframe carrega
+  const overlay = document.getElementById('aba-loading-global');
+  const label   = document.getElementById('aba-loading-label');
+  const frameId = 'iframe-' + tab;
+  const iframe  = document.getElementById(frameId);
+  if (overlay && iframe) {
+    const loaded = iframe.dataset.loaded === '1';
+    if (!loaded) {
+      if (label) label.textContent = 'Carregando ' + tab.charAt(0).toUpperCase() + tab.slice(1) + '...';
+      overlay.classList.add('ativo');
+      iframe.onload = () => {
+        iframe.dataset.loaded = '1';
+        overlay.classList.remove('ativo');
+      };
+    }
+  }
   document.querySelectorAll('.pnav-tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.portal-page, .frame-container').forEach(p => p.classList.remove('active'));
 
@@ -1244,13 +1279,7 @@ async function carregarAlertasValidade() {
     el.innerHTML = html;
     el.style.display = '';
 
-    // Abre automaticamente se há vencidos ou vence hoje
-    if (vencidos.length || hoje_.length) {
-      const body = document.getElementById('val-banner-body');
-      const hd   = document.getElementById('val-banner-hd');
-      if (body) body.style.display = '';
-      if (hd)   { hd.style.borderBottomColor = '#f0e8e0'; hd.querySelector('.val-arr').textContent = '▲'; }
-    }
+    // Sempre começa recolhido — usuário abre quando quiser
   } catch(e) {
     console.error('[alertas validade]', e);
     el.style.display = 'none';
