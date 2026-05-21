@@ -869,20 +869,27 @@ function fecharMobMenu() {
 }
 
 function showTab(tab) {
-  // Mostra spinner enquanto iframe carrega
+  // Mostra spinner brevemente ao trocar de aba (só na primeira vez)
   const abrOverlay = document.getElementById('aba-loading-global');
   const abrLabel   = document.getElementById('aba-loading-label');
-  const frameId = 'iframe-' + tab;
-  const iframe  = document.getElementById(frameId);
-  if (abrOverlay && iframe) {
-    const loaded = iframe.dataset.loaded === '1';
-    if (!loaded) {
-      if (abrLabel) abrLabel.textContent = 'Carregando ' + tab.charAt(0).toUpperCase() + tab.slice(1) + '...';
-      abrOverlay.style.display = 'flex';
-      iframe.onload = () => {
-        iframe.dataset.loaded = '1';
-        abrOverlay.style.display = 'none';
-      };
+  const iframe     = document.getElementById('iframe-' + tab);
+  if (abrOverlay && iframe && iframe.dataset.loaded !== '1') {
+    if (abrLabel) abrLabel.textContent = 'Carregando...';
+    abrOverlay.style.display = 'flex';
+    // Esconde após no máximo 2s — fallback seguro
+    const hideTimer = setTimeout(() => { abrOverlay.style.display = 'none'; }, 2000);
+    const origLoad = iframe.onload;
+    iframe.onload = () => {
+      clearTimeout(hideTimer);
+      abrOverlay.style.display = 'none';
+      iframe.dataset.loaded = '1';
+      if (origLoad) origLoad();
+    };
+    // Se já está carregado (src já definido), esconde imediatamente
+    if (iframe.contentDocument && iframe.contentDocument.readyState === 'complete') {
+      clearTimeout(hideTimer);
+      abrOverlay.style.display = 'none';
+      iframe.dataset.loaded = '1';
     }
   }
   document.querySelectorAll('.pnav-tab').forEach(t => t.classList.remove('active'));
