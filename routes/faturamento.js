@@ -328,19 +328,25 @@ module.exports = function(pool) {
         continue;
       }
 
-      // Linha de pedido: operador = "CAIXA"
-      if (diaAtual && cel0 === 'CAIXA') {
-        const cancelado = String(row[5] || '').toLowerCase() === 'verdadeiro';
+      // Linha de pedido: col[1] é número de pedido, col[6] é emissor (NFCE/MEI)
+      // O operador (col[0]) pode ser qualquer nome — não filtrar por 'CAIXA'
+      if (diaAtual && cel0 && !cel0.startsWith('Data:')) {
+        const pedidoNum = String(row[1] || '').trim();
         const emissor   = String(row[6] || '').trim().toUpperCase();
-        const valor     = parseFloat(String(row[2] || '0').replace(',', '.')) || 0;
-        if (cancelado) {
-          diaAtual.cancelados++;
-        } else if (emissor === 'NFCE') {
-          diaAtual.qtd_nfce++;
-          diaAtual.fat_nfce += valor;
-        } else if (emissor === 'MEI') {
-          diaAtual.qtd_mei++;
-          diaAtual.fat_mei += valor;
+        const valorRaw  = String(row[2] || '0').replace(/R\$\s*/,'').replace(/\./g,'').replace(',','.').trim();
+        const valor     = parseFloat(valorRaw) || 0;
+        const cancelado = String(row[5] || '').toLowerCase().includes('verdad');
+        // Só processa se for linha de pedido válida (tem número de pedido numérico)
+        if (/^\d+$/.test(pedidoNum) && valor > 0) {
+          if (cancelado) {
+            diaAtual.cancelados++;
+          } else if (emissor === 'NFCE') {
+            diaAtual.qtd_nfce++;
+            diaAtual.fat_nfce += valor;
+          } else if (emissor === 'MEI') {
+            diaAtual.qtd_mei++;
+            diaAtual.fat_mei += valor;
+          }
         }
       }
     }
