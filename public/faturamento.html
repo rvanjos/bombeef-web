@@ -1345,41 +1345,65 @@ function renderMensal(lista, ini, fim) {
   // Oculta painel de limite MEI — MEI é apenas uma forma de emissão, sem limite a controlar
   document.getElementById('men-limite-mei').style.display = 'none';
 
-  // ── Painel NFC-e vs MEI com estimativa DAS ────────────────────────────────
-  var pctSimples  = parseFloat(localStorage.getItem('bb_pct_simples') || '8');
-  var nfcePeriodo = totNfce;
-  var meiPeriodo  = totMei;
-  var dasEstimado = Math.round(nfcePeriodo * pctSimples / 100 * 100) / 100;
+  // ── Painel NFC-e vs MEI com DAS estimado por mês (competência) ─────────
+  var pctSimples = parseFloat(localStorage.getItem('bb_pct_simples') || '8');
+  var panelEl    = document.getElementById('men-nfce-mei');
+  var cardsEl    = document.getElementById('nfce-mei-cards');
 
-  var panelEl = document.getElementById('men-nfce-mei');
-  var cardsEl = document.getElementById('nfce-mei-cards');
-  if (nfcePeriodo > 0 || meiPeriodo > 0) {
+  if (totNfce > 0 || totMei > 0) {
     panelEl.style.display = '';
-    var mesesStr = lista.length === 1 ? lista[0].mes : lista.length + ' meses';
-    cardsEl.innerHTML = [
-      // NFC-e
-      '<div style="background:#dbeafe;border-radius:8px;padding:12px 14px">'
-        + '<div style="font-size:10px;font-weight:700;color:#1e40af;text-transform:uppercase;margin-bottom:4px">🧾 NFC-e — ' + mesesStr + '</div>'
-        + '<div style="font-size:18px;font-weight:800;font-family:monospace;color:#1e40af">' + fmt.brl(nfcePeriodo) + '</div>'
-        + '<div style="font-size:10px;color:#3b82f6;margin-top:2px">' + totQtdNfce + ' pedidos</div>'
-        + '</div>',
-      // MEI
-      '<div style="background:#dcfce7;border-radius:8px;padding:12px 14px">'
-        + '<div style="font-size:10px;font-weight:700;color:#166534;text-transform:uppercase;margin-bottom:4px">🤝 MEI — ' + mesesStr + '</div>'
-        + '<div style="font-size:18px;font-weight:800;font-family:monospace;color:#166534">' + fmt.brl(meiPeriodo) + '</div>'
-        + '<div style="font-size:10px;color:#22c55e;margin-top:2px">' + totQtdMei + ' pedidos</div>'
-        + '</div>',
-      // DAS estimado
-      '<div style="background:#fef9c3;border-radius:8px;padding:12px 14px">'
-        + '<div style="font-size:10px;font-weight:700;color:#854d0e;text-transform:uppercase;margin-bottom:4px">🏛️ DAS estimado (' + pctSimples + '% NFC-e)</div>'
-        + '<div style="font-size:18px;font-weight:800;font-family:monospace;color:#854d0e">' + fmt.brl(dasEstimado) + '</div>'
-        + '<div style="font-size:10px;color:#ca8a04;margin-top:2px">sobre NFC-e do período &nbsp;'
-        + '<span onclick="configurarPctSimples()" style="cursor:pointer;text-decoration:underline dotted">⚙️ ajustar %</span></div>'
-        + '</div>',
-    ].join('');
+
+    // Resumo do período + botão ajustar %
+    var header = '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px">'
+      + '<div style="display:flex;gap:16px;flex-wrap:wrap;font-size:12px">'
+      + '<span><span style="color:#1e40af;font-weight:700">NFC-e total:</span> <strong style="font-family:monospace">' + fmt.brl(totNfce) + '</strong> <span style="color:var(--muted);font-size:10px">(' + totQtdNfce + ' pedidos)</span></span>'
+      + '<span><span style="color:#166534;font-weight:700">MEI total:</span> <strong style="font-family:monospace">' + fmt.brl(totMei) + '</strong> <span style="color:var(--muted);font-size:10px">(' + totQtdMei + ' pedidos)</span></span>'
+      + '</div>'
+      + '<span onclick="configurarPctSimples()" style="cursor:pointer;font-size:11px;color:var(--muted);text-decoration:underline dotted">&#9881;&#65039; Simples: ' + pctSimples + '%</span>'
+      + '</div>';
+
+    // Tabela com DAS por mês
+    var linhasMes = lista.map(function(m) {
+      var nfce = parseFloat(m.fat_nfce||0);
+      var mei  = parseFloat(m.fat_mei||0);
+      if (nfce === 0 && mei === 0) return '';
+      var das  = Math.round(nfce * pctSimples / 100 * 100) / 100;
+      var pctN = m.fat_bruto > 0 ? Math.round(nfce / m.fat_bruto * 100) : 0;
+      var pctM = m.fat_bruto > 0 ? Math.round(mei  / m.fat_bruto * 100) : 0;
+      return '<tr>'
+        + '<td style="padding:8px 12px;font-weight:700;font-size:13px">' + m.mes + '</td>'
+        + '<td style="padding:8px 12px;text-align:right;font-family:monospace;color:#1e40af">' + fmt.brl(nfce)
+            + '<div style="font-size:10px;color:#93c5fd">' + m.qtd_nfce + ' ped. &middot; ' + pctN + '%</div></td>'
+        + '<td style="padding:8px 12px;text-align:right;font-family:monospace;color:#166534">' + fmt.brl(mei)
+            + '<div style="font-size:10px;color:#86efac">' + m.qtd_mei + ' ped. &middot; ' + pctM + '%</div></td>'
+        + '<td style="padding:8px 12px;text-align:right;font-weight:700;font-family:monospace;color:#854d0e;font-size:15px">' + fmt.brl(das)
+            + '<div style="font-size:10px;color:#ca8a04;font-weight:400">' + pctSimples + '% s/ NFC-e</div></td>'
+        + '</tr>';
+    }).filter(Boolean).join('');
+
+    var dasTot = Math.round(totNfce * pctSimples / 100 * 100) / 100;
+    var linhaTot = '<tr style="background:#fef9c3;border-top:2px solid #fde68a;font-weight:700">'
+      + '<td style="padding:8px 12px;font-size:12px">TOTAL (' + lista.length + ' mes)</td>'
+      + '<td style="padding:8px 12px;text-align:right;font-family:monospace;color:#1e40af">' + fmt.brl(totNfce) + '</td>'
+      + '<td style="padding:8px 12px;text-align:right;font-family:monospace;color:#166534">' + fmt.brl(totMei) + '</td>'
+      + '<td style="padding:8px 12px;text-align:right;font-family:monospace;color:#854d0e;font-size:16px">' + fmt.brl(dasTot) + '</td>'
+      + '</tr>';
+
+    cardsEl.innerHTML = header
+      + '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;background:var(--white);border-radius:8px;overflow:hidden;border:1px solid var(--border)">'
+      + '<thead><tr style="background:#f8f4f0">'
+      + '<th style="padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700">Mes</th>'
+      + '<th style="padding:8px 12px;text-align:right;font-size:10px;text-transform:uppercase;color:#1e40af;font-weight:700">NFC-e</th>'
+      + '<th style="padding:8px 12px;text-align:right;font-size:10px;text-transform:uppercase;color:#166534;font-weight:700">MEI</th>'
+      + '<th style="padding:8px 12px;text-align:right;font-size:10px;text-transform:uppercase;color:#854d0e;font-weight:700">DAS Estimado</th>'
+      + '</tr></thead>'
+      + '<tbody>' + linhasMes + '</tbody>'
+      + '<tfoot>' + linhaTot + '</tfoot>'
+      + '</table></div>';
   } else {
     panelEl.style.display = 'none';
   }
+}
 }
 
 // ── Import ────────────────────────────────────────────────────────────────────
