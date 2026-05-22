@@ -300,7 +300,7 @@ module.exports = function(pool) {
     }
     sheet['!ref'] = XLSX.utils.encode_range({ s: decoded.s, e: { r: maxR, c: maxC } });
 
-    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null, raw: true });
 
     const dias = [];
     let diaAtual = null;
@@ -330,14 +330,18 @@ module.exports = function(pool) {
 
       // Linha de pedido: col[1] é número de pedido, col[6] é emissor (NFCE/MEI)
       // O operador (col[0]) pode ser qualquer nome — não filtrar por 'CAIXA'
-      if (diaAtual && cel0 && !cel0.startsWith('Data:')) {
-        const pedidoNum = String(row[1] || '').trim();
+      if (diaAtual && cel0 && !cel0.startsWith('Data:') && cel0 !== 'Operador') {
+        const pedidoRaw = String(typeof row[1]==='number' ? Math.round(row[1]) : (row[1]||'')).trim();
         const emissor   = String(row[6] || '').trim().toUpperCase();
-        const valorRaw  = String(row[2] || '0').replace(/R\$\s*/,'').replace(/\./g,'').replace(',','.').trim();
-        const valor     = parseFloat(valorRaw) || 0;
+        // Valor: pode vir como número puro (269.9) ou formatado — NUNCA tem R$ nas linhas de pedido
+        // Com raw:true, valores numéricos vêm como number direto
+        const rawVal   = row[2];
+        const valor    = typeof rawVal === 'number' ? rawVal
+                       : parseFloat(String(rawVal||'0').replace(/R\$\s*/,'').replace(/\./g,'').replace(',','.')) || 0;
         const cancelado = String(row[5] || '').toLowerCase().includes('verdad');
-        // Só processa se for linha de pedido válida (tem número de pedido numérico)
-        if (/^\d+$/.test(pedidoNum) && valor > 0) {
+        // Linha de pedido válida: pedidoNum é inteiro E emissor é NFCE ou MEI ou vazio
+        const isPedido = /^\d{4,6}$/.test(pedidoRaw) && valor > 0 && valor < 50000;
+        if (isPedido) {
           if (cancelado) {
             diaAtual.cancelados++;
           } else if (emissor === 'NFCE') {
