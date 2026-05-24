@@ -141,6 +141,51 @@ module.exports = function(pool) {
     } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
   });
 
+  // ── Bootstrap: força criação das tabelas (admin) ────────────────────────
+  r.post('/init', async (req, res) => {
+    if (!['admin','gestor'].includes(req.user?.perfil)) return res.status(403).json({ ok:false });
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS ponto_registros (
+          id                SERIAL PRIMARY KEY,
+          funcionario_id    INTEGER NOT NULL REFERENCES rh_funcionarios(id),
+          data_ref          DATE NOT NULL DEFAULT CURRENT_DATE,
+          entrada           TIMESTAMPTZ,
+          saida_intervalo   TIMESTAMPTZ,
+          retorno_intervalo TIMESTAMPTZ,
+          saida             TIMESTAMPTZ,
+          entrada_manual    BOOLEAN DEFAULT FALSE,
+          saida_manual      BOOLEAN DEFAULT FALSE,
+          entrada_por       TEXT,
+          saida_por         TEXT,
+          entrada_em        TIMESTAMPTZ,
+          saida_em          TIMESTAMPTZ,
+          justificativa     TEXT,
+          observacao        TEXT,
+          status            TEXT DEFAULT 'ok',
+          criado_por        TEXT,
+          atualizado_em     TIMESTAMPTZ DEFAULT NOW()
+        )`);
+      await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS ponto_func_data_idx ON ponto_registros(funcionario_id, data_ref)`).catch(()=>{});
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS ponto_auditoria (
+          id              SERIAL PRIMARY KEY,
+          ponto_id        INTEGER REFERENCES ponto_registros(id),
+          funcionario_id  INTEGER NOT NULL,
+          tipo            TEXT NOT NULL,
+          horario_batida  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          usuario_login   TEXT,
+          usuario_nome    TEXT,
+          usuario_perfil  TEXT,
+          ip_address      TEXT,
+          user_agent      TEXT,
+          manual          BOOLEAN DEFAULT FALSE,
+          obs             TEXT
+        )`);
+      res.json({ ok:true, msg:'Tabelas criadas com sucesso' });
+    } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
+  });
+
   // ── Bater ponto retroativo (esquecimento) ─────────────────────────────────
   r.post('/bater-retroativo', async (req, res) => {
     const { funcionario_id, tipo, horario_informado, data_ref, justificativa } = req.body;

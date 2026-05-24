@@ -368,6 +368,15 @@ async function carregarPontoHoje() {
     api.get(`/api/ponto/hoje/${_func.id}`),
     api.get(`/api/ponto/auditoria?funcionario_id=${_func.id}&data_ini=${new Date().toISOString().slice(0,10)}&data_fim=${new Date().toISOString().slice(0,10)}&limite=20`)
   ]);
+
+  // Se tabela não existe, cria automaticamente e tenta de novo
+  if (!dp.ok && dp.erro?.includes('ponto_registros')) {
+    showToast('⚙️ Inicializando banco de dados...');
+    await api.post('/api/ponto/init', {});
+    await new Promise(r => setTimeout(r, 800));
+    return carregarPontoHoje();
+  }
+
   _ponto = dp.data;
   _logs  = dl.ok ? dl.data : [];
   renderStatus();
