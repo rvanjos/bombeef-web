@@ -115,6 +115,17 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
 .btn-confirmar.retorno{background:var(--blue-bg);color:var(--blue);}
 .btn-confirmar.saida{background:var(--orange-bg);color:var(--orange);}
 
+/* ── Modal retroativo ── */
+.mbg2{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:910;align-items:flex-end;justify-content:center;}
+.mbg2.open{display:flex;}
+.ret-titulo{font-size:15px;font-weight:700;text-align:center;margin:4px 0 14px;}
+.ret-aviso{background:#fef3c7;border:1px solid #fcd34d;border-radius:9px;padding:10px 12px;font-size:11px;color:#92400e;line-height:1.6;margin-bottom:14px;}
+.ret-aviso strong{display:block;font-size:12px;margin-bottom:2px;}
+.fg-ret{margin-bottom:12px;}
+.fg-ret label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:4px;}
+.fg-ret select,.fg-ret input,.fg-ret textarea{width:100%;padding:11px 12px;border:1px solid var(--border);border-radius:9px;font-size:14px;font-family:'DM Sans',sans-serif;background:var(--white);}
+.fg-ret textarea{resize:none;font-size:13px;}
+
 /* ── Toast ── */
 .toast{position:fixed;bottom:calc(env(safe-area-inset-bottom,0px) + 24px);left:50%;transform:translateX(-50%) translateY(80px);background:#1a1a1a;color:#fff;padding:11px 22px;border-radius:24px;font-size:13px;z-index:9999;transition:transform .25s;pointer-events:none;white-space:nowrap;font-family:'DM Sans',sans-serif;}
 .toast.show{transform:translateX(-50%) translateY(0);}
@@ -185,6 +196,11 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
       </button>
     </div>
 
+    <!-- Botão registro retroativo -->
+    <button onclick="abrirRetroativo()" style="width:100%;padding:13px;background:var(--white);border:1px dashed #c4b5a0;border-radius:12px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;margin-bottom:14px;font-family:'DM Sans',sans-serif;">
+      🕐 Esqueci de marcar — registrar em outro horário
+    </button>
+
     <!-- Resumo do dia -->
     <div class="resumo" id="resumo-dia" style="display:none">
       <div class="resumo-titulo">Resumo do Dia</div>
@@ -219,6 +235,52 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
     <div class="md-btns">
       <button class="btn-confirmar" id="conf-btn" onclick="confirmar()">✅ Confirmar Registro</button>
       <button class="btn-cancelar" onclick="fecharConf()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal registro retroativo -->
+<div class="mbg2" id="m-retro" onclick="if(event.target===this)fecharRetro()">
+  <div class="md">
+    <div class="md-pull"></div>
+    <div class="md-body">
+      <div class="ret-titulo">🕐 Registro Retroativo</div>
+      <div class="ret-aviso">
+        <strong>⚠️ Atenção — isso ficará registrado na auditoria</strong>
+        Use apenas em casos de esquecimento. O sistema vai registrar:<br>
+        • Seu usuário de login<br>
+        • O horário <u>real</u> em que você está fazendo o registro agora<br>
+        • O horário informado por você
+      </div>
+      <div class="fg-ret">
+        <label>Tipo de registro</label>
+        <select id="retro-tipo">
+          <option value="entrada">🟢 Entrada</option>
+          <option value="saida_intervalo">🟡 Saída Intervalo</option>
+          <option value="retorno_intervalo">🔵 Retorno Intervalo</option>
+          <option value="saida">🔴 Saída</option>
+        </select>
+      </div>
+      <div class="fg-ret">
+        <label>Data</label>
+        <input type="date" id="retro-data">
+      </div>
+      <div class="fg-ret">
+        <label>Horário que deveria ter marcado</label>
+        <input type="time" id="retro-hora" step="60">
+      </div>
+      <div class="fg-ret">
+        <label>Motivo do esquecimento *</label>
+        <textarea id="retro-motivo" rows="2" placeholder="Ex: Esqueci de bater na entrada, estava com mãos ocupadas..."></textarea>
+      </div>
+      <div id="retro-info" style="background:var(--bg);border-radius:9px;padding:10px 12px;font-size:11px;color:var(--muted);line-height:1.7;margin-bottom:4px">
+        👤 Registrado por: <strong id="retro-login-show">—</strong><br>
+        🕐 Horário real do registro: <strong id="retro-agora">—</strong>
+      </div>
+    </div>
+    <div class="md-btns">
+      <button class="btn-confirmar intervalo" onclick="confirmarRetroativo()" id="retro-btn">📋 Registrar com ressalva</button>
+      <button class="btn-cancelar" onclick="fecharRetro()">Cancelar</button>
     </div>
   </div>
 </div>
@@ -443,6 +505,57 @@ async function confirmar() {
 
   if (!d.ok) { showToast('❌ '+d.erro); return; }
   showToast(`✅ ${TIPO_LABEL[_tipo]?.label} — ${d.horario}`);
+  await carregarPontoHoje();
+}
+
+// ── Registro retroativo ──────────────────────────────────────────────────────
+function abrirRetroativo() {
+  const agora = new Date();
+  document.getElementById('retro-data').value    = agora.toISOString().slice(0,10);
+  document.getElementById('retro-hora').value    = agora.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}).replace(':','');
+  document.getElementById('retro-hora').value    = `${String(agora.getHours()).padStart(2,'0')}:${String(agora.getMinutes()).padStart(2,'0')}`;
+  document.getElementById('retro-motivo').value  = '';
+  document.getElementById('retro-login-show').textContent = _user?.email || _user?.nome || 'não identificado';
+  // Atualiza relógio do modal a cada segundo
+  const tick = () => {
+    const el = document.getElementById('retro-agora');
+    if (el) el.textContent = new Date().toLocaleTimeString('pt-BR');
+  };
+  tick(); window._retroTimer = setInterval(tick, 1000);
+  document.getElementById('m-retro').classList.add('open');
+}
+
+function fecharRetro() {
+  clearInterval(window._retroTimer);
+  document.getElementById('m-retro').classList.remove('open');
+}
+
+async function confirmarRetroativo() {
+  const tipo      = document.getElementById('retro-tipo').value;
+  const data      = document.getElementById('retro-data').value;
+  const hora      = document.getElementById('retro-hora').value;
+  const motivo    = document.getElementById('retro-motivo').value.trim();
+  if (!hora)   { showToast('⚠️ Informe o horário'); return; }
+  if (!motivo) { showToast('⚠️ Informe o motivo'); return; }
+
+  const btn = document.getElementById('retro-btn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Registrando...';
+
+  const d = await api.post('/api/ponto/bater-retroativo', {
+    funcionario_id:   _func.id,
+    tipo,
+    horario_informado: hora,
+    data_ref:          data,
+    justificativa:     motivo,
+  });
+
+  btn.disabled = false;
+  btn.textContent = '📋 Registrar com ressalva';
+  fecharRetro();
+
+  if (!d.ok) { showToast('❌ '+d.erro); return; }
+  showToast(`✅ Registrado! Horário informado: ${hora} — auditado às ${d.horario_registro}`);
   await carregarPontoHoje();
 }
 

@@ -37,7 +37,7 @@ module.exports = function(pool) {
         status            TEXT DEFAULT 'ok' CHECK(status IN('ok','pendente','ajustado','falta','justificado')),
         criado_por        TEXT,
         atualizado_em     TIMESTAMPTZ DEFAULT NOW()
-      )`).catch(()=>{});
+      )`).catch(e=>console.error('[ponto] criar ponto_registros:', e.message));
 
     await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS ponto_func_data_idx ON ponto_registros(funcionario_id, data_ref)`).catch(()=>{});
 
@@ -137,6 +137,59 @@ module.exports = function(pool) {
         data: rows[0],
         horario: agora.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}),
         auditoria: { usuario, login, horario: agora.toISOString(), ip }
+      });
+    } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
+  });
+
+  // ── Bater ponto retroativo (esquecimento) ─────────────────────────────────
+  r.post('/bater-retroativo', async (req, res) => {
+    const { funcionario_id, tipo, horario_informado, data_ref, justificativa } = req.body;
+    const allowed = ['entrada','saida_intervalo','retorno_intervalo','saida'];
+    if (!funcionario_id || !allowed.includes(tipo) || !horario_informado) {
+      return res.status(400).json({ ok:false, erro:'Parâmetros inválidos' });
+    }
+    const agora     = new Date(); // momento real do registro
+    const dataRef   = data_ref || agora.toISOString().slice(0,10);
+    const usuario   = req.user?.nome   || 'Sistema';
+    const login     = req.user?.email  || req.user?.nome || 'desconhecido';
+    const perfil    = req.user?.perfil || '—';
+    const ip        = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || '—';
+    const userAgent = req.headers['user-agent'] || '—';
+
+    // Monta timestamp com o horário informado pelo usuário mas na data correta
+    const tsInformado = new Date(`${dataRef}T${horario_informado}:00`);
+
+    try {
+      const colPor = tipo==='entrada'?'entrada_por':tipo==='saida'?'saida_por':null;
+      const colEm  = tipo==='entrada'?'entrada_em' :tipo==='saida'?'saida_em' :null;
+      let extraSet = '';
+      if (colPor) extraSet += `, ${colPor} = '${usuario.replace(/'/g,"''")}'`;
+      if (colEm)  extraSet += `, ${colEm} = NOW()`;
+
+      const { rows } = await pool.query(`
+        INSERT INTO ponto_registros(funcionario_id, data_ref, ${tipo}, criado_por, entrada_manual, saida_manual, justificativa${colPor?', '+colPor:''}${colEm?', '+colEm:''})
+        VALUES($1,$2,$3,$4,true,true,$5${colPor?', $4':''}${colEm?', NOW()':''})
+        ON CONFLICT(funcionario_id, data_ref) DO UPDATE
+          SET ${tipo}=$3, atualizado_em=NOW(), entrada_manual=true, saida_manual=true,
+              justificativa=COALESCE($5, ponto_registros.justificativa)${extraSet}
+        RETURNING *
+      `, [funcionario_id, dataRef, tsInformado, usuario, justificativa||null]);
+
+      // Log de auditoria — diferencia retroativo com flag manual=true e obs detalhada
+      await pool.query(`
+        INSERT INTO ponto_auditoria(ponto_id, funcionario_id, tipo, horario_batida, usuario_login, usuario_nome, usuario_perfil, ip_address, user_agent, manual, obs)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,true,$10)
+      `, [rows[0].id, funcionario_id, tipo, agora, login, usuario, perfil,
+          ip, userAgent.slice(0,200),
+          `REGISTRO RETROATIVO: horário informado ${horario_informado} em ${dataRef}. Motivo: ${justificativa||'não informado'}. Registrado por ${login} às ${agora.toLocaleString('pt-BR')}`
+      ]).catch(()=>{});
+
+      res.json({
+        ok: true,
+        data: rows[0],
+        horario_informado,
+        horario_registro: agora.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}),
+        auditoria: { usuario, login, horario_registro: agora.toISOString(), horario_informado, ip }
       });
     } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
   });
