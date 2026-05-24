@@ -23,6 +23,7 @@ module.exports = function(pool) {
         data          DATE NOT NULL DEFAULT CURRENT_DATE,
         fornecedor    TEXT,
         corte         TEXT NOT NULL,
+        lote          TEXT,
         peso_bruto    NUMERIC(10,3) NOT NULL DEFAULT 0,
         peso_limpo    NUMERIC(10,3) NOT NULL DEFAULT 0,
         custo_por_kg  NUMERIC(10,2) NOT NULL DEFAULT 0,
@@ -33,6 +34,9 @@ module.exports = function(pool) {
         criado_em     TIMESTAMPTZ DEFAULT NOW()
       )
     `).catch(()=>{});
+
+    // Adiciona coluna lote se não existir (banco já criado)
+    await pool.query(`ALTER TABLE cortes_registros ADD COLUMN IF NOT EXISTS lote TEXT`).catch(()=>{});
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS cortes_insumos (

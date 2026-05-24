@@ -116,9 +116,7 @@ module.exports = function(pool) {
   // ── MIGRAÇÃO: retiradas → clientes_fiado ──────────────────────────────────
   async function migrarRetiradas() {
     try {
-      // Altera constraint para aceitar funcionario
-      await pool.query(`ALTER TABLE clientes_fiado DROP CONSTRAINT IF EXISTS clientes_fiado_tipo_cliente_check`).catch(()=>{});
-      await pool.query(`ALTER TABLE clientes_fiado ADD CONSTRAINT clientes_fiado_tipo_cliente_check CHECK(tipo_cliente IN('normal','especial','socio','funcionario'))`).catch(()=>{});
+      // Garante coluna funcionario_id
       await pool.query(`ALTER TABLE clientes_fiado ADD COLUMN IF NOT EXISTS funcionario_id INTEGER`).catch(()=>{});
       // Cria clientes para funcionários que ainda não existem
       const { rows: funcs } = await pool.query(`SELECT f.id, f.nome FROM rh_funcionarios f WHERE f.ativo=true`).catch(()=>({rows:[]}));

@@ -196,7 +196,7 @@ tr:hover td{background:#fdf8f5;}
     <div class="tbl-wrap">
       <table>
         <thead><tr>
-          <th>Data</th><th>Corte</th><th>Fornecedor</th>
+          <th>Data</th><th>Corte</th><th>Fornecedor</th><th>Lote / NF</th>
           <th class="num">Bruto (kg)</th><th class="num">Limpo (kg)</th>
           <th class="num">Perda</th><th class="num">Custo/kg</th>
           <th class="num">Custo Limpo/kg</th><th class="num">Preço Ideal</th>
@@ -390,6 +390,9 @@ tr:hover td{background:#fdf8f5;}
     </div>
     <div class="fg"><label>Nome do Corte *</label>
       <input type="text" id="m-reg-corte" placeholder="Ex: Picanha, Alcatra, Fraldinha...">
+    </div>
+    <div class="fg"><label>Lote / NF</label>
+      <input type="text" id="m-reg-lote" placeholder="Ex: NF 12345 · Lote A-07 · 23/05/2026">
     </div>
     <div class="fg-row-3">
       <div class="fg"><label>Peso Bruto (kg) *</label><input type="number" id="m-reg-bruto" step="0.001" placeholder="0.000" oninput="calcCorteLimpo()"></div>
@@ -764,6 +767,7 @@ function renderRegistros() {
       <td>${fmt.date(r.data)}</td>
       <td style="font-weight:600">${r.corte}</td>
       <td style="color:var(--muted)">${r.fornecedor||'—'}</td>
+      <td style="color:var(--muted);font-size:11px">${r.lote||'—'}</td>
       <td class="num">${bruto.toFixed(3)}</td>
       <td class="num">${limpo.toFixed(3)}</td>
       <td class="num"><span class="badge ${cor}">${(perdaPct*100).toFixed(1)}%</span></td>
@@ -784,6 +788,7 @@ function abrirModalRegistro(id) {
   document.getElementById('m-reg-title').textContent = r ? '✏️ Editar Registro' : '🥩 Novo Registro de Corte';
   document.getElementById('m-reg-id').value = r?.id||'';
   document.getElementById('m-reg-data').value = r?.data?.slice(0,10)||today();
+  document.getElementById('m-reg-lote').value = r?.lote||'';
   document.getElementById('m-reg-forn').value = r?.fornecedor||'';
   document.getElementById('m-reg-corte').value = r?.corte||'';
   document.getElementById('m-reg-bruto').value = r?.peso_bruto||'';
@@ -819,6 +824,7 @@ async function salvarRegistro() {
   const body = {
     data: document.getElementById('m-reg-data').value,
     fornecedor: document.getElementById('m-reg-forn').value.trim()||null,
+    lote:       document.getElementById('m-reg-lote').value.trim()||null,
     corte: document.getElementById('m-reg-corte').value.trim(),
     peso_bruto: document.getElementById('m-reg-bruto').value,
     peso_limpo: document.getElementById('m-reg-limpo').value,
