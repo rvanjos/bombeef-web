@@ -1,344 +1,458 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Ponto Eletrônico — Bom Beef</title>
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Ponto — Bom Beef</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@500;700&display=swap" rel="stylesheet">
 <script src="js/api.js"></script>
 <style>
-:root{--red:#8B0000;--red-l:#C0392B;--green:#1a7a4a;--orange:#c76b00;--blue:#1a5c8a;
-  --bg:#f7f4f0;--white:#fff;--text:#1a1a1a;--muted:#7a7068;--border:#e8e0d8;}
-*{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-direction:column;}
-.ph{background:linear-gradient(135deg,var(--red),var(--red-l));padding:12px 18px;display:flex;align-items:center;gap:10px;box-shadow:0 2px 12px rgba(139,0,0,.3);flex-shrink:0;}
-.ph h2{font-family:'Playfair Display',serif;font-size:16px;color:#fff;font-weight:700;}
-.body{flex:1;padding:16px;max-width:560px;margin:0 auto;width:100%;}
+:root{
+  --red:#8B0000;--red-l:#C0392B;--green:#166534;--green-bg:#dcfce7;--green-bd:#86efac;
+  --yellow:#92400e;--yellow-bg:#fef3c7;--yellow-bd:#fcd34d;
+  --blue:#1e40af;--blue-bg:#dbeafe;--blue-bd:#93c5fd;
+  --orange:#991b1b;--orange-bg:#fee2e2;--orange-bd:#fca5a5;
+  --bg:#f7f4f0;--white:#fff;--text:#1a1a1a;--muted:#7a7068;--border:#e8e0d8;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+html,body{height:100%;overflow:hidden;}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);display:flex;flex-direction:column;}
 
-/* Relógio */
-.relogio{text-align:center;margin:20px 0 24px;padding:20px;background:var(--white);border-radius:16px;border:1px solid var(--border);box-shadow:0 4px 20px rgba(0,0,0,.06);}
-.relogio-hora{font-size:52px;font-weight:700;font-family:'DM Mono',monospace;color:var(--text);line-height:1;}
-.relogio-data{font-size:14px;color:var(--muted);margin-top:6px;font-weight:600;}
+/* ── Header ── */
+.ph{background:linear-gradient(135deg,var(--red),var(--red-l));padding:env(safe-area-inset-top,12px) 16px 12px;flex-shrink:0;box-shadow:0 2px 12px rgba(0,0,0,.25);}
+.ph-row{display:flex;align-items:center;gap:10px;}
+.ph h2{font-size:17px;font-weight:700;color:#fff;flex:1;}
+.ph-user{font-size:11px;color:rgba(255,255,255,.8);text-align:right;line-height:1.4;}
+.ph-user strong{display:block;font-size:12px;color:#fff;}
 
-/* Funcionário selecionado */
-.func-box{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px;}
-.func-avatar{width:44px;height:44px;background:linear-gradient(135deg,var(--red),var(--red-l));border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;font-weight:700;flex-shrink:0;}
-.func-nome{font-weight:700;font-size:15px;}
-.func-cargo{font-size:11px;color:var(--muted);margin-top:1px;}
-.func-jornada{font-size:11px;color:var(--blue);margin-top:2px;}
+/* ── Scroll area ── */
+.body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px 14px env(safe-area-inset-bottom,14px);}
 
-/* Status do dia */
-.status-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:20px;}
-.status-item{background:var(--white);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center;}
-.status-item .lbl{font-size:9px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:700;margin-bottom:4px;}
-.status-item .val{font-size:16px;font-weight:700;font-family:'DM Mono',monospace;}
-.status-item.ok .val{color:var(--green);}
-.status-item.pend .val{color:var(--orange);}
-.status-item.vazio .val{color:#ccc;}
+/* ── Relógio ── */
+.relogio{background:var(--white);border-radius:16px;border:1px solid var(--border);padding:18px 16px;text-align:center;margin-bottom:14px;box-shadow:0 2px 10px rgba(0,0,0,.05);}
+.rel-hora{font-size:56px;font-weight:700;font-family:'DM Mono',monospace;letter-spacing:-2px;line-height:1;}
+.rel-data{font-size:13px;color:var(--muted);margin-top:5px;font-weight:500;}
 
-/* Botões de ponto */
-.ponto-btns{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px;}
-.ponto-btn{padding:18px 12px;border:none;border-radius:12px;cursor:pointer;font-size:14px;font-weight:700;font-family:'DM Sans',sans-serif;display:flex;flex-direction:column;align-items:center;gap:6px;transition:transform .1s,box-shadow .1s;border:2px solid transparent;}
-.ponto-btn:active{transform:scale(.97);}
-.ponto-btn .icon{font-size:28px;}
-.ponto-btn.entrada{background:#dcfce7;color:#166534;border-color:#86efac;}
-.ponto-btn.intervalo{background:#fef3c7;color:#92400e;border-color:#fcd34d;}
-.ponto-btn.retorno{background:#dbeafe;color:#1e40af;border-color:#93c5fd;}
-.ponto-btn.saida{background:#fee2e2;color:#991b1b;border-color:#fca5a5;}
-.ponto-btn:disabled{opacity:.4;cursor:not-allowed;transform:none;}
-.ponto-btn.feito{opacity:.6;position:relative;}
-.ponto-btn.feito::after{content:'✓';position:absolute;top:8px;right:10px;font-size:14px;}
-
-/* Resumo horas */
-.horas-box{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:16px;}
-.horas-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid #f5efe8;font-size:13px;}
-.horas-row:last-child{border-bottom:none;}
-.horas-row .k{color:var(--muted);}
-.horas-row .v{font-weight:700;font-family:'DM Mono',monospace;}
-.badge-atraso{background:#fee2e2;color:#991b1b;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700;}
-.badge-extra{background:#dcfce7;color:#166534;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700;}
-.badge-ok{background:#f0fdf4;color:#166534;padding:2px 8px;border-radius:6px;font-size:11px;}
-
-/* Modal */
-.mbg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:800;align-items:center;justify-content:center;padding:16px;}
-.mbg.open{display:flex;}
-.md{background:var(--white);border-radius:14px;width:100%;max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,.25);}
-.mdh{background:linear-gradient(135deg,var(--red),var(--red-l));padding:14px 18px;border-radius:14px 14px 0 0;display:flex;justify-content:space-between;align-items:center;}
-.mdh h3{color:#fff;font-size:15px;font-weight:700;}
-.mdx{background:none;border:none;color:rgba(255,255,255,.8);font-size:22px;cursor:pointer;}
-.mdb{padding:16px 18px;}
-.mdf{padding:12px 18px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;}
-.btn{padding:9px 16px;border-radius:8px;border:none;cursor:pointer;font-size:13px;font-weight:600;font-family:'DM Sans',sans-serif;}
-.btn-red{background:var(--red);color:#fff;}
-.btn-gray{background:var(--white);color:var(--text);border:1px solid var(--border);}
-.fg{margin-bottom:12px;}
-.fg label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:4px;}
-.fg input,.fg select,.fg textarea{width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:'DM Sans',sans-serif;}
-
-/* Seletor de funcionário */
-.func-select-wrap{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px;}
-.func-select-wrap h3{font-size:13px;font-weight:700;margin-bottom:10px;color:var(--muted);}
-.func-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;}
-.func-card{padding:12px;border:2px solid var(--border);border-radius:10px;cursor:pointer;text-align:center;transition:.15s;}
-.func-card:hover{border-color:var(--red);background:#fdf5f5;}
+/* ── Seletor de funcionário ── */
+.func-select{background:var(--white);border-radius:14px;border:1px solid var(--border);padding:14px;margin-bottom:14px;}
+.func-select h3{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-bottom:10px;}
+.func-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;}
+.func-card{border:2px solid var(--border);border-radius:11px;padding:12px 8px;text-align:center;cursor:pointer;background:var(--white);transition:.12s;active:transform:scale(.97);}
+.func-card:active{transform:scale(.96);background:var(--bg);}
 .func-card.sel{border-color:var(--red);background:#fff5f5;}
-.func-card .fn{font-size:12px;font-weight:700;margin-top:6px;}
-.func-card .fc{font-size:10px;color:var(--muted);}
+.func-card-av{width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,var(--red),var(--red-l));color:#fff;font-size:17px;font-weight:700;display:flex;align-items:center;justify-content:center;margin:0 auto 6px;}
+.func-card-nome{font-size:12px;font-weight:700;line-height:1.3;}
+.func-card-cargo{font-size:10px;color:var(--muted);margin-top:2px;}
+
+/* ── Funcionário selecionado ── */
+.func-box{background:var(--white);border-radius:14px;border:1px solid var(--border);padding:13px 14px;margin-bottom:14px;display:flex;align-items:center;gap:12px;}
+.func-av{width:46px;height:46px;border-radius:50%;background:linear-gradient(135deg,var(--red),var(--red-l));color:#fff;font-size:20px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.func-info{flex:1;min-width:0;}
+.func-nome{font-size:15px;font-weight:700;}
+.func-sub{font-size:11px;color:var(--muted);margin-top:2px;}
+.func-jor{font-size:11px;color:#1a5c8a;margin-top:3px;}
+.btn-trocar{background:none;border:1px solid var(--border);border-radius:8px;padding:6px 11px;font-size:11px;color:var(--muted);cursor:pointer;font-family:'DM Sans',sans-serif;white-space:nowrap;}
+
+/* ── Status 4 itens ── */
+.status-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;}
+.si{background:var(--white);border:1px solid var(--border);border-radius:11px;padding:11px 10px;text-align:center;}
+.si-lbl{font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700;margin-bottom:3px;}
+.si-val{font-size:17px;font-weight:700;font-family:'DM Mono',monospace;}
+.si.ok{border-color:#86efac;background:#f0fdf4;}.si.ok .si-val{color:var(--green);}
+.si.pend{border-color:#fcd34d;background:#fffbeb;}.si.pend .si-val{color:var(--yellow);}
+.si.vazio .si-val{color:#ddd;}
+
+/* ── Botões de ponto ── */
+.ponto-btns{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;}
+.pb{border:2px solid transparent;border-radius:14px;padding:20px 12px 16px;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:700;display:flex;flex-direction:column;align-items:center;gap:8px;position:relative;transition:transform .1s;-webkit-user-select:none;user-select:none;}
+.pb:active:not(:disabled){transform:scale(.94);}
+.pb:disabled{opacity:.35;cursor:not-allowed;}
+.pb .pb-icon{font-size:32px;line-height:1;}
+.pb .pb-hora{font-size:11px;font-family:'DM Mono',monospace;margin-top:2px;opacity:.75;}
+.pb.feito{opacity:.55;}.pb.feito::after{content:'✓';position:absolute;top:10px;right:12px;font-size:15px;font-weight:900;}
+.pb.entrada{background:var(--green-bg);color:var(--green);border-color:var(--green-bd);}
+.pb.intervalo{background:var(--yellow-bg);color:var(--yellow);border-color:var(--yellow-bd);}
+.pb.retorno{background:var(--blue-bg);color:var(--blue);border-color:var(--blue-bd);}
+.pb.saida{background:var(--orange-bg);color:var(--orange);border-color:var(--orange-bd);}
+
+/* ── Resumo do dia ── */
+.resumo{background:var(--white);border:1px solid var(--border);border-radius:14px;padding:13px 14px;margin-bottom:14px;}
+.resumo-titulo{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:9px;}
+.resumo-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid #f5efe8;font-size:13px;}
+.resumo-row:last-child{border-bottom:none;}
+.resumo-k{color:var(--muted);}
+.resumo-v{font-weight:700;font-family:'DM Mono',monospace;}
+
+/* ── Log de auditoria ── */
+.log-box{background:var(--white);border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:14px;}
+.log-titulo{padding:11px 14px;border-bottom:1px solid var(--border);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);background:#f8f4f0;}
+.log-item{display:flex;align-items:flex-start;gap:10px;padding:10px 14px;border-bottom:1px solid #f9f4ef;font-size:12px;}
+.log-item:last-child{border-bottom:none;}
+.log-icon{font-size:16px;flex-shrink:0;margin-top:1px;}
+.log-body{flex:1;min-width:0;}
+.log-tipo{font-weight:700;font-size:12px;}
+.log-det{font-size:10px;color:var(--muted);margin-top:2px;line-height:1.5;}
+.log-hora{font-family:'DM Mono',monospace;font-size:11px;font-weight:700;color:var(--text);white-space:nowrap;}
+
+/* ── Modal de confirmação (bottom-sheet) ── */
+.mbg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:900;align-items:flex-end;justify-content:center;}
+.mbg.open{display:flex;}
+.md{background:var(--white);border-radius:22px 22px 0 0;width:100%;max-width:540px;padding-bottom:env(safe-area-inset-bottom,16px);animation:slideUp .2s cubic-bezier(.22,1,.36,1);}
+@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.md-pull{width:40px;height:4px;background:#ddd;border-radius:2px;margin:12px auto 0;}
+.md-body{padding:20px 20px 0;}
+.md-icon{font-size:52px;text-align:center;margin-bottom:6px;}
+.md-hora{text-align:center;font-size:36px;font-weight:700;font-family:'DM Mono',monospace;letter-spacing:-1px;}
+.md-desc{text-align:center;font-size:13px;color:var(--muted);margin:6px 0 16px;}
+.md-info{background:var(--bg);border-radius:10px;padding:11px 13px;font-size:11px;color:var(--muted);line-height:1.8;margin-bottom:4px;}
+.md-info span{font-weight:700;color:var(--text);}
+.md-btns{padding:14px 16px;display:flex;flex-direction:column;gap:10px;}
+.btn-confirmar{width:100%;padding:16px;border:none;border-radius:13px;font-size:16px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;}
+.btn-cancelar{width:100%;padding:13px;border:1px solid var(--border);border-radius:13px;font-size:14px;font-weight:600;cursor:pointer;background:var(--white);color:var(--muted);font-family:'DM Sans',sans-serif;}
+.btn-confirmar.entrada{background:var(--green-bg);color:var(--green);}
+.btn-confirmar.intervalo{background:var(--yellow-bg);color:var(--yellow);}
+.btn-confirmar.retorno{background:var(--blue-bg);color:var(--blue);}
+.btn-confirmar.saida{background:var(--orange-bg);color:var(--orange);}
+
+/* ── Toast ── */
+.toast{position:fixed;bottom:calc(env(safe-area-inset-bottom,0px) + 24px);left:50%;transform:translateX(-50%) translateY(80px);background:#1a1a1a;color:#fff;padding:11px 22px;border-radius:24px;font-size:13px;z-index:9999;transition:transform .25s;pointer-events:none;white-space:nowrap;font-family:'DM Sans',sans-serif;}
+.toast.show{transform:translateX(-50%) translateY(0);}
 </style>
 </head>
 <body>
+
+<!-- Header -->
 <div class="ph">
-  <span style="font-size:20px">⏱️</span>
-  <h2>Ponto Eletrônico</h2>
-  <div style="margin-left:auto;font-size:11px;color:rgba(255,255,255,.75)" id="ph-data"></div>
+  <div class="ph-row">
+    <span style="font-size:22px">⏱️</span>
+    <h2>Ponto Eletrônico</h2>
+    <div class="ph-user" id="ph-user">
+      <strong id="ph-nome">—</strong>
+      <span id="ph-perfil">carregando...</span>
+    </div>
+  </div>
 </div>
 
-<div class="body">
+<!-- Área scrollável -->
+<div class="body" id="body-scroll">
+
   <!-- Relógio -->
   <div class="relogio">
-    <div class="relogio-hora" id="relogio">00:00:00</div>
-    <div class="relogio-data" id="relogio-data"></div>
+    <div class="rel-hora" id="rel-hora">00:00:00</div>
+    <div class="rel-data" id="rel-data"></div>
   </div>
 
   <!-- Seletor de funcionário -->
-  <div class="func-select-wrap" id="func-select-wrap">
-    <h3>👤 Selecione seu nome</h3>
+  <div class="func-select" id="func-select">
+    <h3>Quem está registrando o ponto?</h3>
     <div class="func-grid" id="func-grid"></div>
   </div>
 
-  <!-- Info do funcionário selecionado -->
+  <!-- Funcionário selecionado -->
   <div class="func-box" id="func-box" style="display:none">
-    <div class="func-avatar" id="func-av">?</div>
-    <div>
-      <div class="func-nome" id="func-nome">—</div>
-      <div class="func-cargo" id="func-cargo"></div>
-      <div class="func-jornada" id="func-jornada"></div>
+    <div class="func-av" id="func-av"></div>
+    <div class="func-info">
+      <div class="func-nome" id="func-nome-show"></div>
+      <div class="func-sub" id="func-cargo-show"></div>
+      <div class="func-jor" id="func-jor-show"></div>
     </div>
-    <button onclick="trocarFuncionario()" style="margin-left:auto;background:none;border:1px solid var(--border);border-radius:7px;padding:5px 10px;cursor:pointer;font-size:11px;color:var(--muted)">Trocar</button>
+    <button class="btn-trocar" onclick="trocar()">Trocar</button>
   </div>
 
   <!-- Status do dia -->
-  <div id="status-grid-wrap" style="display:none">
+  <div id="sec-ponto" style="display:none">
     <div class="status-grid">
-      <div class="status-item" id="si-entrada">
-        <div class="lbl">Entrada</div><div class="val vazio">—</div>
-      </div>
-      <div class="status-item" id="si-intervalo">
-        <div class="lbl">Saída Intervalo</div><div class="val vazio">—</div>
-      </div>
-      <div class="status-item" id="si-retorno">
-        <div class="lbl">Retorno</div><div class="val vazio">—</div>
-      </div>
-      <div class="status-item" id="si-saida">
-        <div class="lbl">Saída</div><div class="val vazio">—</div>
-      </div>
+      <div class="si vazio" id="si-entrada"><div class="si-lbl">Entrada</div><div class="si-val">—</div></div>
+      <div class="si vazio" id="si-intervalo"><div class="si-lbl">Saída Intervalo</div><div class="si-val">—</div></div>
+      <div class="si vazio" id="si-retorno"><div class="si-lbl">Retorno</div><div class="si-val">—</div></div>
+      <div class="si vazio" id="si-saida"><div class="si-lbl">Saída</div><div class="si-val">—</div></div>
     </div>
 
-    <!-- Botões de ponto -->
+    <!-- Botões -->
     <div class="ponto-btns">
-      <button class="ponto-btn entrada" id="btn-entrada" onclick="baterPonto('entrada')" disabled>
-        <span class="icon">🟢</span>Registrar Entrada
+      <button class="pb entrada" id="pb-entrada" onclick="abrirConfirmar('entrada')" disabled>
+        <span class="pb-icon">🟢</span>Entrada<span class="pb-hora" id="ph-entrada"></span>
       </button>
-      <button class="ponto-btn intervalo" id="btn-intervalo" onclick="baterPonto('saida_intervalo')" disabled>
-        <span class="icon">🟡</span>Saída Intervalo
+      <button class="pb intervalo" id="pb-intervalo" onclick="abrirConfirmar('saida_intervalo')" disabled>
+        <span class="pb-icon">🟡</span>Saída Intervalo<span class="pb-hora" id="ph-intervalo"></span>
       </button>
-      <button class="ponto-btn retorno" id="btn-retorno" onclick="baterPonto('retorno_intervalo')" disabled>
-        <span class="icon">🔵</span>Retorno Intervalo
+      <button class="pb retorno" id="pb-retorno" onclick="abrirConfirmar('retorno_intervalo')" disabled>
+        <span class="pb-icon">🔵</span>Retorno<span class="pb-hora" id="ph-retorno"></span>
       </button>
-      <button class="ponto-btn saida" id="btn-saida" onclick="baterPonto('saida')" disabled>
-        <span class="icon">🔴</span>Registrar Saída
+      <button class="pb saida" id="pb-saida" onclick="abrirConfirmar('saida')" disabled>
+        <span class="pb-icon">🔴</span>Saída<span class="pb-hora" id="ph-saida"></span>
       </button>
     </div>
 
-    <!-- Resumo horas do dia -->
-    <div class="horas-box" id="horas-box" style="display:none">
-      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:8px">Resumo do Dia</div>
-      <div class="horas-row"><span class="k">Horas trabalhadas</span><span class="v" id="hr-trab">—</span></div>
-      <div class="horas-row"><span class="k">Jornada prevista</span><span class="v" id="hr-prev">—</span></div>
-      <div class="horas-row"><span class="k">Situação</span><span class="v" id="hr-status">—</span></div>
+    <!-- Resumo do dia -->
+    <div class="resumo" id="resumo-dia" style="display:none">
+      <div class="resumo-titulo">Resumo do Dia</div>
+      <div class="resumo-row"><span class="resumo-k">Horas trabalhadas</span><span class="resumo-v" id="r-trab">—</span></div>
+      <div class="resumo-row"><span class="resumo-k">Jornada prevista</span><span class="resumo-v" id="r-prev">—</span></div>
+      <div class="resumo-row"><span class="resumo-k">Situação</span><span class="resumo-v" id="r-sit">—</span></div>
+    </div>
+
+    <!-- Log de auditoria do dia -->
+    <div class="log-box" id="log-box" style="display:none">
+      <div class="log-titulo">📋 Log de Registros do Dia</div>
+      <div id="log-lista"></div>
     </div>
   </div>
-</div>
 
-<!-- Modal confirmação -->
-<div class="mbg" id="m-confirmar">
+</div><!-- /body-scroll -->
+
+<!-- Modal confirmação (bottom-sheet) -->
+<div class="mbg" id="m-conf" onclick="if(event.target===this)fecharConf()">
   <div class="md">
-    <div class="mdh"><h3 id="conf-titulo">Confirmar</h3><button class="mdx" onclick="fecharModal()">×</button></div>
-    <div class="mdb">
-      <div style="text-align:center;padding:8px 0">
-        <div style="font-size:40px" id="conf-icon">⏱️</div>
-        <div style="font-size:22px;font-weight:700;margin:10px 0" id="conf-hora"></div>
-        <div style="font-size:13px;color:var(--muted)" id="conf-desc"></div>
+    <div class="md-pull"></div>
+    <div class="md-body">
+      <div class="md-icon" id="conf-icon">⏱️</div>
+      <div class="md-hora" id="conf-hora">00:00</div>
+      <div class="md-desc" id="conf-desc"></div>
+      <div class="md-info">
+        👤 Funcionário: <span id="conf-func"></span><br>
+        🔑 Usuário logado: <span id="conf-login"></span><br>
+        📅 Data: <span id="conf-data"></span>
       </div>
     </div>
-    <div class="mdf">
-      <button class="btn btn-gray" onclick="fecharModal()">Cancelar</button>
-      <button class="btn btn-red" id="conf-btn" onclick="confirmarPonto()">✅ Confirmar</button>
+    <div class="md-btns">
+      <button class="btn-confirmar" id="conf-btn" onclick="confirmar()">✅ Confirmar Registro</button>
+      <button class="btn-cancelar" onclick="fecharConf()">Cancelar</button>
     </div>
   </div>
 </div>
+
+<div class="toast" id="toast"></div>
 
 <script>
-const {api, fmt, toast} = BB;
-let _funcAtual = null, _pontoHoje = null, _tipoConfirmar = null;
-let _funcionarios = [];
+const {api, fmt} = BB;
+let _func = null, _ponto = null, _tipo = null, _user = null;
+let _funcs = [], _logs = [];
 
-// ── Relógio ──────────────────────────────────────────────────────────────────
-function tickRelogio() {
-  const agora = new Date();
-  document.getElementById('relogio').textContent = agora.toLocaleTimeString('pt-BR');
-  const ds = agora.toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});
-  document.getElementById('relogio-data').textContent = ds.charAt(0).toUpperCase()+ds.slice(1);
-  document.getElementById('ph-data').textContent = agora.toLocaleDateString('pt-BR');
+// ── Relógio ───────────────────────────────────────────────────────────────────
+function tick() {
+  const n = new Date();
+  document.getElementById('rel-hora').textContent = n.toLocaleTimeString('pt-BR');
+  const ds = n.toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});
+  document.getElementById('rel-data').textContent = ds.charAt(0).toUpperCase()+ds.slice(1);
 }
-setInterval(tickRelogio, 1000);
-tickRelogio();
+setInterval(tick, 500); tick();
 
-// ── Init ─────────────────────────────────────────────────────────────────────
+// ── Init ──────────────────────────────────────────────────────────────────────
 window.onBBReady = async () => {
-  await carregarFuncionarios();
-  // Se o próprio funcionário está logado, seleciona automaticamente
-  if (BB.api && window.parent !== window) {
-    // Tenta obter o ID do funcionário do usuário logado via portal
+  // Identifica usuário logado
+  try {
+    const me = await api.get('/auth/me');
+    if (me.ok) {
+      _user = me.data;
+      document.getElementById('ph-nome').textContent   = me.data.nome;
+      document.getElementById('ph-perfil').textContent = me.data.email || me.data.perfil;
+    }
+  } catch(_) {}
+
+  const d = await api.get('/api/rh/funcionarios');
+  if (!d.ok) return;
+  _funcs = (d.data||[]).filter(f=>f.ativo);
+  renderGrid();
+
+  // Se usuário logado é um funcionário vinculado, pré-seleciona
+  if (_user) {
+    const fn = _funcs.find(f =>
+      f.nome?.toLowerCase() === _user.nome?.toLowerCase() ||
+      f.email?.toLowerCase() === _user.email?.toLowerCase()
+    );
+    if (fn) await selecionar(fn.id);
   }
 };
 
-async function carregarFuncionarios() {
-  const d = await api.get('/api/rh/funcionarios');
-  if (!d.ok) return;
-  _funcionarios = (d.data || []).filter(f => f.ativo);
-  const grid = document.getElementById('func-grid');
-  grid.innerHTML = _funcionarios.map(f => `
-    <div class="func-card" onclick="selecionarFuncionario(${f.id})" id="fc-${f.id}">
-      <div style="font-size:24px">${f.nome.charAt(0).toUpperCase()}</div>
-      <div class="fn">${f.nome.split(' ')[0]}</div>
-      <div class="fc">${f.cargo||'—'}</div>
+// ── Grid de funcionários ──────────────────────────────────────────────────────
+function renderGrid() {
+  document.getElementById('func-grid').innerHTML = _funcs.map(f => `
+    <div class="func-card" onclick="selecionar(${f.id})" id="fc-${f.id}">
+      <div class="func-card-av">${f.nome.charAt(0).toUpperCase()}</div>
+      <div class="func-card-nome">${f.nome.split(' ')[0]}</div>
+      <div class="func-card-cargo">${f.cargo||'—'}</div>
     </div>`).join('');
 }
 
-async function selecionarFuncionario(id) {
-  _funcAtual = _funcionarios.find(f => f.id === id);
-  if (!_funcAtual) return;
-  // UI
-  document.getElementById('func-select-wrap').style.display = 'none';
-  document.getElementById('func-box').style.display = 'flex';
-  document.getElementById('status-grid-wrap').style.display = '';
-  document.getElementById('func-av').textContent = _funcAtual.nome.charAt(0).toUpperCase();
-  document.getElementById('func-nome').textContent = _funcAtual.nome;
-  document.getElementById('func-cargo').textContent = _funcAtual.cargo || '';
-  const ent = _funcAtual.horario_entrada?.slice(0,5) || '08:00';
-  const sai = _funcAtual.horario_saida?.slice(0,5)  || '18:00';
-  const jor = _funcAtual.jornada_horas || 8;
-  document.getElementById('func-jornada').textContent = `Jornada: ${ent} → ${sai} (${jor}h) · Tolerância: ${_funcAtual.tolerancia_min||10}min`;
+async function selecionar(id) {
+  _func = _funcs.find(f=>f.id===id);
+  if (!_func) return;
+  document.getElementById('func-select').style.display = 'none';
+  document.getElementById('func-box').style.display    = 'flex';
+  document.getElementById('sec-ponto').style.display   = '';
+  document.getElementById('func-av').textContent          = _func.nome.charAt(0).toUpperCase();
+  document.getElementById('func-nome-show').textContent   = _func.nome;
+  document.getElementById('func-cargo-show').textContent  = _func.cargo||'';
+  const ent = _func.horario_entrada?.slice(0,5)||'08:00';
+  const sai = _func.horario_saida?.slice(0,5)||'18:00';
+  document.getElementById('func-jor-show').textContent = `Jornada: ${ent} → ${sai} · ${_func.jornada_horas||8}h`;
   await carregarPontoHoje();
 }
 
-function trocarFuncionario() {
-  _funcAtual = null; _pontoHoje = null;
-  document.getElementById('func-select-wrap').style.display = '';
-  document.getElementById('func-box').style.display = 'none';
-  document.getElementById('status-grid-wrap').style.display = 'none';
+function trocar() {
+  _func=null; _ponto=null;
+  document.getElementById('func-select').style.display = '';
+  document.getElementById('func-box').style.display    = 'none';
+  document.getElementById('sec-ponto').style.display   = 'none';
+  document.getElementById('log-box').style.display     = 'none';
 }
 
+// ── Carregar ponto do dia ─────────────────────────────────────────────────────
 async function carregarPontoHoje() {
-  if (!_funcAtual) return;
-  const d = await api.get(`/api/ponto/hoje/${_funcAtual.id}`);
-  _pontoHoje = d.data;
-  renderStatusHoje();
+  if (!_func) return;
+  const [dp, dl] = await Promise.all([
+    api.get(`/api/ponto/hoje/${_func.id}`),
+    api.get(`/api/ponto/auditoria?funcionario_id=${_func.id}&data_ini=${new Date().toISOString().slice(0,10)}&data_fim=${new Date().toISOString().slice(0,10)}&limite=20`)
+  ]);
+  _ponto = dp.data;
+  _logs  = dl.ok ? dl.data : [];
+  renderStatus();
+  renderLog();
 }
 
-function fmtHora(ts) {
-  if (!ts) return null;
-  return new Date(ts).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
-}
+const fmtTs = ts => ts ? new Date(ts).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}) : null;
+const fmtH  = h => h===null?'—':`${Math.floor(h)}h${String(Math.round((h%1)*60)).padStart(2,'0')}`;
 
-function renderStatusHoje() {
-  const p = _pontoHoje;
-  const setItem = (id, val, cls) => {
+function renderStatus() {
+  const p = _ponto;
+  const setItem = (id, ts, cls) => {
     const el = document.getElementById(id);
-    el.querySelector('.val').textContent = val || '—';
-    el.className = 'status-item ' + (val ? cls : 'vazio');
+    const h  = fmtTs(ts);
+    el.querySelector('.si-val').textContent = h || '—';
+    el.className = 'si ' + (h ? cls : 'vazio');
   };
-  setItem('si-entrada',   fmtHora(p?.entrada),             'ok');
-  setItem('si-intervalo', fmtHora(p?.saida_intervalo),     'pend');
-  setItem('si-retorno',   fmtHora(p?.retorno_intervalo),   'ok');
-  setItem('si-saida',     fmtHora(p?.saida),               'ok');
+  setItem('si-entrada',   p?.entrada,             'ok');
+  setItem('si-intervalo', p?.saida_intervalo,      'pend');
+  setItem('si-retorno',   p?.retorno_intervalo,    'ok');
+  setItem('si-saida',     p?.saida,                'ok');
 
-  // Habilitar/desabilitar botões conforme sequência lógica
-  const e = !!p?.entrada, si = !!p?.saida_intervalo, ri = !!p?.retorno_intervalo, s = !!p?.saida;
-  const setBt = (id, enabled, feito) => {
-    const bt = document.getElementById(id);
-    bt.disabled = !enabled;
-    bt.classList.toggle('feito', feito);
+  // Botões
+  const e=!!p?.entrada, si=!!p?.saida_intervalo, ri=!!p?.retorno_intervalo, s=!!p?.saida;
+  const setBtn = (id, cls, enabled, feito, hora) => {
+    const b = document.getElementById(id);
+    b.disabled = !enabled;
+    b.classList.toggle('feito', feito);
+    const ph = document.getElementById('ph-'+id.replace('pb-',''));
+    if (ph) ph.textContent = hora || '';
   };
-  setBt('btn-entrada',   !e,          e);
-  setBt('btn-intervalo', e && !si,    si);
-  setBt('btn-retorno',   si && !ri,   ri);
-  setBt('btn-saida',     (e && !s) || (ri && !s), s);
+  setBtn('pb-entrada',   'entrada',   !e,          e,  fmtTs(p?.entrada));
+  setBtn('pb-intervalo', 'intervalo', e&&!si,      si, fmtTs(p?.saida_intervalo));
+  setBtn('pb-retorno',   'retorno',   si&&!ri,     ri, fmtTs(p?.retorno_intervalo));
+  setBtn('pb-saida',     'saida',     (e&&!s)||(ri&&!s), s, fmtTs(p?.saida));
 
-  // Resumo de horas
+  // Resumo
   if (p?.entrada && p?.saida) {
-    const ms = new Date(p.saida) - new Date(p.entrada);
-    const intMs = (p.saida_intervalo && p.retorno_intervalo)
-      ? new Date(p.retorno_intervalo) - new Date(p.saida_intervalo)
-      : (_funcAtual.intervalo_min||60) * 60000;
-    const trabMin = Math.max(0, (ms - intMs) / 60000);
-    const trabH   = trabMin / 60;
-    const prevH   = parseFloat(_funcAtual.jornada_horas || 8);
-    const extraMin= (trabH - prevH) * 60;
-    const atrasoTs= new Date(p.entrada);
-    const prevEntTs = new Date(`1970-01-01T${_funcAtual.horario_entrada||'08:00'}:00`);
-    const atrasoMin = (atrasoTs.getHours()*60+atrasoTs.getMinutes()) - (prevEntTs.getHours()*60+prevEntTs.getMinutes());
-    const hStr = h => `${Math.floor(h)}h${String(Math.round((h%1)*60)).padStart(2,'0')}min`;
-    document.getElementById('hr-trab').textContent = hStr(trabH);
-    document.getElementById('hr-prev').textContent = hStr(prevH);
-    const stEl = document.getElementById('hr-status');
-    if (atrasoMin > (_funcAtual.tolerancia_min||10)) {
-      stEl.innerHTML = `<span class="badge-atraso">⚠️ Atraso de ${atrasoMin}min</span>`;
-    } else if (extraMin > 30) {
-      stEl.innerHTML = `<span class="badge-extra">✅ Hora extra: ${Math.round(extraMin)}min</span>`;
+    const ms     = new Date(p.saida) - new Date(p.entrada);
+    const intMs  = (p.saida_intervalo&&p.retorno_intervalo)
+      ? new Date(p.retorno_intervalo)-new Date(p.saida_intervalo)
+      : (_func.intervalo_min||60)*60000;
+    const trabH  = Math.max(0,(ms-intMs)/3600000);
+    const prevH  = parseFloat(_func.jornada_horas||8);
+    const atrasoMin = (() => {
+      const e2=new Date(p.entrada),pv=new Date(`1970-01-01T${_func.horario_entrada||'08:00'}:00`);
+      return (e2.getHours()*60+e2.getMinutes())-(pv.getHours()*60+pv.getMinutes());
+    })();
+    document.getElementById('r-trab').textContent = fmtH(trabH);
+    document.getElementById('r-prev').textContent = fmtH(prevH);
+    const sit = document.getElementById('r-sit');
+    if (atrasoMin > (_func.tolerancia_min||10)) {
+      sit.innerHTML = `<span style="color:#92400e">⚠️ Atraso de ${atrasoMin}min</span>`;
+    } else if (trabH > prevH+0.5) {
+      sit.innerHTML = `<span style="color:var(--green)">⏫ Hora extra: ${fmtH(trabH-prevH)}</span>`;
     } else {
-      stEl.innerHTML = `<span class="badge-ok">✅ Normal</span>`;
+      sit.innerHTML = `<span style="color:var(--green)">✅ Normal</span>`;
     }
-    document.getElementById('horas-box').style.display = '';
+    document.getElementById('resumo-dia').style.display = '';
   } else {
-    document.getElementById('horas-box').style.display = 'none';
+    document.getElementById('resumo-dia').style.display = 'none';
   }
 }
 
-// ── Bater ponto ───────────────────────────────────────────────────────────────
-const LABELS = {
-  entrada:           { titulo:'Registrar Entrada',    icon:'🟢', desc:'Confirme o registro de entrada' },
-  saida_intervalo:   { titulo:'Saída para Intervalo', icon:'🟡', desc:'Confirme a saída para intervalo' },
-  retorno_intervalo: { titulo:'Retorno do Intervalo', icon:'🔵', desc:'Confirme o retorno do intervalo' },
-  saida:             { titulo:'Registrar Saída',      icon:'🔴', desc:'Confirme o registro de saída' },
+// ── Log de auditoria ──────────────────────────────────────────────────────────
+const TIPO_LABEL = {
+  entrada:           {icon:'🟢', label:'Entrada registrada'},
+  saida_intervalo:   {icon:'🟡', label:'Saída para intervalo'},
+  retorno_intervalo: {icon:'🔵', label:'Retorno do intervalo'},
+  saida:             {icon:'🔴', label:'Saída registrada'},
 };
 
-function baterPonto(tipo) {
-  _tipoConfirmar = tipo;
-  const info = LABELS[tipo];
-  const agora = new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
-  document.getElementById('conf-titulo').textContent = info.titulo;
-  document.getElementById('conf-icon').textContent   = info.icon;
-  document.getElementById('conf-hora').textContent   = agora;
-  document.getElementById('conf-desc').textContent   = info.desc;
-  document.getElementById('m-confirmar').classList.add('open');
+function renderLog() {
+  const box   = document.getElementById('log-box');
+  const lista = document.getElementById('log-lista');
+  if (!_logs.length) { box.style.display='none'; return; }
+  box.style.display = '';
+  lista.innerHTML = _logs.map(l => {
+    const info = TIPO_LABEL[l.tipo] || {icon:'📌', label:l.tipo};
+    const horaBatida  = new Date(l.horario_batida).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    const horaBatidaFull = new Date(l.horario_batida).toLocaleString('pt-BR');
+    return `<div class="log-item">
+      <div class="log-icon">${info.icon}</div>
+      <div class="log-body">
+        <div class="log-tipo">${info.label}</div>
+        <div class="log-det">
+          👤 <strong>${l.usuario_nome||'—'}</strong> (${l.usuario_login||'—'})<br>
+          🕐 Registrado às ${horaBatida} · ${horaBatidaFull}<br>
+          ${l.manual?'<span style="color:#d97706">✏️ Registro manual</span>':'🌐 '+l.ip_address}
+        </div>
+      </div>
+      <div class="log-hora">${horaBatida}</div>
+    </div>`;
+  }).join('');
 }
 
-async function confirmarPonto() {
-  if (!_funcAtual || !_tipoConfirmar) return;
-  document.getElementById('conf-btn').disabled = true;
-  const d = await api.post('/api/ponto/bater', {
-    funcionario_id: _funcAtual.id, tipo: _tipoConfirmar
-  });
-  document.getElementById('conf-btn').disabled = false;
-  fecharModal();
-  if (!d.ok) { toast('❌ '+d.erro); return; }
-  toast(`✅ ${LABELS[_tipoConfirmar].titulo} registrada às ${d.horario}!`);
-  _tipoConfirmar = null;
+// ── Confirmar ponto ───────────────────────────────────────────────────────────
+const CONF = {
+  entrada:           {icon:'🟢',cls:'entrada',  desc:'Confirme o início do expediente'},
+  saida_intervalo:   {icon:'🟡',cls:'intervalo',desc:'Confirme a saída para intervalo'},
+  retorno_intervalo: {icon:'🔵',cls:'retorno',  desc:'Confirme o retorno do intervalo'},
+  saida:             {icon:'🔴',cls:'saida',    desc:'Confirme o encerramento do expediente'},
+};
+
+function abrirConfirmar(tipo) {
+  _tipo = tipo;
+  const info = CONF[tipo];
+  const agora = new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+  document.getElementById('conf-icon').textContent = info.icon;
+  document.getElementById('conf-hora').textContent = agora;
+  document.getElementById('conf-desc').textContent = info.desc;
+  document.getElementById('conf-func').textContent  = _func?.nome || '—';
+  document.getElementById('conf-login').textContent = _user?.email || _user?.nome || 'não identificado';
+  document.getElementById('conf-data').textContent  = new Date().toLocaleDateString('pt-BR',{weekday:'short',day:'2-digit',month:'long'});
+  const btn = document.getElementById('conf-btn');
+  btn.className = 'btn-confirmar '+info.cls;
+  document.getElementById('m-conf').classList.add('open');
+}
+
+function fecharConf() {
+  document.getElementById('m-conf').classList.remove('open');
+  _tipo = null;
+}
+
+async function confirmar() {
+  if (!_func || !_tipo) return;
+  const btn = document.getElementById('conf-btn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Registrando...';
+
+  const d = await api.post('/api/ponto/bater', { funcionario_id:_func.id, tipo:_tipo });
+  btn.disabled = false;
+  btn.textContent = '✅ Confirmar Registro';
+  fecharConf();
+
+  if (!d.ok) { showToast('❌ '+d.erro); return; }
+  showToast(`✅ ${TIPO_LABEL[_tipo]?.label} — ${d.horario}`);
   await carregarPontoHoje();
 }
 
-function fecharModal() { document.getElementById('m-confirmar').classList.remove('open'); }
+// ── Toast ─────────────────────────────────────────────────────────────────────
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 3000);
+}
 </script>
 </body>
 </html>

@@ -23,24 +23,51 @@ module.exports = function(pool) {
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS ponto_registros (
-        id              SERIAL PRIMARY KEY,
-        funcionario_id  INTEGER NOT NULL REFERENCES rh_funcionarios(id),
-        data_ref        DATE NOT NULL DEFAULT CURRENT_DATE,
-        entrada         TIMESTAMPTZ,
-        saida_intervalo TIMESTAMPTZ,
+        id                SERIAL PRIMARY KEY,
+        funcionario_id    INTEGER NOT NULL REFERENCES rh_funcionarios(id),
+        data_ref          DATE NOT NULL DEFAULT CURRENT_DATE,
+        entrada           TIMESTAMPTZ,
+        saida_intervalo   TIMESTAMPTZ,
         retorno_intervalo TIMESTAMPTZ,
-        saida           TIMESTAMPTZ,
-        entrada_manual  BOOLEAN DEFAULT FALSE,
-        saida_manual    BOOLEAN DEFAULT FALSE,
-        justificativa   TEXT,
-        observacao      TEXT,
-        status          TEXT DEFAULT 'ok' CHECK(status IN('ok','pendente','ajustado','falta','justificado')),
-        criado_por      TEXT,
-        atualizado_em   TIMESTAMPTZ DEFAULT NOW()
+        saida             TIMESTAMPTZ,
+        entrada_manual    BOOLEAN DEFAULT FALSE,
+        saida_manual      BOOLEAN DEFAULT FALSE,
+        justificativa     TEXT,
+        observacao        TEXT,
+        status            TEXT DEFAULT 'ok' CHECK(status IN('ok','pendente','ajustado','falta','justificado')),
+        criado_por        TEXT,
+        atualizado_em     TIMESTAMPTZ DEFAULT NOW()
       )`).catch(()=>{});
 
-    // Índice único por funcionário/dia
     await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS ponto_func_data_idx ON ponto_registros(funcionario_id, data_ref)`).catch(()=>{});
+
+    // Tabela de auditoria — registra CADA batida com usuário logado, IP e timestamp
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS ponto_auditoria (
+        id              SERIAL PRIMARY KEY,
+        ponto_id        INTEGER REFERENCES ponto_registros(id),
+        funcionario_id  INTEGER NOT NULL,
+        tipo            TEXT NOT NULL,
+        horario_batida  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        usuario_login   TEXT,
+        usuario_nome    TEXT,
+        usuario_perfil  TEXT,
+        ip_address      TEXT,
+        user_agent      TEXT,
+        manual          BOOLEAN DEFAULT FALSE,
+        obs             TEXT
+      )`).catch(()=>{});
+
+    // Colunas de auditoria extras no registro (quem registrou entrada/saída especificamente)
+    const audCols = [
+      ['entrada_por', 'TEXT'],
+      ['saida_por', 'TEXT'],
+      ['entrada_em', 'TIMESTAMPTZ'],
+      ['saida_em', 'TIMESTAMPTZ'],
+    ];
+    for (const [col, tipo] of audCols) {
+      await pool.query(`ALTER TABLE ponto_registros ADD COLUMN IF NOT EXISTS ${col} ${tipo}`).catch(()=>{});
+    }
   }
   initTables();
 
@@ -69,27 +96,48 @@ module.exports = function(pool) {
   // ── Bater ponto (funcionário) ──────────────────────────────────────────────
   r.post('/bater', async (req, res) => {
     const { funcionario_id, tipo } = req.body;
-    // tipo: entrada | saida_intervalo | retorno_intervalo | saida
     const allowed = ['entrada','saida_intervalo','retorno_intervalo','saida'];
     if (!funcionario_id || !allowed.includes(tipo)) {
       return res.status(400).json({ ok:false, erro:'Parâmetros inválidos' });
     }
 
-    const agora = new Date();
-    const dataRef = agora.toISOString().slice(0,10);
-    const usuario = req.user?.nome || 'Sistema';
+    const agora     = new Date();
+    const dataRef   = agora.toISOString().slice(0,10);
+    const usuario   = req.user?.nome    || 'Sistema';
+    const login     = req.user?.email   || req.user?.nome || 'desconhecido';
+    const perfil    = req.user?.perfil  || '—';
+    const ip        = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || '—';
+    const userAgent = req.headers['user-agent'] || '—';
 
     try {
-      // Upsert: cria ou atualiza o registro do dia
+      // Colunas extras de auditoria por tipo
+      const colPor = tipo === 'entrada' ? 'entrada_por' : tipo === 'saida' ? 'saida_por' : null;
+      const colEm  = tipo === 'entrada' ? 'entrada_em'  : tipo === 'saida' ? 'saida_em'  : null;
+
+      let extraSet = '';
+      if (colPor) extraSet += `, ${colPor} = '${usuario.replace(/'/g,"''")}'`;
+      if (colEm)  extraSet += `, ${colEm} = NOW()`;
+
       const { rows } = await pool.query(`
-        INSERT INTO ponto_registros(funcionario_id, data_ref, ${tipo}, criado_por)
-        VALUES($1, $2, $3, $4)
+        INSERT INTO ponto_registros(funcionario_id, data_ref, ${tipo}, criado_por${colPor?', '+colPor:''}${colEm?', '+colEm:''})
+        VALUES($1, $2, $3, $4${colPor?', $4':''}${colEm?', NOW()':''})
         ON CONFLICT(funcionario_id, data_ref) DO UPDATE
-          SET ${tipo} = $3, atualizado_em = NOW()
+          SET ${tipo} = $3, atualizado_em = NOW()${extraSet}
         RETURNING *
       `, [funcionario_id, dataRef, agora, usuario]);
 
-      res.json({ ok:true, data:rows[0], horario: agora.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}) });
+      // Grava log de auditoria
+      await pool.query(`
+        INSERT INTO ponto_auditoria(ponto_id, funcionario_id, tipo, horario_batida, usuario_login, usuario_nome, usuario_perfil, ip_address, user_agent)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)
+      `, [rows[0].id, funcionario_id, tipo, agora, login, usuario, perfil, ip, userAgent.slice(0,200)]).catch(()=>{});
+
+      res.json({
+        ok: true,
+        data: rows[0],
+        horario: agora.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}),
+        auditoria: { usuario, login, horario: agora.toISOString(), ip }
+      });
     } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
   });
 
@@ -105,6 +153,25 @@ module.exports = function(pool) {
         [req.params.funcionario_id, dataRef]
       );
       res.json({ ok:true, data: rows[0] || null, data_ref: dataRef });
+    } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
+  });
+
+  // ── Log de auditoria (admin/gestor) ──────────────────────────────────────
+  r.get('/auditoria', async (req, res) => {
+    if (!['admin','gestor'].includes(req.user?.perfil)) return res.status(403).json({ ok:false, erro:'Sem permissão' });
+    const { funcionario_id, data_ini, data_fim, limite=100 } = req.query;
+    try {
+      const { rows } = await pool.query(`
+        SELECT a.*, f.nome AS func_nome
+        FROM ponto_auditoria a
+        JOIN rh_funcionarios f ON f.id=a.funcionario_id
+        WHERE ($1::int IS NULL OR a.funcionario_id=$1)
+          AND ($2::date IS NULL OR a.horario_batida::date >= $2::date)
+          AND ($3::date IS NULL OR a.horario_batida::date <= $3::date)
+        ORDER BY a.horario_batida DESC
+        LIMIT $4
+      `, [funcionario_id||null, data_ini||null, data_fim||null, parseInt(limite)]);
+      res.json({ ok:true, data:rows });
     } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
   });
 
