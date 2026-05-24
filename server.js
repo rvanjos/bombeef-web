@@ -244,8 +244,129 @@ app.use(express.static(path.join(__dirname, 'public'), {
 
 // ── Rotas API ──────────────────────────────────────────────────────────────────
 app.use('/auth',             require('./routes/auth')(pool));
-// ── Bootstrap público — cria tabelas do ponto (remover após primeiro uso) ──
+// ── Bootstrap público — cria TODAS as tabelas do sistema ──────────────────
 app.get('/setup-ponto', async (req, res) => {
+  const resultados = [];
+  const run = async (nome, sql) => {
+    try { await pool.query(sql); resultados.push(`✅ ${nome}`); }
+    catch(e) { resultados.push(`⚠️ ${nome}: ${e.message}`); }
+  };
+
+  // RH
+  await run('rh_funcionarios', `CREATE TABLE IF NOT EXISTS rh_funcionarios (
+    id SERIAL PRIMARY KEY, nome TEXT NOT NULL, cargo TEXT, cpf TEXT,
+    data_admissao DATE, salario_base NUMERIC(10,2) DEFAULT 0,
+    vale_alimentacao NUMERIC(10,2) DEFAULT 0, limite_retirada NUMERIC(10,2) DEFAULT 0,
+    ativo BOOLEAN DEFAULT TRUE, observacoes TEXT,
+    horario_entrada TIME DEFAULT '08:00', horario_saida TIME DEFAULT '18:00',
+    intervalo_min INTEGER DEFAULT 60, jornada_horas NUMERIC(4,2) DEFAULT 8,
+    tolerancia_min INTEGER DEFAULT 10, email TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW())`);
+
+  await run('rh_apontamentos', `CREATE TABLE IF NOT EXISTS rh_apontamentos (
+    id SERIAL PRIMARY KEY, funcionario_id INTEGER REFERENCES rh_funcionarios(id),
+    mes_ref TEXT, tipo TEXT, valor NUMERIC(10,2) DEFAULT 0,
+    descricao TEXT, data_ref DATE, status TEXT DEFAULT 'aprovado',
+    solicitante_id INTEGER, solicitante_nome TEXT,
+    aprovador_id INTEGER, motivo_rejeicao TEXT,
+    atualizado_em TIMESTAMPTZ DEFAULT NOW(),
+    created_at TIMESTAMPTZ DEFAULT NOW())`);
+
+  await run('rh_folhas', `CREATE TABLE IF NOT EXISTS rh_folhas (
+    id SERIAL PRIMARY KEY, funcionario_id INTEGER REFERENCES rh_funcionarios(id),
+    mes_ref TEXT NOT NULL, salario_base NUMERIC(10,2) DEFAULT 0,
+    vale_alimentacao NUMERIC(10,2) DEFAULT 0, escala_domingo BOOLEAN DEFAULT FALSE,
+    valor_domingo NUMERIC(10,2) DEFAULT 0, observacao TEXT,
+    atualizado_em TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(funcionario_id, mes_ref))`);
+
+  // Retiradas
+  await run('retiradas', `CREATE TABLE IF NOT EXISTS retiradas (
+    id SERIAL PRIMARY KEY, funcionario_id INTEGER NOT NULL,
+    produto_id INTEGER, descricao TEXT NOT NULL,
+    qtd NUMERIC(10,3) DEFAULT 1, preco_unitario NUMERIC(10,4) DEFAULT 0,
+    desconto_pct NUMERIC(5,2) DEFAULT 100, valor_total NUMERIC(10,2) DEFAULT 0,
+    mes TEXT, dt_retirada DATE DEFAULT CURRENT_DATE,
+    observacao TEXT, autorizado_por INTEGER, usuario_id INTEGER,
+    criado_em TIMESTAMPTZ DEFAULT NOW())`);
+
+  // Ponto
+  await run('ponto_registros', `CREATE TABLE IF NOT EXISTS ponto_registros (
+    id SERIAL PRIMARY KEY,
+    funcionario_id INTEGER NOT NULL REFERENCES rh_funcionarios(id),
+    data_ref DATE NOT NULL DEFAULT CURRENT_DATE,
+    entrada TIMESTAMPTZ, saida_intervalo TIMESTAMPTZ,
+    retorno_intervalo TIMESTAMPTZ, saida TIMESTAMPTZ,
+    entrada_manual BOOLEAN DEFAULT FALSE, saida_manual BOOLEAN DEFAULT FALSE,
+    entrada_por TEXT, saida_por TEXT, entrada_em TIMESTAMPTZ, saida_em TIMESTAMPTZ,
+    justificativa TEXT, observacao TEXT, status TEXT DEFAULT 'ok',
+    criado_por TEXT, atualizado_em TIMESTAMPTZ DEFAULT NOW())`);
+
+  await run('ponto_idx', `CREATE UNIQUE INDEX IF NOT EXISTS ponto_func_data_idx ON ponto_registros(funcionario_id, data_ref)`);
+
+  await run('ponto_auditoria', `CREATE TABLE IF NOT EXISTS ponto_auditoria (
+    id SERIAL PRIMARY KEY, ponto_id INTEGER REFERENCES ponto_registros(id),
+    funcionario_id INTEGER NOT NULL, tipo TEXT NOT NULL,
+    horario_batida TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    usuario_login TEXT, usuario_nome TEXT, usuario_perfil TEXT,
+    ip_address TEXT, user_agent TEXT, manual BOOLEAN DEFAULT FALSE, obs TEXT)`);
+
+  // Fiado / Compras Pendentes
+  await run('clientes_fiado', `CREATE TABLE IF NOT EXISTS clientes_fiado (
+    id SERIAL PRIMARY KEY, nome TEXT NOT NULL,
+    telefone TEXT, tipo_cliente TEXT NOT NULL DEFAULT 'normal',
+    desconto_pct NUMERIC(5,2) DEFAULT 0, limite_credito NUMERIC(12,2),
+    status TEXT NOT NULL DEFAULT 'ativo', observacoes TEXT,
+    funcionario_id INTEGER,
+    created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW())`);
+
+  await run('vendas_fiado', `CREATE TABLE IF NOT EXISTS vendas_fiado (
+    id SERIAL PRIMARY KEY, cliente_id INTEGER NOT NULL REFERENCES clientes_fiado(id),
+    data_compra DATE NOT NULL DEFAULT CURRENT_DATE,
+    subtotal_venda NUMERIC(12,2) DEFAULT 0, desconto_total NUMERIC(12,2) DEFAULT 0,
+    total_final NUMERIC(12,2) DEFAULT 0, saldo_restante NUMERIC(12,2) DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'aberto', precisa_aprovacao BOOLEAN DEFAULT FALSE,
+    aprovado_por TEXT, aprovado_em TIMESTAMPTZ, motivo_reprovacao TEXT,
+    observacoes TEXT, usuario_resp TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW())`);
+
+  await run('itens_venda_fiado', `CREATE TABLE IF NOT EXISTS itens_venda_fiado (
+    id SERIAL PRIMARY KEY, venda_id INTEGER NOT NULL REFERENCES vendas_fiado(id) ON DELETE CASCADE,
+    codigo_produto TEXT, nome_produto TEXT NOT NULL,
+    quantidade NUMERIC(10,3) NOT NULL DEFAULT 1,
+    valor_unit_venda NUMERIC(12,2) NOT NULL DEFAULT 0,
+    valor_unit_custo NUMERIC(12,2) DEFAULT 0,
+    desconto_pct NUMERIC(5,2) DEFAULT 0, valor_final_item NUMERIC(12,2) NOT NULL DEFAULT 0)`);
+
+  await run('pagamentos_fiado', `CREATE TABLE IF NOT EXISTS pagamentos_fiado (
+    id SERIAL PRIMARY KEY, cliente_id INTEGER NOT NULL REFERENCES clientes_fiado(id),
+    data_pagamento DATE NOT NULL DEFAULT CURRENT_DATE,
+    valor_pago NUMERIC(12,2) NOT NULL, forma_pagamento TEXT NOT NULL DEFAULT 'dinheiro',
+    observacoes TEXT, usuario_resp TEXT, created_at TIMESTAMPTZ DEFAULT NOW())`);
+
+  await run('pagamento_venda_fiado', `CREATE TABLE IF NOT EXISTS pagamento_venda_fiado (
+    id SERIAL PRIMARY KEY, pagamento_id INTEGER NOT NULL REFERENCES pagamentos_fiado(id),
+    venda_id INTEGER NOT NULL REFERENCES vendas_fiado(id),
+    valor_abatido NUMERIC(12,2) NOT NULL)`);
+
+  await run('historico_fiado', `CREATE TABLE IF NOT EXISTS historico_fiado (
+    id SERIAL PRIMARY KEY, cliente_id INTEGER REFERENCES clientes_fiado(id),
+    venda_id INTEGER REFERENCES vendas_fiado(id),
+    pagamento_id INTEGER REFERENCES pagamentos_fiado(id),
+    tipo_evento TEXT NOT NULL, descricao TEXT, usuario TEXT,
+    data_evento TIMESTAMPTZ DEFAULT NOW())`);
+
+  const html = resultados.map(r => `<div style="font-family:monospace;padding:3px 0;font-size:13px">${r}</div>`).join('');
+  const ok = resultados.every(r => r.startsWith('✅') || r.includes('already exists'));
+  res.send(`<div style="font-family:sans-serif;padding:20px;max-width:600px">
+    <h2 style="color:${ok?'green':'orange'}">${ok?'✅ Banco configurado!':'⚠️ Concluído com avisos'}</h2>
+    ${html}
+    <p style="margin-top:16px;color:#666;font-size:12px">Pode fechar esta página e usar o sistema normalmente.</p>
+  </div>`);
+});
+
+// ── Bootstrap público — VERSÃO ORIGINAL (mantida para compatibilidade) ──
+app.get('/setup-ponto-old', async (req, res) => {
   try {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS ponto_registros (
