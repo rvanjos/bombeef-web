@@ -244,6 +244,52 @@ app.use(express.static(path.join(__dirname, 'public'), {
 
 // ── Rotas API ──────────────────────────────────────────────────────────────────
 app.use('/auth',             require('./routes/auth')(pool));
+// ── Bootstrap público — cria tabelas do ponto (remover após primeiro uso) ──
+app.get('/setup-ponto', async (req, res) => {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS ponto_registros (
+        id                SERIAL PRIMARY KEY,
+        funcionario_id    INTEGER NOT NULL REFERENCES rh_funcionarios(id),
+        data_ref          DATE NOT NULL DEFAULT CURRENT_DATE,
+        entrada           TIMESTAMPTZ,
+        saida_intervalo   TIMESTAMPTZ,
+        retorno_intervalo TIMESTAMPTZ,
+        saida             TIMESTAMPTZ,
+        entrada_manual    BOOLEAN DEFAULT FALSE,
+        saida_manual      BOOLEAN DEFAULT FALSE,
+        entrada_por       TEXT,
+        saida_por         TEXT,
+        entrada_em        TIMESTAMPTZ,
+        saida_em          TIMESTAMPTZ,
+        justificativa     TEXT,
+        observacao        TEXT,
+        status            TEXT DEFAULT 'ok',
+        criado_por        TEXT,
+        atualizado_em     TIMESTAMPTZ DEFAULT NOW()
+      )`);
+    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS ponto_func_data_idx ON ponto_registros(funcionario_id, data_ref)`).catch(()=>{});
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS ponto_auditoria (
+        id              SERIAL PRIMARY KEY,
+        ponto_id        INTEGER REFERENCES ponto_registros(id),
+        funcionario_id  INTEGER NOT NULL,
+        tipo            TEXT NOT NULL,
+        horario_batida  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        usuario_login   TEXT,
+        usuario_nome    TEXT,
+        usuario_perfil  TEXT,
+        ip_address      TEXT,
+        user_agent      TEXT,
+        manual          BOOLEAN DEFAULT FALSE,
+        obs             TEXT
+      )`);
+    res.send('<h2 style="font-family:sans-serif;color:green">✅ Tabelas criadas! Pode fechar esta página.</h2>');
+  } catch(e) {
+    res.status(500).send('<h2 style="font-family:sans-serif;color:red">❌ Erro: ' + e.message + '</h2>');
+  }
+});
+
 app.use('/api/boletos',      require('./routes/boletos')(pool));
 app.use('/api/faturamento',  require('./routes/faturamento')(pool));
 app.use('/api/dre',          require('./routes/dre')(pool));
