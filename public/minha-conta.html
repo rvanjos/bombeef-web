@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Minha Conta — Bom Beef</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="js/api.js"></script>
+<style>
+:root{--red:#8B0000;--red-l:#C0392B;--green:#1a7a4a;--orange:#c76b00;
+  --bg:#f7f4f0;--white:#fff;--text:#1a1a1a;--muted:#7a7068;--border:#e8e0d8;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
+.ph{background:linear-gradient(135deg,var(--red),var(--red-l));padding:12px 18px;display:flex;align-items:center;gap:10px;}
+.ph h2{font-family:'Playfair Display',serif;font-size:16px;color:#fff;}
+.body{padding:14px;max-width:560px;margin:0 auto;}
+.card{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:12px;box-shadow:0 1px 6px rgba(0,0,0,.05);}
+.kpi-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px;}
+.kpi{background:var(--white);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center;}
+.kpi-l{font-size:9px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:700;margin-bottom:4px;}
+.kpi-v{font-size:18px;font-weight:700;font-family:'DM Mono',monospace;}
+.btn{padding:8px 14px;border-radius:8px;border:none;cursor:pointer;font-size:12px;font-weight:600;font-family:'DM Sans',sans-serif;}
+.btn-red{background:var(--red);color:#fff;}
+.btn-green{background:var(--green);color:#fff;}
+.btn-gray{background:var(--white);color:var(--text);border:1px solid var(--border);}
+/* Extrato */
+.ext-header{background:#fff8f0;border-top:2px solid #f5e6d0;padding:8px 12px;font-weight:700;font-size:12px;color:#5c1a1a;}
+.ext-item{display:flex;padding:8px 12px;border-bottom:1px solid #f9f4ef;font-size:12px;gap:8px;align-items:center;}
+.ext-nome{flex:1;color:#444;}
+.ext-val{font-family:'DM Mono',monospace;font-weight:600;text-align:right;min-width:90px;}
+.ext-saldo{font-family:'DM Mono',monospace;font-weight:700;text-align:right;min-width:90px;}
+.pag-row{background:#f0fdf4;border-top:2px solid #86efac;padding:8px 12px;display:flex;gap:8px;align-items:center;}
+/* Modal pagamento */
+.mbg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:800;align-items:center;justify-content:center;padding:16px;}
+.mbg.open{display:flex;}
+.md{background:var(--white);border-radius:14px;width:100%;max-width:380px;}
+.mdh{background:linear-gradient(135deg,var(--red),var(--red-l));padding:14px 18px;border-radius:14px 14px 0 0;display:flex;justify-content:space-between;align-items:center;}
+.mdh h3{color:#fff;font-size:14px;font-weight:700;}
+.mdx{background:none;border:none;color:rgba(255,255,255,.8);font-size:22px;cursor:pointer;}
+.mdb{padding:16px 18px;}
+.mdf{padding:12px 18px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;}
+.fg{margin-bottom:12px;}
+.fg label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:4px;}
+.fg input,.fg select{width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:'DM Sans',sans-serif;}
+.empty{text-align:center;padding:24px;color:var(--muted);font-size:13px;}
+</style>
+</head>
+<body>
+<div class="ph">
+  <span style="font-size:20px">💼</span>
+  <h2>Minha Conta</h2>
+</div>
+
+<div class="body" id="body">
+  <div style="text-align:center;padding:40px;color:var(--muted)">
+    <div style="font-size:32px;margin-bottom:8px">⏳</div>
+    Carregando...
+  </div>
+</div>
+
+<!-- Modal pagamento -->
+<div class="mbg" id="m-pag">
+  <div class="md">
+    <div class="mdh"><h3>💵 Registrar Pagamento</h3><button class="mdx" onclick="fecharPag()">×</button></div>
+    <div class="mdb">
+      <div class="fg">
+        <label>Saldo em Aberto</label>
+        <div style="font-size:20px;font-weight:700;font-family:monospace;color:var(--red-l)" id="pag-saldo-show">R$ 0,00</div>
+      </div>
+      <div class="fg"><label>Valor a Pagar *</label>
+        <input type="number" id="pag-valor" step="0.01" min="0.01" placeholder="0,00">
+      </div>
+      <div class="fg"><label>Forma de Pagamento</label>
+        <select id="pag-forma">
+          <option value="dinheiro">💵 Dinheiro</option>
+          <option value="pix">📱 Pix</option>
+          <option value="debito">💳 Débito</option>
+          <option value="credito">💳 Crédito</option>
+          <option value="desconto_folha">📋 Desconto em Folha</option>
+        </select>
+      </div>
+      <div class="fg"><label>Observação</label>
+        <input type="text" id="pag-obs" placeholder="Opcional">
+      </div>
+    </div>
+    <div class="mdf">
+      <button class="btn btn-gray" onclick="fecharPag()">Cancelar</button>
+      <button class="btn btn-green" onclick="confirmarPag()">✅ Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const {api, fmt, toast} = BB;
+let _dados = null;
+
+window.onBBReady = async () => {
+  const d = await api.get('/api/fiado/minha-conta');
+  if (!d.ok || !d.data) {
+    document.getElementById('body').innerHTML = `
+      <div class="empty">
+        <div style="font-size:40px;margin-bottom:8px">😕</div>
+        <div style="font-weight:600;margin-bottom:4px">Nenhuma conta encontrada</div>
+        <div style="font-size:11px">Fale com o administrador para vincular sua conta.</div>
+      </div>`;
+    return;
+  }
+  _dados = d.data;
+  renderMinhaConta();
+};
+
+function fmtDt(d) { return d ? d.slice(0,10).split('-').reverse().join('/') : '—'; }
+function fmtH(ts) { return ts ? new Date(ts).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}) : '—'; }
+
+function renderMinhaConta() {
+  const { cliente: c, vendas, pagamentos, saldo } = _dados;
+  const totalComprado = vendas.reduce((s,v)=>s+parseFloat(v.total_final||0),0);
+  const totalPago     = pagamentos.reduce((s,p)=>s+parseFloat(p.valor_pago||0),0);
+
+  // Mescla compras e pagamentos em ordem cronológica
+  const eventos = [
+    ...vendas.map(v=>({tipo:'venda',data:v.data_compra,obj:v})),
+    ...pagamentos.map(p=>({tipo:'pag',data:p.data_pagamento,obj:p})),
+  ].sort((a,b)=>a.data<b.data?-1:1);
+
+  let saldoAcum = 0;
+  const FORMA = {dinheiro:'💵',pix:'📱 Pix',debito:'💳 Débito',credito:'💳 Crédito',desconto_folha:'📋 Folha',outro:'📌'};
+
+  const linhasExtrato = eventos.map(ev => {
+    if (ev.tipo === 'venda') {
+      const v = ev.obj;
+      saldoAcum += parseFloat(v.total_final||0);
+      const itens = (v.itens||[]).map(i=>`${i.nome_produto} (${i.quantidade}x)`).join(', ');
+      return `
+        <div class="ext-header">📦 ${fmtDt(v.data_compra)}</div>
+        <div class="ext-item">
+          <div class="ext-nome" style="font-size:11px">${itens.slice(0,80)||'—'}</div>
+          <div class="ext-val" style="color:var(--red-l)">+${fmt.brl(parseFloat(v.total_final||0))}</div>
+          <div class="ext-saldo" style="color:${saldoAcum>0?'#dc2626':'#166534'}">${fmt.brl(saldoAcum)}</div>
+        </div>`;
+    } else {
+      const p = ev.obj;
+      saldoAcum -= parseFloat(p.valor_pago||0);
+      return `
+        <div class="pag-row">
+          <span style="font-size:14px">${FORMA[p.forma_pagamento]||'💵'}</span>
+          <div style="flex:1">
+            <div style="font-size:12px;font-weight:600">${fmtDt(p.data_pagamento)} — Pagamento</div>
+            ${p.observacoes?`<div style="font-size:10px;color:var(--muted)">${p.observacoes}</div>`:''}
+          </div>
+          <div style="text-align:right">
+            <div style="font-family:monospace;font-weight:700;color:var(--green)">-${fmt.brl(parseFloat(p.valor_pago||0))}</div>
+            <div style="font-family:monospace;font-size:11px;color:${saldoAcum>0?'#dc2626':'#166534'}">${fmt.brl(Math.max(0,saldoAcum))}</div>
+          </div>
+        </div>`;
+    }
+  }).join('');
+
+  document.getElementById('body').innerHTML = `
+    <!-- Header funcionário -->
+    <div class="card" style="background:linear-gradient(135deg,#8B0000,#c0392b);border:none;color:#fff;margin-bottom:12px">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="width:48px;height:48px;background:rgba(255,255,255,.2);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700">${c.nome.charAt(0)}</div>
+        <div>
+          <div style="font-size:16px;font-weight:700">${c.nome}</div>
+          <div style="font-size:11px;color:rgba(255,255,255,.75)">Funcionário Bom Beef Valinhos</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- KPIs -->
+    <div class="kpi-row">
+      <div class="kpi">
+        <div class="kpi-l">Saldo em Aberto</div>
+        <div class="kpi-v" style="color:${saldo>0?'var(--red-l)':'var(--green)'}">${fmt.brl(saldo)}</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-l">Total Retirado</div>
+        <div class="kpi-v">${fmt.brl(totalComprado)}</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-l">Total Pago</div>
+        <div class="kpi-v" style="color:var(--green)">${fmt.brl(totalPago)}</div>
+      </div>
+    </div>
+
+    ${saldo > 0 ? `
+    <div style="margin-bottom:12px">
+      <button class="btn btn-green" style="width:100%;padding:12px;font-size:14px" onclick="abrirPag()">💵 Realizar Pagamento</button>
+    </div>` : `
+    <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:12px 14px;margin-bottom:12px;text-align:center;font-weight:700;color:#166534">
+      ✅ Conta em dia — sem saldo em aberto
+    </div>`}
+
+    <!-- Extrato -->
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:8px">
+      Extrato de Compras e Pagamentos
+    </div>
+    <div style="background:var(--white);border:1px solid var(--border);border-radius:10px;overflow:hidden">
+      <div style="display:grid;grid-template-columns:1fr 90px 90px;padding:6px 12px;background:#f8f4f0;border-bottom:1px solid var(--border)">
+        <span style="font-size:9px;font-weight:700;text-transform:uppercase;color:var(--muted)">Descrição</span>
+        <span style="font-size:9px;font-weight:700;text-transform:uppercase;color:var(--muted);text-align:right">Valor</span>
+        <span style="font-size:9px;font-weight:700;text-transform:uppercase;color:var(--muted);text-align:right">Saldo</span>
+      </div>
+      ${linhasExtrato || '<div class="empty">Nenhum lançamento</div>'}
+    </div>`;
+}
+
+function abrirPag() {
+  const saldo = _dados?.saldo || 0;
+  document.getElementById('pag-saldo-show').textContent = fmt.brl(saldo);
+  document.getElementById('pag-valor').value = saldo.toFixed(2);
+  document.getElementById('pag-obs').value = '';
+  document.getElementById('m-pag').classList.add('open');
+}
+function fecharPag() { document.getElementById('m-pag').classList.remove('open'); }
+
+async function confirmarPag() {
+  const valor = parseFloat(document.getElementById('pag-valor').value)||0;
+  if (!valor || valor <= 0) { toast('⚠️ Informe o valor'); return; }
+  const d = await api.post('/api/fiado/pagamentos', {
+    cliente_id:    _dados.cliente.id,
+    valor_pago:    valor,
+    forma_pagamento: document.getElementById('pag-forma').value,
+    observacoes:   document.getElementById('pag-obs').value,
+    data_pagamento: new Date().toISOString().slice(0,10),
+  });
+  if (!d.ok) { toast('❌ '+d.erro); return; }
+  toast('✅ Pagamento registrado!');
+  fecharPag();
+  // Recarrega
+  const r = await api.get('/api/fiado/minha-conta');
+  if (r.ok && r.data) { _dados = r.data; renderMinhaConta(); }
+}
+</script>
+</body>
+</html>

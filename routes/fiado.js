@@ -16,7 +16,8 @@ module.exports = function(pool) {
         id                SERIAL PRIMARY KEY,
         nome              TEXT NOT NULL,
         telefone          TEXT,
-        tipo_cliente      TEXT NOT NULL DEFAULT 'normal' CHECK(tipo_cliente IN('normal','especial','socio')),
+        tipo_cliente      TEXT NOT NULL DEFAULT 'normal' CHECK(tipo_cliente IN('normal','especial','socio','funcionario')),
+        funcionario_id    INTEGER,
         desconto_pct      NUMERIC(5,2) DEFAULT 0,
         limite_credito    NUMERIC(12,2),
         status            TEXT NOT NULL DEFAULT 'ativo' CHECK(status IN('ativo','inativo')),
@@ -112,7 +113,75 @@ module.exports = function(pool) {
     return parseFloat(rows[0]?.saldo_aberto || 0);
   }
 
+  // ── MIGRAÇÃO: retiradas → clientes_fiado ──────────────────────────────────
+  async function migrarRetiradas() {
+    try {
+      // Altera constraint para aceitar funcionario
+      await pool.query(`ALTER TABLE clientes_fiado DROP CONSTRAINT IF EXISTS clientes_fiado_tipo_cliente_check`).catch(()=>{});
+      await pool.query(`ALTER TABLE clientes_fiado ADD CONSTRAINT clientes_fiado_tipo_cliente_check CHECK(tipo_cliente IN('normal','especial','socio','funcionario'))`).catch(()=>{});
+      await pool.query(`ALTER TABLE clientes_fiado ADD COLUMN IF NOT EXISTS funcionario_id INTEGER`).catch(()=>{});
+      // Cria clientes para funcionários que ainda não existem
+      const { rows: funcs } = await pool.query(`SELECT f.id, f.nome FROM rh_funcionarios f WHERE f.ativo=true`).catch(()=>({rows:[]}));
+      for (const f of funcs) {
+        await pool.query(`
+          INSERT INTO clientes_fiado(nome, tipo_cliente, funcionario_id, status)
+          VALUES($1, 'funcionario', $2, 'ativo')
+          ON CONFLICT DO NOTHING
+        `, [f.nome, f.id]).catch(()=>{});
+      }
+      // Migra retiradas existentes para vendas_fiado
+      const { rows: rets } = await pool.query(`
+        SELECT r.*, f.nome AS func_nome,
+          (SELECT cf.id FROM clientes_fiado cf WHERE cf.funcionario_id=r.funcionario_id AND cf.tipo_cliente='funcionario' LIMIT 1) AS cliente_id
+        FROM retiradas r
+        JOIN rh_funcionarios f ON f.id=r.funcionario_id
+        WHERE r.funcionario_id IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM vendas_fiado vf
+            WHERE vf.observacoes LIKE '%ret_id:'||r.id||'%'
+          )
+        LIMIT 500
+      `).catch(()=>({rows:[]}));
+      let migradas = 0;
+      for (const r of rets) {
+        if (!r.cliente_id) continue;
+        const total = parseFloat(r.valor_total||0) || parseFloat(r.preco_unitario||0)*parseFloat(r.qtd||1);
+        if (total <= 0) continue;
+        const { rows: [v] } = await pool.query(`
+          INSERT INTO vendas_fiado(cliente_id, data_compra, subtotal_venda, desconto_total, total_final, saldo_restante, status, observacoes, usuario_resp)
+          VALUES($1,$2,$3,0,$3,$3,'aberto',$4,'Migrado de Retiradas')
+          RETURNING id
+        `, [r.cliente_id, r.dt_retirada||new Date().toISOString().slice(0,10), total.toFixed(2), `ret_id:${r.id}`]).catch(()=>null);
+        if (v) {
+          await pool.query(`
+            INSERT INTO itens_venda_fiado(venda_id, codigo_produto, nome_produto, quantidade, valor_unit_venda, valor_unit_custo, desconto_pct, valor_final_item)
+            VALUES($1,$2,$3,$4,$5,$5,0,$6)
+          `, [v.id, null, r.descricao, r.qtd||1, parseFloat(r.preco_unitario||0).toFixed(2), total.toFixed(2)]).catch(()=>{});
+          migradas++;
+        }
+      }
+      if (migradas > 0) console.log(`[fiado] ${migradas} retirada(s) migrada(s) para Compras Pendentes`);
+    } catch(e) { console.error('[migrarRetiradas]', e.message); }
+  }
+  setTimeout(migrarRetiradas, 3000); // executa 3s após start
+
   // ── CLIENTES ───────────────────────────────────────────────────────────────
+  // Sincroniza funcionários como clientes tipo 'funcionario'
+  r.post('/sync-funcionarios', async (req, res) => {
+    try {
+      const { rows: funcs } = await pool.query(`SELECT id, nome FROM rh_funcionarios WHERE ativo=true`);
+      let criados = 0;
+      for (const f of funcs) {
+        const existing = await pool.query(`SELECT id FROM clientes_fiado WHERE funcionario_id=$1`, [f.id]);
+        if (!existing.rows.length) {
+          await pool.query(`INSERT INTO clientes_fiado(nome,tipo_cliente,funcionario_id,status) VALUES($1,'funcionario',$2,'ativo')`, [f.nome, f.id]);
+          criados++;
+        }
+      }
+      res.json({ ok:true, criados });
+    } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
+  });
+
   r.get('/clientes', async (req, res) => {
     try {
       const { rows } = await pool.query(`
@@ -412,6 +481,31 @@ module.exports = function(pool) {
         [cliente_id||null]
       );
       res.json({ ok:true, data:rows });
+    } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
+  });
+
+  // ── MINHA CONTA (funcionário logado) ─────────────────────────────────────
+  r.get('/minha-conta', async (req, res) => {
+    try {
+      // Busca funcionário vinculado ao usuário logado pelo nome
+      const { rows: [cli] } = await pool.query(`
+        SELECT cf.*, f.nome AS func_nome
+        FROM clientes_fiado cf
+        LEFT JOIN rh_funcionarios f ON f.id=cf.funcionario_id
+        WHERE cf.tipo_cliente='funcionario'
+          AND (cf.funcionario_id=(SELECT id FROM rh_funcionarios WHERE LOWER(nome) LIKE LOWER($1) LIMIT 1)
+               OR LOWER(cf.nome) LIKE LOWER($1))
+        LIMIT 1
+      `, [`%${req.user?.nome?.split(' ')[0]}%`]);
+      if (!cli) return res.json({ ok:true, data:null });
+      const { rows: vendas } = await pool.query(`
+        SELECT v.*, (SELECT json_agg(i) FROM itens_venda_fiado i WHERE i.venda_id=v.id) AS itens
+        FROM vendas_fiado v WHERE v.cliente_id=$1 AND v.status NOT IN('cancelado','reprovado')
+        ORDER BY v.data_compra DESC LIMIT 50
+      `, [cli.id]);
+      const { rows: pagamentos } = await pool.query(`SELECT * FROM pagamentos_fiado WHERE cliente_id=$1 ORDER BY data_pagamento DESC LIMIT 20`, [cli.id]);
+      const saldo = vendas.filter(v=>['aberto','parcial'].includes(v.status)).reduce((s,v)=>s+parseFloat(v.saldo_restante||0),0);
+      res.json({ ok:true, data:{ cliente:cli, vendas, pagamentos, saldo } });
     } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
   });
 

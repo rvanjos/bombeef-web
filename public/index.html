@@ -411,6 +411,7 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
     <button class="pnav-tab" onclick="showTab('vendasproduto')" data-tab="vendasproduto" data-perfil="admin,gestor"><span class="tab-icon">📊</span><span class="tab-label">Análise Vendas</span></button>
     <div class="pnav-section">Gestão</div>
     <button class="pnav-tab" onclick="showTab('fiado')" data-tab="fiado" data-perfil="admin,gestor,caixa"><span class="tab-icon">💳</span><span class="tab-label">Compras Pendentes</span><span id="nav-badge-fiado" style="display:none;background:#dc2626;color:#fff;border-radius:9px;padding:0 5px;font-size:10px;margin-left:3px;font-weight:700">0</span></button>
+    <button class="pnav-tab" onclick="showTab('minha-conta')" data-tab="minha-conta" data-perfil="operador,caixa"><span class="tab-icon">💼</span><span class="tab-label">Minha Conta</span></button>
     <button class="pnav-tab" onclick="showTab('rh')"        data-tab="rh"        data-perfil="admin,gestor,operador,caixa,estoque,financeiro,contabil"><span class="tab-icon">🧑‍💼</span><span class="tab-label">RH</span></button>
     <button class="pnav-tab" onclick="showTab('auditoria')" data-tab="auditoria" data-perfil="admin"><span class="tab-icon">🔍</span><span class="tab-label">Auditoria</span></button>
     <button class="pnav-tab" onclick="showTab('config')"    data-tab="config"    data-perfil="admin,gestor"><span class="tab-icon">⚙️</span><span class="tab-label">Config</span></button>
@@ -652,6 +653,12 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
 
     <div class="frame-container" id="frame-fiado">
       <iframe id="iframe-fiado" style="width:100%;height:100%;border:none" data-src="fiado.html"></iframe>
+    </div>
+    <div class="frame-container" id="frame-minha-conta">
+      <iframe class="module-frame" id="iframe-minha-conta" data-src="minha-conta.html"></iframe>
+    </div>
+    <div class="frame-container" id="frame-ponto">
+      <iframe class="module-frame" id="iframe-ponto" data-src="ponto.html"></iframe>
     </div>
     <div class="frame-container" id="frame-rh">
       <iframe class="module-frame" id="iframe-rh" src=""  data-src="rh.html"></iframe>

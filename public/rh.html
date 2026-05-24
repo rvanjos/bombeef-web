@@ -206,6 +206,7 @@ main{padding:16px 24px;max-width:1400px;margin:0 auto;}
     <button class="tab" id="tab-btn-meus" onclick="showTab('meus')" style="display:none">📝 Meus Lançamentos</button>
     <button class="tab" onclick="showTab('escala')">📅 Escala de Domingos</button>
     <button class="tab" onclick="showTab('relatorio')">📄 Relatório</button>
+    <button class="tab" onclick="showTab('ponto')">⏱️ Ponto</button>
   </div>
 
   <!-- ── TAB FOLHA ── -->
@@ -524,6 +525,108 @@ main{padding:16px 24px;max-width:1400px;margin:0 auto;}
 
 <!-- Modal rejeitar -->
 <div class="modal-bg" id="modal-rejeitar">
+
+<!-- ══ SEÇÃO PONTO ══════════════════════════════════════════════════════════ -->
+<div id="sec-ponto" style="display:none;padding:0 2px">
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+      <select style="padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px" id="pt-func" onchange="carregarPonto()">
+        <option value="">Todos os funcionários</option>
+      </select>
+      <select style="padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px" id="pt-mes" onchange="carregarPonto()"></select>
+      <select style="padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px" id="pt-ano" onchange="carregarPonto()"></select>
+    </div>
+    <div style="display:flex;gap:6px">
+      <button class="btn-s btn" onclick="exportarPonto()" style="background:var(--green);color:#fff">📊 Exportar</button>
+      <button class="btn-s btn" onclick="abrirAjustePonto(null)" style="background:var(--white);border:1px solid var(--border)">✏️ Ajuste Manual</button>
+      <button class="btn-s btn" onclick="abrirConfJornada()" style="background:var(--white);border:1px solid var(--border)">⚙️ Jornadas</button>
+    </div>
+  </div>
+
+  <div id="pt-kpis" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;margin-bottom:12px"></div>
+
+  <div style="background:var(--white);border:1px solid var(--border);border-radius:10px;overflow:hidden;box-shadow:0 1px 6px rgba(0,0,0,.05)">
+  <div style="overflow-x:auto">
+  <table style="width:100%;border-collapse:collapse" id="tbl-ponto">
+    <thead><tr style="background:#f8f4f0;border-bottom:2px solid var(--border)">
+      <th style="padding:9px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700">Data</th>
+      <th style="padding:9px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700">Funcionário</th>
+      <th style="padding:9px 8px;text-align:center;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700">Entrada</th>
+      <th style="padding:9px 8px;text-align:center;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700">Saída Int.</th>
+      <th style="padding:9px 8px;text-align:center;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700">Retorno</th>
+      <th style="padding:9px 8px;text-align:center;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700">Saída</th>
+      <th style="padding:9px 8px;text-align:center;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700">Horas</th>
+      <th style="padding:9px 8px;text-align:center;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700">Situação</th>
+      <th style="padding:9px 8px;text-align:center;font-size:10px;color:var(--muted);font-weight:700">Ações</th>
+    </tr></thead>
+    <tbody id="tbody-ponto"></tbody>
+  </table>
+  </div></div>
+</div>
+
+<!-- Modal ajuste manual ponto -->
+<div class="modal-bg" id="m-ponto-ajuste">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-head"><h3>✏️ Ajuste de Ponto</h3><button class="modal-close" onclick="document.getElementById('m-ponto-ajuste').classList.remove('open')">×</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="aj-id">
+      <div class="fg-row">
+        <div class="fg"><label>Funcionário *</label>
+          <select id="aj-func" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:7px;font-size:13px"><option value="">Selecione...</option></select>
+        </div>
+        <div class="fg"><label>Data *</label><input type="date" id="aj-data" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:7px;font-size:13px"></div>
+      </div>
+      <div class="fg-row">
+        <div class="fg"><label>Entrada</label><input type="time" id="aj-entrada" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:7px;font-size:13px"></div>
+        <div class="fg"><label>Saída Intervalo</label><input type="time" id="aj-saidaint" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:7px;font-size:13px"></div>
+      </div>
+      <div class="fg-row">
+        <div class="fg"><label>Retorno</label><input type="time" id="aj-retorno" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:7px;font-size:13px"></div>
+        <div class="fg"><label>Saída</label><input type="time" id="aj-saida" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:7px;font-size:13px"></div>
+      </div>
+      <div class="fg"><label>Justificativa</label>
+        <textarea id="aj-just" rows="2" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:7px;font-size:13px" placeholder="Motivo do ajuste..."></textarea>
+      </div>
+      <div class="fg"><label>Status</label>
+        <select id="aj-status" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:7px;font-size:13px">
+          <option value="ajustado">✏️ Ajustado</option>
+          <option value="falta">❌ Falta</option>
+          <option value="justificado">📋 Falta Justificada</option>
+          <option value="ok">✅ OK</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-s" onclick="document.getElementById('m-ponto-ajuste').classList.remove('open')">Cancelar</button>
+      <button class="btn btn-p" onclick="salvarAjustePonto()">💾 Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal configurar jornada -->
+<div class="modal-bg" id="m-jornada">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-head"><h3>⚙️ Configurar Jornada</h3><button class="modal-close" onclick="document.getElementById('m-jornada').classList.remove('open')">×</button></div>
+    <div class="modal-body">
+      <div class="fg"><label>Funcionário *</label>
+        <select id="jor-func" onchange="carregarJornadaFunc()" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:7px;font-size:13px"><option value="">Selecione...</option></select>
+      </div>
+      <div class="fg-row">
+        <div class="fg"><label>Entrada Prevista</label><input type="time" id="jor-entrada" value="08:00" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:7px;font-size:13px"></div>
+        <div class="fg"><label>Saída Prevista</label><input type="time" id="jor-saida" value="18:00" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:7px;font-size:13px"></div>
+      </div>
+      <div class="fg-row">
+        <div class="fg"><label>Intervalo (minutos)</label><input type="number" id="jor-intervalo" value="60" min="0" max="120" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:7px;font-size:13px"></div>
+        <div class="fg"><label>Jornada (horas/dia)</label><input type="number" id="jor-horas" value="8" step="0.5" min="1" max="12" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:7px;font-size:13px"></div>
+      </div>
+      <div class="fg"><label>Tolerância de Atraso (minutos)</label><input type="number" id="jor-tolerancia" value="10" min="0" max="60" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:7px;font-size:13px"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-s" onclick="document.getElementById('m-jornada').classList.remove('open')">Cancelar</button>
+      <button class="btn btn-p" onclick="salvarJornada()">💾 Salvar Jornada</button>
+    </div>
+  </div>
+</div>
 
 <!-- Modal editar apontamento -->
 <div class="modal-bg" id="modal-edit-apont">
@@ -1177,6 +1280,7 @@ function fecharModal(id) {
   if (el.style.display !== '') el.style.display = 'none';
 }
 function showTab(t) {
+  if (t === 'ponto') { setTimeout(inicializarAbaPonto, 50); }
   document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
   // Ativa o botão correto
   const btn = document.querySelector(`.tab[onclick="showTab('${t}')"]`);
@@ -1990,6 +2094,23 @@ async function gerarRelatorio() {
   }
   document.getElementById('rel-container').innerHTML = html;
 }
+
+// ══ PONTO ELETRÔNICO ═════════════════════════════════════════════════════════
+let _pontoRegistros=[];
+function inicializarAbaPonto(){const a=new Date(),M=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];document.getElementById('pt-mes').innerHTML=M.map((m,i)=>`<option value="${i+1}"${i===a.getMonth()?' selected':''}>${m}</option>`).join('');const y=a.getFullYear();document.getElementById('pt-ano').innerHTML=[y-1,y,y+1].map(v=>`<option value="${v}"${v===y?' selected':''}>${v}</option>`).join('');['pt-func','aj-func','jor-func'].forEach(id=>{const s=document.getElementById(id);if(!s)return;s.innerHTML=(id==='pt-func'?'<option value="">Todos os funcionários</option>':'<option value="">Selecione...</option>')+(_funcionarios||[]).filter(f=>f.ativo).map(f=>`<option value="${f.id}">${f.nome}</option>`).join('');});carregarPonto();}
+async function carregarPonto(){const fi=document.getElementById('pt-func')?.value,mes=document.getElementById('pt-mes')?.value,ano=document.getElementById('pt-ano')?.value;if(!mes||!ano)return;let url=`/api/ponto/registros?mes=${mes}&ano=${ano}`;if(fi)url+=`&funcionario_id=${fi}`;const d=await api.get(url);if(!d.ok)return;_pontoRegistros=d.data||[];renderTabelaPonto();renderKPIsPonto();}
+function fmtHoraTs(ts){if(!ts)return'<span style="color:#ccc">—</span>';return`<span style="font-family:monospace;font-weight:600">${new Date(ts).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</span>`;}
+function calcHorasTrab(p){if(!p.entrada||!p.saida)return null;const ms=new Date(p.saida)-new Date(p.entrada),intMs=p.saida_intervalo&&p.retorno_intervalo?new Date(p.retorno_intervalo)-new Date(p.saida_intervalo):(p.intervalo_min||60)*60000;return Math.max(0,(ms-intMs)/3600000);}
+function fmtHorasPonto(h){if(h===null||h===undefined)return'—';return`${Math.floor(h)}h${String(Math.round((h%1)*60)).padStart(2,'0')}`;}
+function badgePonto(p){if(!p.entrada)return'<span style="background:#fee2e2;color:#991b1b;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:700">❌ Falta</span>';const t=calcHorasTrab(p),j=parseFloat(p.jornada_horas||8),tol=parseInt(p.tolerancia_min||10),e=new Date(p.entrada),ev=new Date(`1970-01-01T${p.horario_entrada||'08:00'}:00`),atr=(e.getHours()*60+e.getMinutes())-(ev.getHours()*60+ev.getMinutes());if(atr>tol)return`<span style="background:#fef3c7;color:#92400e;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:700">⚠️ Atraso ${atr}min</span>`;if(t!==null&&t>j+0.5)return`<span style="background:#dcfce7;color:#166534;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:700">⏫ Extra ${fmtHorasPonto(t-j)}</span>`;if(p.status==='ajustado')return'<span style="background:#dbeafe;color:#1e40af;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:700">✏️ Ajustado</span>';if(p.status==='justificado')return'<span style="background:#ede9fe;color:#5b21b6;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:700">📋 Justificado</span>';return'<span style="background:#f0fdf4;color:#166534;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:700">✅ Normal</span>';}
+function renderTabelaPonto(){const tb=document.getElementById('tbody-ponto');if(!tb)return;if(!_pontoRegistros.length){tb.innerHTML='<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--muted)">Nenhum registro encontrado</td></tr>';return;}tb.innerHTML=_pontoRegistros.map(p=>{const t=calcHorasTrab(p),dt=p.data_ref?p.data_ref.slice(0,10).split('-').reverse().join('/'):'—',man=(p.entrada_manual||p.saida_manual)?' <span style="font-size:9px;color:#3b82f6">✏️</span>':'';return`<tr style="border-bottom:1px solid #f5efe8"><td style="padding:8px 12px;font-size:12px;font-weight:600">${dt}</td><td style="padding:8px 12px;font-size:12px">${p.func_nome||'—'}${man}</td><td style="padding:8px 8px;text-align:center;font-size:11px">${fmtHoraTs(p.entrada)}</td><td style="padding:8px 8px;text-align:center;font-size:11px">${fmtHoraTs(p.saida_intervalo)}</td><td style="padding:8px 8px;text-align:center;font-size:11px">${fmtHoraTs(p.retorno_intervalo)}</td><td style="padding:8px 8px;text-align:center;font-size:11px">${fmtHoraTs(p.saida)}</td><td style="padding:8px 8px;text-align:center;font-size:12px;font-family:monospace;font-weight:700">${t!==null?fmtHorasPonto(t):'—'}</td><td style="padding:8px 8px;text-align:center">${badgePonto(p)}</td><td style="padding:8px 8px;text-align:center"><button onclick="abrirAjustePonto(${p.id})" style="background:none;border:1px solid var(--border);border-radius:5px;padding:3px 8px;cursor:pointer;font-size:11px">✏️</button></td></tr>`;}).join('');}
+function renderKPIsPonto(){const mes=parseInt(document.getElementById('pt-mes')?.value||0),ano=parseInt(document.getElementById('pt-ano')?.value||0),dn=new Date(ano,mes,0).getDate(),du=Array.from({length:dn},(_,i)=>new Date(ano,mes-1,i+1).getDay()).filter(d=>d!==0&&d!==6).length,ce=_pontoRegistros.filter(p=>p.entrada).length,fa=_pontoRegistros.filter(p=>!p.entrada).length,at=_pontoRegistros.filter(p=>{if(!p.entrada)return false;const e=new Date(p.entrada),pv=new Date(`1970-01-01T${p.horario_entrada||'08:00'}:00`);return(e.getHours()*60+e.getMinutes())-(pv.getHours()*60+pv.getMinutes())>(p.tolerancia_min||10);}).length,ex=_pontoRegistros.filter(p=>{const t=calcHorasTrab(p);return t!==null&&t>parseFloat(p.jornada_horas||8)+0.5;}).length,el=document.getElementById('pt-kpis');if(el)el.innerHTML=[{l:'Dias Registrados',v:ce,c:'#166534',b:'#dcfce7'},{l:'Faltas',v:fa,c:'#991b1b',b:'#fee2e2'},{l:'Atrasos',v:at,c:'#92400e',b:'#fef3c7'},{l:'Horas Extras',v:ex,c:'#1e40af',b:'#dbeafe'},{l:'Dias Úteis Mês',v:du,c:'var(--muted)',b:'var(--white)'}].map(k=>`<div style="background:${k.b};border:1px solid var(--border);border-radius:8px;padding:10px 12px"><div style="font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:${k.c};font-weight:700;margin-bottom:3px">${k.l}</div><div style="font-size:20px;font-weight:700;color:${k.c};font-family:monospace">${k.v}</div></div>`).join('');}
+function abrirAjustePonto(id){document.getElementById('aj-id').value=id||'';if(id){const p=_pontoRegistros.find(x=>x.id===id);if(p){document.getElementById('aj-func').value=p.funcionario_id;document.getElementById('aj-data').value=p.data_ref?.slice(0,10)||'';const fT=ts=>ts?new Date(ts).toTimeString().slice(0,5):'';document.getElementById('aj-entrada').value=fT(p.entrada);document.getElementById('aj-saidaint').value=fT(p.saida_intervalo);document.getElementById('aj-retorno').value=fT(p.retorno_intervalo);document.getElementById('aj-saida').value=fT(p.saida);document.getElementById('aj-just').value=p.justificativa||'';document.getElementById('aj-status').value=p.status||'ajustado';}}else{['aj-entrada','aj-saidaint','aj-retorno','aj-saida','aj-just'].forEach(i=>document.getElementById(i).value='');document.getElementById('aj-func').value='';document.getElementById('aj-status').value='ajustado';document.getElementById('aj-data').value=new Date().toISOString().slice(0,10);}document.getElementById('m-ponto-ajuste').classList.add('open');}
+async function salvarAjustePonto(){const id=document.getElementById('aj-id').value,fi=document.getElementById('aj-func').value,dt=document.getElementById('aj-data').value;if(!fi||!dt){toast('Selecione funcionário e data');return;}const tS=(t,d)=>t?`${d}T${t}:00`:null,body={funcionario_id:fi,data_ref:dt,entrada:tS(document.getElementById('aj-entrada').value,dt),saida_intervalo:tS(document.getElementById('aj-saidaint').value,dt),retorno_intervalo:tS(document.getElementById('aj-retorno').value,dt),saida:tS(document.getElementById('aj-saida').value,dt),justificativa:document.getElementById('aj-just').value,status:document.getElementById('aj-status').value};const d=id?await api.put(`/api/ponto/registros/${id}`,body):await api.post('/api/ponto/registros',body);if(!d.ok){toast('❌ '+d.erro);return;}toast('✅ Ponto ajustado!');document.getElementById('m-ponto-ajuste').classList.remove('open');carregarPonto();}
+function abrirConfJornada(){document.getElementById('m-jornada').classList.add('open');}
+function carregarJornadaFunc(){const f=(_funcionarios||[]).find(x=>x.id==document.getElementById('jor-func').value);if(f){document.getElementById('jor-entrada').value=f.horario_entrada?.slice(0,5)||'08:00';document.getElementById('jor-saida').value=f.horario_saida?.slice(0,5)||'18:00';document.getElementById('jor-intervalo').value=f.intervalo_min||60;document.getElementById('jor-horas').value=f.jornada_horas||8;document.getElementById('jor-tolerancia').value=f.tolerancia_min||10;}}
+async function salvarJornada(){const id=document.getElementById('jor-func').value;if(!id){toast('Selecione um funcionário');return;}const body={horario_entrada:document.getElementById('jor-entrada').value,horario_saida:document.getElementById('jor-saida').value,intervalo_min:parseInt(document.getElementById('jor-intervalo').value),jornada_horas:parseFloat(document.getElementById('jor-horas').value),tolerancia_min:parseInt(document.getElementById('jor-tolerancia').value)};const d=await api.put(`/api/ponto/jornada/${id}`,body);if(!d.ok){toast('❌ '+d.erro);return;}toast('✅ Jornada atualizada!');document.getElementById('m-jornada').classList.remove('open');const f=(_funcionarios||[]).find(x=>x.id==id);if(f)Object.assign(f,body);}
+async function exportarPonto(){const mes=document.getElementById('pt-mes').value,ano=document.getElementById('pt-ano').value,d=await api.get(`/api/ponto/resumo-mensal?mes=${mes}&ano=${ano}`);if(!d.ok||!d.data?.length){toast('Sem dados');return;}const MN=['','Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'],li=[['Funcionário','Cargo','Data','Entrada','Saída Int.','Retorno','Saída','Horas Trab.','Jornada','Situação','Justificativa']];for(const f of d.data){for(const r of(f.registros||[])){const t=r.entrada&&r.saida?((new Date(r.saida)-new Date(r.entrada)-(r.saida_intervalo&&r.retorno_intervalo?new Date(r.retorno_intervalo)-new Date(r.saida_intervalo):(f.intervalo_min||60)*60000))/3600000):null,fT=ts=>ts?new Date(ts).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}):'',fH=h=>{if(h===null)return'';const hh=Math.floor(h),mm=Math.round((h%1)*60);return`${hh}:${String(mm).padStart(2,'0')}`},e=r.entrada?new Date(r.entrada):null,pv=new Date(`1970-01-01T${f.horario_entrada||'08:00'}:00`),atr=e?(e.getHours()*60+e.getMinutes())-(pv.getHours()*60+pv.getMinutes()):0,sit=!r.entrada?'FALTA':atr>(f.tolerancia_min||10)?`ATRASO ${atr}min`:t&&t>parseFloat(f.jornada_horas||8)+0.5?'HORA EXTRA':r.status==='ajustado'?'AJUSTADO':r.status==='justificado'?'JUSTIFICADO':'NORMAL';li.push([f.nome,f.cargo||'',r.data?.slice(0,10).split('-').reverse().join('/')||'',fT(r.entrada),fT(r.saida_intervalo),fT(r.retorno_intervalo),fT(r.saida),fH(t),fH(parseFloat(f.jornada_horas||8)),sit,r.justificativa||'']);}li.push([]);}const csv=li.map(l=>l.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(';')).join('\n'),a=document.createElement('a');a.href='data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv);a.download=`Ponto_${MN[parseInt(mes)]}_${ano}.csv`;a.click();toast(`✅ Relatório exportado — ${MN[parseInt(mes)]}/${ano}`);}
 </script>
 
 <!-- ============================================================

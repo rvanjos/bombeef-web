@@ -120,7 +120,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
 <!-- Abas -->
 <div class="tabs-bar">
   <button class="tab-btn active" onclick="showTab('painel',this)">📊 Painel</button>
-  <button class="tab-btn" onclick="showTab('clientes',this)">👥 Clientes</button>
+  <button class="tab-btn" onclick="showTab('funcionarios',this)">👷 Funcionários</button>
+  <button class="tab-btn" onclick="showTab('clientes',this)">👥 Clientes Externos</button>
   <button class="tab-btn" onclick="showTab('vendas',this)">🛍 Vendas</button>
   <button class="tab-btn" onclick="showTab('pagamentos',this)">💵 Pagamentos</button>
   <button class="tab-btn" onclick="showTab('aprovacoes',this)" id="tab-aprov">⏳ Aprovações <span class="badge" id="badge-aprov" style="display:none">0</span></button>
@@ -171,7 +172,19 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
   </div>
 </div>
 
-<!-- ── CLIENTES ────────────────────────────────────────────────── -->
+<!-- ── FUNCIONÁRIOS ─────────────────────────────────────────────── -->
+<div id="sec-funcionarios" style="display:none">
+  <div class="toolbar">
+    <input class="flt" type="text" placeholder="🔍 Buscar funcionário..." id="busca-func-ret" oninput="renderFuncionarios()" style="min-width:200px">
+    <button class="btn btn-red" onclick="abrirNovaVendaFuncionario()">＋ Nova Retirada</button>
+    <button class="btn btn-gray" onclick="sincFuncionarios()">🔄 Sincronizar com RH</button>
+  </div>
+
+  <!-- Cards de funcionários com saldo -->
+  <div id="lista-funcionarios" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px"></div>
+</div>
+
+<!-- ── CLIENTES EXTERNOS ──────────────────────────────────────── -->
 <div id="sec-clientes" style="display:none">
   <div class="toolbar">
     <input class="flt" type="text" placeholder="🔍 Buscar..." id="busca-cli" oninput="renderListaClientes()" style="min-width:220px">
@@ -488,6 +501,72 @@ const {api, fmt, toast} = BB;
 let _clientes=[], _vendas=[], _pagamentos=[], _clienteDetalhe=null;
 let _itemIdx=0;
 
+// ── Funcionários ───────────────────────────────────────────────────────────
+function renderFuncionarios() {
+  const q = (document.getElementById('busca-func-ret')?.value||'').toLowerCase();
+  const funcs = _clientes.filter(c => c.tipo_cliente==='funcionario' && (!q || c.nome.toLowerCase().includes(q)));
+  const el = document.getElementById('lista-funcionarios');
+  if (!el) return;
+  if (!funcs.length) { el.innerHTML='<div class="empty">Nenhum funcionário encontrado. Clique em "Sincronizar com RH".</div>'; return; }
+  el.innerHTML = funcs.map(c => {
+    const saldo  = parseFloat(c.saldo_aberto||0);
+    const limite = parseFloat(c.limite_credito||0);
+    const excedeu= limite>0 && saldo>limite;
+    const corSaldo = saldo>0 ? (excedeu?'#dc2626':'#d97706') : '#166534';
+    const pending  = parseInt(c.vendas_pendentes||0);
+    return `<div class="venda-card" style="border-left:3px solid ${corSaldo}">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
+        <div style="flex:1">
+          <div style="font-weight:700;font-size:14px">${c.nome}
+            ${pending>0?`<span class="badge badge-roxo" style="font-size:9px">⏳${pending}</span>`:''}
+          </div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">
+            ${c.ultima_compra?'Última: '+c.ultima_compra.slice(0,10).split('-').reverse().join('/'):'Sem compras'}
+            ${limite>0?' · Limite: '+fmt.brl(limite):''}
+          </div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:10px;color:var(--muted)">Saldo em Aberto</div>
+          <div style="font-size:18px;font-weight:700;font-family:monospace;color:${corSaldo}">${fmt.brl(saldo)}</div>
+          ${excedeu?'<div style="font-size:10px;color:#dc2626">⚠️ Acima do limite</div>':''}
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
+        <button class="btn btn-gray btn-sm" onclick="verExtratoCli(${c.id})">📋 Extrato</button>
+        <button class="btn btn-red btn-sm" onclick="abrirNovaVendaFuncionario(${c.id})">＋ Retirada</button>
+        <button class="btn btn-green btn-sm" onclick="abrirPagamentoCliente(${c.id})">💵 Pagar</button>
+        <button class="btn btn-gray btn-sm" onclick="editarCliente(${c.id})">✏️</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function abrirNovaVendaFuncionario(id) {
+  resetVenda();
+  // Filtra apenas funcionários no autocomplete
+  _filtroTipoVenda = 'funcionario';
+  if (id) {
+    const c = _clientes.find(x=>x.id===id);
+    if (c) selecionarClienteVenda(c);
+  }
+  // Ajusta label
+  document.querySelector('#m-venda .mdh h3').textContent = '🛍 Nova Retirada de Funcionário';
+  document.getElementById('btn-salvar-venda').textContent = '💾 Lançar Retirada';
+  document.getElementById('m-venda').classList.add('open');
+}
+
+async function sincFuncionarios() {
+  const d = await api.post('/api/compras_pendentes/sync-funcionarios', {});
+  if (!d.ok) { toast('❌ Erro ao sincronizar'); return; }
+  toast(`✅ ${d.criados} funcionário(s) sincronizado(s)!`);
+  await carregarTudo();
+}
+
+let _filtroTipoVenda = null;
+
+// Override buscarClienteVenda para filtrar por tipo quando necessário
+const _buscarClienteVendaOrig = typeof buscarClienteVenda === 'function' ? buscarClienteVenda : null;
+
 // ── Inicialização ──────────────────────────────────────────────────────────
 window.onBBReady = async () => {
   const hoje = new Date().toISOString().slice(0,10);
@@ -511,11 +590,14 @@ async function carregarTudo() {
   if (rk.ok) renderKPIs(rk.data);
   renderTabelaClientes();
   renderListaClientes();
+  renderFuncionarios();
   renderVendas();
   renderPagamentos();
   renderAprovacoes();
   popularSelects();
-  document.getElementById('ph-sub').textContent = `${_clientes.length} clientes · ${_vendas.filter(v=>v.status==='aberto'||v.status==='parcial').length} em aberto`;
+  const nFuncs = _clientes.filter(c=>c.tipo_cliente==='funcionario').length;
+  const nExterno = _clientes.filter(c=>c.tipo_cliente!=='funcionario').length;
+  document.getElementById('ph-sub').textContent = `${nFuncs} funcionário(s) · ${nExterno} clientes · ${_vendas.filter(v=>v.status==='aberto'||v.status==='parcial').length} em aberto`;
 }
 
 function renderKPIs(k) {
@@ -548,6 +630,7 @@ function renderTabelaClientes() {
   const tp = document.getElementById('flt-tipo').value;
   const st = document.getElementById('flt-status-cli').value;
   const lista = _clientes.filter(c =>
+    c.tipo_cliente !== 'funcionario' && // funcionários ficam na aba própria
     (!q || c.nome.toLowerCase().includes(q) || (c.telefone||'').includes(q)) &&
     (!tp || c.tipo_cliente===tp) &&
     (!st || c.status===st)
@@ -583,7 +666,10 @@ function renderTabelaClientes() {
 // ── Lista de clientes ───────────────────────────────────────────────────────
 function renderListaClientes() {
   const q = (document.getElementById('busca-cli').value||'').toLowerCase();
-  const lista = _clientes.filter(c => !q || c.nome.toLowerCase().includes(q) || (c.telefone||'').includes(q));
+  const lista = _clientes.filter(c =>
+    c.tipo_cliente !== 'funcionario' && // funcionários ficam na aba própria
+    (!q || c.nome.toLowerCase().includes(q) || (c.telefone||'').includes(q))
+  );
   document.getElementById('lista-clientes').innerHTML = lista.map(c => `
     <div class="venda-card" style="display:flex;align-items:center;gap:12px">
       <div style="flex:1">
@@ -768,6 +854,8 @@ function abrirNovaVendaCliente(id) {
 }
 
 function resetVenda() {
+  _filtroTipoVenda = null;
+  document.querySelector('#m-venda .mdh h3').textContent = '🛍 Nova Venda Fiado';
   document.getElementById('venda-cli-busca').value='';
   document.getElementById('venda-cli-id').value='';
   document.getElementById('venda-saldo-box').style.display='none';
@@ -783,7 +871,11 @@ function buscarClienteVenda() {
   const q = (document.getElementById('venda-cli-busca').value||'').toLowerCase();
   const ac = document.getElementById('venda-cli-ac');
   if (q.length < 2) { ac.classList.remove('open'); return; }
-  const res = _clientes.filter(c=>c.status==='ativo'&&(c.nome.toLowerCase().includes(q)||(c.telefone||'').includes(q))).slice(0,8);
+  const res = _clientes.filter(c=>
+    c.status==='ativo' &&
+    (c.nome.toLowerCase().includes(q)||(c.telefone||'').includes(q)) &&
+    (!_filtroTipoVenda || c.tipo_cliente===_filtroTipoVenda)
+  ).slice(0,8);
   ac.innerHTML = res.map(c=>`<div class="ac-item" onclick="selecionarClienteVenda(${JSON.stringify(c).replace(/"/g,'&quot;')})"><div class="ac-nome">${c.nome}</div><div class="ac-sub">${c.telefone||''} · ${c.tipo_cliente==='socio'?'🤝 Sócio':c.tipo_cliente==='especial'?`⭐ ${c.desconto_pct}% desc`:'👤 Normal'}</div></div>`).join('');
   ac.classList.toggle('open', res.length>0);
 }
