@@ -47,6 +47,17 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
 .mbg.open{display:flex;}
 .md{background:var(--white);border-radius:13px;width:100%;max-width:600px;max-height:92vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3);}
 .md-lg{max-width:1050px;max-height:95vh;}
+@media(max-width:700px){
+  .md,.md-lg{max-width:100%;max-height:96vh;border-radius:16px 16px 0 0;margin-top:auto;}
+  .mbg{align-items:flex-end;padding:0;}
+  .md-lg .mdb{padding:12px;}
+  .kit-two{grid-template-columns:1fr!important;}
+  /* Cabeçalho de itens do kit — versão compacta mobile */
+  .kit-head-desktop{display:none!important;}
+  .kit-item-row{grid-template-columns:1fr 60px 80px 28px!important;gap:5px!important;}
+  .kit-item-custo,.kit-item-venda,.kit-item-subtotal{display:none;}
+  .kit-item-row .ki-nome{grid-column:1;}
+}
 .mdh{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
 .mdh h3{font-family:'Playfair Display',serif;font-size:15px;color:var(--green);}
 .mdx{background:none;border:none;font-size:19px;cursor:pointer;color:var(--muted);}
@@ -60,8 +71,22 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
 .fgr3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px;}
 /* KIT PRECIFICAÇÃO */
 .kit-two{display:grid;grid-template-columns:1fr 300px;gap:16px;align-items:start;}
-.kit-item-row{display:grid;grid-template-columns:1.5fr 80px 90px 80px 80px 70px 26px;gap:6px;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);}
+.kit-item-row{display:grid;grid-template-columns:1.5fr 80px 90px 80px 80px 70px 26px;gap:6px;align-items:start;padding:7px 0;border-bottom:1px solid var(--border);}
 .kit-item-row input{padding:5px 7px;border:1px solid var(--border);border-radius:5px;font-size:12px;font-family:'DM Sans',sans-serif;}
+/* Desktop: ki-campos ocupa colunas restantes do grid */
+.kit-item-row{grid-template-columns:1.5fr 1fr 26px;}
+.ki-campos{display:grid;grid-template-columns:80px 90px 80px 80px 80px;gap:6px;}
+/* Mobile: kit como card */
+@media(max-width:700px){
+  .kit-head-desktop{display:none!important;}
+  .kit-item-row{grid-template-columns:1fr 28px!important;gap:8px;background:#faf7f4;border-radius:10px;padding:11px;margin-bottom:8px;border:1px solid var(--border)!important;}
+  .ki-campos{grid-column:1;grid-template-columns:1fr 1fr!important;gap:6px;}
+  .ki-del{grid-column:2;grid-row:1;}
+  .md-lg{max-width:100%!important;border-radius:18px 18px 0 0!important;margin-top:auto;}
+  .mbg{align-items:flex-end!important;padding:0!important;}
+  .kit-two{grid-template-columns:1fr!important;}
+  .body{padding:14px!important;}
+}
 .kit-del{background:none;border:none;cursor:pointer;font-size:15px;color:var(--red-l);}
 /* CUSTO BREAKDOWN */
 .cost-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px;}
@@ -353,7 +378,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
             <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px">Itens do Kit</div>
             <button class="btn btn-s" style="padding:4px 10px;font-size:11px" onclick="addKitItem()">＋ Item</button>
           </div>
-          <div style="font-size:10px;color:var(--muted);display:grid;grid-template-columns:1.5fr 80px 90px 80px 80px 70px 26px;gap:6px;padding:4px 0;border-bottom:2px solid var(--border);font-weight:700;text-transform:uppercase;letter-spacing:.5px">
+          <div class="kit-head-desktop" style="font-size:10px;color:var(--muted);display:grid;grid-template-columns:1.5fr 80px 90px 80px 80px 70px 26px;gap:6px;padding:4px 0;border-bottom:2px solid var(--border);font-weight:700;text-transform:uppercase;letter-spacing:.5px">
             <span>Nome / Código</span><span>Qtd</span>
             <span>Custo/Un</span>
             <span style="color:var(--orange)" title="Qtd × Custo/Un">Subtotal ▾</span>
@@ -903,40 +928,64 @@ function addKitItem(){
 function renderKitItems(){
   const el=document.getElementById('kit-itens');
   if(!kitItems.length){el.innerHTML='<p style="text-align:center;color:var(--muted);font-size:12px;padding:12px">Nenhum item</p>';recalcKit();return;}
-  el.innerHTML=kitItems.map((item,i)=>`
+  el.innerHTML=kitItems.map((item,i)=>{
+    const subtotal = ((parseFloat(item.quantidade||1))*(parseFloat(item.precoCusto||0))).toFixed(2);
+    return `
     <div class="kit-item-row">
-      <div style="position:relative;flex:1.5">
-        <input placeholder="Código ou nome..." value="${item.descricao||item.codigo||''}"
+      <!-- Coluna busca (desktop: col 1 | mobile: row 1 full) -->
+      <div class="ki-busca" style="position:relative">
+        <input placeholder="Código ou nome do produto..." value="${item.descricao||item.codigo||''}"
           oninput="buscarProdKitQ(${i},this.value)"
           onkeydown="navSugKit(event,${i})"
           id="kit-busca-${i}"
           autocomplete="off"
-          style="font-size:11px;width:100%;padding:5px 8px;border:1px solid var(--border);border-radius:6px">
+          style="font-size:12px;width:100%;padding:7px 9px;border:1px solid var(--border);border-radius:7px;font-family:'DM Sans',sans-serif">
         <div id="kit-sug-${i}" style="display:none;position:absolute;left:0;right:0;top:100%;background:#fff;border:1px solid var(--border);border-radius:0 0 7px 7px;box-shadow:0 4px 12px rgba(0,0,0,.1);z-index:50;max-height:180px;overflow-y:auto"></div>
       </div>
-      <input type="number" placeholder="Qtd" value="${item.quantidade||1}" min="0.001" step="0.001" oninput="kitItems[${i}].quantidade=parseFloat(this.value)||1;recalcKit()">
-      <div style="display:flex;flex-direction:column;gap:2px">
-        <input type="number" placeholder="Custo/un" value="${item.precoCusto||''}" step="0.0001"
-          oninput="kitItems[${i}].precoCusto=parseFloat(this.value)||0;recalcKit()"
-          title="Preço de custo por unidade/kg do produto">
-        ${item.ignorarMargem ? `<input type="number" placeholder="Custo kit" value="${item.custoKit!=null?item.custoKit:''}" step="0.0001"
-          oninput="kitItems[${i}].custoKit=parseFloat(this.value)||0;recalcKit()"
-          style="font-size:10px;border-color:var(--orange);background:#fff8f0"
-          title="Custo que entra no kit (pode ser menor — ex: produto próx. vencimento)">` : ''}
+      <!-- Campos secundários: desktop inline, mobile em grid 2col -->
+      <div class="ki-campos">
+        <div>
+          <div style="font-size:9px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Qtd</div>
+          <input type="number" value="${item.quantidade||1}" min="0.001" step="0.001"
+            oninput="kitItems[${i}].quantidade=parseFloat(this.value)||1;recalcKit()"
+            style="width:100%;padding:6px 7px;border:1px solid var(--border);border-radius:6px;font-size:12px;text-align:center;font-family:'DM Mono',monospace">
+        </div>
+        <div>
+          <div style="font-size:9px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Custo/un</div>
+          <input type="number" value="${item.precoCusto||''}" step="0.0001"
+            oninput="kitItems[${i}].precoCusto=parseFloat(this.value)||0;recalcKit()"
+            style="width:100%;padding:6px 7px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:'DM Mono',monospace">
+        </div>
+        <div>
+          <div style="font-size:9px;color:var(--orange);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Subtotal</div>
+          <input type="number" readonly value="${subtotal}"
+            style="width:100%;padding:6px 7px;border:1px solid #fcd34d;border-radius:6px;font-size:12px;background:#fff8f0;color:var(--orange);font-weight:700;font-family:'DM Mono',monospace;cursor:default">
+        </div>
+        <div>
+          <div style="font-size:9px;color:var(--green);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Venda un.</div>
+          <input type="number" readonly value="${item.precoVenda||''}"
+            style="width:100%;padding:6px 7px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:#f7f4f0;color:var(--muted);cursor:default;font-family:'DM Mono',monospace">
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;padding-top:18px">
+          <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;${item.ignorarMargem?'color:var(--orange);font-weight:700':'color:var(--muted)'}">
+            <input type="checkbox" ${item.ignorarMargem?'checked':''} onchange="kitItems[${i}].ignorarMargem=this.checked;renderKitItems()" style="accent-color:var(--orange)">
+            ${item.ignorarMargem?'⏱ Próx. venc.':'Normal'}
+          </label>
+        </div>
+        ${item.ignorarMargem ? `<div>
+          <div style="font-size:9px;color:var(--orange);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Custo kit</div>
+          <input type="number" placeholder="Custo kit" value="${item.custoKit!=null?item.custoKit:''}" step="0.0001"
+            oninput="kitItems[${i}].custoKit=parseFloat(this.value)||0;recalcKit()"
+            style="width:100%;padding:6px 7px;border:1px solid var(--orange);border-radius:6px;font-size:12px;background:#fff8f0;font-family:'DM Mono',monospace">
+        </div>` : ''}
       </div>
-      <input type="number" readonly
-        value="${((parseFloat(item.quantidade||1))*(parseFloat(item.precoCusto||0))).toFixed(2)}"
-        style="font-size:11px;background:#fff8f0;color:var(--orange);font-weight:700;border-color:var(--orange);cursor:default"
-        title="Subtotal = ${item.quantidade||1} × R$ ${parseFloat(item.precoCusto||0).toFixed(2)}">
-      <input type="number" placeholder="Venda" value="${item.precoVenda||''}" step="0.01" readonly
-        style="font-size:11px;background:#f7f4f0;color:var(--muted);cursor:default;"
-        title="Preço de venda atual do produto (somente leitura)">
-      <label title="Produto próximo do vencimento — margem e fixos desconsiderados para este item" style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;white-space:nowrap;${item.ignorarMargem?'color:var(--orange);font-weight:700':'color:var(--muted)'}">
-        <input type="checkbox" ${item.ignorarMargem?'checked':''} onchange="kitItems[${i}].ignorarMargem=this.checked;renderKitItems()" style="accent-color:var(--orange)">
-        ${item.ignorarMargem?'<span>⏱ Venc.</span>':'<span>Normal</span>'}
-      </label>
-      <button class="kit-del" onclick="kitItems.splice(${i},1);renderKitItems()">×</button>
-    </div>`).join('');
+      <!-- Botão remover -->
+      <div class="ki-del">
+        <button class="kit-del" onclick="kitItems.splice(${i},1);renderKitItems()"
+          style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:4px;line-height:1">×</button>
+      </div>
+    </div>`;
+  }).join('');
   recalcKit();
 }
 
