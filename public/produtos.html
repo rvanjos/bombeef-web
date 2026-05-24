@@ -106,6 +106,9 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
 @media(max-width:1100px){.kit-two{grid-template-columns:1fr;}}
 @media(max-width:900px){.kit-two{grid-template-columns:1fr;}}
 @media(max-width:700px){
+  /* Kits: esconde tabela, mostra cards */
+  .kits-desktop{display:none!important;}
+  .kits-mobile{display:block!important;}
   /* Esconder colunas menos críticas */
   .tbl th:nth-child(4),.tbl td:nth-child(4), /* Fornecedor */
   .tbl th:nth-child(8),.tbl td:nth-child(8), /* Un */
@@ -226,13 +229,16 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
         <button class="btn btn-g" onclick="abrirKit()">＋ Novo Kit</button>
         <div class="search-w"><input type="text" id="busca-k" placeholder="Código ou nome do kit..." oninput="filtrarK()"></div>
       </div>
-      <div class="card" style="margin-bottom:16px">
+      <!-- Desktop: tabela -->
+      <div class="card kits-desktop" style="margin-bottom:16px;overflow-x:auto">
         <table class="tbl">
           <thead><tr><th>Código</th><th>Nome</th><th>Custo Mat.</th><th>Custo Total</th><th>Preço Venda</th><th>Margem Real</th><th>Itens</th><th>Ações</th></tr></thead>
           <tbody id="tbody-k"></tbody>
         </table>
         <div class="empty" id="empty-k" style="display:none"><p>Nenhum kit cadastrado</p></div>
       </div>
+      <!-- Mobile: cards -->
+      <div class="kits-mobile" id="kits-cards" style="display:none"></div>
     </div>
 
     <!-- Histórico Semanal -->
@@ -860,27 +866,76 @@ function calcCustoTotalKit(custoMat){
 function renderK(lista){
   const tb=document.getElementById('tbody-k');
   const em=document.getElementById('empty-k');
-  if(!lista.length){tb.innerHTML='';em.style.display='';return;}
-  em.style.display='none';
-  tb.innerHTML=lista.map(k=>{
+  const cardsEl=document.getElementById('kits-cards');
+  if(!lista.length){
+    if(tb) tb.innerHTML='';
+    if(em) em.style.display='';
+    if(cardsEl) cardsEl.innerHTML='<div style="text-align:center;padding:24px;color:var(--muted)">Nenhum kit cadastrado</div>';
+    return;
+  }
+  if(em) em.style.display='none';
+
+  lista.forEach(k=>{
     const mat=parseFloat(k.custo_total||0);
     const pv=parseFloat(k.preco_venda||0);
     const{precoMin,precoIdeal}=calcCustoTotalKit(mat);
     const marg=pv>0?((pv-mat)/pv*100).toFixed(1):null;
-    const status=pv>=precoIdeal?'✅ OK':pv>=precoMin?'⚠️ Mínimo':'❌ Abaixo';
-    return`<tr>
-      <td style="font-family:'DM Mono',monospace;font-size:11px">${k.codigo}</td>
-      <td><b>${k.nome}</b>${k.descricao?`<br><small style="color:var(--muted)">${k.descricao}</small>`:''}</td>
-      <td style="font-family:'DM Mono',monospace">${fmt.brl(mat)}</td>
-      <td style="font-family:'DM Mono',monospace">${fmt.brl(precoMin)}</td>
-      <td style="font-family:'DM Mono',monospace;font-weight:600">${fmt.brl(pv)}</td>
-      <td style="font-size:12px">${status} ${marg?`(${marg}%)`:'—'}</td>
-      <td style="font-size:12px">${(k.itens||[]).length}</td>
-      <td>
-        <button class="act" onclick="abrirKit('${k.id}')">✏️</button>
-        <button class="act" onclick="excluirKit('${k.id}')" style="color:var(--red-l)">🗑</button>
-      </td>
-    </tr>`;
+    const statusTxt=pv>=precoIdeal?'✅ OK':pv>=precoMin?'⚠️ Mínimo':'❌ Abaixo';
+    const statusCor=pv>=precoIdeal?'var(--green)':pv>=precoMin?'var(--orange)':'var(--red-l)';
+    k._precoMin=precoMin; k._precoIdeal=precoIdeal; k._marg=marg; k._status=statusTxt; k._statusCor=statusCor;
+  });
+
+  // Tabela desktop
+  if(tb) tb.innerHTML=lista.map(k=>`<tr style="cursor:pointer" onclick="abrirKit('${k.id}')">
+    <td style="font-family:'DM Mono',monospace;font-size:11px">${k.codigo}</td>
+    <td><b>${k.nome}</b>${k.descricao?`<br><small style="color:var(--muted)">${k.descricao}</small>`:''}</td>
+    <td style="font-family:'DM Mono',monospace">${fmt.brl(parseFloat(k.custo_total||0))}</td>
+    <td style="font-family:'DM Mono',monospace">${fmt.brl(k._precoMin)}</td>
+    <td style="font-family:'DM Mono',monospace;font-weight:600">${fmt.brl(parseFloat(k.preco_venda||0))}</td>
+    <td style="font-size:12px;color:${k._statusCor};font-weight:600">${k._status} ${k._marg?`(${k._marg}%)`:'—'}</td>
+    <td style="font-size:12px">${(k.itens||[]).length}</td>
+    <td onclick="event.stopPropagation()">
+      <button class="act" onclick="abrirKit('${k.id}')">✏️</button>
+      <button class="act" onclick="excluirKit('${k.id}')" style="color:var(--red-l)">🗑</button>
+    </td>
+  </tr>`).join('');
+
+  // Cards mobile
+  if(cardsEl) cardsEl.innerHTML=lista.map(k=>{
+    const nItens=(k.itens||[]).length;
+    const pv=parseFloat(k.preco_venda||0);
+    const mat=parseFloat(k.custo_total||0);
+    const corBorda=pv>=k._precoIdeal?'#86efac':pv>=k._precoMin?'#fcd34d':'#fca5a5';
+    return`<div onclick="abrirKit('${k.id}')"
+      style="background:var(--white);border:1px solid var(--border);border-left:4px solid ${corBorda};border-radius:10px;padding:13px 14px;margin-bottom:8px;cursor:pointer;-webkit-tap-highlight-color:rgba(0,0,0,.05);active:transform:scale(.98)">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:10px;font-family:'DM Mono',monospace;color:var(--muted);margin-bottom:2px">${k.codigo}</div>
+          <div style="font-size:15px;font-weight:700;line-height:1.2">${k.nome}</div>
+          ${k.descricao?`<div style="font-size:11px;color:var(--muted);margin-top:2px">${k.descricao}</div>`:''}
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-size:18px;font-weight:700;font-family:'DM Mono',monospace">${fmt.brl(pv)}</div>
+          <div style="font-size:11px;color:${k._statusCor};font-weight:600;margin-top:1px">${k._status}${k._marg?` (${k._marg}%)`:''}
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;padding-top:8px;border-top:1px solid #f5efe8">
+        <div style="font-size:11px;color:var(--muted)">
+          📦 ${nItens} iten${nItens!==1?'s':''}
+          &nbsp;·&nbsp; Custo: <span style="font-family:'DM Mono',monospace">${fmt.brl(mat)}</span>
+          &nbsp;·&nbsp; Mín: <span style="font-family:'DM Mono',monospace">${fmt.brl(k._precoMin)}</span>
+        </div>
+        <div style="display:flex;gap:6px">
+          <button onclick="event.stopPropagation();excluirKit('${k.id}')"
+            style="background:#fee2e2;border:none;border-radius:7px;padding:6px 10px;cursor:pointer;font-size:13px">🗑</button>
+          <button onclick="event.stopPropagation();abrirKit('${k.id}')"
+            style="background:var(--red);border:none;border-radius:7px;padding:6px 14px;cursor:pointer;font-size:13px;color:#fff;font-weight:600">
+            Abrir →
+          </button>
+        </div>
+      </div>
+    </div>`;
   }).join('');
 }
 
