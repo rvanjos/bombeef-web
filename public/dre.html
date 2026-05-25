@@ -3623,13 +3623,8 @@ function renderDREFull(){
 
 // Garante que bb_fat_por_mes está carregado — busca da API se localStorage vazio
 async function _garantirFatPorMes() {
+  // Sempre busca da API para garantir valores corretos (sem cache desatualizado)
   try {
-    const cached = JSON.parse(localStorage.getItem('bb_fat_por_mes') || '{}');
-    if (Object.keys(cached).length > 0) {
-      window._fatPorMes = cached;
-      return; // já tem dados
-    }
-    // localStorage vazio — busca da API
     const d = await api.get('/api/faturamento/resumo');
     if (!d.ok || !d.data) return;
     const fatMap = {};
@@ -3637,11 +3632,12 @@ async function _garantirFatPorMes() {
       const total = parseFloat(m.fat_nfce||0) + parseFloat(m.fat_mei||0);
       if (total > 0) fatMap[m.mes] = total;
     });
-    if (Object.keys(fatMap).length > 0) {
-      try { localStorage.setItem('bb_fat_por_mes', JSON.stringify(fatMap)); } catch(_) {}
-      window._fatPorMes = fatMap;
-    }
-  } catch(_) {}
+    try { localStorage.setItem('bb_fat_por_mes', JSON.stringify(fatMap)); } catch(_) {}
+    window._fatPorMes = fatMap;
+  } catch(_) {
+    // Fallback: usa o que tem no localStorage
+    try { window._fatPorMes = JSON.parse(localStorage.getItem('bb_fat_por_mes') || '{}'); } catch(_) {}
+  }
 }
 
 function setEstoqueFinal(mesEnc, valor) {
@@ -4443,22 +4439,27 @@ async function gerarRoyaltiesAutomatico() {
   const TAXA = parseFloat(localStorage.getItem('bb_taxa_royalties') || '4.75') / 100;
   const CAT  = 'Royalties';
 
-  // Coleta faturamento disponível por mês (XMenu > meta)
+  // Coleta faturamento SEMPRE da API (evita usar localStorage desatualizado)
   const fatPorMes = {};
-  try { Object.assign(fatPorMes, JSON.parse(localStorage.getItem('bb_fat_por_mes') || '{}')); } catch(_) {}
+  try {
+    const dr = await api.get('/api/faturamento/resumo');
+    if (dr.ok && dr.data?.length) {
+      dr.data.forEach(m => {
+        const total = parseFloat(m.fat_nfce||0) + parseFloat(m.fat_mei||0);
+        if (total > 0) fatPorMes[m.mes] = total;
+      });
+      // Atualiza localStorage com dados corretos
+      try { localStorage.setItem('bb_fat_por_mes', JSON.stringify(fatPorMes)); } catch(_) {}
+      window._fatPorMes = fatPorMes;
+    }
+  } catch(_) {}
+  // Complementa com faturamento manual se o mês não tiver dado do XMenu
   try {
     const fatManual = JSON.parse(localStorage.getItem('bb_fat_manual_mes') || '{}');
-    for (const [m, v] of Object.entries(fatManual)) { if (!fatPorMes[m]) fatPorMes[m] = v; }
+    for (const [m, v] of Object.entries(fatManual)) {
+      if (!fatPorMes[m] && parseFloat(v) > 0) fatPorMes[m] = parseFloat(v);
+    }
   } catch(_) {}
-  // Tenta metas do Faturamento como fallback
-  if (Object.keys(fatPorMes).length === 0) {
-    try {
-      const dm = await api.get('/api/faturamento/metas');
-      if (dm.ok && dm.data) {
-        dm.data.forEach(m => { if (m.meta > 0 && !fatPorMes[m.mes_ref]) fatPorMes[m.mes_ref] = parseFloat(m.meta); });
-      }
-    } catch(_) {}
-  }
 
   let gerados = 0;
   for (const [mesFat, fat] of Object.entries(fatPorMes)) {

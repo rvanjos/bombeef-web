@@ -438,8 +438,11 @@ module.exports = function(pool, app) {
     try {
       const { ano } = req.query;
       const params = [], conds = [];
+      // Soma apenas registros diários para evitar dupla contagem
+      // (registros de semana/mês/custom são agregações dos dias já contados)
+      conds.push(`tipo_periodo = 'dia'`);
       if (ano) { params.push(ano); conds.push(`EXTRACT(YEAR FROM data_inicio)=$${params.length}`); }
-      const where = conds.length ? 'WHERE '+conds.join(' AND ') : '';
+      const where = 'WHERE ' + conds.join(' AND ');
       const { rows } = await pool.query(`
         SELECT
           TO_CHAR(data_inicio,'MM/YYYY') AS mes,
