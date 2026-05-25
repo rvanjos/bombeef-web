@@ -68,6 +68,25 @@ module.exports = function (pool) {
     }
   })();
 
+  // ── GET /fix-estoque — força migration da coluna estoque (uso único) ────────
+  r.get('/fix-estoque', async (req, res) => {
+    try {
+      await pool.query(`ALTER TABLE produtos ADD COLUMN IF NOT EXISTS estoque NUMERIC(12,3) DEFAULT 0`);
+      const { rows } = await pool.query(`
+        SELECT column_name, data_type 
+        FROM information_schema.columns 
+        WHERE table_name='produtos' 
+        ORDER BY ordinal_position
+      `);
+      const { rows: sample } = await pool.query(
+        `SELECT codigo, descricao, estoque FROM produtos WHERE estoque IS NOT NULL LIMIT 5`
+      );
+      res.json({ ok: true, colunas: rows.map(r=>r.column_name), sample });
+    } catch(e) {
+      res.json({ ok: false, erro: e.message });
+    }
+  });
+
   // ── GET /kpis ──────────────────────────────────────────────────────────────
   r.get('/kpis', async (req, res) => {
     try {
