@@ -51,16 +51,14 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
 .modal-close{background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);}
 .modal-body{padding:18px 20px;}
 .modal-foot{padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end;}
-@media(max-width:640px){
-  .layout{grid-template-columns:1fr;}
+@media(max-width:400px){
   .sidebar{display:none;}
   .mobile-nav{display:flex!important;}
   .content{padding:14px;}
   .fg-row,.fg-row3{grid-template-columns:1fr;}
 }
 .mobile-nav{display:none;overflow-x:auto;background:var(--white);border-bottom:1px solid var(--border);padding:0 8px;gap:2px;scrollbar-width:none;}
-@media(max-width:700px){
-  .layout{grid-template-columns:1fr;min-height:auto;}
+@media(max-width:400px){
   .sidebar{display:none;}
   .mobile-nav{display:flex;}
   .content{padding:14px;}
