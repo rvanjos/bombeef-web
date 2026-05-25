@@ -1281,6 +1281,19 @@ async function procCC(file) {
   // Pré-preenche com o mesRef atual
   const [mm, yyyy] = mesRef.split('/');
   document.getElementById('cc-mes-input').value = `${yyyy}-${mm}`;
+
+  // Detecta bandeira automaticamente pelo nome do arquivo
+  const fn = file.name.toLowerCase();
+  let bandeiraAuto = '';
+  if      (/itau|itaú/.test(fn))  bandeiraAuto = 'Itaú Empresas';
+  else if (/c6/.test(fn))         bandeiraAuto = 'C6 Bank';
+  else if (/caixa|cef/.test(fn))  bandeiraAuto = 'Caixa';
+  else if (/nubank|nu\./.test(fn)) bandeiraAuto = 'Nubank';
+  else if (/inter/.test(fn))      bandeiraAuto = 'Banco Inter';
+  else if (/bradesco/.test(fn))   bandeiraAuto = 'Bradesco';
+  else if (/santander/.test(fn))  bandeiraAuto = 'Santander';
+  if (bandeiraAuto) document.getElementById('cc-bandeira-input').value = bandeiraAuto;
+
   document.getElementById('m-cc-mes').classList.add('open');
 }
 
@@ -1856,22 +1869,29 @@ function parseCCRows(rows) {
 
   if (!isGeneric) {
     // ── Parser Itaú Empresas XLSX ──────────────────────────────────────────────
-    // Estrutura: linhas de seção (ex: "RAFAEL VIEIRA..."), depois cabeçalho "data | descrição | valor",
-    // depois as linhas de lançamento com data no formato "09/jan" ou "01/fev".
-    const MESES = {jan:'01',fev:'02',mar:'03',abr:'04',mai:'05',jun:'06',
-                   jul:'07',ago:'08',set:'09',out:'10',nov:'11',dez:'12'};
+    // Estrutura: cabeçalho corporativo, depois blocos por portador:
+    //   "NOME PORTADOR - FINAL XXXXXX" → "data | descrição | valor" → lançamentos
+    // Datas chegam como ISO string "2026-03-06T00:00:00.000Z" (cellDates:true no SheetJS)
 
-    // Extrai o ano de fechamento do arquivo (procura "vencimento" ou "fechada" nas primeiras linhas)
+    // Extrai vencimento da fatura (linha com "fechada" + data ISO)
     let anoRef = new Date().getFullYear();
     let mesVenc = null;
-    for (let i=0; i<Math.min(15,rows.length); i++) {
+    for (let i = 0; i < Math.min(15, rows.length); i++) {
       for (const cell of rows[i]) {
-        const s = String(cell||'').trim();
-        // Datas no formato DD/MM/YYYY
-        const m = s.match(/(\d{2})\/(\d{2})\/(\d{4})/);
-        if (m) { anoRef = parseInt(m[3]); mesVenc = m[2]; break; }
-        // Datas como objeto Date
-        if (cell instanceof Date) { anoRef = cell.getFullYear(); mesVenc = String(cell.getMonth()+1).padStart(2,'0'); break; }
+        if (!cell) continue;
+        // Data ISO do SheetJS
+        if (typeof cell === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(cell)) {
+          const d = new Date(cell);
+          anoRef  = d.getFullYear();
+          mesVenc = String(d.getMonth() + 1).padStart(2, '0');
+          break;
+        }
+        // Objeto Date
+        if (cell instanceof Date) {
+          anoRef  = cell.getFullYear();
+          mesVenc = String(cell.getMonth() + 1).padStart(2, '0');
+          break;
+        }
       }
       if (mesVenc) break;
     }
@@ -1879,98 +1899,100 @@ function parseCCRows(rows) {
     const result = [];
     let portadorAtual = '';
     let emLancamentos = false;
-    let cD2=-1, cN2=-1, cV2=-1;
+    let cD = -1, cN = -1, cV = -1;
 
-    for (let i=0; i<rows.length; i++) {
-      const row = rows[i];
-      // Concatena todas as células não-vazias para detectar linhas de seção
-      const cells = row.map(c => String(c||'').trim());
-      const textos = cells.filter(Boolean);
+    const parseDataCell = (cell) => {
+      if (!cell) return '';
+      // ISO string: "2026-03-06T00:00:00.000Z"
+      if (typeof cell === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(cell)) {
+        return cell.slice(0, 10); // YYYY-MM-DD
+      }
+      // Objeto Date
+      if (cell instanceof Date) {
+        return cell.toISOString().slice(0, 10);
+      }
+      // Texto "09/jan", "DD/MM/YYYY"
+      const s = String(cell).trim();
+      const MESES = {jan:'01',fev:'02',mar:'03',abr:'04',mai:'05',jun:'06',
+                     jul:'07',ago:'08',set:'09',out:'10',nov:'11',dez:'12'};
+      const mAbrev = s.match(/^(\d{1,2})\/([a-z]{3})$/i);
+      if (mAbrev) {
+        const mm = MESES[mAbrev[2].toLowerCase()] || '01';
+        let ano = anoRef;
+        if (mesVenc && parseInt(mm) > parseInt(mesVenc) + 1) ano = anoRef - 1;
+        return `${ano}-${mm}-${mAbrev[1].padStart(2,'0')}`;
+      }
+      if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) return s.split('/').reverse().join('-');
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+      return '';
+    };
+
+    for (let i = 0; i < rows.length; i++) {
+      const row   = rows[i];
+      const cells = row.map(c => (c === null || c === undefined) ? '' : c);
+      const cel0  = String(cells[0] || '').trim();
+      const textos = cells.map(c => String(c).trim()).filter(Boolean);
       if (!textos.length) { emLancamentos = false; continue; }
 
-      const linha0 = cells[0].toLowerCase();
-      const todasCels = textos.join(' ').toLowerCase();
-
-      // Linha de portador (ex: "RAFAEL VIEIRA DOS ANJOS - FINAL 3983")
-      if (/final\s+\*+\d+|final\s+\d{4}|cartao\s+\d/i.test(textos.join(' '))) {
-        portadorAtual = textos.join(' ').replace(/407505\*+/g,'').trim();
+      // Linha de portador: "NOME - FINAL XXXXXX******YYYY"
+      if (/FINAL\s+\d*\*+\d+/i.test(cel0) || /FINAL\s+\d{4}/i.test(cel0)) {
+        portadorAtual = cel0;
         emLancamentos = false;
         continue;
       }
 
-      // Cabeçalho de lançamentos (linha com "data", "descrição", "valor")
-      if (cells.some(c => c.toLowerCase() === 'data') && cells.some(c => /descri/i.test(c))) {
-        cD2 = cells.findIndex(c => c.toLowerCase() === 'data');
-        cN2 = cells.findIndex(c => /descri/i.test(c));
-        // Valor geralmente é a última coluna não-vazia
-        cV2 = cells.map((c,idx) => ({c,idx})).filter(x => /valor|montante/i.test(x.c)).map(x=>x.idx)[0] ?? cells.length-1;
-        // Se valor não encontrado, pega índice da última célula com "R$" ou número
-        if (cV2 < 0) {
-          for (let k=cells.length-1; k>=0; k--) {
-            if (/R\$|^\-?\d/.test(cells[k])) { cV2=k; break; }
-          }
-        }
+      // Cabeçalho de lançamentos: linha com "data" e "descrição" e "valor"
+      const celLow = cells.map(c => String(c).toLowerCase().trim());
+      if (celLow.some(c => c === 'data') && celLow.some(c => c.startsWith('descri'))) {
+        cD = celLow.findIndex(c => c === 'data');
+        cN = celLow.findIndex(c => c.startsWith('descri'));
+        cV = celLow.findIndex(c => c === 'valor' || c === 'montante');
+        if (cV < 0) cV = cells.length - 1; // última coluna
         emLancamentos = true;
         continue;
       }
 
-      // Linha de total ou pagamento — encerra bloco
-      if (/^total\s+de|^total\s+da|^pagamento\s+efetu|^saldo\s+da/i.test(cells[0])) {
+      // Linha de total ou encerramento — para o bloco
+      if (/^total\s+de|^total\s+da|^pagamento\s+efetu|^saldo\s+da|^encargos/i.test(cel0)) {
         emLancamentos = false;
         continue;
       }
 
       // Lançamento efetivo
-      if (emLancamentos && cN2 >= 0) {
-        const rawDate = cells[cD2] || '';
-        const nome = cells[cN2] || '';
-        const rawVal = cV2 >= 0 ? cells[cV2] : '';
+      if (!emLancamentos || cN < 0) continue;
 
-        if (!nome || /^total|^pagamento|^saldo/i.test(nome)) continue;
+      const dt   = parseDataCell(cells[cD]);
+      const nome = String(cells[cN] || '').trim();
+      if (!nome || /^total|^pagamento|^saldo/i.test(nome)) continue;
 
-        // Parse do valor — suporta "R$20,50", "-R$20,50", "20.50", "20,50"
-        let v = parseFloat(rawVal.replace(/[^\d.,-]/g,'').replace(',','.')) || 0;
-        if (!v) continue;
-        // Estornos ficam negativos (crédito), gastos ficam negativos no DRE
-        const isEstorno = /estorno/i.test(nome) || rawVal.includes('-') || rawVal.startsWith('-');
-        v = isEstorno ? Math.abs(v) : -Math.abs(v);
-
-        // Parse da data — formatos: "09/jan", "01/fev", "DD/MM/YYYY", Date object
-        let dt = '';
-        if (rawDate instanceof Date) {
-          dt = rawDate.toISOString().slice(0,10);
-        } else {
-          const ds = String(rawDate).trim();
-          // "09/jan", "01/fev"
-          const mAbrev = ds.match(/^(\d{1,2})\/([a-z]{3})$/i);
-          if (mAbrev) {
-            const mm = MESES[mAbrev[2].toLowerCase()] || '01';
-            // Se o mês abreviado é menor que o mês de vencimento, provavelmente é do ano seguinte (virada de ano)
-            // Ex: vencimento fev/2026, lançamento jan = janeiro/2026
-            let ano = anoRef;
-            if (mesVenc && parseInt(mm) > parseInt(mesVenc) + 1) ano = anoRef - 1;
-            dt = `${ano}-${mm}-${mAbrev[1].padStart(2,'0')}`;
-          } else if (/^\d{2}\/\d{2}\/\d{4}$/.test(ds)) {
-            dt = ds.split('/').reverse().join('-');
-          } else if (/^\d{4}-\d{2}-\d{2}$/.test(ds)) {
-            dt = ds;
-          }
-        }
-        const mes = dt ? dt.slice(5,7)+'/'+dt.slice(0,4) : mesRef;
-
-        result.push({
-          id: 'cc_'+Date.now()+'_'+i,
-          lancamento: nome,
-          valor: v,
-          data: dt,
-          mes,
-          mesCaixa: mes,
-          categoria: autoClassificar(nome, ''),
-          fonte: 'CC',
-          portador: portadorAtual || '',
-          razaoSocial: nome,
-        });
+      // Valor: número direto ou string
+      let v = 0;
+      const rawV = cells[cV];
+      if (typeof rawV === 'number') {
+        v = rawV;
+      } else {
+        v = parseFloat(String(rawV || '0').replace(/[^\d.,\-]/g,'').replace(',','.')) || 0;
       }
+      if (!v) continue;
+
+      // Estornos ficam positivos (crédito), gastos negativos
+      const isEstorno = /estorno/i.test(nome) || v < 0;
+      v = isEstorno ? Math.abs(v) : -Math.abs(v);
+
+      const mes = dt ? dt.slice(5,7)+'/'+dt.slice(0,4) : mesRef;
+
+      result.push({
+        id:          'cc_' + Date.now() + '_' + i,
+        lancamento:  nome,
+        valor:       v,
+        data:        dt,
+        mes,
+        mesCaixa:    mes,
+        categoria:   autoClassificar(nome, ''),
+        fonte:       'CC',
+        portador:    portadorAtual || 'Itaú Empresas',
+        razaoSocial: nome,
+      });
     }
     return result;
   }
