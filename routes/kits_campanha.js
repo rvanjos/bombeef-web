@@ -14,7 +14,8 @@
 const express = require('express');
 const autenticar = require('../middleware/auth');
 
-module.exports = function (pool) {
+module.exports = function (pool, app) {
+  const publish = (canal, dados) => { try { app?.locals?.ssePublish?.(canal, dados); } catch(_) {} };
   const r = express.Router();
   r.use(autenticar());
 
@@ -703,6 +704,7 @@ module.exports = function (pool) {
         RETURNING produto_id
       `);
 
+      publish('estoque', { type: 'kit_estoque_atualizado', atualizados: upd.rowCount });
       res.json({
         ok: true,
         atualizados: upd.rowCount,

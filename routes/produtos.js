@@ -27,7 +27,8 @@ const upload = multer({
   limits: { fileSize: (parseInt(process.env.UPLOAD_MAX_MB) || 15) * 1024 * 1024 },
 });
 
-module.exports = function (pool) {
+module.exports = function (pool, app) {
+  const publish = (canal, dados) => { try { app?.locals?.ssePublish?.(canal, dados); } catch(_) {} };
   const r = express.Router();
   r.use(autenticar());
 
@@ -479,6 +480,8 @@ module.exports = function (pool) {
         throw e;
       } finally { client.release(); }
 
+      publish('produtos', { type: 'produtos_importados', inseridos, atualizados });
+      publish('estoque', { type: 'estoque_atualizado', atualizados });
       res.json({ ok: true, inseridos, atualizados, erros, pulados, detalheErros });
     } catch (e) {
       console.error('[produtos/import]', e.message);
@@ -604,6 +607,7 @@ module.exports = function (pool) {
         ON CONFLICT (produto_id) DO UPDATE SET saldo = EXCLUDED.saldo, atualizado_em = NOW()
       `).catch(e => console.error('[sync-estoque] insert kits:', e.message));
 
+      publish('estoque', { type: 'estoque_atualizado', atualizados: encontrados.length });
       res.json({
         ok: true,
         atualizados:    encontrados.length,
@@ -677,6 +681,7 @@ module.exports = function (pool) {
         throw e;
       } finally { client.release(); }
 
+      publish('produtos', { type: 'cadastro_atualizado', atualizados });
       res.json({
         ok: true,
         atualizados,

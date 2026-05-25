@@ -242,6 +242,47 @@ app.use(express.static(path.join(__dirname, 'public'), {
   lastModified: false,
 }));
 
+// ── SSE — Server-Sent Events (atualização em tempo real) ─────────────────────
+// Clientes conectados: Map<string, Set<res>>
+const sseClients = new Map();
+
+function ssePublish(canal, dados) {
+  const set = sseClients.get(canal);
+  if (!set || !set.size) return;
+  const payload = 'data: ' + JSON.stringify(dados) + '\n\n';
+  for (const res of set) {
+    try { res.write(payload); }
+    catch(_) { set.delete(res); }
+  }
+}
+// Expõe para uso nas rotas
+app.locals.ssePublish = ssePublish;
+
+// Endpoint SSE — o front-end conecta aqui para receber eventos
+app.get('/api/events', (req, res) => {
+  const canal = req.query.canal || 'geral';
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no'); // Railway / nginx
+  res.flushHeaders();
+  res.write('data: {"type":"connected"}\n\n');
+
+  if (!sseClients.has(canal)) sseClients.set(canal, new Set());
+  sseClients.get(canal).add(res);
+
+  // Heartbeat a cada 25s para manter conexão viva
+  const hb = setInterval(() => {
+    try { res.write(': ping\n\n'); }
+    catch(_) { clearInterval(hb); }
+  }, 25000);
+
+  req.on('close', () => {
+    clearInterval(hb);
+    sseClients.get(canal)?.delete(res);
+  });
+});
+
 // ── Rotas API ──────────────────────────────────────────────────────────────────
 app.use('/auth',             require('./routes/auth')(pool));
 // Fix temporário: corrige constraint de ponto_auditoria
@@ -275,9 +316,9 @@ app.get('/fix-ponto', async (req, res) => {
 app.use('/api/boletos',      require('./routes/boletos')(pool));
 app.use('/api/faturamento',  require('./routes/faturamento')(pool));
 app.use('/api/dre',          require('./routes/dre')(pool));
-app.use('/api/produtos',     require('./routes/produtos')(pool));
+app.use('/api/produtos',     require('./routes/produtos')(pool, app));
 app.use('/api/kits',         require('./routes/kits')(pool));
-app.use('/api/kits-campanha',require('./routes/kits_campanha')(pool));
+app.use('/api/kits-campanha',require('./routes/kits_campanha')(pool, app));
 app.use('/api/validade',     require('./routes/validade')(pool));
 app.use('/api/compras_pendentes', require('./routes/fiado')(pool));
 app.use('/api/fiado',        require('./routes/fiado')(pool)); // alias legado

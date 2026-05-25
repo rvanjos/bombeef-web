@@ -521,6 +521,17 @@ if(cfgSalva) try { CFG = {...CFG, ...JSON.parse(cfgSalva)}; } catch(_) {}
 
 window.onBBReady = () => { carregarKPIs(); carregarProd(); carregarKits(); carregarCfgUI(); };
 
+// Recebe eventos SSE repassados pelo index.html
+window.addEventListener('message', e => {
+  if (e.data?.type !== 'bb_data_changed') return;
+  const ev = e.data.evento;
+  if (!ev) return;
+  if (['estoque_atualizado','produtos_importados','cadastro_atualizado'].includes(ev.type)) {
+    carregarProd();   // recarrega lista de produtos
+    carregarKPIs();
+  }
+});
+
 function showSec(s, btn) {
   ['sec-prod','sec-kits','sec-cfg'].forEach(id=>document.getElementById(id).style.display='none');
   document.getElementById('sec-'+s).style.display='';

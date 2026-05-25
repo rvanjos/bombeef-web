@@ -1564,6 +1564,21 @@ document.addEventListener('change', function(e) {
 
 // Usa onBBReady se disponível, senão polling
 window.onBBReady = function() { initGestaoKits(); };
+
+// Recebe eventos SSE repassados pelo index.html
+window.addEventListener('message', e => {
+  if (e.data?.type !== 'bb_data_changed') return;
+  const ev = e.data.evento;
+  if (!ev) return;
+  if (['estoque_atualizado','kit_estoque_atualizado','produtos_importados'].includes(ev.type)) {
+    // Recarrega lista de estoque se modal estiver aberto
+    if (document.getElementById('modal-estoque')?.classList.contains('open')) {
+      carregarListaEstoque();
+    }
+    // Recarrega campanhas para atualizar saldo disponível
+    carregarCampanhas();
+  }
+});
 // Fallback: se BB já está carregado antes do onBBReady ser definido
 if (typeof BB !== 'undefined' && BB.api) { initGestaoKits(); }
 else { setTimeout(initGestaoKits, 200); }

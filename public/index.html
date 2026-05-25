@@ -780,6 +780,7 @@ function entrarNoPortal() {
 
   // Atualiza KPIs a cada 90 segundos
   kpiTimer = setInterval(carregarKPIs, 90000);
+  iniciarSSE(); // Eventos em tempo real
   carregarPendentesAprovacao();
   setInterval(carregarPendentesAprovacao, 60000);
 
@@ -1622,6 +1623,53 @@ window.addEventListener('message', e => {
       }
     } catch(_) {}
     return;
+  }
+
+  // ── SSE — escuta eventos do servidor e repassa para iframes ─────────────────
+  function conectarSSE() {
+    const src = new EventSource('/api/events?canal=estoque');
+    src.onmessage = (e) => {
+      try {
+        const ev = JSON.parse(e.data);
+        if (ev.type === 'connected') return;
+
+        // Notifica todos os iframes abertos sobre o evento
+        document.querySelectorAll('iframe').forEach(fr => {
+          try { fr.contentWindow.postMessage({ type: 'bb_data_changed', evento: ev }, '*'); } catch(_) {}
+        });
+
+        // Recarrega KPIs do portal
+        if (['estoque_atualizado','kit_estoque_atualizado','produtos_importados','cadastro_atualizado'].includes(ev.type)) {
+          setTimeout(carregarKPIs, 800);
+        }
+      } catch(_) {}
+    };
+    src.onerror = () => {
+      // Reconecta automaticamente após 5s em caso de falha
+      src.close();
+      setTimeout(conectarSSE, 5000);
+    };
+  }
+  // Inicia SSE após login
+  function iniciarSSE() {
+    if (window._sseAtivo) return;
+    window._sseAtivo = true;
+    conectarSSE();
+    // Canal de produtos também
+    const src2 = new EventSource('/api/events?canal=produtos');
+    src2.onmessage = (e) => {
+      try {
+        const ev = JSON.parse(e.data);
+        if (ev.type === 'connected') return;
+        document.querySelectorAll('iframe').forEach(fr => {
+          try { fr.contentWindow.postMessage({ type: 'bb_data_changed', evento: ev }, '*'); } catch(_) {}
+        });
+        if (ev.type === 'produtos_importados' || ev.type === 'cadastro_atualizado') {
+          setTimeout(carregarKPIs, 800);
+        }
+      } catch(_) {}
+    };
+    src2.onerror = () => src2.close();
   }
 
   // Iframe pedindo token — responde a todos os iframes imediatamente
