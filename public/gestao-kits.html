@@ -749,7 +749,7 @@ function renderizarSlots() {
         </div>
       </div>
       <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Produtos permitidos:</div>
-      <div style="margin-bottom:6px">${(_slotsProd[i]||[]).map(p=>
+      <div class="slot-chips" style="margin-bottom:6px">${(_slotsProd[i]||[]).map(p=>
         `<span class="prod-chip">${p.codigo?p.codigo+' — ':''} ${p.descricao}<button onclick="removerProdSlot(${i},${p.id})">×</button></span>`
       ).join('')}</div>
       <div style="display:flex;gap:6px">
@@ -791,13 +791,32 @@ function adicionarProdSlot(idx, id, codigo, descricao, saldo) {
   if (_slotsProd[idx].find(p=>p.id===id)) return;
   _slotsProd[idx].push({id, codigo, descricao, saldo});
   _slotsAtual[idx].produtos_permitidos = _slotsProd[idx].map(p=>p.id);
-  renderizarSlots();
+  // Atualiza só os chips de produto sem recriar o DOM inteiro
+  // Isso evita perder o foco do campo de busca
+  atualizarChipsProdSlot(idx);
+  // Limpa sugestões deste slot
+  const sug = document.getElementById('slot-sugestoes-'+idx);
+  if (sug) sug.innerHTML = '';
+  const busca = document.getElementById('slot-busca-'+idx);
+  if (busca) busca.value = '';
+}
+
+function atualizarChipsProdSlot(idx) {
+  // Atualiza apenas os chips de produto do slot sem reconstruir o slot inteiro
+  const slotCard = document.querySelector('#mc-slots .slot-card:nth-child('+(idx+1)+')');
+  if (!slotCard) { renderizarSlots(); return; }
+  // Procura a div de chips (antes do input de busca)
+  const chipDiv = slotCard.querySelector('.slot-chips');
+  if (!chipDiv) { renderizarSlots(); return; }
+  chipDiv.innerHTML = (_slotsProd[idx]||[]).map(p =>
+    `<span class="prod-chip">${p.codigo?p.codigo+' — ':''} ${p.descricao}<button onclick="removerProdSlot(${idx},${p.id})">×</button></span>`
+  ).join('');
 }
 
 function removerProdSlot(idx, prodId) {
   _slotsProd[idx] = (_slotsProd[idx]||[]).filter(p=>p.id!==prodId);
   _slotsAtual[idx].produtos_permitidos = _slotsProd[idx].map(p=>p.id);
-  renderizarSlots();
+  atualizarChipsProdSlot(idx);
 }
 
 async function salvarCampanha() {
@@ -842,7 +861,7 @@ async function verCampanha(id) {
       ${(c.detalhes||[]).map(det=>`
         <tr>
           <td>${det.slot}</td>
-          <td><span class="badge ${det.tipo==='fixed'?'b-azul':'b-laranja'}">${det.tipo}</span></td>
+          <td><span class="badge ${(det.tipo||'choice')==='fixed'?'b-azul':'b-laranja'}">${det.tipo==='fixed'?'FIXO':det.tipo==='choice'?'ESCOLHA':det.tipo||'choice'}</span></td>
           <td>${c.slots?.find(s=>s.nome===det.slot)?.quantidade||1}</td>
           <td><span class="badge ${det.capacidade>10?'b-verde':det.capacidade>3?'b-laranja':'b-vermelho'}">${det.capacidade} kits</span></td>
         </tr>`).join('')}

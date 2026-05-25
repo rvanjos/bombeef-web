@@ -135,6 +135,9 @@ module.exports = function (pool, app) {
       )
     `).catch(() => {});
 
+    // Migration: corrige tipo NULL em slots antigos
+    await pool.query(`UPDATE kit_campanha_slots SET tipo='choice' WHERE tipo IS NULL`).catch(()=>{});
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS kit_pdv_conciliacao (
         id              SERIAL PRIMARY KEY,
