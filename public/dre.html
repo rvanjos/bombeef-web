@@ -1767,15 +1767,88 @@ function parseCCRowsChatGPT(rows) {
   return result;
 }
 
+// ── Parser CSV Itaú Empresas ──────────────────────────────────────────────────
+// Formato: CNPJ, Portador, Cartão, Data (DD/MM/YYYY), Descrição da compra,
+//          Valor da transação, C/D (D=débito/C=crédito), Local, Cotação do dólar,
+//          Valor em dólar, Tipo da transação, Cód moeda, Moeda, Ramo,
+//          Descrição do ramo, Parcelas, Tipo de cartão, Autorização
+function parseCCItauEmpresasCSV(rows) {
+  const h = rows[0].map(c => String(c).toLowerCase().trim());
+  const ci = ns => { for (const n of ns) { const i = h.findIndex(x => x.includes(n)); if (i >= 0) return i; } return -1; };
+
+  const cPortador = ci(['portador']);
+  const cCartao   = ci(['cartão','cartao']);
+  const cData     = ci(['data','date']);
+  const cDesc     = ci(['descrição da compra','descri','lancamento','estabelecimento']);
+  const cValor    = ci(['valor da transação','valor da transacao','valor']);
+  const cCD       = ci(['c/d']);           // D=débito C=crédito
+  const cParc     = ci(['parcelas','parcel']);
+  const cTipo     = ci(['tipo de cartão','tipo de cartao','tipo']);
+
+  const result = [];
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    const descRaw = String(row[cDesc] ?? '').trim();
+    if (!descRaw) continue;
+
+    // Valor — considera C/D
+    let v = parseFloat(String(row[cValor] ?? '0').replace(/[^\d.,\-]/g, '').replace(',', '.')) || 0;
+    if (!v) continue;
+    const cd = String(row[cCD] ?? '').trim().toUpperCase();
+    // D = débito (saída = negativo no DRE), C = crédito (entrada/estorno = positivo)
+    v = cd === 'C' ? Math.abs(v) : -Math.abs(v);
+
+    // Data DD/MM/YYYY → YYYY-MM-DD
+    let dt = '';
+    const rawDt = String(row[cData] ?? '').trim();
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(rawDt)) {
+      dt = rawDt.split('/').reverse().join('-');
+    } else if (row[cData] instanceof Date) {
+      dt = row[cData].toISOString().slice(0, 10);
+    }
+    const mes = dt ? dt.slice(5,7)+'/'+dt.slice(0,4) : mesRef;
+
+    // Parcelas — "1/4" vira "(Parcela 1/4)"
+    const parcRaw = String(row[cParc] ?? '').trim();
+    const temParc = /^\d+\/\d+$/.test(parcRaw) && parcRaw !== '1/1';
+    const lancamento = temParc ? `${descRaw} (Parcela ${parcRaw})` : descRaw;
+
+    // Portador e cartão
+    const portador = [
+      String(row[cPortador] ?? '').trim(),
+      cCartao >= 0 ? String(row[cCartao] ?? '').trim() : ''
+    ].filter(Boolean).join(' — ') || 'Itaú Empresas';
+
+    result.push({
+      id: 'cc_itau_' + Date.now() + '_' + i,
+      lancamento,
+      valor: v,
+      data: dt,
+      mes,
+      mesCaixa: mes,   // será sobrescrito pelo fluxo confirmarImportCC
+      categoria: autoClassificar(descRaw, ''),
+      fonte: 'CC',
+      portador,
+      razaoSocial: descRaw,
+    });
+  }
+  return result;
+}
+
 function parseCCRows(rows) {
   if (rows.length < 2) return [];
 
   const h0 = rows[0].map(c => String(c).toLowerCase().trim()).join('|');
 
-  // ── Formato CSV Caixa (gerado por ChatGPT ou exportado manualmente) ──────────
-  // Colunas: data;cartao_final;tipo;descricao;cidade;parcela_atual;parcelas_total;valor;natureza
+  // ── Formato CSV Caixa ────────────────────────────────────────────────────────
   if (h0.includes('cartao_final') || h0.includes('cartão_final') || h0.includes('natureza')) {
     return parseCCCaixaCSV(rows);
+  }
+
+  // ── Formato CSV Itaú Empresas ────────────────────────────────────────────────
+  // Colunas: CNPJ|Portador|Cartão|Data|Descrição da compra|Valor da transação|C/D|...
+  if (h0.includes('cnpj') && h0.includes('portador') && h0.includes('descri') && (h0.includes('c/d') || h0.includes('valor da transa'))) {
+    return parseCCItauEmpresasCSV(rows);
   }
   // Heurística: se a linha 0 não tem colunas "data/descrição/valor" padronizadas,
   // trata como fatura Itaú onde os lançamentos ficam intercalados após linhas de seção.
