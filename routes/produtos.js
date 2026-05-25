@@ -586,6 +586,24 @@ module.exports = function (pool) {
 
       // Propaga estoque para produto_id em kit_itens via JOIN
       // (não há coluna estoque em kit_itens — apenas info de produto)
+      // Propaga automaticamente para kit_estoque_interno (estoque de kits)
+      pool.query(`
+        UPDATE kit_estoque_interno kei
+        SET saldo = COALESCE(p.estoque, 0), atualizado_em = NOW()
+        FROM produtos p
+        WHERE kei.produto_id = p.id AND p.estoque IS NOT NULL
+      `).catch(e => console.error('[sync-estoque] propagação kits:', e.message));
+
+      // Insere ingredientes de kits que ainda não têm entrada
+      pool.query(`
+        INSERT INTO kit_estoque_interno (produto_id, produto_codigo, produto_nome, saldo, atualizado_em)
+        SELECT DISTINCT p.id, p.codigo, p.descricao, COALESCE(p.estoque,0), NOW()
+        FROM kit_itens ki JOIN produtos p ON p.id = ki.produto_id
+        WHERE p.estoque > 0
+          AND NOT EXISTS (SELECT 1 FROM kit_estoque_interno kei WHERE kei.produto_id = p.id)
+        ON CONFLICT (produto_id) DO UPDATE SET saldo = EXCLUDED.saldo, atualizado_em = NOW()
+      `).catch(e => console.error('[sync-estoque] insert kits:', e.message));
+
       res.json({
         ok: true,
         atualizados:    encontrados.length,

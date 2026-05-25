@@ -190,6 +190,7 @@ if (window.self !== window.top) {
   <div class="toolbar">
     <button class="btn btn-p" onclick="abrirModalCampanha()">➕ Nova Campanha</button>
     <button class="btn btn-s" onclick="abrirModalEstoque()">📦 Atualizar Estoque</button>
+    <button class="btn btn-s" onclick="sincEstoquePDV()" id="btn-sinc-pdv" title="Importa saldo do estoque da aba Produtos para cá automaticamente">🔄 Sincronizar PDV</button>
     <button class="btn btn-s" onclick="carregarCampanhas()">🔄 Atualizar</button>
   </div>
   <div id="camp-grid" class="camp-grid"></div>
@@ -400,17 +401,24 @@ if (window.self !== window.top) {
 
 <!-- ══ MODAL ESTOQUE ══════════════════════════════════════════════════════ -->
 <div class="modal-bg" id="modal-estoque">
-  <div class="modal">
+  <div class="modal" style="max-width:680px">
     <div class="modal-h">
       <h3>📦 Atualizar Estoque Interno de Kits</h3>
       <button class="modal-x" onclick="fecharModal('modal-estoque')">×</button>
     </div>
     <div class="modal-body">
-      <div class="alert">ℹ️ Este estoque é exclusivo do módulo de kits. Informe a quantidade disponível de cada componente.</div>
-      <div class="toolbar" style="margin-bottom:10px">
-        <input type="text" id="est-busca" placeholder="🔍 Buscar produto..." oninput="buscarProdutoEst(this.value)" style="max-width:300px">
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+        <button class="btn btn-g" onclick="sincEstoqueModal()" id="btn-sinc-modal" style="font-size:12px;padding:7px 14px">
+          🔄 Sincronizar com PDV
+        </button>
+        <span style="font-size:11px;color:var(--muted)">Importa o saldo da aba Produtos automaticamente</span>
+      </div>
+      <div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:10px">
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Ou ajuste manualmente:</div>
+        <input type="text" id="est-busca" placeholder="🔍 Buscar produto por código ou nome..." oninput="buscarProdutoEst(this.value)" style="width:100%;max-width:400px">
       </div>
       <div id="est-resultado"></div>
+      <div id="est-lista-atual" style="margin-top:10px"></div>
     </div>
     <div class="modal-foot">
       <button class="btn btn-s" onclick="fecharModal('modal-estoque')">Fechar</button>
@@ -1338,10 +1346,60 @@ async function carregarRelatorio() {
 }
 
 // ── ESTOQUE ───────────────────────────────────────────────────────────────────
+async function sincEstoquePDV() {
+  const btn = document.getElementById('btn-sinc-pdv');
+  const orig = btn.textContent;
+  btn.textContent = '⏳ Sincronizando...';
+  btn.disabled = true;
+  try {
+    const d = await api.post('/api/kits-campanha/sync-estoque-pdv', {});
+    if (d.ok) {
+      toast('✅ ' + d.msg);
+      // Recarrega o modal de estoque se estiver aberto
+      if (document.getElementById('modal-estoque-lista') &&
+          document.getElementById('modal-estoque-lista').closest('.modal-bg.open')) {
+        carregarListaEstoque();
+      }
+    } else {
+      toast('❌ ' + (d.erro || 'Erro ao sincronizar'));
+    }
+  } catch(e) {
+    toast('❌ Erro de conexão');
+  } finally {
+    btn.textContent = orig;
+    btn.disabled = false;
+  }
+}
+
 function abrirModalEstoque() {
   document.getElementById('est-busca').value='';
-  document.getElementById('est-resultado').innerHTML='<div style="color:var(--muted);font-size:12px;padding:8px">Digite para buscar um produto...</div>';
+  document.getElementById('est-resultado').innerHTML='';
   document.getElementById('modal-estoque').classList.add('open');
+  carregarListaEstoque();
+}
+
+async function carregarListaEstoque() {
+  const el = document.getElementById('est-lista-atual');
+  if (!el) return;
+  el.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:4px">Carregando...</div>';
+  const d = await api.get('/api/kits-campanha/estoque');
+  if (!d.ok || !d.data.length) { el.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:4px">Nenhum produto com saldo registrado.</div>'; return; }
+  el.innerHTML = '<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Saldos atuais:</div>'
+    + '<div style="max-height:260px;overflow-y:auto;border:1px solid var(--border);border-radius:7px">'
+    + d.data.map(p => `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 12px;border-bottom:1px solid var(--border);font-size:12px">
+        <span><b>${p.produto_codigo}</b> — ${p.produto_nome}</span>
+        <span style="font-family:'DM Mono',monospace;font-weight:700;color:${p.saldo>0?'#166534':p.saldo<0?'var(--red)':'var(--muted)'}">${parseFloat(p.saldo).toLocaleString('pt-BR',{maximumFractionDigits:3})}</span>
+      </div>`).join('')
+    + '</div>';
+}
+
+async function sincEstoqueModal() {
+  const btn = document.getElementById('btn-sinc-modal');
+  btn.textContent = '⏳ Sincronizando...'; btn.disabled = true;
+  const d = await api.post('/api/kits-campanha/sync-estoque-pdv', {});
+  btn.textContent = '🔄 Sincronizar com PDV'; btn.disabled = false;
+  if (d.ok) { toast('✅ ' + d.msg); carregarListaEstoque(); }
+  else toast('❌ ' + (d.erro || 'Erro'));
 }
 
 let _estTimer;

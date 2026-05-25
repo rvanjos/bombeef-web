@@ -670,6 +670,51 @@ module.exports = function (pool) {
     } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
+  // ── POST /sync-estoque-pdv — copia produtos.estoque → kit_estoque_interno ─────
+  // Para todos os produtos que já têm registro em kit_estoque_interno
+  // OU que são ingredientes de algum kit ativo
+  r.post('/sync-estoque-pdv', async (req, res) => {
+    try {
+      // 1. Atualiza registros existentes em kit_estoque_interno com o saldo de produtos.estoque
+      const upd = await pool.query(`
+        UPDATE kit_estoque_interno kei
+        SET saldo         = COALESCE(p.estoque, 0),
+            atualizado_em = NOW()
+        FROM produtos p
+        WHERE kei.produto_id = p.id
+          AND p.estoque IS NOT NULL
+        RETURNING kei.produto_id
+      `);
+
+      // 2. Insere novos registros para produtos que são ingredientes de kits
+      //    mas ainda não têm entrada em kit_estoque_interno
+      const ins = await pool.query(`
+        INSERT INTO kit_estoque_interno (produto_id, produto_codigo, produto_nome, saldo, atualizado_em)
+        SELECT DISTINCT p.id, p.codigo, p.descricao, COALESCE(p.estoque, 0), NOW()
+        FROM kit_itens ki
+        JOIN produtos p ON p.id = ki.produto_id
+        WHERE p.estoque IS NOT NULL
+          AND p.estoque > 0
+          AND NOT EXISTS (
+            SELECT 1 FROM kit_estoque_interno kei WHERE kei.produto_id = p.id
+          )
+        ON CONFLICT (produto_id) DO UPDATE
+          SET saldo = EXCLUDED.saldo, atualizado_em = NOW()
+        RETURNING produto_id
+      `);
+
+      res.json({
+        ok: true,
+        atualizados: upd.rowCount,
+        inseridos:   ins.rowCount,
+        msg: `Sincronizado: ${upd.rowCount} atualizado(s), ${ins.rowCount} novo(s) inserido(s) no estoque de kits.`
+      });
+    } catch(e) {
+      console.error('[sync-estoque-pdv]', e.message);
+      res.status(500).json({ ok: false, erro: e.message });
+    }
+  });
+
   // Busca produtos para autocomplete nos slots
   r.get('/produtos-busca', async (req, res) => {
     const { q } = req.query;
