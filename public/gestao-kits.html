@@ -724,7 +724,7 @@ function renderizarSlots() {
   const c = document.getElementById('mc-slots');
   if (!_slotsAtual.length) { c.innerHTML='<div style="color:var(--muted);font-size:12px;padding:8px">Nenhum slot adicionado.</div>'; return; }
   c.innerHTML = _slotsAtual.map((s,i) => `
-    <div class="slot-card">
+    <div class="slot-card" data-slot-idx="${i}">
       <div class="slot-card-h">
         <strong>Slot ${i+1}</strong>
         <select onchange="_slotsAtual[${i}].tipo=this.value;renderizarSlots()" style="width:auto;padding:4px 8px">
@@ -762,28 +762,62 @@ function renderizarSlots() {
 }
 
 let _buscarTimer = {};
+// Cache de resultados por slot para uso no addEventListener
+let _slotBuscaCache = {};
+
 function buscarProdSlot(idx, q) {
   clearTimeout(_buscarTimer[idx]);
-  if (!q || q.length < 2) { document.getElementById(`slot-sugestoes-${idx}`).innerHTML=''; return; }
+  if (!q || q.length < 2) {
+    const el = document.getElementById('slot-sugestoes-'+idx);
+    if (el) el.innerHTML = '';
+    return;
+  }
   _buscarTimer[idx] = setTimeout(async () => {
     const d = await api.get('/api/kits-campanha/produtos-busca?q='+encodeURIComponent(q));
     if (!d.ok) return;
-    const jaAdicionados = new Set((_slotsProd[idx]||[]).map(p=>p.id));
-    const el = document.getElementById(`slot-sugestoes-${idx}`);
+    const el = document.getElementById('slot-sugestoes-'+idx);
     if (!el) return;
-    if (!d.data.length) { el.innerHTML='<div style="font-size:11px;color:var(--muted);padding:4px">Nenhum produto encontrado</div>'; return; }
-        const items = d.data.filter(p=>!jaAdicionados.has(p.id)).slice(0,8);
-    el.innerHTML = '<div style="border:1px solid var(--border);border-radius:7px;overflow:hidden;max-height:160px;overflow-y:auto">'
-      + items.map(p => {
-        const desc = (p.descricao||'').replace(/'/g,"\'");
-        const cod  = (p.codigo||'').replace(/'/g,"\'");
-        return '<div onclick="adicionarProdSlot('+idx+','+p.id+',' + JSON.stringify(p.codigo||'') + ',' + JSON.stringify(p.descricao||'') + ','+(p.saldo_interno||0)+')"'
-          +' style="padding:7px 10px;cursor:pointer;border-bottom:1px solid var(--border);font-size:12px">'
-          +'<strong>'+(p.codigo||'—')+'</strong> — '+p.descricao
-          +'<span style="float:right;color:#aaa;font-size:10px">Estoque: '+(p.saldo_interno||0)+'</span>'
-          +'</div>';
-      }).join('') + '</div>';
-  }, 300);
+
+    const jaAdicionados = new Set((_slotsProd[idx]||[]).map(p=>p.id));
+    const items = (d.data||[]).filter(p => !jaAdicionados.has(p.id)).slice(0,12);
+
+    if (!items.length) {
+      el.innerHTML = '<div style="font-size:11px;color:var(--muted);padding:6px 10px">Nenhum produto encontrado</div>';
+      return;
+    }
+
+    // Guarda no cache para o addEventListener usar
+    _slotBuscaCache[idx] = {};
+    items.forEach(p => { _slotBuscaCache[idx][p.id] = p; });
+
+    // Constrói lista com data-id em vez de onclick inline (evita quebra com aspas/parênteses na descrição)
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'border:1px solid var(--border);border-radius:7px;overflow:hidden;max-height:200px;overflow-y:auto;background:#fff;box-shadow:0 4px 12px rgba(0,0,0,.1)';
+
+    items.forEach(p => {
+      const row = document.createElement('div');
+      row.dataset.slotIdx = idx;
+      row.dataset.prodId  = p.id;
+      row.style.cssText   = 'padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:12px;display:flex;justify-content:space-between;align-items:center';
+      row.innerHTML = '<span><strong>'+(p.codigo||'—')+'</strong> — '+
+        (p.descricao||'').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</span>'+
+        '<span style="color:#aaa;font-size:10px;margin-left:8px;flex-shrink:0">Estoque: '+(p.saldo_interno||0)+'</span>';
+      row.addEventListener('mousedown', function(e) {
+        // mousedown antes do blur do input
+        e.preventDefault();
+        const sidx = parseInt(this.dataset.slotIdx);
+        const pid  = parseInt(this.dataset.prodId);
+        const prod = (_slotBuscaCache[sidx]||{})[pid];
+        if (prod) adicionarProdSlot(sidx, prod.id, prod.codigo||'', prod.descricao||'', prod.saldo_interno||0);
+      });
+      row.addEventListener('mouseover', function() { this.style.background='#faf5f0'; });
+      row.addEventListener('mouseout',  function() { this.style.background=''; });
+      wrap.appendChild(row);
+    });
+
+    el.innerHTML = '';
+    el.appendChild(wrap);
+  }, 250);
 }
 
 function adicionarProdSlot(idx, id, codigo, descricao, saldo) {
@@ -794,22 +828,22 @@ function adicionarProdSlot(idx, id, codigo, descricao, saldo) {
   // Atualiza só os chips de produto sem recriar o DOM inteiro
   // Isso evita perder o foco do campo de busca
   atualizarChipsProdSlot(idx);
-  // Limpa sugestões deste slot
+  // Limpa sugestões mas mantém o texto digitado para adicionar mais produtos
   const sug = document.getElementById('slot-sugestoes-'+idx);
   if (sug) sug.innerHTML = '';
+  // Re-executa busca para atualizar a lista (excluindo o produto recém-adicionado)
   const busca = document.getElementById('slot-busca-'+idx);
-  if (busca) busca.value = '';
+  if (busca && busca.value.length >= 2) buscarProdSlot(idx, busca.value);
 }
 
 function atualizarChipsProdSlot(idx) {
-  // Atualiza apenas os chips de produto do slot sem reconstruir o slot inteiro
-  const slotCard = document.querySelector('#mc-slots .slot-card:nth-child('+(idx+1)+')');
+  const slotCard = document.querySelector('#mc-slots [data-slot-idx="'+idx+'"]');
   if (!slotCard) { renderizarSlots(); return; }
-  // Procura a div de chips (antes do input de busca)
   const chipDiv = slotCard.querySelector('.slot-chips');
   if (!chipDiv) { renderizarSlots(); return; }
   chipDiv.innerHTML = (_slotsProd[idx]||[]).map(p =>
-    `<span class="prod-chip">${p.codigo?p.codigo+' — ':''} ${p.descricao}<button onclick="removerProdSlot(${idx},${p.id})">×</button></span>`
+    '<span class="prod-chip">'+(p.codigo?p.codigo+' — ':'')+p.descricao+
+    '<button onclick="removerProdSlot('+idx+','+p.id+')">×</button></span>'
   ).join('');
 }
 
