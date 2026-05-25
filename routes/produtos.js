@@ -56,12 +56,17 @@ module.exports = function (pool) {
       CREATE INDEX IF NOT EXISTS idx_produtos_fornecedor ON produtos(fornecedor);
     `);
   }
-  initTable().catch(e => console.error('[produtos] initTable:', e.message));
-
-  // Migration: adiciona coluna estoque se não existir
-  pool.query(`
-    ALTER TABLE produtos ADD COLUMN IF NOT EXISTS estoque NUMERIC(12,3) DEFAULT 0
-  `).catch(() => {});
+  // initTable + migration síncronos
+  (async () => {
+    try {
+      await initTable();
+      // Migration: garante coluna estoque
+      await pool.query(`ALTER TABLE produtos ADD COLUMN IF NOT EXISTS estoque NUMERIC(12,3) DEFAULT 0`);
+      console.log('[produtos] coluna estoque OK');
+    } catch(e) {
+      console.error('[produtos] init error:', e.message);
+    }
+  })();
 
   // ── GET /kpis ──────────────────────────────────────────────────────────────
   r.get('/kpis', async (req, res) => {
@@ -399,6 +404,9 @@ module.exports = function (pool) {
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
+
+        // Garante coluna estoque existe (migration defensiva)
+        await client.query(`ALTER TABLE produtos ADD COLUMN IF NOT EXISTS estoque NUMERIC(12,3) DEFAULT 0`).catch(()=>{});
 
         const result = await client.query(`
           INSERT INTO produtos (codigo, descricao, fornecedor, preco_custo, preco_venda, unidade, categoria, origem, estoque)
