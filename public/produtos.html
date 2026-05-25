@@ -174,7 +174,24 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
   <div id="sec-prod">
     <div class="toolbar" style="flex-wrap:wrap;gap:6px">
       <button class="btn btn-g" onclick="abrirProd()">＋ Novo Produto</button>
-      <button class="btn btn-s" onclick="abrirImport()">📥 Importar PDV</button>
+      <div style="position:relative;display:inline-block" id="sync-menu-wrap">
+        <button class="btn btn-s" onclick="toggleSyncMenu()" id="sync-menu-btn">📥 Sincronizar PDV ▾</button>
+        <div id="sync-menu" style="display:none;position:absolute;top:calc(100% + 4px);left:0;background:#fff;border:1px solid var(--border);border-radius:9px;box-shadow:0 4px 16px rgba(0,0,0,.12);z-index:100;min-width:230px;padding:6px 0">
+          <div onclick="abrirSync('estoque')" style="padding:10px 16px;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:10px;border-radius:6px;margin:2px 4px" onmouseover="this.style.background='#faf5f0'" onmouseout="this.style.background=''">
+            <span style="font-size:18px">📦</span>
+            <div><div style="font-weight:600">Atualizar Estoque</div><div style="font-size:11px;color:var(--muted)">Rel. 302 XMenu — Código + Estoque</div></div>
+          </div>
+          <div onclick="abrirSync('cadastro')" style="padding:10px 16px;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:10px;border-radius:6px;margin:2px 4px" onmouseover="this.style.background='#faf5f0'" onmouseout="this.style.background=''">
+            <span style="font-size:18px">🏷️</span>
+            <div><div style="font-weight:600">Atualizar Cadastro</div><div style="font-size:11px;color:var(--muted)">Fornecedor, Custo, Venda, Unidade</div></div>
+          </div>
+          <hr style="margin:4px 12px;border:none;border-top:1px solid var(--border)">
+          <div onclick="abrirImport()" style="padding:10px 16px;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:10px;border-radius:6px;margin:2px 4px" onmouseover="this.style.background='#faf5f0'" onmouseout="this.style.background=''">
+            <span style="font-size:18px">📊</span>
+            <div><div style="font-weight:600">Importar Completo</div><div style="font-size:11px;color:var(--muted)">Cria produtos novos + atualiza</div></div>
+          </div>
+        </div>
+      </div>
       <div class="search-w"><input type="text" id="busca-p" placeholder="Código, descrição, fornecedor..." oninput="filtrarP()"></div>
       <select id="f-cat" style="padding:6px 9px;border:1px solid var(--border);border-radius:7px;font-size:12px" onchange="filtrarP()">
         <option value="">Todas as categorias</option>
@@ -464,6 +481,26 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
       </div>
       <input type="file" id="f-import" accept=".xlsx,.xls,.csv" style="display:none" onchange="procImport(this)">
       <div id="import-res" style="display:none;padding:10px;background:#f0faf4;border-radius:7px;font-size:13px"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Sync PDV -->
+<div class="mbg" id="m-sync">
+  <div class="md" style="max-width:460px">
+    <div class="mdh">
+      <h3 id="sync-title">Sincronizar com PDV</h3>
+      <button class="mdx" onclick="fecharSync()">×</button>
+    </div>
+    <div class="mdb">
+      <div id="sync-desc" style="font-size:12px;color:var(--muted);margin-bottom:12px;padding:10px;background:#f7f4f0;border-radius:7px;line-height:1.5"></div>
+      <div class="upload-z" onclick="document.getElementById('f-sync').click()">
+        <div style="font-size:32px;margin-bottom:8px">📂</div>
+        <p style="font-size:13px;color:var(--muted)">Clique para selecionar o arquivo</p>
+        <p style="font-size:11px;color:var(--muted);margin-top:4px">Aceita <b>XLSX</b></p>
+      </div>
+      <input type="file" id="f-sync" accept=".xlsx,.xls,.csv" style="display:none" onchange="procSync(this)">
+      <div id="sync-res" style="display:none;padding:12px;border-radius:7px;font-size:13px;margin-top:10px"></div>
     </div>
   </div>
 </div>
@@ -1281,6 +1318,61 @@ async function procImport(inp){
   el.style.display='';
   if(!d.ok){el.style.background='#fdf2f2';el.innerHTML=`❌ ${d.erro}`;return;}
   el.innerHTML=`✅ <b>Importado!</b> Inseridos: ${d.inseridos} · Atualizados: ${d.atualizados}${d.pulados?` · Pulados (sem preço): ${d.pulados}`:''}${d.erros?` · Erros: ${d.erros}`:''}`;
+  carregarProd(); carregarKPIs();
+}
+// ── Sync PDV ─────────────────────────────────────────────────────────────────
+let _syncTipo = 'estoque';
+
+function toggleSyncMenu(){
+  const m=document.getElementById('sync-menu');
+  m.style.display = m.style.display==='none' ? '' : 'none';
+}
+document.addEventListener('click', e=>{
+  const wrap=document.getElementById('sync-menu-wrap');
+  if(wrap && !wrap.contains(e.target)) document.getElementById('sync-menu').style.display='none';
+});
+
+const SYNC_INFO = {
+  estoque: {
+    title: '📦 Atualizar Estoque',
+    desc: '<b>Relatório 302 do XMenu</b><br>Atualiza o saldo de estoque de cada produto pelo código.<br><br><b>Colunas necessárias:</b> Código · Estoque<br>Os demais campos são ignorados.'
+  },
+  cadastro: {
+    title: '🏷️ Atualizar Cadastro',
+    desc: '<b>Qualquer planilha com dados de produto</b><br>Atualiza Fornecedor, Preço de Custo, Preço de Venda e Unidade.<br>Somente sobrescreve campos preenchidos na planilha.<br><br><b>Colunas:</b> Código · Fornecedor · Custo · Venda · Unidade'
+  }
+};
+
+function abrirSync(tipo){
+  _syncTipo = tipo;
+  document.getElementById('sync-menu').style.display='none';
+  const info = SYNC_INFO[tipo];
+  document.getElementById('sync-title').textContent = info.title;
+  document.getElementById('sync-desc').innerHTML    = info.desc;
+  document.getElementById('sync-res').style.display = 'none';
+  document.getElementById('f-sync').value = '';
+  document.getElementById('m-sync').classList.add('open');
+}
+
+function fecharSync(){
+  document.getElementById('m-sync').classList.remove('open');
+}
+
+async function procSync(inp){
+  const f=inp.files[0]; if(!f)return;
+  const fd=new FormData(); fd.append('arquivo',f);
+  const el=document.getElementById('sync-res');
+  el.style.display=''; el.style.background='#f7f4f0'; el.textContent='Processando...';
+  const endpoint = _syncTipo==='estoque' ? '/api/produtos/sync-estoque' : '/api/produtos/sync-cadastro';
+  const d = await api.upload(endpoint, fd);
+  if(!d.ok){
+    el.style.background='#fdf2f2';
+    el.innerHTML='<b>Erro:</b> '+d.erro;
+    return;
+  }
+  el.style.background='#f0faf4';
+  const aviso = d.nao_encontrados>0 ? '<br><span style="color:var(--muted);font-size:11px">'+d.nao_encontrados+' codigo(s) nao encontrado(s) no cadastro</span>' : '';
+  el.innerHTML='<b>Concluido!</b> '+d.msg+aviso;
   carregarProd(); carregarKPIs();
 }
 </script>

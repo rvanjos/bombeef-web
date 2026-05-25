@@ -486,5 +486,191 @@ module.exports = function (pool) {
     }
   });
 
+  // ── Helpers compartilhados para sync ────────────────────────────────────────
+  function lerPlanilhaSync(buffer) {
+    const XLSX = require('xlsx');
+    const wb   = XLSX.read(buffer, { type: 'buffer' });
+    const sheet= wb.Sheets[wb.SheetNames[0]];
+    // Corrige !ref incorreto (bug XMenu — declara A1:C1 mas tem 12 colunas)
+    const dec  = XLSX.utils.decode_range(sheet['!ref'] || 'A1');
+    let mR = dec.e.r, mC = dec.e.c;
+    for (const addr of Object.keys(sheet)) {
+      if (addr[0] === '!') continue;
+      const c = XLSX.utils.decode_cell(addr);
+      if (c.r > mR) mR = c.r;
+      if (c.c > mC) mC = c.c;
+    }
+    sheet['!ref'] = XLSX.utils.encode_range({ s: dec.s, e: { r: mR, c: mC } });
+    const all  = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+    // Pula linhas iniciais vazias
+    let si = 0;
+    for (let i = 0; i < Math.min(all.length, 10); i++) {
+      if (all[i].filter(c => String(c).trim()).length >= 2) { si = i; break; }
+    }
+    return all.slice(si).filter(r => r.some(c => String(c).trim()));
+  }
+
+  function detectCols(header) {
+    const normH = s => String(s).toLowerCase().trim().normalize('NFD').replace(/[̀-ͯ]/g,'');
+    const hn = header.map(normH);
+    const col = (...nomes) => {
+      for (const n of nomes) {
+        const nn = normH(n);
+        const i  = hn.findIndex(h => h === nn || h.includes(nn));
+        if (i >= 0) return i;
+      }
+      return -1;
+    };
+    return {
+      colCod    : col('codigoproduto','código','codigo','cod','sku','id'),
+      colDesc   : col('nomeproduto','descrição','descricao','produto','desc','item','nome'),
+      colForn   : col('fornecedor','supplier','marca','fabricante'),
+      colCusto  : col('precocompra','precodecompra','custo','preco custo','preco de compra','p. custo','cost','ultimo compra','último compra'),
+      colVenda  : col('precovenda','precodevenda','preco venda','preco de venda','p. venda','venda','sale'),
+      colUnit   : col('unidade','unid','unit','un'),
+      colCat    : col('categoria','category','grupo','depart','subcategoria'),
+      colEstoque: col('estoque','saldo','qtd estoque','estoque atual','stock'),
+    };
+  }
+
+  const parseNum = v => {
+    if (typeof v === 'number') return isFinite(v) ? v : 0;
+    const s = String(v).replace(/[^\d.,\-]/g, '').replace(',','.');
+    return parseFloat(s) || 0;
+  };
+
+  // ── POST /sync-estoque ───────────────────────────────────────────────────────
+  // Aceita: Relatório 302 XMenu ou qualquer planilha com Código + Estoque
+  r.post('/sync-estoque', upload.single('arquivo'), async (req, res) => {
+    if (!req.file) return res.status(400).json({ ok: false, erro: 'Nenhum arquivo enviado' });
+    try {
+      // Garante coluna estoque existe
+      await pool.query('ALTER TABLE produtos ADD COLUMN IF NOT EXISTS estoque NUMERIC(12,3) DEFAULT 0').catch(()=>{});
+
+      const rows = lerPlanilhaSync(req.file.buffer);
+      if (rows.length < 2) return res.status(422).json({ ok: false, erro: 'Planilha vazia' });
+
+      const { colCod, colEstoque } = detectCols(rows[0]);
+      if (colCod < 0)     return res.status(422).json({ ok: false, erro: 'Coluna de Código não encontrada. Cabeçalho: ' + rows[0].join(' | ') });
+      if (colEstoque < 0) return res.status(422).json({ ok: false, erro: 'Coluna de Estoque não encontrada. Cabeçalho: ' + rows[0].join(' | ') });
+
+      // Monta pares [codigo, estoque] ignorando linhas inválidas
+      const pares = [];
+      for (let i = 1; i < rows.length; i++) {
+        const row     = rows[i];
+        const codigo  = String(row[colCod] ?? '').trim();
+        if (!codigo || !/^\d/.test(codigo)) continue;          // pula cabeçalhos repetidos / totais
+        const estoque = parseNum(row[colEstoque]);
+        pares.push({ codigo, estoque });
+      }
+
+      if (!pares.length) return res.json({ ok: true, atualizados: 0, nao_encontrados: 0, msg: 'Nenhuma linha válida' });
+
+      // Upsert em lote via UNNEST
+      const bCod = pares.map(p => p.codigo);
+      const bEst = pares.map(p => p.estoque);
+
+      const result = await pool.query(`
+        UPDATE produtos SET
+          estoque       = data.est,
+          atualizado_em = NOW()
+        FROM (
+          SELECT UNNEST($1::text[]) AS cod, UNNEST($2::numeric[]) AS est
+        ) AS data
+        WHERE produtos.codigo = data.cod
+        RETURNING produtos.codigo
+      `, [bCod, bEst]);
+
+      const encontrados    = result.rows.map(r => r.codigo);
+      const nao_encontrados= pares.filter(p => !encontrados.includes(p.codigo)).length;
+
+      // Propaga estoque para produto_id em kit_itens via JOIN
+      // (não há coluna estoque em kit_itens — apenas info de produto)
+      res.json({
+        ok: true,
+        atualizados:    encontrados.length,
+        nao_encontrados,
+        total_planilha: pares.length,
+        msg: `Estoque atualizado em ${encontrados.length} produto(s). ${nao_encontrados} código(s) não encontrado(s) no cadastro.`
+      });
+    } catch (e) {
+      console.error('[sync-estoque]', e.message);
+      res.status(500).json({ ok: false, erro: e.message });
+    }
+  });
+
+  // ── POST /sync-cadastro ──────────────────────────────────────────────────────
+  // Aceita: qualquer planilha com Código + Fornecedor + Custo + Venda + Unidade
+  r.post('/sync-cadastro', upload.single('arquivo'), async (req, res) => {
+    if (!req.file) return res.status(400).json({ ok: false, erro: 'Nenhum arquivo enviado' });
+    try {
+      const rows = lerPlanilhaSync(req.file.buffer);
+      if (rows.length < 2) return res.status(422).json({ ok: false, erro: 'Planilha vazia' });
+
+      const { colCod, colForn, colCusto, colVenda, colUnit, colCat } = detectCols(rows[0]);
+      if (colCod < 0) return res.status(422).json({ ok: false, erro: 'Coluna de Código não encontrada. Cabeçalho: ' + rows[0].join(' | ') });
+
+      const pares = [];
+      for (let i = 1; i < rows.length; i++) {
+        const row     = rows[i];
+        const codigo  = String(row[colCod] ?? '').trim();
+        if (!codigo || !/^\d/.test(codigo)) continue;
+        const fornecedor = colForn  >= 0 ? String(row[colForn]  ?? '').trim() || null : null;
+        const custo      = colCusto >= 0 ? parseNum(row[colCusto]) : null;
+        const venda      = colVenda >= 0 ? parseNum(row[colVenda]) : null;
+        const unidade    = colUnit  >= 0 ? String(row[colUnit]  ?? '').trim().toUpperCase() || null : null;
+        const categoria  = colCat   >= 0 ? String(row[colCat]   ?? '').trim() || null : null;
+        // Pula linha se não tem nenhum dado útil
+        if (!fornecedor && custo === null && venda === null) continue;
+        pares.push({ codigo, fornecedor, custo, venda, unidade, categoria });
+      }
+
+      if (!pares.length) return res.json({ ok: true, atualizados: 0, nao_encontrados: 0, msg: 'Nenhuma linha válida' });
+
+      // UPDATE individual por código para respeitar regras de NULL
+      const client = await pool.connect();
+      let atualizados = 0, nao_encontrados = 0;
+      try {
+        await client.query('BEGIN');
+        for (const p of pares) {
+          const { rowCount } = await client.query(`
+            UPDATE produtos SET
+              fornecedor    = CASE WHEN $1::text IS NOT NULL AND $1 <> '' THEN $1 ELSE fornecedor END,
+              preco_custo   = CASE WHEN $2::numeric IS NOT NULL AND $2 > 0 THEN $2 ELSE preco_custo END,
+              preco_venda   = CASE WHEN $3::numeric IS NOT NULL AND $3 > 0 THEN $3 ELSE preco_venda END,
+              unidade       = CASE WHEN $4::text IS NOT NULL AND $4 <> '' THEN $4 ELSE unidade END,
+              categoria     = CASE WHEN $5::text IS NOT NULL AND $5 <> '' THEN $5 ELSE categoria END,
+              atualizado_em = NOW()
+            WHERE codigo = $6
+          `, [p.fornecedor, p.custo, p.venda, p.unidade, p.categoria, p.codigo]);
+          if (rowCount > 0) atualizados++;
+          else nao_encontrados++;
+        }
+        // Propaga preco_custo atualizado para kit_itens
+        await client.query(`
+          UPDATE kit_itens ki
+          SET preco_custo_unitario = p.preco_custo
+          FROM produtos p
+          WHERE ki.produto_id = p.id AND p.preco_custo > 0
+        `);
+        await client.query('COMMIT');
+      } catch(e) {
+        await client.query('ROLLBACK');
+        throw e;
+      } finally { client.release(); }
+
+      res.json({
+        ok: true,
+        atualizados,
+        nao_encontrados,
+        total_planilha: pares.length,
+        msg: `Cadastro atualizado em ${atualizados} produto(s). ${nao_encontrados} código(s) não encontrado(s).`
+      });
+    } catch (e) {
+      console.error('[sync-cadastro]', e.message);
+      res.status(500).json({ ok: false, erro: e.message });
+    }
+  });
+
   return r;
 };
