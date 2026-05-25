@@ -1654,22 +1654,31 @@ window.addEventListener('message', e => {
   function iniciarSSE() {
     if (window._sseAtivo) return;
     window._sseAtivo = true;
-    conectarSSE();
-    // Canal de produtos também
-    const src2 = new EventSource('/api/events?canal=produtos');
-    src2.onmessage = (e) => {
-      try {
-        const ev = JSON.parse(e.data);
-        if (ev.type === 'connected') return;
-        document.querySelectorAll('iframe').forEach(fr => {
-          try { fr.contentWindow.postMessage({ type: 'bb_data_changed', evento: ev }, '*'); } catch(_) {}
-        });
-        if (ev.type === 'produtos_importados' || ev.type === 'cadastro_atualizado') {
-          setTimeout(carregarKPIs, 800);
-        }
-      } catch(_) {}
-    };
-    src2.onerror = () => src2.close();
+
+    // Abre um canal SSE por domínio de dados
+    const canais = ['estoque','produtos','boletos','faturamento','dre'];
+    canais.forEach(canal => {
+      function abrir() {
+        const src = new EventSource('/api/events?canal=' + canal);
+        src.onmessage = (e) => {
+          try {
+            const ev = JSON.parse(e.data);
+            if (ev.type === 'connected') return;
+            // Repassa para todos os iframes
+            document.querySelectorAll('iframe').forEach(fr => {
+              try { fr.contentWindow.postMessage({ type: 'bb_data_changed', evento: ev }, '*'); } catch(_) {}
+            });
+            // Atualiza KPIs do portal em mudanças financeiras
+            if (['boletos_atualizado','faturamento_atualizado','dre_atualizado',
+                 'estoque_atualizado','produtos_importados'].includes(ev.type)) {
+              setTimeout(carregarKPIs, 800);
+            }
+          } catch(_) {}
+        };
+        src.onerror = () => { src.close(); setTimeout(abrir, 5000); };
+      }
+      abrir();
+    });
   }
 
   // Iframe pedindo token — responde a todos os iframes imediatamente

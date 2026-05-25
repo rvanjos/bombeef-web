@@ -313,9 +313,9 @@ app.get('/fix-ponto', async (req, res) => {
   res.send('<div style="font-family:sans-serif;padding:20px">'+r.map(x=>`<div>${x}</div>`).join('')+'<p>Pronto! Pode fechar.</p></div>');
 });
 
-app.use('/api/boletos',      require('./routes/boletos')(pool));
-app.use('/api/faturamento',  require('./routes/faturamento')(pool));
-app.use('/api/dre',          require('./routes/dre')(pool));
+app.use('/api/boletos',      require('./routes/boletos')(pool, app));
+app.use('/api/faturamento',  require('./routes/faturamento')(pool, app));
+app.use('/api/dre',          require('./routes/dre')(pool, app));
 app.use('/api/produtos',     require('./routes/produtos')(pool, app));
 app.use('/api/kits',         require('./routes/kits')(pool));
 app.use('/api/kits-campanha',require('./routes/kits_campanha')(pool, app));

@@ -28,7 +28,21 @@ const upload = multer({
   limits: { fileSize: (parseInt(process.env.UPLOAD_MAX_MB) || 15) * 1024 * 1024 },
 });
 
-module.exports = function (pool) {
+module.exports = function (pool, app) {
+  const publish = (canal, dados) => {
+    try { app?.locals?.ssePublish?.(canal, dados); } catch(_) {}
+  };
+  // Middleware: publica evento SSE automaticamente após mutações bem-sucedidas
+  const autoPublish = (canal, tipo) => (req, res, next) => {
+    const orig = res.json.bind(res);
+    res.json = (body) => {
+      if (body?.ok !== false && ['POST','PUT','DELETE','PATCH'].includes(req.method)) {
+        publish(canal, { type: tipo });
+      }
+      return orig(body);
+    };
+    next();
+  };
   const r = express.Router();
   r.use(autenticar());
 
@@ -478,7 +492,7 @@ module.exports = function (pool) {
   });
 
   // ── POST /categorias — cria nova categoria ─────────────────────────────────
-  r.post('/categorias', async (req, res) => {
+  r.post('/categorias', autoPublish('dre', 'dre_atualizado'), async (req, res) => {
     const { grupo, subgrupo, label_exibicao, ordem } = req.body;
     if (!grupo || !subgrupo) return res.status(400).json({ ok: false, erro: 'grupo e subgrupo obrigatórios' });
     try {
@@ -492,7 +506,7 @@ module.exports = function (pool) {
   });
 
   // ── PUT /categorias/:id — atualiza categoria ───────────────────────────────
-  r.put('/categorias/:id', async (req, res) => {
+  r.put('/categorias/:id', autoPublish('dre', 'dre_atualizado'), async (req, res) => {
     const { grupo, subgrupo, label_exibicao, ordem } = req.body;
     try {
       await pool.query(
@@ -504,7 +518,7 @@ module.exports = function (pool) {
   });
 
   // ── DELETE /categorias/:id — desativa categoria ────────────────────────────
-  r.delete('/categorias/:id', async (req, res) => {
+  r.delete('/categorias/:id', autoPublish('dre', 'dre_atualizado'), async (req, res) => {
     try {
       await pool.query(`UPDATE categorias_dre SET ativo=false WHERE id=$1`, [parseInt(req.params.id)]);
       res.json({ ok: true });
@@ -675,7 +689,7 @@ module.exports = function (pool) {
   }
 
   // ── POST /salvar ───────────────────────────────────────────────────────────
-  r.post('/salvar', async (req, res) => {
+  r.post('/salvar', autoPublish('dre', 'dre_atualizado'), async (req, res) => {
     const { sessao_id, mes_ref, descricao, dados_json, resultado } = req.body;
     if (!mes_ref) return res.status(400).json({ ok: false, erro: 'mes_ref obrigatório' });
     try {
@@ -761,7 +775,7 @@ module.exports = function (pool) {
   });
 
   // ── POST /recuperar/:mes — reconstrói sessão a partir da tabela dre_lancamentos
-  r.post('/recuperar/:mes', async (req, res) => {
+  r.post('/recuperar/:mes', autoPublish('dre', 'dre_atualizado'), async (req, res) => {
     try {
       const mes = decodeURIComponent(req.params.mes);
       // Busca sessão ou cria nova
@@ -836,7 +850,7 @@ module.exports = function (pool) {
 
   // ── POST /salvar-beacon — chamado pelo sendBeacon ao fechar a aba ──────────
   // sendBeacon não envia headers de autenticação facilmente, usamos body
-  r.post('/salvar-beacon', async (req, res) => {
+  r.post('/salvar-beacon', autoPublish('dre', 'dre_atualizado'), async (req, res) => {
     try {
       const { sessao_id, mes_ref, dados_json } = req.body;
       if (!mes_ref || !dados_json) return res.sendStatus(204);
@@ -868,7 +882,7 @@ module.exports = function (pool) {
   });
 
   // ── DELETE /sessoes/:id ────────────────────────────────────────────────────
-  r.delete('/sessoes/:id', async (req, res) => {
+  r.delete('/sessoes/:id', autoPublish('dre', 'dre_atualizado'), async (req, res) => {
     try {
       await pool.query(`DELETE FROM dre_sessoes WHERE id = $1`, [parseInt(req.params.id)]);
       res.json({ ok: true });

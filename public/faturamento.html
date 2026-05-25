@@ -585,6 +585,11 @@ const {api, fmt, toast} = BB;
 let periodos = [], chartFat = null, chartPag = null;
 
 window.onBBReady = () => init();
+window.addEventListener('message', e => {
+  if (e.data?.type !== 'bb_data_changed') return;
+  const t = e.data.evento?.type;
+  if (t === 'faturamento_atualizado') init();
+});
 
 function init(){
   const ano = new Date().getFullYear();

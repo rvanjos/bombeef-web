@@ -983,6 +983,14 @@ function preencherSels() {
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 let _inicializado = false;
 window.onBBReady = () => inicializar();
+window.addEventListener('message', e => {
+  if (e.data?.type !== 'bb_data_changed') return;
+  const t = e.data.evento?.type;
+  // boleto novo/pago afeta DRE; faturamento importado afeta DRE; DRE salvo por outra aba
+  if (['boletos_atualizado','faturamento_atualizado','dre_atualizado'].includes(t)) {
+    inicializar();
+  }
+});
 
 async function carregarFaturamentoMensal() {
   // Carrega NFC-e + MEI por mês para o modo Competência

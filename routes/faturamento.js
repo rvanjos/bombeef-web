@@ -14,7 +14,21 @@ const autenticar = require('../middleware/auth');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5*1024*1024 } });
 
-module.exports = function(pool) {
+module.exports = function(pool, app) {
+  const publish = (canal, dados) => {
+    try { app?.locals?.ssePublish?.(canal, dados); } catch(_) {}
+  };
+  // Middleware: publica evento SSE automaticamente após mutações bem-sucedidas
+  const autoPublish = (canal, tipo) => (req, res, next) => {
+    const orig = res.json.bind(res);
+    res.json = (body) => {
+      if (body?.ok !== false && ['POST','PUT','DELETE','PATCH'].includes(req.method)) {
+        publish(canal, { type: tipo });
+      }
+      return orig(body);
+    };
+    next();
+  };
   const r = express.Router();
   r.use(autenticar());
 
@@ -590,7 +604,7 @@ module.exports = function(pool) {
   });
 
   // ── POST /caixa — adiciona lançamento de caixa ────────────────────────────
-  r.post('/caixa', async (req, res) => {
+  r.post('/caixa', autoPublish('faturamento', 'faturamento_atualizado'), async (req, res) => {
     const { mes_ref, data, tipo, descricao, valor } = req.body;
     if (!mes_ref || !tipo || !valor) return res.status(400).json({ ok: false, erro: 'mes_ref, tipo e valor obrigatórios' });
     try {
@@ -604,7 +618,7 @@ module.exports = function(pool) {
   });
 
   // ── DELETE /caixa/:id — remove lançamento de caixa ───────────────────────
-  r.delete('/caixa/:id', async (req, res) => {
+  r.delete('/caixa/:id', autoPublish('faturamento', 'faturamento_atualizado'), async (req, res) => {
     try {
       await pool.query(`DELETE FROM faturamento_caixa WHERE id=$1`, [req.params.id]);
       res.json({ ok: true });
@@ -743,7 +757,7 @@ module.exports = function(pool) {
   });
 
   // ── DELETE /limpar — apaga todos os registros de faturamento ───────────────
-  r.delete('/limpar', async (req, res) => {
+  r.delete('/limpar', autoPublish('faturamento', 'faturamento_atualizado'), async (req, res) => {
     try {
       const { rows } = await pool.query(`DELETE FROM faturamento_periodos RETURNING id`);
       res.json({ ok: true, removidos: rows.length });
@@ -751,7 +765,7 @@ module.exports = function(pool) {
   });
 
   // ── DELETE /limpar/:mes — apaga registros de um mês específico ──────────
-  r.delete('/limpar/:mes', async (req, res) => {
+  r.delete('/limpar/:mes', autoPublish('faturamento', 'faturamento_atualizado'), async (req, res) => {
     try {
       const mes = decodeURIComponent(req.params.mes); // MM/YYYY
       const { rows } = await pool.query(`
@@ -781,7 +795,7 @@ module.exports = function(pool) {
   });
 
   // ── POST /meta — salva/atualiza meta do mês ───────────────────────────────
-  r.post('/meta', async (req, res) => {
+  r.post('/meta', autoPublish('faturamento', 'faturamento_atualizado'), async (req, res) => {
     const { mes_ref, meta, obs } = req.body;
     if (!mes_ref || meta === undefined) return res.status(400).json({ ok: false, erro: 'mes_ref e meta obrigatórios' });
     try {
@@ -816,7 +830,7 @@ module.exports = function(pool) {
   });
 
   // ── DELETE /:id ────────────────────────────────────────────────────────────
-  r.delete('/:id', async (req, res) => {
+  r.delete('/:id', autoPublish('faturamento', 'faturamento_atualizado'), async (req, res) => {
     try {
       await pool.query(`DELETE FROM faturamento_periodos WHERE id=$1`, [req.params.id]);
       res.json({ ok: true });
