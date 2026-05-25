@@ -9,12 +9,13 @@
 :root{--red:#8B0000;--red-l:#C0392B;--gold:#C9A044;--green:#1a7a4a;--orange:#c76b00;--blue:#1a5c8a;--purple:#6c3483;
   --bg:#f7f4f0;--white:#fff;--text:#1a1a1a;--muted:#7a7068;--border:#e8e0d8;--shadow:0 2px 12px rgba(0,0,0,.08);}
 *{box-sizing:border-box;margin:0;padding:0;}
+html,body{width:100%;height:100%;}
 body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
 .ph{background:var(--red);padding:12px 22px;display:flex;align-items:center;gap:10px;box-shadow:0 2px 12px rgba(139,0,0,.3);}
 .ph h2{font-family:'Playfair Display',serif;font-size:17px;color:#fff;font-weight:700;}
 /* Quando em iframe o body não tem altura fixa — scroll fica no iframe pai */
-.layout{display:grid;grid-template-columns:190px 1fr;min-height:calc(100vh - 52px);max-width:100%;overflow:hidden;}
-.sidebar{background:var(--white);border-right:1px solid var(--border);overflow-y:auto;padding:12px 0;position:sticky;top:0;height:100vh;}
+.layout{display:grid;grid-template-columns:190px 1fr;width:100%;min-height:100%;overflow:visible;}
+.sidebar{background:var(--white);border-right:1px solid var(--border);overflow-y:auto;padding:12px 0;}
 .sb-sec{font-size:9px;text-transform:uppercase;letter-spacing:1.5px;font-weight:700;color:var(--muted);padding:10px 18px 5px;margin-top:4px;}
 .nav-item{display:flex;align-items:center;gap:9px;padding:9px 18px;cursor:pointer;font-size:13px;font-weight:500;color:var(--text);transition:all .15s;border-left:3px solid transparent;}
 .nav-item:hover{background:#faf5f0;color:var(--red);}
