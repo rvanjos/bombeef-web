@@ -43,6 +43,7 @@ module.exports = function (pool) {
         preco_venda   NUMERIC(10,4) DEFAULT 0,
         unidade       TEXT DEFAULT 'un',
         categoria     TEXT,
+        estoque       NUMERIC(12,3) DEFAULT 0,
         ativo         BOOLEAN DEFAULT true,
         origem        TEXT DEFAULT 'manual',
         criado_em     TIMESTAMPTZ DEFAULT NOW(),
@@ -56,6 +57,11 @@ module.exports = function (pool) {
     `);
   }
   initTable().catch(e => console.error('[produtos] initTable:', e.message));
+
+  // Migration: adiciona coluna estoque se não existir
+  pool.query(`
+    ALTER TABLE produtos ADD COLUMN IF NOT EXISTS estoque NUMERIC(12,3) DEFAULT 0
+  `).catch(() => {});
 
   // ── GET /kpis ──────────────────────────────────────────────────────────────
   r.get('/kpis', async (req, res) => {
@@ -196,6 +202,7 @@ module.exports = function (pool) {
           unidade       = COALESCE($5, unidade),
           categoria     = COALESCE($6, categoria),
           ativo         = COALESCE($7, ativo),
+          estoque       = COALESCE($9, estoque),
           atualizado_em = NOW()
         WHERE ${idClause}
       `, [
@@ -205,6 +212,7 @@ module.exports = function (pool) {
         p.unidade || null, p.categoria || null,
         p.ativo !== undefined ? p.ativo : null,
         req.params.id,
+        p.estoque !== undefined && p.estoque !== null ? parseFloat(p.estoque) : null,
       ]);
       if (rowCount === 0) return res.status(404).json({ ok: false, erro: 'Produto não encontrado' });
       res.json({ ok: true });
@@ -324,13 +332,20 @@ module.exports = function (pool) {
         return -1;
       };
 
-      const colCod   = col(['codigoproduto', 'código', 'codigo', 'cod', 'sku', 'id']);
-      const colDesc  = col(['nomeproduto', 'descrição', 'descricao', 'produto', 'desc', 'item', 'nome']);
-      const colForn  = col(['fornecedor', 'supplier', 'marca']);
-      const colCusto = col(['precocompra', 'precodecompra', 'custo', 'preco custo', 'preco de compra', 'p. custo', 'cost']);
-      const colVenda = col(['precovenda', 'precodevenda', 'preco venda', 'preco de venda', 'p. venda', 'venda', 'sale']);
-      const colUnit  = col(['unidade', 'unid', 'unit', 'un']);
-      const colCat   = col(['categoria', 'category', 'grupo', 'depart', 'subcategoria']);
+      const colCod    = col(['codigoproduto', 'código', 'codigo', 'cod', 'sku', 'id']);
+      const colDesc   = col(['nomeproduto', 'descrição', 'descricao', 'produto', 'desc', 'item', 'nome']);
+      const colForn   = col(['fornecedor', 'supplier', 'marca']);
+      const colCusto  = col(['precocompra', 'precodecompra', 'custo', 'preco custo', 'preco de compra', 'p. custo', 'cost']);
+      const colVenda  = col(['precovenda', 'precodevenda', 'preco venda', 'preco de venda', 'p. venda', 'venda', 'sale', 'preco venda']);
+      const colUnit   = col(['unidade', 'unid', 'unit', 'un']);
+      const colCat    = col(['categoria', 'category', 'grupo', 'depart', 'subcategoria']);
+      const colEstoque = col(['estoque', 'saldo', 'estoque entrada', 'quantidade', 'qtd', 'qty', 'stock']);
+
+      // Detecta relatório 302 XMenu: Código | Produto | Preço Venda | Estoque | Un | ...
+      const isXMenu302 = colCod >= 0 && colDesc >= 0 && colEstoque >= 0 &&
+        headerNorm.some(h => h.includes('produto')) &&
+        headerNorm.some(h => h.includes('estoque'));
+      console.log('[produtos/import] isXMenu302:', isXMenu302, 'colEstoque:', colEstoque);
 
       console.log('[produtos/import] header:', header);
       console.log('[produtos/import] cols:', { colCod, colDesc, colForn, colCusto, colVenda, colUnit, colCat });
@@ -349,7 +364,7 @@ module.exports = function (pool) {
       };
 
       // Monta arrays para batch upsert via unnest (1 query em vez de ~N queries individuais)
-      const bCod = [], bDesc = [], bForn = [], bCusto = [], bVenda = [], bUnit = [], bCat = [];
+      const bCod = [], bDesc = [], bForn = [], bCusto = [], bVenda = [], bUnit = [], bCat = [], bEstoque = [];
       let inseridos = 0, atualizados = 0, erros = 0, pulados = 0;
       const detalheErros = [];
 
@@ -359,17 +374,22 @@ module.exports = function (pool) {
         const descricao = String(row[colDesc] ?? '').trim();
         if (!codigo || !descricao) continue;
         if (descricao.toLowerCase().includes('total') && isNaN(parseInt(codigo))) continue;
+        // Ignora linha de rodapé do XMenu (código numérico pequeno sem descrição real)
+        if (isXMenu302 && parseInt(codigo) < 100 && !descricao.match(/[a-zA-Z]{3,}/)) { pulados++; continue; }
 
-        const fornecedor = colForn >= 0 ? String(row[colForn] ?? '').trim() || null : null;
-        const custo      = colCusto >= 0 ? parseNum(row[colCusto]) : 0;
-        const venda      = colVenda >= 0 ? parseNum(row[colVenda]) : 0;
-        const unidade    = colUnit  >= 0 ? String(row[colUnit] ?? 'un').trim().toUpperCase() || 'UN' : 'UN';
-        const categoria  = colCat   >= 0 ? String(row[colCat]  ?? '').trim() || null : null;
+        const fornecedor = colForn    >= 0 ? String(row[colForn] ?? '').trim() || null : null;
+        const custo      = colCusto   >= 0 ? parseNum(row[colCusto]) : 0;
+        const venda      = colVenda   >= 0 ? parseNum(row[colVenda]) : 0;
+        const unidade    = colUnit    >= 0 ? String(row[colUnit] ?? 'un').trim().toUpperCase() || 'UN' : 'UN';
+        const categoria  = colCat     >= 0 ? String(row[colCat]  ?? '').trim() || null : null;
+        const estoque    = colEstoque >= 0 ? parseNum(row[colEstoque]) : null;
 
-        if (custo === 0 && venda === 0) { pulados++; continue; }
+        // No XMenu302: aceita produto mesmo sem custo/venda se tiver código e descrição válidos
+        if (!isXMenu302 && custo === 0 && venda === 0) { pulados++; continue; }
 
         bCod.push(codigo); bDesc.push(descricao); bForn.push(fornecedor);
         bCusto.push(custo); bVenda.push(venda); bUnit.push(unidade); bCat.push(categoria);
+        bEstoque.push(estoque);
       }
 
       if (bCod.length === 0) {
@@ -381,7 +401,7 @@ module.exports = function (pool) {
         await client.query('BEGIN');
 
         const result = await client.query(`
-          INSERT INTO produtos (codigo, descricao, fornecedor, preco_custo, preco_venda, unidade, categoria, origem)
+          INSERT INTO produtos (codigo, descricao, fornecedor, preco_custo, preco_venda, unidade, categoria, origem, estoque)
           SELECT
             UNNEST($1::text[]),
             UNNEST($2::text[]),
@@ -390,7 +410,8 @@ module.exports = function (pool) {
             UNNEST($5::numeric[]),
             UNNEST($6::text[]),
             UNNEST($7::text[]),
-            'pdv'
+            'pdv',
+            UNNEST($8::numeric[])
           ON CONFLICT (codigo) DO UPDATE SET
             descricao     = EXCLUDED.descricao,
             fornecedor    = COALESCE(EXCLUDED.fornecedor, produtos.fornecedor),
@@ -398,13 +419,31 @@ module.exports = function (pool) {
             preco_venda   = CASE WHEN EXCLUDED.preco_venda > 0 THEN EXCLUDED.preco_venda ELSE produtos.preco_venda END,
             unidade       = EXCLUDED.unidade,
             categoria     = COALESCE(EXCLUDED.categoria, produtos.categoria),
+            estoque       = CASE WHEN EXCLUDED.estoque IS NOT NULL THEN EXCLUDED.estoque ELSE produtos.estoque END,
             atualizado_em = NOW()
-          RETURNING (xmax <> 0) AS foi_update
-        `, [bCod, bDesc, bForn, bCusto, bVenda, bUnit, bCat]);
+          RETURNING id, codigo, (xmax <> 0) AS foi_update,
+            preco_custo AS novo_custo
+        `, [bCod, bDesc, bForn, bCusto, bVenda, bUnit, bCat, bEstoque.map(e => e ?? 0)]);
 
         for (const row of result.rows) {
           if (row.foi_update) atualizados++;
           else inseridos++;
+        }
+
+        // Propaga preco_custo atualizado para kit_itens que referenciam esses produtos
+        // (somente onde o custo importado é > 0, para não sobrescrever custos manuais)
+        const prodsCusto = result.rows
+          .filter(r => r.foi_update && parseFloat(r.novo_custo) > 0)
+          .map(r => r.id);
+        if (prodsCusto.length > 0) {
+          await client.query(`
+            UPDATE kit_itens ki
+            SET preco_custo_unitario = p.preco_custo
+            FROM produtos p
+            WHERE ki.produto_id = p.id
+              AND p.id = ANY($1::int[])
+              AND p.preco_custo > 0
+          `, [prodsCusto]);
         }
 
         await client.query('COMMIT');
