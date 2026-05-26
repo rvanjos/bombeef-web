@@ -1210,6 +1210,24 @@ async function carregarSessao() {
       showTable();
       toast(`📂 ${TXS.length} lançamentos de ${lista.data.length} mês(es)`);
     }
+    // Corrige lançamentos CC com mes no futuro (dados de importação antiga com parser com bug)
+    // Um lançamento CC com data real no passado mas mes=futuro é inválido
+    const hoje = new Date();
+    const mesHojeNum = hoje.getFullYear() * 12 + hoje.getMonth() + 1;
+    TXS.forEach(t => {
+      if (t.fonte !== 'CC' || !t.data || !t.mes) return;
+      const [mm, yy] = (t.mes||'').split('/');
+      const mesNum = parseInt(yy) * 12 + parseInt(mm);
+      // Se o mes registrado está mais de 2 meses no futuro, corrige pelo data real
+      if (mesNum > mesHojeNum + 2 && t.data) {
+        const d = new Date(t.data);
+        if (!isNaN(d)) {
+          t.mes = String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
+          if (!t.mesCaixa || t.mesCaixa === t.mes) t.mesCaixa = t.mes;
+        }
+      }
+    });
+
     // Gera provisões de royalties automaticamente para meses com faturamento disponível
     await gerarRoyaltiesAutomatico().catch(e => console.warn('[royalties]', e));
   } catch(e) {
@@ -1390,18 +1408,11 @@ async function confirmarImportCC() {
   const mesesNoArquivo = [...new Set(lancs.map(l => l.mes).filter(Boolean))];
 
   lancs.forEach(l => {
-    // Se o lançamento já tem mês definido (vem do ChatGPT), respeita
+    // mes = mês da COMPRA (competência, vem do parser pela data real)
     if (!l.mes) l.mes = mesCC;
-    // mesCaixa = mês de pagamento: se há múltiplos meses no arquivo,
-    // cada lançamento já sabe o seu mês de competência/caixa
-    // Para arquivo com mês único, usa mesCC (confirmado pelo usuário)
-    if (mesesNoArquivo.length === 1) {
-      l.mesCaixa = mesCC; // usuário confirmou o mês no modal
-    } else {
-      // Múltiplos meses: mesCaixa = vencimento da fatura correspondente ao mês do lançamento
-      // (mantém o que veio do arquivo — será ajustável no modal de revisão)
-      l.mesCaixa = l.mes;
-    }
+    // mesCaixa = mês do PAGAMENTO da fatura (sempre o mês confirmado pelo usuário)
+    // Independente de quantos meses há no arquivo, o pagamento ocorre no mesCC
+    l.mesCaixa = mesCC;
   });
 
   const tituloFatura = mesesNoArquivo.length > 1
@@ -1838,7 +1849,7 @@ function parseCCItauEmpresasCSV(rows) {
       valor: v,
       data: dt,
       mes,
-      mesCaixa: mes,   // será sobrescrito pelo fluxo confirmarImportCC
+      mesCaixa: mes,  // mesCaixa = mês da compra; confirmarImportCC ajusta para mês da fatura
       categoria: autoClassificar(descRaw, ''),
       fonte: 'CC',
       portador,
@@ -3172,12 +3183,14 @@ function confirmarVinculoPagFatura(faturaId) {
   if (sel.value) {
     const tx = TXS.find(t => t.id == sel.value);
     if (tx) {
+      // Remove vínculo anterior deste mesmo tx com outras faturas
       tx.faturaCC = faturaId;
       tx.vinculadoFaturaCC = true;
-      // Se estava ignorado ou sem categoria, corrige
       if (tx.ignorar) tx.ignorar = false;
-      if (!tx.categoria || tx.categoria === '') tx.categoria = 'Pagamento de Fatura CC';
-      toast('✅ Pagamento vinculado e classificado como Pagamento de Fatura CC!');
+      if (!tx.categoria || tx.categoria === '' || tx.categoria === 'Pagamento de Cartão') {
+        tx.categoria = 'Pagamento de Fatura CC';
+      }
+      toast('✅ Pagamento vinculado!');
     }
   }
 
@@ -3303,7 +3316,9 @@ function renderStatusCartoes() {
   const faturas = Object.values(faturasMap);
   faturas.forEach(f => {
     // Pagamento com faturaCC explícito
-    const pag = TXS.find(t => t.vinculadoFaturaCC && Math.abs(Math.abs(parseFloat(t.valor||0)) - f.total) < f.total * 0.1);
+    // Pagamento com vínculo explícito à faturaId correta (mais preciso)
+    const pag = TXS.find(t => t.vinculadoFaturaCC && t.faturaCC === f.faturaId) ||
+      TXS.find(t => t.vinculadoFaturaCC && Math.abs(Math.abs(parseFloat(t.valor||0)) - f.total) < f.total * 0.05);
     if (pag) { f.pagamentoVinculado = pag; return; }
     // Pagamento por proximidade de valor
     const pagProx = pagamentos.find(t =>
@@ -3651,7 +3666,8 @@ async function _garantirFatPorMes() {
     if (!d.ok || !d.data) return;
     const fatMap = {};
     d.data.forEach(m => {
-      const total = parseFloat(m.fat_nfce||0) + parseFloat(m.fat_mei||0);
+      const porForma = parseFloat(m.fat_nfce||0) + parseFloat(m.fat_mei||0);
+      const total = porForma > 0 ? porForma : parseFloat(m.fat_bruto||0);
       if (total > 0) fatMap[m.mes] = total;
     });
     try { localStorage.setItem('bb_fat_por_mes', JSON.stringify(fatMap)); } catch(_) {}
@@ -4467,7 +4483,10 @@ async function gerarRoyaltiesAutomatico() {
     const dr = await api.get('/api/faturamento/resumo');
     if (dr.ok && dr.data?.length) {
       dr.data.forEach(m => {
-        const total = parseFloat(m.fat_nfce||0) + parseFloat(m.fat_mei||0);
+        // Usa fat_nfce+fat_mei quando disponível, senão fat_bruto
+        // (fat_bruto é sempre preenchido; fat_nfce/fat_mei só quando XMenu exporta nesse formato)
+        const porForma = parseFloat(m.fat_nfce||0) + parseFloat(m.fat_mei||0);
+        const total = porForma > 0 ? porForma : parseFloat(m.fat_bruto||0);
         if (total > 0) fatPorMes[m.mes] = total;
       });
       // Atualiza localStorage com dados corretos
@@ -4495,14 +4514,18 @@ async function gerarRoyaltiesAutomatico() {
     const mesVenc = String(mv).padStart(2,'0') + '/' + av;
 
     // Verifica se royalties já foram pagos (lançamento real, não provisão)
-    const jaFoiPago = TXS.some(t =>
+    // Usa lançamentos de extrato/OFX com categoria Royalties no mês do vencimento
+    const pagamentosReais = TXS.filter(t =>
       t.categoria === CAT &&
-      t.mes === mesVenc &&
+      (t.mes === mesVenc || t.mesCaixa === mesVenc) &&
       t.fonte !== 'ROYALTIES' &&
-      parseFloat(t.valor) < 0
+      parseFloat(t.valor||0) < 0
     );
-    if (jaFoiPago) {
-      // Remove provisão pois o pagamento real já existe
+    const totalPago = pagamentosReais.reduce((s,t) => s + Math.abs(parseFloat(t.valor||0)), 0);
+    const parcela = parseFloat(mesFat && fatPorMes[mesFat] ? fatPorMes[mesFat] : 0) * TAXA;
+
+    if (totalPago > parcela * 0.8) {
+      // Pagamento real cobre ≥80% — remove provisão e pula
       TXS = TXS.filter(t => !(t.fonte === 'ROYALTIES' && t.mes === mesVenc));
       continue;
     }
