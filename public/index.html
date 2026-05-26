@@ -781,11 +781,27 @@ function entrarNoPortal() {
   // Atualiza KPIs a cada 90 segundos
   kpiTimer = setInterval(carregarKPIs, 90000);
   iniciarSSE(); // Eventos em tempo real
+
+  // Renova token quando PC acorda do sleep ou aba volta ao foco
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') renovarTokenSeNecessario();
+  });
+  // Detecta PC voltando do sleep (setInterval para durante sleep)
+  let _ultimoHB = Date.now();
+  setInterval(() => {
+    const agora = Date.now();
+    if (agora - _ultimoHB > 60000) {
+      // Passou mais de 1 min sem heartbeat = PC dormiu — renova imediatamente
+      console.log('[auth] PC acordou, verificando token...');
+      renovarTokenSeNecessario();
+    }
+    _ultimoHB = agora;
+  }, 15000);
   carregarPendentesAprovacao();
   setInterval(carregarPendentesAprovacao, 60000);
 
   // Renovação automática do token — verifica a cada 30min
-  setInterval(renovarTokenSeNecessario, 30 * 60 * 1000);
+  setInterval(renovarTokenSeNecessario, 10 * 60 * 1000); // verifica a cada 10min
   renovarTokenSeNecessario(); // verifica imediatamente
 
   // Verificação obrigatória de validade para operadores/gestores
@@ -961,8 +977,8 @@ async function renovarTokenSeNecessario() {
     const payload = JSON.parse(atob(tk.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
     const agora = Math.floor(Date.now() / 1000);
     const restam = payload.exp - agora;
-    // Renova se restar menos de 2 horas
-    if (restam < 7200) {
+    // Renova se restar menos de 4 horas
+    if (restam < 14400) {
       const r = await fetch('/auth/refresh', {
         method: 'POST',
         headers: { 'Authorization': 'Bearer ' + tk }
@@ -1692,7 +1708,18 @@ window.addEventListener('message', e => {
     return;
   }
   // Logout do iframe
-  if (e.data.type === 'bb_logout') fazerLogout();
+  if (e.data.type === 'bb_logout') {
+    // Tenta renovar token antes de deslogar — pode ser expirado mas renovável
+    renovarTokenSeNecessario().then(() => {
+      const tk = token();
+      if (tk) {
+        // Token renovado com sucesso — reinjeta nos iframes
+        _broadcastToken();
+      } else {
+        fazerLogout();
+      }
+    }).catch(() => fazerLogout());
+  }
   // Navegação do iframe
   if (e.data.type === 'bb_navigate') showTab(e.data.tab);
   // Iframe avisa que fez importação → atualiza KPIs
