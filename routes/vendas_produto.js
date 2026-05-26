@@ -5,7 +5,10 @@
 const express = require('express');
 const r = express.Router();
 
+const autenticar = require('../middleware/auth');
+
 module.exports = (pool) => {
+  r.use(autenticar());
 
   // ── Init tabelas ────────────────────────────────────────────────────────────
   async function initTable() {

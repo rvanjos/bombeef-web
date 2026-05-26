@@ -12,6 +12,8 @@
 require('dotenv').config();
 const express    = require('express');
 const cors       = require('cors');
+const helmet     = require('helmet');
+const rateLimit  = require('express-rate-limit');
 const morgan     = require('morgan');
 const path       = require('path');
 const { Pool }   = require('pg');
@@ -218,6 +220,33 @@ app.use(cors({
   credentials: true,
 }));
 
+// ── Segurança: headers HTTP ──────────────────────────────────────────────────
+app.use(helmet({
+  contentSecurityPolicy: false, // desabilitado pois o front usa inline scripts
+  crossOriginEmbedderPolicy: false,
+}));
+
+// ── Rate limiting ────────────────────────────────────────────────────────────
+// Login: máx 10 tentativas por 15 minutos por IP
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { ok: false, erro: 'Muitas tentativas de login. Aguarde 15 minutos.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+// API geral: máx 300 req por minuto por IP
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 300,
+  message: { ok: false, erro: 'Muitas requisições. Tente novamente em breve.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => req.path === '/api/events', // SSE não sofre rate limit
+});
+app.use('/auth/login', loginLimiter);
+app.use('/api/', apiLimiter);
+
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 app.use(express.json({ limit: '20mb' }));
 app.use(express.urlencoded({ extended: true, limit: '20mb' }));
@@ -259,7 +288,7 @@ function ssePublish(canal, dados) {
 app.locals.ssePublish = ssePublish;
 
 // Endpoint SSE — o front-end conecta aqui para receber eventos
-app.get('/api/events', (req, res) => {
+app.get('/api/events', require('./middleware/auth')(), (req, res) => {
   const canal = req.query.canal || 'geral';
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
@@ -286,7 +315,7 @@ app.get('/api/events', (req, res) => {
 // ── Rotas API ──────────────────────────────────────────────────────────────────
 app.use('/auth',             require('./routes/auth')(pool));
 // Fix temporário: corrige constraint de ponto_auditoria
-app.get('/fix-ponto', async (req, res) => {
+app.get('/fix-ponto', require('./middleware/auth')('admin'), async (req, res) => {
   const r = [];
   const run = async (n, sql) => {
     try { await pool.query(sql); r.push('✅ '+n); }
@@ -355,7 +384,7 @@ app.use('/api/fornecedores', require('./routes/fornecedores')(pool));
 app.use('/api/cortes',       require('./routes/cortes')(pool));
 app.use('/api/vendas-produto', require('./routes/vendas_produto')(pool));
 // ── Rota seed CorteMaster (executa uma vez para popular dados iniciais) ─────
-app.get('/api/admin/seed-cortes', async (req, res) => {
+app.get('/api/admin/seed-cortes', require('./middleware/auth')('admin'), async (req, res) => {
   try {
     // Registros de corte
     const cortes = [
@@ -406,7 +435,7 @@ app.get('/api/admin/seed-cortes', async (req, res) => {
 app.use('/api/admin/backup', require('./routes/backup')(pool));
 
 // Limpa duplicatas de validade — mantém o mais recente por (descricao, data_validade)
-app.get('/api/admin/fix-validade-duplicatas', async (req, res) => {
+app.get('/api/admin/fix-validade-duplicatas', require('./middleware/auth')('admin'), async (req, res) => {
   try {
     let removidos = 0;
 
@@ -458,7 +487,7 @@ app.get('/api/admin/fix-validade-duplicatas', async (req, res) => {
 });
 
 // Limpa sessões duplicadas do DRE — mantém apenas a mais recente por mês
-app.get('/api/admin/fix-dre-sessions', async (req, res) => {
+app.get('/api/admin/fix-dre-sessions', require('./middleware/auth')('admin'), async (req, res) => {
   try {
     // Encontra meses com múltiplas sessões
     const { rows: dups } = await pool.query(`
@@ -494,7 +523,7 @@ app.get('/api/admin/fix-dre-sessions', async (req, res) => {
 });
 
 // Limpa categorias inválidas (ex: "BOLETO PAGO") do supplierMem nas sessões DRE
-app.get('/api/admin/fix-dre-supermem', async (req, res) => {
+app.get('/api/admin/fix-dre-supermem', require('./middleware/auth')('admin'), async (req, res) => {
   try {
     const { rows } = await pool.query(`SELECT id, mes_ref, dados_json FROM dre_sessoes`);
     let sessoes_limpas = 0, entradas_removidas = 0;
@@ -535,7 +564,7 @@ app.get('/api/admin/fix-dre-supermem', async (req, res) => {
 });
 
 // Rota de migration manual — acessa uma vez para renomear colunas legadas
-app.get('/api/admin/fix-kits', async (req, res) => {
+app.get('/api/admin/fix-kits', require('./middleware/auth')('admin'), async (req, res) => {
   try {
     const results = [];
     const client = await pool.connect();
