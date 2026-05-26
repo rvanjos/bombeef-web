@@ -337,18 +337,51 @@ module.exports = function (pool, app) {
         [nome, descricao||null, preco_referencia||0, limite_campanha||0,
          data_inicio||null, data_fim||null, status||null, req.params.id]
       );
-      // Atualiza slots: deleta e recria
+      // Atualiza slots: upsert seguro (nunca deleta slots com pedidos vinculados)
       if (slots) {
-        await pool.query(`DELETE FROM kit_campanha_slots WHERE campanha_id=$1`, [req.params.id]);
-        for (let i=0; i<slots.length; i++) {
+        // Busca IDs dos slots existentes desta campanha
+        const { rows: slotsExist } = await pool.query(
+          `SELECT id FROM kit_campanha_slots WHERE campanha_id=$1 ORDER BY ordem,id`,
+          [req.params.id]
+        );
+        const idsExist = slotsExist.map(r => r.id);
+
+        for (let i = 0; i < slots.length; i++) {
           const s = slots[i];
-          await pool.query(`
-            INSERT INTO kit_campanha_slots
-              (campanha_id,nome,tipo,obrigatorio,quantidade,aceita_peso_real,ordem,produtos_permitidos)
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-            [req.params.id, s.nome, s.tipo||'choice', s.obrigatorio!==false, s.quantidade||1,
-             s.aceita_peso_real||false, i, JSON.stringify(s.produtos_permitidos||[])]
-          );
+          const prodJson = JSON.stringify(s.produtos_permitidos||[]);
+          if (i < idsExist.length) {
+            // Slot já existe — atualiza preservando o id (evita violar FK)
+            await pool.query(`
+              UPDATE kit_campanha_slots SET
+                nome=$1, tipo=$2, obrigatorio=$3, quantidade=$4,
+                aceita_peso_real=$5, ordem=$6, produtos_permitidos=$7
+              WHERE id=$8`,
+              [s.nome, s.tipo||'choice', s.obrigatorio!==false, s.quantidade||1,
+               s.aceita_peso_real||false, i, prodJson, idsExist[i]]
+            );
+          } else {
+            // Slot novo — insere
+            await pool.query(`
+              INSERT INTO kit_campanha_slots
+                (campanha_id,nome,tipo,obrigatorio,quantidade,aceita_peso_real,ordem,produtos_permitidos)
+              VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+              [req.params.id, s.nome, s.tipo||'choice', s.obrigatorio!==false, s.quantidade||1,
+               s.aceita_peso_real||false, i, prodJson]
+            );
+          }
+        }
+        // Remove slots excedentes que não têm pedidos vinculados
+        if (idsExist.length > slots.length) {
+          const idsRemover = idsExist.slice(slots.length);
+          for (const sid of idsRemover) {
+            const { rows: temPedido } = await pool.query(
+              `SELECT 1 FROM kit_pedido_itens WHERE slot_id=$1 LIMIT 1`, [sid]
+            );
+            if (!temPedido.length) {
+              await pool.query(`DELETE FROM kit_campanha_slots WHERE id=$1`, [sid]);
+            }
+            // Se tem pedido, mantém o slot oculto (não aparece no front mas não quebra FK)
+          }
         }
       }
       res.json({ ok: true });
