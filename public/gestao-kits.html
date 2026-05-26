@@ -1023,10 +1023,14 @@ async function salvarPedido(status) {
   const campId = document.getElementById('np-campanha').value;
   if (!campId) { toast('Selecione uma campanha','warn'); return; }
 
-  // Montar lista de itens
+  // Montar lista de itens — multiplicar quantidade por qtd_kits
+  const qtdKits = parseInt(document.getElementById('np-qtd-kits')?.value) || 1;
   const itens = [];
   for (const [slotId, sels] of Object.entries(_pedidoSelecoesAtuais)) {
-    sels.forEach(s => itens.push(s));
+    sels.forEach(s => itens.push({
+      ...s,
+      quantidade: (s.quantidade || 1) * qtdKits
+    }));
   }
 
   // Validar slots obrigatórios

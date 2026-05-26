@@ -550,6 +550,37 @@ module.exports = function (pool, app) {
         parseInt(req.params.id)
       ]);
       if (!rowCount) return res.status(404).json({ ok: false, erro: 'Pedido não encontrado' });
+
+      // Se qtd_kits mudou, recalcula quantidades dos itens e reservas proporcionalmente
+      if (qtd_kits) {
+        const { rows: pedAtual } = await pool.query(
+          `SELECT qtd_kits, status FROM kit_pedidos WHERE id=$1`, [parseInt(req.params.id)]
+        );
+        const qtdAnterior = parseInt(pedAtual[0]?.qtd_kits || 1);
+        const qtdNova     = parseInt(qtd_kits);
+        if (qtdNova !== qtdAnterior && qtdAnterior > 0) {
+          const fator = qtdNova / qtdAnterior;
+          // Atualiza quantidades dos itens
+          await pool.query(`
+            UPDATE kit_pedido_itens
+            SET quantidade = ROUND((quantidade * $1)::numeric, 3)
+            WHERE pedido_id = $2
+          `, [fator, parseInt(req.params.id)]);
+          // Atualiza reservas
+          await pool.query(`
+            UPDATE kit_reservas
+            SET quantidade = ROUND((quantidade * $1)::numeric, 3)
+            WHERE pedido_id = $2 AND status = 'reservado'
+          `, [fator, parseInt(req.params.id)]);
+          // Atualiza valor_total proporcional
+          await pool.query(`
+            UPDATE kit_pedidos
+            SET valor_total = ROUND((valor_total * $1)::numeric, 2)
+            WHERE id = $2
+          `, [fator, parseInt(req.params.id)]);
+        }
+      }
+
       res.json({ ok: true });
     } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
