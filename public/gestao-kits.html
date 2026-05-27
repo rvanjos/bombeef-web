@@ -227,7 +227,7 @@ if (window.self !== window.top) {
       </div>
       <div class="fg">
         <label>Quantidade de Kits</label>
-        <input type="number" id="np-qtd-kits" value="1" min="1" max="99" style="max-width:100px">
+        <input type="number" id="np-qtd-kits" value="1" min="1" max="99" style="max-width:100px" oninput="atualizarTodosVisuaisSlots()">
       </div>
       <div class="fg" style="display:flex;align-items:flex-end;gap:8px;padding-bottom:2px">
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-bottom:0">
@@ -937,7 +937,7 @@ async function carregarSlotsMontagem() {
       <div class="slot-mount-h">
         <span class="slot-badge">${slot.tipo==='fixed'?'FIXO':'ESCOLHA'}</span>
         <strong>${slot.nome}</strong>
-        <span style="font-size:11px;color:var(--muted)">Qtd: ${slot.quantidade}${slot.obrigatorio?' · obrigatório':''}</span>
+        <span style="font-size:11px;color:var(--muted)" id="slot-qtd-label-${slot.id}">Qtd: ${slot.quantidade}${slot.obrigatorio?' · obrigatório':''}</span>
         ${slot.aceita_peso_real?'<span style="font-size:10px;color:var(--blue);background:#dbeafe;padding:2px 6px;border-radius:5px">⚖️ peso variável</span>':''}
       </div>
       <div id="slot-prog-${slot.id}" style="font-size:11px;font-weight:600;color:var(--orange);margin-bottom:6px"></div>
@@ -948,7 +948,7 @@ async function carregarSlotsMontagem() {
             style="width:120px" id="peso-${slot.id}" onchange="setPesoReal(${slot.id},this.value)">`:'' }
         </div>` :
         prods.map(p => `
-          <div class="prod-opt" id="opt-${slot.id}-${p.id}" onclick="selecionarProduto(${slot.id},${p.id},${slot.quantidade},${slot.aceita_peso_real?'true':'false'})">
+          <div class="prod-opt" id="opt-${slot.id}-${p.id}" onclick="selecionarProduto(${slot.id},${p.id},${slot.quantidade},${slot.aceita_peso_real?'true':'false'},true)">
             <span class="po-nome">${p.codigo||''} — ${p.descricao}</span>
             <span class="po-saldo">Estoque: ${p.saldo_interno||0}</span>
           </div>`).join('')
@@ -961,8 +961,18 @@ async function carregarSlotsMontagem() {
   _slotsMontagemData.forEach(slot => {
     const prods = slot.produtos_info?.filter(Boolean)||[];
     if (slot.tipo==='fixed' && prods.length===1) {
+      // fixed com 1 produto: pré-seleciona qtd = slot.quantidade (será multiplicado por qtdKits no envio)
       _pedidoSelecoesAtuais[slot.id] = [{ slot_id:slot.id, slot_nome:slot.nome, produto_id:prods[0].id, quantidade:slot.quantidade }];
     }
+  });
+}
+
+function atualizarTodosVisuaisSlots() {
+  // Quando qtd_kits muda, recalcula limite de seleção de todos os slots visíveis
+  const qtdKits = parseInt(document.getElementById('np-qtd-kits')?.value) || 1;
+  (_slotsMontagemData||[]).forEach(slot => {
+    const qtdTotal = (slot.quantidade||1) * qtdKits;
+    atualizarVisuaisSlot(slot.id, qtdTotal);
   });
 }
 
@@ -971,28 +981,39 @@ function selecionarProduto(slotId, prodId, qtdSlot, aceitaPeso) {
   if (!slot) return;
   if (!_pedidoSelecoesAtuais[slotId]) _pedidoSelecoesAtuais[slotId] = [];
 
-  // Conta quantas unidades deste produto já foram selecionadas neste slot
+  // Limite total = qtd do slot × número de kits pedidos
+  const qtdKits = parseInt(document.getElementById('np-qtd-kits')?.value) || 1;
+  const qtdTotal = qtdSlot * qtdKits;
+
   const totalJaSelecionado = _pedidoSelecoesAtuais[slotId].reduce((s,x)=>s+x.quantidade,0);
   const qtdDesteProd = _pedidoSelecoesAtuais[slotId].filter(x=>x.produto_id===prodId).reduce((s,x)=>s+x.quantidade,0);
 
-  if (qtdDesteProd > 0 && totalJaSelecionado >= qtdSlot) {
-    // Já tem este produto e slot cheio — remove uma unidade deste produto
+  if (qtdDesteProd > 0 && totalJaSelecionado >= qtdTotal) {
+    // Slot cheio e produto já selecionado — remove uma unidade
     const idx = _pedidoSelecoesAtuais[slotId].findLastIndex(x=>x.produto_id===prodId);
     if (idx>=0) _pedidoSelecoesAtuais[slotId].splice(idx,1);
-  } else if (totalJaSelecionado < qtdSlot) {
-    // Ainda tem espaço — adiciona mais uma unidade deste produto
+  } else if (totalJaSelecionado < qtdTotal) {
+    // Ainda tem espaço — adiciona 1 unidade deste produto
     _pedidoSelecoesAtuais[slotId].push({ slot_id:slotId, slot_nome:slot.nome, produto_id:prodId, quantidade:1 });
   }
-  // Atualiza visual dos botões
-  atualizarVisuaisSlot(slotId, qtdSlot);
+  // Atualiza visual
+  atualizarVisuaisSlot(slotId, qtdTotal);
 }
 
 function atualizarVisuaisSlot(slotId, qtdSlot) {
   const sels = _pedidoSelecoesAtuais[slotId]||[];
   const total = sels.reduce((s,x)=>s+x.quantidade,0);
-  // Atualiza cada opção de produto
-  const slot = _slotsMontagemData.find(s=>s.id===slotId);
+  const slot  = _slotsMontagemData.find(s=>s.id===slotId);
+  const qtdKits = parseInt(document.getElementById('np-qtd-kits')?.value) || 1;
+  const qtdTotal = (slot?.quantidade||1) * qtdKits;
   const prods = slot?.produtos_info?.filter(Boolean)||[];
+
+  // Atualiza label de qtd se qtdKits > 1
+  const lbl = document.getElementById('slot-qtd-label-'+slotId);
+  if (lbl && qtdKits > 1) {
+    lbl.innerHTML = `Qtd: ${slot?.quantidade||1} × ${qtdKits} kits = <strong>${qtdTotal}</strong>${slot?.obrigatorio?' · obrigatório':''}`;
+  }
+
   prods.forEach(p => {
     const el = document.getElementById(`opt-${slotId}-${p.id}`);
     if (!el) return;
