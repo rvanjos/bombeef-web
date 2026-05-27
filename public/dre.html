@@ -73,7 +73,7 @@ body.modo-expandido #btn-expand { background: var(--blue); color:#fff; border-co
 /* TABELA */
 table{width:100%;border-collapse:collapse;font-size:12px;}
 thead tr{background:var(--red);}
-thead th{padding:7px 9px;text-align:left;color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;position:sticky;top:var(--toolbar-h,42px);z-index:5;background:var(--red);}
+thead th{padding:7px 9px;text-align:left;color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;position:sticky;top:0;z-index:5;background:var(--red);}
 tbody tr{border-bottom:1px solid #f0ebe4;}
 tbody tr:hover{background:#fdf9f6!important;}
 tbody tr.uncat{background:#fff8e6!important;}
@@ -477,7 +477,7 @@ thead th{padding:6px 9px;}
       </div>
 
       <!-- TABELA -->
-        <div style="flex:1;overflow-y:auto;overflow-x:auto;min-width:0">
+        <div id="dre-tbl-scroll" style="flex:1;overflow-y:auto;overflow-x:auto;min-width:0">
           <table id="tbl-main">
             <thead><tr>
               <th style="width:26px;text-align:center"><input type="checkbox" class="chk" id="chk-all" onchange="selAll(this)"></th>
@@ -983,13 +983,6 @@ function preencherSels() {
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 let _inicializado = false;
 window.onBBReady = () => {
-  // Mede altura real da toolbar para o thead sticky ficar correto
-  function ajustarToolbarHeight() {
-    const tb = document.querySelector('.toolbar-top');
-    if (tb) document.documentElement.style.setProperty('--toolbar-h', tb.offsetHeight + 'px');
-  }
-  ajustarToolbarHeight();
-  new ResizeObserver(ajustarToolbarHeight).observe(document.querySelector('.toolbar-top') || document.body);
   inicializar();
 };
 window.addEventListener('message', e => {
