@@ -73,7 +73,7 @@ body.modo-expandido #btn-expand { background: var(--blue); color:#fff; border-co
 /* TABELA */
 table{width:100%;border-collapse:collapse;font-size:12px;}
 thead tr{background:var(--red);}
-thead th{padding:7px 9px;text-align:left;color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;position:sticky;top:39px;z-index:5;background:var(--red);}
+thead th{padding:7px 9px;text-align:left;color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;position:sticky;top:var(--toolbar-h,42px);z-index:5;background:var(--red);}
 tbody tr{border-bottom:1px solid #f0ebe4;}
 tbody tr:hover{background:#fdf9f6!important;}
 tbody tr.uncat{background:#fff8e6!important;}
@@ -982,7 +982,16 @@ function preencherSels() {
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 let _inicializado = false;
-window.onBBReady = () => inicializar();
+window.onBBReady = () => {
+  // Mede altura real da toolbar para o thead sticky ficar correto
+  function ajustarToolbarHeight() {
+    const tb = document.querySelector('.toolbar-top');
+    if (tb) document.documentElement.style.setProperty('--toolbar-h', tb.offsetHeight + 'px');
+  }
+  ajustarToolbarHeight();
+  new ResizeObserver(ajustarToolbarHeight).observe(document.querySelector('.toolbar-top') || document.body);
+  inicializar();
+};
 window.addEventListener('message', e => {
   if (e.data?.type !== 'bb_data_changed') return;
   const t = e.data.evento?.type;
@@ -4522,9 +4531,9 @@ async function gerarRoyaltiesAutomatico() {
       parseFloat(t.valor||0) < 0
     );
     const totalPago = pagamentosReais.reduce((s,t) => s + Math.abs(parseFloat(t.valor||0)), 0);
-    const parcela = parseFloat(mesFat && fatPorMes[mesFat] ? fatPorMes[mesFat] : 0) * TAXA;
+    const parcelaPaga = parseFloat(mesFat && fatPorMes[mesFat] ? fatPorMes[mesFat] : 0) * TAXA;
 
-    if (totalPago > parcela * 0.8) {
+    if (totalPago > parcelaPaga * 0.8) {
       // Pagamento real cobre ≥80% — remove provisão e pula
       TXS = TXS.filter(t => !(t.fonte === 'ROYALTIES' && t.mes === mesVenc));
       continue;
@@ -4534,7 +4543,7 @@ async function gerarRoyaltiesAutomatico() {
     const jaTemProvisao = TXS.some(t => t.fonte === 'ROYALTIES' && t.mes === mesVenc);
     if (jaTemProvisao) continue;
 
-    const parcela  = parseFloat(fat) * TAXA;
+    const parcela = parseFloat(fat) * TAXA;
     const ultimoDia = new Date(av, mv, 0).getDate();
     const dt1 = `${av}-${String(mv).padStart(2,'0')}-15`;
     const dt2 = `${av}-${String(mv).padStart(2,'0')}-${ultimoDia}`;
