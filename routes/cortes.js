@@ -201,13 +201,13 @@ module.exports = function(pool) {
   });
 
   r.post('/registros', async (req, res) => {
-    const { data, fornecedor, corte, peso_bruto, peso_limpo, custo_por_kg, margem, estoque, obs, produto_id } = req.body;
+    const { data, fornecedor, corte, lote, peso_bruto, peso_limpo, custo_por_kg, margem, estoque, obs, produto_id } = req.body;
     if (!corte || !peso_bruto) return res.status(400).json({ ok:false, erro:'corte e peso_bruto obrigatórios' });
     try {
       const { rows } = await pool.query(`
-        INSERT INTO cortes_registros (data, fornecedor, corte, peso_bruto, peso_limpo, custo_por_kg, margem, estoque, obs, produto_id)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *
-      `, [data||new Date().toISOString().slice(0,10), fornecedor||null, corte,
+        INSERT INTO cortes_registros (data, fornecedor, corte, lote, peso_bruto, peso_limpo, custo_por_kg, margem, estoque, obs, produto_id)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *
+      `, [data||new Date().toISOString().slice(0,10), fornecedor||null, corte, lote||null,
           toNum(peso_bruto), toNum(peso_limpo), toNum(custo_por_kg),
           toNum(margem,0.30), toNum(estoque), obs||null, produto_id||null]);
       res.json({ ok:true, data:rows[0] });
@@ -215,14 +215,14 @@ module.exports = function(pool) {
   });
 
   r.put('/registros/:id', async (req, res) => {
-    const { data, fornecedor, corte, peso_bruto, peso_limpo, custo_por_kg, margem, estoque, obs } = req.body;
+    const { data, fornecedor, corte, lote, peso_bruto, peso_limpo, custo_por_kg, margem, estoque, obs } = req.body;
     try {
       const { rows } = await pool.query(`
         UPDATE cortes_registros SET
-          data=$1, fornecedor=$2, corte=$3, peso_bruto=$4, peso_limpo=$5,
-          custo_por_kg=$6, margem=$7, estoque=$8, obs=$9
-        WHERE id=$10 RETURNING *
-      `, [data, fornecedor||null, corte, toNum(peso_bruto), toNum(peso_limpo),
+          data=$1, fornecedor=$2, corte=$3, lote=$4, peso_bruto=$5, peso_limpo=$6,
+          custo_por_kg=$7, margem=$8, estoque=$9, obs=$10
+        WHERE id=$11 RETURNING *
+      `, [data, fornecedor||null, corte, lote||null, toNum(peso_bruto), toNum(peso_limpo),
           toNum(custo_por_kg), toNum(margem,0.30), toNum(estoque), obs||null, req.params.id]);
       if (!rows.length) return res.status(404).json({ ok:false, erro:'Não encontrado' });
       res.json({ ok:true, data:rows[0] });
