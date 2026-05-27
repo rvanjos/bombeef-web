@@ -723,7 +723,23 @@ async function apiFetch(path, opts={}) {
         ...(opts.headers||{})
       }
     });
-    if (res.status === 401) { fazerLogout(); return { ok: false }; }
+    if (res.status === 401) {
+      try {
+        const r = await fetch('/auth/refresh', {
+          method: 'POST', headers: { 'Authorization': 'Bearer ' + (token()||'') }
+        }).then(r => r.json());
+        if (r.ok && r.token) {
+          sessionStorage.setItem('bb_token', r.token);
+          broadcastToken();
+          const res2 = await fetch(API + path, { ...opts, headers: {
+            'Content-Type':'application/json','Authorization':'Bearer '+r.token,...(opts.headers||{})
+          }});
+          if (res2.status === 401) { fazerLogout(); return { ok: false }; }
+          return res2.json();
+        }
+      } catch(_) {}
+      fazerLogout(); return { ok: false };
+    }
     return res.json();
   } catch(e) {
     console.error('[fetch]', path, e.message);
@@ -760,6 +776,15 @@ async function fazerLogin() {
     btn.disabled = false;
     btn.textContent = 'Entrar';
   }
+}
+
+// broadcastToken global — envia token para todos os iframes
+function broadcastToken() {
+  const tk = token();
+  if (!tk || !usuario) return;
+  document.querySelectorAll('iframe').forEach(iframe => {
+    try { iframe.contentWindow.postMessage({ type: 'bb_token', token: tk, usuario }, '*'); } catch(_) {}
+  });
 }
 
 function entrarNoPortal() {
@@ -812,16 +837,9 @@ function entrarNoPortal() {
 
   // Broadcast do token para todos os iframes — crítico no mobile
   // Iframes que carregam antes do login ficam esperando este sinal
-  const _broadcastToken = () => {
-    const tk = token();
-    if (!tk) return;
-    document.querySelectorAll('iframe').forEach(iframe => {
-      try { iframe.contentWindow.postMessage({ type: 'bb_token', token: tk, usuario }, '*'); } catch(_) {}
-    });
-  };
-  _broadcastToken();                       // imediato
-  setTimeout(_broadcastToken, 800);        // iframes que ainda estão carregando
-  setTimeout(_broadcastToken, 2500);       // retry final para rede lenta (mobile)
+  broadcastToken();
+  setTimeout(broadcastToken, 800);
+  setTimeout(broadcastToken, 2500);
 }
 
 function fazerLogout() {
@@ -985,7 +1003,7 @@ async function renovarTokenSeNecessario() {
       }).then(r => r.json());
       if (r.ok && r.token) {
         sessionStorage.setItem('bb_token', r.token);
-        _broadcastToken();
+        broadcastToken();
         console.log('[auth] Token renovado automaticamente');
       }
     }
@@ -1709,15 +1727,9 @@ window.addEventListener('message', e => {
   }
   // Logout do iframe
   if (e.data.type === 'bb_logout') {
-    // Tenta renovar token antes de deslogar — pode ser expirado mas renovável
     renovarTokenSeNecessario().then(() => {
-      const tk = token();
-      if (tk) {
-        // Token renovado com sucesso — reinjeta nos iframes
-        _broadcastToken();
-      } else {
-        fazerLogout();
-      }
+      if (token()) broadcastToken();
+      else fazerLogout();
     }).catch(() => fazerLogout());
   }
   // Navegação do iframe
