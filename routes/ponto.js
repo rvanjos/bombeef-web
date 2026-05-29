@@ -72,6 +72,36 @@ module.exports = function(pool) {
     // Garante índice único necessário para ON CONFLICT
     await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS ponto_func_data_idx ON ponto_registros(funcionario_id, data_ref)`)
       .catch(e => console.warn('[ponto] idx:', e.message));
+
+    // Corrige FK: ponto_registros.funcionario_id deve apontar para 'funcionarios', não 'rh_funcionarios'
+    try {
+      // Verifica se a FK ainda aponta para rh_funcionarios
+      const { rows: fkCheck } = await pool.query(`
+        SELECT constraint_name
+        FROM information_schema.referential_constraints rc
+        JOIN information_schema.key_column_usage kcu
+          ON rc.constraint_name = kcu.constraint_name
+        WHERE kcu.table_name = 'ponto_registros'
+          AND kcu.column_name = 'funcionario_id'
+          AND rc.unique_constraint_schema = 'public'
+          AND EXISTS (
+            SELECT 1 FROM information_schema.key_column_usage kcu2
+            WHERE kcu2.constraint_name = rc.unique_constraint_name
+              AND kcu2.table_name = 'rh_funcionarios'
+          )
+      `);
+      if (fkCheck.length > 0) {
+        const fkName = fkCheck[0].constraint_name;
+        console.log('[ponto] Corrigindo FK:', fkName, '-> funcionarios');
+        await pool.query(`ALTER TABLE ponto_registros DROP CONSTRAINT IF EXISTS "${fkName}"`);
+        await pool.query(`ALTER TABLE ponto_registros ADD CONSTRAINT ponto_registros_funcionario_id_fkey FOREIGN KEY (funcionario_id) REFERENCES funcionarios(id)`);
+        console.log('[ponto] FK corrigida com sucesso');
+      } else {
+        console.log('[ponto] FK já aponta para funcionarios — OK');
+      }
+    } catch(e) {
+      console.warn('[ponto] fix FK:', e.message);
+    }
   }
   initTables().then(() => {
     console.log('[ponto] tabelas OK');
