@@ -168,7 +168,10 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
       <div class="func-sub" id="func-cargo-show"></div>
       <div class="func-jor" id="func-jor-show"></div>
     </div>
-    <button class="btn-trocar" onclick="trocar()">Trocar</button>
+    <div style="display:flex;gap:8px">
+      <button class="btn-trocar" onclick="abrirJornada()" style="background:#f0e8e0;color:var(--text)">⚙️ Jornada</button>
+      <button class="btn-trocar" onclick="trocar()">Trocar</button>
+    </div>
   </div>
 
   <!-- Status do dia -->
@@ -217,6 +220,73 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
   </div>
 
 </div><!-- /body-scroll -->
+
+<!-- Modal Configurar Jornada -->
+<div class="mbg2" id="m-jornada" onclick="if(event.target===this)fecharJornada()">
+  <div class="md" style="max-height:85vh;overflow-y:auto">
+    <div class="md-pull"></div>
+    <div class="md-body">
+      <div class="ret-titulo">⚙️ Configurar Jornada</div>
+      <div id="jor-func-nome" style="font-weight:600;margin-bottom:14px;color:var(--muted);font-size:13px"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+        <div>
+          <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase">Entrada</label>
+          <input type="time" id="jor-entrada" value="08:00" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:8px;font-size:14px;font-family:'DM Sans',sans-serif;margin-top:4px">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase">Saída</label>
+          <input type="time" id="jor-saida" value="18:00" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:8px;font-size:14px;font-family:'DM Sans',sans-serif;margin-top:4px">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase">Jornada (horas)</label>
+          <input type="number" id="jor-horas" value="8" min="1" max="12" step="0.5" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:8px;font-size:14px;font-family:'DM Sans',sans-serif;margin-top:4px">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase">Intervalo (min)</label>
+          <input type="number" id="jor-intervalo" value="60" min="0" max="120" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:8px;font-size:14px;font-family:'DM Sans',sans-serif;margin-top:4px">
+        </div>
+      </div>
+      <div style="margin-bottom:12px">
+        <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;display:block;margin-bottom:6px">Tolerância de atraso (minutos)</label>
+        <input type="number" id="jor-tolerancia" value="10" min="0" max="60" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:8px;font-size:14px;font-family:'DM Sans',sans-serif">
+      </div>
+      <div>
+        <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;display:block;margin-bottom:8px">Dias de Folga</label>
+        <div style="display:flex;flex-wrap:wrap;gap:8px" id="jor-folgas">
+          <label class="folga-check"><input type="checkbox" value="domingo"> Dom</label>
+          <label class="folga-check"><input type="checkbox" value="segunda"> Seg</label>
+          <label class="folga-check"><input type="checkbox" value="terca"> Ter</label>
+          <label class="folga-check"><input type="checkbox" value="quarta"> Qua</label>
+          <label class="folga-check"><input type="checkbox" value="quinta"> Qui</label>
+          <label class="folga-check"><input type="checkbox" value="sexta"> Sex</label>
+          <label class="folga-check"><input type="checkbox" value="sabado"> Sáb</label>
+        </div>
+      </div>
+    </div>
+    <div class="md-btns">
+      <button class="btn-confirmar" onclick="salvarJornada()">💾 Salvar Jornada</button>
+      <button class="btn-cancelar" onclick="fecharJornada()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Relatório Mensal -->
+<div class="mbg2" id="m-relatorio" onclick="if(event.target===this)fecharRelatorio()">
+  <div class="md" style="max-height:92vh;overflow-y:auto;max-width:600px">
+    <div class="md-pull"></div>
+    <div class="md-body">
+      <div class="ret-titulo">📊 Relatório Mensal de Ponto</div>
+      <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center">
+        <input type="month" id="rel-mes" style="flex:1;padding:9px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:'DM Sans',sans-serif">
+        <button onclick="carregarRelatorio()" style="padding:9px 16px;background:var(--red);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif">Gerar</button>
+      </div>
+      <div id="rel-content" style="font-size:13px"></div>
+    </div>
+    <div class="md-btns">
+      <button class="btn-cancelar" onclick="fecharRelatorio()">Fechar</button>
+    </div>
+  </div>
+</div>
 
 <!-- Modal confirmação (bottom-sheet) -->
 <div class="mbg" id="m-conf" onclick="if(event.target===this)fecharConf()">
@@ -302,6 +372,27 @@ function tick() {
 setInterval(tick, 500); tick();
 
 // ── Init ──────────────────────────────────────────────────────────────────────
+.folga-check{
+  display:flex;align-items:center;gap:5px;padding:7px 14px;
+  background:var(--bg);border:1px solid var(--border);border-radius:8px;
+  cursor:pointer;font-size:13px;font-weight:600;transition:all .15s;
+}
+.folga-check:has(input:checked){background:var(--red);color:#fff;border-color:var(--red);}
+.folga-check input{display:none;}
+
+.rel-func{background:var(--white);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:10px;}
+.rel-func-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.rel-func-nome{font-weight:700;font-size:14px}
+.rel-func-badge{font-size:11px;padding:3px 9px;border-radius:12px;font-weight:700}
+.rel-ok{background:#dcfce7;color:#166534}
+.rel-falta{background:#fee2e2;color:#991b1b}
+.rel-extra{background:#dbeafe;color:#1e40af}
+.rel-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px}
+.rel-stat{background:var(--bg);border-radius:7px;padding:8px;text-align:center}
+.rel-stat-v{font-size:16px;font-weight:700;font-family:'DM Mono',monospace}
+.rel-stat-k{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+</style>
+<script>
 window.onBBReady = async () => {
   // Identifica usuário logado
   try {
@@ -310,6 +401,11 @@ window.onBBReady = async () => {
       _user = me.data;
       document.getElementById('ph-nome').textContent   = me.data.nome;
       document.getElementById('ph-perfil').textContent = me.data.email || me.data.perfil;
+      // Mostra botão de relatório para admin/gestor
+      if (['admin','gestor'].includes(me.data.perfil)) {
+        const btnRel = document.getElementById('btn-relatorio');
+        if (btnRel) btnRel.style.display = '';
+      }
     }
   } catch(_) {}
 
@@ -574,6 +670,121 @@ function showToast(msg) {
   t.textContent = msg;
   t.classList.add('show');
   setTimeout(()=>t.classList.remove('show'), 3000);
+}
+
+// ── Configurar Jornada ────────────────────────────────────────────────────────
+function abrirJornada() {
+  if (!_func) return;
+  // Verificar permissão (só admin/gestor)
+  if (!['admin','gestor'].includes(_user?.perfil)) {
+    showToast('❌ Apenas admin ou gestor pode configurar jornadas'); return;
+  }
+  document.getElementById('jor-func-nome').textContent = _func.nome + ' — ' + (_func.cargo||'');
+  document.getElementById('jor-entrada').value    = (_func.horario_entrada||'08:00').slice(0,5);
+  document.getElementById('jor-saida').value      = (_func.horario_saida||'18:00').slice(0,5);
+  document.getElementById('jor-horas').value      = _func.jornada_horas||8;
+  document.getElementById('jor-intervalo').value  = _func.intervalo_min||60;
+  document.getElementById('jor-tolerancia').value = _func.tolerancia_min||10;
+  // Marcar dias de folga
+  const folgas = _func.dias_folga||[];
+  document.querySelectorAll('#jor-folgas input').forEach(cb => {
+    cb.checked = folgas.includes(cb.value);
+  });
+  document.getElementById('m-jornada').classList.add('open');
+}
+
+function fecharJornada() {
+  document.getElementById('m-jornada').classList.remove('open');
+}
+
+async function salvarJornada() {
+  if (!_func) return;
+  const diasFolga = [...document.querySelectorAll('#jor-folgas input:checked')].map(cb => cb.value);
+  const body = {
+    horario_entrada: document.getElementById('jor-entrada').value,
+    horario_saida:   document.getElementById('jor-saida').value,
+    jornada_horas:   parseFloat(document.getElementById('jor-horas').value)||8,
+    intervalo_min:   parseInt(document.getElementById('jor-intervalo').value)||60,
+    tolerancia_min:  parseInt(document.getElementById('jor-tolerancia').value)||10,
+    dias_folga:      diasFolga,
+  };
+  const d = await api.put('/api/ponto/jornada/'+_func.id, body);
+  if (!d.ok) { showToast('❌ '+(d.erro||'Erro ao salvar')); return; }
+  // Atualiza _func local
+  Object.assign(_func, body);
+  const ent = body.horario_entrada.slice(0,5);
+  const sai = body.horario_saida.slice(0,5);
+  document.getElementById('func-jor-show').textContent = `Jornada: ${ent} → ${sai} · ${body.jornada_horas}h`;
+  fecharJornada();
+  showToast('✅ Jornada salva!');
+}
+
+// ── Relatório Mensal ──────────────────────────────────────────────────────────
+function abrirRelatorio() {
+  const hoje = new Date();
+  document.getElementById('rel-mes').value = hoje.getFullYear()+'-'+String(hoje.getMonth()+1).padStart(2,'0');
+  document.getElementById('rel-content').innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted)">Selecione o mês e clique em Gerar</div>';
+  document.getElementById('m-relatorio').classList.add('open');
+  carregarRelatorio();
+}
+
+function fecharRelatorio() {
+  document.getElementById('m-relatorio').classList.remove('open');
+}
+
+async function carregarRelatorio() {
+  const mesVal = document.getElementById('rel-mes').value;
+  if (!mesVal) return;
+  const [ano, mes] = mesVal.split('-');
+  const el = document.getElementById('rel-content');
+  el.innerHTML = '<div style="text-align:center;padding:16px;color:var(--muted)">⏳ Carregando...</div>';
+  const d = await api.get(`/api/ponto/resumo-mensal?mes=${mes}&ano=${ano}`);
+  if (!d.ok || !d.data?.length) {
+    el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted)">Nenhum registro encontrado para este mês</div>';
+    return;
+  }
+  const DIAS = ['domingo','segunda','terca','quarta','quinta','sexta','sabado'];
+  el.innerHTML = d.data.map(f => {
+    const regs = f.registros||[];
+    const totalDiasUteis = regs.filter(r => {
+      const diaSem = DIAS[new Date(r.data_ref+'T12:00:00').getDay()];
+      const folgas = f.dias_folga||[];
+      return !folgas.includes(diaSem);
+    }).length;
+    const faltas   = regs.filter(r => r.status==='falta').length;
+    const extras   = regs.filter(r => r.status==='hora_extra').length;
+    const atrasados= regs.filter(r => r.status==='atraso').length;
+    const horasTot = regs.reduce((s,r) => s + parseFloat(r.horas_trabalhadas||0), 0);
+    const horasEsp = totalDiasUteis * parseFloat(f.jornada_horas||8);
+    const saldo    = horasTot - horasEsp;
+    const fmt = h => {
+      const abs = Math.abs(h);
+      const hh = Math.floor(abs); const mm = Math.round((abs-hh)*60);
+      return (h<0?'-':'+')+hh+'h'+(mm>0?mm+'m':'');
+    };
+    const badge = faltas>0?'rel-falta':extras>0?'rel-extra':'rel-ok';
+    const badgeLabel = faltas>0?`${faltas} falta(s)`:extras>0?`${extras} hora extra`:' Regular';
+    const folhasLabel = (f.dias_folga||[]).length>0 ? 'Folga: '+f.dias_folga.map(d=>d.charAt(0).toUpperCase()+d.slice(1)).join(', ') : 'Sem folga fixa';
+    return `<div class="rel-func">
+      <div class="rel-func-header">
+        <div>
+          <div class="rel-func-nome">${f.nome}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">${f.cargo||''} · ${folhasLabel}</div>
+        </div>
+        <span class="rel-func-badge ${badge}">${badgeLabel}</span>
+      </div>
+      <div class="rel-stats">
+        <div class="rel-stat"><div class="rel-stat-v">${horasTot.toFixed(1)}h</div><div class="rel-stat-k">Trabalhadas</div></div>
+        <div class="rel-stat"><div class="rel-stat-v">${horasEsp.toFixed(1)}h</div><div class="rel-stat-k">Esperadas</div></div>
+        <div class="rel-stat" style="color:${saldo>=0?'var(--green)':'var(--red)'}">
+          <div class="rel-stat-v">${fmt(saldo)}</div><div class="rel-stat-k">Saldo</div>
+        </div>
+        <div class="rel-stat"><div class="rel-stat-v">${faltas}</div><div class="rel-stat-k">Faltas</div></div>
+        <div class="rel-stat"><div class="rel-stat-v">${atrasados}</div><div class="rel-stat-k">Atrasos</div></div>
+        <div class="rel-stat"><div class="rel-stat-v">${regs.length}</div><div class="rel-stat-k">Dias registrados</div></div>
+      </div>
+    </div>`;
+  }).join('');
 }
 </script>
 </body>

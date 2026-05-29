@@ -18,6 +18,7 @@ module.exports = function(pool) {
       `ALTER TABLE funcionarios ADD COLUMN IF NOT EXISTS intervalo_min   INTEGER DEFAULT 60`,
       `ALTER TABLE funcionarios ADD COLUMN IF NOT EXISTS jornada_horas   NUMERIC(4,2) DEFAULT 8`,
       `ALTER TABLE funcionarios ADD COLUMN IF NOT EXISTS tolerancia_min  INTEGER DEFAULT 10`,
+      `ALTER TABLE funcionarios ADD COLUMN IF NOT EXISTS dias_folga      TEXT[] DEFAULT ARRAY[]::TEXT[]`,
     ];
     for (const sql of alters) await pool.query(sql).catch(()=>{});
 
@@ -392,6 +393,7 @@ module.exports = function(pool) {
         SELECT
           f.id, f.nome, f.cargo, f.horario_entrada, f.horario_saida,
           f.jornada_horas, f.tolerancia_min, f.intervalo_min,
+          COALESCE(f.dias_folga, ARRAY[]::TEXT[]) AS dias_folga,
           COUNT(p.id) AS dias_registrados,
           COUNT(CASE WHEN p.entrada IS NOT NULL AND p.saida IS NOT NULL THEN 1 END) AS dias_completos,
           COUNT(CASE WHEN p.status='falta' OR (p.data_ref::date <= CURRENT_DATE AND p.entrada IS NULL) THEN 1 END) AS faltas,
@@ -400,7 +402,14 @@ module.exports = function(pool) {
               'id', p.id, 'data', p.data_ref, 'entrada', p.entrada,
               'saida_intervalo', p.saida_intervalo, 'retorno_intervalo', p.retorno_intervalo,
               'saida', p.saida, 'status', p.status, 'justificativa', p.justificativa,
-              'entrada_manual', p.entrada_manual, 'saida_manual', p.saida_manual
+              'entrada_manual', p.entrada_manual, 'saida_manual', p.saida_manual,
+              'data_ref', p.data_ref,
+              'horas_trabalhadas', CASE WHEN p.entrada IS NOT NULL AND p.saida IS NOT NULL
+                THEN EXTRACT(EPOCH FROM (p.saida - p.entrada))/3600 - COALESCE(
+                  CASE WHEN p.saida_intervalo IS NOT NULL AND p.retorno_intervalo IS NOT NULL
+                    THEN EXTRACT(EPOCH FROM (p.retorno_intervalo - p.saida_intervalo))/3600
+                    ELSE f.intervalo_min::float/60 END, 1)
+                ELSE 0 END
             ) ORDER BY p.data_ref
           ) FILTER (WHERE p.id IS NOT NULL) AS registros
         FROM funcionarios f
@@ -409,7 +418,7 @@ module.exports = function(pool) {
           AND EXTRACT(YEAR FROM p.data_ref)=$2
         WHERE f.ativo=true
         GROUP BY f.id, f.nome, f.cargo, f.horario_entrada, f.horario_saida,
-                 f.jornada_horas, f.tolerancia_min, f.intervalo_min
+                 f.jornada_horas, f.tolerancia_min, f.intervalo_min, f.dias_folga
         ORDER BY f.nome
       `, [parseInt(mes), parseInt(ano)]);
       res.json({ ok:true, data:rows });
@@ -419,15 +428,16 @@ module.exports = function(pool) {
   // ── Jornada do funcionário (configurar) ───────────────────────────────────
   r.put('/jornada/:id', async (req, res) => {
     if (!['admin','gestor'].includes(req.user?.perfil)) return res.status(403).json({ ok:false, erro:'Sem permissão' });
-    const { horario_entrada, horario_saida, intervalo_min, jornada_horas, tolerancia_min } = req.body;
+    const { horario_entrada, horario_saida, intervalo_min, jornada_horas, tolerancia_min, dias_folga } = req.body;
     try {
       await pool.query(`
         UPDATE funcionarios SET
           horario_entrada=$1, horario_saida=$2, intervalo_min=$3,
-          jornada_horas=$4, tolerancia_min=$5
-        WHERE id=$6
+          jornada_horas=$4, tolerancia_min=$5, dias_folga=$6
+        WHERE id=$7
       `, [horario_entrada||'08:00', horario_saida||'18:00', parseInt(intervalo_min)||60,
-          parseFloat(jornada_horas)||8, parseInt(tolerancia_min)||10, req.params.id]);
+          parseFloat(jornada_horas)||8, parseInt(tolerancia_min)||10,
+          dias_folga||[], req.params.id]);
       res.json({ ok:true });
     } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
   });
