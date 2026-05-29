@@ -712,11 +712,33 @@ let _escalaMes = { ano: new Date().getFullYear(), mes: new Date().getMonth() };
 function getToken() {
   return sessionStorage.getItem('bb_token') || localStorage.getItem('bb_token') || '';
 }
+let _rhRefreshing = false;
+let _rhRefreshProm = null;
+
 async function apiFetch(method, path, body) {
   const opts = { method, headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getToken() } };
   if (body) opts.body = JSON.stringify(body);
-  const r = await fetch(BASE + path, opts);
+  let r = await fetch(BASE + path, opts);
   if (r.status === 401) {
+    // Tenta renovar o token antes de deslogar
+    try {
+      if (!_rhRefreshing) {
+        _rhRefreshing = true;
+        _rhRefreshProm = fetch('/auth/refresh', {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + getToken() }
+        }).then(x => x.json()).catch(() => ({ ok: false }))
+          .finally(() => { _rhRefreshing = false; });
+      }
+      const ref = await _rhRefreshProm;
+      if (ref && ref.ok && ref.token) {
+        sessionStorage.setItem('bb_token', ref.token);
+        // Reexecuta com novo token
+        opts.headers['Authorization'] = 'Bearer ' + ref.token;
+        r = await fetch(BASE + path, opts);
+        if (r.status !== 401) return r.json();
+      }
+    } catch(_) {}
     sessionStorage.removeItem('bb_token');
     try { window.parent.postMessage({ type: 'bb_logout' }, '*'); } catch(_) {}
     return { ok: false, erro: 'Sessão expirada' };

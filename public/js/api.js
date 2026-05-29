@@ -44,20 +44,52 @@
     }
   }
 
+  // ── Renovação de token ────────────────────────────────────────────────────
+  let _refreshing = false;
+  let _refreshProm = null;
+
+  async function tryRefresh() {
+    if (!_refreshing) {
+      _refreshing = true;
+      _refreshProm = fetch('/auth/refresh', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + getToken() }
+      }).then(r => r.json()).catch(() => ({ ok: false }))
+        .finally(() => { _refreshing = false; });
+    }
+    return _refreshProm;
+  }
+
   // ── apiFetch ───────────────────────────────────────────────────────────────
   async function apiFetch(path, opts = {}) {
-    const headers = {
+    const makeHeaders = () => ({
       'Content-Type': 'application/json',
       'Authorization': 'Bearer ' + getToken(),
       ...(opts.headers || {}),
-    };
+    });
     let res;
     try {
-      res = await fetch(path, { ...opts, headers });
+      res = await fetch(path, { ...opts, headers: makeHeaders() });
     } catch (_) {
       return { ok: false, erro: 'Sem conexão com o servidor' };
     }
-    if (res.status === 401) { handle401(); throw new Error('Sessão expirada'); }
+    if (res.status === 401) {
+      // Tenta renovar antes de deslogar
+      try {
+        const ref = await tryRefresh();
+        if (ref && ref.ok && ref.token) {
+          setToken(ref.token);
+          // Reexecuta com novo token
+          res = await fetch(path, { ...opts, headers: makeHeaders() });
+          if (res.status !== 401) {
+            try { return await res.json(); }
+            catch(_) { return { ok: false, erro: 'Resposta inválida' }; }
+          }
+        }
+      } catch(_) {}
+      handle401();
+      throw new Error('Sessão expirada');
+    }
     try { return await res.json(); }
     catch (_) { return { ok: false, erro: 'Resposta inválida do servidor' }; }
   }
@@ -72,7 +104,24 @@
         body: formData,
       });
     } catch (_) { return { ok: false, erro: 'Sem conexão com o servidor' }; }
-    if (res.status === 401) { handle401(); throw new Error('Sessão expirada'); }
+    if (res.status === 401) {
+      try {
+        const ref = await tryRefresh();
+        if (ref && ref.ok && ref.token) {
+          setToken(ref.token);
+          res = await fetch(path, {
+            method: 'POST',
+            headers: { 'Authorization': 'Bearer ' + ref.token },
+            body: formData,
+          });
+          if (res.status !== 401) {
+            try { return await res.json(); } catch(_) { return { ok:false }; }
+          }
+        }
+      } catch(_) {}
+      handle401();
+      throw new Error('Sessão expirada');
+    }
     try { return await res.json(); }
     catch (_) { return { ok: false, erro: 'Resposta inválida do servidor' }; }
   }
