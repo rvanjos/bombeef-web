@@ -1592,8 +1592,33 @@ function setSyncStatus(st) {
 window.addEventListener('DOMContentLoaded', async () => {
   const tk = token();
   if (!tk) return;
+
+  // Tenta renovar token expirado ANTES de verificar /auth/me
+  // Isso evita o logout desnecessário ao recarregar a página
   try {
-    const data = await apiFetch('/auth/me');
+    const payload = JSON.parse(atob(tk.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
+    const agora   = Math.floor(Date.now() / 1000);
+    if (payload.exp < agora + 14400) { // expirado ou expira em < 4h
+      const r = await fetch('/auth/refresh', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + tk }
+      }).then(r => r.json()).catch(() => ({ ok: false }));
+      if (r.ok && r.token) {
+        sessionStorage.setItem('bb_token', r.token);
+        console.log('[auth] Token renovado na inicialização');
+      } else if (payload.exp < agora) {
+        // Token expirado E não renovável — pede login
+        sessionStorage.removeItem('bb_token');
+        return;
+      }
+    }
+  } catch(_) { /* ignora erro de decodificação */ }
+
+  // Agora busca dados do usuário com token válido
+  try {
+    const data = await fetch('/auth/me', {
+      headers: { 'Authorization': 'Bearer ' + (token()||'') }
+    }).then(r => r.json());
     if (data.ok) { usuario = data.data; entrarNoPortal(); }
     else sessionStorage.removeItem('bb_token');
   } catch(_) { sessionStorage.removeItem('bb_token'); }
