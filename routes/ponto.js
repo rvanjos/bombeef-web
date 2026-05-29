@@ -66,10 +66,37 @@ module.exports = function(pool) {
       ['saida_em', 'TIMESTAMPTZ'],
     ];
     for (const [col, tipo] of audCols) {
-      await pool.query(`ALTER TABLE ponto_registros ADD COLUMN IF NOT EXISTS ${col} ${tipo}`).catch(()=>{});
+      await pool.query(`ALTER TABLE ponto_registros ADD COLUMN IF NOT EXISTS ${col} ${tipo}`)
+        .catch(e => console.warn('[ponto] alter col', col, e.message));
     }
+    // Garante índice único necessário para ON CONFLICT
+    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS ponto_func_data_idx ON ponto_registros(funcionario_id, data_ref)`)
+      .catch(e => console.warn('[ponto] idx:', e.message));
   }
-  initTables();
+  initTables().then(() => {
+    console.log('[ponto] tabelas OK');
+  }).catch(e => {
+    console.error('[ponto] initTables ERRO:', e.message);
+  });
+
+  // ── GET /funcionarios — lista funcionários para o grid de ponto ──────────────
+  // Usa rh_funcionarios (tabela correta referenciada pelo ponto_registros)
+  // Se rh_funcionarios vazia, faz fallback para 'funcionarios' (tabela do RH)
+  r.get('/funcionarios', async (req, res) => {
+    try {
+      let { rows } = await pool.query(`
+        SELECT id, nome, cargo, email, ativo,
+               horario_entrada, horario_saida, jornada_horas, intervalo_min, tolerancia_min
+        FROM rh_funcionarios WHERE ativo=true ORDER BY nome
+      `);
+      // Fallback: se rh_funcionarios vazia, usa tabela 'funcionarios'
+      if (!rows.length) {
+        const fb = await pool.query(`SELECT id, nome, cargo, email, ativo FROM funcionarios WHERE ativo=true ORDER BY nome`);
+        rows = fb.rows;
+      }
+      res.json({ ok:true, data:rows });
+    } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
+  });
 
   // ── Helpers ────────────────────────────────────────────────────────────────
   function calcHoras(entrada, saida, saidaInt, retornoInt, intervaloMin) {
@@ -138,7 +165,10 @@ module.exports = function(pool) {
         horario: agora.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}),
         auditoria: { usuario, login, horario: agora.toISOString(), ip }
       });
-    } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
+    } catch(e) {
+      console.error('[ponto/bater] ERRO:', e.message, '| stack:', e.stack?.slice(0,200));
+      res.status(500).json({ ok:false, erro: e.message });
+    }
   });
 
   // ── Bootstrap: força criação das tabelas (admin) ────────────────────────

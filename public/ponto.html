@@ -313,7 +313,7 @@ window.onBBReady = async () => {
     }
   } catch(_) {}
 
-  const d = await api.get('/api/rh/funcionarios');
+  const d = await api.get('/api/ponto/funcionarios');
   if (!d.ok) return;
   _funcs = (d.data||[]).filter(f=>f.ativo);
   renderGrid();
