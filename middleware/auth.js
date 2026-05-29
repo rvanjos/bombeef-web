@@ -30,13 +30,14 @@ function autenticar(perfisPermitidos = null) {
       return res.status(401).json({ ok: false, erro: msg });
     }
 
-    // Injeta dados do usuário no request
+    // Injeta dados do usuário no request (ambos req.user e req.usuario para compatibilidade)
     req.user = {
       id:     payload.id,
       nome:   payload.nome,
       email:  payload.email,
       perfil: payload.perfil,
     };
+    req.usuario = req.user; // alias — algumas rotas usam req.usuario
 
     // Verifica perfil se exigido
     if (perfisPermitidos) {
