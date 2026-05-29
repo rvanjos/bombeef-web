@@ -724,11 +724,18 @@ async function apiFetch(path, opts={}) {
       }
     });
     if (res.status === 401) {
-      try {
-        const r = await fetch('/auth/refresh', {
+      // Evita múltiplos refreshes simultâneos — reutiliza a promise em andamento
+      if (!_refreshEmAndamento) {
+        _refreshEmAndamento = true;
+        _refreshPromise = fetch('/auth/refresh', {
           method: 'POST', headers: { 'Authorization': 'Bearer ' + (token()||'') }
-        }).then(r => r.json());
-        if (r.ok && r.token) {
+        }).then(r => r.json()).catch(() => ({ ok: false })).finally(() => {
+          _refreshEmAndamento = false;
+        });
+      }
+      try {
+        const r = await _refreshPromise;
+        if (r && r.ok && r.token) {
           sessionStorage.setItem('bb_token', r.token);
           broadcastToken();
           const res2 = await fetch(API + path, { ...opts, headers: {
