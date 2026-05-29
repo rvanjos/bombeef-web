@@ -2147,7 +2147,24 @@ async function inicializarAbaPonto(){
     if (tb) tb.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:20px;color:var(--red)">Erro ao carregar ponto: ${e.message}</td></tr>`;
   }
 }
-async function carregarPonto(){const fi=document.getElementById('pt-func')?.value,mes=document.getElementById('pt-mes')?.value,ano=document.getElementById('pt-ano')?.value;if(!mes||!ano)return;let url=`/api/ponto/registros?mes=${mes}&ano=${ano}`;if(fi)url+=`&funcionario_id=${fi}`;const d=await get(url);if(!d.ok)return;_pontoRegistros=d.data||[];renderTabelaPonto();renderKPIsPonto();}
+async function carregarPonto(){
+  const fi=document.getElementById('pt-func')?.value,
+        mes=document.getElementById('pt-mes')?.value,
+        ano=document.getElementById('pt-ano')?.value;
+  if(!mes||!ano) return;
+  const tb=document.getElementById('tbody-ponto');
+  if(tb) tb.innerHTML='<tr><td colspan="9" style="text-align:center;padding:20px;color:var(--muted)">⏳ Carregando...</td></tr>';
+  let url=`/api/ponto/registros?mes=${mes}&ano=${ano}`;
+  if(fi) url+=`&funcionario_id=${fi}`;
+  const d=await get(url);
+  if(!d.ok){
+    if(tb) tb.innerHTML=`<tr><td colspan="9" style="text-align:center;padding:20px;color:var(--red)">❌ Erro: ${d.erro||'Falha ao carregar registros'}</td></tr>`;
+    return;
+  }
+  _pontoRegistros=d.data||[];
+  renderTabelaPonto();
+  renderKPIsPonto();
+}
 function fmtHoraTs(ts){if(!ts)return'<span style="color:#ccc">—</span>';return`<span style="font-family:monospace;font-weight:600">${new Date(ts).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</span>`;}
 function calcHorasTrab(p){if(!p.entrada||!p.saida)return null;const ms=new Date(p.saida)-new Date(p.entrada),intMs=p.saida_intervalo&&p.retorno_intervalo?new Date(p.retorno_intervalo)-new Date(p.saida_intervalo):(p.intervalo_min||60)*60000;return Math.max(0,(ms-intMs)/3600000);}
 function fmtHorasPonto(h){if(h===null||h===undefined)return'—';return`${Math.floor(h)}h${String(Math.round((h%1)*60)).padStart(2,'0')}`;}

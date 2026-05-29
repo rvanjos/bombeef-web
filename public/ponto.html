@@ -138,6 +138,10 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
   <div class="ph-row">
     <span style="font-size:22px">⏱️</span>
     <h2>Ponto Eletrônico</h2>
+    <div style="display:flex;align-items:center;gap:8px">
+      <button id="btn-admin-ponto" onclick="abrirAdminPonto()" style="display:none;padding:6px 12px;background:rgba(255,255,255,.2);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif">⚙️ Admin</button>
+      <button id="btn-relatorio" onclick="abrirRelatorio()" style="display:none;padding:6px 12px;background:rgba(255,255,255,.2);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif">📊 Relatório</button>
+    </div>
     <div class="ph-user" id="ph-user">
       <strong id="ph-nome">—</strong>
       <span id="ph-perfil">carregando...</span>
@@ -168,10 +172,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
       <div class="func-sub" id="func-cargo-show"></div>
       <div class="func-jor" id="func-jor-show"></div>
     </div>
-    <div style="display:flex;gap:8px">
-      <button class="btn-trocar" id="btn-jornada" onclick="abrirJornada()" style="background:#f0e8e0;color:var(--text);display:none">⚙️ Jornada</button>
-      <button class="btn-trocar" onclick="trocar()">Trocar</button>
-    </div>
+    <button class="btn-trocar" onclick="trocar()">Trocar</button>
   </div>
 
   <!-- Status do dia -->
@@ -407,10 +408,10 @@ window.onBBReady = async () => {
         if (btnRel) btnRel.style.display = '';
       }
       if (me.data.perfil === 'admin') {
-        const btnJor = document.getElementById('btn-jornada');
-        if (btnJor) btnJor.style.display = '';
         const btnAdm = document.getElementById('btn-admin-ponto');
         if (btnAdm) btnAdm.style.display = '';
+        const btnRel = document.getElementById('btn-relatorio');
+        if (btnRel) btnRel.style.display = '';
       }
     }
   } catch(_) {}
