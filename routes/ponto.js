@@ -13,18 +13,18 @@ module.exports = function(pool) {
   async function initTables() {
     // Adiciona colunas de jornada à tabela de funcionários
     const alters = [
-      `ALTER TABLE rh_funcionarios ADD COLUMN IF NOT EXISTS horario_entrada TIME DEFAULT '08:00'`,
-      `ALTER TABLE rh_funcionarios ADD COLUMN IF NOT EXISTS horario_saida   TIME DEFAULT '18:00'`,
-      `ALTER TABLE rh_funcionarios ADD COLUMN IF NOT EXISTS intervalo_min   INTEGER DEFAULT 60`,
-      `ALTER TABLE rh_funcionarios ADD COLUMN IF NOT EXISTS jornada_horas   NUMERIC(4,2) DEFAULT 8`,
-      `ALTER TABLE rh_funcionarios ADD COLUMN IF NOT EXISTS tolerancia_min  INTEGER DEFAULT 10`,
+      `ALTER TABLE funcionarios ADD COLUMN IF NOT EXISTS horario_entrada TIME DEFAULT '08:00'`,
+      `ALTER TABLE funcionarios ADD COLUMN IF NOT EXISTS horario_saida   TIME DEFAULT '18:00'`,
+      `ALTER TABLE funcionarios ADD COLUMN IF NOT EXISTS intervalo_min   INTEGER DEFAULT 60`,
+      `ALTER TABLE funcionarios ADD COLUMN IF NOT EXISTS jornada_horas   NUMERIC(4,2) DEFAULT 8`,
+      `ALTER TABLE funcionarios ADD COLUMN IF NOT EXISTS tolerancia_min  INTEGER DEFAULT 10`,
     ];
     for (const sql of alters) await pool.query(sql).catch(()=>{});
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS ponto_registros (
         id                SERIAL PRIMARY KEY,
-        funcionario_id    INTEGER NOT NULL REFERENCES rh_funcionarios(id),
+        funcionario_id    INTEGER NOT NULL REFERENCES funcionarios(id),
         data_ref          DATE NOT NULL DEFAULT CURRENT_DATE,
         entrada           TIMESTAMPTZ,
         saida_intervalo   TIMESTAMPTZ,
@@ -46,7 +46,7 @@ module.exports = function(pool) {
       CREATE TABLE IF NOT EXISTS ponto_auditoria (
         id              SERIAL PRIMARY KEY,
         ponto_id        INTEGER REFERENCES ponto_registros(id),
-        funcionario_id  INTEGER NOT NULL,
+        funcionario_id  INTEGER,
         tipo            TEXT NOT NULL,
         horario_batida  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         usuario_login   TEXT,
@@ -80,20 +80,15 @@ module.exports = function(pool) {
   });
 
   // ── GET /funcionarios — lista funcionários para o grid de ponto ──────────────
-  // Usa rh_funcionarios (tabela correta referenciada pelo ponto_registros)
-  // Se rh_funcionarios vazia, faz fallback para 'funcionarios' (tabela do RH)
+  // Usa tabela funcionarios (unificada)
   r.get('/funcionarios', async (req, res) => {
     try {
       let { rows } = await pool.query(`
         SELECT id, nome, cargo, email, ativo,
                horario_entrada, horario_saida, jornada_horas, intervalo_min, tolerancia_min
-        FROM rh_funcionarios WHERE ativo=true ORDER BY nome
+        FROM funcionarios WHERE ativo=true ORDER BY nome
       `);
-      // Fallback: se rh_funcionarios vazia, usa tabela 'funcionarios'
-      if (!rows.length) {
-        const fb = await pool.query(`SELECT id, nome, cargo, email, ativo FROM funcionarios WHERE ativo=true ORDER BY nome`);
-        rows = fb.rows;
-      }
+
       res.json({ ok:true, data:rows });
     } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
   });
@@ -178,7 +173,7 @@ module.exports = function(pool) {
       await pool.query(`
         CREATE TABLE IF NOT EXISTS ponto_registros (
           id                SERIAL PRIMARY KEY,
-          funcionario_id    INTEGER NOT NULL REFERENCES rh_funcionarios(id),
+          funcionario_id    INTEGER NOT NULL REFERENCES funcionarios(id),
           data_ref          DATE NOT NULL DEFAULT CURRENT_DATE,
           entrada           TIMESTAMPTZ,
           saida_intervalo   TIMESTAMPTZ,
@@ -201,7 +196,7 @@ module.exports = function(pool) {
         CREATE TABLE IF NOT EXISTS ponto_auditoria (
           id              SERIAL PRIMARY KEY,
           ponto_id        INTEGER REFERENCES ponto_registros(id),
-          funcionario_id  INTEGER NOT NULL,
+          funcionario_id  INTEGER,
           tipo            TEXT NOT NULL,
           horario_batida  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
           usuario_login   TEXT,
@@ -276,7 +271,7 @@ module.exports = function(pool) {
       const { rows } = await pool.query(
         `SELECT p.*, f.horario_entrada, f.horario_saida, f.jornada_horas, f.tolerancia_min, f.intervalo_min
          FROM ponto_registros p
-         JOIN rh_funcionarios f ON f.id=p.funcionario_id
+         JOIN funcionarios f ON f.id=p.funcionario_id
          WHERE p.funcionario_id=$1 AND p.data_ref=$2`,
         [req.params.funcionario_id, dataRef]
       );
@@ -292,7 +287,7 @@ module.exports = function(pool) {
       const { rows } = await pool.query(`
         SELECT a.*, f.nome AS func_nome
         FROM ponto_auditoria a
-        JOIN rh_funcionarios f ON f.id=a.funcionario_id
+        JOIN funcionarios f ON f.id=a.funcionario_id
         WHERE ($1::int IS NULL OR a.funcionario_id=$1)
           AND ($2::date IS NULL OR a.horario_batida::date >= $2::date)
           AND ($3::date IS NULL OR a.horario_batida::date <= $3::date)
@@ -321,7 +316,7 @@ module.exports = function(pool) {
           f.nome AS func_nome, f.cargo, f.horario_entrada, f.horario_saida,
           f.jornada_horas, f.tolerancia_min, f.intervalo_min
         FROM ponto_registros p
-        JOIN rh_funcionarios f ON f.id=p.funcionario_id
+        JOIN funcionarios f ON f.id=p.funcionario_id
         ${where} ORDER BY p.data_ref DESC, f.nome ASC
       `, params);
       res.json({ ok:true, data:rows });
@@ -381,7 +376,7 @@ module.exports = function(pool) {
               'entrada_manual', p.entrada_manual, 'saida_manual', p.saida_manual
             ) ORDER BY p.data_ref
           ) FILTER (WHERE p.id IS NOT NULL) AS registros
-        FROM rh_funcionarios f
+        FROM funcionarios f
         LEFT JOIN ponto_registros p ON p.funcionario_id=f.id
           AND EXTRACT(MONTH FROM p.data_ref)=$1
           AND EXTRACT(YEAR FROM p.data_ref)=$2
@@ -400,7 +395,7 @@ module.exports = function(pool) {
     const { horario_entrada, horario_saida, intervalo_min, jornada_horas, tolerancia_min } = req.body;
     try {
       await pool.query(`
-        UPDATE rh_funcionarios SET
+        UPDATE funcionarios SET
           horario_entrada=$1, horario_saida=$2, intervalo_min=$3,
           jornada_horas=$4, tolerancia_min=$5
         WHERE id=$6
