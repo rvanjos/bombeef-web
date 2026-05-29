@@ -713,6 +713,10 @@ function toast(msg, ms=2500) {
 
 function token() { return sessionStorage.getItem('bb_token'); }
 
+// Controle de renovação de token (evita loop)
+let _refreshEmAndamento = false;
+let _refreshPromise     = null;
+
 async function apiFetch(path, opts={}) {
   try {
     const res = await fetch(API + path, {

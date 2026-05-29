@@ -416,7 +416,12 @@ window.onBBReady = async () => {
   } catch(_) {}
 
   const d = await api.get('/api/ponto/funcionarios');
-  if (!d.ok) return;
+  if (!d.ok) {
+    // Token pode ter expirado — pede renovação e tenta de novo em 2s
+    try { window.parent?.postMessage({ type:'bb_request_auth' }, '*'); } catch(_) {}
+    setTimeout(() => window.onBBReady && window.onBBReady(), 2000);
+    return;
+  }
   _funcs = (d.data||[]).filter(f=>f.ativo);
   renderGrid();
 
