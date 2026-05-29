@@ -111,12 +111,32 @@ module.exports = function(pool) {
   // Usa tabela funcionarios (unificada)
   r.get('/funcionarios', async (req, res) => {
     try {
-      let { rows } = await pool.query(`
-        SELECT id, nome, cargo, email, ativo,
-               horario_entrada, horario_saida, jornada_horas, intervalo_min, tolerancia_min
-        FROM funcionarios WHERE ativo=true ORDER BY nome
-      `);
-
+      let rows;
+      try {
+        const r = await pool.query(`
+          SELECT id, nome, cargo, email, ativo,
+                 COALESCE(horario_entrada,'08:00'::time) AS horario_entrada,
+                 COALESCE(horario_saida,'18:00'::time)   AS horario_saida,
+                 COALESCE(jornada_horas,8)               AS jornada_horas,
+                 COALESCE(intervalo_min,60)              AS intervalo_min,
+                 COALESCE(tolerancia_min,10)             AS tolerancia_min,
+                 COALESCE(dias_folga,ARRAY[]::TEXT[])    AS dias_folga
+          FROM funcionarios WHERE ativo=true ORDER BY nome
+        `);
+        rows = r.rows;
+      } catch(_) {
+        // dias_folga ainda não existe — fallback
+        const r2 = await pool.query(`
+          SELECT id, nome, cargo, email, ativo,
+                 COALESCE(horario_entrada,'08:00'::time) AS horario_entrada,
+                 COALESCE(horario_saida,'18:00'::time)   AS horario_saida,
+                 COALESCE(jornada_horas,8)               AS jornada_horas,
+                 COALESCE(intervalo_min,60)              AS intervalo_min,
+                 COALESCE(tolerancia_min,10)             AS tolerancia_min
+          FROM funcionarios WHERE ativo=true ORDER BY nome
+        `);
+        rows = r2.rows.map(r => ({ ...r, dias_folga:[] }));
+      }
       res.json({ ok:true, data:rows });
     } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
   });

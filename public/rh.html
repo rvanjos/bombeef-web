@@ -2079,11 +2079,22 @@ async function gerarRelatorio() {
       const retSort = sortByData(f.retiradas_detalhe, 'dt_retirada');
       html += `<div style="margin-bottom:12px">
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px">Retiradas de Produtos</div>
-        <table class="apont-table" style="font-size:11px"><thead><tr><th>Produto</th><th>Data</th><th>Qtd</th><th style="text-align:right">Valor</th></tr></thead><tbody>`;
+        <table class="apont-table" style="font-size:11px"><thead><tr><th>Produto</th><th>Data</th><th>Qtd</th><th style="text-align:right">Custo Unit.</th><th style="text-align:right">Custo Total</th><th style="text-align:right">Valor Cobrado</th></tr></thead><tbody>`;
       for (const r of retSort) {
-        html += `<tr><td>${r.produto_nome||r.produto||'—'}</td><td style="white-space:nowrap">${r.dt_retirada?fmtData(r.dt_retirada):'—'}</td><td>${r.quantidade||1}</td><td style="text-align:right;font-family:'DM Mono',monospace">${brl(r.valor_total||0)}</td></tr>`;
+        const qtdRet  = parseFloat(r.quantidade||1);
+        const custoU  = parseFloat(r.produto_custo||0);
+        const custoT  = custoU * qtdRet;
+        const custoStyle = custoT > parseFloat(r.valor_total||0) ? 'color:#b91c1c;font-weight:700' : 'color:#166534';
+        html += `<tr>
+          <td>${r.produto_nome||r.produto||'—'}</td>
+          <td style="white-space:nowrap">${r.dt_retirada?fmtData(r.dt_retirada):'—'}</td>
+          <td>${qtdRet}</td>
+          <td style="text-align:right;font-family:'DM Mono',monospace">${custoU>0?brl(custoU):'—'}</td>
+          <td style="text-align:right;font-family:'DM Mono',monospace;${custoStyle}">${custoT>0?brl(custoT):'—'}</td>
+          <td style="text-align:right;font-family:'DM Mono',monospace">${brl(r.valor_total||0)}</td>
+        </tr>`; 
       }
-      html += `</tbody><tfoot><tr><td colspan="3" style="font-weight:700;padding-top:4px">Total</td><td style="text-align:right;font-weight:700;font-family:'DM Mono',monospace;color:var(--red-l)">${brl(f.total_retiradas)}</td></tr></tfoot></table></div>`;
+      html += `</tbody><tfoot><tr><td colspan="5" style="font-weight:700;padding-top:4px">Total cobrado</td><td style="text-align:right;font-weight:700;font-family:'DM Mono',monospace;color:var(--red-l)">${brl(f.total_retiradas)}</td></tr></tfoot></table></div>`;
     }
 
     if (f.observacao) html += `<div style="margin-top:8px;font-size:12px;color:var(--muted)">📝 ${f.observacao}</div>`;

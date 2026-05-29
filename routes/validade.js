@@ -248,7 +248,7 @@ module.exports = function (pool) {
   // ── GET /alertas-confirmacao — produtos ≤7 dias com ação não confirmada ──────
   r.get('/alertas-confirmacao', async (req, res) => {
     try {
-      const usuario_id = req.usuario?.id;
+      const usuario_id = req.user?.id || req.usuario?.id || 0;
       const { rows } = await pool.query(`
         SELECT
           v.id, v.descricao, v.lote, v.qtd_unidades,

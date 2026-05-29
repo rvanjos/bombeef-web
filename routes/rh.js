@@ -652,7 +652,8 @@ module.exports = function (pool) {
 
       // Retiradas de produtos
       const { rows: retiradas } = await pool.query(`
-        SELECT r.*, p.descricao AS produto_nome
+        SELECT r.*, p.descricao AS produto_nome,
+               p.preco_custo AS produto_custo, p.preco_venda AS produto_venda
         FROM retiradas r
         LEFT JOIN produtos p ON p.id = r.produto_id
         WHERE r.funcionario_id = ANY($1::int[]) AND r.mes = $2
