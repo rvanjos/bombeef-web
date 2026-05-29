@@ -527,7 +527,7 @@ main{padding:16px 24px;max-width:1400px;margin:0 auto;}
 <div class="modal-bg" id="modal-rejeitar">
 
 <!-- ══ SEÇÃO PONTO ══════════════════════════════════════════════════════════ -->
-<div id="sec-ponto" style="display:none;padding:0 2px">
+<div id="tab-ponto" class="tab-content"><div id="sec-ponto" style="padding:0 2px">
   <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px">
     <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
       <select style="padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px" id="pt-func" onchange="carregarPonto()">
@@ -565,6 +565,7 @@ main{padding:16px 24px;max-width:1400px;margin:0 auto;}
 </div>
 
 <!-- Modal ajuste manual ponto -->
+</div><!-- /tab-ponto -->
 <div class="modal-bg" id="m-ponto-ajuste">
   <div class="modal" style="max-width:480px">
     <div class="modal-head"><h3>✏️ Ajuste de Ponto</h3><button class="modal-close" onclick="document.getElementById('m-ponto-ajuste').classList.remove('open')">×</button></div>
@@ -2119,7 +2120,25 @@ async function gerarRelatorio() {
 
 // ══ PONTO ELETRÔNICO ═════════════════════════════════════════════════════════
 let _pontoRegistros=[];
-function inicializarAbaPonto(){const a=new Date(),M=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];document.getElementById('pt-mes').innerHTML=M.map((m,i)=>`<option value="${i+1}"${i===a.getMonth()?' selected':''}>${m}</option>`).join('');const y=a.getFullYear();document.getElementById('pt-ano').innerHTML=[y-1,y,y+1].map(v=>`<option value="${v}"${v===y?' selected':''}>${v}</option>`).join('');['pt-func','aj-func','jor-func'].forEach(id=>{const s=document.getElementById(id);if(!s)return;s.innerHTML=(id==='pt-func'?'<option value="">Todos os funcionários</option>':'<option value="">Selecione...</option>')+(_funcionarios||[]).filter(f=>f.ativo).map(f=>`<option value="${f.id}">${f.nome}</option>`).join('');});carregarPonto();}
+async function inicializarAbaPonto(){
+  const a=new Date(),M=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  document.getElementById('pt-mes').innerHTML=M.map((m,i)=>`<option value="${i+1}"${i===a.getMonth()?' selected':''}>${m}</option>`).join('');
+  const y=a.getFullYear();
+  document.getElementById('pt-ano').innerHTML=[y-1,y,y+1].map(v=>`<option value="${v}"${v===y?' selected':''}>${v}</option>`).join('');
+  // Busca funcionários via API do ponto (usa tabela correta)
+  if (!window._pontoFuncionarios || !window._pontoFuncionarios.length) {
+    const d = await api.get('/api/ponto/funcionarios');
+    window._pontoFuncionarios = d.ok ? (d.data||[]) : [];
+  }
+  const funcs = window._pontoFuncionarios;
+  ['pt-func','aj-func','jor-func'].forEach(id=>{
+    const s=document.getElementById(id);
+    if(!s)return;
+    s.innerHTML=(id==='pt-func'?'<option value="">Todos os funcionários</option>':'<option value="">Selecione...</option>')+
+      funcs.filter(f=>f.ativo).map(f=>`<option value="${f.id}">${f.nome}</option>`).join('');
+  });
+  carregarPonto();
+}
 async function carregarPonto(){const fi=document.getElementById('pt-func')?.value,mes=document.getElementById('pt-mes')?.value,ano=document.getElementById('pt-ano')?.value;if(!mes||!ano)return;let url=`/api/ponto/registros?mes=${mes}&ano=${ano}`;if(fi)url+=`&funcionario_id=${fi}`;const d=await api.get(url);if(!d.ok)return;_pontoRegistros=d.data||[];renderTabelaPonto();renderKPIsPonto();}
 function fmtHoraTs(ts){if(!ts)return'<span style="color:#ccc">—</span>';return`<span style="font-family:monospace;font-weight:600">${new Date(ts).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</span>`;}
 function calcHorasTrab(p){if(!p.entrada||!p.saida)return null;const ms=new Date(p.saida)-new Date(p.entrada),intMs=p.saida_intervalo&&p.retorno_intervalo?new Date(p.retorno_intervalo)-new Date(p.saida_intervalo):(p.intervalo_min||60)*60000;return Math.max(0,(ms-intMs)/3600000);}
@@ -2130,8 +2149,8 @@ function renderKPIsPonto(){const mes=parseInt(document.getElementById('pt-mes')?
 function abrirAjustePonto(id){document.getElementById('aj-id').value=id||'';if(id){const p=_pontoRegistros.find(x=>x.id===id);if(p){document.getElementById('aj-func').value=p.funcionario_id;document.getElementById('aj-data').value=p.data_ref?.slice(0,10)||'';const fT=ts=>ts?new Date(ts).toTimeString().slice(0,5):'';document.getElementById('aj-entrada').value=fT(p.entrada);document.getElementById('aj-saidaint').value=fT(p.saida_intervalo);document.getElementById('aj-retorno').value=fT(p.retorno_intervalo);document.getElementById('aj-saida').value=fT(p.saida);document.getElementById('aj-just').value=p.justificativa||'';document.getElementById('aj-status').value=p.status||'ajustado';}}else{['aj-entrada','aj-saidaint','aj-retorno','aj-saida','aj-just'].forEach(i=>document.getElementById(i).value='');document.getElementById('aj-func').value='';document.getElementById('aj-status').value='ajustado';document.getElementById('aj-data').value=new Date().toISOString().slice(0,10);}document.getElementById('m-ponto-ajuste').classList.add('open');}
 async function salvarAjustePonto(){const id=document.getElementById('aj-id').value,fi=document.getElementById('aj-func').value,dt=document.getElementById('aj-data').value;if(!fi||!dt){toast('Selecione funcionário e data');return;}const tS=(t,d)=>t?`${d}T${t}:00`:null,body={funcionario_id:fi,data_ref:dt,entrada:tS(document.getElementById('aj-entrada').value,dt),saida_intervalo:tS(document.getElementById('aj-saidaint').value,dt),retorno_intervalo:tS(document.getElementById('aj-retorno').value,dt),saida:tS(document.getElementById('aj-saida').value,dt),justificativa:document.getElementById('aj-just').value,status:document.getElementById('aj-status').value};const d=id?await api.put(`/api/ponto/registros/${id}`,body):await api.post('/api/ponto/registros',body);if(!d.ok){toast('❌ '+d.erro);return;}toast('✅ Ponto ajustado!');document.getElementById('m-ponto-ajuste').classList.remove('open');carregarPonto();}
 function abrirConfJornada(){document.getElementById('m-jornada').classList.add('open');}
-function carregarJornadaFunc(){const f=(_funcionarios||[]).find(x=>x.id==document.getElementById('jor-func').value);if(f){document.getElementById('jor-entrada').value=f.horario_entrada?.slice(0,5)||'08:00';document.getElementById('jor-saida').value=f.horario_saida?.slice(0,5)||'18:00';document.getElementById('jor-intervalo').value=f.intervalo_min||60;document.getElementById('jor-horas').value=f.jornada_horas||8;document.getElementById('jor-tolerancia').value=f.tolerancia_min||10;}}
-async function salvarJornada(){const id=document.getElementById('jor-func').value;if(!id){toast('Selecione um funcionário');return;}const body={horario_entrada:document.getElementById('jor-entrada').value,horario_saida:document.getElementById('jor-saida').value,intervalo_min:parseInt(document.getElementById('jor-intervalo').value),jornada_horas:parseFloat(document.getElementById('jor-horas').value),tolerancia_min:parseInt(document.getElementById('jor-tolerancia').value)};const d=await api.put(`/api/ponto/jornada/${id}`,body);if(!d.ok){toast('❌ '+d.erro);return;}toast('✅ Jornada atualizada!');document.getElementById('m-jornada').classList.remove('open');const f=(_funcionarios||[]).find(x=>x.id==id);if(f)Object.assign(f,body);}
+function carregarJornadaFunc(){const f=(window._pontoFuncionarios||[]).find(x=>x.id==document.getElementById('jor-func').value);if(f){document.getElementById('jor-entrada').value=(f.horario_entrada||'08:00').slice(0,5);document.getElementById('jor-saida').value=(f.horario_saida||'18:00').slice(0,5);document.getElementById('jor-intervalo').value=f.intervalo_min||60;document.getElementById('jor-horas').value=f.jornada_horas||8;document.getElementById('jor-tolerancia').value=f.tolerancia_min||10;}}
+async function salvarJornada(){const id=document.getElementById('jor-func').value;if(!id){toast('Selecione um funcionário');return;}const body={horario_entrada:document.getElementById('jor-entrada').value,horario_saida:document.getElementById('jor-saida').value,intervalo_min:parseInt(document.getElementById('jor-intervalo').value),jornada_horas:parseFloat(document.getElementById('jor-horas').value),tolerancia_min:parseInt(document.getElementById('jor-tolerancia').value)};const d=await api.put(`/api/ponto/jornada/${id}`,body);if(!d.ok){toast('❌ '+d.erro);return;}toast('✅ Jornada atualizada!');document.getElementById('m-jornada').classList.remove('open');const f=(window._pontoFuncionarios||[]).find(x=>x.id==id);if(f)Object.assign(f,body);}
 async function exportarPonto(){const mes=document.getElementById('pt-mes').value,ano=document.getElementById('pt-ano').value,d=await api.get(`/api/ponto/resumo-mensal?mes=${mes}&ano=${ano}`);if(!d.ok||!d.data?.length){toast('Sem dados');return;}const MN=['','Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'],li=[['Funcionário','Cargo','Data','Entrada','Saída Int.','Retorno','Saída','Horas Trab.','Jornada','Situação','Justificativa']];for(const f of d.data){for(const r of(f.registros||[])){const t=r.entrada&&r.saida?((new Date(r.saida)-new Date(r.entrada)-(r.saida_intervalo&&r.retorno_intervalo?new Date(r.retorno_intervalo)-new Date(r.saida_intervalo):(f.intervalo_min||60)*60000))/3600000):null,fT=ts=>ts?new Date(ts).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}):'',fH=h=>{if(h===null)return'';const hh=Math.floor(h),mm=Math.round((h%1)*60);return`${hh}:${String(mm).padStart(2,'0')}`},e=r.entrada?new Date(r.entrada):null,pv=new Date(`1970-01-01T${f.horario_entrada||'08:00'}:00`),atr=e?(e.getHours()*60+e.getMinutes())-(pv.getHours()*60+pv.getMinutes()):0,sit=!r.entrada?'FALTA':atr>(f.tolerancia_min||10)?`ATRASO ${atr}min`:t&&t>parseFloat(f.jornada_horas||8)+0.5?'HORA EXTRA':r.status==='ajustado'?'AJUSTADO':r.status==='justificado'?'JUSTIFICADO':'NORMAL';li.push([f.nome,f.cargo||'',r.data?.slice(0,10).split('-').reverse().join('/')||'',fT(r.entrada),fT(r.saida_intervalo),fT(r.retorno_intervalo),fT(r.saida),fH(t),fH(parseFloat(f.jornada_horas||8)),sit,r.justificativa||'']);}li.push([]);}const csv=li.map(l=>l.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(';')).join('\n'),a=document.createElement('a');a.href='data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv);a.download=`Ponto_${MN[parseInt(mes)]}_${ano}.csv`;a.click();toast(`✅ Relatório exportado — ${MN[parseInt(mes)]}/${ano}`);}
 </script>
 
