@@ -74,6 +74,21 @@ module.exports = function(pool) {
     await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS ponto_func_data_idx ON ponto_registros(funcionario_id, data_ref)`)
       .catch(e => console.warn('[ponto] idx:', e.message));
 
+    // Tabela de jornada por dia da semana (0=dom, 1=seg ... 6=sab)
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS ponto_jornada_dia (
+        id              SERIAL PRIMARY KEY,
+        funcionario_id  INTEGER NOT NULL REFERENCES funcionarios(id),
+        dia_semana      INTEGER NOT NULL CHECK(dia_semana BETWEEN 0 AND 6),
+        folga           BOOLEAN DEFAULT false,
+        horario_entrada TIME,
+        horario_saida   TIME,
+        jornada_horas   NUMERIC(4,2),
+        intervalo_min   INTEGER,
+        UNIQUE(funcionario_id, dia_semana)
+      )
+    `).catch(()=>{});
+
     // Corrige FK diretamente: drop qualquer FK em funcionario_id e recria apontando para funcionarios
     try {
       // Busca TODAS as FKs da coluna funcionario_id em ponto_registros
@@ -461,6 +476,59 @@ module.exports = function(pool) {
           parseFloat(jornada_horas)||8, parseInt(tolerancia_min)||10,
           dias_folga||[], req.params.id]);
       res.json({ ok:true });
+    } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
+  });
+
+  // ── GET /jornada-dia/:funcionario_id — jornada por dia da semana ──────────
+  r.get('/jornada-dia/:funcionario_id', async (req, res) => {
+    try {
+      const { rows } = await pool.query(
+        `SELECT * FROM ponto_jornada_dia WHERE funcionario_id=$1 ORDER BY dia_semana`,
+        [req.params.funcionario_id]
+      );
+      res.json({ ok:true, data:rows });
+    } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
+  });
+
+  // ── PUT /jornada-dia/:funcionario_id — salva jornada por dia (upsert) ─────
+  r.put('/jornada-dia/:funcionario_id', async (req, res) => {
+    if (req.user?.perfil !== 'admin') return res.status(403).json({ ok:false, erro:'Apenas administradores' });
+    const dias = req.body.dias; // array de {dia_semana, folga, horario_entrada, horario_saida, jornada_horas, intervalo_min}
+    if (!Array.isArray(dias)) return res.status(400).json({ ok:false, erro:'dias obrigatório' });
+    try {
+      for (const d of dias) {
+        await pool.query(`
+          INSERT INTO ponto_jornada_dia (funcionario_id, dia_semana, folga, horario_entrada, horario_saida, jornada_horas, intervalo_min)
+          VALUES ($1,$2,$3,$4,$5,$6,$7)
+          ON CONFLICT (funcionario_id, dia_semana) DO UPDATE SET
+            folga=$3, horario_entrada=$4, horario_saida=$5, jornada_horas=$6, intervalo_min=$7
+        `, [req.params.funcionario_id, d.dia_semana, d.folga||false,
+            d.folga ? null : (d.horario_entrada||'08:00'),
+            d.folga ? null : (d.horario_saida||'18:00'),
+            d.folga ? null : (d.jornada_horas||8),
+            d.folga ? null : (d.intervalo_min||60)]);
+      }
+      res.json({ ok:true });
+    } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
+  });
+
+  // ── GET /jornada-dia-hoje/:funcionario_id — retorna jornada do dia atual ──
+  r.get('/jornada-dia-hoje/:funcionario_id', async (req, res) => {
+    try {
+      const diaSemana = new Date().getDay();
+      const { rows } = await pool.query(`
+        SELECT * FROM ponto_jornada_dia
+        WHERE funcionario_id=$1 AND dia_semana=$2 LIMIT 1
+      `, [req.params.funcionario_id, diaSemana]);
+      if (!rows.length) {
+        // Sem jornada específica — retorna a jornada padrão do funcionário
+        const { rows: f } = await pool.query(`SELECT * FROM funcionarios WHERE id=$1`, [req.params.funcionario_id]);
+        if (!f.length) return res.json({ ok:true, data:null });
+        return res.json({ ok:true, data:{ dia_semana:diaSemana, folga:false,
+          horario_entrada: f[0].horario_entrada, horario_saida: f[0].horario_saida,
+          jornada_horas: f[0].jornada_horas||8, intervalo_min: f[0].intervalo_min||60 }});
+      }
+      res.json({ ok:true, data:rows[0] });
     } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
   });
 

@@ -33,7 +33,7 @@ module.exports = function (pool) {
         descricao         TEXT NOT NULL,
         qtd               NUMERIC(10,3) DEFAULT 1,
         preco_unitario    NUMERIC(10,4) DEFAULT 0,
-        desconto_pct      NUMERIC(5,2) DEFAULT 100,
+        desconto_pct      NUMERIC(5,2) DEFAULT 0,
         valor_total       NUMERIC(10,2) DEFAULT 0,
         mes               TEXT NOT NULL,
         dt_retirada       DATE DEFAULT CURRENT_DATE,
@@ -46,13 +46,22 @@ module.exports = function (pool) {
     // Garante colunas
     const needed = [
       ['mes','TEXT'],['valor_total','NUMERIC(10,2) DEFAULT 0'],
-      ['desconto_pct','NUMERIC(5,2) DEFAULT 100'],
+      ['desconto_pct','NUMERIC(5,2) DEFAULT 0'],
       ['qtd','NUMERIC(10,3) DEFAULT 1'],
       ['preco_unitario','NUMERIC(10,4) DEFAULT 0'],
     ];
     for(const[c,d]of needed) await pool.query(`ALTER TABLE retiradas ADD COLUMN IF NOT EXISTS ${c} ${d}`).catch(()=>{});
     await pool.query(`UPDATE retiradas SET mes=TO_CHAR(dt_retirada,'MM/YYYY') WHERE mes IS NULL AND dt_retirada IS NOT NULL`).catch(()=>{});
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_ret_funcionario ON retiradas(funcionario_id)`).catch(()=>{});
+    // Corrige retiradas com desconto_pct=100 (valor_total=0) recalculando pelo custo do produto
+    await pool.query(`
+      UPDATE retiradas r SET
+        desconto_pct = 0,
+        valor_total  = ROUND((r.preco_unitario * r.qtd)::numeric, 2)
+      WHERE r.desconto_pct = 100
+        AND r.preco_unitario > 0
+        AND r.valor_total < r.preco_unitario * r.qtd * 0.5
+    `).catch(e => console.warn('[retiradas] fix desconto:', e.message));
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_ret_mes ON retiradas(mes)`).catch(()=>{});
   }
   initTable().catch(e => console.error('[retiradas] initTable:', e.message));
@@ -182,7 +191,7 @@ module.exports = function (pool) {
         if (prod.rows.length) precUnit = parseFloat(prod.rows[0].preco_custo);
       }
       const qtd        = parseFloat(ret.qtd || 1);
-      const descPct    = parseFloat(ret.descontoPct ?? 100);
+      const descPct    = parseFloat(ret.descontoPct ?? 0); // 0 = paga integral, 100 = gratuito
       const valorTotal = parseFloat((precUnit * qtd * (1 - descPct / 100)).toFixed(2));
 
       // Verifica limite

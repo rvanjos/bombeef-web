@@ -409,6 +409,8 @@ window.onBBReady = async () => {
       if (me.data.perfil === 'admin') {
         const btnJor = document.getElementById('btn-jornada');
         if (btnJor) btnJor.style.display = '';
+        const btnAdm = document.getElementById('btn-admin-ponto');
+        if (btnAdm) btnAdm.style.display = '';
       }
     }
   } catch(_) {}
@@ -790,6 +792,117 @@ async function carregarRelatorio() {
     </div>`;
   }).join('');
 }
+
+// ── Admin Ponto ───────────────────────────────────────────────────────────────
+const DIAS_SEMANA = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
+
+async function abrirAdminPonto() {
+  // Carrega funcionários
+  const d = await api.get('/api/ponto/funcionarios');
+  if (!d.ok) { showToast('❌ Erro ao carregar funcionários'); return; }
+  const funcs = (d.data||[]).filter(f=>f.ativo);
+  document.getElementById('adm-func-sel').innerHTML =
+    '<option value="">Selecione um funcionário...</option>' +
+    funcs.map(f=>`<option value="${f.id}">${f.nome}</option>`).join('');
+  document.getElementById('adm-jornada-form').innerHTML = '';
+  document.getElementById('m-admin-ponto').classList.add('open');
+}
+
+async function carregarJornadaDia() {
+  const id = document.getElementById('adm-func-sel').value;
+  if (!id) return;
+  // Busca jornada padrão do funcionário
+  const fd = await api.get('/api/ponto/funcionarios');
+  const func = (fd.data||[]).find(f=>f.id==id) || {};
+  // Busca jornada por dia
+  const d = await api.get(`/api/ponto/jornada-dia/${id}`);
+  const dias = d.ok ? (d.data||[]) : [];
+  const diaMap = {};
+  dias.forEach(d => { diaMap[d.dia_semana] = d; });
+
+  document.getElementById('adm-jornada-form').innerHTML = `
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px">
+      Jornada padrão: ${(func.horario_entrada||'08:00').slice(0,5)} → ${(func.horario_saida||'18:00').slice(0,5)} · ${func.jornada_horas||8}h
+      <br><small>Deixe em branco para usar o padrão nesse dia.</small>
+    </div>
+    ${DIAS_SEMANA.map((nome, i) => {
+      const dj = diaMap[i] || {};
+      const folga = dj.folga || false;
+      return `<div class="adm-dia-row" data-dia="${i}">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <span style="font-weight:700;font-size:13px">${nome}</span>
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
+            <input type="checkbox" class="adm-folga" data-dia="${i}" ${folga?'checked':''} onchange="toggleFolga(${i})">
+            <span>Folga</span>
+          </label>
+        </div>
+        <div class="adm-dia-horarios" id="adm-hrs-${i}" style="${folga?'display:none':''}">
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px">
+            <div><label style="font-size:10px;color:var(--muted);text-transform:uppercase">Entrada</label>
+              <input type="time" id="adm-ent-${i}" value="${dj.horario_entrada?dj.horario_entrada.slice(0,5):(func.horario_entrada||'08:00').slice(0,5)}"
+                style="width:100%;padding:6px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:'DM Sans',sans-serif"></div>
+            <div><label style="font-size:10px;color:var(--muted);text-transform:uppercase">Saída</label>
+              <input type="time" id="adm-sai-${i}" value="${dj.horario_saida?dj.horario_saida.slice(0,5):(func.horario_saida||'18:00').slice(0,5)}"
+                style="width:100%;padding:6px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:'DM Sans',sans-serif"></div>
+            <div><label style="font-size:10px;color:var(--muted);text-transform:uppercase">Horas</label>
+              <input type="number" id="adm-hor-${i}" value="${dj.jornada_horas||func.jornada_horas||8}" step="0.5" min="0" max="12"
+                style="width:100%;padding:6px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:'DM Sans',sans-serif"></div>
+            <div><label style="font-size:10px;color:var(--muted);text-transform:uppercase">Intervalo</label>
+              <input type="number" id="adm-int-${i}" value="${dj.intervalo_min||func.intervalo_min||60}" min="0" max="120"
+                style="width:100%;padding:6px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:'DM Sans',sans-serif"></div>
+          </div>
+        </div>
+        <div style="height:1px;background:var(--border);margin:10px 0"></div>
+      </div>`;
+    }).join('')}
+    <button onclick="salvarJornadaDia()" style="width:100%;padding:12px;background:var(--red);color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;margin-top:4px">
+      💾 Salvar Jornada Semanal
+    </button>`;
+}
+
+function toggleFolga(dia) {
+  const cb = document.querySelector(`.adm-folga[data-dia="${dia}"]`);
+  const hrs = document.getElementById(`adm-hrs-${dia}`);
+  if (hrs) hrs.style.display = cb?.checked ? 'none' : '';
+}
+
+async function salvarJornadaDia() {
+  const id = document.getElementById('adm-func-sel').value;
+  if (!id) return;
+  const dias = DIAS_SEMANA.map((_, i) => {
+    const folga = document.querySelector(`.adm-folga[data-dia="${i}"]`)?.checked || false;
+    return {
+      dia_semana: i, folga,
+      horario_entrada: folga ? null : (document.getElementById(`adm-ent-${i}`)?.value || '08:00'),
+      horario_saida:   folga ? null : (document.getElementById(`adm-sai-${i}`)?.value || '18:00'),
+      jornada_horas:   folga ? null : parseFloat(document.getElementById(`adm-hor-${i}`)?.value || 8),
+      intervalo_min:   folga ? null : parseInt(document.getElementById(`adm-int-${i}`)?.value || 60),
+    };
+  });
+  const d = await api.put(`/api/ponto/jornada-dia/${id}`, { dias });
+  if (!d.ok) { showToast('❌ ' + (d.erro||'Erro')); return; }
+  showToast('✅ Jornada semanal salva!');
+}
 </script>
+
+<!-- Modal Admin Ponto -->
+<div class="mbg2" id="m-admin-ponto" onclick="if(event.target===this)document.getElementById('m-admin-ponto').classList.remove('open')">
+  <div class="md" style="max-height:92vh;overflow-y:auto;max-width:580px">
+    <div class="md-pull"></div>
+    <div class="md-body">
+      <div class="ret-titulo">⚙️ Administração de Jornadas</div>
+      <div style="margin-bottom:14px">
+        <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;display:block;margin-bottom:6px">Funcionário</label>
+        <select id="adm-func-sel" onchange="carregarJornadaDia()" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:'DM Sans',sans-serif">
+          <option value="">Selecione um funcionário...</option>
+        </select>
+      </div>
+      <div id="adm-jornada-form"></div>
+    </div>
+    <div class="md-btns">
+      <button class="btn-cancelar" onclick="document.getElementById('m-admin-ponto').classList.remove('open')">Fechar</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
