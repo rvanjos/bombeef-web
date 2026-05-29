@@ -169,7 +169,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
       <div class="func-jor" id="func-jor-show"></div>
     </div>
     <div style="display:flex;gap:8px">
-      <button class="btn-trocar" onclick="abrirJornada()" style="background:#f0e8e0;color:var(--text)">⚙️ Jornada</button>
+      <button class="btn-trocar" id="btn-jornada" onclick="abrirJornada()" style="background:#f0e8e0;color:var(--text);display:none">⚙️ Jornada</button>
       <button class="btn-trocar" onclick="trocar()">Trocar</button>
     </div>
   </div>
@@ -405,6 +405,10 @@ window.onBBReady = async () => {
       if (['admin','gestor'].includes(me.data.perfil)) {
         const btnRel = document.getElementById('btn-relatorio');
         if (btnRel) btnRel.style.display = '';
+      }
+      if (me.data.perfil === 'admin') {
+        const btnJor = document.getElementById('btn-jornada');
+        if (btnJor) btnJor.style.display = '';
       }
     }
   } catch(_) {}
@@ -676,8 +680,8 @@ function showToast(msg) {
 function abrirJornada() {
   if (!_func) return;
   // Verificar permissão (só admin/gestor)
-  if (!['admin','gestor'].includes(_user?.perfil)) {
-    showToast('❌ Apenas admin ou gestor pode configurar jornadas'); return;
+  if (_user?.perfil !== 'admin') {
+    showToast('❌ Apenas o administrador pode alterar jornadas'); return;
   }
   document.getElementById('jor-func-nome').textContent = _func.nome + ' — ' + (_func.cargo||'');
   document.getElementById('jor-entrada').value    = (_func.horario_entrada||'08:00').slice(0,5);

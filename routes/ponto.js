@@ -124,12 +124,14 @@ module.exports = function(pool) {
   // ── Helpers ────────────────────────────────────────────────────────────────
   function calcHoras(entrada, saida, saidaInt, retornoInt, intervaloMin) {
     if (!entrada || !saida) return null;
-    const ms   = new Date(saida) - new Date(entrada);
+    const ms = new Date(saida) - new Date(entrada);
     const totalMin = ms / 60000;
-    // Desconta intervalo se registrado, senão usa o padrão
+    // Intervalo LIVRE: desconta apenas o tempo real de intervalo batido.
+    // Se não bateu saída/retorno: não desconta nada (o funcionário
+    // pode fazer o almoço em qualquer momento, basta cumprir as horas totais).
     const intReal = (saidaInt && retornoInt)
       ? (new Date(retornoInt) - new Date(saidaInt)) / 60000
-      : (intervaloMin || 60);
+      : 0;
     return Math.max(0, (totalMin - intReal) / 60);
   }
 
@@ -427,7 +429,7 @@ module.exports = function(pool) {
 
   // ── Jornada do funcionário (configurar) ───────────────────────────────────
   r.put('/jornada/:id', async (req, res) => {
-    if (!['admin','gestor'].includes(req.user?.perfil)) return res.status(403).json({ ok:false, erro:'Sem permissão' });
+    if (req.user?.perfil !== 'admin') return res.status(403).json({ ok:false, erro:'Apenas administradores podem alterar jornadas' });
     const { horario_entrada, horario_saida, intervalo_min, jornada_horas, tolerancia_min, dias_folga } = req.body;
     try {
       await pool.query(`

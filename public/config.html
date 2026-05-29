@@ -357,6 +357,16 @@ window.onBBReady = () => { init(); };
 async function init(){
   await carregarConfig();
 
+  // Oculta aba Usuários para perfis que não são admin
+  const meConf = await api.get('/auth/me');
+  const perfilAtual = meConf?.data?.perfil || '';
+  if (perfilAtual !== 'admin') {
+    document.querySelectorAll('[onclick*="usuarios"]').forEach(el => el.style.display = 'none');
+    document.querySelectorAll('[onclick*="funcionarios"]').forEach(el => {
+      if (!el.closest('#page-sistema')) el.style.display = 'none';
+    });
+  }
+
   const hoje = new Date();
   const mesVal = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
   document.getElementById('meta-mes').value = mesVal;
