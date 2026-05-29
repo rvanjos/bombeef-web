@@ -3104,16 +3104,19 @@ function abrirBuscarPagamentoFatura(faturaId, totalFatura, mesFatura, bandeira) 
   const todos = TXS.filter(t =>
     (t.fonte === 'EXTRATO' || t.fonte === 'OFX') &&
     parseFloat(t.valor||0) < 0 &&
-    Math.abs(Math.abs(parseFloat(t.valor||0)) - totalFatura) < totalFatura * 0.25 &&
-    scoreMes(t) <= 2
+    scoreMes(t) <= 3  // aceita até 3 meses de diferença
+    // sem filtro de valor — pagamento pode ser de fatura diferente (boleto do cartão)
   ).sort((a,b) => {
-    // Prioriza: mesmo mês primeiro, depois mais próximo em valor
+    // Prioriza: já classificado como pagamento > mesmo mês > mais próximo em valor
+    const pa = (a.categoria==='Pagamento de Fatura CC'||a.categoria==='Pagamento de Cartão') ? -1 : 0;
+    const pb = (b.categoria==='Pagamento de Fatura CC'||b.categoria==='Pagamento de Cartão') ? -1 : 0;
+    if (pa !== pb) return pa - pb;
     const sm = scoreMes(a) - scoreMes(b);
     if (sm !== 0) return sm;
     const da = Math.abs(Math.abs(parseFloat(a.valor||0)) - totalFatura);
     const db = Math.abs(Math.abs(parseFloat(b.valor||0)) - totalFatura);
     return da - db;
-  }).slice(0, 15);
+  }).slice(0, 30);
 
   // Pagamento já vinculado a esta fatura
   const jaVinculado = TXS.find(t => t.faturaCC === faturaId && t.vinculadoFaturaCC);

@@ -2121,23 +2121,31 @@ async function gerarRelatorio() {
 // ══ PONTO ELETRÔNICO ═════════════════════════════════════════════════════════
 let _pontoRegistros=[];
 async function inicializarAbaPonto(){
-  const a=new Date(),M=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-  document.getElementById('pt-mes').innerHTML=M.map((m,i)=>`<option value="${i+1}"${i===a.getMonth()?' selected':''}>${m}</option>`).join('');
-  const y=a.getFullYear();
-  document.getElementById('pt-ano').innerHTML=[y-1,y,y+1].map(v=>`<option value="${v}"${v===y?' selected':''}>${v}</option>`).join('');
-  // Busca funcionários via API do ponto (usa tabela correta)
-  if (!window._pontoFuncionarios || !window._pontoFuncionarios.length) {
+  try {
+    const a=new Date(),M=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+    const elMes = document.getElementById('pt-mes');
+    const elAno = document.getElementById('pt-ano');
+    if (!elMes || !elAno) { console.error('[ponto] elementos pt-mes/pt-ano não encontrados'); return; }
+    elMes.innerHTML=M.map((m,i)=>`<option value="${i+1}"${i===a.getMonth()?' selected':''}>${m}</option>`).join('');
+    const y=a.getFullYear();
+    elAno.innerHTML=[y-1,y,y+1].map(v=>`<option value="${v}"${v===y?' selected':''}>${v}</option>`).join('');
+    // Força recarregar funcionários sempre (não usa cache antigo)
+    window._pontoFuncionarios = null;
     const d = await get('/api/ponto/funcionarios');
     window._pontoFuncionarios = d.ok ? (d.data||[]) : [];
+    const funcs = window._pontoFuncionarios;
+    ['pt-func','aj-func','jor-func'].forEach(id=>{
+      const s=document.getElementById(id);
+      if(!s)return;
+      s.innerHTML=(id==='pt-func'?'<option value="">Todos os funcionários</option>':'<option value="">Selecione...</option>')+
+        funcs.filter(f=>f.ativo).map(f=>`<option value="${f.id}">${f.nome}</option>`).join('');
+    });
+    await carregarPonto();
+  } catch(e) {
+    console.error('[inicializarAbaPonto]', e);
+    const tb = document.getElementById('tbody-ponto');
+    if (tb) tb.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:20px;color:var(--red)">Erro ao carregar ponto: ${e.message}</td></tr>`;
   }
-  const funcs = window._pontoFuncionarios;
-  ['pt-func','aj-func','jor-func'].forEach(id=>{
-    const s=document.getElementById(id);
-    if(!s)return;
-    s.innerHTML=(id==='pt-func'?'<option value="">Todos os funcionários</option>':'<option value="">Selecione...</option>')+
-      funcs.filter(f=>f.ativo).map(f=>`<option value="${f.id}">${f.nome}</option>`).join('');
-  });
-  carregarPonto();
 }
 async function carregarPonto(){const fi=document.getElementById('pt-func')?.value,mes=document.getElementById('pt-mes')?.value,ano=document.getElementById('pt-ano')?.value;if(!mes||!ano)return;let url=`/api/ponto/registros?mes=${mes}&ano=${ano}`;if(fi)url+=`&funcionario_id=${fi}`;const d=await get(url);if(!d.ok)return;_pontoRegistros=d.data||[];renderTabelaPonto();renderKPIsPonto();}
 function fmtHoraTs(ts){if(!ts)return'<span style="color:#ccc">—</span>';return`<span style="font-family:monospace;font-weight:600">${new Date(ts).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</span>`;}
