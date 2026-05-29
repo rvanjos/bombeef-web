@@ -19,6 +19,7 @@ module.exports = function(pool) {
       `ALTER TABLE funcionarios ADD COLUMN IF NOT EXISTS jornada_horas   NUMERIC(4,2) DEFAULT 8`,
       `ALTER TABLE funcionarios ADD COLUMN IF NOT EXISTS tolerancia_min  INTEGER DEFAULT 10`,
       `ALTER TABLE funcionarios ADD COLUMN IF NOT EXISTS dias_folga      TEXT[] DEFAULT ARRAY[]::TEXT[]`,
+      `ALTER TABLE funcionarios ADD COLUMN IF NOT EXISTS usa_ponto       BOOLEAN DEFAULT true`,
     ];
     for (const sql of alters) await pool.query(sql).catch(()=>{});
 
@@ -135,8 +136,9 @@ module.exports = function(pool) {
                  COALESCE(jornada_horas,8)               AS jornada_horas,
                  COALESCE(intervalo_min,60)              AS intervalo_min,
                  COALESCE(tolerancia_min,10)             AS tolerancia_min,
-                 COALESCE(dias_folga,ARRAY[]::TEXT[])    AS dias_folga
-          FROM funcionarios WHERE ativo=true ORDER BY nome
+                 COALESCE(dias_folga,ARRAY[]::TEXT[])    AS dias_folga,
+                 COALESCE(usa_ponto,true)                AS usa_ponto
+          FROM funcionarios WHERE ativo=true AND COALESCE(usa_ponto,true)=true ORDER BY nome
         `);
         rows = r.rows;
       } catch(_) {
@@ -148,7 +150,7 @@ module.exports = function(pool) {
                  COALESCE(jornada_horas,8)               AS jornada_horas,
                  COALESCE(intervalo_min,60)              AS intervalo_min,
                  COALESCE(tolerancia_min,10)             AS tolerancia_min
-          FROM funcionarios WHERE ativo=true ORDER BY nome
+          FROM funcionarios WHERE ativo=true AND COALESCE(usa_ponto,true)=true ORDER BY nome
         `);
         rows = r2.rows.map(r => ({ ...r, dias_folga:[] }));
       }
@@ -465,16 +467,16 @@ module.exports = function(pool) {
   // ── Jornada do funcionário (configurar) ───────────────────────────────────
   r.put('/jornada/:id', async (req, res) => {
     if (req.user?.perfil !== 'admin') return res.status(403).json({ ok:false, erro:'Apenas administradores podem alterar jornadas' });
-    const { horario_entrada, horario_saida, intervalo_min, jornada_horas, tolerancia_min, dias_folga } = req.body;
+    const { horario_entrada, horario_saida, intervalo_min, jornada_horas, tolerancia_min, dias_folga, usa_ponto } = req.body;
     try {
       await pool.query(`
         UPDATE funcionarios SET
           horario_entrada=$1, horario_saida=$2, intervalo_min=$3,
-          jornada_horas=$4, tolerancia_min=$5, dias_folga=$6
-        WHERE id=$7
+          jornada_horas=$4, tolerancia_min=$5, dias_folga=$6, usa_ponto=$7
+        WHERE id=$8
       `, [horario_entrada||'08:00', horario_saida||'18:00', parseInt(intervalo_min)||60,
           parseFloat(jornada_horas)||8, parseInt(tolerancia_min)||10,
-          dias_folga||[], req.params.id]);
+          dias_folga||[], usa_ponto !== false, req.params.id]);
       res.json({ ok:true });
     } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
   });

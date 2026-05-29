@@ -826,10 +826,23 @@ async function carregarJornadaDia() {
   const diaMap = {};
   dias.forEach(d => { diaMap[d.dia_semana] = d; });
 
+  const usaPonto = func.usa_ponto !== false;
   document.getElementById('adm-jornada-form').innerHTML = `
+    <div style="background:${usaPonto?'#f0fdf4':'#fef2f2'};border:1px solid ${usaPonto?'#86efac':'#fca5a5'};border-radius:10px;padding:12px 14px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between">
+      <div>
+        <div style="font-size:13px;font-weight:700">Registra ponto eletrônico?</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">Se desativado, este funcionário não aparece no sistema de ponto</div>
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+        <input type="checkbox" id="adm-usa-ponto" ${usaPonto?'checked':''} onchange="toggleUsaPonto(this.checked)"
+          style="width:18px;height:18px;cursor:pointer;accent-color:var(--green)">
+        <span style="font-size:13px;font-weight:600">${usaPonto?'Sim':'Não'}</span>
+      </label>
+    </div>
+    <div id="adm-config-jornada" style="${usaPonto?'':'opacity:.4;pointer-events:none'}">
     <div style="font-size:12px;color:var(--muted);margin-bottom:12px">
       Jornada padrão: ${(func.horario_entrada||'08:00').slice(0,5)} → ${(func.horario_saida||'18:00').slice(0,5)} · ${func.jornada_horas||8}h
-      <br><small>Deixe em branco para usar o padrão nesse dia.</small>
+      <br><small>Configure a jornada de cada dia — marque "Folga" para dias de descanso.</small>
     </div>
     ${DIAS_SEMANA.map((nome, i) => {
       const dj = diaMap[i] || {};
@@ -861,9 +874,19 @@ async function carregarJornadaDia() {
         <div style="height:1px;background:var(--border);margin:10px 0"></div>
       </div>`;
     }).join('')}
+    </div>
     <button onclick="salvarJornadaDia()" style="width:100%;padding:12px;background:var(--red);color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;margin-top:4px">
-      💾 Salvar Jornada Semanal
+      💾 Salvar Configuração
     </button>`;
+}
+
+function toggleUsaPonto(checked) {
+  const lbl = document.querySelector('#adm-usa-ponto + span');
+  if (lbl) lbl.textContent = checked ? 'Sim' : 'Não';
+  const cfg = document.getElementById('adm-config-jornada');
+  if (cfg) { cfg.style.opacity = checked ? '1' : '.4'; cfg.style.pointerEvents = checked ? '' : 'none'; }
+  const wrap = document.querySelector('#adm-usa-ponto').closest('div[style*="border-radius:10px"]');
+  if (wrap) { wrap.style.background = checked ? '#f0fdf4' : '#fef2f2'; wrap.style.borderColor = checked ? '#86efac' : '#fca5a5'; }
 }
 
 function toggleFolga(dia) {
@@ -884,6 +907,17 @@ async function salvarJornadaDia() {
       jornada_horas:   folga ? null : parseFloat(document.getElementById(`adm-hor-${i}`)?.value || 8),
       intervalo_min:   folga ? null : parseInt(document.getElementById(`adm-int-${i}`)?.value || 60),
     };
+  });
+  const usaPonto = document.getElementById('adm-usa-ponto')?.checked !== false;
+  // Primeiro salva a jornada padrão (usa_ponto, horários padrão)
+  await api.put(`/api/ponto/jornada/${id}`, {
+    horario_entrada: document.getElementById(`adm-ent-1`)?.value || '08:00',
+    horario_saida:   document.getElementById(`adm-sai-1`)?.value || '18:00',
+    jornada_horas:   parseFloat(document.getElementById(`adm-hor-1`)?.value || 8),
+    intervalo_min:   parseInt(document.getElementById(`adm-int-1`)?.value || 60),
+    tolerancia_min:  10,
+    dias_folga:      dias.filter(d=>d.folga).map(d=>['domingo','segunda','terca','quarta','quinta','sexta','sabado'][d.dia_semana]),
+    usa_ponto:       usaPonto,
   });
   const d = await api.put(`/api/ponto/jornada-dia/${id}`, { dias });
   if (!d.ok) { showToast('❌ ' + (d.erro||'Erro')); return; }
