@@ -3595,11 +3595,27 @@ function updStats() {
     document.getElementById('dash-rec-mini').textContent = '↑ ' + fmt.brl(rec);
     document.getElementById('dash-dep-mini').textContent = '↓ ' + fmt.brl(dep);
 
-    // 3. Meta de faturamento — usa faturamento do mês atual
+    // 3. Meta de faturamento — FASE 3: usa API, não localStorage
     const mesAtualStr2 = `${String(hoje.getMonth()+1).padStart(2,'0')}/${hoje.getFullYear()}`;
-    const fatReal = parseFloat(localStorage.getItem('bb_fat_por_mes') && JSON.parse(localStorage.getItem('bb_fat_por_mes') || '{}')[mesAtualStr2] || 0);
-    const metaFat = parseFloat(localStorage.getItem('bb_meta_faturamento') || 0) ||
-                    parseFloat((function(){try{const m=JSON.parse(localStorage.getItem('bb_metas')||'{}');const k=Object.keys(m).find(k=>k.includes(mesAtualStr2.split('/')[1]));return k?m[k].faturamento_meta||0:0;}catch(e){return 0;}})());
+    // fatReal: window._fatPorMes já populado pela API /api/faturamento/resumo no carregamento
+    const fatReal = parseFloat(window._fatPorMes?.[mesAtualStr2] || 0);
+    // metaFat: busca assíncrona da API — atualiza o header quando responder
+    let metaFat = 0;
+    api.get(`/api/config/metas/${encodeURIComponent(mesAtualStr2)}`).then(r => {
+      if (r.ok && r.data?.faturamento_meta > 0) {
+        metaFat = parseFloat(r.data.faturamento_meta);
+        const fatR = parseFloat(window._fatPorMes?.[mesAtualStr2] || 0);
+        if (fatR > 0) {
+          const p = Math.round(fatR / metaFat * 100);
+          const el = document.getElementById('dash-fat-pct');
+          const sb = document.getElementById('dash-fat-sub');
+          const br = document.getElementById('dash-fat-bar');
+          if(el) el.textContent = p + '%';
+          if(sb) sb.textContent = fmt.brl(fatR) + ' / ' + fmt.brl(metaFat);
+          if(br) { br.style.width = Math.min(p,100)+'%'; br.style.background = p>=100?'var(--green)':p>=70?'var(--blue)':'var(--orange)'; }
+        }
+      }
+    }).catch(()=>{});
     if (metaFat > 0 && fatReal > 0) {
       const pctFat = Math.round(fatReal / metaFat * 100);
       document.getElementById('dash-fat-pct').textContent = pctFat + '%';
@@ -4507,18 +4523,12 @@ async function gerarRoyaltiesAutomatico() {
         const total = porForma > 0 ? porForma : parseFloat(m.fat_bruto||0);
         if (total > 0) fatPorMes[m.mes] = total;
       });
-      // Atualiza localStorage com dados corretos
-      try { localStorage.setItem('bb_fat_por_mes', JSON.stringify(fatPorMes)); } catch(_) {}
+      // FASE 3: apenas memória — não persistir em localStorage
       window._fatPorMes = fatPorMes;
     }
   } catch(_) {}
-  // Complementa com faturamento manual se o mês não tiver dado do XMenu
-  try {
-    const fatManual = JSON.parse(localStorage.getItem('bb_fat_manual_mes') || '{}');
-    for (const [m, v] of Object.entries(fatManual)) {
-      if (!fatPorMes[m] && parseFloat(v) > 0) fatPorMes[m] = parseFloat(v);
-    }
-  } catch(_) {}
+  // bb_fat_manual_mes removido (Fase 3) — faturamento vem exclusivamente da API
+  // Se um mês não tem dado no XMenu, o usuário deve importar o arquivo XMenu
 
   let gerados = 0;
   for (const [mesFat, fat] of Object.entries(fatPorMes)) {

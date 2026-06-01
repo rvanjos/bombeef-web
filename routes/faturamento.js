@@ -782,51 +782,73 @@ module.exports = function(pool, app) {
 
   // ── GET /meta/:mes — busca meta do mês ──────────────────────────────────
   r.get('/meta/:mes', async (req, res) => {
+    // FASE 1 unificação: lê de metas (fonte única) — faturamento_metas aposentada
     try {
       const mes = decodeURIComponent(req.params.mes); // MM/YYYY
       const { rows } = await pool.query(
-        `SELECT * FROM faturamento_metas WHERE mes_ref=$1`, [mes]
+        `SELECT mes AS mes_ref, faturamento_meta AS meta, observacao AS obs,
+                faturamento_real, atualizado_em
+         FROM metas WHERE mes=$1`, [mes]
       );
-      // Também retorna o faturamento real já lançado no mês
+      // Faturamento real sempre vem de faturamento_periodos (fonte de verdade)
       const real = await pool.query(`
         SELECT COALESCE(SUM(fat_bruto),0) AS fat_bruto
         FROM faturamento_periodos
         WHERE TO_CHAR(data_inicio,'MM/YYYY') = $1
       `, [mes]);
-      res.json({ ok: true, data: rows[0]||null, fat_real: parseFloat(real.rows[0]?.fat_bruto||0) });
+      const fat_real = parseFloat(real.rows[0]?.fat_bruto||0);
+      const data = rows[0] ? { ...rows[0], fat_real } : null;
+      res.json({ ok: true, data, fat_real });
     } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
   // ── POST /meta — salva/atualiza meta do mês ───────────────────────────────
+  // FASE 1 unificação: grava em metas (fonte única) + dual-write em faturamento_metas (histórico)
   r.post('/meta', autoPublish('faturamento', 'faturamento_atualizado'), async (req, res) => {
     const { mes_ref, meta, obs } = req.body;
     if (!mes_ref || meta === undefined) return res.status(400).json({ ok: false, erro: 'mes_ref e meta obrigatórios' });
     try {
+      const valorMeta = parseFloat(meta);
+      // Fonte única: grava em metas
       const { rows } = await pool.query(`
+        INSERT INTO metas (mes, faturamento_meta, observacao)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (mes) DO UPDATE SET
+          faturamento_meta = EXCLUDED.faturamento_meta,
+          observacao       = COALESCE(EXCLUDED.observacao, metas.observacao),
+          atualizado_em    = NOW()
+        RETURNING mes AS mes_ref, faturamento_meta AS meta, observacao AS obs
+      `, [mes_ref, valorMeta, obs||null]);
+      // Dual-write: mantém faturamento_metas sincronizada (histórico, não apagar)
+      pool.query(`
         INSERT INTO faturamento_metas (mes_ref, meta, obs)
         VALUES ($1, $2, $3)
         ON CONFLICT (mes_ref) DO UPDATE SET
-          meta = EXCLUDED.meta,
-          obs  = COALESCE(EXCLUDED.obs, faturamento_metas.obs),
-          atualizado_em = NOW()
-        RETURNING *
-      `, [mes_ref, parseFloat(meta), obs||null]);
+          meta = EXCLUDED.meta, atualizado_em = NOW()
+      `, [mes_ref, valorMeta, obs||null]).catch(()=>{});
       res.json({ ok: true, data: rows[0] });
     } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
   // ── GET /metas — lista todas as metas ────────────────────────────────────
+  // FASE 1 unificação: lê de metas (fonte única) — retorna campos compatíveis com frontend
   r.get('/metas', async (req, res) => {
     try {
       const { rows } = await pool.query(`
-        SELECT m.*,
+        SELECT
+          m.mes            AS mes_ref,
+          m.faturamento_meta AS meta,
+          m.meta_perda_pct,
+          m.meta_retiradas,
+          m.observacao     AS obs,
+          m.atualizado_em,
           COALESCE((
             SELECT SUM(fat_bruto) FROM faturamento_periodos
-            WHERE TO_CHAR(data_inicio,'MM/YYYY') = m.mes_ref
+            WHERE TO_CHAR(data_inicio,'MM/YYYY') = m.mes
           ),0) AS fat_real
-        FROM faturamento_metas m
-        ORDER BY m.mes_ref DESC
-        LIMIT 24
+        FROM metas m
+        ORDER BY m.mes DESC
+        LIMIT 36
       `);
       res.json({ ok: true, data: rows });
     } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
