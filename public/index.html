@@ -427,10 +427,10 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
     <!-- DASHBOARD -->
     <div class="portal-page active" id="page-dashboard">
 
-      <!-- Header -->
+      <!-- Header do Dashboard -->
       <div class="dash-header">
         <div>
-          <div class="dash-title">Dashboard</div>
+          <div class="dash-title">📈 Dashboard Gerencial</div>
           <div class="dash-sub" id="dash-sub">Carregando dados...</div>
         </div>
         <div class="dash-mes-sel">
@@ -439,26 +439,22 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
         </div>
       </div>
 
-      <!-- Alertas dinâmicos -->
-      <div id="dash-alertas"></div>
-
-      <!-- Painel de ações de validade -->
+      <!-- Painel de ações de validade (mantido para compatibilidade) -->
       <div id="dash-acoes-validade" style="display:none;margin-bottom:14px"></div>
 
-      <!-- Card: Aprovações Compras Pendentes Pendentes (só aparece quando tem pendentes) -->
+      <!-- Aprovações pendentes (mantido) -->
       <div id="dash-fiado-pendentes" style="display:none;margin-bottom:14px;background:linear-gradient(135deg,#5b21b6,#7c3aed);border-radius:12px;padding:14px 18px;cursor:pointer;box-shadow:0 4px 16px rgba(91,33,182,.3)" onclick="showTab('fiado')">
         <div style="display:flex;align-items:center;gap:14px">
           <span style="font-size:28px">⏳</span>
           <div style="flex:1">
             <div style="font-size:12px;font-weight:700;color:rgba(255,255,255,.8);text-transform:uppercase;letter-spacing:.6px">Aprovações Pendentes — Compras Pendentes</div>
-            <div style="font-size:22px;font-weight:700;color:#fff;margin-top:2px"><span class="pend-count">0</span> venda(s) de sócios aguardando</div>
-            <div style="font-size:11px;color:rgba(255,255,255,.7);margin-top:2px">Clique para abrir a aba Compras Pendentes → Aprovações</div>
+            <div style="font-size:22px;font-weight:700;color:#fff;margin-top:2px"><span class="pend-count">0</span> venda(s) aguardando</div>
           </div>
           <span style="color:rgba(255,255,255,.6);font-size:22px">→</span>
         </div>
       </div>
 
-      <!-- Hero: Meta de Faturamento -->
+      <!-- ══ SEÇÃO 1: META + FATURAMENTO ══ -->
       <div class="fat-hero hidden" id="prog-fat">
         <div class="fat-hero-info">
           <div class="fat-hero-label">🎯 Meta de Faturamento — <span id="prog-mes"></span></div>
@@ -469,91 +465,93 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
           <div class="fat-bar-track">
             <div class="fat-bar-fill" id="prog-bar" style="width:0%"></div>
           </div>
-          <div class="fat-bar-labels">
-            <span>0%</span><span>50%</span><span>100%</span>
-          </div>
+          <div class="fat-bar-labels"><span>0%</span><span>50%</span><span>100%</span></div>
         </div>
         <div class="fat-pct" id="prog-pct" style="color:var(--muted)">0%</div>
       </div>
 
-      <!-- KPI Row -->
-      <div class="kpi-row">
-        <div class="kpi-card k-red" onclick="showTab('boletos')" style="cursor:pointer">
-          <span class="kpi-icon2">📄</span>
-          <div class="kpi-label">Boletos Vencendo (7d)</div>
-          <div class="kpi-val kpi-loading" id="k-vence7d">—</div>
-          <div class="kpi-sub" id="k-vence7d-val">—</div>
-        </div>
-        <div class="kpi-card k-orange" onclick="showTab('boletos')" style="cursor:pointer">
-          <span class="kpi-icon2">⚠️</span>
-          <div class="kpi-label">Boletos Vencidos</div>
-          <div class="kpi-val kpi-loading" id="k-vencidos">—</div>
-          <div class="kpi-sub" id="k-aberto">—</div>
-        </div>
-        <div class="kpi-card k-blue" onclick="showTab('dre')" id="kpi-card-dre" style="display:none;cursor:pointer">
+      <!-- ══ SEÇÃO 2: KPIs FINANCEIROS (sem semáforo duplicado do Hub) ══ -->
+      <div class="kpi-row" id="kpi-row-principal">
+        <!-- Resultado DRE — principal KPI financeiro -->
+        <div class="kpi-card k-blue" onclick="showTab('dre')" id="kpi-card-dre" style="cursor:pointer">
           <span class="kpi-icon2">📊</span>
           <div class="kpi-label">Resultado DRE</div>
           <div class="kpi-val kpi-loading" id="k-resultado">—</div>
-          <div class="kpi-sub" id="k-resultado-sub">—</div>
+          <div class="kpi-sub" id="k-resultado-sub">Receitas - Despesas</div>
         </div>
-        <div class="kpi-card k-orange" onclick="showTab('validade')" style="cursor:pointer">
-          <span class="kpi-icon2">🗓</span>
-          <div class="kpi-label">Validade — Alertas</div>
-          <div class="kpi-val kpi-loading" id="k-val-alerta">—</div>
-          <div class="kpi-sub" id="k-val-venc">—</div>
+        <!-- Faturamento do mês -->
+        <div class="kpi-card k-green" onclick="showTab('faturamento')" style="cursor:pointer">
+          <span class="kpi-icon2">💵</span>
+          <div class="kpi-label">Faturamento Mês</div>
+          <div class="kpi-val kpi-loading" id="k-fat-mes">—</div>
+          <div class="kpi-sub" id="k-fat-pct">—</div>
         </div>
+        <!-- Boletos a vencer 7d -->
+        <div class="kpi-card k-orange" onclick="showTab('boletos')" style="cursor:pointer">
+          <span class="kpi-icon2">📅</span>
+          <div class="kpi-label">Boletos — 7 dias</div>
+          <div class="kpi-val kpi-loading" id="k-vence7d">—</div>
+          <div class="kpi-sub" id="k-vence7d-val">—</div>
+        </div>
+        <!-- Perdas do mês vs meta -->
         <div class="kpi-card k-red" onclick="showTab('perdas')" style="cursor:pointer">
           <span class="kpi-icon2">🗑️</span>
           <div class="kpi-label">Perdas do Mês</div>
           <div class="kpi-val kpi-loading" id="k-perdas">—</div>
           <div class="kpi-sub" id="k-perdas-meta">—</div>
         </div>
+        <!-- Retiradas -->
         <div class="kpi-card k-purple" onclick="showTab('retiradas')" style="cursor:pointer">
           <span class="kpi-icon2">👥</span>
-          <div class="kpi-label">Retiradas do Mês</div>
+          <div class="kpi-label">Retiradas Mês</div>
           <div class="kpi-val kpi-loading" id="k-retiradas">—</div>
           <div class="kpi-sub">funcionários</div>
         </div>
+        <!-- IDs legados -->
+        <div style="display:none"><span id="k-vencidos"></span><span id="k-aberto"></span><span id="k-val-alerta"></span><span id="k-val-venc"></span></div>
       </div>
 
-      <!-- Linha 1: Financeiro + Atalhos Inteligentes -->
-      <div class="dash-row" style="margin-bottom:14px">
-
-        <!-- Gráfico de barras: DRE simplificado -->
-        <div class="dash-card" id="dash-dre-card" style="display:none">
+      <!-- ══ LINHA 1: DRE Resumo + Boletos próximos ══ -->
+      <div class="dash-row" style="margin-bottom:14px" id="dash-dre-card">
+        <!-- DRE simplificado -->
+        <div class="dash-card">
           <div class="dash-card-title">📊 DRE — Resumo do Mês</div>
           <div id="dash-dre-bars">
             <div class="mini-bar-row">
-              <div class="mini-bar-label">Receitas</div>
+              <div class="mini-bar-label" style="color:var(--green);font-weight:600">Receitas</div>
               <div class="mini-bar-track"><div class="mini-bar-fill" id="bar-rec" style="width:0%;background:var(--green)"></div></div>
               <div class="mini-bar-val" id="bar-rec-val">—</div>
             </div>
             <div class="mini-bar-row">
-              <div class="mini-bar-label">Despesas</div>
+              <div class="mini-bar-label" style="color:var(--red-l);font-weight:600">Despesas</div>
               <div class="mini-bar-track"><div class="mini-bar-fill" id="bar-desp" style="width:0%;background:var(--red-l)"></div></div>
               <div class="mini-bar-val" id="bar-desp-val">—</div>
             </div>
             <div class="mini-bar-row">
-              <div class="mini-bar-label">Resultado</div>
+              <div class="mini-bar-label" style="font-weight:600">Resultado</div>
               <div class="mini-bar-track"><div class="mini-bar-fill" id="bar-res" style="width:0%;background:var(--blue)"></div></div>
               <div class="mini-bar-val" id="bar-res-val">—</div>
             </div>
           </div>
-          <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
-            <div class="dash-card-title" style="margin-bottom:8px">📄 Boletos — Próximos Vencimentos</div>
-            <div id="dash-boletos-prox"><div style="font-size:12px;color:var(--muted)">Carregando...</div></div>
+          <div style="margin-top:12px">
+            <button class="btn-refresh" style="width:100%;justify-content:center" onclick="showTab('dre')">Ver DRE Completo →</button>
           </div>
         </div>
 
-        <!-- Atalhos Inteligentes -->
-        <div class="dash-card" id="dash-atalhos-card">
-          <div class="dash-card-title">⚡ Atalhos Rápidos</div>
-          <div class="atalhos-grid" id="dash-atalhos">
-            <!-- gerados dinamicamente -->
+        <!-- Boletos próximos vencimentos -->
+        <div class="dash-card">
+          <div class="dash-card-title">📄 Boletos — Próximos Vencimentos</div>
+          <div id="dash-boletos-prox"><div style="font-size:12px;color:var(--muted)">Carregando...</div></div>
+          <div style="margin-top:12px">
+            <button class="btn-refresh" style="width:100%;justify-content:center" onclick="showTab('boletos')">Ver Todos os Boletos →</button>
           </div>
         </div>
+      </div>
 
-        <!-- Validade — gráfico de criticidade (quando DRE não disponível) -->
+      <!-- ══ LINHA 2: Validade + Perdas gauge + RH ══ -->
+      <div class="dash-row tres" style="margin-bottom:14px">
+
+        <!-- Validade — situação -->
         <div class="dash-card" id="dash-validade-card">
           <div class="dash-card-title">🗓 Validade — Situação</div>
           <div id="dash-val-bars">
@@ -579,16 +577,11 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
             </div>
           </div>
           <div style="margin-top:12px">
-            <button class="btn-refresh" style="width:100%;justify-content:center" onclick="showTab('validade')">Ver Validade Completa →</button>
+            <button class="btn-refresh" style="width:100%;justify-content:center" onclick="showTab('validade')">Ver Validade →</button>
           </div>
         </div>
 
-      </div>
-
-      <!-- Linha 2: Perdas gauge + Cortes + Retiradas -->
-      <div class="dash-row tres" style="margin-bottom:0">
-
-        <!-- Perdas do mês -->
+        <!-- Perdas — gauge vs meta -->
         <div class="dash-card">
           <div class="dash-card-title">🗑️ Perdas — Meta do Mês</div>
           <div class="gauge-wrap" id="dash-perdas-gauge">
@@ -602,41 +595,39 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
           <div style="text-align:center;font-size:11px;color:var(--muted)">
             <span id="perdas-val">—</span> de <span id="perdas-meta">—</span> permitido
           </div>
-        </div>
-
-        <!-- Cortes — resumo rápido -->
-        <div class="dash-card">
-          <div class="dash-card-title">🔪 Cortes — Último Registro</div>
-          <div id="dash-cortes-mini">
-            <div style="font-size:12px;color:var(--muted);padding:8px 0">Carregando...</div>
-          </div>
-          <div style="margin-top:8px">
-            <button class="btn-refresh" style="width:100%;justify-content:center" onclick="showTab('cortes')">Ver CorteMaster →</button>
+          <div style="margin-top:10px">
+            <button class="btn-refresh" style="width:100%;justify-content:center" onclick="showTab('perdas')">Ver Perdas →</button>
           </div>
         </div>
 
-        <!-- RH / Equipe -->
+        <!-- Cortes + RH -->
         <div class="dash-card">
-          <div class="dash-card-title">👥 Equipe — Resumo</div>
+          <div class="dash-card-title">🔪 Cortes + 👥 Equipe</div>
+          <div id="dash-cortes-mini" style="margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--border)">
+            <div style="font-size:12px;color:var(--muted)">Carregando...</div>
+          </div>
           <div id="dash-rh-mini">
-            <div style="font-size:12px;color:var(--muted);padding:8px 0">Carregando...</div>
+            <div style="font-size:12px;color:var(--muted)">Carregando...</div>
           </div>
-          <div style="margin-top:8px">
-            <button class="btn-refresh" style="width:100%;justify-content:center" onclick="showTab('rh')">Ver RH Completo →</button>
+          <div style="margin-top:10px;display:flex;gap:6px">
+            <button class="btn-refresh" style="flex:1;justify-content:center" onclick="showTab('cortes')">Cortes →</button>
+            <button class="btn-refresh" style="flex:1;justify-content:center" onclick="showTab('rh')">RH →</button>
           </div>
         </div>
 
       </div>
 
-      <!-- IDs legados mantidos para compatibilidade com carregarKPIs() -->
+      <!-- IDs legados para compatibilidade -->
       <div style="display:none">
         <span id="badge-boletos"></span><span id="badge-dre"></span>
         <span id="badge-produtos"></span><span id="badge-validade"></span>
-        <span id="badge-retiradas"></span>
-        <span id="card-acesso-dre"></span>
+        <span id="badge-retiradas"></span><span id="card-acesso-dre"></span>
+        <div id="dash-atalhos-card"><div id="dash-atalhos"></div></div>
       </div>
 
     </div><!-- /dashboard -->
+
+
 
     <!-- IFRAMES dos módulos -->
     <!-- Overlay de carregamento das abas -->
@@ -1406,7 +1397,7 @@ async function carregarKPIs() {
     $('dash-sub').textContent = `Referência: ${mesTxt} · Atualizado: ${new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`;
 
     // Remove loading
-    ['k-vence7d','k-vencidos','k-resultado','k-val-alerta','k-perdas','k-retiradas'].forEach(id => {
+    ['k-vence7d','k-vencidos','k-resultado','k-val-alerta','k-perdas','k-retiradas','k-fat-mes'].forEach(id => {
       $(id)?.classList.remove('kpi-loading');
     });
 
@@ -1459,6 +1450,20 @@ async function carregarKPIs() {
 
     // ── Retiradas ─────────────────────────────────────────────────────────
     $('k-retiradas').textContent  = fmtBRL(d.retiradasMes);
+
+    // ── Faturamento KPI card (novo campo gerencial) ───────────────────────
+    const fatKpi = $('k-fat-mes');
+    if (fatKpi) {
+      fatKpi.textContent  = fmtBRL(d.faturamentoReal || 0);
+      fatKpi.className    = 'kpi-val' + (d.faturamentoReal > 0 ? ' c-green' : '');
+      fatKpi.classList.remove('kpi-loading');
+      const fatPctEl = $('k-fat-pct');
+      if (fatPctEl) {
+        fatPctEl.textContent = d.faturamentoMeta > 0
+          ? `${d.faturamentoPct || 0}% da meta (${fmtBRL(d.faturamentoMeta)})`
+          : 'Meta não definida';
+      }
+    }
 
     // ── Faturamento progress bar ──────────────────────────────────────────
     if (d.faturamentoMeta > 0) {

@@ -232,44 +232,22 @@ function render(d) {
       </div>
 
       <div class="secao">
-        <div class="sec-title">💰 Financeiro — ${d.mes}</div>
+        <div class="sec-title">💰 Situação Financeira — ${d.mes}</div>
         <div class="card">
           <div class="kpi-row">
             <div class="kpi">
-              <div class="kpi-label">Receitas</div>
-              <div class="kpi-val positivo">${brl(f.receitas)}</div>
-            </div>
-            <div class="kpi">
-              <div class="kpi-label">Despesas</div>
-              <div class="kpi-val negativo">${brl(f.despesas)}</div>
-            </div>
-            <div class="kpi">
-              <div class="kpi-label">Resultado</div>
+              <div class="kpi-label">Resultado DRE</div>
               <div class="kpi-val ${resCls}">${resSinal} ${brl(Math.abs(resValor))}</div>
+              <div class="kpi-sub">Rec: ${brl(f.receitas)} | Desp: ${brl(f.despesas)}</div>
+            </div>
+            <div class="kpi">
+              <div class="kpi-label">Boletos Abertos</div>
+              <div class="kpi-val ${f.total_aberto>0?'alerta':''}">${brl(f.total_aberto)}</div>
+              <div class="kpi-sub">${f.boletos_vencidos} vencido(s) · ${f.boletos_prox7d} vencem em 7d</div>
             </div>
           </div>
-          <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
-            <div class="kpi-row">
-              <div class="kpi">
-                <div class="kpi-label">Boletos Abertos</div>
-                <div class="kpi-val ${f.total_aberto>0?'alerta':''}">${brl(f.total_aberto)}</div>
-                <div class="kpi-sub">${f.boletos_vencidos} vencido(s)</div>
-              </div>
-              <div class="kpi">
-                <div class="kpi-label">Perdas Mês</div>
-                <div class="kpi-val ${o.perdas_mes>0?'negativo':''}">${brl(o.perdas_mes)}</div>
-                <div class="kpi-sub">${o.perdas_count} registro(s)</div>
-              </div>
-              <div class="kpi">
-                <div class="kpi-label">Retiradas Mês</div>
-                <div class="kpi-val">${brl(o.retiradas_mes)}</div>
-                <div class="kpi-sub">${o.retiradas_count} registro(s)</div>
-              </div>
-            </div>
-          </div>
-          <div style="margin-top:10px">
-            <button onclick="navegar('dre')" style="background:none;border:1px solid var(--border);border-radius:7px;padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;color:var(--text)">Ver DRE completo →</button>
-            <button onclick="navegar('boletos')" style="background:none;border:1px solid var(--border);border-radius:7px;padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;color:var(--text);margin-left:6px">Ver Boletos →</button>
+          <div style="margin-top:10px;font-size:11px;color:var(--muted)">
+            Para análise detalhada acesse o Dashboard →
           </div>
         </div>
       </div>
@@ -308,26 +286,7 @@ function render(d) {
         </div>
       </div>
 
-      <div class="secao">
-        <div class="sec-title">📊 Operação — ${d.mes}</div>
-        <div class="card">
-          <div class="kpi-row">
-            <div class="kpi">
-              <div class="kpi-label">Movimentos 24h</div>
-              <div class="kpi-val">${o.movimentos_24h}</div>
-              <div class="kpi-sub">no estoque</div>
-            </div>
-            <div class="kpi">
-              <div class="kpi-label">Validade OK</div>
-              <div class="kpi-val ${o.validade_vencidos>0?'negativo':o.validade_criticos>0?'alerta':'positivo'}">${o.validade_vencidos>0?'⚠️ '+o.validade_vencidos+' venc.':o.validade_criticos>0?'⚠️ '+o.validade_criticos+' crit.':'✓ OK'}</div>
-            </div>
-            <div class="kpi">
-              <div class="kpi-label">Est. Mínimo</div>
-              <div class="kpi-val ${o.estoque_minimo_count>0?'alerta':'positivo'}">${o.estoque_minimo_count>0?o.estoque_minimo_count+' baixos':'✓ OK'}</div>
-            </div>
-          </div>
-        </div>
-      </div>
+
     </div>
   </div>`;
 }
