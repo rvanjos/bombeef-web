@@ -155,11 +155,13 @@ tbody td{padding:10px 12px;font-size:13px;vertical-align:middle;}
 <div class="toast" id="toast"></div>
 
 <script>
+let _api = null;
 let _fornecedores = [];
 let _editandoCnpj = null;
 let _categorias   = [];
 
 window.onBBReady = async () => {
+  const { api, fmt, toast } = BB;
   const me = await api.get('/auth/me');
   if (me.ok) document.getElementById('ph-perfil').textContent = me.data.email || me.data.perfil;
 
@@ -193,7 +195,7 @@ async function _buscarExec() {
   if (q) params.set('q', q);
   if (inativos) params.set('ativo', 'false');
 
-  const d = await api.get('/api/fornecedores?' + params.toString());
+  const d = await (_api||BB.api).get('/api/fornecedores?' + params.toString());
   // API retorna array direto (sem wrapper ok/data)
   _fornecedores = Array.isArray(d) ? d : (d.data || []);
   renderLista();
@@ -317,12 +319,12 @@ async function salvar() {
 
   let d;
   if (_editandoCnpj) {
-    d = await api.put(`/api/fornecedores/${_editandoCnpj}`, body);
+    d = await (_api||BB.api).put(`/api/fornecedores/${_editandoCnpj}`, body);
     // PUT retorna {ok:true} — qualquer resposta sem erro é sucesso
     if (d.erro) { toast('❌ ' + d.erro); btn.disabled=false; btn.textContent='💾 Salvar'; return; }
     toast('✅ Fornecedor atualizado!');
   } else {
-    d = await api.post('/api/fornecedores', body);
+    d = await (_api||BB.api).post('/api/fornecedores', body);
     if (d.erro) { toast('❌ ' + d.erro); btn.disabled=false; btn.textContent='💾 Salvar'; return; }
     toast('✅ Fornecedor cadastrado!');
   }
@@ -349,13 +351,16 @@ function formatCNPJ(cnpj) {
   return c.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/,'$1.$2.$3/$4-$5');
 }
 
-let _toastTimer;
+let _toastLocal;
 function toast(msg) {
+  if (typeof BB !== 'undefined' && BB.toast) { BB.toast(msg); return; }
+  // fallback local
   const el = document.getElementById('toast');
+  if (!el) return;
   el.textContent = msg;
   el.classList.add('show');
-  clearTimeout(_toastTimer);
-  _toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
+  clearTimeout(_toastLocal);
+  _toastLocal = setTimeout(() => el.classList.remove('show'), 2800);
 }
 </script>
 </body>

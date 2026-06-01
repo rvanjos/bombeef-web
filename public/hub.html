@@ -161,9 +161,13 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
 <div class="toast" id="toast"></div>
 
 <script>
+let _api = null;
 let _status = {};
 
-window.onBBReady = () => { carregar(); };
+window.onBBReady = () => {
+  _api = BB.api;
+  carregar();
+};
 
 // Escuta eventos do barramento (F1-01)
 window.addEventListener('message', e => {
@@ -176,8 +180,8 @@ window.addEventListener('message', e => {
 
 async function carregar() {
   const [statusRes, pendRes] = await Promise.all([
-    api.get('/api/hub/status'),
-    api.get('/api/hub/pendencias'),
+    (_api||BB.api).get('/api/hub/status'),
+    (_api||BB.api).get('/api/hub/pendencias'),
   ]);
   if (statusRes.ok) {
     _status = statusRes.data;
@@ -346,7 +350,7 @@ async function enviarArquivo() {
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Importando...'; }
 
   try {
-    const res = await api.upload(info.rota, fd);
+    const res = await (_api||BB.api).upload(info.rota, fd);
     if (res.ok !== false) {
       toast('✅ Arquivo importado com sucesso!');
       document.getElementById('detect-result').classList.remove('show');
@@ -365,6 +369,7 @@ async function enviarArquivo() {
 // ── Utils ─────────────────────────────────────────────────────────────────────
 let _toastT;
 function toast(msg, ms=2800) {
+  if (typeof BB !== 'undefined' && BB.toast) { BB.toast(msg, ms); return; }
   const el = document.getElementById('toast');
   el.textContent = msg; el.classList.add('show');
   clearTimeout(_toastT);
