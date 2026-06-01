@@ -467,6 +467,7 @@ app.use('/api/config',       require('./routes/config')(pool));
 app.use('/api/rh',           require('./routes/rh')(pool));
 app.use('/api/dashboard',    require('./routes/dashboard')(pool));
 app.use('/api/fornecedores', require('./routes/fornecedores')(pool));
+app.use('/api/estoque',      require('./routes/movimentos')(pool, app)); // F1-03
 app.use('/api/cortes',       require('./routes/cortes')(pool));
 app.use('/api/vendas-produto', require('./routes/vendas_produto')(pool));
 // ── Rota seed CorteMaster (executa uma vez para popular dados iniciais) ─────
