@@ -325,6 +325,8 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
 @keyframes spin{to{transform:rotate(360deg);}}
 .spinner-label{font-size:12px;color:var(--muted);font-weight:600;letter-spacing:.3px;}
 </style>
+<!-- F1-01: Barramento de eventos — distribuição de eventos SSE para iframes -->
+<script src="js/bb-events.js"></script>
 </head>
 <body>
 
@@ -1707,6 +1709,8 @@ window.addEventListener('message', e => {
         document.querySelectorAll('iframe').forEach(fr => {
           try { fr.contentWindow.postMessage({ type: 'bb_data_changed', evento: ev }, '*'); } catch(_) {}
         });
+        // F1-01: distribui como bbEvent tipado (barramento centralizado)
+        if (typeof bbDistribuirEvento === 'function') bbDistribuirEvento(ev);
 
         // Recarrega KPIs do portal
         if (['estoque_atualizado','kit_estoque_atualizado','produtos_importados','cadastro_atualizado'].includes(ev.type)) {
@@ -1738,6 +1742,8 @@ window.addEventListener('message', e => {
             document.querySelectorAll('iframe').forEach(fr => {
               try { fr.contentWindow.postMessage({ type: 'bb_data_changed', evento: ev }, '*'); } catch(_) {}
             });
+            // F1-01: distribui como bbEvent tipado (barramento centralizado)
+            if (typeof bbDistribuirEvento === 'function') bbDistribuirEvento(ev);
             // Atualiza KPIs do portal em mudanças financeiras
             if (['boletos_atualizado','faturamento_atualizado','dre_atualizado',
                  'estoque_atualizado','produtos_importados'].includes(ev.type)) {
