@@ -400,6 +400,7 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
   <div class="portal-body">
   <nav class="pnav" id="pnav">
     <div class="pnav-section">Principal</div>
+    <button class="pnav-tab" onclick="showTab('hub')" data-tab="hub"><span class="tab-icon">🎛️</span><span class="tab-label">Hub Operacional</span></button>
     <button class="pnav-tab active" onclick="showTab('dashboard')" data-tab="dashboard"><span class="tab-icon">🏠</span><span class="tab-label">Dashboard</span></button>
     <div class="pnav-section">Financeiro</div>
     <button class="pnav-tab" onclick="showTab('boletos')"   data-tab="boletos"   data-perfil="admin,gestor,financeiro,contabil"><span class="tab-icon">📄</span><span class="tab-label">Boletos</span></button>
@@ -644,6 +645,7 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
       <div class="spinner-label" id="aba-loading-label">Carregando...</div>
     </div>
     <div class="frame-container" id="frame-boletos">
+      <iframe class="module-frame" id="iframe-hub" data-src="hub.html"></iframe>
       <iframe class="module-frame" id="iframe-boletos" src="boletos.html?v=1775328871"></iframe>
     </div>
     <div class="frame-container" id="frame-dre">

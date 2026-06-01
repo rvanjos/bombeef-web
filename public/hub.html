@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hub Operacional — Bom Beef</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="/js/api.js"></script>
+<style>
+:root{--red:#8B0000;--red-l:#C0392B;--bg:#f7f4f0;--white:#fff;--text:#1a1a1a;--muted:#7a7068;--border:#e8e0d8;--shadow:0 2px 12px rgba(0,0,0,.07);
+  --green:#166534;--green-bg:#f0fdf4;--green-bdr:#86efac;
+  --amber:#92400E;--amber-bg:#fffbeb;--amber-bdr:#fcd34d;
+  --red-bg:#fef2f2;--red-bdr:#fca5a5;}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{width:100%;height:100%;}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);display:flex;flex-direction:column;}
+
+/* Header */
+.ph{background:var(--red);padding:11px 20px;display:flex;align-items:center;gap:10px;flex-shrink:0;box-shadow:0 2px 12px rgba(139,0,0,.3);}
+.ph h2{font-family:'Playfair Display',serif;font-size:16px;color:#fff;font-weight:700;flex:1;}
+.ph-atualizado{font-size:11px;color:rgba(255,255,255,.65);}
+.btn-atualizar{padding:5px 12px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:7px;font-size:11px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;transition:.15s;}
+.btn-atualizar:hover{background:rgba(255,255,255,.25);}
+
+/* Layout */
+.hub-body{flex:1;overflow-y:auto;padding:16px;}
+
+/* Semáforo */
+.semaforo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-bottom:18px;}
+.sem-card{background:var(--white);border-radius:10px;padding:14px 16px;border:1px solid var(--border);box-shadow:var(--shadow);cursor:pointer;transition:.15s;position:relative;overflow:hidden;}
+.sem-card:hover{transform:translateY(-1px);box-shadow:0 4px 16px rgba(0,0,0,.1);}
+.sem-card.ok   {border-left:4px solid #16a34a;}
+.sem-card.alerta{border-left:4px solid #d97706;}
+.sem-card.critico{border-left:4px solid var(--red-l);}
+.sem-icone{font-size:22px;margin-bottom:6px;}
+.sem-label{font-size:10px;text-transform:uppercase;letter-spacing:.7px;font-weight:700;color:var(--muted);margin-bottom:3px;}
+.sem-status{font-size:13px;font-weight:600;line-height:1.3;}
+.sem-status.ok{color:#166534;}
+.sem-status.alerta{color:#92400E;}
+.sem-status.critico{color:var(--red-l);}
+.sem-dot{position:absolute;top:12px;right:12px;width:9px;height:9px;border-radius:50%;}
+.sem-dot.ok{background:#22c55e;}
+.sem-dot.alerta{background:#f59e0b;animation:pulse 1.5s infinite;}
+.sem-dot.critico{background:#ef4444;animation:pulse .8s infinite;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.4;}}
+
+/* Seções */
+.sec-title{font-size:11px;text-transform:uppercase;letter-spacing:1px;font-weight:700;color:var(--muted);margin-bottom:10px;display:flex;align-items:center;gap:8px;}
+.sec-title::after{content:'';flex:1;height:1px;background:var(--border);}
+.sec-mb{margin-bottom:18px;}
+
+/* Upload */
+.upload-area{background:var(--white);border:2px dashed var(--border);border-radius:12px;padding:28px;text-align:center;cursor:pointer;transition:.2s;margin-bottom:18px;}
+.upload-area:hover,.upload-area.dragover{border-color:var(--red);background:#fdf9f5;}
+.upload-icone{font-size:32px;margin-bottom:8px;}
+.upload-title{font-size:15px;font-weight:700;margin-bottom:4px;}
+.upload-sub{font-size:12px;color:var(--muted);}
+.upload-tags{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:10px;}
+.upload-tag{padding:3px 10px;background:#f0f0f0;border-radius:10px;font-size:11px;font-weight:600;color:var(--muted);}
+.upload-tag.nfe{background:#fffbeb;color:#92400E;border:1px solid #fcd34d;}
+#upload-input{display:none;}
+
+/* Resultado da detecção */
+.detect-result{background:var(--white);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:14px;display:none;}
+.detect-result.show{display:block;}
+.detect-tipo{font-size:13px;font-weight:700;margin-bottom:4px;}
+.detect-acao{font-size:12px;color:var(--muted);}
+.detect-btns{display:flex;gap:8px;margin-top:10px;}
+
+/* Pendências */
+.pend-table{width:100%;border-collapse:collapse;background:var(--white);border-radius:10px;overflow:hidden;box-shadow:var(--shadow);}
+.pend-table th{background:#fdf9f5;font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:700;padding:8px 12px;text-align:left;border-bottom:2px solid var(--border);}
+.pend-table td{padding:9px 12px;font-size:12px;border-bottom:1px solid var(--border);}
+.pend-table tr:last-child td{border-bottom:none;}
+.badge{display:inline-block;padding:2px 8px;border-radius:9px;font-size:10px;font-weight:700;}
+.badge-ok{background:#dcfce7;color:#166534;}
+.badge-alerta{background:#fef9c3;color:#92400E;}
+.badge-critico{background:#fee2e2;color:#991b1b;}
+
+/* Ações rápidas */
+.acoes-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;}
+.acao-btn{background:var(--white);border:1px solid var(--border);border-radius:10px;padding:12px 14px;cursor:pointer;text-align:left;transition:.15s;font-family:'DM Sans',sans-serif;}
+.acao-btn:hover{border-color:var(--red);background:#fdf9f5;}
+.acao-btn .ab-ico{font-size:20px;margin-bottom:5px;}
+.acao-btn .ab-label{font-size:12px;font-weight:700;display:block;}
+.acao-btn .ab-sub{font-size:10px;color:var(--muted);}
+.acao-btn.urgente{border-color:var(--red-l);background:var(--red-bg);}
+.acao-btn.urgente .ab-label{color:var(--red-l);}
+
+/* Loading */
+.loading{text-align:center;padding:32px;color:var(--muted);font-size:13px;}
+.spinner{display:inline-block;width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--red);border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:6px;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+.toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%) translateY(60px);background:#1a1a1a;color:#fff;padding:7px 18px;border-radius:8px;font-size:12px;z-index:9999;transition:transform .25s;pointer-events:none;font-family:'DM Sans',sans-serif;}
+.toast.show{transform:translateX(-50%) translateY(0);}
+
+/* NF-e aviso */
+.nfe-aviso{background:#fffbeb;border:1px solid #fcd34d;border-radius:9px;padding:10px 14px;font-size:12px;color:#92400E;margin-bottom:10px;display:none;}
+.nfe-aviso.show{display:block;}
+</style>
+</head>
+<body>
+
+<div class="ph">
+  <span style="font-size:18px">🎛️</span>
+  <h2>Hub Operacional</h2>
+  <span class="ph-atualizado" id="ph-atualizado"></span>
+  <button class="btn-atualizar" onclick="carregar()">↻ Atualizar</button>
+</div>
+
+<div class="hub-body">
+
+  <!-- Semáforo -->
+  <div class="sec-title sec-mb">Status Operacional</div>
+  <div class="semaforo-grid" id="semaforo">
+    <div class="loading"><span class="spinner"></span>Carregando status...</div>
+  </div>
+
+  <!-- Upload Único -->
+  <div class="sec-title sec-mb">Importar Arquivo</div>
+
+  <div class="nfe-aviso" id="nfe-aviso">
+    ⚠️ <strong>Arquivo NF-e XML detectado.</strong> Este arquivo deve ser importado diretamente pelo módulo <strong>Boletos → Importar NF-e</strong>. O Hub não processa NF-e.
+    <button onclick="irParaBoletos()" style="margin-left:10px;padding:3px 10px;background:#92400E;color:#fff;border:none;border-radius:6px;font-size:11px;cursor:pointer;font-family:'DM Sans',sans-serif;">Ir para Boletos</button>
+  </div>
+
+  <div class="detect-result" id="detect-result">
+    <div class="detect-tipo" id="detect-tipo"></div>
+    <div class="detect-acao" id="detect-acao"></div>
+    <div class="detect-btns" id="detect-btns"></div>
+  </div>
+
+  <div class="upload-area" id="upload-area"
+    ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)"
+    onclick="document.getElementById('upload-input').click()">
+    <input type="file" id="upload-input" accept=".xlsx,.xls,.csv,.ofx,.ofc,.xml"
+      onchange="onFileSelect(event)">
+    <div class="upload-icone">📂</div>
+    <div class="upload-title">Arraste o arquivo aqui ou clique para selecionar</div>
+    <div class="upload-sub">O sistema identifica o tipo automaticamente e distribui para os módulos corretos</div>
+    <div class="upload-tags">
+      <span class="upload-tag">XLSX</span>
+      <span class="upload-tag">CSV</span>
+      <span class="upload-tag">OFX</span>
+      <span class="upload-tag nfe">NF-e XML → Boletos</span>
+    </div>
+  </div>
+
+  <!-- Importações Pendentes -->
+  <div class="sec-title sec-mb">Importações Pendentes</div>
+  <div id="pendencias-wrap" style="margin-bottom:18px">
+    <div class="loading"><span class="spinner"></span>Carregando...</div>
+  </div>
+
+  <!-- Ações Rápidas -->
+  <div class="sec-title sec-mb">Ações Rápidas</div>
+  <div class="acoes-grid" id="acoes-grid"></div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let _status = {};
+
+window.onBBReady = () => { carregar(); };
+
+// Escuta eventos do barramento (F1-01)
+window.addEventListener('message', e => {
+  const ev = e.data?.bbEvent || e.data?.type;
+  if (['PERDA_REGISTRADA','VALIDADE_DESCARTADA','ESTOQUE_ATUALIZADO',
+       'MOVIMENTO_ESTOQUE','FATURAMENTO_ATUALIZADO'].includes(ev)) {
+    setTimeout(carregar, 1200); // recarrega após evento
+  }
+});
+
+async function carregar() {
+  const [statusRes, pendRes] = await Promise.all([
+    api.get('/api/hub/status'),
+    api.get('/api/hub/pendencias'),
+  ]);
+  if (statusRes.ok) {
+    _status = statusRes.data;
+    renderSemaforo(_status);
+    renderAcoes(_status);
+    document.getElementById('ph-atualizado').textContent =
+      'Atualizado: ' + new Date(statusRes.gerado_em).toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'});
+  }
+  if (pendRes.ok) renderPendencias(pendRes.data);
+}
+
+// ── Semáforo ──────────────────────────────────────────────────────────────────
+function renderSemaforo(status) {
+  const el = document.getElementById('semaforo');
+  el.innerHTML = Object.values(status).map(s => {
+    const cls = s.critico ? 'critico' : s.alerta ? 'alerta' : 'ok';
+    return `<div class="sem-card ${cls}" onclick="irPara('${s.acao||''}')">
+      <div class="sem-dot ${cls}"></div>
+      <div class="sem-icone">${s.icone||'📊'}</div>
+      <div class="sem-label">${s.label}</div>
+      <div class="sem-status ${cls}">${s.msg}</div>
+    </div>`;
+  }).join('');
+}
+
+// ── Pendências ────────────────────────────────────────────────────────────────
+function renderPendencias(pends) {
+  const el = document.getElementById('pendencias-wrap');
+  if (!pends?.length) { el.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:8px 0">Nenhuma pendência identificada.</div>'; return; }
+  el.innerHTML = `<table class="pend-table">
+    <thead><tr><th>Arquivo</th><th>Origem</th><th>Última importação</th><th>Status</th></tr></thead>
+    <tbody>${pends.map(p => `<tr>
+      <td style="font-weight:600">${p.arquivo}</td>
+      <td style="color:var(--muted)">${p.origem}</td>
+      <td style="font-family:'DM Mono',monospace;font-size:11px">${p.ultima}</td>
+      <td><span class="badge badge-${p.status}">${p.status==='ok'?'✅ OK':p.status==='alerta'?'⚠️ Atenção':'🔴 Pendente'}</span></td>
+    </tr>`).join('')}</tbody>
+  </table>`;
+}
+
+// ── Ações rápidas ─────────────────────────────────────────────────────────────
+function renderAcoes(status) {
+  const acoes = [
+    { ico:'📦', label:'Importar Estoque',  sub:'Relatório 302 XMenu', tab:'produtos', urgente: status.estoque?.critico },
+    { ico:'💰', label:'Importar Vendas',   sub:'Relatório XMenu',    tab:'faturamento', urgente: status.vendas?.critico },
+    { ico:'🗓', label:'Ver Validade',       sub: status.validade?.msg || 'Itens próximos', tab:'validade', urgente: status.validade?.critico },
+    { ico:'📄', label:'Ver Boletos',        sub: status.boletos?.msg || 'Vencimentos',    tab:'boletos',  urgente: status.boletos?.critico },
+    { ico:'🏭', label:'Fornecedores',       sub:'Cadastro de fornecedores', tab:'fornecedores', urgente:false },
+    { ico:'🔍', label:'Perdas',             sub:'Registrar e consultar',   tab:'perdas',       urgente:false },
+  ];
+  document.getElementById('acoes-grid').innerHTML = acoes.map(a => `
+    <button class="acao-btn ${a.urgente?'urgente':''}" onclick="irPara('${a.tab}')">
+      <div class="ab-ico">${a.ico}</div>
+      <span class="ab-label">${a.label}</span>
+      <span class="ab-sub">${a.sub}</span>
+    </button>`).join('');
+}
+
+// ── Navegação ─────────────────────────────────────────────────────────────────
+function irPara(tab) {
+  if (!tab) return;
+  try { window.parent?.postMessage({ type:'bb_navigate', tab }, '*'); } catch(_) {}
+}
+
+function irParaBoletos() { irPara('boletos'); }
+
+// ── Upload ────────────────────────────────────────────────────────────────────
+function onDragOver(e) { e.preventDefault(); document.getElementById('upload-area').classList.add('dragover'); }
+function onDragLeave(e) { document.getElementById('upload-area').classList.remove('dragover'); }
+function onDrop(e) {
+  e.preventDefault();
+  document.getElementById('upload-area').classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file) processarArquivo(file);
+}
+function onFileSelect(e) {
+  const file = e.target.files[0];
+  if (file) processarArquivo(file);
+  e.target.value = '';
+}
+
+async function processarArquivo(file) {
+  const nfe = document.getElementById('nfe-aviso');
+  const dr  = document.getElementById('detect-result');
+  nfe.classList.remove('show'); dr.classList.remove('show');
+
+  // Detectar tipo via leitura do arquivo
+  const nome = file.name.toLowerCase();
+  const ext  = nome.split('.').pop();
+
+  // NF-e XML — identificar e bloquear imediatamente
+  if (ext === 'xml') {
+    const txt = await file.text().catch(()=>'');
+    if (txt.includes('<NFe') || txt.includes('<nfeProc') || txt.includes('nfe.fazenda')) {
+      nfe.classList.add('show');
+      return;
+    }
+    toast('⚠️ Arquivo XML não reconhecido como NF-e');
+    return;
+  }
+
+  // OFX
+  if (ext === 'ofx' || ext === 'ofc') {
+    mostrarDeteccao('extrato_ofx', file);
+    return;
+  }
+
+  // XLSX/CSV — detectar pelo nome e depois pelo conteúdo
+  let tipo = 'desconhecido';
+  if (nome.includes('302') || nome.includes('estoque')) tipo = 'estoque_302';
+  else if (nome.includes('venda') || nome.includes('faturamento')) tipo = 'vendas_xmenu';
+  else if (nome.includes('produto') || nome.includes('cadastro')) tipo = 'cadastro_pdv';
+  else if (nome.includes('fatura') || nome.includes('cartao') || nome.includes('cc')) tipo = 'fatura_cc';
+  else if (nome.includes('extrato')) tipo = 'extrato_xlsx';
+  else tipo = 'xlsx_generico';
+
+  mostrarDeteccao(tipo, file);
+}
+
+const TIPO_INFO = {
+  'estoque_302':    { label:'📦 Relatório de Estoque (302)',      acao:'Vai atualizar: Produtos · Validade · Kits · Dashboard', destino:'produtos',     rota:'/api/produtos/sync-estoque' },
+  'vendas_xmenu':  { label:'💰 Relatório de Vendas (XMenu)',     acao:'Vai atualizar: Faturamento · DRE · Dashboard',          destino:'faturamento',  rota:'/api/faturamento/import' },
+  'cadastro_pdv':  { label:'📋 Cadastro de Produtos',             acao:'Vai atualizar: Catálogo de produtos · Kits · Retiradas',destino:'produtos',     rota:'/api/produtos/sync-cadastro' },
+  'extrato_ofx':   { label:'🏦 Extrato Bancário (OFX)',           acao:'Vai atualizar: DRE · Classificação financeira',         destino:'dre',          rota:'/api/dre/import-extrato' },
+  'extrato_xlsx':  { label:'🏦 Extrato Bancário (XLSX)',          acao:'Vai atualizar: DRE · Classificação financeira',         destino:'dre',          rota:'/api/dre/import-extrato' },
+  'fatura_cc':     { label:'💳 Fatura Cartão de Crédito',         acao:'Vai atualizar: DRE · Status Cartões',                   destino:'dre',          rota:'/api/dre/import-extrato' },
+  'xlsx_generico': { label:'📊 Planilha XLSX (tipo não identificado)', acao:'Selecione o destino manualmente', destino:null, rota:null },
+  'desconhecido':  { label:'❓ Arquivo não reconhecido',           acao:'Formato não suportado ou não identificado', destino:null, rota:null },
+};
+
+let _arqAtual = null;
+function mostrarDeteccao(tipo, file) {
+  _arqAtual = { tipo, file };
+  const info = TIPO_INFO[tipo] || TIPO_INFO.desconhecido;
+  document.getElementById('detect-tipo').textContent = info.label + ' — ' + file.name;
+  document.getElementById('detect-acao').textContent = info.acao;
+
+  const btns = document.getElementById('detect-btns');
+  if (info.rota) {
+    btns.innerHTML = `
+      <button onclick="enviarArquivo()" style="padding:7px 16px;background:var(--red);color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif">
+        ✅ Confirmar e Importar
+      </button>
+      <button onclick="document.getElementById('detect-result').classList.remove('show')"
+        style="padding:7px 14px;background:var(--white);color:var(--text);border:1px solid var(--border);border-radius:7px;font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif">
+        Cancelar
+      </button>`;
+  } else {
+    btns.innerHTML = `<button onclick="document.getElementById('detect-result').classList.remove('show')"
+      style="padding:7px 14px;background:var(--white);color:var(--text);border:1px solid var(--border);border-radius:7px;font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif">
+      Fechar</button>`;
+  }
+  document.getElementById('detect-result').classList.add('show');
+}
+
+async function enviarArquivo() {
+  if (!_arqAtual) return;
+  const info = TIPO_INFO[_arqAtual.tipo];
+  if (!info?.rota) return;
+
+  const fd = new FormData();
+  fd.append('arquivo', _arqAtual.file);
+
+  toast('⏳ Enviando arquivo...');
+  const btn = document.querySelector('#detect-btns button');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Importando...'; }
+
+  try {
+    const res = await api.upload(info.rota, fd);
+    if (res.ok !== false) {
+      toast('✅ Arquivo importado com sucesso!');
+      document.getElementById('detect-result').classList.remove('show');
+      setTimeout(carregar, 1500);
+      if (info.destino) setTimeout(() => irPara(info.destino), 2000);
+    } else {
+      toast('❌ ' + (res.erro || 'Erro ao importar'));
+    }
+  } catch(e) {
+    toast('❌ Erro: ' + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '✅ Confirmar e Importar'; }
+  }
+}
+
+// ── Utils ─────────────────────────────────────────────────────────────────────
+let _toastT;
+function toast(msg, ms=2800) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  clearTimeout(_toastT);
+  _toastT = setTimeout(() => el.classList.remove('show'), ms);
+}
+</script>
+</body>
+</html>
