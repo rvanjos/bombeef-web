@@ -13,7 +13,9 @@
 const express    = require('express');
 const autenticar = require('../middleware/auth');
 
-module.exports = function (pool) {
+const events = require('../lib/events');
+
+module.exports = function (pool, app) {
   const r = express.Router();
   r.use(autenticar());
 
@@ -191,6 +193,49 @@ module.exports = function (pool) {
       }
 
       res.json({ ok: true, data: rows[0] });
+
+      // ── F1-06: registrar movimento de estoque (try/catch isolado)
+      // Falha aqui NÃO afeta a perda já registrada acima
+      try {
+        const perda = rows[0];
+        if (perda.produto_id) {
+          await pool.query(`
+            INSERT INTO movimentos_estoque
+              (produto_id, produto_codigo, tipo_movimento, origem, origem_id,
+               quantidade, estoque_anterior, estoque_posterior, usuario_id, observacao)
+            SELECT
+              p.id, p.codigo, 'PERDA', 'perdas', $1,
+              -$2::numeric,
+              p.estoque,
+              GREATEST(0, p.estoque - $2::numeric),
+              $3, $4
+            FROM produtos p WHERE p.id = $5
+          `, [
+            perda.id,
+            Math.abs(parseInt(perda.qtd_unidades || 0)),
+            req.user?.id || null,
+            perda.observacao || perda.motivo || null,
+            perda.produto_id,
+          ]);
+          // Atualiza produtos.estoque
+          await pool.query(`
+            UPDATE produtos
+            SET estoque = GREATEST(0, estoque - $1), atualizado_em = NOW()
+            WHERE id = $2
+          `, [Math.abs(parseInt(perda.qtd_unidades || 0)), perda.produto_id]);
+          // Emite evento no barramento
+          events.emit(app, 'PERDA_REGISTRADA', {
+            perda_id:   perda.id,
+            produto_id: perda.produto_id,
+            quantidade: perda.qtd_unidades,
+            motivo:     perda.motivo,
+          });
+        }
+      } catch (eMov) {
+        // Log mas nunca quebra o fluxo da perda
+        console.warn('[perdas] movimento estoque falhou (não crítico):', eMov.message);
+      }
+
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
