@@ -440,7 +440,7 @@ app.use('/api/dre',          require('./routes/dre')(pool, app));
 app.use('/api/produtos',     require('./routes/produtos')(pool, app));
 app.use('/api/kits',         require('./routes/kits')(pool));
 app.use('/api/kits-campanha',require('./routes/kits_campanha')(pool, app));
-app.use('/api/validade',     require('./routes/validade')(pool));
+app.use('/api/validade',     require('./routes/validade')(pool, app)); // F1-07
 app.use('/api/compras_pendentes', require('./routes/fiado')(pool));
 app.use('/api/fiado',        require('./routes/fiado')(pool)); // alias legado
 app.use('/api/ponto',        require('./routes/ponto')(pool));

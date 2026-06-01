@@ -27,7 +27,9 @@ const upload = multer({
   limits: { fileSize: (parseInt(process.env.UPLOAD_MAX_MB) || 15) * 1024 * 1024 },
 });
 
-module.exports = function (pool) {
+const events = require('../lib/events');
+
+module.exports = function (pool, app) {
   const r = express.Router();
   r.use(autenticar());
 
@@ -570,6 +572,78 @@ module.exports = function (pool) {
       if (result.rowCount === 0)
         return res.status(404).json({ ok: false, erro: 'Nenhum item encontrado com esses IDs' });
       res.json({ ok: true, atualizados: result.rowCount, motivo });
+
+      // ── F1-07: se foi descarte por vencimento → gera perdas automaticamente
+      // try/catch isolado — falha não afeta o encerramento já confirmado
+      if (novoStatus === 'descartado') {
+        try {
+          // Busca dados dos itens encerrados para gerar as perdas
+          const { rows: itensDesc } = await pool.query(`
+            SELECT vi.id, vi.descricao, vi.codigo, vi.qtd_unidades,
+                   vi.produto_id, vi.lote,
+                   p.preco_custo
+            FROM validade_items vi
+            LEFT JOIN produtos p ON p.id = vi.produto_id
+            WHERE vi.id = ANY($1::int[])
+          `, [idsNum]);
+
+          for (const item of itensDesc) {
+            const dtHoje = new Date().toISOString().slice(0, 10);
+            const mes    = dtHoje.slice(5, 7) + '/' + dtHoje.slice(0, 4);
+            const qtd    = Math.abs(parseInt(item.qtd_unidades || 0));
+            const valor  = parseFloat(item.preco_custo || 0) * qtd;
+
+            // Cria registro em perdas (sem duplicar se já existir)
+            const jaExiste = await pool.query(
+              `SELECT id FROM perdas WHERE validade_item_id = $1 LIMIT 1`,
+              [item.id]
+            );
+            if (!jaExiste.rows.length) {
+              await pool.query(`
+                INSERT INTO perdas
+                  (validade_item_id, produto_id, descricao, motivo,
+                   qtd_unidades, valor_perda, dt_perda, mes, usuario_id)
+                VALUES ($1,$2,$3,'vencimento',$4,$5,$6,$7,$8)
+              `, [item.id, item.produto_id || null,
+                  item.descricao || item.codigo || 'Item vencido',
+                  qtd, valor, dtHoje, mes, req.user?.id || null]);
+            }
+
+            // Registra movimento de estoque
+            if (item.produto_id && qtd > 0) {
+              await pool.query(`
+                INSERT INTO movimentos_estoque
+                  (produto_id, produto_codigo, tipo_movimento, origem, origem_id,
+                   quantidade, estoque_anterior, estoque_posterior, usuario_id, observacao)
+                SELECT p.id, p.codigo, 'VALIDADE', 'validade', $1,
+                       -$2::numeric,
+                       p.estoque,
+                       GREATEST(0, p.estoque - $2::numeric),
+                       $3, $4
+                FROM produtos p WHERE p.id = $5
+              `, [item.id, qtd, req.user?.id || null,
+                  'Vencimento: ' + (item.descricao || item.codigo), item.produto_id]);
+
+              await pool.query(`
+                UPDATE produtos
+                SET estoque = GREATEST(0, estoque - $1), atualizado_em = NOW()
+                WHERE id = $2
+              `, [qtd, item.produto_id]);
+            }
+          }
+
+          // Emite evento de atualização de estoque
+          events.emit(app, 'VALIDADE_DESCARTADA', {
+            ids:      idsNum,
+            motivo,
+            total:    itensDesc.length,
+          });
+
+        } catch (eMov) {
+          console.warn('[validade] F1-07 movimento falhou (não crítico):', eMov.message);
+        }
+      }
+
     } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
