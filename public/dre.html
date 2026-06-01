@@ -389,6 +389,10 @@ thead th{padding:6px 9px;}
         <div class="sep"></div>
 
         <!-- Grupo: Ações -->
+        <button id="btn-limpar-royal" onclick="limparRoyaltiesErrados()" title="Remove provisões de royalties com valores absurdos do banco"
+          style="display:none;padding:5px 11px;font-size:11px;background:#fff3cd;border:1px solid #ffc107;color:#856404;border-radius:7px;cursor:pointer;font-family:'DM Sans',sans-serif;font-weight:600">
+          🧹 Royalties
+        </button>
         <button class="btn bg" style="padding:5px 11px;font-size:11px" onclick="salvarTodos()" title="Salvar todos os lançamentos">💾 Salvar</button>
         <button class="btn bs" style="padding:5px 10px;font-size:11px" onclick="exportarExcel()" title="Exportar para Excel">📊 Excel</button>
         <button class="btn bs" style="padding:5px 10px;font-size:11px" onclick="abrirSessoes()" title="Histórico de sessões">🗂 Sessões</button>
@@ -1021,7 +1025,27 @@ async function carregarFaturamentoMensal() {
 }
 
 
+// ── Limpeza de Royalties errados ─────────────────────────────────────────────
+async function limparRoyaltiesErrados() {
+  if (!confirm('Remove TODAS as provisões de royalties com valor acima de R$ 50.000 do banco.\nConfirma?')) return;
+  const d = await api.delete('/api/dre/royalties-errados');
+  if (!d.ok) { toast('❌ ' + (d.erro||'Erro')); return; }
+  toast('✅ ' + d.msg + ' — recarregando...');
+  TXS = TXS.filter(t => !(t.fonte === 'ROYALTIES' && Math.abs(parseFloat(t.valor||0)) > 50000));
+  renderTabela();
+  recalcularTotais();
+  await salvarMes(mesRef, true);
+}
+
 async function inicializar() {
+  // Mostra botão admin
+  try {
+    const tk = sessionStorage.getItem('bb_token')||'';
+    if (tk) {
+      const pay = JSON.parse(atob(tk.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
+      if (pay.perfil === 'admin') { const b=document.getElementById('btn-limpar-royal'); if(b) b.style.display=''; }
+    }
+  } catch(_) {}
   // Se já inicializou E já tem dados em memória, não recarrega do banco
   if (_inicializado && TXS.length > 0) {
     showTable(); render(); updStats(); renderDRE();
@@ -4535,9 +4559,16 @@ async function gerarRoyaltiesAutomatico() {
       continue;
     }
 
-    // Verifica se provisão já existe para não duplicar
-    const jaTemProvisao = TXS.some(t => t.fonte === 'ROYALTIES' && t.mes === mesVenc);
-    if (jaTemProvisao) continue;
+    // Remove provisões existentes deste mês (para evitar duplicatas com valores errados)
+    const provisoesExist = TXS.filter(t => t.fonte === 'ROYALTIES' && t.mes === mesVenc);
+    if (provisoesExist.length > 0) {
+      // Se já existe provisão com valor correto (~igual ao calculado), pula
+      const valorEsperado = parseFloat(fat || 0) * TAXA;
+      const jaOk = provisoesExist.some(p => Math.abs(Math.abs(parseFloat(p.valor||0)) - valorEsperado) < valorEsperado * 0.05);
+      if (jaOk) continue;
+      // Remove as provisões erradas
+      TXS = TXS.filter(t => !(t.fonte === 'ROYALTIES' && t.mes === mesVenc));
+    }
 
     const parcela = parseFloat(fat) * TAXA;
     const ultimoDia = new Date(av, mv, 0).getDate();
