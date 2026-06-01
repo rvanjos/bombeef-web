@@ -18,205 +18,355 @@
 html,body{width:100%;height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;color:var(--text);}
 body{display:flex;flex-direction:column;overflow-y:auto;}
 
-/* ── HEADER ── */
 .ph{background:var(--red);padding:10px 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;box-shadow:0 2px 8px rgba(139,0,0,.25);}
 .ph-left{display:flex;align-items:center;gap:10px;}
 .ph h2{font-family:'Playfair Display',serif;font-size:16px;color:#fff;}
-.ph-time{font-size:11px;color:rgba(255,255,255,.65);}
-.btn-atualizar{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;padding:5px 12px;border-radius:7px;font-size:12px;font-family:'DM Sans',sans-serif;cursor:pointer;font-weight:600;transition:all .15s;}
-.btn-atualizar:hover{background:rgba(255,255,255,.25);}
+.ph-hora{font-size:11px;color:rgba(255,255,255,.65);}
+.btn-att{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;padding:5px 12px;border-radius:7px;font-size:12px;font-family:'DM Sans',sans-serif;cursor:pointer;font-weight:600;}
+.btn-att:hover{background:rgba(255,255,255,.25);}
 
-/* ── CONTENT ── */
-.content{padding:16px 20px;flex:1;}
-.secao{margin-bottom:20px;}
-.sec-title{font-size:9px;text-transform:uppercase;letter-spacing:1.5px;font-weight:700;color:var(--muted);margin-bottom:10px;padding-left:2px;}
+.content{padding:14px 18px;flex:1;}
+.sec-title{font-size:9px;text-transform:uppercase;letter-spacing:1.4px;font-weight:700;color:var(--muted);margin-bottom:9px;padding-left:2px;}
+.secao{margin-bottom:18px;}
 
 /* ── SEMÁFORO ── */
-.semaforo{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;}
-.sem-card{background:var(--white);border:1px solid var(--border);border-radius:10px;padding:12px 14px;display:flex;align-items:center;gap:10px;cursor:pointer;transition:all .15s;box-shadow:var(--shadow);}
-.sem-card:hover{transform:translateY(-1px);box-shadow:0 4px 14px rgba(0,0,0,.1);}
-.sem-card.ok{border-left:3px solid var(--green);}
-.sem-card.alerta{border-left:3px solid #d97706;}
-.sem-card.critico{border-left:3px solid var(--red-l);background:#fff8f8;}
-.sem-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
-.sem-card.ok .sem-dot{background:var(--green);}
-.sem-card.alerta .sem-dot{background:#d97706;}
-.sem-card.critico .sem-dot{background:var(--red-l);animation:pulse .8s infinite;}
-@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.4;}}
-.sem-info{flex:1;min-width:0;}
-.sem-label{font-size:9px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);font-weight:700;}
+.semaforo{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:9px;}
+.sem{background:var(--white);border:1px solid var(--border);border-radius:9px;padding:10px 12px;display:flex;align-items:center;gap:9px;cursor:pointer;transition:all .15s;box-shadow:var(--shadow);}
+.sem:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,.1);}
+.sem.ok{border-left:3px solid var(--green);}
+.sem.alerta{border-left:3px solid #d97706;}
+.sem.critico{border-left:3px solid var(--red-l);background:#fff8f8;}
+.sem-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
+.sem.ok .sem-dot{background:var(--green);}
+.sem.alerta .sem-dot{background:#d97706;}
+.sem.critico .sem-dot{background:var(--red-l);animation:pulso .8s infinite;}
+@keyframes pulso{0%,100%{opacity:1}50%{opacity:.35}}
+.sem-lbl{font-size:8px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);font-weight:700;}
 .sem-msg{font-size:12px;color:var(--text);font-weight:600;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 
-/* ── GRID DE SEÇÕES ── */
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
-.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;}
-
 /* ── CARD ── */
-.card{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:16px;box-shadow:var(--shadow);}
-.card-title{font-size:10px;text-transform:uppercase;letter-spacing:1px;font-weight:700;color:var(--muted);margin-bottom:12px;display:flex;align-items:center;gap:6px;}
-.card-title span{font-size:14px;}
+.card{background:var(--white);border:1px solid var(--border);border-radius:11px;padding:14px 16px;box-shadow:var(--shadow);}
+.card-title{font-size:10px;text-transform:uppercase;letter-spacing:.9px;font-weight:700;color:var(--muted);margin-bottom:11px;}
+
+/* ── VENDAS CARD ── */
+.vendas-grid{display:grid;grid-template-columns:1fr 1px 1fr 1px 1fr;gap:0;}
+.vdiv{width:1px;background:var(--border);margin:0 14px;}
+.vbloco{}
+.v-label{font-size:9px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);font-weight:700;}
+.v-val{font-family:'DM Mono',monospace;font-size:22px;font-weight:700;color:var(--text);margin:3px 0 2px;}
+.v-val.sem-dado{color:var(--muted);font-size:16px;}
+.v-sub{font-size:11px;color:var(--muted);}
+.v-comp{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;margin-top:4px;padding:2px 7px;border-radius:5px;}
+.v-comp.pos{background:var(--green-bg);color:var(--green);}
+.v-comp.neg{background:#fef2f2;color:var(--red-l);}
+.v-comp.neu{background:var(--bg);color:var(--muted);}
+
+/* ── META BAR ── */
+.meta-wrap{margin-top:10px;padding-top:10px;border-top:1px solid var(--border);}
+.meta-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;}
+.meta-lbl{font-size:11px;color:var(--muted);}
+.meta-pct{font-family:'DM Mono',monospace;font-size:13px;font-weight:700;}
+.meta-bar-bg{background:#f0ebe4;border-radius:4px;height:7px;overflow:hidden;}
+.meta-bar-fill{height:100%;border-radius:4px;transition:width .6s ease;}
+
+/* ── IMPORTAÇÕES ── */
+.imp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;}
+.imp-item{background:var(--bg);border-radius:8px;padding:9px 11px;border-left:3px solid var(--border);}
+.imp-item.ok{border-left-color:var(--green);}
+.imp-item.alerta{border-left-color:#d97706;}
+.imp-item.critico{border-left-color:var(--red-l);}
+.imp-lbl{font-size:9px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:700;}
+.imp-msg{font-size:12px;font-weight:600;color:var(--text);margin-top:2px;}
 
 /* ── KPI MINI ── */
-.kpi-row{display:flex;gap:10px;flex-wrap:wrap;}
-.kpi{flex:1;min-width:120px;background:var(--bg);border-radius:8px;padding:10px 12px;}
-.kpi-label{font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px;}
-.kpi-val{font-family:'DM Mono',monospace;font-size:18px;font-weight:700;margin-top:2px;color:var(--text);}
-.kpi-val.positivo{color:var(--green);}
-.kpi-val.negativo{color:var(--red-l);}
-.kpi-val.alerta{color:#d97706;}
-.kpi-sub{font-size:10px;color:var(--muted);margin-top:1px;}
+.kpi-row{display:flex;gap:9px;flex-wrap:wrap;}
+.kpi{flex:1;min-width:110px;background:var(--bg);border-radius:8px;padding:9px 11px;}
+.kpi-lbl{font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700;}
+.kpi-v{font-family:'DM Mono',monospace;font-size:17px;font-weight:700;margin-top:2px;}
+.kpi-v.pos{color:var(--green);}
+.kpi-v.neg{color:var(--red-l);}
+.kpi-v.warn{color:#d97706;}
+.kpi-s{font-size:10px;color:var(--muted);margin-top:1px;}
 
-/* ── LISTA DE ALERTAS ── */
-.alert-list{display:flex;flex-direction:column;gap:6px;}
-.alert-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;font-size:12px;font-weight:500;}
-.alert-item.critico{background:#fef2f2;border:1px solid #fecaca;color:#991b1b;}
-.alert-item.alerta{background:var(--amber-bg);border:1px solid var(--amber-bdr);color:var(--amber);}
-.alert-item.ok{background:var(--green-bg);border:1px solid var(--green-bdr);color:var(--green);}
-.alert-ico{font-size:14px;flex-shrink:0;}
-.alert-text{flex:1;}
-.alert-btn{background:none;border:1px solid currentColor;border-radius:5px;padding:2px 8px;font-size:10px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;opacity:.8;}
-.alert-btn:hover{opacity:1;}
+/* ── ALERTAS ── */
+.alert-list{display:flex;flex-direction:column;gap:5px;}
+.ali{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:7px;font-size:12px;font-weight:500;}
+.ali.critico{background:#fef2f2;border:1px solid #fecaca;color:#991b1b;}
+.ali.alerta{background:var(--amber-bg);border:1px solid var(--amber-bdr);color:var(--amber);}
+.ali.ok{background:var(--green-bg);border:1px solid var(--green-bdr);color:var(--green);}
+.ali-ico{font-size:13px;flex-shrink:0;}
+.ali-txt{flex:1;}
+.ali-btn{background:none;border:1px solid currentColor;border-radius:5px;padding:2px 7px;font-size:10px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;}
 
 /* ── ATALHOS ── */
-.atalhos{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;}
-.atalho{background:var(--white);border:1px solid var(--border);border-radius:10px;padding:11px 12px;cursor:pointer;transition:all .15s;text-align:center;box-shadow:var(--shadow);}
+.atalhos{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:7px;}
+.atalho{background:var(--white);border:1px solid var(--border);border-radius:9px;padding:10px 11px;cursor:pointer;transition:all .15s;text-align:center;box-shadow:var(--shadow);}
 .atalho:hover{border-color:var(--red);background:#fff8f8;transform:translateY(-1px);}
-.atalho-ico{font-size:20px;margin-bottom:4px;}
-.atalho-label{font-size:11px;font-weight:600;color:var(--text);}
+.at-ico{font-size:18px;margin-bottom:3px;}
+.at-lbl{font-size:11px;font-weight:600;color:var(--text);}
 
-/* ── IMPORT ── */
-.drop-zone{border:2px dashed var(--border);border-radius:12px;padding:20px;text-align:center;cursor:pointer;transition:all .2s;background:var(--white);}
-.drop-zone:hover,.drop-zone.drag{border-color:var(--red);background:#fff8f8;}
-.drop-ico{font-size:28px;margin-bottom:6px;}
-.drop-txt{font-size:13px;font-weight:600;color:var(--text);}
-.drop-sub{font-size:11px;color:var(--muted);margin-top:3px;}
-.tag{display:inline-block;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:2px 7px;font-size:10px;font-weight:700;color:var(--muted);margin:3px 2px 0;}
+/* ── DROP ── */
+.drop{border:2px dashed var(--border);border-radius:10px;padding:16px;text-align:center;cursor:pointer;transition:all .2s;background:var(--white);}
+.drop:hover,.drop.drag{border-color:var(--red);background:#fff8f8;}
+.drop-ico{font-size:24px;margin-bottom:4px;}
+.drop-txt{font-size:13px;font-weight:600;}
+.drop-sub{font-size:11px;color:var(--muted);margin-top:2px;}
+.tag{display:inline-block;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:2px 6px;font-size:10px;font-weight:700;color:var(--muted);margin:3px 2px 0;}
 .tag.nfe{background:#fff8f8;border-color:#fecaca;color:var(--red-l);}
-.tipo-badge{display:inline-block;padding:3px 10px;border-radius:6px;font-size:11px;font-weight:700;margin-top:6px;}
 
-/* ── LOADING ── */
-.loading{color:var(--muted);font-size:12px;padding:16px;text-align:center;}
-.skeleton{background:linear-gradient(90deg,#f0ebe5 25%,#e8e0d8 50%,#f0ebe5 75%);background-size:200% 100%;animation:sk 1.2s infinite;border-radius:6px;height:14px;margin:4px 0;}
-@keyframes sk{0%{background-position:200% 0}100%{background-position:-200% 0}}
+/* ── GRID ── */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+@media(max-width:900px){.grid2{grid-template-columns:1fr;}.vendas-grid{grid-template-columns:1fr;}.vdiv{display:none;}}
 </style>
 </head>
 <body>
 
 <div class="ph">
   <div class="ph-left">
-    <span style="font-size:20px">🎛️</span>
+    <span style="font-size:19px">🎛️</span>
     <h2>Hub Operacional</h2>
   </div>
   <div style="display:flex;align-items:center;gap:10px;">
-    <span class="ph-time" id="ph-hora">—</span>
-    <button class="btn-atualizar" onclick="carregar()">↻ Atualizar</button>
+    <span class="ph-hora" id="ph-hora">—</span>
+    <button class="btn-att" onclick="carregar()">↻ Atualizar</button>
   </div>
 </div>
 
 <div class="content" id="content">
-  <div class="loading">⏳ Carregando...</div>
+  <div style="padding:32px;text-align:center;color:var(--muted)">⏳ Carregando...</div>
 </div>
 
 <input type="file" id="file-input" accept=".xlsx,.xls,.csv,.ofx,.xml" style="display:none" onchange="onFileSelect(this.files[0])">
 
 <script>
 let _api = null;
-let _dados = null;
 
 window.onBBReady = () => {
   _api = BB.api;
   atualizarRelogio();
-  setInterval(atualizarRelogio, 60000);
+  setInterval(atualizarRelogio, 30000);
   carregar();
-  // Auto-refresh a cada 5 minutos
-  setInterval(carregar, 300000);
+  setInterval(carregar, 300000); // refresh 5min
 };
 
 function atualizarRelogio() {
   const n = new Date();
   document.getElementById('ph-hora').textContent =
-    `Atualizado ${n.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`;
+    n.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
 }
 
 async function carregar() {
   try {
     const d = await (_api||BB.api).get('/api/hub/resumo');
     if (!d.ok) { renderErro(d.erro); return; }
-    _dados = d.data;
-    render(_dados);
-  } catch(e) {
-    renderErro(e.message);
-  }
+    render(d.data);
+  } catch(e) { renderErro(e.message); }
 }
 
 function renderErro(msg) {
   document.getElementById('content').innerHTML =
-    `<div style="padding:32px;text-align:center;color:#991b1b">⚠️ Erro ao carregar: ${msg||'Tente atualizar'}</div>`;
+    `<div style="padding:32px;text-align:center;color:#991b1b">⚠️ ${msg||'Erro — tente atualizar'}</div>`;
 }
 
+function brl(v) {
+  return 'R$ ' + parseFloat(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+function pctStr(v, casas=1) {
+  if (v === null || v === undefined) return '—';
+  return (v > 0 ? '+' : '') + parseFloat(v).toFixed(casas) + '%';
+}
+function compTag(v, label) {
+  if (v === null || v === undefined) return '';
+  const cls = v > 0 ? 'pos' : v < 0 ? 'neg' : 'neu';
+  const ico = v > 0 ? '▲' : v < 0 ? '▼' : '=';
+  return `<span class="v-comp ${cls}">${ico} ${label}</span>`;
+}
+
+// ── Dias da semana ────────────────────────────────────────────────────────────
+const DIAS = ['domingo','segunda-feira','terça-feira','quarta-feira','quinta-feira','sexta-feira','sábado'];
+
 function render(d) {
-  const s = d.status;
-  const f = d.financeiro;
-  const o = d.operacional;
-  const brl = v => 'R$ ' + parseFloat(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const v  = d.vendas;
+  const s  = d.status;
+  const f  = d.financeiro;
+  const im = d.importacoes;
+  const o  = d.operacional;
 
-  // Semáforo
+  // ── Semáforo ──────────────────────────────────────────────────────────────
   const mods = [
-    {key:'estoque',    label:'Estoque',       acao:()=>navegar('produtos')},
-    {key:'vendas',     label:'Vendas',        acao:()=>navegar('faturamento')},
-    {key:'validade',   label:'Validade',      acao:()=>navegar('validade')},
-    {key:'boletos',    label:'Boletos',       acao:()=>navegar('boletos')},
-    {key:'estoque_minimo', label:'Est. Mínimo', acao:()=>navegar('produtos')},
+    {key:'estoque',        label:'Estoque',     fn:()=>nav('produtos')},
+    {key:'vendas',         label:'Vendas',      fn:()=>nav('faturamento')},
+    {key:'validade',       label:'Validade',    fn:()=>nav('validade')},
+    {key:'boletos',        label:'Boletos',     fn:()=>nav('boletos')},
+    {key:'estoque_minimo', label:'Est. Mínimo', fn:()=>nav('produtos')},
   ];
-
   const semHtml = mods.map(m => {
     const st = s[m.key];
     const cls = st.critico?'critico':st.alerta?'alerta':'ok';
-    return `<div class="sem-card ${cls}" onclick="(${m.acao.toString()})()">
+    return `<div class="sem ${cls}" onclick="(${m.fn.toString()})()">
       <div class="sem-dot"></div>
-      <div class="sem-info">
-        <div class="sem-label">${m.label}</div>
+      <div style="flex:1;min-width:0">
+        <div class="sem-lbl">${m.label}</div>
         <div class="sem-msg">${st.msg}</div>
       </div>
     </div>`;
   }).join('');
 
-  // Pendências operacionais
-  const pendencias = [];
-  if (o.validade_vencidos > 0)
-    pendencias.push({cls:'critico',ico:'🔴',txt:`${o.validade_vencidos} produto(s) VENCIDO(S) — retirar imediatamente`,btn:'Ver Validade',acao:"navegar('validade')"});
-  if (o.validade_criticos > 0)
-    pendencias.push({cls:'alerta',ico:'🟡',txt:`${o.validade_criticos} produto(s) vencem em 3 dias`,btn:'Ver Validade',acao:"navegar('validade')"});
-  if (o.validade_alertas > 0)
-    pendencias.push({cls:'alerta',ico:'⚠️',txt:`${o.validade_alertas} produto(s) vencem em 7 dias`,btn:'Ver Validade',acao:"navegar('validade')"});
-  if (f.boletos_vencidos > 0)
-    pendencias.push({cls:'critico',ico:'🔴',txt:`${f.boletos_vencidos} boleto(s) vencido(s) — ${brl(f.boletos_vencidos_valor)}`,btn:'Ver Boletos',acao:"navegar('boletos')"});
-  if (f.boletos_prox7d > 0)
-    pendencias.push({cls:'alerta',ico:'📅',txt:`${f.boletos_prox7d} boleto(s) vencem nos próximos 7 dias`,btn:'Ver Boletos',acao:"navegar('boletos')"});
-  if (o.estoque_minimo_count > 0)
-    pendencias.push({cls:'alerta',ico:'📦',txt:`${o.estoque_minimo_count} produto(s) abaixo do estoque mínimo`,btn:'Ver Produtos',acao:"navegar('produtos')"});
-  if (f.dre_pendencias > 0)
-    pendencias.push({cls:'alerta',ico:'📊',txt:`${f.dre_pendencias} lançamento(s) DRE sem categoria`,btn:'Classificar',acao:"navegar('dre')"});
-  if (s.estoque.critico)
-    pendencias.push({cls:'alerta',ico:'📥',txt:`Estoque não atualizado há ${s.estoque.dias} dias`,btn:'Importar',acao:"abrirImport()"});
-  if (s.vendas.critico)
-    pendencias.push({cls:'alerta',ico:'📥',txt:`Vendas não importadas há ${s.vendas.dias} dias`,btn:'Importar',acao:"abrirImport()"});
-  if (pendencias.length === 0)
-    pendencias.push({cls:'ok',ico:'✅',txt:'Tudo em ordem — sem pendências operacionais',btn:null,acao:null});
+  // ── Seção Vendas ──────────────────────────────────────────────────────────
+  const diaLabel = DIAS[v.dia_semana] || 'hoje';
+  const fatHoje  = v.fat_hoje;
+  const temHoje  = fatHoje > 0;
+  const temMeta  = v.meta_dia > 0;
+  const temSem   = v.fat_semana_ant > 0;
 
-  const pendHtml = pendencias.map(p =>
-    `<div class="alert-item ${p.cls}">
-      <span class="alert-ico">${p.ico}</span>
-      <span class="alert-text">${p.txt}</span>
-      ${p.btn ? `<button class="alert-btn" onclick="${p.acao}">${p.btn}</button>` : ''}
+  const metaBarPct = temMeta && temHoje
+    ? Math.min(Math.round(fatHoje / v.meta_dia * 100), 100) : 0;
+  const metaBarMes = v.meta_mes > 0
+    ? Math.min(Math.round(v.fat_mes / v.meta_mes * 100), 100) : 0;
+  const barCorDia = metaBarPct >= 100 ? 'var(--green)' : metaBarPct >= 70 ? '#2563eb' : '#d97706';
+  const barCorMes = metaBarMes >= 100 ? 'var(--green)' : metaBarMes >= 70 ? '#2563eb' : '#d97706';
+
+  const vendaHtml = `
+  <div class="card">
+    <div class="card-title">💰 Vendas — ${d.mes}</div>
+    <div class="vendas-grid">
+
+      <!-- Coluna 1: Hoje -->
+      <div class="vbloco">
+        <div class="v-label">${diaLabel.charAt(0).toUpperCase()+diaLabel.slice(1)}</div>
+        <div class="v-val ${!temHoje?'sem-dado':''}">${temHoje ? brl(fatHoje) : 'Não importado'}</div>
+        ${temHoje && v.pessoas_hoje > 0 ? `<div class="v-sub">${v.pessoas_hoje} atendimentos · ticket ${brl(v.ticket_hoje)}</div>` : ''}
+        ${temHoje && temSem ? compTag(v.var_sem_pct, `${Math.abs(v.var_sem_pct).toFixed(1)}% vs ${DIAS[v.dia_semana]} passado`) : ''}
+        ${temHoje && temSem ? `<div class="v-sub" style="margin-top:2px">${DIAS[v.dia_semana]} passado: ${brl(v.fat_semana_ant)}
+          (${v.var_sem_r >= 0 ? '+' : ''}${brl(v.var_sem_r)})</div>` : ''}
+        ${temMeta ? `
+        <div class="meta-wrap">
+          <div class="meta-row">
+            <span class="meta-lbl">Meta do dia (÷26)</span>
+            <span class="meta-pct" style="color:${barCorDia}">${temHoje ? metaBarPct+'%' : '—'}</span>
+          </div>
+          <div class="meta-row" style="margin-bottom:3px">
+            <span style="font-size:11px;color:var(--muted)">${brl(temHoje?fatHoje:0)} / ${brl(v.meta_dia)}</span>
+          </div>
+          <div class="meta-bar-bg"><div class="meta-bar-fill" style="width:${metaBarPct}%;background:${barCorDia}"></div></div>
+        </div>` : `<div style="margin-top:8px;font-size:11px;color:var(--muted)">
+          <a href="#" onclick="nav('metas');return false" style="color:var(--red-l)">Definir meta do mês →</a></div>`}
+      </div>
+
+      <div class="vdiv"></div>
+
+      <!-- Coluna 2: Mês acumulado -->
+      <div class="vbloco">
+        <div class="v-label">Mês acumulado (${v.dias_importados}d)</div>
+        <div class="v-val ${v.fat_mes===0?'sem-dado':''}">${v.fat_mes > 0 ? brl(v.fat_mes) : '—'}</div>
+        ${v.pessoas_mes > 0 ? `<div class="v-sub">${v.pessoas_mes} atendimentos · ticket ${brl(v.ticket_mes)}</div>` : ''}
+        ${v.fat_mes > 0 && v.fat_mes_ant > 0 ? compTag(v.var_mes_pct,
+          `${Math.abs(v.var_mes_pct).toFixed(1)}% vs ${d.mes.replace(/(\d+)\/(\d+)/,'$1 mês ant.')}`) : ''}
+        ${v.meta_mes > 0 ? `
+        <div class="meta-wrap">
+          <div class="meta-row">
+            <span class="meta-lbl">Meta mensal</span>
+            <span class="meta-pct" style="color:${barCorMes}">${v.pct_mes !== null ? v.pct_mes+'%' : '—'}</span>
+          </div>
+          <div class="meta-row" style="margin-bottom:3px">
+            <span style="font-size:11px;color:var(--muted)">${brl(v.fat_mes)} / ${brl(v.meta_mes)}</span>
+          </div>
+          <div class="meta-bar-bg"><div class="meta-bar-fill" style="width:${metaBarMes}%;background:${barCorMes}"></div></div>
+        </div>` : ''}
+      </div>
+
+      <div class="vdiv"></div>
+
+      <!-- Coluna 3: Situação financeira rápida -->
+      <div class="vbloco">
+        <div class="v-label">Financeiro — ${d.mes}</div>
+        <div class="kpi-row" style="flex-direction:column;gap:6px;margin-top:4px">
+          <div style="display:flex;justify-content:space-between;font-size:12px">
+            <span style="color:var(--muted)">Boletos abertos</span>
+            <span class="kpi-v ${f.total_aberto>0?'warn':''}" style="font-size:13px">${brl(f.total_aberto)}</span>
+          </div>
+          ${f.boletos_vencidos > 0 ? `<div style="display:flex;justify-content:space-between;font-size:12px">
+            <span style="color:var(--red-l)">⚠️ Vencidos</span>
+            <span style="font-family:'DM Mono',monospace;font-size:13px;font-weight:700;color:var(--red-l)">${brl(f.boletos_vencidos_valor)} (${f.boletos_vencidos})</span>
+          </div>` : ''}
+          <div style="display:flex;justify-content:space-between;font-size:12px">
+            <span style="color:var(--muted)">Perdas do mês</span>
+            <span style="font-family:'DM Mono',monospace;font-size:13px;font-weight:700">${brl(f.perdas_mes)}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:12px">
+            <span style="color:var(--muted)">Retiradas</span>
+            <span style="font-family:'DM Mono',monospace;font-size:13px;font-weight:700">${brl(f.retiradas_mes)}</span>
+          </div>
+        </div>
+        <div style="margin-top:10px;font-size:11px;color:var(--muted)">
+          Ver análise completa no <a href="#" onclick="nav('dashboard');return false" style="color:var(--red-l)">Dashboard →</a>
+        </div>
+      </div>
+    </div>
+  </div>`;
+
+  // ── Pendências ────────────────────────────────────────────────────────────
+  const pend = [];
+  if (o.validade_vencidos > 0)
+    pend.push({cls:'critico',ico:'🔴',txt:`${o.validade_vencidos} produto(s) VENCIDO(S) — retirar imediatamente`,btn:'Ver',fn:"nav('validade')"});
+  if (o.validade_criticos > 0)
+    pend.push({cls:'alerta',ico:'🟡',txt:`${o.validade_criticos} produto(s) vencem em 3 dias`,btn:'Ver',fn:"nav('validade')"});
+  if (o.validade_alertas > 0)
+    pend.push({cls:'alerta',ico:'⚠️',txt:`${o.validade_alertas} produto(s) vencem em 7 dias`,btn:'Ver',fn:"nav('validade')"});
+  if (f.boletos_vencidos > 0)
+    pend.push({cls:'critico',ico:'🔴',txt:`${f.boletos_vencidos} boleto(s) vencido(s) — ${brl(f.boletos_vencidos_valor)}`,btn:'Pagar',fn:"nav('boletos')"});
+  if (f.boletos_prox7d > 0)
+    pend.push({cls:'alerta',ico:'📅',txt:`${f.boletos_prox7d} boleto(s) vencem em 7 dias — ${brl(f.boletos_prox7d_valor)}`,btn:'Ver',fn:"nav('boletos')"});
+  if (d.estoque.abaixo_minimo > 0)
+    pend.push({cls:'alerta',ico:'📦',txt:`${d.estoque.abaixo_minimo} produto(s) abaixo do estoque mínimo`,btn:'Ver',fn:"nav('produtos')"});
+  if (f.dre_pendencias > 0)
+    pend.push({cls:'alerta',ico:'📊',txt:`${f.dre_pendencias} lançamento(s) DRE sem categoria`,btn:'Classificar',fn:"nav('dre')"});
+  if (im.estoque.critico)
+    pend.push({cls:'alerta',ico:'📥',txt:`Estoque não importado há ${im.estoque.dias} dias`,btn:'Importar',fn:"abrirImport()"});
+  if (im.vendas.critico)
+    pend.push({cls:'alerta',ico:'📥',txt:`Vendas não importadas há ${im.vendas.dias} dias`,btn:'Importar',fn:"abrirImport()"});
+  if (pend.length === 0)
+    pend.push({cls:'ok',ico:'✅',txt:'Tudo em ordem — sem pendências operacionais'});
+
+  const pendHtml = pend.map(p =>
+    `<div class="ali ${p.cls}">
+      <span class="ali-ico">${p.ico}</span>
+      <span class="ali-txt">${p.txt}</span>
+      ${p.btn?`<button class="ali-btn" onclick="${p.fn}">${p.btn}</button>`:''}
     </div>`
   ).join('');
 
-  // Resultado financeiro
-  const resValor = parseFloat(f.resultado||0);
-  const resCls = resValor >= 0 ? 'positivo' : 'negativo';
-  const resSinal = resValor >= 0 ? '+' : '-';
+  // ── Importações ───────────────────────────────────────────────────────────
+  const impItems = [
+    {lbl:'Estoque',  ...im.estoque},
+    {lbl:'Vendas',   ...im.vendas},
+    {lbl:'Produtos', ...im.produtos},
+    {lbl:'Boletos',  ...im.boletos},
+  ];
+  const impHtml = impItems.map(i => {
+    const cls = i.critico?'critico':i.alerta?'alerta':'ok';
+    return `<div class="imp-item ${cls}">
+      <div class="imp-lbl">${i.lbl}</div>
+      <div class="imp-msg">${i.msg}</div>
+    </div>`;
+  }).join('');
 
+  // ── Atalhos ───────────────────────────────────────────────────────────────
+  const ats = [
+    {ico:'📦',lbl:'Importar Estoque',fn:"abrirImport()"},
+    {ico:'💰',lbl:'Importar Vendas', fn:"abrirImport()"},
+    {ico:'🗓',lbl:'Validade',        fn:"nav('validade')"},
+    {ico:'📄',lbl:'Boletos',         fn:"nav('boletos')"},
+    {ico:'🏭',lbl:'Fornecedor',      fn:"nav('fornecedores')"},
+    {ico:'👥',lbl:'Retirada',        fn:"nav('retiradas')"},
+    {ico:'🗑️',lbl:'Nova Perda',      fn:"nav('perdas')"},
+    {ico:'📊',lbl:'Classificar DRE', fn:"nav('dre')"},
+  ];
+  const atHtml = ats.map(a =>
+    `<div class="atalho" onclick="${a.fn}"><div class="at-ico">${a.ico}</div><div class="at-lbl">${a.lbl}</div></div>`
+  ).join('');
+
+  // ── Render final ─────────────────────────────────────────────────────────
   document.getElementById('content').innerHTML = `
 
   <div class="secao">
@@ -224,177 +374,154 @@ function render(d) {
     <div class="semaforo">${semHtml}</div>
   </div>
 
+  <div class="secao">${vendaHtml}</div>
+
   <div class="grid2">
     <div>
       <div class="secao">
-        <div class="sec-title">🚨 Pendências Operacionais</div>
+        <div class="sec-title">🚨 Pendências</div>
         <div class="alert-list">${pendHtml}</div>
       </div>
 
       <div class="secao">
-        <div class="sec-title">💰 Situação Financeira — ${d.mes}</div>
-        <div class="card">
-          <div class="kpi-row">
-            <div class="kpi">
-              <div class="kpi-label">Resultado DRE</div>
-              <div class="kpi-val ${resCls}">${resSinal} ${brl(Math.abs(resValor))}</div>
-              <div class="kpi-sub">Rec: ${brl(f.receitas)} | Desp: ${brl(f.despesas)}</div>
-            </div>
-            <div class="kpi">
-              <div class="kpi-label">Boletos Abertos</div>
-              <div class="kpi-val ${f.total_aberto>0?'alerta':''}">${brl(f.total_aberto)}</div>
-              <div class="kpi-sub">${f.boletos_vencidos} vencido(s) · ${f.boletos_prox7d} vencem em 7d</div>
-            </div>
-          </div>
-          <div style="margin-top:10px;font-size:11px;color:var(--muted)">
-            Para análise detalhada acesse o Dashboard →
-          </div>
-        </div>
+        <div class="sec-title">📥 Importações — última atualização</div>
+        <div class="imp-grid">${impHtml}</div>
+      </div>
+
+      <div class="secao">
+        <div class="sec-title">⚡ Atalhos Rápidos</div>
+        <div class="atalhos">${atHtml}</div>
       </div>
     </div>
 
     <div>
       <div class="secao">
         <div class="sec-title">📥 Importar Arquivo</div>
-        <div class="drop-zone" id="drop-zone"
+        <div class="drop" id="drop"
           ondragover="event.preventDefault();this.classList.add('drag')"
           ondragleave="this.classList.remove('drag')"
           ondrop="onDrop(event)"
           onclick="document.getElementById('file-input').click()">
           <div class="drop-ico">📂</div>
-          <div class="drop-txt">Arraste o arquivo ou clique para selecionar</div>
-          <div class="drop-sub">O sistema identifica o tipo automaticamente</div>
-          <div style="margin-top:8px">
+          <div class="drop-txt">Arraste ou clique para importar</div>
+          <div class="drop-sub">Identificação automática do tipo</div>
+          <div style="margin-top:7px">
             <span class="tag">XLSX</span><span class="tag">CSV</span>
             <span class="tag">OFX</span><span class="tag nfe">NF-e XML → Boletos</span>
           </div>
         </div>
-        <div id="import-status" style="margin-top:8px;display:none"></div>
+        <div id="imp-status" style="margin-top:7px;display:none"></div>
       </div>
 
       <div class="secao">
-        <div class="sec-title">⚡ Atalhos Rápidos</div>
-        <div class="atalhos">
-          <div class="atalho" onclick="abrirImport()"><div class="atalho-ico">📦</div><div class="atalho-label">Importar Estoque</div></div>
-          <div class="atalho" onclick="abrirImport()"><div class="atalho-ico">💰</div><div class="atalho-label">Importar Vendas</div></div>
-          <div class="atalho" onclick="navegar('validade')"><div class="atalho-ico">🗓</div><div class="atalho-label">Validade</div></div>
-          <div class="atalho" onclick="navegar('boletos')"><div class="atalho-ico">📄</div><div class="atalho-label">Boletos</div></div>
-          <div class="atalho" onclick="navegar('fornecedores')"><div class="atalho-ico">🏭</div><div class="atalho-label">Fornecedor</div></div>
-          <div class="atalho" onclick="navegar('retiradas')"><div class="atalho-ico">👥</div><div class="atalho-label">Retirada</div></div>
-          <div class="atalho" onclick="navegar('perdas')"><div class="atalho-ico">🗑️</div><div class="atalho-label">Nova Perda</div></div>
-          <div class="atalho" onclick="navegar('dre')"><div class="atalho-ico">📊</div><div class="atalho-label">Classificar DRE</div></div>
+        <div class="sec-title">📊 Operação — ${d.mes}</div>
+        <div class="card">
+          <div class="kpi-row">
+            <div class="kpi">
+              <div class="kpi-lbl">Movimentos 24h</div>
+              <div class="kpi-v">${o.movimentos_24h}</div>
+              <div class="kpi-s">no estoque</div>
+            </div>
+            <div class="kpi">
+              <div class="kpi-lbl">Perdas do mês</div>
+              <div class="kpi-v ${o.perdas_mes>0?'neg':''}">${brl(o.perdas_mes)}</div>
+              <div class="kpi-s">${o.perdas_count} registro(s)</div>
+            </div>
+            <div class="kpi">
+              <div class="kpi-lbl">Retiradas</div>
+              <div class="kpi-v">${brl(o.retiradas_mes)}</div>
+              <div class="kpi-s">${o.retiradas_count} registro(s)</div>
+            </div>
+          </div>
         </div>
       </div>
-
-
     </div>
   </div>`;
 }
 
-function navegar(tab) {
-  try { window.parent.postMessage({ type: 'bb_nav', tab }, '*'); } catch(_) {}
-  // Fallback: tenta direto
-  try { if (window.parent.showTab) window.parent.showTab(tab); } catch(_) {}
+function nav(tab) {
+  try { window.parent.postMessage({ type:'bb_nav', tab }, '*'); } catch(_){}
 }
-
 function abrirImport() {
-  document.getElementById('drop-zone')?.scrollIntoView({ behavior:'smooth' });
   document.getElementById('file-input').click();
 }
-
 function onDrop(e) {
   e.preventDefault();
-  document.getElementById('drop-zone').classList.remove('drag');
-  const file = e.dataTransfer.files[0];
-  if (file) onFileSelect(file);
+  document.getElementById('drop').classList.remove('drag');
+  if (e.dataTransfer.files[0]) onFileSelect(e.dataTransfer.files[0]);
 }
 
 function onFileSelect(file) {
   if (!file) return;
   const nome = file.name.toLowerCase();
   const ext  = nome.split('.').pop();
-  const st   = document.getElementById('import-status');
+  const st   = document.getElementById('imp-status');
+  st.style.display = '';
 
-  // NF-e XML → redirecionar
   if (ext === 'xml') {
-    st.style.display = '';
-    st.innerHTML = `<div class="alert-item critico" style="margin-top:4px">
-      <span class="alert-ico">⚠️</span>
-      <span class="alert-text"><strong>NF-e XML</strong> — Use o módulo Boletos para importar notas fiscais</span>
-      <button class="alert-btn" onclick="navegar('boletos')">Ir para Boletos</button>
+    st.innerHTML = `<div class="ali alerta">
+      <span class="ali-ico">⚠️</span>
+      <span class="ali-txt"><strong>NF-e XML</strong> — use o módulo Boletos para importar notas fiscais</span>
+      <button class="ali-btn" onclick="nav('boletos')">Ir para Boletos</button>
     </div>`;
     return;
   }
 
-  st.style.display = '';
-  st.innerHTML = `<div class="alert-item alerta" style="margin-top:4px">⏳ Identificando arquivo: <strong>${file.name}</strong></div>`;
-
-  // Detectar tipo pelo nome / cabeçalho
   let tipo = 'desconhecido';
-  if (nome.includes('302') || nome.includes('estoque')) tipo = 'estoque_302';
-  else if (nome.includes('venda') || nome.includes('fatur')) tipo = 'vendas_xmenu';
-  else if (ext === 'ofx') tipo = 'extrato_ofx';
-  else if (nome.includes('extrato') || nome.includes('itau')) tipo = 'extrato_xlsx';
-  else if (nome.includes('fatura') || nome.includes('cartao') || nome.includes('cc')) tipo = 'fatura_cc';
-  else if (nome.includes('produto') || nome.includes('cadastro')) tipo = 'cadastro_pdv';
-
-  const tipoLabel = {
-    estoque_302: '📦 Relatório 302 — Estoque',
-    vendas_xmenu: '💰 Relatório de Vendas',
-    extrato_ofx: '🏦 Extrato Bancário OFX',
-    extrato_xlsx: '🏦 Extrato Bancário XLSX',
-    fatura_cc: '💳 Fatura Cartão CC',
-    cadastro_pdv: '📋 Cadastro de Produtos',
-    desconhecido: '❓ Tipo não identificado',
-  };
+  if (nome.includes('302')||nome.includes('estoque')) tipo = 'estoque';
+  else if (nome.includes('venda')||nome.includes('fatur')||nome.includes('xmenu')) tipo = 'vendas';
+  else if (ext==='ofx') tipo = 'extrato_ofx';
+  else if (nome.includes('extrato')||nome.includes('itau')) tipo = 'extrato_xlsx';
 
   const rotaMap = {
-    estoque_302:  '/api/produtos/sync-estoque',
-    vendas_xmenu: '/api/faturamento/import',      // rota correta
-    extrato_ofx:  '/api/dre/upload-extrato',
-    extrato_xlsx: '/api/dre/upload-extrato',
-    fatura_cc:    '/api/dre/upload-fatura-cc',
-    cadastro_pdv: '/api/produtos/sync-cadastro',
+    estoque:     '/api/produtos/sync-estoque',
+    vendas:      '/api/faturamento/import',
+    extrato_ofx: '/api/dre/upload-extrato',
+    extrato_xlsx:'/api/dre/upload-extrato',
+  };
+  const nomeMap = {
+    estoque:'📦 Relatório 302 — Estoque',
+    vendas:'💰 Relatório de Vendas (XMenu)',
+    extrato_ofx:'🏦 Extrato Bancário OFX',
+    extrato_xlsx:'🏦 Extrato Bancário XLSX',
+    desconhecido:'❓ Tipo não identificado',
   };
 
   const rota = rotaMap[tipo];
-  setTimeout(() => {
-    st.innerHTML = `<div class="alert-item ${rota?'alerta':'critico'}" style="margin-top:4px">
-      <span>📄 <strong>${tipoLabel[tipo]}</strong></span>
-      ${rota ? `<button class="alert-btn" onclick="enviarArquivo('${rota}')">Importar →</button>`
-              : '<span style="margin-left:8px">Selecione manualmente o módulo de destino</span>'}
-    </div>`;
-    if (rota) window._arquivoSelecionado = file;
-  }, 600);
+  st.innerHTML = `<div class="ali ${rota?'alerta':'critico'}">
+    <span class="ali-ico">📄</span>
+    <span class="ali-txt"><strong>${nomeMap[tipo]}</strong></span>
+    ${rota?`<button class="ali-btn" onclick="enviar('${rota}')">Importar →</button>`:''}
+  </div>`;
+  window._fileToSend = file;
 }
 
-async function enviarArquivo(rota) {
-  const file = window._arquivoSelecionado;
+async function enviar(rota) {
+  const file = window._fileToSend;
   if (!file) return;
-  const st = document.getElementById('import-status');
-  st.innerHTML = `<div class="alert-item alerta" style="margin-top:4px">⏳ Enviando...</div>`;
+  const st = document.getElementById('imp-status');
+  st.innerHTML = `<div class="ali alerta">⏳ Enviando <strong>${file.name}</strong>...</div>`;
   try {
-    const fd = new FormData();
-    fd.append('arquivo', file);
+    const fd = new FormData(); fd.append('arquivo', file);
     const res = await (_api||BB.api).upload(rota, fd);
     if (res.ok !== false) {
-      st.innerHTML = `<div class="alert-item ok" style="margin-top:4px">✅ Importado com sucesso! Atualizando...</div>`;
+      st.innerHTML = `<div class="ali ok">✅ Importado com sucesso!</div>`;
       setTimeout(() => carregar(), 1500);
     } else {
-      st.innerHTML = `<div class="alert-item critico" style="margin-top:4px">❌ ${res.erro||'Erro ao importar'}</div>`;
+      st.innerHTML = `<div class="ali critico">❌ ${res.erro||'Erro ao importar'}</div>`;
     }
   } catch(e) {
-    st.innerHTML = `<div class="alert-item critico" style="margin-top:4px">❌ ${e.message}</div>`;
+    st.innerHTML = `<div class="ali critico">❌ ${e.message}</div>`;
   }
 }
 
-// Escuta eventos do barramento
+// Recebe eventos do barramento
 window.addEventListener('message', e => {
   const ev = e.data?.bbEvent || e.data?.type;
   if (['PERDA_REGISTRADA','VALIDADE_DESCARTADA','ESTOQUE_ATUALIZADO',
        'MOVIMENTO_ESTOQUE','FATURAMENTO_ATUALIZADO','BOLETO_PAGO'].includes(ev)) {
-    clearTimeout(window._hubRefreshTimer);
-    window._hubRefreshTimer = setTimeout(() => carregar(), 2000);
+    clearTimeout(window._hubTimer);
+    window._hubTimer = setTimeout(carregar, 2500);
   }
 });
 </script>
