@@ -119,7 +119,7 @@ module.exports = function(pool) {
       // Garante coluna funcionario_id
       await pool.query(`ALTER TABLE clientes_fiado ADD COLUMN IF NOT EXISTS funcionario_id INTEGER`).catch(()=>{});
       // Cria clientes para funcionários que ainda não existem
-      const { rows: funcs } = await pool.query(`SELECT f.id, f.nome FROM rh_funcionarios f WHERE f.ativo=true`).catch(()=>({rows:[]}));
+      const { rows: funcs } = await pool.query(`SELECT f.id, f.nome FROM funcionarios f WHERE f.ativo=true`).catch(()=>({rows:[]})); // F2-13: rh_funcionarios → funcionarios
       for (const f of funcs) {
         await pool.query(`
           INSERT INTO clientes_fiado(nome, tipo_cliente, funcionario_id, status)
@@ -132,7 +132,7 @@ module.exports = function(pool) {
         SELECT r.*, f.nome AS func_nome,
           (SELECT cf.id FROM clientes_fiado cf WHERE cf.funcionario_id=r.funcionario_id AND cf.tipo_cliente='funcionario' LIMIT 1) AS cliente_id
         FROM retiradas r
-        JOIN rh_funcionarios f ON f.id=r.funcionario_id
+        JOIN funcionarios f ON f.id=r.funcionario_id -- F2-13
         WHERE r.funcionario_id IS NOT NULL
           AND NOT EXISTS (
             SELECT 1 FROM vendas_fiado vf
@@ -167,7 +167,7 @@ module.exports = function(pool) {
   // Sincroniza funcionários como clientes tipo 'funcionario'
   r.post('/sync-funcionarios', async (req, res) => {
     try {
-      const { rows: funcs } = await pool.query(`SELECT id, nome FROM rh_funcionarios WHERE ativo=true`);
+      const { rows: funcs } = await pool.query(`SELECT id, nome FROM funcionarios WHERE ativo=true`); // F2-13
       let criados = 0;
       for (const f of funcs) {
         const existing = await pool.query(`SELECT id FROM clientes_fiado WHERE funcionario_id=$1`, [f.id]);
@@ -489,9 +489,9 @@ module.exports = function(pool) {
       const { rows: [cli] } = await pool.query(`
         SELECT cf.*, f.nome AS func_nome
         FROM clientes_fiado cf
-        LEFT JOIN rh_funcionarios f ON f.id=cf.funcionario_id
+        LEFT JOIN funcionarios f ON f.id=cf.funcionario_id -- F2-13
         WHERE cf.tipo_cliente='funcionario'
-          AND (cf.funcionario_id=(SELECT id FROM rh_funcionarios WHERE LOWER(nome) LIKE LOWER($1) LIMIT 1)
+          AND (cf.funcionario_id=(SELECT id FROM funcionarios WHERE LOWER(nome) LIKE LOWER($1) LIMIT 1) -- F2-13
                OR LOWER(cf.nome) LIKE LOWER($1))
         LIMIT 1
       `, [`%${req.user?.nome?.split(' ')[0]}%`]);
