@@ -644,8 +644,10 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
       <div class="spinner"></div>
       <div class="spinner-label" id="aba-loading-label">Carregando...</div>
     </div>
-    <div class="frame-container" id="frame-boletos">
+    <div class="frame-container" id="frame-hub">
       <iframe class="module-frame" id="iframe-hub" data-src="hub.html"></iframe>
+    </div>
+    <div class="frame-container" id="frame-boletos">
       <iframe class="module-frame" id="iframe-boletos" src="boletos.html?v=1775328871"></iframe>
     </div>
     <div class="frame-container" id="frame-dre">
@@ -690,6 +692,8 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
     </div>
     <div class="frame-container" id="frame-config">
       <iframe class="module-frame" id="iframe-config" src="config.html?v=1775328871"></iframe>
+    </div>
+    <div class="frame-container" id="frame-fornecedores">
       <iframe class="module-frame" id="iframe-fornecedores" data-src="fornecedores.html"></iframe>
     </div>
 
@@ -1633,6 +1637,12 @@ window.addEventListener('DOMContentLoaded', async () => {
 // ── Mensagens dos iframes ──────────────────────────────────────────────────
 window.addEventListener('message', e => {
   if (!e.data) return;
+
+  // Hub Operacional: navegar para outro módulo
+  if (e.data.type === 'bb_nav' && e.data.tab) {
+    showTab(e.data.tab);
+    return;
+  }
 
   // Auditoria: iframe pede categorias do DRE
   if (e.data.type === 'auditoria_get_cats') {

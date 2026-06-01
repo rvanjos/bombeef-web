@@ -3,378 +3,441 @@
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Hub Operacional — Bom Beef</title>
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="/js/api.js"></script>
 <style>
-:root{--red:#8B0000;--red-l:#C0392B;--bg:#f7f4f0;--white:#fff;--text:#1a1a1a;--muted:#7a7068;--border:#e8e0d8;--shadow:0 2px 12px rgba(0,0,0,.07);
-  --green:#166534;--green-bg:#f0fdf4;--green-bdr:#86efac;
-  --amber:#92400E;--amber-bg:#fffbeb;--amber-bdr:#fcd34d;
-  --red-bg:#fef2f2;--red-bdr:#fca5a5;}
+:root{
+  --red:#8B0000;--red-l:#C0392B;--bg:#f7f4f0;--white:#fff;
+  --text:#1a1a1a;--muted:#7a7068;--border:#e8e0d8;
+  --green:#15803d;--green-bg:#f0fdf4;--green-bdr:#bbf7d0;
+  --amber:#92400e;--amber-bg:#fffbeb;--amber-bdr:#fcd34d;
+  --blue:#1e3a8a;--blue-bg:#eff6ff;--blue-bdr:#bfdbfe;
+  --shadow:0 2px 8px rgba(0,0,0,.07);
+}
 *{box-sizing:border-box;margin:0;padding:0;}
-html,body{width:100%;height:100%;}
-body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);display:flex;flex-direction:column;}
+html,body{width:100%;height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;color:var(--text);}
+body{display:flex;flex-direction:column;overflow-y:auto;}
 
-/* Header */
-.ph{background:var(--red);padding:11px 20px;display:flex;align-items:center;gap:10px;flex-shrink:0;box-shadow:0 2px 12px rgba(139,0,0,.3);}
-.ph h2{font-family:'Playfair Display',serif;font-size:16px;color:#fff;font-weight:700;flex:1;}
-.ph-atualizado{font-size:11px;color:rgba(255,255,255,.65);}
-.btn-atualizar{padding:5px 12px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:7px;font-size:11px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;transition:.15s;}
+/* ── HEADER ── */
+.ph{background:var(--red);padding:10px 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;box-shadow:0 2px 8px rgba(139,0,0,.25);}
+.ph-left{display:flex;align-items:center;gap:10px;}
+.ph h2{font-family:'Playfair Display',serif;font-size:16px;color:#fff;}
+.ph-time{font-size:11px;color:rgba(255,255,255,.65);}
+.btn-atualizar{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;padding:5px 12px;border-radius:7px;font-size:12px;font-family:'DM Sans',sans-serif;cursor:pointer;font-weight:600;transition:all .15s;}
 .btn-atualizar:hover{background:rgba(255,255,255,.25);}
 
-/* Layout */
-.hub-body{flex:1;overflow-y:auto;padding:16px;}
+/* ── CONTENT ── */
+.content{padding:16px 20px;flex:1;}
+.secao{margin-bottom:20px;}
+.sec-title{font-size:9px;text-transform:uppercase;letter-spacing:1.5px;font-weight:700;color:var(--muted);margin-bottom:10px;padding-left:2px;}
 
-/* Semáforo */
-.semaforo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-bottom:18px;}
-.sem-card{background:var(--white);border-radius:10px;padding:14px 16px;border:1px solid var(--border);box-shadow:var(--shadow);cursor:pointer;transition:.15s;position:relative;overflow:hidden;}
-.sem-card:hover{transform:translateY(-1px);box-shadow:0 4px 16px rgba(0,0,0,.1);}
-.sem-card.ok   {border-left:4px solid #16a34a;}
-.sem-card.alerta{border-left:4px solid #d97706;}
-.sem-card.critico{border-left:4px solid var(--red-l);}
-.sem-icone{font-size:22px;margin-bottom:6px;}
-.sem-label{font-size:10px;text-transform:uppercase;letter-spacing:.7px;font-weight:700;color:var(--muted);margin-bottom:3px;}
-.sem-status{font-size:13px;font-weight:600;line-height:1.3;}
-.sem-status.ok{color:#166534;}
-.sem-status.alerta{color:#92400E;}
-.sem-status.critico{color:var(--red-l);}
-.sem-dot{position:absolute;top:12px;right:12px;width:9px;height:9px;border-radius:50%;}
-.sem-dot.ok{background:#22c55e;}
-.sem-dot.alerta{background:#f59e0b;animation:pulse 1.5s infinite;}
-.sem-dot.critico{background:#ef4444;animation:pulse .8s infinite;}
+/* ── SEMÁFORO ── */
+.semaforo{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;}
+.sem-card{background:var(--white);border:1px solid var(--border);border-radius:10px;padding:12px 14px;display:flex;align-items:center;gap:10px;cursor:pointer;transition:all .15s;box-shadow:var(--shadow);}
+.sem-card:hover{transform:translateY(-1px);box-shadow:0 4px 14px rgba(0,0,0,.1);}
+.sem-card.ok{border-left:3px solid var(--green);}
+.sem-card.alerta{border-left:3px solid #d97706;}
+.sem-card.critico{border-left:3px solid var(--red-l);background:#fff8f8;}
+.sem-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+.sem-card.ok .sem-dot{background:var(--green);}
+.sem-card.alerta .sem-dot{background:#d97706;}
+.sem-card.critico .sem-dot{background:var(--red-l);animation:pulse .8s infinite;}
 @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.4;}}
+.sem-info{flex:1;min-width:0;}
+.sem-label{font-size:9px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);font-weight:700;}
+.sem-msg{font-size:12px;color:var(--text);font-weight:600;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 
-/* Seções */
-.sec-title{font-size:11px;text-transform:uppercase;letter-spacing:1px;font-weight:700;color:var(--muted);margin-bottom:10px;display:flex;align-items:center;gap:8px;}
-.sec-title::after{content:'';flex:1;height:1px;background:var(--border);}
-.sec-mb{margin-bottom:18px;}
+/* ── GRID DE SEÇÕES ── */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;}
 
-/* Upload */
-.upload-area{background:var(--white);border:2px dashed var(--border);border-radius:12px;padding:28px;text-align:center;cursor:pointer;transition:.2s;margin-bottom:18px;}
-.upload-area:hover,.upload-area.dragover{border-color:var(--red);background:#fdf9f5;}
-.upload-icone{font-size:32px;margin-bottom:8px;}
-.upload-title{font-size:15px;font-weight:700;margin-bottom:4px;}
-.upload-sub{font-size:12px;color:var(--muted);}
-.upload-tags{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:10px;}
-.upload-tag{padding:3px 10px;background:#f0f0f0;border-radius:10px;font-size:11px;font-weight:600;color:var(--muted);}
-.upload-tag.nfe{background:#fffbeb;color:#92400E;border:1px solid #fcd34d;}
-#upload-input{display:none;}
+/* ── CARD ── */
+.card{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:16px;box-shadow:var(--shadow);}
+.card-title{font-size:10px;text-transform:uppercase;letter-spacing:1px;font-weight:700;color:var(--muted);margin-bottom:12px;display:flex;align-items:center;gap:6px;}
+.card-title span{font-size:14px;}
 
-/* Resultado da detecção */
-.detect-result{background:var(--white);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:14px;display:none;}
-.detect-result.show{display:block;}
-.detect-tipo{font-size:13px;font-weight:700;margin-bottom:4px;}
-.detect-acao{font-size:12px;color:var(--muted);}
-.detect-btns{display:flex;gap:8px;margin-top:10px;}
+/* ── KPI MINI ── */
+.kpi-row{display:flex;gap:10px;flex-wrap:wrap;}
+.kpi{flex:1;min-width:120px;background:var(--bg);border-radius:8px;padding:10px 12px;}
+.kpi-label{font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px;}
+.kpi-val{font-family:'DM Mono',monospace;font-size:18px;font-weight:700;margin-top:2px;color:var(--text);}
+.kpi-val.positivo{color:var(--green);}
+.kpi-val.negativo{color:var(--red-l);}
+.kpi-val.alerta{color:#d97706;}
+.kpi-sub{font-size:10px;color:var(--muted);margin-top:1px;}
 
-/* Pendências */
-.pend-table{width:100%;border-collapse:collapse;background:var(--white);border-radius:10px;overflow:hidden;box-shadow:var(--shadow);}
-.pend-table th{background:#fdf9f5;font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:700;padding:8px 12px;text-align:left;border-bottom:2px solid var(--border);}
-.pend-table td{padding:9px 12px;font-size:12px;border-bottom:1px solid var(--border);}
-.pend-table tr:last-child td{border-bottom:none;}
-.badge{display:inline-block;padding:2px 8px;border-radius:9px;font-size:10px;font-weight:700;}
-.badge-ok{background:#dcfce7;color:#166534;}
-.badge-alerta{background:#fef9c3;color:#92400E;}
-.badge-critico{background:#fee2e2;color:#991b1b;}
+/* ── LISTA DE ALERTAS ── */
+.alert-list{display:flex;flex-direction:column;gap:6px;}
+.alert-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;font-size:12px;font-weight:500;}
+.alert-item.critico{background:#fef2f2;border:1px solid #fecaca;color:#991b1b;}
+.alert-item.alerta{background:var(--amber-bg);border:1px solid var(--amber-bdr);color:var(--amber);}
+.alert-item.ok{background:var(--green-bg);border:1px solid var(--green-bdr);color:var(--green);}
+.alert-ico{font-size:14px;flex-shrink:0;}
+.alert-text{flex:1;}
+.alert-btn{background:none;border:1px solid currentColor;border-radius:5px;padding:2px 8px;font-size:10px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;opacity:.8;}
+.alert-btn:hover{opacity:1;}
 
-/* Ações rápidas */
-.acoes-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;}
-.acao-btn{background:var(--white);border:1px solid var(--border);border-radius:10px;padding:12px 14px;cursor:pointer;text-align:left;transition:.15s;font-family:'DM Sans',sans-serif;}
-.acao-btn:hover{border-color:var(--red);background:#fdf9f5;}
-.acao-btn .ab-ico{font-size:20px;margin-bottom:5px;}
-.acao-btn .ab-label{font-size:12px;font-weight:700;display:block;}
-.acao-btn .ab-sub{font-size:10px;color:var(--muted);}
-.acao-btn.urgente{border-color:var(--red-l);background:var(--red-bg);}
-.acao-btn.urgente .ab-label{color:var(--red-l);}
+/* ── ATALHOS ── */
+.atalhos{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;}
+.atalho{background:var(--white);border:1px solid var(--border);border-radius:10px;padding:11px 12px;cursor:pointer;transition:all .15s;text-align:center;box-shadow:var(--shadow);}
+.atalho:hover{border-color:var(--red);background:#fff8f8;transform:translateY(-1px);}
+.atalho-ico{font-size:20px;margin-bottom:4px;}
+.atalho-label{font-size:11px;font-weight:600;color:var(--text);}
 
-/* Loading */
-.loading{text-align:center;padding:32px;color:var(--muted);font-size:13px;}
-.spinner{display:inline-block;width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--red);border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:6px;}
-@keyframes spin{to{transform:rotate(360deg);}}
+/* ── IMPORT ── */
+.drop-zone{border:2px dashed var(--border);border-radius:12px;padding:20px;text-align:center;cursor:pointer;transition:all .2s;background:var(--white);}
+.drop-zone:hover,.drop-zone.drag{border-color:var(--red);background:#fff8f8;}
+.drop-ico{font-size:28px;margin-bottom:6px;}
+.drop-txt{font-size:13px;font-weight:600;color:var(--text);}
+.drop-sub{font-size:11px;color:var(--muted);margin-top:3px;}
+.tag{display:inline-block;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:2px 7px;font-size:10px;font-weight:700;color:var(--muted);margin:3px 2px 0;}
+.tag.nfe{background:#fff8f8;border-color:#fecaca;color:var(--red-l);}
+.tipo-badge{display:inline-block;padding:3px 10px;border-radius:6px;font-size:11px;font-weight:700;margin-top:6px;}
 
-.toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%) translateY(60px);background:#1a1a1a;color:#fff;padding:7px 18px;border-radius:8px;font-size:12px;z-index:9999;transition:transform .25s;pointer-events:none;font-family:'DM Sans',sans-serif;}
-.toast.show{transform:translateX(-50%) translateY(0);}
-
-/* NF-e aviso */
-.nfe-aviso{background:#fffbeb;border:1px solid #fcd34d;border-radius:9px;padding:10px 14px;font-size:12px;color:#92400E;margin-bottom:10px;display:none;}
-.nfe-aviso.show{display:block;}
+/* ── LOADING ── */
+.loading{color:var(--muted);font-size:12px;padding:16px;text-align:center;}
+.skeleton{background:linear-gradient(90deg,#f0ebe5 25%,#e8e0d8 50%,#f0ebe5 75%);background-size:200% 100%;animation:sk 1.2s infinite;border-radius:6px;height:14px;margin:4px 0;}
+@keyframes sk{0%{background-position:200% 0}100%{background-position:-200% 0}}
 </style>
 </head>
 <body>
 
 <div class="ph">
-  <span style="font-size:18px">🎛️</span>
-  <h2>Hub Operacional</h2>
-  <span class="ph-atualizado" id="ph-atualizado"></span>
-  <button class="btn-atualizar" onclick="carregar()">↻ Atualizar</button>
+  <div class="ph-left">
+    <span style="font-size:20px">🎛️</span>
+    <h2>Hub Operacional</h2>
+  </div>
+  <div style="display:flex;align-items:center;gap:10px;">
+    <span class="ph-time" id="ph-hora">—</span>
+    <button class="btn-atualizar" onclick="carregar()">↻ Atualizar</button>
+  </div>
 </div>
 
-<div class="hub-body">
-
-  <!-- Semáforo -->
-  <div class="sec-title sec-mb">Status Operacional</div>
-  <div class="semaforo-grid" id="semaforo">
-    <div class="loading"><span class="spinner"></span>Carregando status...</div>
-  </div>
-
-  <!-- Upload Único -->
-  <div class="sec-title sec-mb">Importar Arquivo</div>
-
-  <div class="nfe-aviso" id="nfe-aviso">
-    ⚠️ <strong>Arquivo NF-e XML detectado.</strong> Este arquivo deve ser importado diretamente pelo módulo <strong>Boletos → Importar NF-e</strong>. O Hub não processa NF-e.
-    <button onclick="irParaBoletos()" style="margin-left:10px;padding:3px 10px;background:#92400E;color:#fff;border:none;border-radius:6px;font-size:11px;cursor:pointer;font-family:'DM Sans',sans-serif;">Ir para Boletos</button>
-  </div>
-
-  <div class="detect-result" id="detect-result">
-    <div class="detect-tipo" id="detect-tipo"></div>
-    <div class="detect-acao" id="detect-acao"></div>
-    <div class="detect-btns" id="detect-btns"></div>
-  </div>
-
-  <div class="upload-area" id="upload-area"
-    ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)"
-    onclick="document.getElementById('upload-input').click()">
-    <input type="file" id="upload-input" accept=".xlsx,.xls,.csv,.ofx,.ofc,.xml"
-      onchange="onFileSelect(event)">
-    <div class="upload-icone">📂</div>
-    <div class="upload-title">Arraste o arquivo aqui ou clique para selecionar</div>
-    <div class="upload-sub">O sistema identifica o tipo automaticamente e distribui para os módulos corretos</div>
-    <div class="upload-tags">
-      <span class="upload-tag">XLSX</span>
-      <span class="upload-tag">CSV</span>
-      <span class="upload-tag">OFX</span>
-      <span class="upload-tag nfe">NF-e XML → Boletos</span>
-    </div>
-  </div>
-
-  <!-- Importações Pendentes -->
-  <div class="sec-title sec-mb">Importações Pendentes</div>
-  <div id="pendencias-wrap" style="margin-bottom:18px">
-    <div class="loading"><span class="spinner"></span>Carregando...</div>
-  </div>
-
-  <!-- Ações Rápidas -->
-  <div class="sec-title sec-mb">Ações Rápidas</div>
-  <div class="acoes-grid" id="acoes-grid"></div>
-
+<div class="content" id="content">
+  <div class="loading">⏳ Carregando...</div>
 </div>
 
-<div class="toast" id="toast"></div>
+<input type="file" id="file-input" accept=".xlsx,.xls,.csv,.ofx,.xml" style="display:none" onchange="onFileSelect(this.files[0])">
 
 <script>
 let _api = null;
-let _status = {};
+let _dados = null;
 
 window.onBBReady = () => {
   _api = BB.api;
+  atualizarRelogio();
+  setInterval(atualizarRelogio, 60000);
   carregar();
+  // Auto-refresh a cada 5 minutos
+  setInterval(carregar, 300000);
 };
 
-// Escuta eventos do barramento (F1-01)
+function atualizarRelogio() {
+  const n = new Date();
+  document.getElementById('ph-hora').textContent =
+    `Atualizado ${n.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`;
+}
+
+async function carregar() {
+  try {
+    const d = await (_api||BB.api).get('/api/hub/resumo');
+    if (!d.ok) { renderErro(d.erro); return; }
+    _dados = d.data;
+    render(_dados);
+  } catch(e) {
+    renderErro(e.message);
+  }
+}
+
+function renderErro(msg) {
+  document.getElementById('content').innerHTML =
+    `<div style="padding:32px;text-align:center;color:#991b1b">⚠️ Erro ao carregar: ${msg||'Tente atualizar'}</div>`;
+}
+
+function render(d) {
+  const s = d.status;
+  const f = d.financeiro;
+  const o = d.operacional;
+  const brl = v => 'R$ ' + parseFloat(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+
+  // Semáforo
+  const mods = [
+    {key:'estoque',    label:'Estoque',       acao:()=>navegar('produtos')},
+    {key:'vendas',     label:'Vendas',        acao:()=>navegar('faturamento')},
+    {key:'validade',   label:'Validade',      acao:()=>navegar('validade')},
+    {key:'boletos',    label:'Boletos',       acao:()=>navegar('boletos')},
+    {key:'estoque_minimo', label:'Est. Mínimo', acao:()=>navegar('produtos')},
+  ];
+
+  const semHtml = mods.map(m => {
+    const st = s[m.key];
+    const cls = st.critico?'critico':st.alerta?'alerta':'ok';
+    return `<div class="sem-card ${cls}" onclick="(${m.acao.toString()})()">
+      <div class="sem-dot"></div>
+      <div class="sem-info">
+        <div class="sem-label">${m.label}</div>
+        <div class="sem-msg">${st.msg}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  // Pendências operacionais
+  const pendencias = [];
+  if (o.validade_vencidos > 0)
+    pendencias.push({cls:'critico',ico:'🔴',txt:`${o.validade_vencidos} produto(s) VENCIDO(S) — retirar imediatamente`,btn:'Ver Validade',acao:"navegar('validade')"});
+  if (o.validade_criticos > 0)
+    pendencias.push({cls:'alerta',ico:'🟡',txt:`${o.validade_criticos} produto(s) vencem em 3 dias`,btn:'Ver Validade',acao:"navegar('validade')"});
+  if (o.validade_alertas > 0)
+    pendencias.push({cls:'alerta',ico:'⚠️',txt:`${o.validade_alertas} produto(s) vencem em 7 dias`,btn:'Ver Validade',acao:"navegar('validade')"});
+  if (f.boletos_vencidos > 0)
+    pendencias.push({cls:'critico',ico:'🔴',txt:`${f.boletos_vencidos} boleto(s) vencido(s) — ${brl(f.boletos_vencidos_valor)}`,btn:'Ver Boletos',acao:"navegar('boletos')"});
+  if (f.boletos_prox7d > 0)
+    pendencias.push({cls:'alerta',ico:'📅',txt:`${f.boletos_prox7d} boleto(s) vencem nos próximos 7 dias`,btn:'Ver Boletos',acao:"navegar('boletos')"});
+  if (o.estoque_minimo_count > 0)
+    pendencias.push({cls:'alerta',ico:'📦',txt:`${o.estoque_minimo_count} produto(s) abaixo do estoque mínimo`,btn:'Ver Produtos',acao:"navegar('produtos')"});
+  if (f.dre_pendencias > 0)
+    pendencias.push({cls:'alerta',ico:'📊',txt:`${f.dre_pendencias} lançamento(s) DRE sem categoria`,btn:'Classificar',acao:"navegar('dre')"});
+  if (s.estoque.critico)
+    pendencias.push({cls:'alerta',ico:'📥',txt:`Estoque não atualizado há ${s.estoque.dias} dias`,btn:'Importar',acao:"abrirImport()"});
+  if (s.vendas.critico)
+    pendencias.push({cls:'alerta',ico:'📥',txt:`Vendas não importadas há ${s.vendas.dias} dias`,btn:'Importar',acao:"abrirImport()"});
+  if (pendencias.length === 0)
+    pendencias.push({cls:'ok',ico:'✅',txt:'Tudo em ordem — sem pendências operacionais',btn:null,acao:null});
+
+  const pendHtml = pendencias.map(p =>
+    `<div class="alert-item ${p.cls}">
+      <span class="alert-ico">${p.ico}</span>
+      <span class="alert-text">${p.txt}</span>
+      ${p.btn ? `<button class="alert-btn" onclick="${p.acao}">${p.btn}</button>` : ''}
+    </div>`
+  ).join('');
+
+  // Resultado financeiro
+  const resValor = parseFloat(f.resultado||0);
+  const resCls = resValor >= 0 ? 'positivo' : 'negativo';
+  const resSinal = resValor >= 0 ? '+' : '-';
+
+  document.getElementById('content').innerHTML = `
+
+  <div class="secao">
+    <div class="sec-title">⚡ Status Operacional</div>
+    <div class="semaforo">${semHtml}</div>
+  </div>
+
+  <div class="grid2">
+    <div>
+      <div class="secao">
+        <div class="sec-title">🚨 Pendências Operacionais</div>
+        <div class="alert-list">${pendHtml}</div>
+      </div>
+
+      <div class="secao">
+        <div class="sec-title">💰 Financeiro — ${d.mes}</div>
+        <div class="card">
+          <div class="kpi-row">
+            <div class="kpi">
+              <div class="kpi-label">Receitas</div>
+              <div class="kpi-val positivo">${brl(f.receitas)}</div>
+            </div>
+            <div class="kpi">
+              <div class="kpi-label">Despesas</div>
+              <div class="kpi-val negativo">${brl(f.despesas)}</div>
+            </div>
+            <div class="kpi">
+              <div class="kpi-label">Resultado</div>
+              <div class="kpi-val ${resCls}">${resSinal} ${brl(Math.abs(resValor))}</div>
+            </div>
+          </div>
+          <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
+            <div class="kpi-row">
+              <div class="kpi">
+                <div class="kpi-label">Boletos Abertos</div>
+                <div class="kpi-val ${f.total_aberto>0?'alerta':''}">${brl(f.total_aberto)}</div>
+                <div class="kpi-sub">${f.boletos_vencidos} vencido(s)</div>
+              </div>
+              <div class="kpi">
+                <div class="kpi-label">Perdas Mês</div>
+                <div class="kpi-val ${o.perdas_mes>0?'negativo':''}">${brl(o.perdas_mes)}</div>
+                <div class="kpi-sub">${o.perdas_count} registro(s)</div>
+              </div>
+              <div class="kpi">
+                <div class="kpi-label">Retiradas Mês</div>
+                <div class="kpi-val">${brl(o.retiradas_mes)}</div>
+                <div class="kpi-sub">${o.retiradas_count} registro(s)</div>
+              </div>
+            </div>
+          </div>
+          <div style="margin-top:10px">
+            <button onclick="navegar('dre')" style="background:none;border:1px solid var(--border);border-radius:7px;padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;color:var(--text)">Ver DRE completo →</button>
+            <button onclick="navegar('boletos')" style="background:none;border:1px solid var(--border);border-radius:7px;padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;color:var(--text);margin-left:6px">Ver Boletos →</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="secao">
+        <div class="sec-title">📥 Importar Arquivo</div>
+        <div class="drop-zone" id="drop-zone"
+          ondragover="event.preventDefault();this.classList.add('drag')"
+          ondragleave="this.classList.remove('drag')"
+          ondrop="onDrop(event)"
+          onclick="document.getElementById('file-input').click()">
+          <div class="drop-ico">📂</div>
+          <div class="drop-txt">Arraste o arquivo ou clique para selecionar</div>
+          <div class="drop-sub">O sistema identifica o tipo automaticamente</div>
+          <div style="margin-top:8px">
+            <span class="tag">XLSX</span><span class="tag">CSV</span>
+            <span class="tag">OFX</span><span class="tag nfe">NF-e XML → Boletos</span>
+          </div>
+        </div>
+        <div id="import-status" style="margin-top:8px;display:none"></div>
+      </div>
+
+      <div class="secao">
+        <div class="sec-title">⚡ Atalhos Rápidos</div>
+        <div class="atalhos">
+          <div class="atalho" onclick="abrirImport()"><div class="atalho-ico">📦</div><div class="atalho-label">Importar Estoque</div></div>
+          <div class="atalho" onclick="abrirImport()"><div class="atalho-ico">💰</div><div class="atalho-label">Importar Vendas</div></div>
+          <div class="atalho" onclick="navegar('validade')"><div class="atalho-ico">🗓</div><div class="atalho-label">Validade</div></div>
+          <div class="atalho" onclick="navegar('boletos')"><div class="atalho-ico">📄</div><div class="atalho-label">Boletos</div></div>
+          <div class="atalho" onclick="navegar('fornecedores')"><div class="atalho-ico">🏭</div><div class="atalho-label">Fornecedor</div></div>
+          <div class="atalho" onclick="navegar('retiradas')"><div class="atalho-ico">👥</div><div class="atalho-label">Retirada</div></div>
+          <div class="atalho" onclick="navegar('perdas')"><div class="atalho-ico">🗑️</div><div class="atalho-label">Nova Perda</div></div>
+          <div class="atalho" onclick="navegar('dre')"><div class="atalho-ico">📊</div><div class="atalho-label">Classificar DRE</div></div>
+        </div>
+      </div>
+
+      <div class="secao">
+        <div class="sec-title">📊 Operação — ${d.mes}</div>
+        <div class="card">
+          <div class="kpi-row">
+            <div class="kpi">
+              <div class="kpi-label">Movimentos 24h</div>
+              <div class="kpi-val">${o.movimentos_24h}</div>
+              <div class="kpi-sub">no estoque</div>
+            </div>
+            <div class="kpi">
+              <div class="kpi-label">Validade OK</div>
+              <div class="kpi-val ${o.validade_vencidos>0?'negativo':o.validade_criticos>0?'alerta':'positivo'}">${o.validade_vencidos>0?'⚠️ '+o.validade_vencidos+' venc.':o.validade_criticos>0?'⚠️ '+o.validade_criticos+' crit.':'✓ OK'}</div>
+            </div>
+            <div class="kpi">
+              <div class="kpi-label">Est. Mínimo</div>
+              <div class="kpi-val ${o.estoque_minimo_count>0?'alerta':'positivo'}">${o.estoque_minimo_count>0?o.estoque_minimo_count+' baixos':'✓ OK'}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function navegar(tab) {
+  try { window.parent.postMessage({ type: 'bb_nav', tab }, '*'); } catch(_) {}
+  // Fallback: tenta direto
+  try { if (window.parent.showTab) window.parent.showTab(tab); } catch(_) {}
+}
+
+function abrirImport() {
+  document.getElementById('drop-zone')?.scrollIntoView({ behavior:'smooth' });
+  document.getElementById('file-input').click();
+}
+
+function onDrop(e) {
+  e.preventDefault();
+  document.getElementById('drop-zone').classList.remove('drag');
+  const file = e.dataTransfer.files[0];
+  if (file) onFileSelect(file);
+}
+
+function onFileSelect(file) {
+  if (!file) return;
+  const nome = file.name.toLowerCase();
+  const ext  = nome.split('.').pop();
+  const st   = document.getElementById('import-status');
+
+  // NF-e XML → redirecionar
+  if (ext === 'xml') {
+    st.style.display = '';
+    st.innerHTML = `<div class="alert-item critico" style="margin-top:4px">
+      <span class="alert-ico">⚠️</span>
+      <span class="alert-text"><strong>NF-e XML</strong> — Use o módulo Boletos para importar notas fiscais</span>
+      <button class="alert-btn" onclick="navegar('boletos')">Ir para Boletos</button>
+    </div>`;
+    return;
+  }
+
+  st.style.display = '';
+  st.innerHTML = `<div class="alert-item alerta" style="margin-top:4px">⏳ Identificando arquivo: <strong>${file.name}</strong></div>`;
+
+  // Detectar tipo pelo nome / cabeçalho
+  let tipo = 'desconhecido';
+  if (nome.includes('302') || nome.includes('estoque')) tipo = 'estoque_302';
+  else if (nome.includes('venda') || nome.includes('fatur')) tipo = 'vendas_xmenu';
+  else if (ext === 'ofx') tipo = 'extrato_ofx';
+  else if (nome.includes('extrato') || nome.includes('itau')) tipo = 'extrato_xlsx';
+  else if (nome.includes('fatura') || nome.includes('cartao') || nome.includes('cc')) tipo = 'fatura_cc';
+  else if (nome.includes('produto') || nome.includes('cadastro')) tipo = 'cadastro_pdv';
+
+  const tipoLabel = {
+    estoque_302: '📦 Relatório 302 — Estoque',
+    vendas_xmenu: '💰 Relatório de Vendas',
+    extrato_ofx: '🏦 Extrato Bancário OFX',
+    extrato_xlsx: '🏦 Extrato Bancário XLSX',
+    fatura_cc: '💳 Fatura Cartão CC',
+    cadastro_pdv: '📋 Cadastro de Produtos',
+    desconhecido: '❓ Tipo não identificado',
+  };
+
+  const rotaMap = {
+    estoque_302: '/api/produtos/sync-estoque',
+    vendas_xmenu: '/api/faturamento/upload-xmenu',
+    extrato_ofx: '/api/dre/upload-extrato',
+    extrato_xlsx: '/api/dre/upload-extrato',
+    fatura_cc: '/api/dre/upload-fatura-cc',
+    cadastro_pdv: '/api/produtos/sync-cadastro',
+  };
+
+  const rota = rotaMap[tipo];
+  setTimeout(() => {
+    st.innerHTML = `<div class="alert-item ${rota?'alerta':'critico'}" style="margin-top:4px">
+      <span>📄 <strong>${tipoLabel[tipo]}</strong></span>
+      ${rota ? `<button class="alert-btn" onclick="enviarArquivo('${rota}')">Importar →</button>`
+              : '<span style="margin-left:8px">Selecione manualmente o módulo de destino</span>'}
+    </div>`;
+    if (rota) window._arquivoSelecionado = file;
+  }, 600);
+}
+
+async function enviarArquivo(rota) {
+  const file = window._arquivoSelecionado;
+  if (!file) return;
+  const st = document.getElementById('import-status');
+  st.innerHTML = `<div class="alert-item alerta" style="margin-top:4px">⏳ Enviando...</div>`;
+  try {
+    const fd = new FormData();
+    fd.append('arquivo', file);
+    const res = await (_api||BB.api).upload(rota, fd);
+    if (res.ok !== false) {
+      st.innerHTML = `<div class="alert-item ok" style="margin-top:4px">✅ Importado com sucesso! Atualizando...</div>`;
+      setTimeout(() => carregar(), 1500);
+    } else {
+      st.innerHTML = `<div class="alert-item critico" style="margin-top:4px">❌ ${res.erro||'Erro ao importar'}</div>`;
+    }
+  } catch(e) {
+    st.innerHTML = `<div class="alert-item critico" style="margin-top:4px">❌ ${e.message}</div>`;
+  }
+}
+
+// Escuta eventos do barramento
 window.addEventListener('message', e => {
   const ev = e.data?.bbEvent || e.data?.type;
   if (['PERDA_REGISTRADA','VALIDADE_DESCARTADA','ESTOQUE_ATUALIZADO',
-       'MOVIMENTO_ESTOQUE','FATURAMENTO_ATUALIZADO'].includes(ev)) {
-    setTimeout(carregar, 1200); // recarrega após evento
+       'MOVIMENTO_ESTOQUE','FATURAMENTO_ATUALIZADO','BOLETO_PAGO'].includes(ev)) {
+    clearTimeout(window._hubRefreshTimer);
+    window._hubRefreshTimer = setTimeout(() => carregar(), 2000);
   }
 });
-
-async function carregar() {
-  const [statusRes, pendRes] = await Promise.all([
-    (_api||BB.api).get('/api/hub/status'),
-    (_api||BB.api).get('/api/hub/pendencias'),
-  ]);
-  if (statusRes.ok) {
-    _status = statusRes.data;
-    renderSemaforo(_status);
-    renderAcoes(_status);
-    document.getElementById('ph-atualizado').textContent =
-      'Atualizado: ' + new Date(statusRes.gerado_em).toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'});
-  }
-  if (pendRes.ok) renderPendencias(pendRes.data);
-}
-
-// ── Semáforo ──────────────────────────────────────────────────────────────────
-function renderSemaforo(status) {
-  const el = document.getElementById('semaforo');
-  el.innerHTML = Object.values(status).map(s => {
-    const cls = s.critico ? 'critico' : s.alerta ? 'alerta' : 'ok';
-    return `<div class="sem-card ${cls}" onclick="irPara('${s.acao||''}')">
-      <div class="sem-dot ${cls}"></div>
-      <div class="sem-icone">${s.icone||'📊'}</div>
-      <div class="sem-label">${s.label}</div>
-      <div class="sem-status ${cls}">${s.msg}</div>
-    </div>`;
-  }).join('');
-}
-
-// ── Pendências ────────────────────────────────────────────────────────────────
-function renderPendencias(pends) {
-  const el = document.getElementById('pendencias-wrap');
-  if (!pends?.length) { el.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:8px 0">Nenhuma pendência identificada.</div>'; return; }
-  el.innerHTML = `<table class="pend-table">
-    <thead><tr><th>Arquivo</th><th>Origem</th><th>Última importação</th><th>Status</th></tr></thead>
-    <tbody>${pends.map(p => `<tr>
-      <td style="font-weight:600">${p.arquivo}</td>
-      <td style="color:var(--muted)">${p.origem}</td>
-      <td style="font-family:'DM Mono',monospace;font-size:11px">${p.ultima}</td>
-      <td><span class="badge badge-${p.status}">${p.status==='ok'?'✅ OK':p.status==='alerta'?'⚠️ Atenção':'🔴 Pendente'}</span></td>
-    </tr>`).join('')}</tbody>
-  </table>`;
-}
-
-// ── Ações rápidas ─────────────────────────────────────────────────────────────
-function renderAcoes(status) {
-  const acoes = [
-    { ico:'📦', label:'Importar Estoque',  sub:'Relatório 302 XMenu', tab:'produtos', urgente: status.estoque?.critico },
-    { ico:'💰', label:'Importar Vendas',   sub:'Relatório XMenu',    tab:'faturamento', urgente: status.vendas?.critico },
-    { ico:'🗓', label:'Ver Validade',       sub: status.validade?.msg || 'Itens próximos', tab:'validade', urgente: status.validade?.critico },
-    { ico:'📄', label:'Ver Boletos',        sub: status.boletos?.msg || 'Vencimentos',    tab:'boletos',  urgente: status.boletos?.critico },
-    { ico:'🏭', label:'Fornecedores',       sub:'Cadastro de fornecedores', tab:'fornecedores', urgente:false },
-    { ico:'🔍', label:'Perdas',             sub:'Registrar e consultar',   tab:'perdas',       urgente:false },
-  ];
-  document.getElementById('acoes-grid').innerHTML = acoes.map(a => `
-    <button class="acao-btn ${a.urgente?'urgente':''}" onclick="irPara('${a.tab}')">
-      <div class="ab-ico">${a.ico}</div>
-      <span class="ab-label">${a.label}</span>
-      <span class="ab-sub">${a.sub}</span>
-    </button>`).join('');
-}
-
-// ── Navegação ─────────────────────────────────────────────────────────────────
-function irPara(tab) {
-  if (!tab) return;
-  try { window.parent?.postMessage({ type:'bb_navigate', tab }, '*'); } catch(_) {}
-}
-
-function irParaBoletos() { irPara('boletos'); }
-
-// ── Upload ────────────────────────────────────────────────────────────────────
-function onDragOver(e) { e.preventDefault(); document.getElementById('upload-area').classList.add('dragover'); }
-function onDragLeave(e) { document.getElementById('upload-area').classList.remove('dragover'); }
-function onDrop(e) {
-  e.preventDefault();
-  document.getElementById('upload-area').classList.remove('dragover');
-  const file = e.dataTransfer.files[0];
-  if (file) processarArquivo(file);
-}
-function onFileSelect(e) {
-  const file = e.target.files[0];
-  if (file) processarArquivo(file);
-  e.target.value = '';
-}
-
-async function processarArquivo(file) {
-  const nfe = document.getElementById('nfe-aviso');
-  const dr  = document.getElementById('detect-result');
-  nfe.classList.remove('show'); dr.classList.remove('show');
-
-  // Detectar tipo via leitura do arquivo
-  const nome = file.name.toLowerCase();
-  const ext  = nome.split('.').pop();
-
-  // NF-e XML — identificar e bloquear imediatamente
-  if (ext === 'xml') {
-    const txt = await file.text().catch(()=>'');
-    if (txt.includes('<NFe') || txt.includes('<nfeProc') || txt.includes('nfe.fazenda')) {
-      nfe.classList.add('show');
-      return;
-    }
-    toast('⚠️ Arquivo XML não reconhecido como NF-e');
-    return;
-  }
-
-  // OFX
-  if (ext === 'ofx' || ext === 'ofc') {
-    mostrarDeteccao('extrato_ofx', file);
-    return;
-  }
-
-  // XLSX/CSV — detectar pelo nome e depois pelo conteúdo
-  let tipo = 'desconhecido';
-  if (nome.includes('302') || nome.includes('estoque')) tipo = 'estoque_302';
-  else if (nome.includes('venda') || nome.includes('faturamento')) tipo = 'vendas_xmenu';
-  else if (nome.includes('produto') || nome.includes('cadastro')) tipo = 'cadastro_pdv';
-  else if (nome.includes('fatura') || nome.includes('cartao') || nome.includes('cc')) tipo = 'fatura_cc';
-  else if (nome.includes('extrato')) tipo = 'extrato_xlsx';
-  else tipo = 'xlsx_generico';
-
-  mostrarDeteccao(tipo, file);
-}
-
-const TIPO_INFO = {
-  'estoque_302':    { label:'📦 Relatório de Estoque (302)',      acao:'Vai atualizar: Produtos · Validade · Kits · Dashboard', destino:'produtos',     rota:'/api/produtos/sync-estoque' },
-  'vendas_xmenu':  { label:'💰 Relatório de Vendas (XMenu)',     acao:'Vai atualizar: Faturamento · DRE · Dashboard',          destino:'faturamento',  rota:'/api/faturamento/import' },
-  'cadastro_pdv':  { label:'📋 Cadastro de Produtos',             acao:'Vai atualizar: Catálogo de produtos · Kits · Retiradas',destino:'produtos',     rota:'/api/produtos/sync-cadastro' },
-  'extrato_ofx':   { label:'🏦 Extrato Bancário (OFX)',           acao:'Vai atualizar: DRE · Classificação financeira',         destino:'dre',          rota:'/api/dre/import-extrato' },
-  'extrato_xlsx':  { label:'🏦 Extrato Bancário (XLSX)',          acao:'Vai atualizar: DRE · Classificação financeira',         destino:'dre',          rota:'/api/dre/import-extrato' },
-  'fatura_cc':     { label:'💳 Fatura Cartão de Crédito',         acao:'Vai atualizar: DRE · Status Cartões',                   destino:'dre',          rota:'/api/dre/import-extrato' },
-  'xlsx_generico': { label:'📊 Planilha XLSX (tipo não identificado)', acao:'Selecione o destino manualmente', destino:null, rota:null },
-  'desconhecido':  { label:'❓ Arquivo não reconhecido',           acao:'Formato não suportado ou não identificado', destino:null, rota:null },
-};
-
-let _arqAtual = null;
-function mostrarDeteccao(tipo, file) {
-  _arqAtual = { tipo, file };
-  const info = TIPO_INFO[tipo] || TIPO_INFO.desconhecido;
-  document.getElementById('detect-tipo').textContent = info.label + ' — ' + file.name;
-  document.getElementById('detect-acao').textContent = info.acao;
-
-  const btns = document.getElementById('detect-btns');
-  if (info.rota) {
-    btns.innerHTML = `
-      <button onclick="enviarArquivo()" style="padding:7px 16px;background:var(--red);color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif">
-        ✅ Confirmar e Importar
-      </button>
-      <button onclick="document.getElementById('detect-result').classList.remove('show')"
-        style="padding:7px 14px;background:var(--white);color:var(--text);border:1px solid var(--border);border-radius:7px;font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif">
-        Cancelar
-      </button>`;
-  } else {
-    btns.innerHTML = `<button onclick="document.getElementById('detect-result').classList.remove('show')"
-      style="padding:7px 14px;background:var(--white);color:var(--text);border:1px solid var(--border);border-radius:7px;font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif">
-      Fechar</button>`;
-  }
-  document.getElementById('detect-result').classList.add('show');
-}
-
-async function enviarArquivo() {
-  if (!_arqAtual) return;
-  const info = TIPO_INFO[_arqAtual.tipo];
-  if (!info?.rota) return;
-
-  const fd = new FormData();
-  fd.append('arquivo', _arqAtual.file);
-
-  toast('⏳ Enviando arquivo...');
-  const btn = document.querySelector('#detect-btns button');
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ Importando...'; }
-
-  try {
-    const res = await (_api||BB.api).upload(info.rota, fd);
-    if (res.ok !== false) {
-      toast('✅ Arquivo importado com sucesso!');
-      document.getElementById('detect-result').classList.remove('show');
-      setTimeout(carregar, 1500);
-      if (info.destino) setTimeout(() => irPara(info.destino), 2000);
-    } else {
-      toast('❌ ' + (res.erro || 'Erro ao importar'));
-    }
-  } catch(e) {
-    toast('❌ Erro: ' + e.message);
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = '✅ Confirmar e Importar'; }
-  }
-}
-
-// ── Utils ─────────────────────────────────────────────────────────────────────
-let _toastT;
-function toast(msg, ms=2800) {
-  if (typeof BB !== 'undefined' && BB.toast) { BB.toast(msg, ms); return; }
-  const el = document.getElementById('toast');
-  el.textContent = msg; el.classList.add('show');
-  clearTimeout(_toastT);
-  _toastT = setTimeout(() => el.classList.remove('show'), ms);
-}
 </script>
 </body>
 </html>

@@ -1,8 +1,6 @@
 /**
- * routes/hub.js — Hub Operacional (F1-09)
- * Bom Beef Sistema de Gestão — AR Boutique de Carnes LTDA
- *
- * GET /api/hub/status — status operacional de todos os módulos
+ * routes/hub.js — Hub Operacional (F1-09 revisado)
+ * GET /api/hub/resumo — tudo que o gestor precisa em uma chamada
  */
 'use strict';
 
@@ -13,144 +11,128 @@ module.exports = function(pool) {
   const r = express.Router();
   r.use(autenticar());
 
-  r.get('/status', async (req, res) => {
+  r.get('/resumo', async (req, res) => {
     try {
       const agora = new Date();
       const hoje  = agora.toISOString().slice(0,10);
-      const ontem = new Date(agora - 86400000).toISOString().slice(0,10);
-      const status = {};
+      const mesAtual = `${String(agora.getMonth()+1).padStart(2,'0')}/${agora.getFullYear()}`;
 
-      // Estoque — última importação PDV
-      const est = await pool.query(`
-        SELECT MAX(atualizado_em) AS ultima FROM produtos WHERE estoque > 0
-      `).catch(() => ({rows:[{}]}));
-      const ultEst = est.rows[0]?.ultima;
-      const diasEst = ultEst ? Math.floor((agora - new Date(ultEst)) / 86400000) : 999;
-      status.estoque = {
-        label: 'Estoque',
-        icone: '📦',
-        ok: diasEst <= 1,
-        alerta: diasEst > 1 && diasEst <= 3,
-        critico: diasEst > 3,
-        msg: ultEst ? (diasEst === 0 ? 'Atualizado hoje' : `Atualizado há ${diasEst} dia(s)`) : 'Nunca importado',
-        ultima_atualizacao: ultEst || null,
-        acao: 'sync-estoque',
-      };
+      const q = sql => pool.query(sql).catch(() => ({ rows: [] }));
 
-      // Vendas — último registro de faturamento
-      const fat = await pool.query(`
-        SELECT MAX(data_fim) AS ultima FROM faturamento_periodos WHERE tipo_periodo='dia'
-      `).catch(() => ({rows:[{}]}));
-      const ultFat = fat.rows[0]?.ultima;
-      const diasFat = ultFat ? Math.floor((agora - new Date(ultFat + 'T23:59:59')) / 86400000) : 999;
-      status.vendas = {
-        label: 'Vendas',
-        icone: '💰',
-        ok: diasFat <= 1,
-        alerta: diasFat > 1 && diasFat <= 3,
-        critico: diasFat > 3,
-        msg: ultFat ? (diasFat <= 1 ? 'Importadas hoje/ontem' : `Última importação há ${diasFat} dia(s)`) : 'Nunca importado',
-        ultima_atualizacao: ultFat || null,
-        acao: 'importar-vendas',
-      };
+      const [
+        estoque, vendas, validade, boletos, pMin,
+        mov24h, perdas, retiradas, dreRes,
+        boletoProx, valorAberto, dre_pend
+      ] = await Promise.all([
+        // Estoque — última atualização
+        q(`SELECT MAX(atualizado_em) AS u FROM produtos WHERE estoque > 0`),
+        // Vendas — último registro diário
+        q(`SELECT MAX(data_fim) AS u, COALESCE(SUM(fat_bruto),0) AS fat_hoje
+           FROM faturamento_periodos WHERE tipo_periodo='dia' AND data_inicio >= CURRENT_DATE`),
+        // Validade
+        q(`SELECT
+            COUNT(*) FILTER (WHERE data_validade < CURRENT_DATE) AS vencidos,
+            COUNT(*) FILTER (WHERE data_validade BETWEEN CURRENT_DATE AND CURRENT_DATE+3) AS criticos,
+            COUNT(*) FILTER (WHERE data_validade BETWEEN CURRENT_DATE+4 AND CURRENT_DATE+7) AS alertas
+           FROM validade_items WHERE status NOT IN ('descartado','vendido')`),
+        // Boletos vencidos
+        q(`SELECT COUNT(*) AS n, COALESCE(SUM(ABS(valor)),0) AS total
+           FROM boletos WHERE status='avencer' AND vencimento < CURRENT_DATE`),
+        // Produtos abaixo do mínimo
+        q(`SELECT COUNT(*) AS n FROM produtos WHERE ativo=true AND estoque_minimo>0 AND estoque<estoque_minimo`),
+        // Movimentos 24h
+        q(`SELECT COUNT(*) AS n FROM movimentos_estoque WHERE data_movimento >= NOW()-INTERVAL '24 hours'`),
+        // Perdas do mês
+        q(`SELECT COALESCE(SUM(valor_perda),0) AS total, COUNT(*) AS n FROM perdas WHERE mes=$1`),
+        // Retiradas do mês
+        q(`SELECT COALESCE(SUM(valor_total),0) AS total, COUNT(*) AS n FROM retiradas WHERE mes=$1`),
+        // DRE resultado mês
+        q(`SELECT
+            COALESCE(SUM(valor) FILTER (WHERE tipo_lancamento IN ('RECEITA','RECEITA_EXTRA')),0) AS receitas,
+            COALESCE(SUM(ABS(valor)) FILTER (WHERE tipo_lancamento NOT IN ('RECEITA','RECEITA_EXTRA')),0) AS despesas
+           FROM dre_lancamentos dl JOIN dre_sessoes ds ON ds.id=dl.sessao_id WHERE ds.mes_ref=$1`),
+        // Boletos próximos 7 dias
+        q(`SELECT COUNT(*) AS n, COALESCE(SUM(ABS(valor)),0) AS total
+           FROM boletos WHERE status='avencer' AND vencimento BETWEEN CURRENT_DATE AND CURRENT_DATE+7`),
+        // Total aberto em boletos
+        q(`SELECT COALESCE(SUM(ABS(valor)),0) AS total FROM boletos WHERE status='avencer'`),
+        // DRE lançamentos sem categoria
+        q(`SELECT COUNT(*) AS n FROM dre_lancamentos WHERE (categoria IS NULL OR categoria='') AND mes=$1`),
+      ].map((p,i) => i>=6 ? p : p) // já são promises
+       .map((p,i) => {
+         // Adicionar parâmetros onde necessário
+         if (i === 6) return pool.query(`SELECT COALESCE(SUM(valor_perda),0) AS total, COUNT(*) AS n FROM perdas WHERE mes=$1`, [mesAtual]).catch(()=>({rows:[{total:0,n:0}]}));
+         if (i === 7) return pool.query(`SELECT COALESCE(SUM(valor_total),0) AS total, COUNT(*) AS n FROM retiradas WHERE mes=$1`, [mesAtual]).catch(()=>({rows:[{total:0,n:0}]}));
+         if (i === 8) return pool.query(`SELECT COALESCE(SUM(valor) FILTER (WHERE tipo_lancamento IN ('RECEITA','RECEITA_EXTRA')),0) AS receitas, COALESCE(SUM(ABS(valor)) FILTER (WHERE tipo_lancamento NOT IN ('RECEITA','RECEITA_EXTRA')),0) AS despesas FROM dre_lancamentos dl JOIN dre_sessoes ds ON ds.id=dl.sessao_id WHERE ds.mes_ref=$1`, [mesAtual]).catch(()=>({rows:[{receitas:0,despesas:0}]}));
+         if (i === 11) return pool.query(`SELECT COUNT(*) AS n FROM dre_lancamentos WHERE (categoria IS NULL OR categoria='') AND mes=$1`, [mesAtual]).catch(()=>({rows:[{n:0}]}));
+         return p;
+       }));
 
-      // Validade — itens vencidos / críticos
-      const val = await pool.query(`
-        SELECT
-          COUNT(*) FILTER (WHERE data_validade < CURRENT_DATE) AS vencidos,
-          COUNT(*) FILTER (WHERE data_validade BETWEEN CURRENT_DATE AND CURRENT_DATE + 3) AS criticos,
-          COUNT(*) FILTER (WHERE data_validade BETWEEN CURRENT_DATE + 4 AND CURRENT_DATE + 7) AS alertas
-        FROM validade_items WHERE status NOT IN ('descartado','vendido')
-      `).catch(() => ({rows:[{vencidos:0,criticos:0,alertas:0}]}));
-      const v = val.rows[0];
-      const nVenc = parseInt(v.vencidos||0), nCrit = parseInt(v.criticos||0);
-      status.validade = {
-        label: 'Validade',
-        icone: '🗓',
-        ok: nVenc === 0 && nCrit === 0,
-        alerta: nVenc === 0 && nCrit > 0,
-        critico: nVenc > 0,
-        msg: nVenc > 0 ? `${nVenc} vencido(s) — retirar imediatamente` :
-             nCrit > 0 ? `${nCrit} crítico(s) — vencem em 3 dias` : 'Sem alertas',
-        vencidos: nVenc, criticos: nCrit, alertas: parseInt(v.alertas||0),
-        acao: 'validade',
-      };
+      const dias = d => d ? Math.floor((agora - new Date(d)) / 86400000) : 999;
+      const brl  = v => parseFloat(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
 
-      // Boletos — vencidos sem baixa
-      const bol = await pool.query(`
-        SELECT COUNT(*) AS vencidos, COALESCE(SUM(ABS(valor)),0) AS total
-        FROM boletos WHERE status='avencer' AND vencimento < CURRENT_DATE
-      `).catch(() => ({rows:[{vencidos:0,total:0}]}));
-      const nBol = parseInt(bol.rows[0]?.vencidos||0);
-      status.boletos = {
-        label: 'Boletos',
-        icone: '📄',
-        ok: nBol === 0,
-        alerta: nBol > 0 && nBol <= 3,
-        critico: nBol > 3,
-        msg: nBol > 0 ? `${nBol} vencido(s) sem baixa` : 'Em dia',
-        vencidos: nBol,
-        total_vencido: parseFloat(bol.rows[0]?.total||0),
-        acao: 'boletos',
-      };
+      const dEst = dias(estoque.rows[0]?.u);
+      const dFat = dias(vendas.rows[0]?.u);
+      const v    = validade.rows[0] || {};
+      const nVenc = parseInt(v.vencidos||0);
+      const nCrit = parseInt(v.criticos||0);
+      const nAlrt = parseInt(v.alertas||0);
+      const nBol  = parseInt(boletos.rows[0]?.n||0);
+      const totBol = parseFloat(boletos.rows[0]?.total||0);
+      const nMin  = parseInt(pMin.rows[0]?.n||0);
+      const nMov  = parseInt(mov24h.rows[0]?.n||0);
+      const totPerd = parseFloat(perdas.rows[0]?.total||0);
+      const totRet  = parseFloat(retiradas.rows[0]?.total||0);
+      const rec     = parseFloat(dre_pend ? 0 : (dreRes.rows[0]?.receitas||0)); // Will be resolved below
+      const desp    = parseFloat(dreRes.rows[0]?.despesas||0);
+      const receitas = parseFloat(dreRes.rows[0]?.receitas||0);
+      const nBolProx = parseInt(boletoProx.rows[0]?.n||0);
+      const totAberto = parseFloat(valorAberto.rows[0]?.total||0);
+      const nDrePend = parseInt(dre_pend.rows[0]?.n||0);
+      const resultado = receitas - desp;
 
-      // Produtos — abaixo do estoque mínimo
-      const pMin = await pool.query(`
-        SELECT COUNT(*) AS total FROM produtos
-        WHERE ativo=true AND estoque_minimo > 0 AND estoque < estoque_minimo
-      `).catch(() => ({rows:[{total:0}]}));
-      const nMin = parseInt(pMin.rows[0]?.total||0);
-      status.estoque_minimo = {
-        label: 'Estoque Mínimo',
-        icone: '⚠️',
-        ok: nMin === 0,
-        alerta: nMin > 0 && nMin <= 5,
-        critico: nMin > 5,
-        msg: nMin > 0 ? `${nMin} produto(s) abaixo do mínimo` : 'Estoque adequado',
-        produtos_criticos: nMin,
-        acao: 'produtos',
-      };
-
-      // Movimentos — atividade recente
-      const mov = await pool.query(`
-        SELECT COUNT(*) AS total FROM movimentos_estoque
-        WHERE data_movimento >= NOW() - INTERVAL '24 hours'
-      `).catch(() => ({rows:[{total:0}]}));
-      status.movimentos = {
-        label: 'Movimentos Hoje',
-        icone: '📊',
-        ok: true,
-        alerta: false,
-        critico: false,
-        msg: `${parseInt(mov.rows[0]?.total||0)} movimento(s) nas últimas 24h`,
-        total_24h: parseInt(mov.rows[0]?.total||0),
-      };
-
-      res.json({ ok: true, data: status, gerado_em: agora });
+      res.json({ ok: true, data: {
+        timestamp: agora,
+        mes: mesAtual,
+        status: {
+          estoque:  { ok: dEst<=1, alerta: dEst>1&&dEst<=3, critico: dEst>3,
+                      msg: dEst===0?'Atualizado hoje':`Há ${dEst} dia(s)`, dias: dEst },
+          vendas:   { ok: dFat<=1, alerta: dFat>1&&dFat<=3, critico: dFat>3,
+                      msg: dFat<=1?'Importadas hoje/ontem':`Há ${dFat} dia(s)`, dias: dFat },
+          validade: { ok: nVenc===0&&nCrit===0, alerta: nVenc===0&&nCrit>0, critico: nVenc>0,
+                      msg: nVenc>0?`${nVenc} vencido(s) — urgente!`:nCrit>0?`${nCrit} vencem em 3 dias`:'OK',
+                      vencidos: nVenc, criticos: nCrit, alertas: nAlrt },
+          boletos:  { ok: nBol===0, alerta: nBol>0&&nBol<=3, critico: nBol>3,
+                      msg: nBol>0?`${nBol} vencido(s) — R$ ${brl(totBol)}`:'Em dia',
+                      vencidos: nBol, total_vencido: totBol, prox7d: nBolProx, total_aberto: totAberto },
+          estoque_minimo: { ok: nMin===0, alerta: nMin>0&&nMin<=5, critico: nMin>5,
+                            msg: nMin>0?`${nMin} abaixo do mínimo`:'Adequado', count: nMin },
+        },
+        financeiro: {
+          receitas, despesas: desp, resultado,
+          resultado_fmt: `R$ ${brl(Math.abs(resultado))}`,
+          resultado_tipo: resultado >= 0 ? 'positivo' : 'negativo',
+          boletos_vencidos: nBol, boletos_vencidos_valor: totBol,
+          boletos_prox7d: nBolProx, total_aberto: totAberto,
+          dre_pendencias: nDrePend,
+        },
+        operacional: {
+          perdas_mes: totPerd, perdas_count: parseInt(perdas.rows[0]?.n||0),
+          retiradas_mes: totRet, retiradas_count: parseInt(retiradas.rows[0]?.n||0),
+          movimentos_24h: nMov,
+          validade_vencidos: nVenc, validade_criticos: nCrit, validade_alertas: nAlrt,
+          estoque_minimo_count: nMin,
+        },
+      }});
     } catch(e) {
-      console.error('[hub/status]', e.message);
+      console.error('[hub/resumo]', e.message);
       res.status(500).json({ ok: false, erro: e.message });
     }
   });
 
-  // GET /api/hub/pendencias — lista importações pendentes
-  r.get('/pendencias', async (req, res) => {
-    try {
-      const agora = new Date();
-      const pendencias = [];
-
-      const est = await pool.query(`SELECT MAX(atualizado_em) AS u FROM produtos WHERE estoque > 0`).catch(()=>({rows:[{}]}));
-      const fat = await pool.query(`SELECT MAX(data_fim) AS u FROM faturamento_periodos WHERE tipo_periodo='dia'`).catch(()=>({rows:[{}]}));
-
-      const fmt = d => d ? new Date(d).toLocaleDateString('pt-BR') : 'Nunca';
-      const dias = d => d ? Math.floor((agora - new Date(d)) / 86400000) : 999;
-
-      pendencias.push({ arquivo:'Relatório 302 — Estoque', origem:'XMenu/ChefWeb', ultima: fmt(est.rows[0]?.u), dias_atraso: dias(est.rows[0]?.u), status: dias(est.rows[0]?.u) <= 1 ? 'ok' : dias(est.rows[0]?.u) <= 3 ? 'alerta' : 'critico' });
-      pendencias.push({ arquivo:'Relatório de Vendas', origem:'XMenu/ChefWeb', ultima: fmt(fat.rows[0]?.u), dias_atraso: dias(fat.rows[0]?.u), status: dias(fat.rows[0]?.u) <= 1 ? 'ok' : dias(fat.rows[0]?.u) <= 3 ? 'alerta' : 'critico' });
-
-      res.json({ ok: true, data: pendencias });
-    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
-  });
+  // Manter /status e /pendencias para compatibilidade
+  r.get('/status',    async (req, res) => { res.redirect('/api/hub/resumo'); });
+  r.get('/pendencias',async (req, res) => { res.json({ ok: true, data: [] }); });
 
   return r;
 };
