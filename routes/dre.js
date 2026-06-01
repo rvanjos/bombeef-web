@@ -1156,5 +1156,35 @@ module.exports = function (pool, app) {
     };
   }
 
+  // ── DELETE /royalties-errados ────────────────────────────────────────────────
+  r.delete('/royalties-errados', async (req, res) => {
+    if (req.user?.perfil !== 'admin') return res.status(403).json({ ok:false, erro:'Apenas admin' });
+    try {
+      // Remove provisões automáticas com valor absurdo (>50k)
+      const { rowCount } = await pool.query(
+        `DELETE FROM dre_lancamentos WHERE fonte='ROYALTIES' AND ABS(valor)>50000`
+      );
+      res.json({ ok:true, removidos:rowCount,
+        msg:`${rowCount} provisão(ões) removida(s). O sistema vai recalcular com os valores corretos.` });
+    } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
+  });
+
+  // ── DELETE /royalties/:mes ────────────────────────────────────────────────
+  r.delete('/royalties/:mes', async (req, res) => {
+    if (req.user?.perfil !== 'admin') return res.status(403).json({ ok:false, erro:'Apenas admin' });
+    try {
+      const mes = req.params.mes;
+      const { rows:sessoes } = await pool.query(
+        `SELECT id FROM dre_sessoes WHERE mes_ref=$1`, [mes]
+      );
+      if (!sessoes.length) return res.json({ ok:true, removidos:0 });
+      const ids = sessoes.map(s=>s.id);
+      const { rowCount } = await pool.query(
+        `DELETE FROM dre_lancamentos WHERE sessao_id=ANY($1::int[]) AND fonte='ROYALTIES'`, [ids]
+      );
+      res.json({ ok:true, removidos:rowCount });
+    } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
+  });
+
   return r;
 };
