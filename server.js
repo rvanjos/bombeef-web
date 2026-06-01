@@ -192,6 +192,53 @@ async function autoMigrate() {
   await addCol('usuarios','ultimo_login','TIMESTAMPTZ').catch(()=>{});
   await addCol('usuarios','atualizado_em','TIMESTAMPTZ DEFAULT NOW()').catch(()=>{});
 
+  // ── F1-04: Índices de performance ────────────────────────────────────────
+  // CREATE INDEX IF NOT EXISTS — nunca falha, nunca afeta dados existentes
+  const addIdx = async (name, table, cols, unique='') => {
+    await pool.query(`CREATE ${unique} INDEX IF NOT EXISTS ${name} ON ${table}(${cols})`)
+      .catch(e => console.warn(`[migrate] idx ${name}:`, e.message));
+  };
+
+  // funcionarios — buscas por ativo e nome
+  await addIdx('idx_func_ativo_nome',    'funcionarios',      'ativo, nome');
+
+  // usuarios — login por email
+  await addIdx('idx_usr_email',          'usuarios',          'email');
+
+  // kit_campanhas — listagem de campanhas ativas
+  await addIdx('idx_kit_camp_ativo',     'kit_campanhas',     'ativo, data_inicio');
+
+  // kit_campanha_slots — JOIN ao listar slots de uma campanha
+  await addIdx('idx_kit_slots_camp',     'kit_campanha_slots','campanha_id');
+
+  // kit_pedido_itens — itens de um pedido específico
+  await addIdx('idx_kit_pitem_pedido',   'kit_pedido_itens',  'pedido_id, produto_id');
+
+  // kits — listagem de kits ativos
+  await addIdx('idx_kits_ativo',         'kits',              'ativo');
+
+  // rh — fichas, apontamentos e pagamentos mensais por funcionário
+  await addIdx('idx_rh_fichas_func',     'rh_fichas',         'funcionario_id, mes_ref');
+  await addIdx('idx_rh_apont_func',      'rh_apontamentos',   'funcionario_id, mes_ref');
+  await addIdx('idx_rh_pgto_func',       'rh_pagamentos',     'funcionario_id, mes_ref');
+
+  // ponto — auditoria e jornada por funcionário
+  await addIdx('idx_ponto_audit_func',   'ponto_auditoria',   'funcionario_id, horario_batida');
+  await addIdx('idx_ponto_jornada_func', 'ponto_jornada_dia', 'funcionario_id, dia_semana');
+
+  // fiado — vendas, pagamentos e histórico por cliente
+  await addIdx('idx_venda_fiado_cli',    'vendas_fiado',      'cliente_id, data_compra');
+  await addIdx('idx_pgto_fiado_cli',     'pagamentos_fiado',  'cliente_id, data_pagamento');
+  await addIdx('idx_hist_fiado_cli',     'historico_fiado',   'cliente_id');
+  await addIdx('idx_cli_tipo',           'clientes_fiado',    'tipo_cliente, ativo');
+
+  // metas — busca por mês
+  await addIdx('idx_metas_mes',          'metas',             'mes');
+
+  // fornecedores — busca por CNPJ e razão social
+  await addIdx('idx_forn_cnpj',          'fornecedores',      'cnpj_fornecedor');
+  await addIdx('idx_forn_nome',          'fornecedores',      'razao_social');
+
   console.log('[migrate] ✅ migração automática concluída');
 }
 
