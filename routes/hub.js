@@ -305,6 +305,117 @@ module.exports = function(pool) {
     }
   });
 
+  // ── GET /compras — F2-04: motor de compras inteligentes ─────────────────────
+  r.get('/compras', async (req, res) => {
+    try {
+      const JANELA = 30; // dias para calcular média de vendas
+
+      // Cruzamento: produtos × média de vendas × estoque atual
+      // Inclui todos os produtos com estoque_minimo > 0 OU com vendas recentes
+      const { rows } = await pool.query(`
+        WITH vendas_media AS (
+          SELECT
+            codigo,
+            SUM(quantidade)::NUMERIC                           AS total_qtd,
+            ROUND(SUM(quantidade)::NUMERIC / $1, 4)            AS media_diaria,
+            COUNT(DISTINCT data_venda)                         AS dias_com_venda
+          FROM vendas_produto
+          WHERE data_venda >= CURRENT_DATE - INTERVAL '${JANELA} days'
+          GROUP BY codigo
+        )
+        SELECT
+          p.id,
+          p.codigo,
+          p.descricao,
+          p.fornecedor,
+          p.unidade,
+          p.estoque,
+          p.estoque_minimo,
+          p.preco_custo,
+          COALESCE(v.media_diaria, 0)           AS media_diaria,
+          COALESCE(v.dias_com_venda, 0)         AS dias_com_venda,
+          COALESCE(v.total_qtd, 0)              AS total_qtd_30d,
+          CASE
+            WHEN COALESCE(v.media_diaria, 0) > 0
+              THEN ROUND(p.estoque / v.media_diaria, 1)
+            ELSE NULL
+          END                                   AS cobertura_dias,
+          CASE
+            WHEN COALESCE(v.media_diaria, 0) > 0
+              THEN ROUND((v.media_diaria * 30) - p.estoque, 3)
+            ELSE GREATEST(p.estoque_minimo - p.estoque, 0)
+          END                                   AS sugestao_compra
+        FROM produtos p
+        LEFT JOIN vendas_media v ON v.codigo = p.codigo
+        WHERE p.ativo = true
+          AND (
+            p.estoque_minimo > 0
+            OR (COALESCE(v.media_diaria, 0) > 0 AND p.estoque < v.media_diaria * 15)
+          )
+        ORDER BY
+          CASE
+            WHEN COALESCE(v.media_diaria, 0) > 0
+              THEN p.estoque / NULLIF(v.media_diaria, 0)
+            ELSE 999
+          END ASC NULLS LAST,
+          p.descricao ASC
+      `, [JANELA]);
+
+      // Classificar e enriquecer
+      const itens = rows.map(r => {
+        const cob  = r.cobertura_dias !== null ? parseFloat(r.cobertura_dias) : null;
+        const med  = parseFloat(r.media_diaria || 0);
+        const est  = parseFloat(r.estoque || 0);
+        const min  = parseFloat(r.estoque_minimo || 0);
+        const sug  = Math.max(0, parseFloat(r.sugestao_compra || 0));
+
+        // Classificação
+        let classe, urgencia;
+        if (cob !== null) {
+          if (cob < 5)        { classe = 'urgente';  urgencia = 1; }
+          else if (cob < 15)  { classe = 'breve';    urgencia = 2; }
+          else                { classe = 'saudavel'; urgencia = 3; }
+        } else if (min > 0 && est < min) {
+          // Sem histórico de vendas mas abaixo do mínimo
+          classe = 'urgente'; urgencia = 1;
+        } else if (min > 0 && est < min * 1.2) {
+          classe = 'breve'; urgencia = 2;
+        } else {
+          classe = 'saudavel'; urgencia = 3;
+        }
+
+        return {
+          id:            parseInt(r.id),
+          codigo:        r.codigo,
+          descricao:     r.descricao,
+          fornecedor:    r.fornecedor || null,
+          unidade:       r.unidade || 'un',
+          estoque:       est,
+          estoque_minimo: min,
+          media_diaria:  parseFloat(med.toFixed(3)),
+          dias_com_venda: parseInt(r.dias_com_venda || 0),
+          cobertura_dias: cob,
+          sugestao_compra: parseFloat(sug.toFixed(3)),
+          classe,
+          urgencia,
+        };
+      }).filter(r => r.classe !== 'saudavel' || r.estoque_minimo > 0);
+
+      // Separar por classe para o frontend
+      const urgentes  = itens.filter(i => i.classe === 'urgente');
+      const breve     = itens.filter(i => i.classe === 'breve');
+      const saudavel  = itens.filter(i => i.classe === 'saudavel');
+
+      res.json({
+        ok: true,
+        data: { urgentes, breve, saudavel, total: itens.length, janela_dias: JANELA }
+      });
+    } catch(e) {
+      console.error('[hub/compras]', e.message);
+      res.status(500).json({ ok: false, erro: e.message });
+    }
+  });
+
   // ── Aliases de compatibilidade ────────────────────────────────────────────
   r.get('/status',     async (req, res) => res.redirect('/api/hub/resumo'));
   r.get('/pendencias', async (req, res) => res.json({ ok: true, data: [] }));

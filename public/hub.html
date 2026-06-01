@@ -114,6 +114,25 @@ body{display:flex;flex-direction:column;overflow-y:auto;}
 .tag{display:inline-block;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:2px 6px;font-size:10px;font-weight:700;color:var(--muted);margin:3px 2px 0;}
 .tag.nfe{background:#fff8f8;border-color:#fecaca;color:var(--red-l);}
 
+/* ── COMPRAS ── */
+.compras-grupo{margin-bottom:12px;}
+.compras-header{display:flex;align-items:center;gap:8px;margin-bottom:7px;}
+.compras-badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:5px;}
+.badge-urgente{background:#fef2f2;color:var(--red-l);}
+.badge-breve{background:var(--amber-bg);color:var(--amber);}
+.badge-saudavel{background:var(--green-bg);color:var(--green);}
+.comp-table{width:100%;border-collapse:collapse;font-size:12px;}
+.comp-table th{font-size:9px;text-transform:uppercase;letter-spacing:.5px;font-weight:700;color:var(--muted);padding:5px 8px;border-bottom:1px solid var(--border);text-align:left;}
+.comp-table th.r,.comp-table td.r{text-align:right;}
+.comp-table td{padding:6px 8px;border-bottom:1px solid #f5efe8;vertical-align:middle;}
+.comp-table tr:hover td{background:#fdf9f7;}
+.cob-pill{display:inline-block;padding:1px 7px;border-radius:4px;font-family:'DM Mono',monospace;font-size:11px;font-weight:700;}
+.cob-urgente{background:#fef2f2;color:var(--red-l);}
+.cob-breve{background:var(--amber-bg);color:var(--amber);}
+.cob-saudavel{background:var(--green-bg);color:var(--green);}
+.cob-sem{background:var(--bg);color:var(--muted);}
+.fornec{font-size:10px;color:var(--muted);margin-top:1px;}
+
 /* ── GRID ── */
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
 @media(max-width:900px){.grid2{grid-template-columns:1fr;}.vendas-grid{grid-template-columns:1fr;}.vdiv{display:none;}}
@@ -157,9 +176,13 @@ function atualizarRelogio() {
 
 async function carregar() {
   try {
-    const d = await (_api||BB.api).get('/api/hub/resumo');
-    if (!d.ok) { renderErro(d.erro); return; }
-    render(d.data);
+    const [res, comp] = await Promise.all([
+      (_api||BB.api).get('/api/hub/resumo'),
+      (_api||BB.api).get('/api/hub/compras'),
+    ]);
+    if (!res.ok) { renderErro(res.erro); return; }
+    render(res.data);
+    renderCompras(comp.ok ? comp.data : null);
   } catch(e) { renderErro(e.message); }
 }
 
@@ -376,6 +399,13 @@ function render(d) {
 
   <div class="secao">${vendaHtml}</div>
 
+  <div class="secao" id="sec-compras">
+    <div class="sec-title">🛒 Compras Inteligentes — cobertura de estoque</div>
+    <div class="card" id="compras-card">
+      <div style="font-size:12px;color:var(--muted);padding:8px 0">⏳ Calculando sugestões...</div>
+    </div>
+  </div>
+
   <div class="grid2">
     <div>
       <div class="secao">
@@ -437,6 +467,91 @@ function render(d) {
       </div>
     </div>
   </div>`;
+}
+
+function renderCompras(data) {
+  const el = document.getElementById('compras-card');
+  if (!el) return;
+  if (!data) {
+    el.innerHTML = '<div style="font-size:12px;color:var(--muted)">Não foi possível calcular sugestões.</div>';
+    return;
+  }
+
+  const { urgentes, breve, janela_dias } = data;
+  const total = urgentes.length + breve.length;
+
+  if (total === 0) {
+    el.innerHTML = `<div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--green)">
+      <span style="font-size:16px">✅</span> Estoque saudável — sem necessidade de reposição imediata
+      <span style="color:var(--muted);font-size:11px">(base: últimos ${janela_dias} dias)</span>
+    </div>`;
+    return;
+  }
+
+  function linhasTabela(itens) {
+    return itens.map(it => {
+      const cobStr = it.cobertura_dias !== null
+        ? `${it.cobertura_dias}d` : '—';
+      const cobCls = it.classe === 'urgente' ? 'cob-urgente'
+                   : it.classe === 'breve'   ? 'cob-breve' : 'cob-saudavel';
+      const medStr = it.media_diaria > 0
+        ? `${it.media_diaria.toFixed(2)} ${it.unidade}/dia` : 'sem histórico';
+      const sugStr = it.sugestao_compra > 0
+        ? `${it.sugestao_compra.toFixed(it.sugestao_compra < 10 ? 2 : 0)} ${it.unidade}` : '—';
+      return `<tr>
+        <td>
+          <div style="font-weight:600">${it.descricao}</div>
+          ${it.fornecedor ? `<div class="fornec">🏭 ${it.fornecedor}</div>` : ''}
+        </td>
+        <td class="r" style="font-family:'DM Mono',monospace">${it.estoque.toFixed(it.estoque < 10 ? 2 : 0)} ${it.unidade}</td>
+        <td class="r" style="color:var(--muted);font-size:11px">${medStr}</td>
+        <td class="r"><span class="cob-pill ${cobCls}">${cobStr}</span></td>
+        <td class="r" style="font-weight:600;color:var(--red-l)">${sugStr}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  let html = '';
+
+  if (urgentes.length > 0) {
+    html += `<div class="compras-grupo">
+      <div class="compras-header">
+        <span style="font-size:14px">🔴</span>
+        <strong style="font-size:13px">Compra Urgente</strong>
+        <span class="compras-badge badge-urgente">${urgentes.length} produto(s) — cobertura &lt; 5 dias</span>
+      </div>
+      <table class="comp-table">
+        <thead><tr>
+          <th>Produto</th><th class="r">Estoque</th>
+          <th class="r">Média/dia</th><th class="r">Cobertura</th><th class="r">Sugestão</th>
+        </tr></thead>
+        <tbody>${linhasTabela(urgentes)}</tbody>
+      </table>
+    </div>`;
+  }
+
+  if (breve.length > 0) {
+    html += `<div class="compras-grupo">
+      <div class="compras-header">
+        <span style="font-size:14px">🟡</span>
+        <strong style="font-size:13px">Comprar em Breve</strong>
+        <span class="compras-badge badge-breve">${breve.length} produto(s) — cobertura 5 a 15 dias</span>
+      </div>
+      <table class="comp-table">
+        <thead><tr>
+          <th>Produto</th><th class="r">Estoque</th>
+          <th class="r">Média/dia</th><th class="r">Cobertura</th><th class="r">Sugestão</th>
+        </tr></thead>
+        <tbody>${linhasTabela(breve)}</tbody>
+      </table>
+    </div>`;
+  }
+
+  html += `<div style="font-size:10px;color:var(--muted);margin-top:6px">
+    Base: últimos ${janela_dias} dias · Sugestão = (média/dia × 30) − estoque atual
+  </div>`;
+
+  el.innerHTML = html;
 }
 
 function nav(tab) {
