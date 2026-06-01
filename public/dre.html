@@ -4489,10 +4489,10 @@ async function salvarCategorias() {
 
 // ─── PROVISÃO MÚLTIPLOS MESES ────────────────────────────────────────────────
 // ─── ROYALTIES AUTOMÁTICOS ────────────────────────────────────────────────────
-// Regra: taxa configurável (padrão 4,75%) do faturamento do mês M → 2 parcelas no mês M+1
+// Regra: 4,88% do faturamento do mês M → 2 parcelas iguais no mês M+1 (dia 15 e último dia útil)
 // Taxa configurável via localStorage('bb_taxa_royalties') ou na aba Config / DRE
 async function gerarRoyaltiesAutomatico() {
-  const TAXA = parseFloat(localStorage.getItem('bb_taxa_royalties') || '4.75') / 100;
+  const TAXA = parseFloat(localStorage.getItem('bb_taxa_royalties') || '4.88') / 100;
   const CAT  = 'Royalties';
 
   // Coleta faturamento SEMPRE da API (evita usar localStorage desatualizado)
@@ -4540,9 +4540,9 @@ async function gerarRoyaltiesAutomatico() {
       parseFloat(t.valor||0) < 0
     );
     const totalPago = pagamentosReais.reduce((s,t) => s + Math.abs(parseFloat(t.valor||0)), 0);
-    const parcelaPaga = parseFloat(mesFat && fatPorMes[mesFat] ? fatPorMes[mesFat] : 0) * TAXA;
+    const totalEsperado = parseFloat(mesFat && fatPorMes[mesFat] ? fatPorMes[mesFat] : 0) * TAXA;
 
-    if (totalPago > parcelaPaga * 0.8) {
+    if (totalPago > totalEsperado * 0.8) {
       // Pagamento real cobre ≥80% — remove provisão e pula
       TXS = TXS.filter(t => !(t.fonte === 'ROYALTIES' && t.mes === mesVenc));
       continue;
@@ -4552,14 +4552,15 @@ async function gerarRoyaltiesAutomatico() {
     const provisoesExist = TXS.filter(t => t.fonte === 'ROYALTIES' && t.mes === mesVenc);
     if (provisoesExist.length > 0) {
       // Se já existe provisão com valor correto (~igual ao calculado), pula
-      const valorEsperado = parseFloat(fat || 0) * TAXA;
+      const valorEsperado = parseFloat(fat || 0) * TAXA / 2;  // cada provisão = metade
       const jaOk = provisoesExist.some(p => Math.abs(Math.abs(parseFloat(p.valor||0)) - valorEsperado) < valorEsperado * 0.05);
       if (jaOk) continue;
       // Remove as provisões erradas
       TXS = TXS.filter(t => !(t.fonte === 'ROYALTIES' && t.mes === mesVenc));
     }
 
-    const parcela = parseFloat(fat) * TAXA;
+    const totalRoyalties = parseFloat(fat) * TAXA;  // total = fat × 4,88%
+    const parcela = totalRoyalties / 2;             // cada parcela = metade
     const ultimoDia = new Date(av, mv, 0).getDate();
     const dt1 = `${av}-${String(mv).padStart(2,'0')}-15`;
     const dt2 = `${av}-${String(mv).padStart(2,'0')}-${ultimoDia}`;
