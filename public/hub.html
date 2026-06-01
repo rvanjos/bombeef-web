@@ -349,11 +349,11 @@ function onFileSelect(file) {
   };
 
   const rotaMap = {
-    estoque_302: '/api/produtos/sync-estoque',
-    vendas_xmenu: '/api/faturamento/upload-xmenu',
-    extrato_ofx: '/api/dre/upload-extrato',
+    estoque_302:  '/api/produtos/sync-estoque',
+    vendas_xmenu: '/api/faturamento/import',      // rota correta
+    extrato_ofx:  '/api/dre/upload-extrato',
     extrato_xlsx: '/api/dre/upload-extrato',
-    fatura_cc: '/api/dre/upload-fatura-cc',
+    fatura_cc:    '/api/dre/upload-fatura-cc',
     cadastro_pdv: '/api/produtos/sync-cadastro',
   };
 

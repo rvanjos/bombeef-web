@@ -617,12 +617,14 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
 
       </div>
 
-      <!-- IDs legados para compatibilidade -->
-      <div style="display:none">
+      <!-- IDs legados para compatibilidade com carregarKPIs() -->
+      <!-- Apenas IDs que não existem em outro lugar no dashboard -->
+      <div style="display:none" aria-hidden="true">
         <span id="badge-boletos"></span><span id="badge-dre"></span>
         <span id="badge-produtos"></span><span id="badge-validade"></span>
         <span id="badge-retiradas"></span><span id="card-acesso-dre"></span>
         <div id="dash-atalhos-card"><div id="dash-atalhos"></div></div>
+        <div id="dash-alertas"></div>
       </div>
 
     </div><!-- /dashboard -->
