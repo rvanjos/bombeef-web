@@ -201,15 +201,17 @@ module.exports = function (pool, app) {
         : `codigo = $8`;
       const { rowCount } = await pool.query(`
         UPDATE produtos SET
-          descricao     = COALESCE($1, descricao),
-          fornecedor    = COALESCE($2, fornecedor),
-          preco_custo   = COALESCE($3, preco_custo),
-          preco_venda   = COALESCE($4, preco_venda),
-          unidade       = COALESCE($5, unidade),
-          categoria     = COALESCE($6, categoria),
-          ativo         = COALESCE($7, ativo),
-          estoque       = COALESCE($9, estoque),
-          atualizado_em = NOW()
+          descricao      = COALESCE($1, descricao),
+          fornecedor     = COALESCE($2, fornecedor),
+          preco_custo    = COALESCE($3, preco_custo),
+          preco_venda    = COALESCE($4, preco_venda),
+          unidade        = COALESCE($5, unidade),
+          categoria      = COALESCE($6, categoria),
+          ativo          = COALESCE($7, ativo),
+          estoque        = COALESCE($9, estoque),
+          estoque_minimo = COALESCE($10, estoque_minimo),
+          usa_validade   = COALESCE($11, usa_validade),
+          atualizado_em  = NOW()
         WHERE ${idClause}
       `, [
         p.descricao || null, p.fornecedor || null,
@@ -219,6 +221,8 @@ module.exports = function (pool, app) {
         p.ativo !== undefined ? p.ativo : null,
         req.params.id,
         p.estoque !== undefined && p.estoque !== null ? parseFloat(p.estoque) : null,
+        p.estoque_minimo !== undefined ? parseFloat(p.estoque_minimo) : null,
+        p.usa_validade  !== undefined ? p.usa_validade : null,
       ]);
       if (rowCount === 0) return res.status(404).json({ ok: false, erro: 'Produto não encontrado' });
       res.json({ ok: true });

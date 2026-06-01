@@ -278,6 +278,12 @@ async function autoMigrate() {
     ON movimentos_estoque(data_movimento DESC)`)
     .catch(e => console.warn('[migrate] idx_mov_data:', e.message));
 
+  // ── F1-05: Campos estoque_minimo e usa_validade em produtos ────────────────
+  // ADD COLUMN IF NOT EXISTS — não afeta dados existentes
+  // DEFAULT garante valor para todos os registros já existentes no banco
+  await addCol('produtos', 'estoque_minimo', 'NUMERIC(12,3) DEFAULT 0');
+  await addCol('produtos', 'usa_validade',   'BOOLEAN DEFAULT true');
+
   console.log('[migrate] ✅ migração automática concluída');
 }
 
