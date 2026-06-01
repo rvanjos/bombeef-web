@@ -239,6 +239,45 @@ async function autoMigrate() {
   await addIdx('idx_forn_cnpj',          'fornecedores',      'cnpj_fornecedor');
   await addIdx('idx_forn_nome',          'fornecedores',      'razao_social');
 
+  // ── F1-02: Tabela MOVIMENTOS_ESTOQUE ────────────────────────────────────────
+  // CREATE TABLE IF NOT EXISTS — nunca afeta dados existentes
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS movimentos_estoque (
+      id               SERIAL PRIMARY KEY,
+      produto_id       INTEGER NOT NULL REFERENCES produtos(id),
+      produto_codigo   TEXT    NOT NULL,
+      data_movimento   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      tipo_movimento   TEXT    NOT NULL
+        CHECK(tipo_movimento IN (
+          'ENTRADA_COMPRA','ENTRADA_AJUSTE','VENDA','PERDA','VALIDADE',
+          'KIT_RESERVA','KIT_CANCELAMENTO','RETIRADA_FUNCIONARIO',
+          'AJUSTE_INVENTARIO','IMPORTACAO_PDV'
+        )),
+      origem           TEXT,
+      origem_id        INTEGER,
+      quantidade       NUMERIC(12,3) NOT NULL,
+      estoque_anterior NUMERIC(12,3),
+      estoque_posterior NUMERIC(12,3),
+      usuario_id       INTEGER REFERENCES usuarios(id),
+      observacao       TEXT,
+      criado_em        TIMESTAMPTZ DEFAULT NOW()
+    )
+  `).catch(e => console.warn('[migrate] movimentos_estoque:', e.message));
+
+  // Índices da nova tabela
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_mov_produto
+    ON movimentos_estoque(produto_id, data_movimento DESC)`)
+    .catch(e => console.warn('[migrate] idx_mov_produto:', e.message));
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_mov_tipo
+    ON movimentos_estoque(tipo_movimento)`)
+    .catch(e => console.warn('[migrate] idx_mov_tipo:', e.message));
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_mov_origem
+    ON movimentos_estoque(origem, origem_id)`)
+    .catch(e => console.warn('[migrate] idx_mov_origem:', e.message));
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_mov_data
+    ON movimentos_estoque(data_movimento DESC)`)
+    .catch(e => console.warn('[migrate] idx_mov_data:', e.message));
+
   console.log('[migrate] ✅ migração automática concluída');
 }
 
