@@ -409,7 +409,8 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
     <div class="pnav-section">Operação</div>
     <button class="pnav-tab" onclick="showTab('produtos')"  data-tab="produtos"  data-perfil="admin,gestor,estoque"><span class="tab-icon">📦</span><span class="tab-label">Produtos</span></button>
     <button class="pnav-tab" onclick="showTab('cortes')"    data-tab="cortes"    data-perfil="admin,gestor,estoque"><span class="tab-icon">🔪</span><span class="tab-label">Cortes</span></button>
-    <button class="pnav-tab" onclick="showTab('gestaokits')" data-tab="gestaokits" data-perfil="admin,gestor,estoque"><span class="tab-icon">📦</span><span class="tab-label">Op. Kits</span></button>
+    <button class="pnav-tab" onclick="showTab('promocoes')" data-tab="promocoes" data-perfil="admin,gestor,estoque"><span class="tab-icon">🎯</span><span class="tab-label">Promoções</span></button>
+    <button class="pnav-tab" onclick="showTab('kits')" data-tab="kits" data-perfil="admin,gestor,estoque"><span class="tab-icon">🎁</span><span class="tab-label">Kits</span></button>
     <button class="pnav-tab" onclick="showTab('validade')"  data-tab="validade"  data-perfil="admin,gestor,estoque,caixa"><span class="tab-icon">🗓</span><span class="tab-label">Validade</span></button>
     <button class="pnav-tab" onclick="showTab('retiradas')" data-tab="retiradas" data-perfil="admin,gestor,caixa"><span class="tab-icon">👥</span><span class="tab-label">Retiradas</span></button>
     <button class="pnav-tab" onclick="showTab('vendasproduto')" data-tab="vendasproduto" data-perfil="admin,gestor"><span class="tab-icon">📊</span><span class="tab-label">Análise Vendas</span></button>
@@ -666,8 +667,11 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
     <div class="frame-container" id="frame-rh">
       <iframe class="module-frame" id="iframe-rh" src=""  data-src="rh.html"></iframe>
     </div>
-    <div class="frame-container" id="frame-gestaokits">
-      <iframe class="module-frame" id="iframe-gestaokits" src=""  data-src="gestao-kits.html"></iframe>
+    <div class="frame-container" id="frame-promocoes">
+      <iframe class="module-frame" id="iframe-promocoes" data-src="gestao-kits.html"></iframe>
+    </div>
+    <div class="frame-container" id="frame-kits">
+      <iframe class="module-frame" id="iframe-kits" data-src="kits-composicao.html"></iframe>
     </div>
     <div class="frame-container" id="frame-validade">
       <iframe class="module-frame" id="iframe-validade" src="validade.html?v=1775328871"></iframe>

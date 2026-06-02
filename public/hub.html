@@ -574,6 +574,26 @@ function renderCompras(data) {
     return;
   }
 
+  // Cards de resumo
+  const cardHtml = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;margin-bottom:12px">
+      <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:10px 12px;text-align:center">
+        <div style="font-size:20px">🔴</div>
+        <div style="font-family:'DM Mono',monospace;font-size:20px;font-weight:700;color:var(--red-l)">${urgentes.length}</div>
+        <div style="font-size:10px;font-weight:700;color:var(--red-l);text-transform:uppercase;letter-spacing:.5px">Urgente</div>
+      </div>
+      <div style="background:var(--amber-bg);border:1px solid var(--amber-bdr);border-radius:8px;padding:10px 12px;text-align:center">
+        <div style="font-size:20px">🟡</div>
+        <div style="font-family:'DM Mono',monospace;font-size:20px;font-weight:700;color:var(--amber)">${breve.length}</div>
+        <div style="font-size:10px;font-weight:700;color:var(--amber);text-transform:uppercase;letter-spacing:.5px">Em Breve</div>
+      </div>
+      <div style="background:var(--green-bg);border:1px solid var(--green-bdr);border-radius:8px;padding:10px 12px;text-align:center">
+        <div style="font-size:20px">🟢</div>
+        <div style="font-family:'DM Mono',monospace;font-size:20px;font-weight:700;color:var(--green)">${saudavel.length}</div>
+        <div style="font-size:10px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:.5px">Saudável</div>
+      </div>
+    </div>`;
+
   function linhasTabela(itens) {
     return itens.map(it => {
       const cobNum = it.cobertura_dias !== null ? parseFloat(it.cobertura_dias) : null;
@@ -641,11 +661,81 @@ function renderCompras(data) {
     </div>`;
   }
 
-  html += `<div style="font-size:10px;color:var(--muted);margin-top:6px">
-    Base: últimos ${janela_dias} dias · Sugestão = (média/dia × 30) − estoque atual
+  // Limitar a 5 itens mais críticos
+  const top5Urgentes = urgentes.slice(0, Math.min(5, urgentes.length));
+  const top5Breve    = breve.slice(0, Math.max(0, 5 - top5Urgentes.length));
+
+  let htmlCompacto = cardHtml;
+  if (top5Urgentes.length > 0) {
+    htmlCompacto += `<div class="compras-grupo">
+      <div class="compras-header">
+        <span style="font-size:14px">🔴</span>
+        <strong style="font-size:12px">Compra Urgente</strong>
+        <span class="compras-badge badge-urgente">${urgentes.length} produto(s)</span>
+      </div>
+      <table class="comp-table">
+        <thead><tr><th>Produto</th><th class="r">Estoque</th><th class="r">Cobertura</th><th class="r">Sugestão</th></tr></thead>
+        <tbody>${linhasTabela(top5Urgentes)}</tbody>
+      </table></div>`;
+  }
+  if (top5Breve.length > 0) {
+    htmlCompacto += `<div class="compras-grupo">
+      <div class="compras-header">
+        <span style="font-size:14px">🟡</span>
+        <strong style="font-size:12px">Comprar em Breve</strong>
+        <span class="compras-badge badge-breve">${breve.length} produto(s)</span>
+      </div>
+      <table class="comp-table">
+        <thead><tr><th>Produto</th><th class="r">Estoque</th><th class="r">Cobertura</th><th class="r">Sugestão</th></tr></thead>
+        <tbody>${linhasTabela(top5Breve)}</tbody>
+      </table></div>`;
+  }
+
+  const totalCriticos = urgentes.length + breve.length;
+  htmlCompacto += `<div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
+    <span style="font-size:10px;color:var(--muted)">Base: últimos ${janela_dias} dias · mostrando top 5 de ${totalCriticos} críticos</span>
+    ${totalCriticos > 5 ? `<button onclick="abrirModalCompras()" style="background:none;border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif">Ver todos ${totalCriticos} →</button>` : ''}
   </div>`;
 
-  el.innerHTML = html;
+  el.innerHTML = htmlCompacto;
+  // Guardar dados completos para modal
+  window._dadosCompras = data;
+}
+
+function abrirModalCompras() {
+  const data = window._dadosCompras;
+  if (!data) return;
+  const { urgentes, breve, janela_dias } = data;
+
+  let html = `<div style="background:var(--red);padding:12px 20px;border-radius:12px 12px 0 0;display:flex;align-items:center;justify-content:space-between">
+    <span style="font-family:'Playfair Display',serif;font-size:15px;color:#fff;font-weight:700">🛒 Compras Inteligentes — Lista Completa</span>
+    <button onclick="document.getElementById('modal-compras').style.display='none'" style="background:rgba(255,255,255,.2);border:none;border-radius:7px;color:#fff;padding:4px 10px;cursor:pointer">✕</button>
+  </div>
+  <div style="padding:16px;overflow-y:auto;max-height:60vh">`;
+
+  if (urgentes.length > 0) {
+    html += `<div class="compras-grupo"><div class="compras-header"><span>🔴</span><strong>Compra Urgente (${urgentes.length})</strong></div>
+      <table class="comp-table"><thead><tr><th>Produto</th><th class="r">Estoque</th><th class="r">Média/dia</th><th class="r">Cobertura</th><th class="r">Sugestão</th></tr></thead>
+      <tbody>${linhasTabela(urgentes)}</tbody></table></div>`;
+  }
+  if (breve.length > 0) {
+    html += `<div class="compras-grupo"><div class="compras-header"><span>🟡</span><strong>Comprar em Breve (${breve.length})</strong></div>
+      <table class="comp-table"><thead><tr><th>Produto</th><th class="r">Estoque</th><th class="r">Média/dia</th><th class="r">Cobertura</th><th class="r">Sugestão</th></tr></thead>
+      <tbody>${linhasTabela(breve)}</tbody></table></div>`;
+  }
+  html += `<div style="font-size:10px;color:var(--muted);margin-top:8px">Base: últimos ${janela_dias} dias</div></div>`;
+
+  let modal = document.getElementById('modal-compras');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'modal-compras';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+    modal.innerHTML = '<div style="background:#fff;border-radius:12px;width:100%;max-width:800px;max-height:85vh;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.3)" id="modal-compras-inner"></div>';
+    modal.addEventListener('click', e => { if (e.target === modal) modal.style.display = 'none'; });
+    document.body.appendChild(modal);
+  }
+  document.getElementById('modal-compras-inner').innerHTML = html;
+  modal.style.display = 'flex';
 }
 
 function nav(tab) {
