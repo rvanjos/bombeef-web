@@ -249,7 +249,7 @@ async function autoMigrate() {
       data_movimento   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       tipo_movimento   TEXT    NOT NULL
         CHECK(tipo_movimento IN (
-          'ENTRADA_COMPRA','ENTRADA_AJUSTE','VENDA','PERDA','VALIDADE',
+          'ENTRADA_COMPRA','ENTRADA_AJUSTE','VENDA','VENDA_ANALYTICS','PERDA','VALIDADE',
           'KIT_RESERVA','KIT_CANCELAMENTO','KIT_ENTREGA','RETIRADA_FUNCIONARIO',
           'AJUSTE_INVENTARIO','IMPORTACAO_PDV'
         )),
@@ -476,7 +476,7 @@ app.use('/api/fornecedores', require('./routes/fornecedores')(pool));
 app.use('/api/estoque',      require('./routes/movimentos')(pool, app)); // F1-03
 app.use('/api/hub',          require('./routes/hub')(pool));               // F1-09
 app.use('/api/cortes',       require('./routes/cortes')(pool));
-app.use('/api/vendas-produto', require('./routes/vendas_produto')(pool));
+app.use('/api/vendas-produto', require('./routes/vendas_produto')(pool, app)); // F2-07
 // ── Rota seed CorteMaster (executa uma vez para popular dados iniciais) ─────
 app.get('/api/admin/seed-cortes', require('./middleware/auth')('admin'), async (req, res) => {
   try {

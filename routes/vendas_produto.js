@@ -6,8 +6,9 @@ const express = require('express');
 const r = express.Router();
 
 const autenticar = require('../middleware/auth');
+const events     = require('../lib/events');
 
-module.exports = (pool) => {
+module.exports = (pool, app) => {
   r.use(autenticar());
 
   // ── Init tabelas ────────────────────────────────────────────────────────────
@@ -95,6 +96,51 @@ module.exports = (pool) => {
 
       await client.query('COMMIT');
       res.json({ ok: true, importacao_id: impId, total: linhas.length });
+
+      // ── F2-07: registrar VENDA_ANALYTICS em movimentos_estoque (try/catch isolado) ──
+      // Rastreabilidade pura — NÃO altera produtos.estoque
+      try {
+        // Agrupar linhas por codigo+data para evitar 1 INSERT por linha
+        const agrupado = {};
+        for (const l of linhas) {
+          const key = `${l.codigo}|${l.data_venda}`;
+          if (!agrupado[key]) agrupado[key] = { codigo: String(l.codigo), nome: l.nome, data: l.data_venda, qtd: 0, valor: 0 };
+          agrupado[key].qtd   += parseFloat(l.quantidade || 0);
+          agrupado[key].valor += parseFloat(l.valor_total || 0);
+        }
+        for (const it of Object.values(agrupado)) {
+          if (!it.qtd || it.qtd <= 0) continue;
+          // Buscar produto_id por codigo (pode não existir — não falha)
+          const prod = await pool.query(
+            `SELECT id FROM produtos WHERE codigo = $1 LIMIT 1`, [it.codigo]
+          );
+          const prodId = prod.rows[0]?.id || null;
+          await pool.query(`
+            INSERT INTO movimentos_estoque
+              (produto_id, produto_codigo, tipo_movimento, origem, origem_id,
+               quantidade, estoque_anterior, estoque_posterior,
+               usuario_id, observacao, data_movimento)
+            VALUES ($1,$2,'VENDA_ANALYTICS','vendas_produto',$3,
+                    -$4::numeric, NULL, NULL,
+                    $5, $6, $7::date)
+          `, [
+            prodId, it.codigo, impId,
+            it.qtd,
+            req.usuario?.id || null,
+            `Venda XMenu: ${it.nome} — ${it.qtd.toFixed(3)} un`,
+            it.data,
+          ]);
+        }
+        events.emit(app, 'MOVIMENTO_ESTOQUE', {
+          origem:    'vendas_produto',
+          origem_id: impId,
+          tipo:      'VENDA_ANALYTICS',
+          total:     Object.keys(agrupado).length,
+        });
+      } catch(eMov) {
+        console.warn('[vendas_produto] F2-07 movimento falhou (não crítico):', eMov.message);
+      }
+
     } catch(e) {
       await client.query('ROLLBACK');
       res.status(500).json({ ok: false, erro: e.message });
