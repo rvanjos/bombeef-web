@@ -200,28 +200,20 @@ if(window.self !== window.top){
       </div>
     </div>
 
-    <!-- METAS -->
+    <!-- METAS — redirecionamento para Gestão → Metas -->
     <div class="page" id="page-metas">
       <div class="pg-title">Metas Mensais</div>
-      <div class="pg-sub">Faturamento, perdas e retiradas</div>
-      <div class="card">
-        <div class="card-title">Definir Meta — <span id="meta-mes-label"></span></div>
-        <div class="fg-row">
-          <div class="fg"><label>Mês de Referência</label><input type="month" id="meta-mes" onchange="carregarMeta()"></div>
-          <div class="fg"><label>Meta de Faturamento (R$)</label><input type="number" id="meta-fat" step="100" placeholder="0,00"></div>
+      <div class="pg-sub">Cadastro centralizado de metas</div>
+      <div class="card" style="text-align:center;padding:40px 20px">
+        <div style="font-size:36px;margin-bottom:12px">🎯</div>
+        <div style="font-size:16px;font-weight:700;margin-bottom:8px">O cadastro de metas foi centralizado</div>
+        <div style="font-size:13px;color:var(--muted);max-width:400px;margin:0 auto 20px">
+          Todas as metas agora são gerenciadas em um único local: <strong>Gestão → Metas</strong>.
+          Dashboard, Hub, DRE e Perdas consomem os dados deste módulo centralizado.
         </div>
-        <div class="fg-row3">
-          <div class="fg"><label>Faturamento Real (R$)</label><input type="number" id="meta-real" step="100" placeholder="0,00"></div>
-          <div class="fg"><label>Meta de Perdas (%)</label><input type="number" id="meta-perda-pct" value="2" step="0.1" min="0" max="100"></div>
-          <div class="fg"><label>Meta de Retiradas (R$)</label><input type="number" id="meta-retiradas" step="50" placeholder="0,00"></div>
-        </div>
-        <div class="fg"><label>Observação</label><input id="meta-obs" placeholder="Opcional"></div>
-        <button class="btn btn-p" onclick="salvarMeta()">💾 Salvar Meta</button>
-      </div>
-      <div class="card" style="padding:0;overflow:hidden">
-        <div style="padding:14px 16px;font-size:11px;text-transform:uppercase;letter-spacing:.8px;font-weight:700;color:var(--muted)">Histórico</div>
-        <table class="tbl"><thead><tr><th>Mês</th><th>Meta Fat.</th><th>Real</th><th>% Ating.</th><th>Meta Perda</th><th>Meta Retiradas</th></tr></thead>
-        <tbody id="tbody-metas"></tbody></table>
+        <button class="btn btn-p" onclick="window.parent?.postMessage({type:'bb_nav',tab:'metas'},'*')">
+          🎯 Abrir Gestão → Metas
+        </button>
       </div>
     </div>
 

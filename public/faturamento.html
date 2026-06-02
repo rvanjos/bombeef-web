@@ -392,26 +392,19 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
     </div>
   </div>
 
-  <!-- ── METAS ── -->
+  <!-- ── METAS — redirecionamento para Gestão → Metas ── -->
   <div id="sec-metas" style="display:none">
-    <div class="toolbar">
-      <button class="btn btn-g" onclick="abrirModalMeta()">🎯 Definir Meta do Mês</button>
-      <span style="font-size:12px;color:var(--muted)">As metas aparecem como previsão de receita no DRE</span>
-    </div>
-    <div class="card">
-      <table class="tbl" id="tbl-metas">
-        <thead><tr>
-          <th>Mês</th>
-          <th style="text-align:right">Meta de Faturamento</th>
-          <th style="text-align:right">Realizado</th>
-          <th style="text-align:right">% Atingido</th>
-          <th style="text-align:center">Barra</th>
-          <th>Obs</th>
-          <th></th>
-        </tr></thead>
-        <tbody id="tbody-metas"></tbody>
-      </table>
-      <div class="empty" id="empty-metas" style="display:none">Nenhuma meta definida ainda. Clique em "Definir Meta do Mês".</div>
+    <div class="card" style="text-align:center;padding:48px 20px">
+      <div style="font-size:40px;margin-bottom:12px">🎯</div>
+      <div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:8px">Metas agora em Gestão → Metas</div>
+      <div style="font-size:13px;color:var(--muted);max-width:420px;margin:0 auto 20px;line-height:1.6">
+        O cadastro de metas foi centralizado. Dashboard, Hub Operacional, DRE e Perdas consomem
+        os dados de um único lugar. Todos os seus dados históricos foram preservados.
+      </div>
+      <button class="btn btn-p" style="font-size:14px;padding:10px 24px"
+        onclick="window.parent?.postMessage({type:'bb_nav',tab:'metas'},'*')">
+        Abrir Gestão → Metas →
+      </button>
     </div>
   </div>
 
