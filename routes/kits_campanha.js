@@ -13,6 +13,7 @@
 
 const express = require('express');
 const autenticar = require('../middleware/auth');
+const events  = require('../lib/events');
 
 module.exports = function (pool, app) {
   const publish = (canal, dados) => { try { app?.locals?.ssePublish?.(canal, dados); } catch(_) {} };
@@ -517,6 +518,33 @@ module.exports = function (pool, app) {
 
         await client.query('COMMIT');
         res.json({ ok: true, id: pedId, numero });
+
+        // ── F2-06: registrar KIT_RESERVA por produto (try/catch isolado) ──────
+        if (status === 'reservado') {
+          try {
+            for (const it of itens) {
+              if (!it.produto_id) continue;
+              await pool.query(`
+                INSERT INTO movimentos_estoque
+                  (produto_id, produto_codigo, tipo_movimento, origem, origem_id,
+                   quantidade, estoque_anterior, estoque_posterior, usuario_id, observacao)
+                SELECT p.id, p.codigo, 'KIT_RESERVA', 'kits', $1,
+                  -$2::numeric,
+                  p.estoque,
+                  GREATEST(0, p.estoque - $2::numeric),
+                  $3, $4
+                FROM produtos p WHERE p.id = $5
+              `, [pedId, parseFloat(it.quantidade||1),
+                  req.usuario?.id||null,
+                  `Kit #${numero}: ${it.slot_nome||'item'}`,
+                  it.produto_id]);
+            }
+            events.emit(app, 'MOVIMENTO_ESTOQUE', { origem:'kits', origem_id:pedId, tipo:'KIT_RESERVA' });
+          } catch(eMov) {
+            console.warn('[kits] F2-06 KIT_RESERVA movimento falhou (não crítico):', eMov.message);
+          }
+        }
+
       } catch(e) {
         await client.query('ROLLBACK'); throw e;
       } finally { client.release(); }
@@ -617,6 +645,34 @@ module.exports = function (pool, app) {
         await client.query(`DELETE FROM kit_pedidos WHERE id=$1`, [id]);
         await client.query('COMMIT');
         res.json({ ok: true, numero });
+
+        // ── F2-06: KIT_CANCELAMENTO ao excluir pedido reservado (try/catch isolado) ──
+        if (status === 'reservado') {
+          try {
+            const { rows: itensPed } = await pool.query(
+              `SELECT produto_id, quantidade FROM kit_pedido_itens WHERE pedido_id=$1 AND produto_id IS NOT NULL`,
+              [id]
+            );
+            for (const it of itensPed) {
+              await pool.query(`
+                INSERT INTO movimentos_estoque
+                  (produto_id, produto_codigo, tipo_movimento, origem, origem_id,
+                   quantidade, estoque_anterior, estoque_posterior, usuario_id, observacao)
+                SELECT p.id, p.codigo, 'KIT_CANCELAMENTO', 'kits', $1,
+                  +$2::numeric,
+                  p.estoque, p.estoque + $2::numeric,
+                  $3, $4
+                FROM produtos p WHERE p.id = $5
+              `, [id, parseFloat(it.quantidade||1),
+                  req.usuario?.id||null,
+                  `Kit #${numero}: excluído — devolução ao estoque`,
+                  it.produto_id]);
+            }
+          } catch(eMov) {
+            console.warn('[kits] F2-06 delete KIT_CANCELAMENTO falhou (não crítico):', eMov.message);
+          }
+        }
+
       } catch(e) {
         await client.query('ROLLBACK');
         throw e;
@@ -699,6 +755,65 @@ module.exports = function (pool, app) {
 
         await client.query('COMMIT');
         res.json({ ok: true });
+
+        // ── F2-06: movimentos KIT_CANCELAMENTO ou KIT_ENTREGA (try/catch isolado) ──
+        try {
+          if (status === 'cancelado') {
+            // Devolução: gerar KIT_CANCELAMENTO por item do pedido
+            const { rows: itensPed } = await pool.query(
+              `SELECT produto_id, quantidade FROM kit_pedido_itens WHERE pedido_id=$1 AND produto_id IS NOT NULL`,
+              [req.params.id]
+            );
+            for (const it of itensPed) {
+              await pool.query(`
+                INSERT INTO movimentos_estoque
+                  (produto_id, produto_codigo, tipo_movimento, origem, origem_id,
+                   quantidade, estoque_anterior, estoque_posterior, usuario_id, observacao)
+                SELECT p.id, p.codigo, 'KIT_CANCELAMENTO', 'kits', $1,
+                  +$2::numeric,
+                  p.estoque,
+                  p.estoque + $2::numeric,
+                  $3, $4
+                FROM produtos p WHERE p.id = $5
+              `, [req.params.id, parseFloat(it.quantidade||1),
+                  req.usuario?.id||null,
+                  `Kit #${ped.numero}: cancelamento — devolução ao estoque`,
+                  it.produto_id]);
+            }
+            events.emit(app, 'MOVIMENTO_ESTOQUE', { origem:'kits', origem_id:parseInt(req.params.id), tipo:'KIT_CANCELAMENTO' });
+          } else if (status === 'entregue') {
+            // Saída definitiva: gerar KIT_ENTREGA por item
+            const { rows: itensPed } = await pool.query(
+              `SELECT produto_id, quantidade FROM kit_pedido_itens WHERE pedido_id=$1 AND produto_id IS NOT NULL`,
+              [req.params.id]
+            );
+            for (const it of itensPed) {
+              await pool.query(`
+                INSERT INTO movimentos_estoque
+                  (produto_id, produto_codigo, tipo_movimento, origem, origem_id,
+                   quantidade, estoque_anterior, estoque_posterior, usuario_id, observacao)
+                SELECT p.id, p.codigo, 'KIT_ENTREGA', 'kits', $1,
+                  -$2::numeric,
+                  p.estoque,
+                  GREATEST(0, p.estoque - $2::numeric),
+                  $3, $4
+                FROM produtos p WHERE p.id = $5
+              `, [req.params.id, parseFloat(it.quantidade||1),
+                  req.usuario?.id||null,
+                  `Kit #${ped.numero}: entrega confirmada`,
+                  it.produto_id]);
+              // Atualiza estoque físico ao entregar
+              await pool.query(
+                `UPDATE produtos SET estoque = GREATEST(0, estoque - $1), atualizado_em = NOW() WHERE id = $2`,
+                [parseFloat(it.quantidade||1), it.produto_id]
+              );
+            }
+            events.emit(app, 'MOVIMENTO_ESTOQUE', { origem:'kits', origem_id:parseInt(req.params.id), tipo:'KIT_ENTREGA' });
+          }
+        } catch(eMov) {
+          console.warn('[kits] F2-06 movimento estoque falhou (não crítico):', eMov.message);
+        }
+
       } catch(e) {
         await client.query('ROLLBACK'); throw e;
       } finally { client.release(); }

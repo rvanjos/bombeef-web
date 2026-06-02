@@ -250,7 +250,7 @@ async function autoMigrate() {
       tipo_movimento   TEXT    NOT NULL
         CHECK(tipo_movimento IN (
           'ENTRADA_COMPRA','ENTRADA_AJUSTE','VENDA','PERDA','VALIDADE',
-          'KIT_RESERVA','KIT_CANCELAMENTO','RETIRADA_FUNCIONARIO',
+          'KIT_RESERVA','KIT_CANCELAMENTO','KIT_ENTREGA','RETIRADA_FUNCIONARIO',
           'AJUSTE_INVENTARIO','IMPORTACAO_PDV'
         )),
       origem           TEXT,
