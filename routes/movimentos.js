@@ -194,5 +194,101 @@ module.exports = function(pool, app) {
     }
   });
 
+  // ── GET /auditoria — visão consolidada F2-09 ────────────────────────────────
+  // Retorna movimentos com produto + usuário + filtros avançados
+  r.get('/auditoria', async (req, res) => {
+    const limite   = Math.min(parseInt(req.query.limite) || 100, 500);
+    const pagina   = Math.max(1, parseInt(req.query.pagina) || 1);
+    const offset   = (pagina - 1) * limite;
+    const tipo     = req.query.tipo     || null;
+    const origem   = req.query.origem   || null;
+    const usuario  = req.query.usuario  || null;
+    const produto  = req.query.produto  || null;  // busca por código ou descrição
+    const dataIni  = req.query.data_ini || null;
+    const dataFim  = req.query.data_fim || null;
+    const mesRef   = req.query.mes      || null;   // MM/YYYY
+
+    try {
+      const params = [];
+      const conds  = [];
+
+      if (tipo)    { params.push(tipo);    conds.push(`m.tipo_movimento = $${params.length}`); }
+      if (origem)  { params.push(origem);  conds.push(`m.origem = $${params.length}`); }
+      if (usuario) { params.push(parseInt(usuario)); conds.push(`m.usuario_id = $${params.length}`); }
+      if (produto) { params.push(`%${produto}%`); conds.push(`(p.codigo ILIKE $${params.length} OR p.descricao ILIKE $${params.length})`); }
+      if (dataIni) { params.push(dataIni); conds.push(`m.data_movimento >= $${params.length}`); }
+      if (dataFim) { params.push(dataFim); conds.push(`m.data_movimento <= $${params.length}::date + INTERVAL '1 day'`); }
+      if (mesRef)  { params.push(mesRef);  conds.push(`TO_CHAR(m.data_movimento,'MM/YYYY') = $${params.length}`); }
+
+      const where = conds.length ? 'WHERE ' + conds.join(' AND ') : '';
+
+      // Contar total para paginação
+      const countParams = [...params];
+      const { rows: countRows } = await pool.query(
+        `SELECT COUNT(*)::int AS n
+         FROM movimentos_estoque m
+         LEFT JOIN produtos p ON p.id = m.produto_id
+         ${where}`, countParams
+      );
+      const total = countRows[0].n;
+
+      // Buscar registros
+      params.push(limite); const pLim = params.length;
+      params.push(offset); const pOff = params.length;
+
+      const { rows } = await pool.query(`
+        SELECT
+          m.id,
+          m.data_movimento,
+          m.tipo_movimento,
+          m.origem,
+          m.origem_id,
+          m.quantidade,
+          m.estoque_anterior,
+          m.estoque_posterior,
+          m.observacao,
+          -- Produto
+          p.id             AS produto_id,
+          p.codigo         AS produto_codigo,
+          p.descricao      AS produto_descricao,
+          p.unidade        AS produto_unidade,
+          -- Usuário
+          u.id             AS usuario_id,
+          u.nome           AS usuario_nome
+        FROM movimentos_estoque m
+        LEFT JOIN produtos  p ON p.id = m.produto_id
+        LEFT JOIN usuarios  u ON u.id = m.usuario_id
+        ${where}
+        ORDER BY m.data_movimento DESC
+        LIMIT $${pLim} OFFSET $${pOff}
+      `, params);
+
+      res.json({
+        ok: true,
+        data: rows,
+        total,
+        pagina,
+        paginas: Math.ceil(total / limite),
+        limite,
+      });
+    } catch(e) {
+      console.error('[movimentos/auditoria]', e.message);
+      res.status(500).json({ ok: false, erro: e.message });
+    }
+  });
+
+  // ── GET /tipos — lista tipos de movimentos disponíveis ───────────────────
+  r.get('/tipos', async (req, res) => {
+    try {
+      const { rows } = await pool.query(`
+        SELECT tipo_movimento, COUNT(*)::int AS total, MAX(data_movimento) AS ultimo
+        FROM movimentos_estoque
+        GROUP BY tipo_movimento
+        ORDER BY total DESC
+      `);
+      res.json({ ok: true, data: rows });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
   return r;
 };

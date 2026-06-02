@@ -98,6 +98,7 @@ select,input{padding:6px 10px;border:1px solid var(--border);border-radius:7px;f
   <button class="tab" onclick="showAuditTab('duplicatas')" id="tab-btn-duplicatas">🔁 Duplicatas <span id="badge-duplicatas" class="badge badge-warn" style="margin-left:4px">0</span></button>
   <button class="tab" onclick="showAuditTab('conflitos')" id="tab-btn-conflitos">⚡ Conflitos <span id="badge-conflitos" class="badge badge-purple" style="margin-left:4px">0</span></button>
   <button class="tab" onclick="showAuditTab('categorias')" id="tab-btn-categorias">📂 Por Categoria</button>
+  <button class="tab" onclick="showAuditTab('estoque')" id="tab-btn-estoque">📦 Movimentos de Estoque</button>
 </div>
 
 <div class="body">
@@ -128,6 +129,75 @@ select,input{padding:6px 10px;border:1px solid var(--border);border-radius:7px;f
   <div class="tab-content" id="tab-categorias">
     <div id="lista-categorias"><div class="empty">Selecione um mês para auditar</div></div>
   </div>
+
+  <!-- F2-08: Aba Movimentos de Estoque -->
+  <div class="tab-content" id="tab-estoque">
+    <div style="padding:14px 16px">
+      <!-- Filtros -->
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:flex-end">
+        <div class="fg">
+          <label>Produto</label>
+          <input type="text" id="est-busca-produto" placeholder="Código ou nome..." style="width:200px">
+        </div>
+        <div class="fg">
+          <label>Tipo</label>
+          <select id="est-tipo">
+            <option value="">Todos</option>
+            <option value="RETIRADA_FUNCIONARIO">Retirada Funcionário</option>
+            <option value="PERDA">Perda</option>
+            <option value="VALIDADE">Validade (Descarte)</option>
+            <option value="KIT_RESERVA">Kit — Reserva</option>
+            <option value="KIT_CANCELAMENTO">Kit — Cancelamento</option>
+            <option value="VENDA">Venda</option>
+            <option value="ENTRADA_COMPRA">Entrada — Compra</option>
+            <option value="ENTRADA_AJUSTE">Entrada — Ajuste</option>
+            <option value="IMPORTACAO_PDV">Importação PDV</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label>Origem</label>
+          <select id="est-origem">
+            <option value="">Todas</option>
+            <option value="retiradas">Retiradas</option>
+            <option value="perdas">Perdas</option>
+            <option value="validade">Validade</option>
+            <option value="kits">Kits</option>
+            <option value="vendas">Vendas</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label>Data inicial</label>
+          <input type="date" id="est-data-ini">
+        </div>
+        <div class="fg">
+          <label>Data final</label>
+          <input type="date" id="est-data-fim">
+        </div>
+        <div class="fg" style="justify-content:flex-end">
+          <label>&nbsp;</label>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-p" onclick="carregarEstoque()">🔍 Filtrar</button>
+            <button class="btn btn-s" onclick="limparFiltrosEstoque()">✕ Limpar</button>
+          </div>
+        </div>
+      </div>
+      <div id="est-totais" style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap"></div>
+      <div style="overflow-x:auto">
+        <table class="tbl-main" id="est-table">
+          <thead><tr>
+            <th>Data / Hora</th><th>Produto</th><th>Tipo</th><th>Origem</th>
+            <th class="n">Qtd</th><th class="n">Est. Antes</th><th class="n">Est. Depois</th>
+            <th>Usuário</th><th>Observação</th>
+          </tr></thead>
+          <tbody id="est-tbody">
+            <tr><td colspan="9" class="empty">Use os filtros acima para consultar movimentos</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div id="est-paginacao" style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:12px;color:var(--muted)"></div>
+    </div>
+  </div>
+
 </div>
 
 <script>
@@ -708,8 +778,100 @@ function toggleAprovado(id) {
 function showAuditTab(tab) {
   document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  document.getElementById('tab-'+tab).classList.add('active');
-  document.getElementById('tab-btn-'+tab).classList.add('active');
+  document.getElementById('tab-'+tab)?.classList.add('active');
+  document.getElementById('tab-btn-'+tab)?.classList.add('active');
+  // F2-08: carrega movimentos na primeira abertura
+  if (tab === 'estoque' && !window._estCarregado) carregarEstoque();
+}
+
+// ── F2-08 + F2-09: Auditoria de Movimentos de Estoque ────────────────────────
+let _estPagina = 1;
+window._estCarregado = false;
+
+async function carregarEstoque(pagina) {
+  pagina = pagina || 1;
+  _estPagina = pagina;
+  const tbody  = document.getElementById('est-tbody');
+  const totais = document.getElementById('est-totais');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="9" class="empty">⏳ Buscando...</td></tr>';
+
+  const params = new URLSearchParams({ limite: 100, pagina });
+  const produto = document.getElementById('est-busca-produto')?.value?.trim();
+  const tipo    = document.getElementById('est-tipo')?.value;
+  const origem  = document.getElementById('est-origem')?.value;
+  const dataIni = document.getElementById('est-data-ini')?.value;
+  const dataFim = document.getElementById('est-data-fim')?.value;
+  if (produto) params.set('produto', produto);
+  if (tipo)    params.set('tipo', tipo);
+  if (origem)  params.set('origem', origem);
+  if (dataIni) params.set('data_ini', dataIni);
+  if (dataFim) params.set('data_fim', dataFim);
+
+  const d = await api.get('/api/estoque/auditoria?' + params.toString());
+  window._estCarregado = true;
+
+  if (!d.ok || !d.data || !d.data.length) {
+    tbody.innerHTML = '<tr><td colspan="9" class="empty">Nenhum movimento encontrado. Ajuste os filtros ou lance uma retirada/perda para ver dados aqui.</td></tr>';
+    if (totais) totais.innerHTML = '';
+    const pg = document.getElementById('est-paginacao');
+    if (pg) pg.innerHTML = '';
+    return;
+  }
+
+  const tipoLabels = {
+    RETIRADA_FUNCIONARIO:'👥 Retirada', PERDA:'🗑️ Perda', VALIDADE:'📅 Validade',
+    KIT_RESERVA:'📦 Kit Res.', KIT_CANCELAMENTO:'🔄 Kit Canc.', VENDA:'💰 Venda',
+    ENTRADA_COMPRA:'📥 Entrada', ENTRADA_AJUSTE:'✏️ Ajuste', IMPORTACAO_PDV:'📋 PDV',
+  };
+  const tipoCores = {
+    RETIRADA_FUNCIONARIO:'#7c3aed', PERDA:'var(--red-l)', VALIDADE:'#d97706',
+    KIT_RESERVA:'var(--blue)', KIT_CANCELAMENTO:'var(--muted)', VENDA:'var(--green)',
+    ENTRADA_COMPRA:'var(--green)', ENTRADA_AJUSTE:'var(--blue)', IMPORTACAO_PDV:'var(--muted)',
+  };
+  const fmt   = v => v != null ? parseFloat(v).toFixed(Math.abs(parseFloat(v)) < 10 ? 3 : 1) : '—';
+  const fmtDt = s => { const dt = new Date(s); return dt.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}); };
+
+  tbody.innerHTML = d.data.map(m => {
+    const qtd = parseFloat(m.quantidade || 0);
+    const isE = qtd > 0;
+    const cor = isE ? 'var(--green)' : 'var(--red-l)';
+    const tc  = tipoCores[m.tipo_movimento] || 'var(--muted)';
+    const tl  = tipoLabels[m.tipo_movimento] || m.tipo_movimento;
+    return '<tr>' +
+      '<td style="font-size:11px;color:var(--muted);white-space:nowrap">' + fmtDt(m.data_movimento) + '</td>' +
+      '<td><div style="font-weight:600;font-size:12px">' + (m.produto_descricao||'—') + '</div>' +
+        '<div style="font-size:10px;color:var(--muted)">' + (m.produto_codigo||'') + (m.produto_unidade?' · '+m.produto_unidade:'') + '</div></td>' +
+      '<td style="text-align:center"><span style="font-size:11px;font-weight:600;color:' + tc + ';background:' + tc + '15;padding:2px 6px;border-radius:4px;white-space:nowrap">' + tl + '</span></td>' +
+      '<td style="text-align:center;font-size:11px;color:var(--muted)">' + (m.origem||'—') + (m.origem_id?' #'+m.origem_id:'') + '</td>' +
+      '<td style="text-align:right;font-family:monospace;font-weight:700;color:' + cor + '">' + (isE?'+':'') + fmt(qtd) + '</td>' +
+      '<td style="text-align:right;font-family:monospace;font-size:11px;color:var(--muted)">' + fmt(m.estoque_anterior) + '</td>' +
+      '<td style="text-align:right;font-family:monospace;font-size:11px;font-weight:600">' + fmt(m.estoque_posterior) + '</td>' +
+      '<td style="font-size:11px;color:var(--muted)">' + (m.usuario_nome||'—') + '</td>' +
+      '<td style="font-size:11px;color:var(--muted);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + (m.observacao||'').replace(/"/g,'') + '">' + (m.observacao||'—') + '</td>' +
+    '</tr>';
+  }).join('');
+
+  const totSaida   = d.data.filter(m=>parseFloat(m.quantidade||0)<0).reduce((s,m)=>s+Math.abs(parseFloat(m.quantidade||0)),0);
+  const totEntrada = d.data.filter(m=>parseFloat(m.quantidade||0)>0).reduce((s,m)=>s+parseFloat(m.quantidade||0),0);
+  if (totais) totais.innerHTML =
+    '<span style="background:#f3f4f6;border-radius:6px;padding:4px 10px;font-size:11px"><strong>' + d.total + '</strong> movimentos · pág. ' + d.pagina + '/' + d.paginas + '</span>' +
+    (totEntrada>0 ? '<span style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:4px 10px;font-size:11px;color:var(--green)"><strong>↑ +' + totEntrada.toFixed(2) + '</strong> entradas</span>' : '') +
+    (totSaida>0   ? '<span style="background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:4px 10px;font-size:11px;color:var(--red-l)"><strong>↓ -' + totSaida.toFixed(2) + '</strong> saídas</span>' : '');
+
+  const pg = document.getElementById('est-paginacao');
+  if (pg && d.paginas > 1) {
+    pg.innerHTML = '<button onclick="carregarEstoque(' + (d.pagina-1) + ')" ' + (d.pagina<=1?'disabled':'') + ' style="padding:4px 10px;border:1px solid var(--border);border-radius:5px;cursor:pointer;font-size:11px">← Ant.</button>' +
+      '<span>Página <strong>' + d.pagina + '</strong> de ' + d.paginas + '</span>' +
+      '<button onclick="carregarEstoque(' + (d.pagina+1) + ')" ' + (d.pagina>=d.paginas?'disabled':'') + ' style="padding:4px 10px;border:1px solid var(--border);border-radius:5px;cursor:pointer;font-size:11px">Próx. →</button>';
+  } else if (pg) { pg.innerHTML = ''; }
+}
+
+function limparFiltrosEstoque() {
+  ['est-busca-produto','est-tipo','est-origem','est-data-ini','est-data-fim'].forEach(function(id){
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  carregarEstoque(1);
 }
 
 function toggleCard(id) {
