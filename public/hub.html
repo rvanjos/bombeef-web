@@ -563,7 +563,7 @@ function renderCompras(data) {
     return;
   }
 
-  const { urgentes, breve, janela_dias } = data;
+  const { urgentes, breve, saudavel, janela_dias } = data;
   const total = urgentes.length + breve.length;
 
   if (total === 0) {
@@ -705,7 +705,7 @@ function renderCompras(data) {
 function abrirModalCompras() {
   const data = window._dadosCompras;
   if (!data) return;
-  const { urgentes, breve, janela_dias } = data;
+  const { urgentes, breve, saudavel, janela_dias } = data;
 
   let html = `<div style="background:var(--red);padding:12px 20px;border-radius:12px 12px 0 0;display:flex;align-items:center;justify-content:space-between">
     <span style="font-family:'Playfair Display',serif;font-size:15px;color:#fff;font-weight:700">🛒 Compras Inteligentes — Lista Completa</span>

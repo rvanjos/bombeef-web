@@ -173,13 +173,19 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
   <button class="tab"        id="ktab-ranking"  onclick="showKTab('ranking',this)">🏆 Ranking</button>
 </div>
 
-<!-- Conteúdo: substituir sec-kits original, mas sem o wrapper (as sub-abas ficam diretas) -->
+<!-- KPI bar do módulo Kits -->
+<div style="background:var(--white);border-bottom:1px solid var(--border);padding:8px 16px;display:flex;gap:16px">
+  <div style="display:flex;align-items:center;gap:6px">
+    <span style="font-size:10px;text-transform:uppercase;letter-spacing:.6px;font-weight:700;color:var(--muted)">Kits Ativos</span>
+    <span id="k-kt" style="font-family:'DM Mono',monospace;font-size:16px;font-weight:700">—</span>
+  </div>
+</div>
+
+<!-- Conteúdo das abas -->
 <div id="sec-kits" style="display:block;padding:14px">
     <!-- Subtabs dentro de Kits -->
     <div style="display:flex;gap:0;border-bottom:2px solid var(--border);background:var(--white);margin:-14px -14px 14px;padding:0 14px;">
-      <button class="tab active" id="ktab-lista" onclick="showKTab('lista',this)">🎁 Kits Cadastrados</button>
-      <button class="tab" id="ktab-semanas" onclick="showKTab('semanas',this)">📊 Histórico Semanal</button>
-      <button class="tab" id="ktab-ranking" onclick="showKTab('ranking',this)">🏆 Ranking</button>
+
     </div>
 
     <!-- Lista de Kits -->
