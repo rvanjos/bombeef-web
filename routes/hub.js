@@ -337,13 +337,13 @@ module.exports = function(pool) {
           COALESCE(v.total_qtd, 0)              AS total_qtd_30d,
           CASE
             WHEN COALESCE(v.media_diaria, 0) > 0
-              THEN ROUND(p.estoque / v.media_diaria, 1)
+              THEN ROUND(GREATEST(p.estoque, 0) / v.media_diaria, 1)
             ELSE NULL
           END                                   AS cobertura_dias,
           CASE
             WHEN COALESCE(v.media_diaria, 0) > 0
-              THEN ROUND((v.media_diaria * 30) - p.estoque, 3)
-            ELSE GREATEST(p.estoque_minimo - p.estoque, 0)
+              THEN ROUND((v.media_diaria * 30) - GREATEST(p.estoque, 0), 3)
+            ELSE GREATEST(p.estoque_minimo - GREATEST(p.estoque, 0), 0)
           END                                   AS sugestao_compra
         FROM produtos p
         LEFT JOIN vendas_media v ON v.codigo = p.codigo
@@ -355,7 +355,7 @@ module.exports = function(pool) {
         ORDER BY
           CASE
             WHEN COALESCE(v.media_diaria, 0) > 0
-              THEN p.estoque / NULLIF(v.media_diaria, 0)
+              THEN GREATEST(p.estoque, 0) / NULLIF(v.media_diaria, 0)
             ELSE 999
           END ASC NULLS LAST,
           p.descricao ASC
@@ -365,7 +365,8 @@ module.exports = function(pool) {
       const itens = rows.map(r => {
         const cob  = r.cobertura_dias !== null ? parseFloat(r.cobertura_dias) : null;
         const med  = parseFloat(r.media_diaria || 0);
-        const est  = parseFloat(r.estoque || 0);
+        const est  = Math.max(0, parseFloat(r.estoque || 0)); // estoque negativo tratado como 0
+        const estRaw = parseFloat(r.estoque || 0);             // valor real para exibição
         const min  = parseFloat(r.estoque_minimo || 0);
         const sug  = Math.max(0, parseFloat(r.sugestao_compra || 0));
 
@@ -390,7 +391,7 @@ module.exports = function(pool) {
           descricao:     r.descricao,
           fornecedor:    r.fornecedor || null,
           unidade:       r.unidade || 'un',
-          estoque:       est,
+          estoque:       estRaw, // valor real (pode ser negativo — indica inconsistência no Rel.302)
           estoque_minimo: min,
           media_diaria:  parseFloat(med.toFixed(3)),
           dias_com_venda: parseInt(r.dias_com_venda || 0),

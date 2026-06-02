@@ -259,7 +259,8 @@ function render(d) {
       <!-- Coluna 1: Hoje -->
       <div class="vbloco">
         <div class="v-label">${diaLabel.charAt(0).toUpperCase()+diaLabel.slice(1)}</div>
-        <div class="v-val ${!temHoje?'sem-dado':''}">${temHoje ? brl(fatHoje) : 'Não importado'}</div>
+        <div class="v-val ${!temHoje?'sem-dado':''}">${temHoje ? brl(fatHoje) : '—'}</div>
+        ${!temHoje ? `<div style="font-size:11px;color:var(--muted);margin-top:2px">Vendas de hoje ainda não importadas</div>` : ''}
         ${temHoje && v.pessoas_hoje > 0 ? `<div class="v-sub">${v.pessoas_hoje} atendimentos · ticket ${brl(v.ticket_hoje)}</div>` : ''}
         ${temHoje && temSem ? compTag(v.var_sem_pct, `${Math.abs(v.var_sem_pct).toFixed(1)}% vs ${DIAS[v.dia_semana]} passado`) : ''}
         ${temHoje && temSem ? `<div class="v-sub" style="margin-top:2px">${DIAS[v.dia_semana]} passado: ${brl(v.fat_semana_ant)}
@@ -282,8 +283,9 @@ function render(d) {
 
       <!-- Coluna 2: Mês acumulado -->
       <div class="vbloco">
-        <div class="v-label">Mês acumulado (${v.dias_importados}d)</div>
+        <div class="v-label">Mês acumulado${v.dias_importados > 0 ? ` (${v.dias_importados} dias importados)` : ''}</div>
         <div class="v-val ${v.fat_mes===0?'sem-dado':''}">${v.fat_mes > 0 ? brl(v.fat_mes) : '—'}</div>
+        ${v.fat_mes === 0 ? `<div style="font-size:11px;color:var(--muted);margin-top:2px">Importar relatório XMenu para ver dados de vendas</div>` : ''}
         ${v.pessoas_mes > 0 ? `<div class="v-sub">${v.pessoas_mes} atendimentos · ticket ${brl(v.ticket_mes)}</div>` : ''}
         ${v.fat_mes > 0 && v.fat_mes_ant > 0 ? compTag(v.var_mes_pct,
           `${Math.abs(v.var_mes_pct).toFixed(1)}% vs ${d.mes.replace(/(\d+)\/(\d+)/,'$1 mês ant.')}`) : ''}
@@ -574,20 +576,28 @@ function renderCompras(data) {
 
   function linhasTabela(itens) {
     return itens.map(it => {
-      const cobStr = it.cobertura_dias !== null
-        ? `${it.cobertura_dias}d` : '—';
+      const cobNum = it.cobertura_dias !== null ? parseFloat(it.cobertura_dias) : null;
+      const cobStr = cobNum !== null ? `${cobNum}d` : '—';
       const cobCls = it.classe === 'urgente' ? 'cob-urgente'
                    : it.classe === 'breve'   ? 'cob-breve' : 'cob-saudavel';
       const medStr = it.media_diaria > 0
         ? `${it.media_diaria.toFixed(2)} ${it.unidade}/dia` : 'sem histórico';
       const sugStr = it.sugestao_compra > 0
         ? `${it.sugestao_compra.toFixed(it.sugestao_compra < 10 ? 2 : 0)} ${it.unidade}` : '—';
+      // Motivo da recomendação
+      let motivo = '';
+      if (it.estoque < 0)                         motivo = 'Estoque negativo — importar Rel.302';
+      else if (cobNum !== null && cobNum < 5)      motivo = `Cobertura de ${cobNum}d — compra imediata`;
+      else if (cobNum !== null && cobNum < 15)     motivo = `Cobertura de ${cobNum}d — acionar fornecedor`;
+      else if (it.estoque_minimo > 0 && it.media_diaria === 0) motivo = 'Sem histórico de vendas — abaixo do mínimo';
+
       return `<tr>
         <td>
           <div style="font-weight:600">${it.descricao}</div>
           ${it.fornecedor ? `<div class="fornec">🏭 ${it.fornecedor}</div>` : ''}
+          ${motivo ? `<div class="fornec" style="color:var(--${it.estoque<0?'red-l':'muted'})">${motivo}</div>` : ''}
         </td>
-        <td class="r" style="font-family:'DM Mono',monospace">${it.estoque.toFixed(it.estoque < 10 ? 2 : 0)} ${it.unidade}</td>
+        <td class="r" style="font-family:'DM Mono',monospace;${it.estoque < 0 ? 'color:var(--red-l);' : ''}">${it.estoque < 0 ? '⚠️ ' : ''}${Math.abs(it.estoque).toFixed(Math.abs(it.estoque) < 10 ? 2 : 0)} ${it.unidade}${it.estoque < 0 ? ' <span title="Estoque negativo: importar Rel.302 para corrigir" style="font-size:10px;color:var(--muted)">(neg)</span>' : ''}</td>
         <td class="r" style="color:var(--muted);font-size:11px">${medStr}</td>
         <td class="r"><span class="cob-pill ${cobCls}">${cobStr}</span></td>
         <td class="r" style="font-weight:600;color:var(--red-l)">${sugStr}</td>
