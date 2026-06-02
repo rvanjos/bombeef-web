@@ -2338,7 +2338,7 @@ function render() {
           oninput="this.dataset.tid='${t.id}'"
           onfocus="this.select()">
       </td>
-      <td class="${v>=0?'vp':'vn'}" style="white-space:nowrap;text-align:right">${fmt.brl(v)}</td>
+      <td class="${v>=0?'vp':'vn'}" style="white-space:nowrap;text-align:right" title="${v>=0?'Entrada':'Saída'}: ${fmt.brl(v)}">${v<0?'- ':''}${fmt.brl(Math.abs(v))}</td>
       <td style="text-align:center"><button title="${t.ignorar?'Reativar':'Ignorar'}" onclick="togIgn('${t.id}')" style="background:none;border:none;cursor:pointer;font-size:13px;opacity:${t.ignorar?1:.4}">${t.ignorar?'↩️':'🚫'}</button></td>
       <td style="text-align:center;white-space:nowrap">
         ${t.fonte==='BOLETO_PREV'?`
