@@ -716,6 +716,7 @@ function renderVendas() {
       </div>
       <div style="display:flex;gap:5px;margin-top:8px;flex-wrap:wrap">
         <button class="btn btn-gray btn-sm" onclick="verItensVenda(${v.id})">📋 Itens</button>
+        ${'aberto parcial aguardando'.includes(v.status)?`<button class="btn btn-gray btn-sm" onclick="abrirEditarVenda(${v.id})" title="Editar itens ou preços">✏️ Editar</button>`:''}
         ${v.status==='aberto'||v.status==='parcial'?`<button class="btn btn-green btn-sm" onclick="abrirPagamentoVenda(${v.id},${v.cliente_id})">💵 Pagar</button>`:''}
         ${v.status!=='cancelado'&&v.status!=='reprovado'&&v.status!=='pago'?`<button class="btn btn-gray btn-sm" onclick="abrirCancelar(${v.id})">🚫</button>`:''}
       </div>
@@ -1499,6 +1500,148 @@ function abrirNovaVendaCliente(id) {
   resetVenda();
   if (id) { const c=_clientes.find(x=>x.id===id); if(c) selecionarClienteVenda(c); }
   document.getElementById('m-venda').classList.add('open');
+}
+</script>
+<!-- Modal: Editar Venda -->
+<div id="modal-editar-venda" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;align-items:center;justify-content:center;padding:16px">
+  <div style="background:#fff;border-radius:14px;width:100%;max-width:640px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+    <!-- Header -->
+    <div style="background:var(--red);border-radius:14px 14px 0 0;padding:14px 20px;display:flex;align-items:center;justify-content:space-between">
+      <div>
+        <div style="font-family:'Playfair Display',serif;font-size:15px;color:#fff;font-weight:700">✏️ Editar Venda</div>
+        <div style="font-size:11px;color:rgba(255,255,255,.7);margin-top:1px" id="ev-subtitulo">—</div>
+      </div>
+      <button onclick="fecharEditarVenda()" style="background:rgba(255,255,255,.2);border:none;border-radius:7px;color:#fff;padding:5px 10px;cursor:pointer;font-size:14px">✕</button>
+    </div>
+
+    <div style="padding:18px 20px">
+      <div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:10px 14px;font-size:12px;color:#92400e;margin-bottom:14px">
+        ⚠️ <strong>Atenção:</strong> A edição substituirá todos os itens da venda. O valor já pago será preservado — apenas o saldo em aberto será recalculado.
+      </div>
+
+      <!-- Itens editáveis -->
+      <div id="ev-itens-wrap"></div>
+      <button onclick="evAdicionarItem()" style="background:none;border:1px dashed var(--border);border-radius:8px;width:100%;padding:8px;font-size:12px;cursor:pointer;color:var(--muted);margin-top:6px;font-family:'DM Sans',sans-serif">+ Adicionar item</button>
+
+      <!-- Observação -->
+      <div style="margin-top:14px">
+        <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Observação</label>
+        <input type="text" id="ev-obs" placeholder="Opcional" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:'DM Sans',sans-serif">
+      </div>
+
+      <!-- Totais -->
+      <div style="background:#f7f4f0;border-radius:8px;padding:10px 14px;margin-top:14px;display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:12px;color:var(--muted)">Novo total calculado:</span>
+        <span id="ev-total" style="font-family:'DM Mono',monospace;font-size:18px;font-weight:700">R$ 0,00</span>
+      </div>
+
+      <!-- Botões -->
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+        <button onclick="fecharEditarVenda()" style="padding:9px 18px;background:none;border:1px solid var(--border);border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif">Cancelar</button>
+        <button onclick="salvarEdicaoVenda()" id="ev-btn-salvar" style="padding:9px 18px;background:var(--red);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif">💾 Salvar Alterações</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Editar Venda ─────────────────────────────────────────────────────────────
+let _evVendaId = null;
+let _evItens   = [];
+
+async function abrirEditarVenda(vendaId) {
+  // Buscar venda com itens
+  const venda = _vendas.find(v => v.id === vendaId);
+  if (!venda) return;
+  _evVendaId = vendaId;
+  _evItens   = (venda.itens || []).map(i => ({ ...i }));
+
+  const cli = _clientes.find(c => c.id === venda.cliente_id);
+  document.getElementById('ev-subtitulo').textContent =
+    `${cli?.nome || '—'} · ${venda.data_compra?.slice(0,10).split('-').reverse().join('/')}`;
+  document.getElementById('ev-obs').value = venda.observacoes || '';
+
+  evRenderItens();
+  document.getElementById('modal-editar-venda').style.display = 'flex';
+}
+
+function fecharEditarVenda() {
+  document.getElementById('modal-editar-venda').style.display = 'none';
+  _evVendaId = null; _evItens = [];
+}
+
+function evRenderItens() {
+  const wrap = document.getElementById('ev-itens-wrap');
+  wrap.innerHTML = _evItens.map((it, idx) => `
+    <div style="display:grid;grid-template-columns:2fr 80px 100px 28px;gap:6px;align-items:center;padding:7px 0;border-bottom:1px solid #f5efe8">
+      <div>
+        <input type="text" value="${(it.nome_produto||'').replace(/"/g,'&quot;')}" placeholder="Nome do produto"
+          onchange="_evItens[${idx}].nome_produto=this.value;evAtualizarTotal()"
+          style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:'DM Sans',sans-serif">
+        <input type="text" value="${it.codigo_produto||''}" placeholder="Código (opcional)"
+          onchange="_evItens[${idx}].codigo_produto=this.value"
+          style="width:100%;padding:4px 8px;border:1px solid var(--border);border-radius:6px;font-size:11px;color:var(--muted);font-family:'DM Sans',sans-serif;margin-top:3px">
+      </div>
+      <input type="number" value="${parseFloat(it.quantidade||1)}" min="0.001" step="0.001" placeholder="Qtd"
+        onchange="_evItens[${idx}].quantidade=parseFloat(this.value)||1;evAtualizarTotal()"
+        style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;text-align:right;font-family:'DM Mono',monospace">
+      <input type="number" value="${parseFloat(it.valor_unit_venda||it.valor_unit_custo||0)}" min="0" step="0.01" placeholder="R$ unit"
+        onchange="_evItens[${idx}].valor_unit_venda=parseFloat(this.value)||0;_evItens[${idx}].valor_unit_custo=parseFloat(this.value)||0;evAtualizarTotal()"
+        style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;text-align:right;font-family:'DM Mono',monospace">
+      <button onclick="_evItens.splice(${idx},1);evRenderItens()" style="background:none;border:none;cursor:pointer;font-size:16px;color:var(--red-l);padding:0">×</button>
+    </div>`).join('') +
+    `<div style="display:grid;grid-template-columns:2fr 80px 100px 28px;gap:6px;padding:4px 0">
+      <div style="font-size:11px;font-weight:600;color:var(--muted)">Item</div>
+      <div style="font-size:11px;color:var(--muted);text-align:right">Qtd</div>
+      <div style="font-size:11px;color:var(--muted);text-align:right">R$ unitário</div>
+      <div></div>
+    </div>`;
+  evAtualizarTotal();
+}
+
+function evAdicionarItem() {
+  _evItens.push({ nome_produto:'', quantidade:1, valor_unit_venda:0, valor_unit_custo:0 });
+  evRenderItens();
+  // Focar no último campo de nome
+  setTimeout(() => {
+    const inputs = document.querySelectorAll('#ev-itens-wrap input[placeholder="Nome do produto"]');
+    if (inputs.length) inputs[inputs.length-1].focus();
+  }, 50);
+}
+
+function evAtualizarTotal() {
+  const total = _evItens.reduce((s, it) => {
+    return s + parseFloat(it.valor_unit_venda||it.valor_unit_custo||0) * parseFloat(it.quantidade||1);
+  }, 0);
+  document.getElementById('ev-total').textContent = fmt.brl(total);
+}
+
+async function salvarEdicaoVenda() {
+  if (!_evVendaId) return;
+  const itensValidos = _evItens.filter(it => it.nome_produto?.trim());
+  if (!itensValidos.length) { BB.toast('⚠️ Adicione ao menos 1 item'); return; }
+
+  const btn = document.getElementById('ev-btn-salvar');
+  btn.textContent = '⏳ Salvando...'; btn.disabled = true;
+
+  const d = await api.put(`/api/fiado/vendas/${_evVendaId}/editar`, {
+    itens: itensValidos.map(it => ({
+      nome_produto:     it.nome_produto.trim(),
+      codigo_produto:   it.codigo_produto || null,
+      quantidade:       parseFloat(it.quantidade||1),
+      valor_unit_venda: parseFloat(it.valor_unit_venda||it.valor_unit_custo||0),
+      valor_unit_custo: parseFloat(it.valor_unit_custo||it.valor_unit_venda||0),
+      desconto_pct:     parseFloat(it.desconto_pct||0),
+    })),
+    observacoes: document.getElementById('ev-obs').value.trim() || null,
+  });
+
+  btn.textContent = '💾 Salvar Alterações'; btn.disabled = false;
+
+  if (!d.ok) { BB.toast('❌ ' + (d.erro || 'Erro ao salvar')); return; }
+  BB.toast(`✅ Venda atualizada — novo total: ${fmt.brl(d.novo_total)}`);
+  fecharEditarVenda();
+  await carregarDados(); // recarrega tudo
 }
 </script>
 </body>

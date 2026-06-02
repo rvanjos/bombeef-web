@@ -332,6 +332,80 @@ module.exports = function(pool) {
     finally { client.release(); }
   });
 
+  // ── PUT /vendas/:id/editar — editar itens/preços de venda aberta/parcial ──
+  r.put('/vendas/:id/editar', async (req, res) => {
+    const { itens, observacoes } = req.body;
+    if (!itens || !itens.length) return res.status(400).json({ ok:false, erro:'itens obrigatórios' });
+
+    try {
+      // Só permite editar vendas abertas ou parcialmente pagas
+      const { rows: [venda] } = await pool.query(
+        `SELECT v.*, c.tipo_cliente, c.desconto_pct AS desc_cliente, c.nome AS cliente_nome
+         FROM vendas_fiado v JOIN clientes_fiado c ON c.id=v.cliente_id WHERE v.id=$1`,
+        [parseInt(req.params.id)]
+      );
+      if (!venda) return res.status(404).json({ ok:false, erro:'Venda não encontrada' });
+      if (!['aberto','parcial','aguardando'].includes(venda.status)) {
+        return res.status(400).json({ ok:false, erro:`Não é possível editar venda com status "${venda.status}". Apenas vendas em aberto, parciais ou aguardando aprovação podem ser editadas.` });
+      }
+
+      // Recalcular totais com os novos itens
+      const c = { tipo_cliente: venda.tipo_cliente, desconto_pct: venda.desc_cliente };
+      let subtotal=0, desconto_total=0, total_final=0;
+      for (const item of itens) {
+        const vUnit = parseFloat(item.valor_unit_venda||0);
+        const desc  = c.tipo_cliente==='especial'
+          ? parseFloat(c.desconto_pct||0)
+          : parseFloat(item.desconto_pct||0);
+        const final = c.tipo_cliente==='socio'
+          ? parseFloat(item.valor_unit_custo||0) * parseFloat(item.quantidade||1)
+          : vUnit * parseFloat(item.quantidade||1) * (1 - desc/100);
+        subtotal      += vUnit * parseFloat(item.quantidade||1);
+        desconto_total += (vUnit * parseFloat(item.quantidade||1)) - final;
+        total_final   += final;
+        item._final = final;
+        item._desc  = desc;
+      }
+
+      // Preservar valor já pago — saldo restante = novo total - já pago
+      const ja_pago = parseFloat(venda.total_final||0) - parseFloat(venda.saldo_restante||0);
+      const novo_saldo = Math.max(0, total_final - ja_pago);
+
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        // Atualizar cabeçalho da venda
+        await client.query(
+          `UPDATE vendas_fiado SET
+             subtotal_venda=$1, desconto_total=$2, total_final=$3, saldo_restante=$4,
+             observacoes=COALESCE($5, observacoes), atualizado_em=NOW()
+           WHERE id=$6`,
+          [subtotal.toFixed(2), desconto_total.toFixed(2), total_final.toFixed(2),
+           novo_saldo.toFixed(2), observacoes||null, parseInt(req.params.id)]
+        );
+        // Substituir itens
+        await client.query(`DELETE FROM itens_venda_fiado WHERE venda_id=$1`, [parseInt(req.params.id)]);
+        for (const item of itens) {
+          await client.query(
+            `INSERT INTO itens_venda_fiado(venda_id,codigo_produto,nome_produto,quantidade,valor_unit_venda,valor_unit_custo,desconto_pct,valor_final_item)
+             VALUES($1,$2,$3,$4,$5,$6,$7,$8)`,
+            [parseInt(req.params.id), item.codigo_produto||null, item.nome_produto,
+             item.quantidade, item.valor_unit_venda||0, item.valor_unit_custo||0,
+             item._desc||0, item._final.toFixed(2)]
+          );
+        }
+        await client.query('COMMIT');
+        await log(venda.cliente_id, 'venda_editada',
+          `Venda editada: ${itens.length} item(s), novo total R$ ${total_final.toFixed(2)}`,
+          req.user?.nome, parseInt(req.params.id));
+        res.json({ ok:true, novo_total: total_final, novo_saldo });
+      } catch(e) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ ok:false, erro:e.message });
+      } finally { client.release(); }
+    } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
+  });
+
   r.put('/vendas/:id/aprovar', async (req, res) => {
     if (!['admin','gestor'].includes(req.user?.perfil)) return res.status(403).json({ ok:false, erro:'Sem permissão' });
     try {
