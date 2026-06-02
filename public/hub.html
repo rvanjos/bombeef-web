@@ -176,13 +176,15 @@ function atualizarRelogio() {
 
 async function carregar() {
   try {
-    const [res, comp] = await Promise.all([
+    const [res, comp, crit] = await Promise.all([
       (_api||BB.api).get('/api/hub/resumo'),
       (_api||BB.api).get('/api/hub/compras'),
+      (_api||BB.api).get('/api/hub/resumo-criticos'),
     ]);
     if (!res.ok) { renderErro(res.erro); return; }
     render(res.data);
     renderCompras(comp.ok ? comp.data : null);
+    renderCriticos(crit.ok ? crit.data : null);
   } catch(e) { renderErro(e.message); }
 }
 
@@ -406,6 +408,13 @@ function render(d) {
     </div>
   </div>
 
+  <div class="secao" id="sec-criticos">
+    <div class="sec-title">🏦 Módulos Críticos — Financeiro</div>
+    <div id="criticos-card" class="card">
+      <div style="font-size:12px;color:var(--muted)">⏳ Carregando...</div>
+    </div>
+  </div>
+
   <div class="grid2">
     <div>
       <div class="secao">
@@ -467,6 +476,81 @@ function render(d) {
       </div>
     </div>
   </div>`;
+}
+
+function renderCriticos(data) {
+  const el = document.getElementById('criticos-card');
+  if (!el || !data) return;
+
+  const b = data.boletos || {};
+  const d = data.dre     || {};
+  const v = data.validade|| {};
+
+  const resCls  = d.resultado >= 0 ? 'pos' : 'neg';
+  const resSinal= d.resultado >= 0 ? '+' : '-';
+
+  el.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1px 1fr 1px 1fr;gap:0">
+
+      <!-- BOLETOS -->
+      <div style="padding-right:14px">
+        <div style="font-size:9px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);font-weight:700;margin-bottom:8px">📄 Boletos</div>
+        <div style="display:flex;flex-direction:column;gap:5px">
+          <div style="display:flex;justify-content:space-between;font-size:12px">
+            <span style="color:var(--muted)">Total aberto</span>
+            <span style="font-family:'DM Mono',monospace;font-weight:700">${brl(b.total_aberto)}</span>
+          </div>
+          ${b.vencidos > 0 ? `<div style="display:flex;justify-content:space-between;font-size:12px">
+            <span style="color:var(--red-l);font-weight:600">🔴 Vencidos (${b.vencidos})</span>
+            <span style="font-family:'DM Mono',monospace;font-weight:700;color:var(--red-l)">${brl(b.total_vencido)}</span>
+          </div>` : '<div style="font-size:11px;color:var(--green)">✅ Sem vencidos</div>'}
+          ${b.vence_7d > 0 ? `<div style="font-size:11px;color:var(--amber)">⚠️ ${b.vence_7d} vencem em 7 dias</div>` : ''}
+          ${b.vence_15d > 0 ? `<div style="font-size:11px;color:var(--muted)">📅 ${b.vence_15d} vencem em 8–15 dias</div>` : ''}
+        </div>
+        <button onclick="nav('boletos')" style="margin-top:8px;background:none;border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif">Ver Boletos →</button>
+      </div>
+
+      <div style="background:var(--border);margin:0 14px"></div>
+
+      <!-- DRE -->
+      <div>
+        <div style="font-size:9px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);font-weight:700;margin-bottom:8px">📊 DRE — ${data.mes}</div>
+        <div style="display:flex;flex-direction:column;gap:5px">
+          <div style="display:flex;justify-content:space-between;font-size:12px">
+            <span style="color:var(--green)">Receitas</span>
+            <span style="font-family:'DM Mono',monospace;font-weight:700;color:var(--green)">${brl(d.receitas)}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:12px">
+            <span style="color:var(--red-l)">Despesas</span>
+            <span style="font-family:'DM Mono',monospace;font-weight:700;color:var(--red-l)">${brl(d.despesas)}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:12px;border-top:1px solid var(--border);padding-top:4px;margin-top:2px">
+            <span style="font-weight:600">Resultado</span>
+            <span style="font-family:'DM Mono',monospace;font-weight:700;color:var(--${resCls==='pos'?'green':'red-l'})">${resSinal} ${brl(Math.abs(d.resultado))} (${d.margem_pct}%)</span>
+          </div>
+          ${d.sem_categoria > 0 ? `<div style="font-size:11px;color:var(--amber)">⚠️ ${d.sem_categoria} lançamento(s) sem categoria</div>` : ''}
+        </div>
+        <button onclick="nav('dre')" style="margin-top:8px;background:none;border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif">Ver DRE →</button>
+      </div>
+
+      <div style="background:var(--border);margin:0 14px"></div>
+
+      <!-- VALIDADE financeiro -->
+      <div style="padding-left:14px">
+        <div style="font-size:9px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);font-weight:700;margin-bottom:8px">🗓 Validade — Valor em Risco</div>
+        <div style="display:flex;flex-direction:column;gap:5px">
+          ${v.valor_vencido > 0 ? `<div style="display:flex;justify-content:space-between;font-size:12px">
+            <span style="color:var(--red-l);font-weight:600">🔴 Vencidos (${v.qtd_vencidos})</span>
+            <span style="font-family:'DM Mono',monospace;font-weight:700;color:var(--red-l)">${brl(v.valor_vencido)}</span>
+          </div>` : '<div style="font-size:11px;color:var(--green)">✅ Sem produtos vencidos</div>'}
+          ${v.valor_risco_7d > 0 ? `<div style="display:flex;justify-content:space-between;font-size:12px">
+            <span style="color:var(--amber)">⚠️ Risco 7 dias (${v.qtd_7d})</span>
+            <span style="font-family:'DM Mono',monospace;font-weight:700;color:var(--amber)">${brl(v.valor_risco_7d)}</span>
+          </div>` : ''}
+        </div>
+        <button onclick="nav('validade')" style="margin-top:8px;background:none;border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif">Ver Validade →</button>
+      </div>
+    </div>`;
 }
 
 function renderCompras(data) {

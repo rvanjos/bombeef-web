@@ -101,6 +101,24 @@ module.exports = function (pool, app) {
     await pool.query(`ALTER TABLE boletos DROP CONSTRAINT IF EXISTS boletos_status_check`).catch(() => {});
     await pool.query(`ALTER TABLE boletos DROP CONSTRAINT IF EXISTS boletos_origem_check`).catch(() => {});
 
+    // 4. Tabela de log de importações (F2.5)
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS boletos_importacoes (
+        id            SERIAL PRIMARY KEY,
+        tipo          TEXT NOT NULL DEFAULT 'nfe',   -- nfe | csv | pdf | manual
+        nome_arquivo  TEXT,
+        chave_nfe     TEXT,
+        fornecedor    TEXT,
+        boletos_gerados INTEGER DEFAULT 0,
+        boletos_duplicados INTEGER DEFAULT 0,
+        valor_total   NUMERIC(14,2) DEFAULT 0,
+        usuario_id    INTEGER REFERENCES usuarios(id),
+        usuario_nome  TEXT,
+        criado_em     TIMESTAMPTZ DEFAULT NOW()
+      )
+    `).catch(() => {});
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_bol_imp_criado ON boletos_importacoes(criado_em DESC)`).catch(() => {});
+
     // 4. Corrige valores inválidos
     await pool.query(`
       UPDATE boletos SET status = 'avencer'
@@ -267,6 +285,66 @@ module.exports = function (pool, app) {
       });
     } catch (e) {
       console.error('[boletos/kpis]', e.message);
+      res.status(500).json({ ok: false, erro: e.message });
+    }
+  });
+
+  // ── GET /painel — painel financeiro + alertas + log (F2.5) ─────────────────
+  r.get('/painel', async (req, res) => {
+    try {
+      const [kpis, porFornec, vence15, logImp] = await Promise.all([
+        // KPIs gerais (já existe em /kpis — replicar aqui para um endpoint só)
+        pool.query(`
+          SELECT
+            COUNT(*) FILTER (WHERE status='avencer')                                              AS a_vencer,
+            COUNT(*) FILTER (WHERE status='avencer' AND vencimento < CURRENT_DATE)                AS vencidos,
+            COUNT(*) FILTER (WHERE status='avencer' AND vencimento BETWEEN CURRENT_DATE AND CURRENT_DATE+7)  AS vence_7d,
+            COUNT(*) FILTER (WHERE status='avencer' AND vencimento BETWEEN CURRENT_DATE AND CURRENT_DATE+15) AS vence_15d,
+            COALESCE(SUM(ABS(valor)) FILTER (WHERE status='avencer'),0)                           AS total_aberto,
+            COALESCE(SUM(ABS(valor)) FILTER (WHERE status='avencer' AND vencimento < CURRENT_DATE),0) AS total_vencido,
+            COALESCE(SUM(ABS(valor)) FILTER (WHERE status='pago' AND dt_pagamento >= DATE_TRUNC('month',NOW())),0) AS pago_mes
+          FROM boletos WHERE status != 'cancelado'
+        `),
+        // Distribuição por fornecedor (top 10 em aberto)
+        pool.query(`
+          SELECT
+            fornecedor,
+            COUNT(*) AS qtd,
+            COALESCE(SUM(ABS(valor)),0) AS total,
+            COUNT(*) FILTER (WHERE vencimento < CURRENT_DATE) AS vencidos,
+            MIN(vencimento) AS proximo_vencimento
+          FROM boletos
+          WHERE status='avencer' AND fornecedor IS NOT NULL
+          GROUP BY fornecedor
+          ORDER BY SUM(ABS(valor)) DESC
+          LIMIT 10
+        `),
+        // Boletos que vencem em 8–15 dias (além dos 7d já no semáforo)
+        pool.query(`
+          SELECT id, fornecedor, produto, nf, vencimento, ABS(valor) AS valor, parcela, total_parcelas
+          FROM boletos
+          WHERE status='avencer'
+            AND vencimento BETWEEN CURRENT_DATE+8 AND CURRENT_DATE+15
+          ORDER BY vencimento ASC
+          LIMIT 20
+        `),
+        // Log das últimas 20 importações
+        pool.query(`
+          SELECT tipo, nome_arquivo, fornecedor, boletos_gerados, boletos_duplicados,
+                 valor_total, usuario_nome, criado_em
+          FROM boletos_importacoes
+          ORDER BY criado_em DESC LIMIT 20
+        `),
+      ]);
+
+      res.json({ ok: true, data: {
+        kpis: kpis.rows[0],
+        por_fornecedor: porFornec.rows,
+        vence_15d: vence15.rows,
+        log_importacoes: logImp.rows,
+      }});
+    } catch(e) {
+      console.error('[boletos/painel]', e.message);
       res.status(500).json({ ok: false, erro: e.message });
     }
   });
@@ -780,6 +858,17 @@ module.exports = function (pool, app) {
         ids.push(rows[0].id);
       }
       await client.query('COMMIT');
+
+      // Registrar log de importação
+      const nfKeys = new Set(boletos.filter(b => b.chaveNfe||b.chave_nfe).map(b => b.chaveNfe||b.chave_nfe));
+      const nfDups = boletos.length - ids.length;
+      const valTotal = boletos.reduce((s,b) => s + parseFloat(b.valor||0), 0);
+      pool.query(
+        `INSERT INTO boletos_importacoes(tipo,chave_nfe,fornecedor,boletos_gerados,boletos_duplicados,valor_total,usuario_id,usuario_nome)
+         VALUES('nfe',$1,$2,$3,$4,$5,$6,$7)`,
+        [nfKeys.size===1?[...nfKeys][0]:null, boletos[0]?.fornecedor||null,
+         ids.length, nfDups, valTotal, req.user?.id||null, req.user?.nome||null]
+      ).catch(() => {});
 
       // Notifica para atualizar dashboard
       res.json({ ok: true, ids, count: ids.length });

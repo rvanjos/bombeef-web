@@ -691,6 +691,120 @@ module.exports = function (pool, app) {
   });
 
   // ── GET /historico ─────────────────────────────────────────────────────────
+  // ── GET /analise-financeira — valor em risco + ranking (F2.5) ────────────
+  r.get('/analise-financeira', async (req, res) => {
+    try {
+      await atualizarStatus();
+
+      const [risco, ranking, perdas_mes, perdas_12m] = await Promise.all([
+        // Valor financeiro em risco por faixa de vencimento
+        pool.query(`
+          SELECT
+            SUM(CASE WHEN data_validade < CURRENT_DATE
+              THEN COALESCE(peso_total_kg, qtd_unidades * 0.001) * COALESCE(preco_custo, 0) ELSE 0 END) AS valor_vencido,
+            SUM(CASE WHEN data_validade BETWEEN CURRENT_DATE AND CURRENT_DATE+3
+              THEN COALESCE(peso_total_kg, qtd_unidades * 0.001) * COALESCE(preco_custo, 0) ELSE 0 END) AS valor_critico_3d,
+            SUM(CASE WHEN data_validade BETWEEN CURRENT_DATE+4 AND CURRENT_DATE+7
+              THEN COALESCE(peso_total_kg, qtd_unidades * 0.001) * COALESCE(preco_custo, 0) ELSE 0 END) AS valor_alerta_7d,
+            SUM(CASE WHEN data_validade BETWEEN CURRENT_DATE+8 AND CURRENT_DATE+15
+              THEN COALESCE(peso_total_kg, qtd_unidades * 0.001) * COALESCE(preco_custo, 0) ELSE 0 END) AS valor_atencao_15d,
+            COUNT(*) FILTER (WHERE data_validade < CURRENT_DATE) AS qtd_vencidos,
+            COUNT(*) FILTER (WHERE data_validade BETWEEN CURRENT_DATE AND CURRENT_DATE+3) AS qtd_criticos,
+            COUNT(*) FILTER (WHERE data_validade BETWEEN CURRENT_DATE+4 AND CURRENT_DATE+7) AS qtd_alertas,
+            COUNT(*) FILTER (WHERE data_validade BETWEEN CURRENT_DATE+8 AND CURRENT_DATE+15) AS qtd_atencao
+          FROM validade_items
+          WHERE status NOT IN ('descartado','vendido')
+        `),
+        // Ranking de produtos com maior valor em risco (próximos 15 dias)
+        pool.query(`
+          SELECT
+            descricao,
+            codigo,
+            data_validade,
+            status,
+            COALESCE(peso_total_kg, qtd_unidades * 0.001) AS qtd,
+            COALESCE(preco_custo, 0) AS preco_custo,
+            ROUND(COALESCE(peso_total_kg, qtd_unidades * 0.001) * COALESCE(preco_custo, 0), 2) AS valor_risco,
+            (data_validade::date - CURRENT_DATE) AS dias_restantes,
+            acao_antes_vencer,
+            localizacao
+          FROM validade_items
+          WHERE status NOT IN ('descartado','vendido')
+            AND data_validade <= CURRENT_DATE + 15
+            AND COALESCE(preco_custo, 0) > 0
+          ORDER BY valor_risco DESC
+          LIMIT 20
+        `),
+        // Perdas do mês atual (vinculadas a movimentos_estoque)
+        pool.query(`
+          SELECT
+            COALESCE(SUM(valor_perda),0) AS total_mes,
+            COUNT(*) AS qtd_mes
+          FROM perdas
+          WHERE mes = TO_CHAR(NOW(),'MM/YYYY')
+        `),
+        // Perdas dos últimos 12 meses (para tendência)
+        pool.query(`
+          SELECT
+            mes,
+            COALESCE(SUM(valor_perda),0) AS total,
+            COUNT(*) AS qtd
+          FROM perdas
+          GROUP BY mes
+          ORDER BY
+            SPLIT_PART(mes,'/',2)::int DESC,
+            SPLIT_PART(mes,'/',1)::int DESC
+          LIMIT 12
+        `),
+      ]);
+
+      const r = risco.rows[0];
+      const valorVencido  = parseFloat(r.valor_vencido || 0);
+      const valorCritico  = parseFloat(r.valor_critico_3d || 0);
+      const valorAlerta   = parseFloat(r.valor_alerta_7d || 0);
+      const valorAtencao  = parseFloat(r.valor_atencao_15d || 0);
+      const totalRisco    = valorVencido + valorCritico + valorAlerta;
+
+      // Sugestões operacionais para os itens críticos
+      const sugestoes = ranking.rows.map(item => {
+        const dias = parseInt(item.dias_restantes || 0);
+        let sugestao = null;
+        const qtdNum = parseFloat(item.qtd || 0);
+
+        if (dias < 0)       sugestao = 'Descartar imediatamente — produto vencido';
+        else if (dias <= 2) sugestao = 'Exposição prioritária urgente ou descarte hoje';
+        else if (dias <= 5) sugestao = qtdNum > 5 ? 'Estoque elevado — sugerir promoção ou exposição prioritária' : 'Monitorar — considerar promoção';
+        else if (dias <= 7) sugestao = 'Programar promoção ou uso antecipado';
+        else                sugestao = 'Planejar uso ou promoção nos próximos dias';
+
+        return { ...item, sugestao };
+      });
+
+      res.json({ ok: true, data: {
+        valor_em_risco: {
+          vencido:      valorVencido,
+          critico_3d:   valorCritico,
+          alerta_7d:    valorAlerta,
+          atencao_15d:  valorAtencao,
+          total_urgente: totalRisco,
+          qtd_vencidos:  parseInt(r.qtd_vencidos || 0),
+          qtd_criticos:  parseInt(r.qtd_criticos || 0),
+          qtd_alertas:   parseInt(r.qtd_alertas || 0),
+          qtd_atencao:   parseInt(r.qtd_atencao || 0),
+        },
+        ranking_risco: sugestoes,
+        perdas: {
+          total_mes:   parseFloat(perdas_mes.rows[0]?.total_mes || 0),
+          qtd_mes:     parseInt(perdas_mes.rows[0]?.qtd_mes || 0),
+          evolucao_12m: perdas_12m.rows,
+        },
+      }});
+    } catch(e) {
+      console.error('[validade/analise-financeira]', e.message);
+      res.status(500).json({ ok: false, erro: e.message });
+    }
+  });
+
   r.get('/historico', async (req, res) => {
     try {
       const { resolucao, de, ate, busca } = req.query;

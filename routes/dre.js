@@ -997,6 +997,177 @@ module.exports = function (pool, app) {
   });
 
   // ── GET /relatorio/:mes ────────────────────────────────────────────────────
+  // ── GET /checklist/:mes — fechamento guiado (F2.5) ─────────────────────────
+  r.get('/checklist/:mes', async (req, res) => {
+    try {
+      const mes = req.params.mes; // MM/YYYY
+      const [mmStr, yyyyStr] = mes.split('/');
+      const mm = parseInt(mmStr), yy = parseInt(yyyyStr);
+      const dataIni = `${yy}-${String(mm).padStart(2,'0')}-01`;
+      const dataFim = new Date(yy, mm, 0).toISOString().slice(0,10); // último dia do mês
+
+      const [sessao, lancSemCat, extrato, faturamento, boletos, duplicatas] = await Promise.all([
+        // Tem sessão DRE salva para o mês?
+        pool.query(`SELECT id, atualizado_em FROM dre_sessoes WHERE mes_ref=$1 ORDER BY atualizado_em DESC LIMIT 1`, [mes]),
+        // Lançamentos sem categoria
+        pool.query(`SELECT COUNT(*) AS n FROM dre_lancamentos WHERE mes=$1 AND (categoria IS NULL OR categoria='') AND ignorar=false`, [mes]),
+        // Extrato importado? (tem lançamentos com fonte EXTRATO)
+        pool.query(`SELECT COUNT(*) AS n FROM dre_lancamentos WHERE mes=$1 AND fonte='EXTRATO'`, [mes]),
+        // Faturamento importado?
+        pool.query(`SELECT COUNT(*) AS n, COALESCE(SUM(fat_bruto),0) AS fat FROM faturamento_periodos WHERE TO_CHAR(data_inicio,'MM/YYYY')=$1`, [mes]),
+        // Boletos NF-e importados para o mês?
+        pool.query(`SELECT COUNT(*) AS n FROM boletos WHERE mes_competencia=$1 AND origem='nfe'`, [mes]),
+        // Lançamentos suspeitos: mesmo valor + mesmo fornecedor em < 3 dias
+        pool.query(`
+          SELECT COUNT(*) AS n FROM (
+            SELECT a.id FROM dre_lancamentos a
+            JOIN dre_lancamentos b ON b.id != a.id
+              AND b.mes = a.mes
+              AND ABS(a.valor - b.valor) < 0.01
+              AND (a.razao_social = b.razao_social OR (a.razao_social IS NULL AND b.razao_social IS NULL))
+              AND ABS(a.data_lanc::date - b.data_lanc::date) <= 3
+            WHERE a.mes = $1 AND a.fonte='EXTRATO'
+            GROUP BY a.id HAVING COUNT(*) > 0
+          ) AS dup
+        `, [mes]),
+      ]);
+
+      const temSessao   = sessao.rows.length > 0;
+      const nSemCat     = parseInt(lancSemCat.rows[0]?.n || 0);
+      const nExtrato    = parseInt(extrato.rows[0]?.n || 0);
+      const nFaturamento= parseInt(faturamento.rows[0]?.n || 0);
+      const fatTotal    = parseFloat(faturamento.rows[0]?.fat || 0);
+      const nBoletos    = parseInt(boletos.rows[0]?.n || 0);
+      const nDuplicatas = parseInt(duplicatas.rows[0]?.n || 0);
+
+      res.json({ ok: true, data: {
+        mes,
+        itens: [
+          { id:'extrato',     label:'Extrato bancário importado',  ok: nExtrato>0,     valor: nExtrato+' lançamentos',    acao: nExtrato===0?'Importar OFX ou XLSX no DRE':null },
+          { id:'nfe',         label:'NF-e/Boletos do mês',         ok: nBoletos>0,     valor: nBoletos+' NF-e',           acao: nBoletos===0?'Importar XML no módulo Boletos':null },
+          { id:'faturamento', label:'Faturamento importado',        ok: nFaturamento>0, valor: nFaturamento>0?'R$ '+parseFloat(fatTotal).toLocaleString('pt-BR',{minimumFractionDigits:2}):'—', acao: nFaturamento===0?'Importar relatório XMenu':null },
+          { id:'classificacao',label:'Classificações pendentes',   ok: nSemCat===0,    valor: nSemCat===0?'Todos classificados':nSemCat+' sem categoria', acao: nSemCat>0?'Abrir DRE e classificar lançamentos pendentes':null, urgente: nSemCat>0 },
+          { id:'duplicatas',  label:'Lançamentos suspeitos',        ok: nDuplicatas===0, valor: nDuplicatas===0?'Nenhum detectado':nDuplicatas+' possíveis duplicatas', acao: nDuplicatas>0?'Verificar manualmente no DRE':null },
+          { id:'sessao',      label:'DRE salvo',                    ok: temSessao,      valor: temSessao?(sessao.rows[0].atualizado_em?.toISOString().slice(0,16).replace('T',' ')):'Não salvo', acao: !temSessao?'Abrir DRE e salvar o mês':null },
+        ],
+        pronto: nSemCat===0 && nExtrato>0 && temSessao,
+      }});
+    } catch(e) {
+      console.error('[dre/checklist]', e.message);
+      res.status(500).json({ ok: false, erro: e.message });
+    }
+  });
+
+  // ── GET /diagnostico/:mes — análise automática (F2.5) ────────────────────
+  r.get('/diagnostico/:mes', async (req, res) => {
+    try {
+      const mes = req.params.mes;
+      const [mm, yy] = mes.split('/').map(Number);
+      const mesAnt = mm === 1 ? `12/${yy-1}` : `${String(mm-1).padStart(2,'0')}/${yy}`;
+
+      const [atual, anterior, topDesp, porCategoria] = await Promise.all([
+        // Totais do mês atual
+        pool.query(`
+          SELECT
+            COALESCE(SUM(valor) FILTER (WHERE valor > 0),0) AS receitas,
+            COALESCE(SUM(ABS(valor)) FILTER (WHERE valor < 0),0) AS despesas
+          FROM dre_lancamentos WHERE mes=$1 AND ignorar=false
+        `, [mes]),
+        // Totais do mês anterior
+        pool.query(`
+          SELECT
+            COALESCE(SUM(valor) FILTER (WHERE valor > 0),0) AS receitas,
+            COALESCE(SUM(ABS(valor)) FILTER (WHERE valor < 0),0) AS despesas
+          FROM dre_lancamentos WHERE mes=$1 AND ignorar=false
+        `, [mesAnt]),
+        // Top 5 fornecedores/categorias por valor
+        pool.query(`
+          SELECT
+            COALESCE(razao_social, lancamento) AS nome,
+            categoria,
+            COALESCE(SUM(ABS(valor)),0) AS total
+          FROM dre_lancamentos
+          WHERE mes=$1 AND valor < 0 AND ignorar=false
+            AND (categoria IS NOT NULL AND categoria != '')
+          GROUP BY COALESCE(razao_social, lancamento), categoria
+          ORDER BY SUM(ABS(valor)) DESC
+          LIMIT 5
+        `, [mes]),
+        // Despesas por categoria
+        pool.query(`
+          SELECT
+            categoria,
+            COALESCE(SUM(ABS(valor)),0) AS total,
+            COUNT(*) AS qtd
+          FROM dre_lancamentos
+          WHERE mes=$1 AND valor < 0 AND ignorar=false
+            AND (categoria IS NOT NULL AND categoria != '')
+          GROUP BY categoria
+          ORDER BY SUM(ABS(valor)) DESC
+        `, [mes]),
+      ]);
+
+      const rec  = parseFloat(atual.rows[0]?.receitas || 0);
+      const desp = parseFloat(atual.rows[0]?.despesas || 0);
+      const res2 = rec - desp;
+      const recAnt  = parseFloat(anterior.rows[0]?.receitas || 0);
+      const despAnt = parseFloat(anterior.rows[0]?.despesas || 0);
+      const margem  = rec > 0 ? ((res2 / rec) * 100).toFixed(1) : '0.0';
+      const brl = v => 'R$ ' + parseFloat(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+      const pct = (a,b) => b > 0 ? (((a-b)/b)*100).toFixed(1) : null;
+
+      // Gerar diagnósticos automáticos
+      const alertas = [];
+      const varDesp = pct(desp, despAnt);
+      const varRec  = pct(rec,  recAnt);
+      if (varDesp && parseFloat(varDesp) > 10) alertas.push({ tipo:'alerta', msg:`Despesas aumentaram ${varDesp}% vs mês anterior (${brl(despAnt)} → ${brl(desp)})` });
+      if (varDesp && parseFloat(varDesp) < -10) alertas.push({ tipo:'ok',    msg:`Despesas reduziram ${Math.abs(varDesp)}% vs mês anterior` });
+      if (varRec  && parseFloat(varRec)  > 5)  alertas.push({ tipo:'ok',    msg:`Receitas cresceram ${varRec}% vs mês anterior` });
+      if (varRec  && parseFloat(varRec)  < -5) alertas.push({ tipo:'alerta', msg:`Receitas caíram ${Math.abs(varRec)}% vs mês anterior` });
+      if (parseFloat(margem) < 0)  alertas.push({ tipo:'critico', msg:`Resultado negativo: ${brl(Math.abs(res2))} de prejuízo (margem ${margem}%)` });
+      if (parseFloat(margem) > 20) alertas.push({ tipo:'ok',     msg:`Margem de ${margem}% — acima da média` });
+
+      // Fornecedor de maior representatividade
+      if (topDesp.rows.length > 0) {
+        const top = topDesp.rows[0];
+        const pctTop = desp > 0 ? ((parseFloat(top.total)/desp)*100).toFixed(0) : 0;
+        if (parseFloat(pctTop) > 20) alertas.push({ tipo:'info', msg:`${top.nome} representa ${pctTop}% das despesas do mês (${brl(top.total)})` });
+      }
+
+      res.json({ ok: true, data: {
+        mes, mes_ant: mesAnt,
+        resumo: { receitas: rec, despesas: desp, resultado: res2, margem: parseFloat(margem), margem_fmt: margem+'%' },
+        comparativo: { var_receitas_pct: varRec ? parseFloat(varRec) : null, var_despesas_pct: varDesp ? parseFloat(varDesp) : null },
+        top_despesas: topDesp.rows,
+        por_categoria: porCategoria.rows,
+        alertas,
+      }});
+    } catch(e) {
+      console.error('[dre/diagnostico]', e.message);
+      res.status(500).json({ ok: false, erro: e.message });
+    }
+  });
+
+  // ── GET /evolucao — evolução mensal dos últimos 6 meses (F2.5) ──────────
+  r.get('/evolucao', async (req, res) => {
+    try {
+      const { rows } = await pool.query(`
+        SELECT
+          mes,
+          COALESCE(SUM(valor) FILTER (WHERE valor > 0 AND ignorar=false),0) AS receitas,
+          COALESCE(SUM(ABS(valor)) FILTER (WHERE valor < 0 AND ignorar=false),0) AS despesas
+        FROM dre_lancamentos
+        WHERE mes IS NOT NULL
+        GROUP BY mes
+        ORDER BY
+          SPLIT_PART(mes,'/',2)::int DESC,
+          SPLIT_PART(mes,'/',1)::int DESC
+        LIMIT 12
+      `);
+      res.json({ ok: true, data: rows });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
   r.get('/relatorio/:mes', async (req, res) => {
     try {
       const mes = req.params.mes; // MM/YYYY

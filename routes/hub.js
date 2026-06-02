@@ -416,6 +416,80 @@ module.exports = function(pool) {
     }
   });
 
+  // ── GET /resumo-criticos — Boletos+DRE+Validade para o Hub (F2.5) ────────
+  r.get('/resumo-criticos', async (req, res) => {
+    try {
+      const agora = new Date();
+      const mes = `${String(agora.getMonth()+1).padStart(2,'0')}/${agora.getFullYear()}`;
+
+      const [boletos, dre, validade] = await Promise.all([
+        // Boletos: KPIs + vence em 15d
+        pool.query(`
+          SELECT
+            COUNT(*) FILTER (WHERE status='avencer' AND vencimento < CURRENT_DATE) AS vencidos,
+            COUNT(*) FILTER (WHERE status='avencer' AND vencimento BETWEEN CURRENT_DATE AND CURRENT_DATE+7) AS vence_7d,
+            COUNT(*) FILTER (WHERE status='avencer' AND vencimento BETWEEN CURRENT_DATE+8 AND CURRENT_DATE+15) AS vence_15d,
+            COALESCE(SUM(ABS(valor)) FILTER (WHERE status='avencer'),0) AS total_aberto,
+            COALESCE(SUM(ABS(valor)) FILTER (WHERE status='avencer' AND vencimento < CURRENT_DATE),0) AS total_vencido
+          FROM boletos WHERE status != 'cancelado'
+        `),
+        // DRE: resultado mês + pendências
+        pool.query(`
+          SELECT
+            COALESCE(SUM(valor) FILTER (WHERE valor > 0 AND ignorar=false),0) AS receitas,
+            COALESCE(SUM(ABS(valor)) FILTER (WHERE valor < 0 AND ignorar=false),0) AS despesas,
+            COUNT(*) FILTER (WHERE (categoria IS NULL OR categoria='') AND ignorar=false) AS sem_categoria
+          FROM dre_lancamentos WHERE mes=$1
+        `, [mes]),
+        // Validade: valor em risco
+        pool.query(`
+          SELECT
+            COALESCE(SUM(CASE WHEN data_validade < CURRENT_DATE
+              THEN COALESCE(peso_total_kg,0) * COALESCE(preco_custo,0) ELSE 0 END),0) AS valor_vencido,
+            COALESCE(SUM(CASE WHEN data_validade BETWEEN CURRENT_DATE AND CURRENT_DATE+7
+              THEN COALESCE(peso_total_kg,0) * COALESCE(preco_custo,0) ELSE 0 END),0) AS valor_risco_7d,
+            COUNT(*) FILTER (WHERE data_validade < CURRENT_DATE AND status NOT IN ('descartado','vendido')) AS qtd_vencidos,
+            COUNT(*) FILTER (WHERE data_validade BETWEEN CURRENT_DATE AND CURRENT_DATE+7 AND status NOT IN ('descartado','vendido')) AS qtd_7d
+          FROM validade_items
+        `),
+      ]);
+
+      const b = boletos.rows[0];
+      const d = dre.rows[0];
+      const v = validade.rows[0];
+      const rec  = parseFloat(d.receitas || 0);
+      const desp = parseFloat(d.despesas || 0);
+      const resultado = rec - desp;
+
+      res.json({ ok: true, data: {
+        mes,
+        boletos: {
+          vencidos:       parseInt(b.vencidos || 0),
+          vence_7d:       parseInt(b.vence_7d || 0),
+          vence_15d:      parseInt(b.vence_15d || 0),
+          total_aberto:   parseFloat(b.total_aberto || 0),
+          total_vencido:  parseFloat(b.total_vencido || 0),
+        },
+        dre: {
+          receitas:       rec,
+          despesas:       desp,
+          resultado,
+          margem_pct:     rec > 0 ? parseFloat(((resultado/rec)*100).toFixed(1)) : 0,
+          sem_categoria:  parseInt(d.sem_categoria || 0),
+        },
+        validade: {
+          valor_vencido:  parseFloat(v.valor_vencido || 0),
+          valor_risco_7d: parseFloat(v.valor_risco_7d || 0),
+          qtd_vencidos:   parseInt(v.qtd_vencidos || 0),
+          qtd_7d:         parseInt(v.qtd_7d || 0),
+        },
+      }});
+    } catch(e) {
+      console.error('[hub/resumo-criticos]', e.message);
+      res.status(500).json({ ok: false, erro: e.message });
+    }
+  });
+
   // ── Aliases de compatibilidade ────────────────────────────────────────────
   r.get('/status',     async (req, res) => res.redirect('/api/hub/resumo'));
   r.get('/pendencias', async (req, res) => res.json({ ok: true, data: [] }));
