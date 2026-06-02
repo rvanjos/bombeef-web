@@ -294,10 +294,11 @@ module.exports = function (pool) {
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
-  r.get('/metas/:mes', async (req, res) => {
+  r.get('/metas/:mes(*)', async (req, res) => {
     try {
-      const { rows } = await pool.query(`SELECT * FROM metas WHERE mes = $1`, [req.params.mes]);
-      const mes = req.params.mes;
+      const mes = decodeURIComponent(req.params.mes);
+      const { rows } = await pool.query(`SELECT * FROM metas WHERE mes = $1`, [mes]);
+      // mes já definido acima via decodeURIComponent
       if (!rows.length) {
         // Retorna estrutura vazia com o mês
         return res.json({ ok: true, data: { mes, faturamento_meta: 0, faturamento_real: 0, meta_perda_pct: 2, meta_retiradas: 0 } });

@@ -185,7 +185,7 @@ async function carregarKPIs() {
   const hoje = new Date();
   const mes = `${String(hoje.getMonth()+1).padStart(2,'0')}/${hoje.getFullYear()}`;
   const [dMeta, dKpis] = await Promise.all([
-    api.get(`/api/config/metas/${mes}`),
+    api.get(`/api/config/metas/${encodeURIComponent(mes)}`),
     api.get(`/api/dashboard/kpis?mes=${encodeURIComponent(mes)}`),
   ]);
   const m = dMeta?.data || {};
@@ -203,8 +203,8 @@ async function carregarKPIs() {
     </div>
     <div class="kpi amber">
       <div class="kpi-label">Meta de Perdas</div>
-      <div class="kpi-val">${(m.meta_perda_pct || 2).toFixed(1)}%</div>
-      <div class="kpi-sub">${fatMeta > 0 ? 'R$ '+fmt.brl(fatMeta*(m.meta_perda_pct||2)/100)+' máximo' : 'do faturamento'}</div>
+      <div class="kpi-val">${(parseFloat(m.meta_perda_pct) || 2).toFixed(1)}%</div>
+      <div class="kpi-sub">${fatMeta > 0 ? 'R$ '+fmt.brl(fatMeta*(parseFloat(m.meta_perda_pct)||2)/100)+' máximo' : 'do faturamento'}</div>
     </div>
     <div class="kpi roxo">
       <div class="kpi-label">Teto de Retiradas</div>
@@ -242,11 +242,11 @@ async function carregarHistorico() {
       <td class="right" style="font-family:'DM Mono',monospace;color:${fatReal>0?'var(--green)':'var(--muted)'}">${fatReal > 0 ? fmt.brl(fatReal) : '—'}</td>
       <td class="right"><span class="badge ${badgeCls}">${meta > 0 ? pct+'%' : '—'}</span></td>
       <td><div class="barra-wrap"><div class="barra-fill" style="width:${pct}%;background:${barCor}"></div></div></td>
-      <td class="right" style="color:var(--muted);font-size:12px">${(m.meta_perda_pct||2).toFixed(1)}%</td>
+      <td class="right" style="color:var(--muted);font-size:12px">${(parseFloat(m.meta_perda_pct)||2).toFixed(1)}%</td>
       <td class="right" style="color:var(--muted);font-size:12px">${m.meta_retiradas > 0 ? fmt.brl(m.meta_retiradas) : '—'}</td>
       <td style="color:var(--muted);font-size:12px">${m.observacao||'—'}</td>
       <td>
-        <button onclick="editarMeta('${m.mes}',${m.faturamento_meta||0},${m.meta_perda_pct||2},${m.meta_retiradas||0},'${(m.observacao||'').replace(/'/g,"\\'")}')"
+        <button onclick="editarMeta('${m.mes}',${parseFloat(m.faturamento_meta)||0},${parseFloat(m.meta_perda_pct)||2},${parseFloat(m.meta_retiradas)||0},'${(m.observacao||'').replace(/'/g,"\\'")}')"
           style="background:none;border:none;cursor:pointer;font-size:14px;opacity:.6;padding:2px 4px" title="Editar">✏️</button>
       </td>
     </tr>`;

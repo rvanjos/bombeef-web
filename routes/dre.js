@@ -998,9 +998,9 @@ module.exports = function (pool, app) {
 
   // ── GET /relatorio/:mes ────────────────────────────────────────────────────
   // ── GET /checklist/:mes — fechamento guiado (F2.5) ─────────────────────────
-  r.get('/checklist/:mes', async (req, res) => {
+  r.get('/checklist/:mes(*)', async (req, res) => {
     try {
-      const mes = req.params.mes; // MM/YYYY
+      const mes = decodeURIComponent(req.params.mes); // MM/YYYY
       const [mmStr, yyyyStr] = mes.split('/');
       const mm = parseInt(mmStr), yy = parseInt(yyyyStr);
       const dataIni = `${yy}-${String(mm).padStart(2,'0')}-01`;
@@ -1059,9 +1059,9 @@ module.exports = function (pool, app) {
   });
 
   // ── GET /diagnostico/:mes — análise automática (F2.5) ────────────────────
-  r.get('/diagnostico/:mes', async (req, res) => {
+  r.get('/diagnostico/:mes(*)', async (req, res) => {
     try {
-      const mes = req.params.mes;
+      const mes = decodeURIComponent(req.params.mes);
       const [mm, yy] = mes.split('/').map(Number);
       const mesAnt = mm === 1 ? `12/${yy-1}` : `${String(mm-1).padStart(2,'0')}/${yy}`;
 
