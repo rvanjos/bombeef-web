@@ -253,7 +253,15 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
 <script>
 // Variáveis globais usadas pelo módulo
 let api, fmt, toast;
-let kits = [], semanas = [];
+let kits = [], semanas = [], kitItems = [], prods = [];
+
+// Configuração de custos (mesma de produtos.html)
+let CFG = {
+  cartao:3, royalties:4.875, desperdicio:5, imposto:6, fixos:25, lucro:15,
+  margensMinimas:{Bovino:28,'Suíno':28,Embutidos:28,Acompanhamentos:25,Bebidas:35,Embalagens:15,Outros:25}
+};
+const cfgSalva = localStorage.getItem('bb_kit_cfg');
+if(cfgSalva) try { CFG = {...CFG, ...JSON.parse(cfgSalva)}; } catch(_) {}
 
 window.onBBReady = () => {
   ({ api, fmt, toast } = BB);
