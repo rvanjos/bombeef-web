@@ -18,8 +18,9 @@
 
 const express    = require('express');
 const autenticar = require('../middleware/auth');
+const events     = require('../lib/events');
 
-module.exports = function (pool) {
+module.exports = function (pool, app) {
   const r = express.Router();
   r.use(autenticar());
 
@@ -219,6 +220,49 @@ module.exports = function (pool) {
         ret.observacao || null, ret.autorizadoPor || req.user.id, req.user.id,
       ]);
       res.json({ ok: true, data: rows[0] });
+
+      // ── F2-05: registrar movimento de estoque (try/catch isolado) ─────────
+      // Falha aqui NÃO afeta a retirada já registrada acima
+      try {
+        const ret = rows[0];
+        if (ret.produto_id) {
+          await pool.query(`
+            INSERT INTO movimentos_estoque
+              (produto_id, produto_codigo, tipo_movimento, origem, origem_id,
+               quantidade, estoque_anterior, estoque_posterior, usuario_id, observacao)
+            SELECT
+              p.id, p.codigo, 'RETIRADA_FUNCIONARIO', 'retiradas', $1,
+              -$2::numeric,
+              p.estoque,
+              GREATEST(0, p.estoque - $2::numeric),
+              $3, $4
+            FROM produtos p WHERE p.id = $5
+          `, [
+            ret.id,
+            parseFloat(ret.qtd || 0),
+            ret.usuario_id || null,
+            `Retirada: ${ret.descricao}`,
+            ret.produto_id,
+          ]);
+          // Atualiza produtos.estoque
+          await pool.query(`
+            UPDATE produtos
+            SET estoque = GREATEST(0, estoque - $1), atualizado_em = NOW()
+            WHERE id = $2
+          `, [parseFloat(ret.qtd || 0), ret.produto_id]);
+          // Emite evento no barramento
+          events.emit(app, 'MOVIMENTO_ESTOQUE', {
+            origem:     'retiradas',
+            origem_id:  ret.id,
+            produto_id: ret.produto_id,
+            tipo:       'RETIRADA_FUNCIONARIO',
+            quantidade: ret.qtd,
+          });
+        }
+      } catch (eMov) {
+        console.warn('[retiradas] F2-05 movimento estoque falhou (não crítico):', eMov.message);
+      }
+
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
