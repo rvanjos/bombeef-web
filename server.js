@@ -472,6 +472,32 @@ app.post('/api/dre/exportar-excel', require('./middleware/auth')(), async (req, 
 });
 app.use('/api/perdas',       require('./routes/perdas')(pool, app)); // F1-06
 app.use('/api/retiradas',    require('./routes/retiradas')(pool, app)); // F2-05
+// ── Diagnóstico temporário de metas (sem auth, chave de acesso) ───────────────
+app.get('/api/diag-metas', async (req, res) => {
+  if (req.query.chave !== 'bombeef_diag_2026') return res.status(403).json({ ok:false });
+  try {
+    const { rows } = await pool.query(`
+      SELECT
+        COALESCE(fm.mes_ref, m.mes) AS mes,
+        fm.meta                      AS meta_faturamento_metas,
+        m.faturamento_meta           AS meta_em_metas,
+        CASE
+          WHEN fm.mes_ref IS NULL THEN 'SO_EM_METAS'
+          WHEN m.mes IS NULL      THEN 'NAO_MIGRADO'
+          WHEN ABS(COALESCE(fm.meta,0)-COALESCE(m.faturamento_meta,0)) < 0.01 THEN 'OK'
+          ELSE 'DIVERGENCIA'
+        END AS status
+      FROM faturamento_metas fm
+      FULL OUTER JOIN metas m ON m.mes = fm.mes_ref
+      ORDER BY
+        SPLIT_PART(COALESCE(fm.mes_ref,m.mes),'/',2)::int DESC,
+        SPLIT_PART(COALESCE(fm.mes_ref,m.mes),'/',1)::int DESC
+    `);
+    const resumo = { total:rows.length, ok:rows.filter(r=>r.status==='OK').length, nao_migrado:rows.filter(r=>r.status==='NAO_MIGRADO').length, so_em_metas:rows.filter(r=>r.status==='SO_EM_METAS').length, divergencia:rows.filter(r=>r.status==='DIVERGENCIA').length };
+    res.json({ ok:true, data:rows, resumo });
+  } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
+});
+
 app.use('/api/config',       require('./routes/config')(pool));
 app.use('/api/rh',           require('./routes/rh')(pool));
 app.use('/api/dashboard',    require('./routes/dashboard')(pool));
