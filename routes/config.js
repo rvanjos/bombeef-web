@@ -21,40 +21,6 @@ const { requireNivel } = require('../middleware/auth');
 module.exports = function (pool) {
   const r = express.Router();
 
-  // ── DIAGNÓSTICO PÚBLICO (sem auth) — chave de acesso temporária ───────────
-  r.get('/metas/diagnostico-pub', async (req, res) => {
-    if (req.query.chave !== 'bombeef_diag_2026') return res.status(403).json({ ok:false });
-    try {
-      const { rows } = await pool.query(`
-        SELECT
-          COALESCE(fm.mes_ref, m.mes)   AS mes,
-          fm.meta                        AS meta_faturamento_metas,
-          m.faturamento_meta             AS meta_em_metas,
-          m.meta_perda_pct,
-          m.meta_retiradas,
-          CASE
-            WHEN fm.mes_ref IS NULL THEN 'SO_EM_METAS'
-            WHEN m.mes IS NULL      THEN 'NAO_MIGRADO'
-            WHEN ABS(COALESCE(fm.meta,0) - COALESCE(m.faturamento_meta,0)) < 0.01 THEN 'OK'
-            ELSE 'DIVERGENCIA'
-          END AS status
-        FROM faturamento_metas fm
-        FULL OUTER JOIN metas m ON m.mes = fm.mes_ref
-        ORDER BY
-          SPLIT_PART(COALESCE(fm.mes_ref, m.mes),'/',2)::int DESC,
-          SPLIT_PART(COALESCE(fm.mes_ref, m.mes),'/',1)::int DESC
-      `);
-      const resumo = {
-        total:       rows.length,
-        ok:          rows.filter(r => r.status === 'OK').length,
-        nao_migrado: rows.filter(r => r.status === 'NAO_MIGRADO').length,
-        so_em_metas: rows.filter(r => r.status === 'SO_EM_METAS').length,
-        divergencia: rows.filter(r => r.status === 'DIVERGENCIA').length,
-      };
-      res.json({ ok: true, data: rows, resumo });
-    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
-  });
-
   r.use(autenticar());
 
   // ── Init tabelas ───────────────────────────────────────────────────────────
@@ -329,57 +295,6 @@ module.exports = function (pool) {
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
-  // ── GET /metas/diagnostico — duas queries simples (sem JOIN pesado) ─────────
-  r.get('/metas/diagnostico', async (req, res) => {
-    try {
-      // Query 1: tudo de faturamento_metas
-      const { rows: fm } = await pool.query(
-        `SELECT mes_ref AS mes, meta, obs FROM faturamento_metas ORDER BY mes_ref DESC LIMIT 60`
-      );
-      // Query 2: tudo de metas
-      const { rows: mt } = await pool.query(
-        `SELECT mes, faturamento_meta, meta_perda_pct, meta_retiradas, observacao FROM metas ORDER BY mes DESC LIMIT 60`
-      );
-
-      // Montar mapa e cruzar em JavaScript (sem JOIN no banco)
-      const mapFm = {};
-      fm.forEach(r => { mapFm[r.mes] = parseFloat(r.meta || 0); });
-      const mapMt = {};
-      mt.forEach(r => { mapMt[r.mes] = parseFloat(r.faturamento_meta || 0); });
-
-      // Todos os meses únicos
-      const meses = [...new Set([...Object.keys(mapFm), ...Object.keys(mapMt)])];
-      meses.sort((a, b) => {
-        const [ma, ya] = a.split('/').map(Number);
-        const [mb, yb] = b.split('/').map(Number);
-        return (yb - ya) || (mb - ma);
-      });
-
-  // ── POST /metas/migrar — migra faturamento_metas → metas (seguro, sem sobrescrever) ──
-  // Só executa se autorizado explicitamente com { confirmar: true }
-  r.post('/metas/migrar', requireNivel('admin'), async (req, res) => {
-    if (!req.body?.confirmar) {
-      return res.status(400).json({ ok: false, erro: 'Envie { confirmar: true } para executar a migração' });
-    }
-    try {
-      // INSERT apenas onde metas NÃO tem o mês ainda
-      const { rows } = await pool.query(`
-        INSERT INTO metas (mes, faturamento_meta, observacao)
-        SELECT fm.mes_ref, fm.meta, fm.obs
-        FROM faturamento_metas fm
-        LEFT JOIN metas m ON m.mes = fm.mes_ref
-        WHERE m.mes IS NULL
-          AND fm.meta > 0
-        ON CONFLICT (mes) DO NOTHING
-        RETURNING mes, faturamento_meta
-      `);
-      res.json({ ok: true, migrados: rows.length, meses: rows.map(r => r.mes) });
-    } catch(e) {
-      console.error('[config/metas/migrar]', e.message);
-      res.status(500).json({ ok: false, erro: e.message });
-    }
-  });
-
   r.get('/metas/:mes(*)', async (req, res) => {
     try {
       const mes = decodeURIComponent(req.params.mes);
@@ -392,58 +307,6 @@ module.exports = function (pool) {
       res.json({ ok: true, data: rows[0] });
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
-
-  r.post('/metas', requireNivel('gestor'), async (req, res) => {
-    const m = req.body;
-    if (!m.mes) return res.status(400).json({ ok: false, erro: 'mes obrigatório (MM/YYYY)' });
-    try {
-      const { rows } = await pool.query(`
-        INSERT INTO metas (mes, faturamento_meta, faturamento_real, meta_perda_pct, meta_retiradas, observacao)
-        VALUES ($1,$2,$3,$4,$5,$6)
-        ON CONFLICT (mes) DO UPDATE SET
-          faturamento_meta  = EXCLUDED.faturamento_meta,
-          faturamento_real  = EXCLUDED.faturamento_real,
-          meta_perda_pct    = EXCLUDED.meta_perda_pct,
-          meta_retiradas    = EXCLUDED.meta_retiradas,
-          observacao        = EXCLUDED.observacao,
-          atualizado_em     = NOW()
-        RETURNING *
-      `, [m.mes, parseFloat(m.faturamentoMeta || 0), parseFloat(m.faturamentoReal || 0),
-          parseFloat(m.metaPerdaPct || 2), parseFloat(m.metaRetiradas || 0), m.observacao || null]);
-      res.json({ ok: true, data: rows[0] });
-    } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
-  });
-
-
-
-      const rows = meses.map(mes => {
-        const vFm = mapFm[mes] !== undefined ? mapFm[mes] : null;
-        const vMt = mapMt[mes] !== undefined ? mapMt[mes] : null;
-        let status;
-        if (vFm === null) status = 'SO_EM_METAS';
-        else if (vMt === null) status = 'NAO_MIGRADO';
-        else if (Math.abs(vFm - vMt) < 0.01) status = 'OK';
-        else status = 'DIVERGENCIA';
-        return { mes, meta_faturamento_metas: vFm, meta_em_metas: vMt, status };
-      });
-
-      const resumo = {
-        total:       rows.length,
-        ok:          rows.filter(r => r.status === 'OK').length,
-        nao_migrado: rows.filter(r => r.status === 'NAO_MIGRADO').length,
-        so_em_metas: rows.filter(r => r.status === 'SO_EM_METAS').length,
-        divergencia: rows.filter(r => r.status === 'DIVERGENCIA').length,
-      };
-
-      res.json({ ok: true, data: rows, resumo,
-        raw: { faturamento_metas: fm.length, metas: mt.length } });
-    } catch(e) {
-      console.error('[config/metas/diagnostico]', e.message);
-      res.status(500).json({ ok: false, erro: e.message });
-    }
-  });
-
-
 
   // ══════════════════════════════════════════════════════════════════════
   // CATEGORIAS DRE
