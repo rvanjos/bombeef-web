@@ -363,44 +363,53 @@ module.exports = function (pool) {
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
-  // ── GET /metas/diagnostico — comparação faturamento_metas vs metas (auditoria) ──
+  // ── GET /metas/diagnostico — duas queries simples (sem JOIN pesado) ─────────
   r.get('/metas/diagnostico', async (req, res) => {
     try {
-      // FULL OUTER JOIN para ver todos os meses de ambas as tabelas
-      const { rows } = await pool.query(`
-        SELECT
-          COALESCE(fm.mes_ref, m.mes)   AS mes,
-          fm.meta                        AS meta_fat_metas,
-          m.faturamento_meta             AS meta_metas,
-          m.meta_perda_pct,
-          m.meta_retiradas,
-          m.observacao                   AS obs_metas,
-          fm.obs                         AS obs_fat_metas,
-          CASE
-            WHEN fm.mes_ref IS NULL
-              THEN 'SO_EM_METAS'
-            WHEN m.mes IS NULL
-              THEN 'NAO_MIGRADO'
-            WHEN ABS(COALESCE(fm.meta,0) - COALESCE(m.faturamento_meta,0)) < 0.01
-              THEN 'OK'
-            ELSE 'DIVERGENCIA'
-          END AS status
-        FROM faturamento_metas fm
-        FULL OUTER JOIN metas m ON m.mes = fm.mes_ref
-        ORDER BY
-          SPLIT_PART(COALESCE(fm.mes_ref, m.mes),'/',2)::int DESC,
-          SPLIT_PART(COALESCE(fm.mes_ref, m.mes),'/',1)::int DESC
-      `);
+      // Query 1: tudo de faturamento_metas
+      const { rows: fm } = await pool.query(
+        `SELECT mes_ref AS mes, meta, obs FROM faturamento_metas ORDER BY mes_ref DESC LIMIT 60`
+      );
+      // Query 2: tudo de metas
+      const { rows: mt } = await pool.query(
+        `SELECT mes, faturamento_meta, meta_perda_pct, meta_retiradas, observacao FROM metas ORDER BY mes DESC LIMIT 60`
+      );
+
+      // Montar mapa e cruzar em JavaScript (sem JOIN no banco)
+      const mapFm = {};
+      fm.forEach(r => { mapFm[r.mes] = parseFloat(r.meta || 0); });
+      const mapMt = {};
+      mt.forEach(r => { mapMt[r.mes] = parseFloat(r.faturamento_meta || 0); });
+
+      // Todos os meses únicos
+      const meses = [...new Set([...Object.keys(mapFm), ...Object.keys(mapMt)])];
+      meses.sort((a, b) => {
+        const [ma, ya] = a.split('/').map(Number);
+        const [mb, yb] = b.split('/').map(Number);
+        return (yb - ya) || (mb - ma);
+      });
+
+      const rows = meses.map(mes => {
+        const vFm = mapFm[mes] !== undefined ? mapFm[mes] : null;
+        const vMt = mapMt[mes] !== undefined ? mapMt[mes] : null;
+        let status;
+        if (vFm === null) status = 'SO_EM_METAS';
+        else if (vMt === null) status = 'NAO_MIGRADO';
+        else if (Math.abs(vFm - vMt) < 0.01) status = 'OK';
+        else status = 'DIVERGENCIA';
+        return { mes, meta_faturamento_metas: vFm, meta_em_metas: vMt, status };
+      });
 
       const resumo = {
-        total:          rows.length,
-        ok:             rows.filter(r => r.status === 'OK').length,
-        nao_migrado:    rows.filter(r => r.status === 'NAO_MIGRADO').length,
-        so_em_metas:    rows.filter(r => r.status === 'SO_EM_METAS').length,
-        divergencia:    rows.filter(r => r.status === 'DIVERGENCIA').length,
+        total:       rows.length,
+        ok:          rows.filter(r => r.status === 'OK').length,
+        nao_migrado: rows.filter(r => r.status === 'NAO_MIGRADO').length,
+        so_em_metas: rows.filter(r => r.status === 'SO_EM_METAS').length,
+        divergencia: rows.filter(r => r.status === 'DIVERGENCIA').length,
       };
 
-      res.json({ ok: true, data: rows, resumo });
+      res.json({ ok: true, data: rows, resumo,
+        raw: { faturamento_metas: fm.length, metas: mt.length } });
     } catch(e) {
       console.error('[config/metas/diagnostico]', e.message);
       res.status(500).json({ ok: false, erro: e.message });
