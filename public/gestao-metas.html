@@ -82,5 +82,233 @@ tr:hover td{background:#fdf9f7;}
   <button class="btn btn-p" onclick="abrirForm()" style="padding:5px 14px;font-size:12px">+ Nova Meta</button>
 </div>
 
-
 <div class="content">
+
+  <!-- KPIs do mês atual -->
+  <div class="kpi-row" id="kpis-mes"></div>
+
+  <!-- Banner informativo -->
+  <div class="info-banner">
+    <span style="font-size:16px;flex-shrink:0">ℹ️</span>
+    <div>
+      <strong>Fonte única de verdade.</strong> Todas as metas cadastradas aqui são consumidas por Dashboard, Hub Operacional, DRE e Perdas.
+      Não é necessário cadastrar metas em nenhum outro módulo do sistema.
+    </div>
+  </div>
+
+  <!-- Formulário -->
+  <div class="card" id="form-card" style="display:none">
+    <div class="card-title" id="form-titulo">📝 Definir Meta do Mês</div>
+    <div class="form-grid" style="margin-bottom:12px">
+      <div class="fg">
+        <label>Mês de referência</label>
+        <input type="month" id="f-mes">
+      </div>
+      <div class="fg">
+        <label>Meta de faturamento (R$)</label>
+        <input type="number" id="f-fat" placeholder="Ex: 140000" min="0" step="100">
+      </div>
+      <div class="fg">
+        <label>Meta de perdas <span class="opt">(% do faturamento)</span></label>
+        <input type="number" id="f-perda" placeholder="Ex: 2" min="0" max="100" step="0.1" value="2">
+        <div class="hint">Padrão: 2% do faturamento do mês</div>
+      </div>
+    </div>
+    <div class="form-grid" style="margin-bottom:14px">
+      <div class="fg">
+        <label>Teto de retiradas (R$) <span class="opt">opcional</span></label>
+        <input type="number" id="f-retiradas" placeholder="Ex: 5000" min="0" step="100">
+      </div>
+      <div class="fg">
+        <label>Observação <span class="opt">opcional</span></label>
+        <input type="text" id="f-obs" placeholder="Sazonalidade, eventos, etc.">
+      </div>
+      <div class="fg" style="justify-content:flex-end">
+        <div style="height:22px"></div><!-- alinhamento -->
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-s" onclick="fecharForm()">Cancelar</button>
+          <button class="btn btn-p" onclick="salvar()">💾 Salvar Meta</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tipos futuros (preview visual) -->
+    <div style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:700;margin-bottom:8px">Metas Futuras — Estrutura prevista (não implementadas)</div>
+      <div class="future-types">
+        <div class="future-type"><div class="ft-label">🎫 Ticket Médio</div><div class="ft-val">Ex: R$ 250 por atendimento</div></div>
+        <div class="future-type"><div class="ft-label">👥 Clientes</div><div class="ft-val">Ex: 180 atendimentos/dia</div></div>
+        <div class="future-type"><div class="ft-label">📈 Crescimento</div><div class="ft-val">Ex: +5% vs mês anterior</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Histórico -->
+  <div class="card">
+    <div class="card-title">📋 Histórico de Metas</div>
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Mês</th>
+            <th class="right">Meta Fat.</th>
+            <th class="right">Realizado</th>
+            <th class="right">% Ating.</th>
+            <th>Barra</th>
+            <th class="right">Meta Perdas</th>
+            <th class="right">Teto Retiradas</th>
+            <th>Obs.</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="tbody-metas">
+          <tr><td colspan="9" style="text-align:center;padding:24px;color:var(--muted)">Carregando...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const { api, fmt, toast } = BB;
+
+window.onBBReady = () => {
+  carregarTudo();
+};
+
+async function carregarTudo() {
+  await Promise.all([carregarKPIs(), carregarHistorico()]);
+}
+
+async function carregarKPIs() {
+  const hoje = new Date();
+  const mes = `${String(hoje.getMonth()+1).padStart(2,'0')}/${hoje.getFullYear()}`;
+  const [dMeta, dKpis] = await Promise.all([
+    api.get(`/api/config/metas/${encodeURIComponent(mes)}`),
+    api.get(`/api/dashboard/kpis?mes=${encodeURIComponent(mes)}`),
+  ]);
+  const m = dMeta?.data || {};
+  const k = dKpis?.data || {};
+  const fatReal = k.faturamentoReal || 0;
+  const fatMeta = k.faturamentoMeta || m.faturamento_meta || 0;
+  const pct = fatMeta > 0 ? Math.round(fatReal / fatMeta * 100) : 0;
+  const clr = pct >= 100 ? 'verde' : pct >= 70 ? 'amber' : 'azul';
+
+  document.getElementById('kpis-mes').innerHTML = `
+    <div class="kpi ${clr}">
+      <div class="kpi-label">Meta Faturamento — ${mes}</div>
+      <div class="kpi-val">${fmt.brl(fatMeta)}</div>
+      <div class="kpi-sub">${pct > 0 ? pct+'% atingido · '+fmt.brl(fatReal)+' realizado' : 'Sem faturamento importado'}</div>
+    </div>
+    <div class="kpi amber">
+      <div class="kpi-label">Meta de Perdas</div>
+      <div class="kpi-val">${(parseFloat(m.meta_perda_pct) || 2).toFixed(1)}%</div>
+      <div class="kpi-sub">${fatMeta > 0 ? 'R$ '+fmt.brl(fatMeta*(parseFloat(m.meta_perda_pct)||2)/100)+' máximo' : 'do faturamento'}</div>
+    </div>
+    <div class="kpi roxo">
+      <div class="kpi-label">Teto de Retiradas</div>
+      <div class="kpi-val">${m.meta_retiradas > 0 ? fmt.brl(m.meta_retiradas) : '—'}</div>
+      <div class="kpi-sub">${m.meta_retiradas > 0 ? 'teto mensal' : 'não definido'}</div>
+    </div>
+    <div class="kpi azul">
+      <div class="kpi-label">Meta diária (estimada)</div>
+      <div class="kpi-val">${fatMeta > 0 ? fmt.brl(fatMeta/26) : '—'}</div>
+      <div class="kpi-sub">meta_mensal ÷ 26 dias úteis</div>
+    </div>`;
+}
+
+async function carregarHistorico() {
+  const d = await api.get('/api/config/metas');
+  const tbody = document.getElementById('tbody-metas');
+  if (!d.ok || !d.data?.length) {
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--muted)">Nenhuma meta cadastrada</td></tr>';
+    return;
+  }
+
+  const dFat = await api.get('/api/faturamento/resumo').catch(()=>({ok:false}));
+  const fatPorMes = {};
+  if (dFat.ok) dFat.data.forEach(m => { fatPorMes[m.mes] = parseFloat(m.fat_bruto||0); });
+
+  tbody.innerHTML = d.data.map(m => {
+    const fatReal = fatPorMes[m.mes] || parseFloat(m.faturamento_real||0);
+    const meta = parseFloat(m.faturamento_meta||0);
+    const pct = meta > 0 ? Math.min(Math.round(fatReal/meta*100),100) : 0;
+    const badgeCls = meta === 0 ? 'badge-empty' : pct >= 100 ? 'badge-ok' : pct >= 70 ? 'badge-warn' : 'badge-danger';
+    const barCor = pct >= 100 ? 'var(--green)' : pct >= 70 ? '#d97706' : 'var(--red-l)';
+    return `<tr>
+      <td style="font-weight:600">${m.mes}</td>
+      <td class="right" style="font-family:'DM Mono',monospace">${meta > 0 ? fmt.brl(meta) : '<span style="color:var(--muted)">—</span>'}</td>
+      <td class="right" style="font-family:'DM Mono',monospace;color:${fatReal>0?'var(--green)':'var(--muted)'}">${fatReal > 0 ? fmt.brl(fatReal) : '—'}</td>
+      <td class="right"><span class="badge ${badgeCls}">${meta > 0 ? pct+'%' : '—'}</span></td>
+      <td><div class="barra-wrap"><div class="barra-fill" style="width:${pct}%;background:${barCor}"></div></div></td>
+      <td class="right" style="color:var(--muted);font-size:12px">${(parseFloat(m.meta_perda_pct)||2).toFixed(1)}%</td>
+      <td class="right" style="color:var(--muted);font-size:12px">${m.meta_retiradas > 0 ? fmt.brl(m.meta_retiradas) : '—'}</td>
+      <td style="color:var(--muted);font-size:12px">${m.observacao||'—'}</td>
+      <td>
+        <button onclick="editarMeta('${m.mes}',${parseFloat(m.faturamento_meta)||0},${parseFloat(m.meta_perda_pct)||2},${parseFloat(m.meta_retiradas)||0},'${(m.observacao||'').replace(/'/g,"\\'")}')"
+          style="background:none;border:none;cursor:pointer;font-size:14px;opacity:.6;padding:2px 4px" title="Editar">✏️</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function abrirForm() {
+  const hoje = new Date();
+  document.getElementById('f-mes').value = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
+  document.getElementById('f-fat').value = '';
+  document.getElementById('f-perda').value = '2';
+  document.getElementById('f-retiradas').value = '';
+  document.getElementById('f-obs').value = '';
+  document.getElementById('form-titulo').textContent = '📝 Definir Meta do Mês';
+  document.getElementById('form-card').style.display = '';
+  document.getElementById('f-fat').focus();
+  document.getElementById('form-card').scrollIntoView({behavior:'smooth'});
+}
+
+function editarMeta(mes, fat, perda, retiradas, obs) {
+  const [mm, yyyy] = mes.split('/');
+  document.getElementById('f-mes').value = `${yyyy}-${mm}`;
+  document.getElementById('f-fat').value = fat || '';
+  document.getElementById('f-perda').value = perda || 2;
+  document.getElementById('f-retiradas').value = retiradas || '';
+  document.getElementById('f-obs').value = obs || '';
+  document.getElementById('form-titulo').textContent = `✏️ Editando meta de ${mes}`;
+  document.getElementById('form-card').style.display = '';
+  document.getElementById('f-fat').focus();
+  document.getElementById('form-card').scrollIntoView({behavior:'smooth'});
+}
+
+function fecharForm() {
+  document.getElementById('form-card').style.display = 'none';
+}
+
+async function salvar() {
+  const mesInput = document.getElementById('f-mes').value;
+  const fat = parseFloat(document.getElementById('f-fat').value);
+  const perda = parseFloat(document.getElementById('f-perda').value) || 2;
+  const retiradas = parseFloat(document.getElementById('f-retiradas').value) || 0;
+  const obs = document.getElementById('f-obs').value.trim();
+
+  if (!mesInput) { toast('⚠️ Informe o mês'); return; }
+  if (!fat || fat <= 0) { toast('⚠️ Informe a meta de faturamento'); return; }
+
+  const [yyyy, mm] = mesInput.split('-');
+  const mes = `${mm}/${yyyy}`;
+
+  const d = await api.post('/api/config/metas', {
+    mes,
+    faturamentoMeta: fat,
+    metaPerdaPct: perda,
+    metaRetiradas: retiradas,
+    observacao: obs || null,
+  });
+
+  if (!d.ok) { toast('❌ Erro: ' + d.erro); return; }
+  toast(`✅ Meta de ${mes} salva com sucesso`);
+  fecharForm();
+  carregarTudo();
+}
+</script>
+</body>
+</html>
