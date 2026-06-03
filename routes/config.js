@@ -328,6 +328,40 @@ module.exports = function (pool) {
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
+  // ── GET /metas/diagnostico-pub — diagnóstico público com chave (acesso temporário) ──
+  r.get('/metas/diagnostico-pub', async (req, res) => {
+    if (req.query.chave !== 'bombeef_diag_2026') return res.status(403).json({ ok:false, erro:'chave inválida' });
+    try {
+      const { rows } = await pool.query(`
+        SELECT
+          COALESCE(fm.mes_ref, m.mes)   AS mes,
+          fm.meta                        AS meta_faturamento_metas,
+          m.faturamento_meta             AS meta_em_metas,
+          m.meta_perda_pct,
+          m.meta_retiradas,
+          CASE
+            WHEN fm.mes_ref IS NULL THEN 'SO_EM_METAS'
+            WHEN m.mes IS NULL      THEN 'NAO_MIGRADO'
+            WHEN ABS(COALESCE(fm.meta,0) - COALESCE(m.faturamento_meta,0)) < 0.01 THEN 'OK'
+            ELSE 'DIVERGENCIA'
+          END AS status
+        FROM faturamento_metas fm
+        FULL OUTER JOIN metas m ON m.mes = fm.mes_ref
+        ORDER BY
+          SPLIT_PART(COALESCE(fm.mes_ref, m.mes),'/',2)::int DESC,
+          SPLIT_PART(COALESCE(fm.mes_ref, m.mes),'/',1)::int DESC
+      `);
+      const resumo = {
+        total:        rows.length,
+        ok:           rows.filter(r => r.status === 'OK').length,
+        nao_migrado:  rows.filter(r => r.status === 'NAO_MIGRADO').length,
+        so_em_metas:  rows.filter(r => r.status === 'SO_EM_METAS').length,
+        divergencia:  rows.filter(r => r.status === 'DIVERGENCIA').length,
+      };
+      res.json({ ok: true, data: rows, resumo });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
   // ── GET /metas/diagnostico — comparação faturamento_metas vs metas (auditoria) ──
   r.get('/metas/diagnostico', async (req, res) => {
     try {
