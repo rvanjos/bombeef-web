@@ -308,6 +308,19 @@ thead th{padding:6px 9px;}
   <button onclick="toggleArquivos()" style="background:none;border:none;cursor:pointer;font-size:11px;color:var(--muted);padding:0 4px" title="Fechar">✕</button>
 </div>
 
+<!-- R1: BANNER DE ALERTAS — lançamentos sem categoria -->
+<div id="banner-sem-cat" style="display:none;background:#fffbeb;border-bottom:2px solid #d97706;padding:8px 14px;flex-shrink:0;align-items:center;gap:10px;flex-wrap:wrap">
+  <span style="font-size:15px">⚠️</span>
+  <div style="flex:1">
+    <span style="font-size:12px;font-weight:700;color:#92400e" id="bsc-titulo">ATENÇÃO</span>
+    <span style="font-size:12px;color:#92400e" id="bsc-texto"></span>
+  </div>
+  <button onclick="filtrarPendentes()" style="background:#d97706;color:#fff;border:none;border-radius:6px;padding:4px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;white-space:nowrap">
+    Ver pendentes →
+  </button>
+  <button onclick="document.getElementById('banner-sem-cat').style.display='none'" style="background:none;border:none;cursor:pointer;font-size:13px;color:#92400e;padding:0 2px" title="Fechar">✕</button>
+</div>
+
 <!-- BARRA DE CONTROLES -->
 <!-- BARRA SUPERIOR LIMPA: só Ver DRE + info -->
 <div class="ctrl" style="padding:5px 12px;gap:8px;justify-content:space-between">
@@ -3655,9 +3668,33 @@ function updStats() {
 
   // Label do header
   document.getElementById('ph-sub').textContent = `${mesAtualStr} · ${TXS.length} lanç · ${pct}% classificado`;
+
+  // ── R1: Banner de lançamentos sem categoria ──────────────────────────────
+  const semCat    = at.filter(t => !t.categoria && t.fonte !== 'PREV_RECEITA');
+  const semCatVal = semCat.reduce((s, t) => s + Math.abs(parseFloat(t.valor || 0)), 0);
+  const bannerSC  = document.getElementById('banner-sem-cat');
+  if (bannerSC) {
+    if (semCat.length > 0) {
+      bannerSC.style.display = 'flex';
+      const t = document.getElementById('bsc-titulo');
+      const d = document.getElementById('bsc-texto');
+      if (t) t.textContent = `ATENÇÃO: ${semCat.length} lançamento(s) sem categoria`;
+      if (d) d.textContent = ` — R$ ${fmt.brl(semCatVal)} fora do resultado do DRE.`;
+    } else {
+      bannerSC.style.display = 'none';
+    }
+  }
 }
 
 // ─── DRE VISUAL ───────────────────────────────────────────────────────────────
+// ── R1: filtrar pendentes sem categoria ──────────────────────────────────────
+function filtrarPendentes() {
+  const cb = document.getElementById('f-pend');
+  if (cb) { cb.checked = true; }
+  render();
+  document.getElementById('banner-sem-cat')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
 function getModo(){return document.getElementById('dre-modo')?.value||'caixa';}
 function sincModo(){
   const v=document.getElementById('dre-modo-full')?.value||'comp';

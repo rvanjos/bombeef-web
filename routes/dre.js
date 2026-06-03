@@ -1006,7 +1006,8 @@ module.exports = function (pool, app) {
       const dataIni = `${yy}-${String(mm).padStart(2,'0')}-01`;
       const dataFim = new Date(yy, mm, 0).toISOString().slice(0,10); // último dia do mês
 
-      const [sessao, lancSemCat, extrato, faturamento, boletos, duplicatas] = await Promise.all([
+      const [sessao, lancSemCat, extrato, faturamento, boletos, duplicatas,
+             boletosPrevVencidos, lancSemCatValor, pagFaturasSemImport] = await Promise.all([
         // Tem sessão DRE salva para o mês?
         pool.query(`SELECT id, atualizado_em FROM dre_sessoes WHERE mes_ref=$1 ORDER BY atualizado_em DESC LIMIT 1`, [mes]),
         // Lançamentos sem categoria
@@ -1030,6 +1031,38 @@ module.exports = function (pool, app) {
             GROUP BY a.id HAVING COUNT(*) > 0
           ) AS dup
         `, [mes]),
+        // R3-1: Boletos PREV vencidos há mais de 30 dias sem baixa
+        pool.query(`
+          SELECT COUNT(*) AS n, COALESCE(SUM(ABS(valor)),0) AS total
+          FROM boletos
+          WHERE status = 'avencer'
+            AND vencimento < CURRENT_DATE - INTERVAL '30 days'
+            AND (mes_competencia = $1 OR TO_CHAR(vencimento::date,'MM/YYYY') = $1)
+        `, [mes]),
+        // R3-3: Valor total dos lançamentos sem categoria
+        pool.query(`
+          SELECT COALESCE(SUM(ABS(valor)),0) AS total
+          FROM dre_lancamentos
+          WHERE mes=$1 AND (categoria IS NULL OR categoria='') AND ignorar=false
+        `, [mes]),
+        // R3-2: Pagamentos de fatura de cartão no extrato sem fatura CC correspondente
+        // Detecta por padrão no nome do lançamento
+        pool.query(`
+          SELECT COUNT(*) AS n, COALESCE(SUM(ABS(valor)),0) AS total
+          FROM dre_lancamentos
+          WHERE mes=$1
+            AND fonte='EXTRATO'
+            AND valor < 0
+            AND (
+              lancamento ILIKE '%pag%fatura%'
+              OR lancamento ILIKE '%pagto%cart%'
+              OR lancamento ILIKE '%pagamento%cart%'
+              OR lancamento ILIKE '%fatura%cc%'
+              OR lancamento ILIKE '%pag%cartao%'
+            )
+            AND (categoria IS NULL OR categoria = '' OR categoria = 'Pagamento de Fatura CC' OR categoria = 'Pagamento de Cartão')
+            AND sessao_id IS NOT NULL
+        `, [mes]),
       ]);
 
       const temSessao   = sessao.rows.length > 0;
@@ -1039,6 +1072,12 @@ module.exports = function (pool, app) {
       const fatTotal    = parseFloat(faturamento.rows[0]?.fat || 0);
       const nBoletos    = parseInt(boletos.rows[0]?.n || 0);
       const nDuplicatas = parseInt(duplicatas.rows[0]?.n || 0);
+      // R3 — novos itens
+      const nPrevVencidos    = parseInt(boletosPrevVencidos.rows[0]?.n || 0);
+      const vlPrevVencidos   = parseFloat(boletosPrevVencidos.rows[0]?.total || 0);
+      const vlSemCat         = parseFloat(lancSemCatValor.rows[0]?.total || 0);
+      const nPagFaturaSemImp = parseInt(pagFaturasSemImport.rows[0]?.n || 0);
+      const vlPagFaturaSemImp= parseFloat(pagFaturasSemImport.rows[0]?.total || 0);
 
       res.json({ ok: true, data: {
         mes,
@@ -1049,8 +1088,33 @@ module.exports = function (pool, app) {
           { id:'classificacao',label:'Classificações pendentes',   ok: nSemCat===0,    valor: nSemCat===0?'Todos classificados':nSemCat+' sem categoria', acao: nSemCat>0?'Abrir DRE e classificar lançamentos pendentes':null, urgente: nSemCat>0 },
           { id:'duplicatas',  label:'Lançamentos suspeitos',        ok: nDuplicatas===0, valor: nDuplicatas===0?'Nenhum detectado':nDuplicatas+' possíveis duplicatas', acao: nDuplicatas>0?'Verificar manualmente no DRE':null },
           { id:'sessao',      label:'DRE salvo',                    ok: temSessao,      valor: temSessao?(sessao.rows[0].atualizado_em?.toISOString().slice(0,16).replace('T',' ')):'Não salvo', acao: !temSessao?'Abrir DRE e salvar o mês':null },
+          // R3: 3 novos itens de confiabilidade
+          { id:'sem_categoria',   label:'Valor sem categoria',
+            ok: nSemCat === 0,
+            valor: nSemCat === 0
+              ? 'Todos classificados'
+              : `${nSemCat} lançamento(s) · R$ ${vlSemCat.toLocaleString('pt-BR',{minimumFractionDigits:2})} fora do resultado`,
+            acao: nSemCat > 0 ? 'Abrir DRE · filtrar "Pendentes" e classificar' : null,
+            urgente: nSemCat > 0,
+          },
+          { id:'prev_vencidos',   label:'Boletos PREV vencidos >30d',
+            ok: nPrevVencidos === 0,
+            valor: nPrevVencidos === 0
+              ? 'Nenhum'
+              : `${nPrevVencidos} boleto(s) · R$ ${vlPrevVencidos.toLocaleString('pt-BR',{minimumFractionDigits:2})} — confirmar se pagos ou negociados`,
+            acao: nPrevVencidos > 0 ? 'Verificar boletos vencidos no módulo Boletos' : null,
+            urgente: nPrevVencidos > 0,
+          },
+          { id:'pag_fatura_sem_import', label:'Pag. fatura CC sem fatura importada',
+            ok: nPagFaturaSemImp === 0,
+            valor: nPagFaturaSemImp === 0
+              ? 'Nenhum detectado'
+              : `${nPagFaturaSemImp} pagamento(s) de fatura · R$ ${vlPagFaturaSemImp.toLocaleString('pt-BR',{minimumFractionDigits:2})} — importar fatura CC correspondente`,
+            acao: nPagFaturaSemImp > 0 ? 'Importar fatura CC no DRE para evitar dupla contagem' : null,
+            urgente: nPagFaturaSemImp > 0,
+          },
         ],
-        pronto: nSemCat===0 && nExtrato>0 && temSessao,
+        pronto: nSemCat===0 && nExtrato>0 && temSessao && nPrevVencidos===0 && nPagFaturaSemImp===0,
       }});
     } catch(e) {
       console.error('[dre/checklist]', e.message);
