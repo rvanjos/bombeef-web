@@ -328,6 +328,75 @@ module.exports = function (pool) {
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
+  // ── GET /metas/diagnostico — comparação faturamento_metas vs metas (auditoria) ──
+  r.get('/metas/diagnostico', async (req, res) => {
+    try {
+      // FULL OUTER JOIN para ver todos os meses de ambas as tabelas
+      const { rows } = await pool.query(`
+        SELECT
+          COALESCE(fm.mes_ref, m.mes)   AS mes,
+          fm.meta                        AS meta_fat_metas,
+          m.faturamento_meta             AS meta_metas,
+          m.meta_perda_pct,
+          m.meta_retiradas,
+          m.observacao                   AS obs_metas,
+          fm.obs                         AS obs_fat_metas,
+          CASE
+            WHEN fm.mes_ref IS NULL
+              THEN 'SO_EM_METAS'
+            WHEN m.mes IS NULL
+              THEN 'NAO_MIGRADO'
+            WHEN ABS(COALESCE(fm.meta,0) - COALESCE(m.faturamento_meta,0)) < 0.01
+              THEN 'OK'
+            ELSE 'DIVERGENCIA'
+          END AS status
+        FROM faturamento_metas fm
+        FULL OUTER JOIN metas m ON m.mes = fm.mes_ref
+        ORDER BY
+          SPLIT_PART(COALESCE(fm.mes_ref, m.mes),'/',2)::int DESC,
+          SPLIT_PART(COALESCE(fm.mes_ref, m.mes),'/',1)::int DESC
+      `);
+
+      const resumo = {
+        total:          rows.length,
+        ok:             rows.filter(r => r.status === 'OK').length,
+        nao_migrado:    rows.filter(r => r.status === 'NAO_MIGRADO').length,
+        so_em_metas:    rows.filter(r => r.status === 'SO_EM_METAS').length,
+        divergencia:    rows.filter(r => r.status === 'DIVERGENCIA').length,
+      };
+
+      res.json({ ok: true, data: rows, resumo });
+    } catch(e) {
+      console.error('[config/metas/diagnostico]', e.message);
+      res.status(500).json({ ok: false, erro: e.message });
+    }
+  });
+
+  // ── POST /metas/migrar — migra faturamento_metas → metas (seguro, sem sobrescrever) ──
+  // Só executa se autorizado explicitamente com { confirmar: true }
+  r.post('/metas/migrar', requireNivel('admin'), async (req, res) => {
+    if (!req.body?.confirmar) {
+      return res.status(400).json({ ok: false, erro: 'Envie { confirmar: true } para executar a migração' });
+    }
+    try {
+      // INSERT apenas onde metas NÃO tem o mês ainda
+      const { rows } = await pool.query(`
+        INSERT INTO metas (mes, faturamento_meta, observacao)
+        SELECT fm.mes_ref, fm.meta, fm.obs
+        FROM faturamento_metas fm
+        LEFT JOIN metas m ON m.mes = fm.mes_ref
+        WHERE m.mes IS NULL
+          AND fm.meta > 0
+        ON CONFLICT (mes) DO NOTHING
+        RETURNING mes, faturamento_meta
+      `);
+      res.json({ ok: true, migrados: rows.length, meses: rows.map(r => r.mes) });
+    } catch(e) {
+      console.error('[config/metas/migrar]', e.message);
+      res.status(500).json({ ok: false, erro: e.message });
+    }
+  });
+
   // ══════════════════════════════════════════════════════════════════════
   // CATEGORIAS DRE
   // ══════════════════════════════════════════════════════════════════════
