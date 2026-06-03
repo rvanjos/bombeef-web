@@ -79,7 +79,31 @@ tr:hover td{background:#fdf9f7;}
 <div class="ph">
   <span style="font-size:18px">🎯</span>
   <h2>Gestão de Metas</h2>
-  <button class="btn btn-p" onclick="abrirForm()" style="padding:5px 14px;font-size:12px">+ Nova Meta</button>
+  <div style="display:flex;gap:8px">
+    <button class="btn btn-p" onclick="executarDiagnostico()" style="padding:5px 14px;font-size:12px;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.4)">🔍 Diagnóstico</button>
+    <button class="btn btn-p" onclick="abrirForm()" style="padding:5px 14px;font-size:12px">+ Nova Meta</button>
+  </div>
+</div>
+
+<!-- Painel de diagnóstico -->
+<div id="diag-panel" style="display:none;background:#fffbeb;border-bottom:2px solid #d97706;padding:14px 20px">
+  <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#92400e;margin-bottom:10px">🔍 Diagnóstico — faturamento_metas vs metas</div>
+  <div id="diag-resumo" style="display:flex;gap:10px;margin-bottom:10px;flex-wrap:wrap"></div>
+  <div style="overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead><tr style="background:#92400e;color:#fff">
+        <th style="padding:6px 10px;text-align:left">Mês</th>
+        <th style="padding:6px 10px;text-align:right">faturamento_metas</th>
+        <th style="padding:6px 10px;text-align:right">metas (novo)</th>
+        <th style="padding:6px 10px;text-align:center">Status</th>
+      </tr></thead>
+      <tbody id="diag-tbody"><tr><td colspan="4" style="padding:12px;text-align:center;color:#92400e">Clique em Diagnóstico para consultar</td></tr></tbody>
+    </table>
+  </div>
+  <div style="margin-top:10px;display:flex;gap:8px;align-items:center">
+    <div id="diag-migrar-btn"></div>
+    <button onclick="document.getElementById('diag-panel').style.display='none'" style="padding:5px 12px;background:none;border:1px solid #d97706;border-radius:6px;font-size:11px;cursor:pointer;font-family:'DM Sans',sans-serif;color:#92400e">Fechar</button>
+  </div>
 </div>
 
 <div class="content">
@@ -172,6 +196,61 @@ tr:hover td{background:#fdf9f7;}
 
 <script>
 const { api, fmt, toast } = BB;
+
+async function executarDiagnostico() {
+  const panel = document.getElementById('diag-panel');
+  panel.style.display = '';
+  document.getElementById('diag-tbody').innerHTML = '<tr><td colspan="4" style="padding:12px;text-align:center;color:#92400e">⏳ Consultando banco de dados...</td></tr>';
+  document.getElementById('diag-resumo').innerHTML = '';
+  document.getElementById('diag-migrar-btn').innerHTML = '';
+
+  const d = await api.get('/api/config/metas/diagnostico');
+  if (!d.ok) {
+    document.getElementById('diag-tbody').innerHTML = '<tr><td colspan="4" style="padding:12px;color:red">Erro: ' + (d.erro||'falha na consulta') + '</td></tr>';
+    return;
+  }
+
+  const { data: rows, resumo } = d;
+  const fmt = v => v !== null && v !== undefined ? 'R$ ' + parseFloat(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—';
+
+  // Resumo
+  const cores = { ok:'#14532d', NAO_MIGRADO:'#92400e', SO_EM_METAS:'#1e3a8a', DIVERGENCIA:'#991b1b' };
+  document.getElementById('diag-resumo').innerHTML = [
+    { l:'Total', v: resumo.total, c:'#374151' },
+    { l:'✅ OK', v: resumo.ok, c:'#14532d' },
+    { l:'🟡 Não Migrado', v: resumo.nao_migrado, c:'#92400e' },
+    { l:'🔵 Só em Metas', v: resumo.so_em_metas, c:'#1e3a8a' },
+    { l:'🔴 Divergência', v: resumo.divergencia, c:'#991b1b' },
+  ].map(i => `<span style="background:#fff;border:1px solid #e5e7eb;border-radius:6px;padding:4px 10px;font-size:12px;color:${i.c};font-weight:700">${i.l}: ${i.v}</span>`).join('');
+
+  // Tabela
+  const statusIcon = { OK:'✅ OK', NAO_MIGRADO:'🟡 Não migrado', SO_EM_METAS:'🔵 Só em metas', DIVERGENCIA:'🔴 Divergência' };
+  const statusBg   = { OK:'#f0fdf4', NAO_MIGRADO:'#fffbeb', SO_EM_METAS:'#eff6ff', DIVERGENCIA:'#fef2f2' };
+  document.getElementById('diag-tbody').innerHTML = rows.map((r,i) => `
+    <tr style="background:${i%2?'#faf9f7':'#fff'}">
+      <td style="padding:6px 10px;font-weight:600">${r.mes}</td>
+      <td style="padding:6px 10px;text-align:right;font-family:monospace">${fmt(r.meta_faturamento_metas)}</td>
+      <td style="padding:6px 10px;text-align:right;font-family:monospace">${fmt(r.meta_em_metas)}</td>
+      <td style="padding:6px 10px;text-align:center;background:${statusBg[r.status]}">${statusIcon[r.status]||r.status}</td>
+    </tr>`).join('');
+
+  // Botão de migração se houver NAO_MIGRADO
+  if (resumo.nao_migrado > 0) {
+    document.getElementById('diag-migrar-btn').innerHTML = `
+      <button onclick="executarMigracao()" style="padding:6px 16px;background:#92400e;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif">
+        🔄 Migrar ${resumo.nao_migrado} meses não migrados
+      </button>`;
+  }
+}
+
+async function executarMigracao() {
+  if (!confirm('Confirmar migração de meses NAO_MIGRADOS de faturamento_metas para metas?\n\nMeses com divergência ou já existentes em metas NÃO serão alterados.')) return;
+  const d = await api.post('/api/config/metas/migrar', { confirmar: true });
+  if (!d.ok) { BB.toast('❌ Erro: ' + (d.erro||'falha')); return; }
+  BB.toast('✅ Migrado ' + d.migrados + ' meses: ' + (d.meses||[]).join(', '));
+  setTimeout(() => executarDiagnostico(), 500);
+  setTimeout(() => carregarTudo(), 600);
+}
 
 window.onBBReady = () => {
   carregarTudo();
