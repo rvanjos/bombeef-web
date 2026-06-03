@@ -620,6 +620,37 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
       </div>
 
       <!-- IDs legados para compatibilidade com carregarKPIs() -->
+      <!-- ══ SEÇÃO F2-10: PROJEÇÃO + GRÁFICO + TOP PRODUTOS ══ -->
+      <div id="dash-gerencial" style="display:none">
+
+        <!-- Projeção do mês -->
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-bottom:14px" id="dash-projecao-cards">
+          <!-- preenchido por carregarGerencial() -->
+        </div>
+
+        <!-- Gráfico 30 dias -->
+        <div style="background:#fff;border:1px solid var(--border);border-radius:11px;padding:14px 16px;margin-bottom:14px;box-shadow:0 2px 8px rgba(0,0,0,.06)">
+          <div style="font-size:10px;text-transform:uppercase;letter-spacing:.8px;font-weight:700;color:var(--muted);margin-bottom:10px">📈 Faturamento — Últimos 30 dias</div>
+          <svg id="dash-grafico-30d" width="100%" height="120" viewBox="0 0 800 120" preserveAspectRatio="none"
+               style="display:block;overflow:visible">
+            <text x="400" y="65" text-anchor="middle" style="font-size:12px;fill:#9ca3af">Carregando...</text>
+          </svg>
+          <div id="dash-grafico-legenda" style="font-size:10px;color:var(--muted);margin-top:4px;text-align:right"></div>
+        </div>
+
+        <!-- Top produtos + Curva ABC -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px" id="dash-bottom-row">
+          <div style="background:#fff;border:1px solid var(--border);border-radius:11px;padding:14px 16px;box-shadow:0 2px 8px rgba(0,0,0,.06)">
+            <div style="font-size:10px;text-transform:uppercase;letter-spacing:.8px;font-weight:700;color:var(--muted);margin-bottom:10px">🏆 Top Produtos do Mês</div>
+            <div id="dash-top-produtos">—</div>
+          </div>
+          <div style="background:#fff;border:1px solid var(--border);border-radius:11px;padding:14px 16px;box-shadow:0 2px 8px rgba(0,0,0,.06)">
+            <div style="font-size:10px;text-transform:uppercase;letter-spacing:.8px;font-weight:700;color:var(--muted);margin-bottom:10px">📊 Resultado Financeiro</div>
+            <div id="dash-resultado-fin">—</div>
+          </div>
+        </div>
+      </div>
+
       <!-- Apenas IDs que não existem em outro lugar no dashboard -->
       <div style="display:none" aria-hidden="true">
         <span id="badge-boletos"></span><span id="badge-dre"></span>
@@ -1359,6 +1390,120 @@ async function carregarAlertasValidade() {
   }
 }
 
+// ── F2-10: Dashboard Gerencial — projeção + gráfico + top produtos + ABC ─────
+async function carregarGerencial(mes) {
+  const url = mes ? `/api/dashboard/gerencial?mes=${encodeURIComponent(mes)}` : '/api/dashboard/gerencial';
+  let d;
+  try { d = (await apiFetch(url))?.data; } catch(e) { return; }
+  if (!d) return;
+
+  const el = $('dash-gerencial');
+  if (el) el.style.display = '';
+
+  const brl = fmtBRL;
+  const f   = d.faturamento;
+  const re  = d.dre;
+  const pe  = d.perdas;
+
+  // ── Cards de projeção ────────────────────────────────────────────────────
+  const pCards = $('dash-projecao-cards');
+  if (pCards) {
+    const metaOk = f.meta > 0;
+    const projPct = metaOk ? Math.round(f.projecao/f.meta*100) : null;
+    const projStatus = !metaOk ? '' :
+      projPct >= 100 ? `✅ Acima da meta (+${projPct-100}%)` :
+      `⚠️ Abaixo da meta (${projPct}%)`;
+    const varSinal = f.var_mes_ant !== null ? (f.var_mes_ant >= 0 ? `+${f.var_mes_ant}` : `${f.var_mes_ant}`) : '—';
+
+    pCards.innerHTML = [
+      {lbl:'Realizado', val:brl(f.realizado), sub: metaOk ? `${f.pct_meta}% da meta` : `${f.dias_importados}d importados`, cor:'var(--green)'},
+      {lbl:'Projeção do Mês', val:brl(f.projecao), sub: projStatus || `Média ${brl(f.media_diaria)}/dia`, cor: metaOk && projPct >= 100 ? 'var(--green)' : 'var(--orange)'},
+      {lbl:'Meta', val: metaOk ? brl(f.meta) : '—', sub: metaOk ? '' : 'Definir em Gestão→Metas', cor:'var(--blue)'},
+      {lbl:'Vs mês anterior', val: varSinal + '%', sub: `Mês ant: ${brl(f.fat_mes_ant)}`, cor: f.var_mes_ant >= 0 ? 'var(--green)' : 'var(--red-l)'},
+      {lbl:'Ticket médio', val: brl(f.ticket_medio), sub: `${f.pessoas_mes} atendimentos`, cor:'var(--text)'},
+    ].map(c => `
+      <div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px 14px;box-shadow:0 2px 6px rgba(0,0,0,.05);border-left:3px solid ${c.cor}">
+        <div style="font-size:9px;text-transform:uppercase;letter-spacing:.6px;font-weight:700;color:var(--muted)">${c.lbl}</div>
+        <div style="font-family:'DM Mono',monospace;font-size:19px;font-weight:700;color:${c.cor};margin:3px 0 1px">${c.val}</div>
+        <div style="font-size:11px;color:var(--muted)">${c.sub}</div>
+      </div>`).join('');
+  }
+
+  // ── Gráfico 30 dias ──────────────────────────────────────────────────────
+  const svgEl = $('dash-grafico-30d');
+  if (svgEl && f.grafico_30d?.length) {
+    const pts = f.grafico_30d;
+    const maxV = Math.max(...pts.map(p => parseFloat(p.fat||0)), 1);
+    const W = 800, H = 110, pad = 6, barW = Math.floor((W - pad*2) / pts.length) - 2;
+    const metaDia = f.meta > 0 ? f.meta / 26 : 0;
+    const metaY  = metaDia > 0 ? H - Math.round(metaDia/maxV*(H-10)) : -1;
+
+    let svgContent = '';
+    // Linha de meta diária
+    if (metaY > 0 && metaY < H) {
+      svgContent += `<line x1="${pad}" y1="${metaY}" x2="${W-pad}" y2="${metaY}" stroke="#2563eb" stroke-width="1" stroke-dasharray="4,3" opacity="0.5"/>
+        <text x="${W-pad-2}" y="${metaY-3}" text-anchor="end" style="font-size:9px;fill:#2563eb">meta/dia</text>`;
+    }
+    // Barras
+    pts.forEach((p, i) => {
+      const v = parseFloat(p.fat||0);
+      const bH = v > 0 ? Math.max(3, Math.round(v/maxV*(H-10))) : 2;
+      const x  = pad + i * ((W - pad*2) / pts.length);
+      const y  = H - bH;
+      const cor = v >= (metaDia * 0.9) ? '#16a34a' : '#d97706';
+      const dia = (p.data||'').slice(8,10);
+      svgContent += `<rect x="${x+1}" y="${y}" width="${barW}" height="${bH}"
+        rx="2" fill="${cor}" opacity="0.85">
+        <title>${p.data}: ${brl(v)}</title>
+      </rect>`;
+      if (i % 5 === 0 || i === pts.length-1) {
+        svgContent += `<text x="${x + barW/2}" y="${H+12}" text-anchor="middle" style="font-size:8px;fill:#9ca3af">${dia}</text>`;
+      }
+    });
+    svgEl.innerHTML = svgContent;
+    const leg = $('dash-grafico-legenda');
+    if (leg) leg.textContent = `${pts.length} dias importados · máximo ${brl(maxV)}`;
+  }
+
+  // ── Top Produtos ─────────────────────────────────────────────────────────
+  const topEl = $('dash-top-produtos');
+  if (topEl) {
+    if (d.top_produtos?.length) {
+      topEl.innerHTML = d.top_produtos.map((p,i) => `
+        <div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #f5efe8">
+          <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);width:16px">${i+1}</span>
+          <span style="flex:1;font-size:12px;font-weight:600">${p.nome}</span>
+          <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted)">${p.total_qtd.toFixed(1)}</span>
+        </div>`).join('');
+    } else {
+      topEl.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:8px 0">Importar XMenu para ver os produtos mais vendidos</div>';
+    }
+  }
+
+  // ── Resultado Financeiro ─────────────────────────────────────────────────
+  const resEl = $('dash-resultado-fin');
+  if (resEl && (re.receitas > 0 || re.despesas > 0)) {
+    const margem = re.receitas > 0 ? ((re.resultado/re.receitas)*100).toFixed(1) : 0;
+    const cor = re.resultado >= 0 ? 'var(--green)' : 'var(--red-l)';
+    resEl.innerHTML = [
+      ['Receitas', brl(re.receitas), 'var(--green)'],
+      ['Despesas', brl(re.despesas), 'var(--red-l)'],
+      ['Resultado', `${re.resultado>=0?'+':''}${brl(re.resultado)}`, cor],
+      ['Margem', `${margem}%`, cor],
+      ['Perdas', `${brl(pe.total_mes)} (${pe.pct_fat}%)`, pe.pct_fat > pe.meta_pct ? 'var(--red-l)' : 'var(--green)'],
+    ].map(([l,v,c]) => `
+      <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #f5efe8;font-size:12px">
+        <span style="color:var(--muted)">${l}</span>
+        <span style="font-family:'DM Mono',monospace;font-weight:600;color:${c}">${v}</span>
+      </div>`).join('');
+  } else if (resEl) {
+    resEl.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:8px 0">Salvar DRE do mês para ver resultado financeiro</div>';
+  }
+
+  // ── Curva ABC: atualizar produtos com badge (background) ─────────────────
+  apiFetch('/api/dashboard/curva-abc?janela=90').catch(()=>{});
+}
+
 // ── Aprovações pendentes (fiado) ─────────────────────────────────────────────
 async function carregarPendentesAprovacao() {
   try {
@@ -1508,6 +1653,9 @@ async function carregarKPIs() {
 
     // ── Alertas de ação de validade ───────────────────────────────────────
     carregarAlertasValidade();
+
+    // ── F2-10: Dashboard Gerencial (projeção + gráfico + ABC) ─────────────
+    carregarGerencial(mes);
 
     // ── Fat Hero Bar ──────────────────────────────────────────────────────
     if (d.faturamentoMeta > 0) {

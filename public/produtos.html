@@ -555,7 +555,9 @@ function renderP(lista){
                     margNum >= margMin ? 'color:var(--green)' : 'color:var(--orange)';
     return`<tr>
       <td style="font-family:'DM Mono',monospace;font-size:11px">${p.codigo}</td>
-      <td><b>${p.descricao}</b></td>
+      <td><b>
+        ${p.curva_abc?`<span style="font-size:9px;font-weight:800;padding:1px 6px;border-radius:4px;margin-right:5px;background:${p.curva_abc==='A'?'#fef9c3':p.curva_abc==='B'?'#f0fdf4':'#f3f4f6'};color:${p.curva_abc==='A'?'#92400e':p.curva_abc==='B'?'#14532d':'#6b7280'}">${p.curva_abc==='A'?'⭐ A':p.curva_abc==='B'?'✦ B':'· C'}</span>`:''}${p.descricao}
+      </b></td>
       <td style="font-size:11px">${p.categoria||'—'}</td>
       <td style="font-size:11px">${p.fornecedor||'—'}</td>
       <td style="font-family:'DM Mono',monospace">${fmt.brl(c)}</td>

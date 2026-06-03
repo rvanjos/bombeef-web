@@ -283,6 +283,9 @@ async function autoMigrate() {
   // DEFAULT garante valor para todos os registros já existentes no banco
   await addCol('produtos', 'estoque_minimo', 'NUMERIC(12,3) DEFAULT 0');
   await addCol('produtos', 'usa_validade',   'BOOLEAN DEFAULT true');
+  await addCol('produtos', 'curva_abc',       'TEXT').catch(()=>{});             // F2-12
+  await addCol('produtos', 'curva_abc_valor', 'NUMERIC(14,2)').catch(()=>{});   // F2-12
+  await addCol('produtos', 'curva_abc_em',    'TIMESTAMPTZ').catch(()=>{});     // F2-12
 
   console.log('[migrate] ✅ migração automática concluída');
 }

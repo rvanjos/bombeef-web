@@ -613,7 +613,7 @@ function renderCompras(data) {
 
       return `<tr>
         <td>
-          <div style="font-weight:600">${it.descricao}</div>
+          <div style="font-weight:600">${it.curva_abc?`<span style="font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-right:4px;background:${it.curva_abc==='A'?'#fef9c3':it.curva_abc==='B'?'#f0fdf4':'#f3f4f6'};color:${it.curva_abc==='A'?'#92400e':it.curva_abc==='B'?'#14532d':'#6b7280'}">${it.curva_abc==='A'?'⭐ A':'✦'+it.curva_abc}</span>`:''} ${it.descricao}</div>
           ${it.fornecedor ? `<div class="fornec">🏭 ${it.fornecedor}</div>` : ''}
           ${motivo ? `<div class="fornec" style="color:var(--${it.estoque<0?'red-l':'muted'})">${motivo}</div>` : ''}
         </td>
