@@ -329,6 +329,57 @@ module.exports = function (pool) {
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
+  // ── GET /metas/diagnostico — duas queries simples (sem JOIN pesado) ─────────
+  r.get('/metas/diagnostico', async (req, res) => {
+    try {
+      // Query 1: tudo de faturamento_metas
+      const { rows: fm } = await pool.query(
+        `SELECT mes_ref AS mes, meta, obs FROM faturamento_metas ORDER BY mes_ref DESC LIMIT 60`
+      );
+      // Query 2: tudo de metas
+      const { rows: mt } = await pool.query(
+        `SELECT mes, faturamento_meta, meta_perda_pct, meta_retiradas, observacao FROM metas ORDER BY mes DESC LIMIT 60`
+      );
+
+      // Montar mapa e cruzar em JavaScript (sem JOIN no banco)
+      const mapFm = {};
+      fm.forEach(r => { mapFm[r.mes] = parseFloat(r.meta || 0); });
+      const mapMt = {};
+      mt.forEach(r => { mapMt[r.mes] = parseFloat(r.faturamento_meta || 0); });
+
+      // Todos os meses únicos
+      const meses = [...new Set([...Object.keys(mapFm), ...Object.keys(mapMt)])];
+      meses.sort((a, b) => {
+        const [ma, ya] = a.split('/').map(Number);
+        const [mb, yb] = b.split('/').map(Number);
+        return (yb - ya) || (mb - ma);
+      });
+
+  // ── POST /metas/migrar — migra faturamento_metas → metas (seguro, sem sobrescrever) ──
+  // Só executa se autorizado explicitamente com { confirmar: true }
+  r.post('/metas/migrar', requireNivel('admin'), async (req, res) => {
+    if (!req.body?.confirmar) {
+      return res.status(400).json({ ok: false, erro: 'Envie { confirmar: true } para executar a migração' });
+    }
+    try {
+      // INSERT apenas onde metas NÃO tem o mês ainda
+      const { rows } = await pool.query(`
+        INSERT INTO metas (mes, faturamento_meta, observacao)
+        SELECT fm.mes_ref, fm.meta, fm.obs
+        FROM faturamento_metas fm
+        LEFT JOIN metas m ON m.mes = fm.mes_ref
+        WHERE m.mes IS NULL
+          AND fm.meta > 0
+        ON CONFLICT (mes) DO NOTHING
+        RETURNING mes, faturamento_meta
+      `);
+      res.json({ ok: true, migrados: rows.length, meses: rows.map(r => r.mes) });
+    } catch(e) {
+      console.error('[config/metas/migrar]', e.message);
+      res.status(500).json({ ok: false, erro: e.message });
+    }
+  });
+
   r.get('/metas/:mes(*)', async (req, res) => {
     try {
       const mes = decodeURIComponent(req.params.mes);
@@ -363,31 +414,7 @@ module.exports = function (pool) {
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
-  // ── GET /metas/diagnostico — duas queries simples (sem JOIN pesado) ─────────
-  r.get('/metas/diagnostico', async (req, res) => {
-    try {
-      // Query 1: tudo de faturamento_metas
-      const { rows: fm } = await pool.query(
-        `SELECT mes_ref AS mes, meta, obs FROM faturamento_metas ORDER BY mes_ref DESC LIMIT 60`
-      );
-      // Query 2: tudo de metas
-      const { rows: mt } = await pool.query(
-        `SELECT mes, faturamento_meta, meta_perda_pct, meta_retiradas, observacao FROM metas ORDER BY mes DESC LIMIT 60`
-      );
 
-      // Montar mapa e cruzar em JavaScript (sem JOIN no banco)
-      const mapFm = {};
-      fm.forEach(r => { mapFm[r.mes] = parseFloat(r.meta || 0); });
-      const mapMt = {};
-      mt.forEach(r => { mapMt[r.mes] = parseFloat(r.faturamento_meta || 0); });
-
-      // Todos os meses únicos
-      const meses = [...new Set([...Object.keys(mapFm), ...Object.keys(mapMt)])];
-      meses.sort((a, b) => {
-        const [ma, ya] = a.split('/').map(Number);
-        const [mb, yb] = b.split('/').map(Number);
-        return (yb - ya) || (mb - ma);
-      });
 
       const rows = meses.map(mes => {
         const vFm = mapFm[mes] !== undefined ? mapFm[mes] : null;
@@ -416,30 +443,7 @@ module.exports = function (pool) {
     }
   });
 
-  // ── POST /metas/migrar — migra faturamento_metas → metas (seguro, sem sobrescrever) ──
-  // Só executa se autorizado explicitamente com { confirmar: true }
-  r.post('/metas/migrar', requireNivel('admin'), async (req, res) => {
-    if (!req.body?.confirmar) {
-      return res.status(400).json({ ok: false, erro: 'Envie { confirmar: true } para executar a migração' });
-    }
-    try {
-      // INSERT apenas onde metas NÃO tem o mês ainda
-      const { rows } = await pool.query(`
-        INSERT INTO metas (mes, faturamento_meta, observacao)
-        SELECT fm.mes_ref, fm.meta, fm.obs
-        FROM faturamento_metas fm
-        LEFT JOIN metas m ON m.mes = fm.mes_ref
-        WHERE m.mes IS NULL
-          AND fm.meta > 0
-        ON CONFLICT (mes) DO NOTHING
-        RETURNING mes, faturamento_meta
-      `);
-      res.json({ ok: true, migrados: rows.length, meses: rows.map(r => r.mes) });
-    } catch(e) {
-      console.error('[config/metas/migrar]', e.message);
-      res.status(500).json({ ok: false, erro: e.message });
-    }
-  });
+
 
   // ══════════════════════════════════════════════════════════════════════
   // CATEGORIAS DRE
