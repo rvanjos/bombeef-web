@@ -54,6 +54,8 @@ module.exports = function(pool, app) {
     await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_fat_data ON faturamento_periodos(data_inicio);
       CREATE INDEX IF NOT EXISTS idx_fat_tipo ON faturamento_periodos(tipo_periodo);
+      -- Índice funcional: TO_CHAR(data_inicio,'MM/YYYY') — usado em 8 queries de faturamento
+      CREATE INDEX IF NOT EXISTS idx_fat_mes_fmt ON faturamento_periodos(TO_CHAR(data_inicio,'MM/YYYY'));
     `).catch(()=>{});
     // Adicionar coluna atualizado_em se não existir (migração)
     await pool.query(`

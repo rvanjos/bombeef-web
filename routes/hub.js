@@ -14,7 +14,22 @@ module.exports = function(pool) {
   const r = express.Router();
   r.use(autenticar());
 
+  // ── Cache in-memory para /resumo (60s) ────────────────────────────────────
+  // Invalida automaticamente em eventos de estoque/faturamento/boleto
+  let _cacheResumo = null;
+  let _cacheResumoTs = 0;
+  const CACHE_TTL = 60 * 1000; // 60 segundos
+
+  function invalidarCacheResumo() {
+    _cacheResumo = null;
+    _cacheResumoTs = 0;
+  }
+
   r.get('/resumo', async (req, res) => {
+    // Servir do cache se válido
+    if (_cacheResumo && Date.now() - _cacheResumoTs < CACHE_TTL) {
+      return res.json(_cacheResumo);
+    }
     try {
       const agora   = new Date();
       const hoje    = agora.toISOString().slice(0,10);           // YYYY-MM-DD
@@ -220,7 +235,7 @@ module.exports = function(pool) {
                           msg: nMin>0 ? `${nMin} abaixo do mínimo` : 'Adequado', count:nMin },
       };
 
-      res.json({ ok: true, data: {
+      const payload = { ok: true, data: {
         timestamp: agora,
         mes,
 
@@ -297,7 +312,11 @@ module.exports = function(pool) {
           validade_vencidos: nVenc, validade_criticos: nCrit, validade_alertas: nAlrt,
           estoque_minimo_count: nMin,
         },
-      }});
+      }};
+      // Salvar no cache
+      _cacheResumo = payload;
+      _cacheResumoTs = Date.now();
+      res.json(payload);
 
     } catch(e) {
       console.error('[hub/resumo]', e.message, e.stack?.split('\n')[1]);
@@ -489,6 +508,13 @@ module.exports = function(pool) {
       console.error('[hub/resumo-criticos]', e.message);
       res.status(500).json({ ok: false, erro: e.message });
     }
+  });
+
+  // ── Invalidar cache em eventos do barramento ────────────────────────────
+  // Hub recebe eventos SSE via index.html e invalida o cache automaticamente
+  r.post('/invalidar-cache', (req, res) => {
+    invalidarCacheResumo();
+    res.json({ ok: true });
   });
 
   // ── Aliases de compatibilidade ────────────────────────────────────────────

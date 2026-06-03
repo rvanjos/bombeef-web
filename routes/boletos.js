@@ -153,6 +153,8 @@ module.exports = function (pool, app) {
       CREATE INDEX IF NOT EXISTS idx_boletos_status      ON boletos(status);
       CREATE INDEX IF NOT EXISTS idx_boletos_mes_comp    ON boletos(mes_competencia);
       CREATE INDEX IF NOT EXISTS idx_boletos_mes_caixa   ON boletos(mes_caixa);
+      -- Índice para GROUP BY por fornecedor no painel de boletos
+      CREATE INDEX IF NOT EXISTS idx_boletos_fornecedor  ON boletos(fornecedor) WHERE status = 'avencer';
     `).catch(() => {});
   }
   initTable().catch(e => console.error('[boletos] initTable:', e.message));
