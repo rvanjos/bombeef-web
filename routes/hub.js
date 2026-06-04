@@ -453,13 +453,22 @@ module.exports = function(pool) {
             COALESCE(SUM(ABS(valor)) FILTER (WHERE status='avencer' AND vencimento < CURRENT_DATE),0) AS total_vencido
           FROM boletos WHERE status != 'cancelado'
         `),
-        // DRE: resultado mês + pendências
+        // DRE: usa res_* de dre_sessoes (preenchidos desde Sprint 3.1-E)
+        // dre_lancamentos está desabilitada (espelharLancamentos = no-op)
         pool.query(`
           SELECT
-            COALESCE(SUM(valor) FILTER (WHERE valor > 0 AND ignorar=false),0) AS receitas,
-            COALESCE(SUM(ABS(valor)) FILTER (WHERE valor < 0 AND ignorar=false),0) AS despesas,
-            COUNT(*) FILTER (WHERE (categoria IS NULL OR categoria='') AND ignorar=false) AS sem_categoria
-          FROM dre_lancamentos WHERE mes=$1
+            COALESCE(res_receitas, 0) AS receitas,
+            COALESCE(res_despesas, 0) AS despesas,
+            COALESCE(res_final,    0) AS resultado_final,
+            COALESCE(res_cmv,      0) AS cmv,
+            CASE WHEN dados_json IS NOT NULL THEN (
+              SELECT COUNT(*) FROM jsonb_array_elements(dados_json->'transactions') t
+              WHERE (t->>'categoria') IS NULL OR (t->>'categoria') = ''
+                AND (t->>'ignorar')::boolean IS NOT TRUE
+            ) ELSE 0 END AS sem_categoria
+          FROM dre_sessoes
+          WHERE mes_ref = $1
+          ORDER BY atualizado_em DESC LIMIT 1
         `, [mes]),
         // Validade: valor em risco
         pool.query(`
@@ -475,11 +484,14 @@ module.exports = function(pool) {
       ]);
 
       const b = boletos.rows[0];
-      const d = dre.rows[0];
+      const d = dre.rows[0] || {};
       const v = validade.rows[0];
       const rec  = parseFloat(d.receitas || 0);
       const desp = parseFloat(d.despesas || 0);
-      const resultado = rec - desp;
+      // Usa resultado_final salvo (Sprint 3.1-E) se disponível, senão calcula
+      const resultado = d.resultado_final != null && parseFloat(d.resultado_final) !== 0
+        ? parseFloat(d.resultado_final)
+        : rec - desp;
 
       res.json({ ok: true, data: {
         mes,

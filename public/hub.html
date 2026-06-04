@@ -287,8 +287,8 @@ function render(d) {
         <div class="v-val ${v.fat_mes===0?'sem-dado':''}">${v.fat_mes > 0 ? brl(v.fat_mes) : '—'}</div>
         ${v.fat_mes === 0 ? `<div style="font-size:11px;color:var(--muted);margin-top:2px">Importar relatório XMenu para ver dados de vendas</div>` : ''}
         ${v.pessoas_mes > 0 ? `<div class="v-sub">${v.pessoas_mes} atendimentos · ticket ${brl(v.ticket_mes)}</div>` : ''}
-        ${v.fat_mes > 0 && v.fat_mes_ant > 0 ? compTag(v.var_mes_pct,
-          `${Math.abs(v.var_mes_pct).toFixed(1)}% vs ${d.mes.replace(/(\d+)\/(\d+)/,'$1 mês ant.')}`) : ''}
+        ${v.fat_mes > 0 && v.fat_mes_ant > 0 && v.var_mes_pct != null ? compTag(v.var_mes_pct,
+          `${Math.abs(v.var_mes_pct||0).toFixed(1)}% vs ${d.mes.replace(/(\d+)\/(\d+)/,'$1 mês ant.')}`) : ''}
         ${v.meta_mes > 0 ? `
         <div class="meta-wrap">
           <div class="meta-row">
@@ -767,10 +767,10 @@ function onFileSelect(file) {
   }
 
   let tipo = 'desconhecido';
-  if (nome.includes('302')||nome.includes('estoque')) tipo = 'estoque';
-  else if (nome.includes('venda')||nome.includes('fatur')||nome.includes('xmenu')) tipo = 'vendas';
+  if (nome.includes('302')||nome.includes('estoque')||nome.includes('inventario')||nome.includes('inventário')||nome.includes('saldo')) tipo = 'estoque';
+  else if (nome.includes('venda')||nome.includes('fatur')||nome.includes('xmenu')||nome.includes('101')||nome.includes('200')) tipo = 'vendas';
   else if (ext==='ofx') tipo = 'extrato_ofx';
-  else if (nome.includes('extrato')||nome.includes('itau')) tipo = 'extrato_xlsx';
+  else if (nome.includes('extrato')||nome.includes('itau')||nome.includes('caixa')||nome.includes('banco')) tipo = 'extrato_xlsx';
 
   const rotaMap = {
     estoque:     '/api/produtos/sync-estoque',
@@ -787,9 +787,12 @@ function onFileSelect(file) {
   };
 
   const rota = rotaMap[tipo];
+  const dicaDesconh = tipo==='desconhecido'
+    ? '<div style="font-size:10px;margin-top:4px;color:#6b7280">💡 Renomeie o arquivo incluindo "302", "estoque", "venda" ou "extrato" para identificação automática</div>'
+    : '';
   st.innerHTML = `<div class="ali ${rota?'alerta':'critico'}">
     <span class="ali-ico">📄</span>
-    <span class="ali-txt"><strong>${nomeMap[tipo]}</strong></span>
+    <div style="flex:1"><strong>${nomeMap[tipo]}</strong>${dicaDesconh}</div>
     ${rota?`<button class="ali-btn" onclick="enviar('${rota}')">Importar →</button>`:''}
   </div>`;
   window._fileToSend = file;
@@ -804,8 +807,11 @@ async function enviar(rota) {
     const fd = new FormData(); fd.append('arquivo', file);
     const res = await (_api||BB.api).upload(rota, fd);
     if (res.ok !== false) {
-      st.innerHTML = `<div class="ali ok">✅ Importado com sucesso!</div>`;
-      setTimeout(() => carregar(), 1500);
+      const msgExtra = res.atualizados !== undefined ? ` (${res.atualizados} produto(s) atualizados)` : '';
+      st.innerHTML = `<div class="ali ok">✅ Importado com sucesso!${msgExtra}</div>`;
+      // Invalidar cache do Hub para refletir novo estoque imediatamente
+      try { await (_api||BB.api).get('/api/hub/invalidar-cache'); } catch(_) {}
+      setTimeout(() => carregar(), 1200);
     } else {
       st.innerHTML = `<div class="ali critico">❌ ${res.erro||'Erro ao importar'}</div>`;
     }
