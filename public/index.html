@@ -884,7 +884,7 @@ function entrarNoPortal() {
 
   // Verificação obrigatória de validade para operadores/gestores
   // Alerta obrigatório para todos os perfis exceto admin (PERFIS_ORDEM: contabil→gestor→admin)
-  const perfisObrigatorios = ['contabil','financeiro','estoque','caixa','gestor'];
+  const perfisObrigatorios = ['gestor','estoque','caixa'];
   if (perfisObrigatorios.includes(usuario?.perfil)) {
     verificarConfirmacaoValidade();
   }
