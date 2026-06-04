@@ -2193,11 +2193,16 @@ function addLancs(novos, fileName) {
       const ch = _chaveFornecedor(l) || l.lancamento.toUpperCase().slice(0,30);
       l.categoria = supMem[ch] || autoClassificar(l.lancamento, l.razaoSocial||'');
     }
-    TXS.push({...l, id: l.id || (Date.now()+'_'+Math.random())});
+    const novoTx = {...l, id: l.id || (Date.now()+'_'+Math.random())};
+    TXS.push(novoTx);
     exFitid.add(l.fitid);
     exBoleto.add(String(l.boletoId));
     exHash.add(h);
     n++;
+    // Sprint 3.1-D: tentar vincular automaticamente se for EXTRATO
+    if (novoTx.fonte === 'EXTRATO' || novoTx.fonte === 'OFX') {
+      tentarVincularFaturaAuto(novoTx);
+    }
   }
   if (!files.includes(fileName)) files.push(fileName);
   const msg = n > 0 || atualiz > 0
@@ -2453,6 +2458,120 @@ function setCat(id, cat) {
   updStats();
   const mesLanc = t.mes || mesRef;
   salvarMesDebounce(mesLanc);
+}
+
+// ── Sprint 3.1-D: Vinculação automática por score ───────────────────────────
+// Critérios primários: valor (±5%) + data (±45d do mês da fatura) + fatura única
+// Texto do lançamento é apenas fator auxiliar (+10 pontos de confiança)
+function _scoreFaturaCandidata(tx, fatura) {
+  // tx = lançamento EXTRATO/OFX candidato a ser o pagamento
+  // fatura = objeto de ccrFaturasImportadas()
+  let score = 0;
+
+  // P2: valor ±5% — critério mais importante (+50)
+  const valTx    = Math.abs(parseFloat(tx.valor || 0));
+  const valFat   = fatura.total;
+  if (valFat <= 0 || valTx <= 0) return 0;
+  const diffPct  = Math.abs(valTx - valFat) / valFat;
+  if (diffPct > 0.05) return 0;  // fora da tolerância — descarta
+  score += 50;
+
+  // P3: data compatível com mês da fatura (pagamento esperado até 45d após competência)
+  const mesFat = fatura.mes || '';
+  const mesTx  = tx.mesCaixa || tx.mes || '';
+  if (mesFat && mesTx) {
+    const [mf, yf] = mesFat.split('/').map(Number);
+    const [mt, yt] = mesTx.split('/').map(Number);
+    if (mf && mt) {
+      const diffMeses = (yt * 12 + mt) - (yf * 12 + mf);
+      // Pagamento esperado no mês seguinte ou no mesmo mês (0 ou +1)
+      if (diffMeses >= 0 && diffMeses <= 2) score += 20;
+      else if (diffMeses === -1 || diffMeses === 3) score += 5;  // adiantado ou atrasado
+      else return 0;  // muito distante — descarta
+    }
+  } else {
+    score += 10;  // sem data para comparar — bônus parcial
+  }
+
+  // P4: bandeira compatível (+20)
+  const bandFat = (fatura.bandeira || '').toLowerCase();
+  const lancTx  = (tx.lancamento || '').toLowerCase();
+  const razaoTx = (tx.razaoSocial || '').toLowerCase();
+  if (bandFat) {
+    const cartao = CARTOES_MONITORADOS.find(c => c.match.test(bandFat));
+    if (cartao && (cartao.match.test(lancTx) || cartao.match.test(razaoTx))) {
+      score += 20;
+    }
+  }
+
+  // P5: texto sugere pagamento de fatura (+10) — auxiliar apenas
+  const textoSugerePag = /pag.*fatura|pagamento.*cart|fatura.*cc|pagto.*cart|debito.*aut|deb.*aut/i.test(tx.lancamento || '');
+  if (textoSugerePag) score += 10;
+
+  return score;
+}
+
+function tentarVincularFaturaAuto(tx) {
+  // Pré-condições: EXTRATO/OFX, débito, não vinculado ainda
+  if (tx.fonte !== 'EXTRATO' && tx.fonte !== 'OFX') return;
+  if (parseFloat(tx.valor || 0) >= 0) return;
+  if (tx.faturaCC && tx.vinculadoFaturaCC) return;
+
+  const faturas = ccrFaturasImportadas();
+  if (!faturas.length) return;
+
+  // Calcular score para cada fatura candidata
+  const candidatas = faturas
+    .filter(f => {
+      // Só considera faturas ainda não vinculadas a outro pagamento
+      const jaVinc = TXS.find(t =>
+        t.id !== tx.id &&
+        t.faturaCC === f.faturaId &&
+        t.vinculadoFaturaCC === true
+      );
+      return !jaVinc;
+    })
+    .map(f => ({ fatura: f, score: _scoreFaturaCandidata(tx, f) }))
+    .filter(c => c.score >= 80)
+    .sort((a, b) => b.score - a.score);
+
+  // Regra de segurança: só vincula se houver UMA candidata com score ≥ 80
+  // Se houver empate ou múltiplas candidatas → não vincula (manual)
+  if (candidatas.length === 0) return;
+  if (candidatas.length > 1) {
+    // Verificar se há empate próximo (diferença ≤ 10 pontos)
+    if (candidatas[1].score >= candidatas[0].score - 10) {
+      console.log('[auto-vinc] múltiplas candidatas com score próximo — deixar manual');
+      return;
+    }
+  }
+
+  const melhor = candidatas[0];
+
+  // Aplicar vínculo
+  tx.faturaCC        = melhor.fatura.faturaId;
+  tx.vinculadoFaturaCC = true;
+  // Atualizar categoria apenas se vazia ou era "Pagamento de Cartão"
+  if (!tx.categoria || tx.categoria === 'Pagamento de Cartão') {
+    tx.categoria = 'Pagamento de Fatura CC';
+  }
+  console.log(`[auto-vinc] ✅ score=${melhor.score} → ${tx.lancamento} → ${melhor.fatura.faturaId}`);
+}
+
+// Rodar para todos os lançamentos EXTRATO não vinculados (retroativo)
+function _revinculateCC() {
+  let n = 0;
+  TXS.forEach(tx => {
+    if (tx.fonte !== 'EXTRATO' && tx.fonte !== 'OFX') return;
+    if (tx.faturaCC && tx.vinculadoFaturaCC) return;
+    const ante = tx.faturaCC;
+    tentarVincularFaturaAuto(tx);
+    if (tx.faturaCC !== ante) n++;
+  });
+  if (n > 0) {
+    render(); updStats();
+    console.log(`[auto-vinc] ${n} pagamento(s) vinculado(s) automaticamente`);
+  }
 }
 
 // Vincula lançamento de pagamento de cartão aos itens da fatura CC
@@ -2987,6 +3106,8 @@ function ccrEnviarParaDRE() {
   addLancs(_ccrLancs, _ccrFileName);
   fecharModal('m-cc-revisao');
   toast(`✅ ${_ccrLancs.length} lançamentos enviados para o DRE`);
+  // Sprint 3.1-D: tentar vincular retroativamente pagamentos já existentes no extrato
+  setTimeout(_revinculateCC, 200);
   // Verifica se há lançamento de pagamento de fatura sem vínculo
   ccrAlertarPagamentoSemFatura(faturaId, _ccrMesCC, _ccrBandeira);
 }
