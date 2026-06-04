@@ -5883,6 +5883,12 @@ async function salvar(silent=false, tentativa=1){
       const sid = (window._sessoesPorMes && window._sessoesPorMes[mes])
                || (mes === mesRef ? sessId : null)
                || sessId;
+      // Sprint 3.1-E: calcular resultado antes de salvar e incluir no payload
+      // O backend já suporta os 6 campos res_* e usa COALESCE (não sobrescreve sessões antigas)
+      // calcResultadoDRE usa o modo atual (caixa/comp), estoque e DAS — sem nenhuma alteração de lógica
+      let _res = null;
+      try { _res = calcResultadoDRE(mes); } catch(_e) { console.warn('[salvar] calcResultadoDRE falhou:', _e.message); }
+
       const d = await api.post('/api/dre/salvar', {
         sessao_id: sid,
         mes_ref: mes,
@@ -5892,7 +5898,15 @@ async function salvar(silent=false, tentativa=1){
           loadedFiles: mes === mesRef ? files : [],
           supplierMem: supMem,
           _savedAt: new Date().toISOString()
-        }
+        },
+        resultado: _res ? {
+          receitas:   _res.receitas,
+          despesas:   _res.despesas,
+          cmv:        _res.cmv,
+          lucroBruto: _res.lucroBruto,
+          lucroOp:    _res.lucroOp,
+          final:      _res.final,
+        } : undefined,
       });
       if (d.ok) {
         if (mes === mesRef) {
