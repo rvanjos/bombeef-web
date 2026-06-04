@@ -883,7 +883,8 @@ function entrarNoPortal() {
   renovarTokenSeNecessario(); // verifica imediatamente
 
   // Verificação obrigatória de validade para operadores/gestores
-  const perfisObrigatorios = ['operador','gestor','caixa','estoque'];
+  // Alerta obrigatório para todos os perfis exceto admin (PERFIS_ORDEM: contabil→gestor→admin)
+  const perfisObrigatorios = ['contabil','financeiro','estoque','caixa','gestor'];
   if (perfisObrigatorios.includes(usuario?.perfil)) {
     verificarConfirmacaoValidade();
   }
