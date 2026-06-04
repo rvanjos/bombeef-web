@@ -381,25 +381,24 @@ async function carregarConfig(){
   document.getElementById('cfg-nome').value     = c.nome_empresa||'';
   document.getElementById('cfg-emoji').value    = c.logo_emoji||'🥩';
   document.getElementById('cfg-dias-val').value = c.dias_alerta_val||7;
-  // Parâmetros fiscais — lidos do localStorage (compartilhado com DRE e Faturamento)
-  document.getElementById('cfg-taxa-royalties').value = localStorage.getItem('bb_taxa_royalties') || '4.75';
-  document.getElementById('cfg-pct-simples').value    = localStorage.getItem('bb_pct_simples')    || '8';
+  // Parâmetros fiscais — lidos do backend (Sprint 3.1-B: taxa_royalties_pct agora no banco)
+  document.getElementById('cfg-taxa-royalties').value = c.taxa_royalties_pct || '4.88';
+  document.getElementById('cfg-pct-simples').value    = c.aliquota_simples   || '8';
 }
 
 async function salvarConfig(){
+  const taxaRoy = parseFloat(document.getElementById('cfg-taxa-royalties').value);
+  const pctSimp = parseFloat(document.getElementById('cfg-pct-simples').value);
   const body = {
-    nome_empresa:     document.getElementById('cfg-nome').value,
-    logo_emoji:       document.getElementById('cfg-emoji').value,
-    dias_alerta_val:  document.getElementById('cfg-dias-val').value,
+    nome_empresa:        document.getElementById('cfg-nome').value,
+    logo_emoji:          document.getElementById('cfg-emoji').value,
+    dias_alerta_val:     document.getElementById('cfg-dias-val').value,
+    // Sprint 3.1-B: taxa_royalties_pct salva no banco — única fonte de verdade
+    taxa_royalties_pct:  (!isNaN(taxaRoy) && taxaRoy >= 0) ? String(taxaRoy) : '4.88',
+    aliquota_simples:    (!isNaN(pctSimp) && pctSimp >= 0) ? String(pctSimp) : '8',
   };
   const d = await api.put('/api/config/sistema', body);
   if (!d.ok) { toast('Erro: '+d.erro); return; }
-
-  // Salva parâmetros fiscais no localStorage (compartilhado entre DRE e Faturamento)
-  const taxaRoy = parseFloat(document.getElementById('cfg-taxa-royalties').value);
-  const pctSimp = parseFloat(document.getElementById('cfg-pct-simples').value);
-  if (!isNaN(taxaRoy) && taxaRoy >= 0) localStorage.setItem('bb_taxa_royalties', taxaRoy.toString());
-  if (!isNaN(pctSimp) && pctSimp >= 0) localStorage.setItem('bb_pct_simples', pctSimp.toString());
 
   toast('✅ Configurações salvas!');
 }

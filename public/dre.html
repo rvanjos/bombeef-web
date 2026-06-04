@@ -800,6 +800,7 @@ thead th{padding:6px 9px;}
 <script>
 const {api, fmt, toast} = BB;
 let TXS=[], sessId=null, mesRef='', files=[], supMem={}, selIds=new Set(), _sv;
+let _taxaRoyalties = 4.88; // Sprint 3.1-B: carregada do backend em carregarCategorias()
 let _estoquesMes = {}; // { 'MM/YYYY': valorEstoqueFinal }
 try { _estoquesMes = JSON.parse(localStorage.getItem('bb_estoques_mes') || '{}'); window._estoquesMes = _estoquesMes; } catch(_) {}
 
@@ -1107,6 +1108,18 @@ async function carregarCategorias() {
   } catch(e) {
     console.warn('[DRE] usando categorias fallback:', e.message);
     CATS = CATS_FALLBACK;
+  }
+  // ── Sprint 3.1-B: carregar taxa de royalties do backend ─────────────────
+  try {
+    const cfg = await api.get('/api/config/sistema');
+    if (cfg.ok && cfg.data?.taxa_royalties_pct) {
+      _taxaRoyalties = parseFloat(cfg.data.taxa_royalties_pct) || 4.88;
+      // Manter localStorage em sincronia para retrocompatibilidade do campo config.html
+      try { localStorage.setItem('bb_taxa_royalties', String(_taxaRoyalties)); } catch(_) {}
+    }
+  } catch(_) {
+    // Fallback: localStorage ou padrão 4.88
+    _taxaRoyalties = parseFloat(localStorage.getItem('bb_taxa_royalties') || '4.88') || 4.88;
   }
     preencherSels();
   atualizarDatalist();
@@ -4545,7 +4558,7 @@ async function salvarCategorias() {
 // Regra: 4,88% do faturamento do mês M → 2 parcelas iguais no mês M+1 (dia 15 e último dia útil)
 // Taxa configurável via localStorage('bb_taxa_royalties') ou na aba Config / DRE
 async function gerarRoyaltiesAutomatico() {
-  const TAXA = parseFloat(localStorage.getItem('bb_taxa_royalties') || '4.88') / 100;
+  const TAXA = (_taxaRoyalties || 4.88) / 100; // Sprint 3.1-B: lida do backend via _taxaRoyalties
   const CAT  = 'Royalties';
 
   // Coleta faturamento SEMPRE da API (evita usar localStorage desatualizado)

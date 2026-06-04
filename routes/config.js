@@ -200,7 +200,8 @@ module.exports = function (pool) {
         ('dias_alerta_val', '7',                'Dias de antecedência para alerta de validade'),
         ('taxa_desconto_fun','100',             'Desconto padrão para retiradas de funcionários (%)'),
         ('fuso_horario',    'America/Sao_Paulo','Fuso horário do sistema'),
-        ('aliquota_simples', '8',              'Alíquota do Simples Nacional sobre NFC-e (%)')
+        ('aliquota_simples', '8',              'Alíquota do Simples Nacional sobre NFC-e (%)'),
+        ('taxa_royalties_pct','4.88',          'Taxa de royalties MDK (%) — usada no cálculo automático do DRE')
       ON CONFLICT (chave) DO NOTHING
     `);
   }
