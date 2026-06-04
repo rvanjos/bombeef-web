@@ -46,6 +46,9 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
 /* BANNER */
 .banner{background:#fff;border-bottom:1px solid var(--border);padding:7px 14px;display:none;align-items:center;gap:8px;flex-wrap:wrap;flex-shrink:0;}
 .banner.show{display:flex;}
+.frq-btn{background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:3px 10px;font-size:11px;font-weight:600;cursor:pointer;color:#374151;font-family:'DM Sans',sans-serif;transition:all .15s;}
+.frq-btn:hover{background:#f3f4f6;border-color:#9ca3af;}
+.frq-ativo{background:#8B0000!important;color:#fff!important;border-color:#8B0000!important;}
 .ftag{background:#f0ebe4;border-radius:10px;padding:2px 8px;font-size:11px;color:var(--muted);}
 .ftag.cc{background:#e8f0f7;color:var(--blue);}
 /* CONTROLES */
@@ -326,6 +329,75 @@ thead th{padding:6px 9px;}
     Ver pendentes →
   </button>
   <button onclick="document.getElementById('banner-sem-cat').style.display='none'" style="background:none;border:none;cursor:pointer;font-size:13px;color:#92400e;padding:0 2px" title="Fechar">✕</button>
+</div>
+
+<!-- Sprint 3.1-F: Painel de Pendências do Fechamento + Filtros Rápidos -->
+<div id="painel-pendencias" style="display:none;background:#fafaf9;border-bottom:2px solid #e5e7eb;flex-shrink:0">
+
+  <!-- Cabeçalho colapsável -->
+  <div style="display:flex;align-items:center;gap:8px;padding:7px 14px;cursor:pointer;user-select:none"
+       onclick="togglePainelPendencias()">
+    <span style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:#374151">
+      📋 Pendências do Fechamento
+    </span>
+    <span id="pp-badge-total" style="background:#dc2626;color:#fff;border-radius:10px;padding:1px 7px;font-size:10px;font-weight:700;display:none">0</span>
+    <span style="margin-left:auto;font-size:10px;color:#9ca3af" id="pp-toggle-label">▼ expandir</span>
+  </div>
+
+  <!-- Cards de pendências (colapsáveis) -->
+  <div id="pp-cards" style="display:none;padding:0 12px 10px;display:none">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;margin-bottom:10px">
+
+      <!-- Card: sem categoria -->
+      <div id="pp-card-semcat" onclick="aplicarFiltroRapido('semcat')"
+           style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:10px 12px;cursor:pointer;transition:border-color .2s"
+           onmouseover="this.style.borderColor='#d97706'" onmouseout="this.style.borderColor=document.getElementById('pp-card-semcat').dataset.sel==='1'?'#d97706':'#e5e7eb'">
+        <div style="font-size:10px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">⚠️ Sem categoria</div>
+        <div style="font-size:18px;font-weight:800;font-family:'DM Mono',monospace;color:#111827" id="pp-n-semcat">0</div>
+        <div style="font-size:11px;color:#6b7280;margin-top:2px" id="pp-v-semcat">R$ 0,00 fora do resultado</div>
+      </div>
+
+      <!-- Card: boletos PREV vencidos -->
+      <div id="pp-card-prevvenc" onclick="aplicarFiltroRapido('prevvenc')"
+           style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:10px 12px;cursor:pointer;transition:border-color .2s"
+           onmouseover="this.style.borderColor='#dc2626'" onmouseout="this.style.borderColor=document.getElementById('pp-card-prevvenc').dataset.sel==='1'?'#dc2626':'#e5e7eb'">
+        <div style="font-size:10px;font-weight:700;color:#991b1b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">🔴 PREV vencidos +30d</div>
+        <div style="font-size:18px;font-weight:800;font-family:'DM Mono',monospace;color:#111827" id="pp-n-prevvenc">0</div>
+        <div style="font-size:11px;color:#6b7280;margin-top:2px">boletos sem baixa</div>
+      </div>
+
+      <!-- Card: pagamento CC sem fatura -->
+      <div id="pp-card-ccpend" onclick="aplicarFiltroRapido('ccpend')"
+           style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:10px 12px;cursor:pointer;transition:border-color .2s"
+           onmouseover="this.style.borderColor='#7c3aed'" onmouseout="this.style.borderColor=document.getElementById('pp-card-ccpend').dataset.sel==='1'?'#7c3aed':'#e5e7eb'">
+        <div style="font-size:10px;font-weight:700;color:#4c1d95;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">💳 Pag. CC sem fatura</div>
+        <div style="font-size:18px;font-weight:800;font-family:'DM Mono',monospace;color:#111827" id="pp-n-ccpend">0</div>
+        <div style="font-size:11px;color:#6b7280;margin-top:2px" id="pp-v-ccpend">possível dupla contagem</div>
+      </div>
+
+      <!-- Card: checklist -->
+      <div id="pp-card-checklist"
+           style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:10px 12px">
+        <div style="font-size:10px;font-weight:700;color:#065f46;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">✅ Checklist</div>
+        <div style="font-size:18px;font-weight:800;font-family:'DM Mono',monospace;color:#111827" id="pp-check-ok">—</div>
+        <div style="font-size:11px;color:#6b7280;margin-top:2px" id="pp-check-sub">de 9 itens aprovados</div>
+      </div>
+
+    </div>
+
+    <!-- Filtros rápidos -->
+    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding-top:4px;border-top:1px solid #f3f4f6">
+      <span style="font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin-right:2px">Filtrar:</span>
+      <button id="frq-todos"    onclick="aplicarFiltroRapido('todos')"    class="frq-btn frq-ativo">Todos</button>
+      <button id="frq-semcat"   onclick="aplicarFiltroRapido('semcat')"   class="frq-btn">⚠️ Sem categoria</button>
+      <button id="frq-prevvenc" onclick="aplicarFiltroRapido('prevvenc')" class="frq-btn">🔴 PREV vencidos</button>
+      <button id="frq-ccpend"   onclick="aplicarFiltroRapido('ccpend')"   class="frq-btn">💳 Pag. Cartão</button>
+      <button id="frq-naooper"  onclick="aplicarFiltroRapido('naooper')"  class="frq-btn">🚫 Não operacionais</button>
+      <button id="frq-altos"    onclick="aplicarFiltroRapido('altos')"    class="frq-btn">💰 Valores altos</button>
+      <button id="frq-manual"   onclick="aplicarFiltroRapido('manual')"   class="frq-btn">✏️ Manual</button>
+    </div>
+
+  </div>
 </div>
 
 <!-- BARRA DE CONTROLES -->
@@ -808,6 +880,7 @@ thead th{padding:6px 9px;}
 const {api, fmt, toast} = BB;
 let TXS=[], sessId=null, mesRef='', files=[], supMem={}, selIds=new Set(), _sv;
 let _taxaRoyalties = 4.88; // Sprint 3.1-B: carregada do backend em carregarCategorias()
+let _filtroRapido = 'todos'; // Sprint 3.1-F: filtro rápido ativo
 let _estoquesMes = {}; // { 'MM/YYYY': valorEstoqueFinal }
 try { _estoquesMes = JSON.parse(localStorage.getItem('bb_estoques_mes') || '{}'); window._estoquesMes = _estoquesMes; } catch(_) {}
 
@@ -1302,6 +1375,12 @@ async function carregarSessao() {
 async function trocarMes() {
   if (_ignorarTrocarMes) return;
   const v = document.getElementById('f-mesref').value; if (!v) return;
+  // Sprint 3.1-F: resetar filtro rápido ao trocar de mês
+  _filtroRapido = 'todos';
+  ['todos','semcat','prevvenc','ccpend','naooper','altos','manual'].forEach(id => {
+    const btn = document.getElementById('frq-' + id);
+    if (btn) btn.className = 'frq-btn' + (id === 'todos' ? ' frq-ativo' : '');
+  });
   const [y,m] = v.split('-'); mesRef = `${m}/${y}`;
   document.getElementById('dre-mes-label').textContent = mesRef;
   await carregarSessao();
@@ -2330,6 +2409,19 @@ function render() {
     if (mes && t.mes !== mes) return false;
     if (fonte && t.fonte !== fonte) return false;
     if (pend && t.categoria) return false;
+    // Sprint 3.1-F: filtros rápidos
+    if (_filtroRapido === 'semcat')   { if (t.categoria || t.ignorar) return false; }
+    if (_filtroRapido === 'prevvenc') { if (t.fonte !== 'BOLETO_PREV') return false; }
+    if (_filtroRapido === 'ccpend')   {
+      const isPagCC = /pag.*fatura|pagamento.*cart|fatura.*cc|pagto.*cart|debito.*aut/i.test(t.lancamento||'');
+      if (!isPagCC || parseFloat(t.valor||0) >= 0) return false;
+    }
+    if (_filtroRapido === 'naooper')  { if (!CATS_NAO_OPERACIONAIS.has(t.categoria)) return false; }
+    if (_filtroRapido === 'altos') {
+      const limiar = TXS.reduce((s,x)=>s+Math.abs(parseFloat(x.valor||0)),0) / Math.max(TXS.length,1) * 3;
+      if (Math.abs(parseFloat(t.valor||0)) < limiar) return false;
+    }
+    if (_filtroRapido === 'manual')   { if (t.fonte !== 'MANUAL') return false; }
     return true;
   }).sort((a,b) => (b.data||'').localeCompare(a.data||'')); // mais recente primeiro
 
@@ -3820,6 +3912,9 @@ function updStats() {
   // Label do header
   document.getElementById('ph-sub').textContent = `${mesAtualStr} · ${TXS.length} lanç · ${pct}% classificado`;
 
+  // Sprint 3.1-F: atualizar painel de pendências
+  atualizarPainelPendencias();
+
   // ── R1: Banner de lançamentos sem categoria ──────────────────────────────
   const semCat    = at.filter(t => !t.categoria && t.fonte !== 'PREV_RECEITA');
   const semCatVal = semCat.reduce((s, t) => s + Math.abs(parseFloat(t.valor || 0)), 0);
@@ -3867,6 +3962,91 @@ function atualizarAvisoModo() {
   }
   // Persistir preferência
   try { localStorage.setItem('bb_dre_modo', modo); } catch(_) {}
+}
+
+// ── Sprint 3.1-F: Painel de Pendências + Filtros Rápidos ─────────────────────
+function togglePainelPendencias() {
+  const cards = document.getElementById('pp-cards');
+  const lbl   = document.getElementById('pp-toggle-label');
+  if (!cards) return;
+  const aberto = cards.style.display !== 'none';
+  cards.style.display = aberto ? 'none' : 'flex';
+  cards.style.flexDirection = 'column';
+  if (lbl) lbl.textContent = aberto ? '▼ expandir' : '▲ recolher';
+}
+
+function atualizarPainelPendencias() {
+  const painel = document.getElementById('painel-pendencias');
+  if (!painel || !TXS.length) { if (painel) painel.style.display = 'none'; return; }
+
+  const hoje = new Date();
+  const mesAtual = `${String(hoje.getMonth()+1).padStart(2,'0')}/${hoje.getFullYear()}`;
+  const mesFiltro = mesRef || mesAtual;
+
+  // Calc 1: sem categoria
+  const semCat = TXS.filter(t => !t.categoria && !t.ignorar && t.fonte !== 'PREV_RECEITA');
+  const semCatMes = semCat.filter(t => (t.mesCaixa||t.mes||'') === mesFiltro);
+  const semCatVal = semCatMes.reduce((s,t) => s + Math.abs(parseFloat(t.valor||0)), 0);
+
+  // Calc 2: BOLETO_PREV vencidos >30 dias sem baixa
+  const limiteData = new Date(hoje - 30*86400000).toISOString().slice(0,10);
+  const prevVenc = TXS.filter(t =>
+    t.fonte === 'BOLETO_PREV' && t.data && t.data < limiteData
+    && (t.mesCaixa||t.mes||'') === mesFiltro
+  );
+
+  // Calc 3: pagamentos de cartão sem fatura vinculada
+  const ccPend = TXS.filter(t =>
+    (t.fonte === 'EXTRATO' || t.fonte === 'OFX') &&
+    parseFloat(t.valor||0) < 0 &&
+    (t.mesCaixa||t.mes||'') === mesFiltro &&
+    /pag.*fatura|pagamento.*cart|fatura.*cc|pagto.*cart|debito.*aut/i.test(t.lancamento||'') &&
+    !t.vinculadoFaturaCC
+  );
+
+  // Atualizar cards
+  const nSemCat = semCatMes.length, nPrev = prevVenc.length, nCC = ccPend.length;
+  const totalProblemas = nSemCat + nPrev + nCC;
+
+  const badge = document.getElementById('pp-badge-total');
+  if (badge) {
+    badge.textContent = totalProblemas;
+    badge.style.display = totalProblemas > 0 ? 'inline-block' : 'none';
+    badge.style.background = totalProblemas > 0 ? '#dc2626' : '#16a34a';
+  }
+
+  const $id = id => document.getElementById(id);
+  if ($id('pp-n-semcat'))  $id('pp-n-semcat').textContent  = nSemCat;
+  if ($id('pp-v-semcat'))  $id('pp-v-semcat').textContent  = `R$ ${fmt.brl(semCatVal)} fora do resultado`;
+  if ($id('pp-n-prevvenc'))$id('pp-n-prevvenc').textContent = nPrev;
+  if ($id('pp-n-ccpend'))  $id('pp-n-ccpend').textContent  = nCC;
+
+  // Colorir cards com problema
+  const cardSemCat  = $id('pp-card-semcat');
+  const cardPrev    = $id('pp-card-prevvenc');
+  const cardCC      = $id('pp-card-ccpend');
+  if (cardSemCat)  { cardSemCat.style.borderColor  = nSemCat > 0 ? '#d97706' : '#e5e7eb'; cardSemCat.style.background  = nSemCat > 0 ? '#fffbeb' : '#fff'; }
+  if (cardPrev)    { cardPrev.style.borderColor    = nPrev   > 0 ? '#dc2626' : '#e5e7eb'; cardPrev.style.background    = nPrev   > 0 ? '#fff1f2' : '#fff'; }
+  if (cardCC)      { cardCC.style.borderColor      = nCC     > 0 ? '#7c3aed' : '#e5e7eb'; cardCC.style.background      = nCC     > 0 ? '#f5f3ff' : '#fff'; }
+
+  // Exibir painel
+  painel.style.display = 'flex';
+  painel.style.flexDirection = 'column';
+}
+
+function aplicarFiltroRapido(tipo) {
+  _filtroRapido = tipo;
+  // Atualizar botões ativos
+  ['todos','semcat','prevvenc','ccpend','naooper','altos','manual'].forEach(id => {
+    const btn = document.getElementById('frq-' + id);
+    if (btn) btn.className = 'frq-btn' + (id === tipo ? ' frq-ativo' : '');
+  });
+  // Atualizar destaque dos cards
+  ['semcat','prevvenc','ccpend'].forEach(id => {
+    const card = document.getElementById('pp-card-' + id);
+    if (card) card.dataset.sel = (id === tipo) ? '1' : '0';
+  });
+  render();
 }
 
 function getModo(){return document.getElementById('dre-modo')?.value||'caixa';}
