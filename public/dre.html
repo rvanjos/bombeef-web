@@ -308,6 +308,13 @@ thead th{padding:6px 9px;}
   <button onclick="toggleArquivos()" style="background:none;border:none;cursor:pointer;font-size:11px;color:var(--muted);padding:0 4px" title="Fechar">✕</button>
 </div>
 
+<!-- Sprint 3.1-C: aviso de modo Caixa x Competência -->
+<div id="aviso-modo-dre" style="display:none;background:#f0f4ff;border-bottom:1px solid #c7d2fe;padding:5px 14px 5px 14px;font-size:11px;color:#3730a3;flex-shrink:0;align-items:center;gap:8px;flex-wrap:wrap">
+  <span id="aviso-modo-icone">ℹ️</span>
+  <span id="aviso-modo-texto"></span>
+  <button onclick="document.getElementById('aviso-modo-dre').style.display='none'" style="background:none;border:none;cursor:pointer;font-size:12px;color:#6366f1;padding:0 2px;margin-left:auto" title="Dispensar">✕</button>
+</div>
+
 <!-- R1: BANNER DE ALERTAS — lançamentos sem categoria -->
 <div id="banner-sem-cat" style="display:none;background:#fffbeb;border-bottom:2px solid #d97706;padding:8px 14px;flex-shrink:0;align-items:center;gap:10px;flex-wrap:wrap">
   <span style="font-size:15px">⚠️</span>
@@ -545,7 +552,7 @@ thead th{padding:6px 9px;}
     <div class="dre-hd">
       <span>DRE — <span id="dre-mes-label">—</span></span>
       <div style="display:flex;gap:5px;align-items:center">
-        <select id="dre-modo" onchange="renderDRE()" style="padding:2px 6px;border:1px solid rgba(255,255,255,.4);border-radius:5px;font-size:11px;background:#5a0000;color:#fff;font-weight:600;cursor:pointer">
+        <select id="dre-modo" onchange="renderDRE();atualizarAvisoModo()" style="padding:2px 6px;border:1px solid rgba(255,255,255,.4);border-radius:5px;font-size:11px;background:#5a0000;color:#fff;font-weight:600;cursor:pointer">
           <option value="caixa" style="background:#fff;color:#1a1a1a">Caixa (extrato bancário)</option>
           <option value="comp"  style="background:#fff;color:#1a1a1a">Competência (faturamento)</option>
         </select>
@@ -1071,6 +1078,14 @@ async function inicializar() {
       if (btn) btn.textContent = '⤡ Compactar';
     }
   } catch(_) {}
+  // Sprint 3.1-C: restaurar modo salvo antes de carregar
+  try {
+    const modoSalvo = localStorage.getItem('bb_dre_modo');
+    if (modoSalvo === 'comp' || modoSalvo === 'caixa') {
+      const sel = document.getElementById('dre-modo');
+      if (sel) sel.value = modoSalvo;
+    }
+  } catch(_) {}
   await carregarCategorias();
   await carregarFaturamentoMensal();
   await carregarSessao();
@@ -1146,6 +1161,7 @@ async function carregarSessao() {
     if (!lista.ok || !lista.data?.length) {
       TXS=[]; files=[]; supMem={}; sessId=null;
       setSt('ok'); updMesFiltro(); render(); updStats(); renderDRE();
+      atualizarAvisoModo();
       return;
     }
 
@@ -1278,6 +1294,7 @@ async function carregarSessao() {
   }
   setSt('ok');
   updMesFiltro(); render(); updStats(); renderDRE();
+  atualizarAvisoModo();
   // Garante que a tabela esteja visível se há lançamentos
   if (TXS.length) showTable();
 }
@@ -3708,11 +3725,35 @@ function filtrarPendentes() {
   document.getElementById('banner-sem-cat')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
+// ── Sprint 3.1-C: aviso de modo + persistência ──────────────────────────────
+function atualizarAvisoModo() {
+  const modo  = getModo();
+  const el    = document.getElementById('aviso-modo-dre');
+  const texto = document.getElementById('aviso-modo-texto');
+  if (!el || !texto) return;
+  if (modo === 'caixa') {
+    texto.textContent = 'Modo Caixa: receitas e despesas seguem a data de pagamento/recebimento. Para análise por evento econômico, altere para Competência.';
+    el.style.display = 'flex';
+    el.style.background = '#f0f4ff';
+    el.style.borderBottomColor = '#c7d2fe';
+    el.style.color = '#3730a3';
+  } else {
+    texto.textContent = 'Modo Competência: receitas seguem o faturamento XMenu e despesas seguem a competência do lançamento.';
+    el.style.display = 'flex';
+    el.style.background = '#f0fdf4';
+    el.style.borderBottomColor = '#86efac';
+    el.style.color = '#14532d';
+  }
+  // Persistir preferência
+  try { localStorage.setItem('bb_dre_modo', modo); } catch(_) {}
+}
+
 function getModo(){return document.getElementById('dre-modo')?.value||'caixa';}
 function sincModo(){
   const v=document.getElementById('dre-modo-full')?.value||'comp';
   const el=document.getElementById('dre-modo'); if(el) el.value=v;
   renderDRE(); renderDREFull();
+  atualizarAvisoModo();
 }
 function getMesTx(t){return getModo()==='caixa'?(t.mesCaixa||t.mes||mesRef):(t.mes||mesRef);}
 
