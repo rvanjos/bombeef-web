@@ -44,7 +44,7 @@ module.exports = function (pool, app) {
     next();
   };
   const r = express.Router();
-  r.use(autenticar());
+  r.use(autenticar(['admin','financeiro','contabil']));
 
   // Perfil contabil: somente leitura — bloqueia qualquer escrita
   r.use((req, res, next) => {

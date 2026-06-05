@@ -9,7 +9,7 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 
 
 module.exports = function(pool) {
   const r = express.Router();
-  r.use(autenticar());
+  r.use(autenticar(['admin','gestor']));
 
   // ── AUTO-MIGRATE ──────────────────────────────────────────────────────────
   ;(async () => {
