@@ -729,5 +729,160 @@ module.exports = function(pool) {
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
+
+  // ── GET /planejamento ── Sprint 4.4-A ─────────────────────────────────────
+  // Sugestão de quantidade de compra por produto
+  // Fontes: produtos (estoque, curva_abc, custos) + vendas_produto (venda média 30d)
+  r.get('/planejamento', async (req, res) => {
+    try {
+      const { abc, status, categoria, limite = 200 } = req.query;
+      const conds = ['p.ativo = true'];
+      const params = [];
+
+      if (abc) {
+        params.push(abc);
+        conds.push(`p.curva_abc = $${params.length}`);
+      }
+      if (categoria) {
+        params.push(categoria);
+        conds.push(`p.categoria = $${params.length}`);
+      }
+
+      const { rows } = await pool.query(`
+        SELECT
+          p.codigo,
+          p.descricao                                           AS produto_nome,
+          p.curva_abc,
+          p.categoria,
+          p.unidade,
+          COALESCE(p.estoque, 0)                               AS estoque_atual,
+          p.estoque_minimo,
+          -- Custo unitário: prioridade custo_medio_90d > ultimo_custo > preco_custo
+          COALESCE(
+            NULLIF(p.custo_medio_90d, 0),
+            NULLIF(p.ultimo_custo, 0),
+            NULLIF(p.preco_custo, 0)
+          )                                                    AS custo_unitario,
+          CASE
+            WHEN p.custo_medio_90d  IS NOT NULL AND p.custo_medio_90d  > 0 THEN 'custo_medio_90d'
+            WHEN p.ultimo_custo     IS NOT NULL AND p.ultimo_custo     > 0 THEN 'ultimo_custo'
+            WHEN p.preco_custo      IS NOT NULL AND p.preco_custo      > 0 THEN 'preco_custo'
+            ELSE 'sem_custo'
+          END                                                  AS fonte_custo,
+          p.tendencia_custo,
+          -- Venda média diária (últimos 30d)
+          COALESCE(v.media_diaria, 0)                          AS venda_media_diaria
+        FROM produtos p
+        LEFT JOIN (
+          SELECT
+            codigo,
+            ROUND(SUM(quantidade)::numeric / NULLIF(COUNT(DISTINCT data_venda), 0), 4) AS media_diaria
+          FROM vendas_produto
+          WHERE data_venda >= CURRENT_DATE - 30
+          GROUP BY codigo
+        ) v ON v.codigo = p.codigo
+        WHERE ${conds.join(' AND ')}
+          AND (COALESCE(p.estoque, 0) > 0 OR COALESCE(v.media_diaria, 0) > 0
+               OR p.ultimo_custo IS NOT NULL)
+        ORDER BY p.curva_abc NULLS LAST, p.descricao
+        LIMIT $${params.push(parseInt(limite)) && params.length}
+      `, params);
+
+      // Calcular campos derivados em Node (sem SQL extra)
+      const data = rows.map(r => {
+        const estoque    = parseFloat(r.estoque_atual  || 0);
+        const vendaDia   = parseFloat(r.venda_media_diaria || 0);
+        const custoUnit  = r.custo_unitario ? parseFloat(r.custo_unitario) : null;
+
+        // Dias alvo por curva ABC
+        const diasAlvo = r.curva_abc === 'A' ? 21
+                       : r.curva_abc === 'B' ? 15
+                       : r.curva_abc === 'C' ? 10
+                       : 15; // sem ABC → padrão 15
+
+        // Cobertura atual
+        const coberturaDias = vendaDia > 0
+          ? parseFloat((estoque / vendaDia).toFixed(1))
+          : null; // sem venda → cobertura indefinida
+
+        // Quantidade sugerida: (vendaDia × diasAlvo) - estoqueAtual, mínimo 0
+        const qtdSugerida = vendaDia > 0
+          ? parseFloat(Math.max(0, vendaDia * diasAlvo - estoque).toFixed(3))
+          : 0;
+
+        // Valor estimado da compra
+        const valorEstimado = custoUnit != null && qtdSugerida > 0
+          ? parseFloat((qtdSugerida * custoUnit).toFixed(2))
+          : null;
+
+        // Classificação de urgência
+        let status;
+        if (coberturaDias === null) {
+          status = 'sem_venda'; // sem histórico de venda — não classifica
+        } else if (coberturaDias < 5) {
+          status = 'urgente';
+        } else if (coberturaDias < 15) {
+          status = 'atencao';
+        } else {
+          status = 'saudavel';
+        }
+
+        return {
+          codigo:            r.codigo,
+          produto_nome:      r.produto_nome,
+          categoria:         r.categoria || null,
+          curva_abc:         r.curva_abc || null,
+          unidade:           r.unidade   || null,
+          estoque_atual:     estoque,
+          estoque_minimo:    parseFloat(r.estoque_minimo || 0),
+          venda_media_diaria: vendaDia,
+          cobertura_dias:    coberturaDias,
+          dias_alvo_estoque: diasAlvo,
+          qtd_sugerida:      qtdSugerida,
+          custo_unitario:    custoUnit,
+          fonte_custo:       r.fonte_custo,
+          valor_estimado:    valorEstimado,
+          tendencia_custo:   r.tendencia_custo || null,
+          status,
+        };
+      });
+
+      // Filtrar por status se solicitado
+      const filtrado = status ? data.filter(r => r.status === status) : data;
+
+      // Ordenar: urgente → atenção → sem_venda → saudável; dentro de cada grupo, menor cobertura primeiro
+      const ordemStatus = { urgente: 0, atencao: 1, sem_venda: 2, saudavel: 3 };
+      filtrado.sort((a, b) => {
+        const ds = (ordemStatus[a.status] ?? 4) - (ordemStatus[b.status] ?? 4);
+        if (ds !== 0) return ds;
+        const ca = a.cobertura_dias ?? 999;
+        const cb = b.cobertura_dias ?? 999;
+        return ca - cb;
+      });
+
+      // Totalizadores
+      const urgentes  = filtrado.filter(r => r.status === 'urgente').length;
+      const atencao   = filtrado.filter(r => r.status === 'atencao').length;
+      const valorTotal = filtrado.reduce((s, r) => s + (r.valor_estimado || 0), 0);
+
+      res.json({
+        ok: true,
+        data: filtrado,
+        resumo: {
+          total:          filtrado.length,
+          urgentes,
+          atencao,
+          saudaveis:      filtrado.filter(r => r.status === 'saudavel').length,
+          sem_venda:      filtrado.filter(r => r.status === 'sem_venda').length,
+          valor_total_estimado: parseFloat(valorTotal.toFixed(2)),
+        },
+      });
+
+    } catch(e) {
+      console.error('[compras/planejamento]', e.message);
+      res.status(500).json({ ok: false, erro: e.message });
+    }
+  });
+
   return r;
 };
