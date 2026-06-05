@@ -1023,16 +1023,28 @@ module.exports = function (pool, app) {
   });
 
 
-  // ── GET /campanhas/:id/planejamento ── Sprint 4.5-A ──────────────────────
+  // ── GET /campanhas/:id/planejamento ── Sprint 4.5-A/B ─────────────────────
   // Calcula necessidade de compra para produzir N kits de uma campanha.
+  // Slots fixed: calculados automaticamente.
+  // Slots choice: requerem choices[slot_id]=produto_id; sem seleção → slot pendente.
   // Usa produtos.estoque (estoque real) e custo_medio_90d > ultimo_custo > preco_custo.
-  // NÃO usa kit_estoque_interno (saldo interno do módulo de pedidos).
   r.get('/campanhas/:id/planejamento', async (req, res) => {
     try {
       const campanhaId = parseInt(req.params.id);
       const qtdKits    = Math.max(1, parseInt(req.query.qtd) || 1);
       const dataAcao   = req.query.data_acao   || null;
       const dataLimite = req.query.data_limite || null;
+      // choices: JSON com { slot_id: produto_id } para slots do tipo choice
+      // Aceito como ?choices={"12":45,"13":67} ou query param choices[slot_id]=produto_id
+      let choices = {};
+      if (req.query.choices) {
+        try { choices = JSON.parse(req.query.choices); } catch(_) {}
+      }
+      // também aceitar choices[12]=45 (URLSearchParams array-style)
+      Object.keys(req.query).forEach(k => {
+        const m = k.match(/^choices\[(\d+)\]$/);
+        if (m) choices[m[1]] = parseInt(req.query[k]);
+      });
 
       // Buscar campanha
       const { rows: camps } = await pool.query(
@@ -1076,18 +1088,45 @@ module.exports = function (pool, app) {
       let valorTotalEstimado = 0;
       let algumFalta = false;
 
+      const slotsPendentes = []; // slots choice sem seleção
+
       for (const slot of slots) {
         const prodIds = (slot.produtos_permitidos || []).map(Number).filter(Boolean);
-        if (!prodIds.length) continue;
+        if (!prodIds.length) {
+          slotsPendentes.push({ slot_id: slot.id, slot_nome: slot.nome, motivo: 'sem_produtos' });
+          continue;
+        }
 
-        for (const pid of prodIds) {
+        // Para slots choice: usar apenas o produto selecionado pelo usuário
+        let pidsParaCalculo = prodIds;
+        if (slot.tipo === 'choice') {
+          const escolhido = parseInt(choices[String(slot.id)] || 0);
+          if (!escolhido || !prodIds.includes(escolhido)) {
+            // Slot choice sem seleção → pendente, não calcula
+            slotsPendentes.push({
+              slot_id:   slot.id,
+              slot_nome: slot.nome,
+              slot_tipo: 'choice',
+              motivo:    'aguardando_selecao',
+              opcoes:    prodIds.map(pid => {
+                const pr = prodMap[pid];
+                return pr ? { produto_id: pid, produto_codigo: pr.codigo, produto_nome: pr.nome } : null;
+              }).filter(Boolean),
+            });
+            continue;
+          }
+          pidsParaCalculo = [escolhido];
+        }
+        // Para slots fixed: calcular todos os produtos (normalmente 1)
+
+        for (const pid of pidsParaCalculo) {
           const p = prodMap[pid];
           if (!p) continue;
 
-          const qtdPorKit       = parseFloat(slot.quantidade || 1);
+          const qtdPorKit        = parseFloat(slot.quantidade || 1);
           const necessidadeTotal = parseFloat((qtdPorKit * qtdKits).toFixed(4));
-          const estoqueAtual    = parseFloat(p.estoque_atual || 0);
-          const faltaComprar    = parseFloat(Math.max(0, necessidadeTotal - estoqueAtual).toFixed(4));
+          const estoqueAtual     = parseFloat(p.estoque_atual || 0);
+          const faltaComprar     = parseFloat(Math.max(0, necessidadeTotal - estoqueAtual).toFixed(4));
 
           // Custo: prioridade custo_medio_90d > ultimo_custo > preco_custo
           let custoUnit = null, fonteCusto = 'sem_custo';
@@ -1103,9 +1142,10 @@ module.exports = function (pool, app) {
             ? parseFloat((faltaComprar * custoUnit).toFixed(2)) : null;
 
           if (faltaComprar > 0) { algumFalta = true; totalFaltaComprar += faltaComprar; }
-          if (valorEstimado)   valorTotalEstimado += valorEstimado;
+          if (valorEstimado)    valorTotalEstimado += valorEstimado;
 
           itens.push({
+            slot_id:           slot.id,
             slot_nome:         slot.nome,
             slot_tipo:         slot.tipo,
             produto_id:        p.id,
@@ -1135,21 +1175,27 @@ module.exports = function (pool, app) {
         }
       }
 
+      const temPendentes = slotsPendentes.some(s => s.motivo === 'aguardando_selecao');
+      if (temPendentes && statusGeral === 'ok') statusGeral = 'pendente';
+
       res.json({
         ok: true,
-        campanha: { id: campanha.id, nome: campanha.nome, status: campanha.status },
+        campanha:    { id: campanha.id, nome: campanha.nome, status: campanha.status },
         data_acao:   dataAcao,
         data_limite: dataLimite,
         qtd_kits:    qtdKits,
         status:      statusGeral,
         itens,
+        slots_pendentes: slotsPendentes,
         resumo: {
-          total_slots:          slots.length,
-          total_produtos:       itens.length,
-          produtos_com_falta:   itens.filter(i => i.falta_comprar > 0).length,
-          produtos_sem_custo:   itens.filter(i => i.fonte_custo === 'sem_custo').length,
-          valor_total_estimado: parseFloat(valorTotalEstimado.toFixed(2)),
-          estoque_suficiente:   !algumFalta,
+          total_slots:           slots.length,
+          slots_calculados:      slots.length - slotsPendentes.length,
+          slots_pendentes:       slotsPendentes.length,
+          total_produtos:        itens.length,
+          produtos_com_falta:    itens.filter(i => i.falta_comprar > 0).length,
+          produtos_sem_custo:    itens.filter(i => i.fonte_custo === 'sem_custo').length,
+          valor_total_estimado:  parseFloat(valorTotalEstimado.toFixed(2)),
+          estoque_suficiente:    !algumFalta,
         },
       });
 

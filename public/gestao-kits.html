@@ -1697,12 +1697,35 @@ else { setTimeout(initGestaoKits, 200); }
 <script>
 // ── Planejamento de Kit ── Sprint 4.5-A ─────────────────────────────────────
 let _plkCampanhaId = null;
+let _plkSlotsChoice = [];
 
-function abrirPlanejamento(id, nome) {
+async function abrirPlanejamento(id, nome) {
   _plkCampanhaId = id;
+  _plkSlotsChoice = [];
   const el = document.getElementById('pl-kit-titulo');
   if(el) el.textContent = '📦 Planejamento — ' + nome;
   document.getElementById('plk-resultado').style.display = 'none';
+  // Carregar slots choice antes de abrir
+  const choiceArea = document.getElementById('plk-choices');
+  if(choiceArea) { choiceArea.innerHTML = '<span style="font-size:12px;color:var(--muted)">⏳ Carregando slots...</span>'; choiceArea.style.display = ''; }
+  try {
+    const dc = await api.get('/api/kits-campanha/campanhas/'+id);
+    if(dc.ok) {
+      const slotsC = (dc.data.slots||[]).filter(function(s){return s.tipo==='choice' && s.obrigatorio;});
+      _plkSlotsChoice = slotsC;
+      if(slotsC.length && choiceArea) {
+        choiceArea.innerHTML = '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px">Escolha o produto de cada slot:</div>' +
+          slotsC.map(function(s){
+            var prods = (s.produtos_info||[]).filter(Boolean);
+            return '<div style="margin-bottom:8px"><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">'+s.nome+'</label>'
+              +'<select id="plk-choice-'+s.id+'" style="border:1px solid var(--border);border-radius:6px;padding:6px 9px;font-size:12px;font-family:inherit;min-width:200px;background:#fff">'
+              +'<option value="">— selecionar produto —</option>'
+              +prods.map(function(p){return '<option value="'+p.id+'">'+( p.descricao||p.codigo)+'</option>';}).join('')
+              +'</select></div>';
+          }).join('');
+      } else if(choiceArea) { choiceArea.style.display = 'none'; }
+    } else if(choiceArea) { choiceArea.style.display = 'none'; }
+  } catch(e2) { if(choiceArea) choiceArea.style.display = 'none'; }
   document.getElementById('modal-planejamento').classList.add('open');
 }
 
@@ -1718,6 +1741,13 @@ async function calcularPlanejamento() {
   const p = new URLSearchParams({ qtd });
   if(dataAcao) p.set('data_acao', dataAcao);
   if(dataLim)  p.set('data_limite', dataLim);
+  // Coletar escolhas dos slots choice
+  var choicesObj = {};
+  (_plkSlotsChoice||[]).forEach(function(s){
+    var sel = document.getElementById('plk-choice-'+s.id);
+    if(sel && sel.value) choicesObj[s.id] = sel.value;
+  });
+  if(Object.keys(choicesObj).length) p.set('choices', JSON.stringify(choicesObj));
 
   try {
     const res = await api.get('/api/kits-campanha/campanhas/'+_plkCampanhaId+'/planejamento?'+p);
@@ -1759,6 +1789,17 @@ async function calcularPlanejamento() {
     }).join('');
 
     document.getElementById('plk-total').textContent = brl2(r.valor_total_estimado);
+    // Slots pendentes
+    var pendArea = document.getElementById('plk-pendentes');
+    if(pendArea){
+      var pends = (res.slots_pendentes||[]).filter(function(s){return s.motivo==='aguardando_selecao';});
+      if(pends.length){
+        pendArea.style.display='';
+        pendArea.innerHTML='<div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:9px 13px;font-size:12px;color:#92400e">'
+          +'⚠️ <strong>'+pends.length+' slot(s) aguardando seleção</strong> — escolha um produto acima: '
+          +pends.map(function(s){return '<strong>'+s.slot_nome+'</strong>';}).join(', ')+'</div>';
+      } else { pendArea.style.display='none'; }
+    }
 
   } catch(e) {
     tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:20px;color:#dc2626">❌ ${e.message}</td></tr>`;
@@ -1775,6 +1816,9 @@ async function calcularPlanejamento() {
       <button onclick="fecharModal('modal-planejamento')" class="btn btn-s btn-sm">✕</button>
     </div>
     <div class="modal-body" style="padding:14px">
+
+      <!-- Slots choice -->
+      <div id="plk-choices" style="display:none;background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:10px 13px;margin-bottom:12px"></div>
 
       <!-- Controles -->
       <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px">
@@ -1802,6 +1846,9 @@ async function calcularPlanejamento() {
       <div id="plk-resultado" style="display:none">
         <!-- Cards -->
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px" id="plk-cards"></div>
+        <!-- Slots pendentes -->
+        <div id="plk-pendentes" style="display:none;margin-bottom:8px"></div>
+
         <!-- Tabela -->
         <div style="overflow-x:auto;border-radius:8px;border:1px solid var(--border)">
           <table style="width:100%;border-collapse:collapse;font-size:12px">
