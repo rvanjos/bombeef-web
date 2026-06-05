@@ -93,6 +93,18 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
 /* Semáforo */
 .dot-g{color:var(--green);} .dot-o{color:var(--orange);} .dot-r{color:var(--red-l);}
 @media(max-width:700px){.charts-2,.charts-3{grid-template-columns:1fr;} .kpi-grid{grid-template-columns:1fr 1fr;}}
+/* Margem Real */
+.fonte-badge{display:inline-block;border-radius:5px;padding:1px 7px;font-size:10px;font-weight:700;}
+.fonte-90d{background:#d1e7dd;color:#0a4a22;}
+.fonte-ult{background:#fff3cd;color:#856404;}
+.fonte-man{background:#fde68a;color:#92400e;}
+.fonte-sem{background:#f8d7da;color:#721c24;}
+.m-card{background:var(--white);border-radius:10px;box-shadow:var(--shadow);padding:14px 18px;flex:1;}
+.m-card .kv{font-size:20px;font-weight:800;font-family:'DM Mono',monospace;margin-top:4px;}
+.m-card .kl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);}
+.m-margem-g{color:var(--green);font-weight:700;}
+.m-margem-o{color:var(--orange);font-weight:700;}
+.m-margem-r{color:var(--red-l);font-weight:700;}
 /* Normalização bb-base */
 .btn-p { background: var(--red); color: #fff; padding: 8px 16px; border-radius: 7px; font-size: 12px; font-weight: 600; border: none; }
 .btn-p:hover { background: var(--red-l); }
@@ -119,6 +131,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
   <button class="tab" onclick="showSec('abc',this)">🔤 Curva ABC</button>
   <button class="tab" onclick="showSec('estrategia',this)">🎯 Estratégia</button>
   <button class="tab" onclick="showSec('importar',this)">📥 Importar</button>
+  <button class="tab" onclick="showSec('margem',this)">💰 Margem Real</button>
 </div>
 
 <div class="body">
@@ -439,6 +452,7 @@ function showSec(id, btn) {
   if(id==='abc')        carregarABC();
   if(id==='estrategia') carregarEstrategia();
   if(id==='importar')   carregarHistorico();
+  if(id==='margem')     carregarMargem();
 }
 
 // ── Filtros ─────────────────────────────────────────────────────────────────
@@ -1391,5 +1405,197 @@ async function init() {
 }
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<!-- ── ABA MARGEM REAL ─────────────────────────────────────────────────── -->
+</div>
+<div id="sec-margem" class="sec" style="padding:14px">
+
+  <!-- Filtros -->
+  <div class="card" style="padding:12px 14px;margin-bottom:12px">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr auto;gap:10px;align-items:flex-end">
+      <div>
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:3px">De</div>
+        <input type="date" id="mr-ini" style="width:100%;border:1px solid var(--border);border-radius:7px;padding:6px 9px;font-size:12px;font-family:'DM Sans',sans-serif">
+      </div>
+      <div>
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:3px">Até</div>
+        <input type="date" id="mr-fim" style="width:100%;border:1px solid var(--border);border-radius:7px;padding:6px 9px;font-size:12px;font-family:'DM Sans',sans-serif">
+      </div>
+      <div>
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:3px">Categoria</div>
+        <input type="text" id="mr-cat" placeholder="Todas" style="width:100%;border:1px solid var(--border);border-radius:7px;padding:6px 9px;font-size:12px;font-family:'DM Sans',sans-serif">
+      </div>
+      <div>
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:3px">Curva ABC</div>
+        <select id="mr-abc" style="width:100%;border:1px solid var(--border);border-radius:7px;padding:6px 9px;font-size:12px;font-family:'DM Sans',sans-serif;background:#fff">
+          <option value="">Todas</option>
+          <option value="A">A</option>
+          <option value="B">B</option>
+          <option value="C">C</option>
+        </select>
+      </div>
+      <div>
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:3px">Ordenar por</div>
+        <select id="mr-ordem" style="width:100%;border:1px solid var(--border);border-radius:7px;padding:6px 9px;font-size:12px;font-family:'DM Sans',sans-serif;background:#fff">
+          <option value="lucro">💰 Lucro bruto</option>
+          <option value="margem">% Margem</option>
+          <option value="fat">R$ Faturamento</option>
+          <option value="qtd">Qtd vendida</option>
+          <option value="custo">CMV estimado</option>
+        </select>
+      </div>
+      <button class="btn-p" onclick="carregarMargem()" style="height:32px;padding:0 16px;font-size:12px;cursor:pointer">🔍 Buscar</button>
+    </div>
+  </div>
+
+  <!-- Cards de resumo -->
+  <div id="mr-cards" style="display:none;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+    <div class="m-card"><div class="kl">Faturamento Total</div><div class="kv" id="mr-fat">—</div></div>
+    <div class="m-card"><div class="kl">CMV Estimado</div><div class="kv" id="mr-cmv">—</div></div>
+    <div class="m-card" style="border-left:3px solid var(--green)"><div class="kl">Lucro Bruto Total</div><div class="kv" id="mr-lucro" style="color:var(--green)">—</div></div>
+    <div class="m-card"><div class="kl">Margem Média</div><div class="kv" id="mr-margem-media">—</div></div>
+    <div class="m-card" id="mr-card-semcusto" style="display:none"><div class="kl">⚠️ Sem custo</div><div class="kv" id="mr-semcusto" style="color:var(--red-l)">—</div></div>
+  </div>
+
+  <!-- Aviso custo não-ideal -->
+  <div id="mr-aviso-custo" style="display:none;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:9px 14px;margin-bottom:10px;font-size:12px;color:#92400e">
+    ⚠️ <strong id="mr-aviso-n90d">0</strong> produto(s) sem CMP-90d — usando custo manual. Importe planilha de compras PDV para melhorar a precisão.
+  </div>
+
+  <!-- Tabela -->
+  <div style="overflow-x:auto;background:var(--white);border-radius:10px;box-shadow:var(--shadow);border:1px solid var(--border)">
+    <table class="tbl" style="width:100%;min-width:900px">
+      <thead><tr>
+        <th style="min-width:180px">Produto</th>
+        <th>Categoria</th>
+        <th style="text-align:center">ABC</th>
+        <th style="text-align:right">Qtd Vendida</th>
+        <th style="text-align:right">Faturamento</th>
+        <th style="text-align:right">Preço Médio</th>
+        <th style="text-align:right">Custo Unit.</th>
+        <th style="text-align:center">Fonte</th>
+        <th style="text-align:right">CMV Estimado</th>
+        <th style="text-align:right">Lucro Bruto</th>
+        <th style="text-align:right">Margem %</th>
+      </tr></thead>
+      <tbody id="mr-tbody">
+        <tr><td colspan="11" style="text-align:center;padding:32px;color:var(--muted)">Selecione um período e clique em Buscar</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+const _brl2  = v => v != null ? 'R$ '+parseFloat(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—';
+const _pct2  = v => v != null ? parseFloat(v).toFixed(1)+'%' : '—';
+const _num3  = v => v != null ? parseFloat(v).toLocaleString('pt-BR',{minimumFractionDigits:3,maximumFractionDigits:3}) : '—';
+
+const _fonteBadge = f => {
+  const m = {
+    custo_medio_90d: ['CMP-90d','fonte-90d'],
+    ultimo_custo:    ['último custo','fonte-ult'],
+    preco_custo:     ['manual','fonte-man'],
+    sem_custo:       ['sem custo','fonte-sem'],
+  };
+  const [label, cls] = m[f] || ['?','fonte-sem'];
+  return `<span class="fonte-badge ${cls}">${label}</span>`;
+};
+
+const _abcB = v => {
+  if (!v) return '—';
+  const cls = v==='A'?'abc-a':v==='B'?'abc-b':'abc-c';
+  return `<span class="${cls}">${v}</span>`;
+};
+
+const _margemCor = v => {
+  if (v == null) return '<span style="color:var(--muted)">—</span>';
+  const n = parseFloat(v);
+  const style = n >= 30 ? 'color:var(--green);font-weight:700'
+              : n >= 15 ? 'color:var(--orange);font-weight:700'
+              : 'color:var(--red-l);font-weight:700';
+  return `<span style="${style}">${n.toFixed(1)}%</span>`;
+};
+
+function _setText(id, v) { const el=document.getElementById(id); if(el) el.textContent=v; }
+
+async function carregarMargem() {
+  const ini   = document.getElementById('mr-ini')?.value   || '';
+  const fim   = document.getElementById('mr-fim')?.value   || '';
+  const cat   = document.getElementById('mr-cat')?.value   || '';
+  const abc   = document.getElementById('mr-abc')?.value   || '';
+  const ordem = document.getElementById('mr-ordem')?.value || 'lucro';
+  const tbody = document.getElementById('mr-tbody');
+  if (!tbody) return;
+
+  tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:24px;color:var(--muted)">⏳ Carregando...</td></tr>';
+  document.getElementById('mr-cards').style.display = 'none';
+
+  const p = new URLSearchParams({ ini, fim, abc, ordem });
+  if (cat) p.set('categoria', cat);
+
+  try {
+    const api = window.BB?.api || window._api;
+    const res = await api.get('/api/vendas-produto/margem-real?' + p.toString());
+    if (!res.ok) {
+      tbody.innerHTML = `<tr><td colspan="11" style="text-align:center;padding:24px;color:var(--red-l)">❌ ${res.erro||'Erro ao carregar'}</td></tr>`;
+      return;
+    }
+
+    const r = res.resumo;
+    const cards = document.getElementById('mr-cards');
+    cards.style.display = 'flex';
+    _setText('mr-fat',          _brl2(r.faturamento_total));
+    _setText('mr-cmv',          _brl2(r.cmv_total));
+    _setText('mr-lucro',        _brl2(r.lucro_bruto_total));
+    _setText('mr-margem-media', _pct2(r.margem_media_pct));
+
+    if (r.sem_custo > 0) {
+      document.getElementById('mr-card-semcusto').style.display = '';
+      _setText('mr-semcusto', r.sem_custo + ' produto(s)');
+    } else {
+      document.getElementById('mr-card-semcusto').style.display = 'none';
+    }
+
+    const n90d = r.total_produtos - r.com_custo_90d;
+    const aviso = document.getElementById('mr-aviso-custo');
+    if (n90d > 0) {
+      aviso.style.display = '';
+      _setText('mr-aviso-n90d', n90d);
+    } else {
+      aviso.style.display = 'none';
+    }
+
+    if (!res.data?.length) {
+      tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:32px;color:var(--muted)">Nenhum produto encontrado no período</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = res.data.map(row => {
+      const lucroN = parseFloat(row.lucro_bruto || 0);
+      const rowBg  = row.fonte_custo === 'sem_custo' ? 'background:#fff5f5;' : '';
+      return `<tr style="${rowBg}">
+        <td>
+          <strong style="font-size:12px">${row.produto_nome||row.codigo}</strong>
+          <div style="font-size:10px;color:var(--muted)">${row.codigo}</div>
+        </td>
+        <td style="font-size:12px">${row.categoria||'—'}</td>
+        <td style="text-align:center">${_abcB(row.curva_abc)}</td>
+        <td style="text-align:right;font-family:'DM Mono',monospace;font-size:12px">${_num3(row.qtd_vendida)}</td>
+        <td style="text-align:right;font-family:'DM Mono',monospace;font-size:12px">${_brl2(row.faturamento)}</td>
+        <td style="text-align:right;font-family:'DM Mono',monospace;font-size:12px">${_brl2(row.preco_medio_realizado)}</td>
+        <td style="text-align:right;font-family:'DM Mono',monospace;font-size:12px">${_brl2(row.custo_unit_usado)}</td>
+        <td style="text-align:center">${_fonteBadge(row.fonte_custo)}</td>
+        <td style="text-align:right;font-family:'DM Mono',monospace;font-size:12px">${_brl2(row.cmv_estimado)}</td>
+        <td style="text-align:right;font-family:'DM Mono',monospace;font-size:12px${lucroN<0?';color:var(--red-l);font-weight:700':''}">${_brl2(row.lucro_bruto)}</td>
+        <td style="text-align:right">${_margemCor(row.margem_pct)}</td>
+      </tr>`;
+    }).join('');
+
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="11" style="text-align:center;padding:24px;color:var(--red-l)">❌ ${e.message}</td></tr>`;
+  }
+}
+</script>
+
 </body>
 </html>
