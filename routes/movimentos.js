@@ -196,7 +196,7 @@ module.exports = function(pool, app) {
 
   // ── GET /auditoria — visão consolidada F2-09 ────────────────────────────────
   // Retorna movimentos com produto + usuário + filtros avançados
-  r.get('/auditoria', async (req, res) => {
+  r.get('/auditoria', autenticar('admin'), async (req, res) => {
     const limite   = Math.min(parseInt(req.query.limite) || 100, 500);
     const pagina   = Math.max(1, parseInt(req.query.pagina) || 1);
     const offset   = (pagina - 1) * limite;

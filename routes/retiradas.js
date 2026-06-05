@@ -268,6 +268,7 @@ module.exports = function (pool, app) {
 
   // ── PUT /:id ───────────────────────────────────────────────────────────────
   r.put('/:id', async (req, res) => {
+    if (!['admin','gestor'].includes(req.user?.perfil)) return res.status(403).json({ ok:false, erro:'Acesso restrito a admin/gestor' });
     const ret = req.body;
     try {
       await pool.query(`
@@ -294,6 +295,7 @@ module.exports = function (pool, app) {
 
   // ── DELETE /:id ────────────────────────────────────────────────────────────
   r.delete('/:id', async (req, res) => {
+    if (!['admin','gestor'].includes(req.user?.perfil)) return res.status(403).json({ ok:false, erro:'Acesso restrito a admin/gestor' });
     try {
       await pool.query(`DELETE FROM retiradas WHERE id = $1`, [parseInt(req.params.id)]);
       res.json({ ok: true });

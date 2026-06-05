@@ -370,6 +370,7 @@ module.exports = function (pool) {
 
   // ── POST /pagamento ────────────────────────────────────────────────────────
   r.post('/pagamento', async (req, res) => {
+    if (req.user?.perfil !== 'admin') return res.status(403).json({ ok:false, erro:'Acesso restrito ao administrador' });
     const { funcionario_id, mes_ref, tipo, descricao, valor, data_ref } = req.body;
     if (!funcionario_id || !mes_ref || !tipo) return res.status(400).json({ ok: false, erro: 'funcionario_id, mes_ref e tipo obrigatórios' });
     try {
@@ -383,6 +384,7 @@ module.exports = function (pool) {
 
   // ── DELETE /pagamento/:id ──────────────────────────────────────────────────
   r.delete('/pagamento/:id', async (req, res) => {
+    if (req.user?.perfil !== 'admin') return res.status(403).json({ ok:false, erro:'Acesso restrito ao administrador' });
     try {
       await pool.query(`DELETE FROM rh_pagamentos WHERE id = $1`, [parseInt(req.params.id)]);
       res.json({ ok: true });
@@ -439,6 +441,7 @@ module.exports = function (pool) {
 
   // ── PUT /funcionario/:id — atualiza salário/VA base ───────────────────────
   r.put('/funcionario/:id', async (req, res) => {
+    if (req.user?.perfil !== 'admin') return res.status(403).json({ ok:false, erro:'Acesso restrito ao administrador' });
     const { salario_base, vale_alimentacao, cargo } = req.body;
     try {
       await pool.query(`
@@ -566,14 +569,14 @@ module.exports = function (pool) {
         const { rows } = await pool.query(`
           UPDATE rh_pagamentos SET status='aprovado', aprovador_id=$1, atualizado_em=NOW()
           WHERE id=$2 RETURNING *
-        `, [req.usuario?.id||null, parseInt(req.params.id)]);
+        `, [req.user?.id||null, parseInt(req.params.id)]);
         if (!rows.length) return res.status(404).json({ ok:false, erro:'Não encontrado' });
         return res.json({ ok: true, data: rows[0] });
       }
       const { rows } = await pool.query(`
         UPDATE rh_apontamentos SET status='aprovado', aprovador_id=$1, atualizado_em=NOW()
         WHERE id=$2 RETURNING *
-      `, [req.usuario?.id||null, parseInt(req.params.id)]);
+      `, [req.user?.id||null, parseInt(req.params.id)]);
       if (!rows.length) return res.status(404).json({ ok:false, erro:'Não encontrado' });
       res.json({ ok: true, data: rows[0] });
     } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
@@ -588,7 +591,7 @@ module.exports = function (pool) {
           UPDATE rh_pagamentos SET status='rejeitado', aprovador_id=$1,
             motivo_rejeicao=$2, atualizado_em=NOW()
           WHERE id=$3 RETURNING *
-        `, [req.usuario?.id||null, motivo||null, parseInt(req.params.id)]);
+        `, [req.user?.id||null, motivo||null, parseInt(req.params.id)]);
         if (!rows.length) return res.status(404).json({ ok:false, erro:'Não encontrado' });
         return res.json({ ok: true, data: rows[0] });
       }
@@ -596,7 +599,7 @@ module.exports = function (pool) {
         UPDATE rh_apontamentos SET status='rejeitado', aprovador_id=$1,
           motivo_rejeicao=$2, atualizado_em=NOW()
         WHERE id=$3 RETURNING *
-      `, [req.usuario?.id||null, motivo||null, parseInt(req.params.id)]);
+      `, [req.user?.id||null, motivo||null, parseInt(req.params.id)]);
       if (!rows.length) return res.status(404).json({ ok:false, erro:'Não encontrado' });
       res.json({ ok: true, data: rows[0] });
     } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
