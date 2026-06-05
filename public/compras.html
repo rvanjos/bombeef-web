@@ -1,0 +1,835 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Compras — Bom Beef</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono&display=swap" rel="stylesheet">
+<script src="/js/api.js"></script>
+<style>
+:root{--red:#8B0000;--red-l:#C0392B;--bg:#f7f4f0;--white:#fff;--text:#111827;--muted:#6b7280;
+  --border:#e5e7eb;--green:#15803d;--green-bg:#f0fdf4;--green-bdr:#bbf7d0;
+  --amber:#92400e;--amber-bg:#fffbeb;--amber-bdr:#fcd34d;
+  --blue:#1e3a8a;--blue-bg:#eff6ff;--blue-bdr:#bfdbfe;
+  --orange:#9a3412;--orange-bg:#fff7ed;--orange-bdr:#fdba74;
+  --purple:#4c1d95;--purple-bg:#f5f3ff;--purple-bdr:#c4b5fd;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);font-size:14px;}
+.ph{background:var(--red);color:#fff;padding:10px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0;}
+.ph h1{font-size:16px;font-weight:700;}
+.tabs{background:#fff;border-bottom:2px solid var(--border);display:flex;gap:0;flex-shrink:0;}
+.tab{padding:9px 18px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;background:none;border:none;border-bottom:3px solid transparent;font-family:'DM Sans',sans-serif;}
+.tab.active{color:var(--red);border-bottom-color:var(--red);}
+.tab:hover:not(.active){background:#fafafa;}
+.sec{display:none;padding:16px;overflow-y:auto;height:calc(100vh - 95px);}
+.sec.active{display:block;}
+.card{background:#fff;border-radius:10px;border:1px solid var(--border);padding:14px 16px;margin-bottom:12px;}
+.card-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-bottom:10px;}
+.btn{background:var(--red);color:#fff;border:none;border-radius:7px;padding:7px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;}
+.btn:hover{background:var(--red-l);}
+.btn-g{background:#16a34a;}
+.btn-g:hover{background:#15803d;}
+.btn-s{background:#f3f4f6;color:var(--text);border:1px solid var(--border);}
+.btn-s:hover{background:#e5e7eb;}
+.tbl{width:100%;border-collapse:collapse;font-size:13px;}
+.tbl th{background:#f9fafb;padding:8px 10px;text-align:left;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);border-bottom:1px solid var(--border);}
+.tbl td{padding:8px 10px;border-bottom:1px solid #f3f4f6;vertical-align:middle;}
+.tbl tr:hover td{background:#fafafa;}
+.badge{display:inline-block;border-radius:5px;padding:2px 8px;font-size:11px;font-weight:700;}
+.bg-green{background:var(--green-bg);color:var(--green);}
+.bg-amber{background:var(--amber-bg);color:var(--amber);}
+.bg-red{background:#fef2f2;color:#991b1b;}
+.bg-orange{background:var(--orange-bg);color:var(--orange);}
+.bg-blue{background:var(--blue-bg);color:var(--blue);}
+.bg-gray{background:#f3f4f6;color:var(--muted);}
+.drop{border:2px dashed var(--border);border-radius:10px;padding:28px;text-align:center;color:var(--muted);cursor:pointer;transition:all .2s;}
+.drop:hover,.drop.drag{border-color:var(--red);background:#fff5f5;color:var(--red);}
+.drop input{display:none;}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
+.kpi-box{background:#fff;border:1px solid var(--border);border-radius:8px;padding:12px 14px;}
+.kpi-box .kv{font-size:20px;font-weight:800;font-family:'DM Mono',monospace;margin-top:4px;}
+.kpi-box .kl{font-size:10px;text-transform:uppercase;letter-spacing:.5px;font-weight:700;color:var(--muted);}
+.inp{border:1px solid var(--border);border-radius:7px;padding:7px 10px;font-size:13px;font-family:'DM Sans',sans-serif;width:100%;}
+.inp:focus{outline:none;border-color:var(--red);}
+.fg{display:flex;flex-direction:column;gap:4px;}
+.fg label{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;}
+.fg-row{display:grid;gap:10px;}
+.sep{height:1px;background:var(--border);margin:12px 0;}
+.alert{border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:10px;display:flex;align-items:flex-start;gap:8px;}
+.alert-info{background:var(--blue-bg);border:1px solid var(--blue-bdr);color:var(--blue);}
+.alert-warn{background:var(--amber-bg);border:1px solid var(--amber-bdr);color:var(--amber);}
+.alert-ok{background:var(--green-bg);border:1px solid var(--green-bdr);color:var(--green);}
+.alert-err{background:#fef2f2;border:1px solid #fecaca;color:#991b1b;}
+.scroll-x{overflow-x:auto;}
+.mono{font-family:'DM Mono',monospace;}
+.opp-badge{font-size:15px;font-weight:800;}
+/* Tendência */
+.tend-alta{color:#dc2626;font-weight:700;}
+.tend-baixa{color:#16a34a;font-weight:700;}
+.tend-estavel{color:#6b7280;font-weight:700;}
+.tend-sem_dados{color:#d1d5db;}
+/* Cenário de simulação */
+.cenario-row{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;border:1px solid var(--border);margin-bottom:6px;}
+.cenario-preco{font-size:18px;font-weight:800;font-family:'DM Mono',monospace;color:var(--red);}
+/* Gráfico SVG simples */
+.evo-bar{display:flex;align-items:flex-end;gap:4px;height:60px;margin-top:8px;}
+.evo-bar-col{flex:1;background:var(--red);border-radius:3px 3px 0 0;opacity:.8;min-width:8px;}
+</style>
+</head>
+<body>
+
+<div class="ph">
+  <span style="font-size:20px">🛒</span>
+  <h1>Central de Compras</h1>
+  <span style="margin-left:auto;font-size:12px;opacity:.7">admin · gestor</span>
+</div>
+
+<div class="tabs">
+  <button class="tab active" onclick="showTab('importacao',this)">📥 Importação</button>
+  <button class="tab" onclick="showTab('historico',this)">📋 Histórico</button>
+  <button class="tab" onclick="showTab('analise',this)">🔍 Análise de Compra</button>
+  <button class="tab" onclick="showTab('giro',this)">📊 Giro e Cobertura</button>
+</div>
+
+<!-- ── ABA 1: IMPORTAÇÃO ─────────────────────────────────────────────────── -->
+<div id="sec-importacao" class="sec active">
+
+  <div class="drop" id="drop"
+    ondragover="ev.preventDefault();this.classList.add('drag')"
+    ondragleave="this.classList.remove('drag')"
+    ondrop="this.classList.remove('drag');onDrop(event)"
+    onclick="document.getElementById('inp-file').click()">
+    <input type="file" id="inp-file" accept=".xlsx,.xls,.csv" onchange="onFileChange(this.files[0])">
+    <div style="font-size:32px;margin-bottom:8px">📄</div>
+    <div style="font-weight:700;margin-bottom:4px">Arraste a planilha do PDV aqui</div>
+    <div style="font-size:12px">ou clique para selecionar · .xlsx, .xls, .csv</div>
+  </div>
+
+  <div id="imp-status" style="display:none"></div>
+
+  <div class="card" style="margin-top:16px">
+    <div class="card-title">Importações recentes</div>
+    <div id="imp-hist-body"><div style="color:var(--muted);font-size:13px">Carregando...</div></div>
+  </div>
+</div>
+
+<!-- ── ABA 2: HISTÓRICO ──────────────────────────────────────────────────── -->
+<div id="sec-historico" class="sec">
+  <div class="card">
+    <div class="fg-row" style="grid-template-columns:2fr 1fr 1fr 1fr auto">
+      <div class="fg">
+        <label>Produto</label>
+        <input class="inp" id="h-produto" placeholder="Código ou nome..." oninput="debHistorico()">
+      </div>
+      <div class="fg">
+        <label>Fornecedor</label>
+        <input class="inp" id="h-fornecedor" placeholder="Nome..." oninput="debHistorico()">
+      </div>
+      <div class="fg">
+        <label>De</label>
+        <input class="inp" type="date" id="h-ini" onchange="carregarHistorico()">
+      </div>
+      <div class="fg">
+        <label>Até</label>
+        <input class="inp" type="date" id="h-fim" onchange="carregarHistorico()">
+      </div>
+      <div class="fg" style="justify-content:flex-end">
+        <label>&nbsp;</label>
+        <button class="btn btn-s" onclick="carregarHistorico()">🔍 Buscar</button>
+      </div>
+    </div>
+  </div>
+  <div class="card scroll-x">
+    <table class="tbl" id="tbl-historico">
+      <thead><tr>
+        <th>Data</th><th>Produto</th><th>Grupo</th><th>Fornecedor</th>
+        <th style="text-align:right">Qtd</th><th>Un</th>
+        <th style="text-align:right">Custo Unit.</th>
+        <th style="text-align:right">Total</th>
+        <th>NF</th><th style="text-align:right">Anterior</th><th>Var%</th>
+      </tr></thead>
+      <tbody id="tbody-historico"><tr><td colspan="11" style="color:var(--muted);padding:20px;text-align:center">Informe um produto ou fornecedor para buscar</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ── ABA 3: ANÁLISE DE COMPRA ─────────────────────────────────────────── -->
+<div id="sec-analise" class="sec">
+  <div class="card" style="margin-bottom:12px">
+    <div class="fg-row" style="grid-template-columns:1fr auto">
+      <div class="fg">
+        <label>Produto</label>
+        <input class="inp" id="a-busca" placeholder="Digite código ou nome do produto..." oninput="onBuscaInput()" autocomplete="off">
+        <div id="a-autocomplete" style="position:relative;z-index:99"></div>
+      </div>
+      <div class="fg" style="justify-content:flex-end">
+        <label>&nbsp;</label>
+        <button class="btn" onclick="carregarAnalise()">Analisar →</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="analise-corpo" style="display:none">
+    <div class="grid2" style="margin-bottom:12px">
+
+      <!-- Bloco A: Operacional -->
+      <div class="card">
+        <div class="card-title">📦 Situação Operacional</div>
+        <div class="grid2">
+          <div class="kpi-box"><div class="kl">Estoque Atual</div><div class="kv" id="a-estoque">—</div></div>
+          <div class="kpi-box"><div class="kl">Estoque Mínimo</div><div class="kv" id="a-estmin">—</div></div>
+          <div class="kpi-box"><div class="kl">Venda Média/Dia</div><div class="kv" id="a-venda-dia">—</div></div>
+          <div class="kpi-box" id="a-cobertura-box"><div class="kl">Cobertura</div><div class="kv" id="a-cobertura">—</div></div>
+        </div>
+        <div id="a-ruptura-alert" style="display:none;margin-top:10px"></div>
+        <div style="margin-top:8px;display:flex;gap:8px">
+          <span id="a-abc-badge" class="badge bg-gray">—</span>
+          <span id="a-categ" style="font-size:12px;color:var(--muted)"></span>
+        </div>
+      </div>
+
+      <!-- Bloco B: Histórico de Compras -->
+      <div class="card">
+        <div class="card-title">🛒 Histórico de Compras</div>
+        <div class="grid2">
+          <div class="kpi-box"><div class="kl">Último Custo</div><div class="kv" id="a-ult-custo">—</div></div>
+          <div class="kpi-box"><div class="kl">CMP 3 Pedidos</div><div class="kv" id="a-cmp3">—</div></div>
+          <div class="kpi-box"><div class="kl">CMP 90 dias</div><div class="kv" id="a-cmp90">—</div></div>
+          <div class="kpi-box"><div class="kl">CMP Histórico</div><div class="kv" id="a-cmptot">—</div></div>
+        </div>
+        <div style="margin-top:8px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <span style="font-size:12px;color:var(--muted)">Menor: <strong id="a-menor">—</strong></span>
+          <span style="font-size:12px;color:var(--muted)">Maior: <strong id="a-maior">—</strong></span>
+          <span id="a-tend-badge" style="font-size:13px;font-weight:700"></span>
+        </div>
+        <div style="margin-top:6px;font-size:12px;color:var(--muted)">
+          Último fornecedor: <strong id="a-ult-forn">—</strong> · <span id="a-ult-data">—</span>
+        </div>
+        <!-- Mini gráfico de evolução -->
+        <div id="a-evo-wrap" style="margin-top:10px;display:none">
+          <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:4px">Evolução mensal de custo</div>
+          <div class="evo-bar" id="a-evo-bars"></div>
+          <div id="a-evo-labels" style="display:flex;gap:4px;margin-top:2px"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bloco C: Preços praticados nas vendas -->
+    <div class="card" id="bloco-precos-vendas" style="margin-bottom:12px">
+      <div class="card-title">💰 Preços Praticados nas Vendas (últimos 90d)</div>
+      <div class="grid4">
+        <div class="kpi-box"><div class="kl">Preço Cadastrado</div><div class="kv" id="a-pv-cad">—</div></div>
+        <div class="kpi-box"><div class="kl">Última Venda</div><div class="kv" id="a-pv-ult">—</div><div style="font-size:10px;color:var(--muted)" id="a-pv-ult-data"></div></div>
+        <div class="kpi-box"><div class="kl">Máximo 90d</div><div class="kv" id="a-pv-max">—</div></div>
+        <div class="kpi-box"><div class="kl">Mínimo 90d</div><div class="kv" id="a-pv-min">—</div></div>
+      </div>
+    </div>
+
+    <!-- Bloco D: Cotação -->
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-title">📝 Cotação</div>
+      <div class="fg-row" style="grid-template-columns:2fr 1fr 1fr 1fr auto">
+        <div class="fg"><label>Fornecedor</label><input class="inp" id="cot-forn" placeholder="Nome do fornecedor"></div>
+        <div class="fg"><label>Valor unitário (R$)</label><input class="inp" id="cot-valor" type="number" step="0.01" placeholder="0,00" oninput="calcularTudo()"></div>
+        <div class="fg"><label>Quantidade</label><input class="inp" id="cot-qtd" type="number" step="0.1" placeholder="kg / un" oninput="calcularTudo()"></div>
+        <div class="fg"><label>Margem alvo (%)</label><input class="inp" id="cot-alvo" type="number" value="35" step="0.5" oninput="calcularTudo()"></div>
+        <div class="fg"><label>Mín. (%)</label><input class="inp" id="cot-min" type="number" value="30" step="0.5" oninput="calcularTudo()"></div>
+      </div>
+    </div>
+
+    <!-- Bloco E: Resultado da Cotação -->
+    <div id="bloco-resultado" style="display:none;margin-bottom:12px">
+      <div class="card">
+        <div class="card-title">🎯 Resultado da Cotação</div>
+        <div class="grid3">
+          <div class="kpi-box"><div class="kl">Variação vs Último</div><div class="kv" id="r-var-ult">—</div></div>
+          <div class="kpi-box"><div class="kl">Variação vs CMP-90d</div><div class="kv" id="r-var-90">—</div></div>
+          <div class="kpi-box"><div class="kl">Variação vs CMP-3ped</div><div class="kv" id="r-var-3p">—</div></div>
+        </div>
+        <div style="margin-top:10px">
+          <span id="r-opp-badge" class="opp-badge"></span>
+        </div>
+        <div id="r-impacto" style="margin-top:8px;font-size:13px;color:var(--muted)"></div>
+        <!-- Lucro potencial -->
+        <div id="r-lucro" style="display:none;margin-top:10px;background:var(--green-bg);border:1px solid var(--green-bdr);border-radius:8px;padding:10px 14px">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--green);margin-bottom:6px">💰 Simulação de Lucro da Compra</div>
+          <div class="grid3">
+            <div><div style="font-size:10px;color:var(--muted)">Investimento</div><div class="mono" style="font-weight:700" id="r-invest">—</div></div>
+            <div><div style="font-size:10px;color:var(--muted)">Receita potencial</div><div class="mono" style="font-weight:700" id="r-receita">—</div></div>
+            <div><div style="font-size:10px;color:var(--muted)">Lucro bruto potencial</div><div class="mono" style="font-weight:700;color:var(--green)" id="r-lucro-bruto">—</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bloco F: Simulação de Preço -->
+    <div id="bloco-simulacao" style="display:none;margin-bottom:12px">
+      <div class="card">
+        <div class="card-title">🏷️ Simulação de Preço de Venda</div>
+        <div class="alert alert-info" style="margin-bottom:10px">
+          ℹ️ Apenas sugestão — nenhum preço é alterado automaticamente.
+        </div>
+        <div id="sim-sem-hist" style="display:none" class="alert alert-warn">
+          ⚠️ Sem histórico de vendas suficiente para análise de mercado. Preço sugerido pela margem alvo.
+        </div>
+
+        <div id="sim-cenarios">
+          <!-- Cenário 1: margem atual -->
+          <div class="cenario-row" id="sim-c1">
+            <div style="flex:1">
+              <div style="font-size:11px;color:var(--muted)">Manter margem atual</div>
+              <div id="sim-c1-desc" style="font-size:11px;color:var(--muted)"></div>
+            </div>
+            <div class="cenario-preco" id="sim-c1-preco">—</div>
+            <div style="text-align:right;min-width:80px">
+              <div style="font-size:12px;color:var(--muted)">Margem: <strong id="sim-c1-margem">—</strong></div>
+              <div style="font-size:12px;color:var(--muted)">Markup: <strong id="sim-c1-markup">—</strong></div>
+            </div>
+            <div id="sim-c1-risco" style="min-width:130px;text-align:right;font-size:12px;font-weight:600"></div>
+          </div>
+          <!-- Cenário 2: margem alvo -->
+          <div class="cenario-row" id="sim-c2">
+            <div style="flex:1">
+              <div style="font-size:11px;color:var(--muted)" id="sim-c2-label">Margem alvo (35%)</div>
+            </div>
+            <div class="cenario-preco" id="sim-c2-preco">—</div>
+            <div style="text-align:right;min-width:80px">
+              <div style="font-size:12px;color:var(--muted)">Margem: <strong id="sim-c2-margem">—</strong></div>
+              <div style="font-size:12px;color:var(--muted)">Markup: <strong id="sim-c2-markup">—</strong></div>
+            </div>
+            <div id="sim-c2-risco" style="min-width:130px;text-align:right;font-size:12px;font-weight:600"></div>
+          </div>
+          <!-- Cenário 3: margem mínima -->
+          <div class="cenario-row" id="sim-c3">
+            <div style="flex:1">
+              <div style="font-size:11px;color:var(--muted)" id="sim-c3-label">Margem mínima (30%)</div>
+            </div>
+            <div class="cenario-preco" id="sim-c3-preco">—</div>
+            <div style="text-align:right;min-width:80px">
+              <div style="font-size:12px;color:var(--muted)">Margem: <strong id="sim-c3-margem">—</strong></div>
+              <div style="font-size:12px;color:var(--muted)">Markup: <strong id="sim-c3-markup">—</strong></div>
+            </div>
+            <div id="sim-c3-risco" style="min-width:130px;text-align:right;font-size:12px;font-weight:600"></div>
+          </div>
+        </div>
+
+        <div class="sep"></div>
+        <div style="font-size:12px;color:var(--muted)">
+          Se preço <strong id="sim-preco-atual">—</strong> for mantido:
+          margem cai para <strong id="sim-margem-sem" style="color:#dc2626"></strong>
+          (<span id="sim-queda"></span> p.p.)
+          · markup: <strong id="sim-markup-sem"></strong>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── ABA 4: GIRO E COBERTURA ───────────────────────────────────────────── -->
+<div id="sec-giro" class="sec">
+  <div class="card" style="margin-bottom:10px">
+    <div class="fg-row" style="grid-template-columns:1fr 1fr 1fr auto">
+      <div class="fg"><label>Categoria</label>
+        <input class="inp" id="g-grupo" placeholder="Todas..." oninput="debGiro()">
+      </div>
+      <div class="fg"><label>Curva ABC</label>
+        <select class="inp" id="g-abc" onchange="carregarGiro()">
+          <option value="">Todas</option>
+          <option>A</option><option>B</option><option>C</option>
+        </select>
+      </div>
+      <div class="fg"><label>Status</label>
+        <select class="inp" id="g-status" onchange="carregarGiro()">
+          <option value="">Todos</option>
+          <option value="urgente">🔴 Urgente</option>
+          <option value="atencao">🟡 Atenção</option>
+          <option value="saudavel">🟢 Saudável</option>
+        </select>
+      </div>
+      <div class="fg"><label>&nbsp;</label>
+        <button class="btn btn-s" onclick="carregarGiro()">Atualizar</button>
+      </div>
+    </div>
+  </div>
+  <div class="card scroll-x">
+    <table class="tbl">
+      <thead><tr>
+        <th>Produto</th><th>Categ.</th><th>ABC</th>
+        <th style="text-align:right">Estoque</th>
+        <th style="text-align:right">Venda/dia</th>
+        <th style="text-align:right">Cobertura</th>
+        <th>Status</th>
+        <th style="text-align:right">Último Custo</th>
+        <th>Tendência</th>
+        <th>Última Compra</th>
+        <th>Alertas</th>
+      </tr></thead>
+      <tbody id="tbody-giro"><tr><td colspan="11" style="color:var(--muted);padding:20px;text-align:center">Carregando...</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+let _api = null, _analiseData = null, _debTimer = null;
+
+window.onBBReady = () => { _api = BB.api; init(); };
+
+window.addEventListener('message', e => {
+  if (e.data?.type === 'bb_token') {
+    if (!window.BB) window.BB = {};
+    if (!BB.api && e.data.token) {
+      BB.api = { get: (u) => fetch(u,{headers:{'Authorization':'Bearer '+e.data.token}}).then(r=>r.json()),
+        upload: (u,fd) => fetch(u,{method:'POST',headers:{'Authorization':'Bearer '+e.data.token},body:fd}).then(r=>r.json()),
+        post:(u,b)=>fetch(u,{method:'POST',headers:{'Authorization':'Bearer '+e.data.token,'Content-Type':'application/json'},body:JSON.stringify(b)}).then(r=>r.json()) };
+      _api = BB.api; init();
+    }
+  }
+});
+
+function init() { carregarImpHist(); carregarGiro(); }
+
+// ── Utils ──────────────────────────────────────────────────────────────────
+const brl = v => 'R$ ' + parseFloat(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+const pct = (v,d=1) => v!=null ? (v>0?'+':'')+parseFloat(v).toFixed(d)+'%' : '—';
+const mono = v => `<span class="mono">${v}</span>`;
+
+function arredondarPreco(base) {
+  const dez = Math.floor(base / 10) * 10;
+  const cands = [dez+4.90, dez+9.90, dez+14.90, dez+19.90];
+  const ok = cands.filter(c => c >= base - 0.001);
+  return ok.length ? Math.round(ok[0]*100)/100 : cands[cands.length-1];
+}
+
+function calcSimulacao(precoVenda, custoRef, novoCusto) {
+  if (!precoVenda || precoVenda <= 0 || !novoCusto || novoCusto <= 0) return null;
+  const margem = (precoVenda - (custoRef||0)) / precoVenda;
+  const precoBruto = novoCusto / (1 - margem);
+  const comercial = arredondarPreco(precoBruto);
+  return {
+    margem_atual_pct: margem * 100,
+    preco_bruto: precoBruto,
+    preco_sugerido: comercial,
+    margem_real_pct: (comercial - novoCusto) / comercial * 100,
+    markup_pct: (comercial / novoCusto - 1) * 100,
+    margem_sem_reajuste_pct: (precoVenda - novoCusto) / precoVenda * 100,
+    queda_margem_pp: (margem - (precoVenda - novoCusto) / precoVenda) * 100,
+    markup_sem_reajuste_pct: (precoVenda / novoCusto - 1) * 100,
+  };
+}
+
+function calcCenario(novoCusto, margemAlvo) {
+  const precoBruto = novoCusto / (1 - margemAlvo / 100);
+  const sugerido = arredondarPreco(precoBruto);
+  const margemReal = (sugerido - novoCusto) / sugerido * 100;
+  const markup = (sugerido / novoCusto - 1) * 100;
+  return { sugerido, margemReal, markup };
+}
+
+function riscoReajuste(preco, d) {
+  if (!d?.preco_max_90d) return '⚪ sem histórico de vendas';
+  if (preco <= d.preco_medio_90d) return '🟢 Dentro da média';
+  if (preco <= d.preco_max_90d) return '🟡 Acima da média';
+  return '🔴 Acima do histórico';
+}
+
+function classifOportunidade(cotado, d) {
+  const menorH = d.menor_custo, maiorH = d.maior_custo;
+  const cmp90 = d.custo_medio_90d || d.custo_medio_total;
+  const ultCusto = d.ultimo_custo;
+  const tend = d.tendencia_custo;
+  if (!cmp90 && !ultCusto) return { icon:'⚪', label:'Sem histórico', cls:'bg-gray' };
+  if (menorH && cotado < menorH) return { icon:'🟢', label:'Excelente — abaixo do mínimo histórico!', cls:'bg-green' };
+  if (cmp90 && cotado < cmp90 && tend === 'alta') return { icon:'🟢', label:'Boa compra + custo subindo, antecipar', cls:'bg-green' };
+  if (cmp90 && cotado < cmp90) return { icon:'🟢', label:'Boa compra — abaixo do CMP-90d', cls:'bg-green' };
+  if (cmp90 && ultCusto && cotado >= cmp90 && cotado <= ultCusto) return { icon:'🟡', label:'Dentro do padrão', cls:'bg-amber' };
+  if (maiorH && cotado <= maiorH) return { icon:'🟠', label:'Acima do padrão — negociar', cls:'bg-orange' };
+  return { icon:'🔴', label:'Muito caro — acima do histórico', cls:'bg-red' };
+}
+
+function tendLabel(t) {
+  if (t === 'alta')    return '<span class="tend-alta">📈 ALTA</span>';
+  if (t === 'baixa')   return '<span class="tend-baixa">📉 BAIXA</span>';
+  if (t === 'estavel') return '<span class="tend-estavel">➡️ ESTÁVEL</span>';
+  return '<span class="tend-sem_dados">—</span>';
+}
+
+function $id(id) { return document.getElementById(id); }
+function setText(id, v) { const el=$id(id); if(el) el.textContent = v; }
+function setHTML(id, v) { const el=$id(id); if(el) el.innerHTML = v; }
+
+// ── ABAS ───────────────────────────────────────────────────────────────────
+function showTab(name, btn) {
+  document.querySelectorAll('.sec').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  $id('sec-'+name).classList.add('active');
+  btn.classList.add('active');
+  if (name === 'historico' && !$id('tbody-historico').dataset.loaded) carregarHistorico();
+  if (name === 'giro') carregarGiro();
+}
+
+// ── ABA 1: IMPORTAÇÃO ─────────────────────────────────────────────────────
+function onDrop(e) { e.preventDefault(); onFileChange(e.dataTransfer.files[0]); }
+function onFileChange(file) {
+  if (!file) return;
+  const ext = file.name.split('.').pop().toLowerCase();
+  if (!['xlsx','xls','csv'].includes(ext)) {
+    $id('imp-status').style.display='';
+    $id('imp-status').innerHTML = '<div class="alert alert-warn">⚠️ Formato não suportado. Use .xlsx, .xls ou .csv</div>';
+    return;
+  }
+  $id('imp-status').style.display='';
+  $id('imp-status').innerHTML = `<div class="alert alert-info">
+    <div><strong>${file.name}</strong> — ${(file.size/1024).toFixed(0)} KB</div>
+    <button class="btn" onclick="enviarImportacao()" style="margin-top:8px">📥 Importar agora →</button>
+  </div>`;
+  window._fileToImport = file;
+}
+
+async function enviarImportacao() {
+  const file = window._fileToImport;
+  if (!file) return;
+  $id('imp-status').innerHTML = '<div class="alert alert-info">⏳ Importando <strong>'+file.name+'</strong>...</div>';
+  try {
+    const fd = new FormData(); fd.append('arquivo', file);
+    const res = await (_api||BB.api).upload('/api/compras/importar', fd);
+    if (res.ok !== false) {
+      let html = `<div class="alert alert-ok">
+        ✅ <strong>Importação concluída!</strong><br>
+        Importados: <strong>${res.importados}</strong> &nbsp;·&nbsp;
+        Ignorados: ${res.ignorados} &nbsp;·&nbsp;
+        Sem vínculo: ${res.sem_vinculo}
+      </div>`;
+      if (res.sem_vinculo > 0) {
+        html += `<div class="alert alert-warn" style="margin-top:6px">
+          ⚠️ <strong>${res.sem_vinculo} produto(s) sem vínculo</strong> — código do PDV não encontrado no cadastro:<br>
+          <span style="font-size:12px;font-family:monospace">` +
+          res.sem_vinculo_lista.map(p=>`${p.codigo} — ${p.nome||'?'}`).join('<br>') +
+          `</span>
+        </div>`;
+      }
+      $id('imp-status').innerHTML = html;
+      carregarImpHist();
+      window._fileToImport = null;
+    } else {
+      $id('imp-status').innerHTML = `<div class="alert alert-err">❌ ${res.erro||'Erro ao importar'}</div>`;
+    }
+  } catch(e) {
+    $id('imp-status').innerHTML = `<div class="alert alert-err">❌ ${e.message}</div>`;
+  }
+}
+
+async function carregarImpHist() {
+  try {
+    const res = await (_api||BB.api).get('/api/compras/importacoes');
+    if (!res.ok || !res.data?.length) {
+      $id('imp-hist-body').innerHTML = '<div style="color:var(--muted);font-size:13px">Nenhuma importação realizada ainda</div>';
+      return;
+    }
+    const rows = res.data.map(r => `<tr>
+      <td>${new Date(r.criado_em).toLocaleDateString('pt-BR')}</td>
+      <td><strong>${r.nome_arquivo}</strong></td>
+      <td>${r.periodo_ini ? new Date(r.periodo_ini+'T12:00').toLocaleDateString('pt-BR') : '—'} — ${r.periodo_fim ? new Date(r.periodo_fim+'T12:00').toLocaleDateString('pt-BR') : '—'}</td>
+      <td class="mono" style="text-align:right">${r.total_linhas}</td>
+      <td class="mono" style="text-align:right;color:var(--muted)">${r.total_ignorados}</td>
+      <td class="mono" style="text-align:right;color:${r.total_sem_vinculo>0?'#dc2626':'var(--muted)'}">${r.total_sem_vinculo}</td>
+      <td class="mono" style="text-align:right">${brl(r.total_valor)}</td>
+    </tr>`).join('');
+    $id('imp-hist-body').innerHTML = `<div class="scroll-x"><table class="tbl">
+      <thead><tr><th>Data</th><th>Arquivo</th><th>Período</th><th style="text-align:right">Importados</th><th style="text-align:right">Ignorados</th><th style="text-align:right">Sem vínculo</th><th style="text-align:right">Valor total</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>`;
+  } catch(e) { console.error(e); }
+}
+
+// ── ABA 2: HISTÓRICO ──────────────────────────────────────────────────────
+function debHistorico() { clearTimeout(_debTimer); _debTimer=setTimeout(carregarHistorico,400); }
+async function carregarHistorico() {
+  const params = new URLSearchParams({
+    produto: $id('h-produto').value,
+    fornecedor: $id('h-fornecedor').value,
+    ini: $id('h-ini').value,
+    fim: $id('h-fim').value,
+  });
+  const res = await (_api||BB.api).get('/api/compras/historico?'+params);
+  $id('tbody-historico').dataset.loaded = '1';
+  if (!res.ok || !res.data?.length) {
+    $id('tbody-historico').innerHTML = '<tr><td colspan="11" style="color:var(--muted);padding:20px;text-align:center">Nenhum resultado</td></tr>';
+    return;
+  }
+  $id('tbody-historico').innerHTML = res.data.map(r => {
+    const v = r.variacao_pct;
+    const vCls = v==null?'':v>5?'bg-red':v>0?'bg-amber':v<-5?'bg-green':'bg-gray';
+    return `<tr>
+      <td>${new Date(r.data_entrada+'T12:00').toLocaleDateString('pt-BR')}</td>
+      <td><strong>${r.produto_nome||r.produto_codigo}</strong><br><span style="font-size:10px;color:var(--muted)">${r.produto_codigo}</span></td>
+      <td>${r.grupo||'—'}</td>
+      <td>${r.fornecedor_nome||'—'}</td>
+      <td class="mono" style="text-align:right">${parseFloat(r.quantidade).toFixed(3)}</td>
+      <td>${r.unidade||''}</td>
+      <td class="mono" style="text-align:right">${brl(r.valor_unitario)}</td>
+      <td class="mono" style="text-align:right">${brl(r.valor_total)}</td>
+      <td style="font-size:11px">${r.numero_nfe||'—'}</td>
+      <td class="mono" style="text-align:right">${r.custo_anterior?brl(r.custo_anterior):'—'}</td>
+      <td>${v!=null?`<span class="badge ${vCls}">${pct(v)}</span>`:'—'}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── ABA 3: ANÁLISE ─────────────────────────────────────────────────────────
+let _buscaTimer = null;
+function onBuscaInput() {
+  clearTimeout(_buscaTimer);
+  _buscaTimer = setTimeout(async () => {
+    const q = $id('a-busca').value.trim();
+    if (!q || q.length < 2) { $id('a-autocomplete').innerHTML=''; return; }
+    // Busca simples usando historico (primeiros 20)
+    const res = await (_api||BB.api).get('/api/compras/historico?produto='+encodeURIComponent(q)+'&limit=20');
+    if (!res.ok || !res.data?.length) { $id('a-autocomplete').innerHTML=''; return; }
+    const vistos = new Set();
+    const itens = res.data.filter(r => {
+      if (vistos.has(r.produto_codigo)) return false;
+      vistos.add(r.produto_codigo); return true;
+    }).slice(0,8);
+    $id('a-autocomplete').innerHTML = `<div style="position:absolute;background:#fff;border:1px solid var(--border);border-radius:8px;width:100%;max-height:220px;overflow-y:auto;box-shadow:0 4px 16px rgba(0,0,0,.1);z-index:99">` +
+      itens.map(it => `<div onclick="selecionarProduto('${it.produto_codigo}','${(it.produto_nome||'').replace(/'/g,"\\'")}');document.getElementById('a-autocomplete').innerHTML=''"
+        style="padding:9px 14px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--border)"
+        onmouseover="this.style.background='#fafafa'" onmouseout="this.style.background=''">
+        <strong>${it.produto_nome||it.produto_codigo}</strong>
+        <span style="font-size:11px;color:var(--muted);margin-left:6px">${it.produto_codigo}</span>
+      </div>`).join('') + `</div>`;
+  }, 300);
+}
+
+function selecionarProduto(codigo, nome) {
+  $id('a-busca').value = nome || codigo;
+  $id('a-busca').dataset.codigo = codigo;
+  carregarAnalise();
+}
+
+async function carregarAnalise() {
+  const codigo = $id('a-busca').dataset.codigo || $id('a-busca').value.trim();
+  if (!codigo) return;
+  $id('a-autocomplete').innerHTML = '';
+
+  try {
+    const res = await (_api||BB.api).get('/api/compras/analise/'+encodeURIComponent(codigo));
+    if (!res.ok) { alert(res.erro || 'Produto não encontrado'); return; }
+    const d = res.data;
+    _analiseData = d;
+
+    $id('analise-corpo').style.display = '';
+
+    // Bloco A
+    setText('a-estoque',   d.estoque + ' ' + (d.unidade||''));
+    setText('a-estmin',    d.estoque_minimo ? d.estoque_minimo + ' ' + (d.unidade||'') : '—');
+    setText('a-venda-dia', d.media_diaria > 0 ? d.media_diaria.toFixed(3) + ' ' + (d.unidade||'') + '/dia' : 'Sem vendas 30d');
+    const cobBox = $id('a-cobertura-box');
+    if (d.cobertura_dias != null) {
+      setText('a-cobertura', d.cobertura_dias + ' dias');
+      cobBox.style.background = d.cobertura_dias < 5 ? '#fef2f2' : d.cobertura_dias < 15 ? '#fffbeb' : '';
+      cobBox.style.borderColor = d.cobertura_dias < 5 ? '#fecaca' : d.cobertura_dias < 15 ? '#fcd34d' : '';
+    } else {
+      setText('a-cobertura', '—');
+    }
+    // Alerta de ruptura
+    const rupEl = $id('a-ruptura-alert');
+    if (d.cobertura_dias != null && d.cobertura_dias < 5) {
+      rupEl.style.display='';
+      rupEl.innerHTML='<div class="alert alert-err">⚠️ Risco de ruptura — cobertura < 5 dias</div>';
+    } else if (d.estoque > 0 && d.media_diaria === 0 && d.ultima_entrada_em) {
+      const dias = Math.floor((Date.now()-new Date(d.ultima_entrada_em).getTime())/86400000);
+      if (dias > 30) {
+        rupEl.style.display='';
+        rupEl.innerHTML='<div class="alert alert-warn">⚠️ Estoque parado — sem vendas e última compra há '+dias+' dias</div>';
+      } else rupEl.style.display='none';
+    } else rupEl.style.display='none';
+
+    const abcM = {A:'bg-green',B:'bg-blue',C:'bg-gray'};
+    setHTML('a-abc-badge', d.curva_abc
+      ? `<span class="badge ${abcM[d.curva_abc]||'bg-gray'}">${d.curva_abc==='A'?'⭐':d.curva_abc==='B'?'✦':'·'} Curva ${d.curva_abc}</span>`
+      : '<span class="badge bg-gray">sem ABC</span>');
+    setText('a-categ', d.categoria||'');
+
+    // Bloco B: histórico compras
+    const custoRef = d.ultimo_custo || d.preco_custo_manual || 0;
+    setText('a-ult-custo', d.ultimo_custo ? brl(d.ultimo_custo) : '—');
+    setText('a-cmp3',      d.custo_medio_3ped ? brl(d.custo_medio_3ped) : '—');
+    setText('a-cmp90',     d.custo_medio_90d ? brl(d.custo_medio_90d) : '—');
+    setText('a-cmptot',    d.custo_medio_total ? brl(d.custo_medio_total) : '—');
+    setText('a-menor',     d.menor_custo ? brl(d.menor_custo) : '—');
+    setText('a-maior',     d.maior_custo ? brl(d.maior_custo) : '—');
+    setHTML('a-tend-badge', tendLabel(d.tendencia_custo));
+    setText('a-ult-forn',  d.ultimo_fornecedor||'—');
+    setText('a-ult-data',  d.ultima_entrada_em ? new Date(d.ultima_entrada_em+'T12:00').toLocaleDateString('pt-BR') : '—');
+
+    // Mini gráfico de evolução
+    if (d.evolucao_mensal?.length > 1) {
+      $id('a-evo-wrap').style.display='';
+      const vals = d.evolucao_mensal.map(e=>parseFloat(e.custo_medio));
+      const mx = Math.max(...vals), mn = Math.min(...vals);
+      const range = mx - mn || 1;
+      $id('a-evo-bars').innerHTML = vals.map((v,i)=>{
+        const h = Math.round(10 + (v-mn)/range*50);
+        return `<div class="evo-bar-col" style="height:${h}px" title="${d.evolucao_mensal[i].mes}: ${brl(v)}"></div>`;
+      }).join('');
+      $id('a-evo-labels').innerHTML = vals.map((_,i)=>{
+        const m = d.evolucao_mensal[i].mes.slice(5);
+        return `<div style="flex:1;font-size:9px;color:var(--muted);text-align:center">${m}</div>`;
+      }).join('');
+    } else {
+      $id('a-evo-wrap').style.display='none';
+    }
+
+    // Bloco C: preços vendas
+    setText('a-pv-cad',      d.preco_venda ? brl(d.preco_venda) : '—');
+    setText('a-pv-ult',      d.ultima_venda_preco ? brl(d.ultima_venda_preco) : '—');
+    setText('a-pv-ult-data', d.ultima_venda_data ? new Date(d.ultima_venda_data).toLocaleDateString('pt-BR') : '');
+    setText('a-pv-max',      d.preco_max_90d ? brl(d.preco_max_90d) : '—');
+    setText('a-pv-min',      d.preco_min_90d ? brl(d.preco_min_90d) : '—');
+
+    // Recalcular se já há cotação
+    calcularTudo();
+  } catch(e) { console.error(e); }
+}
+
+function calcularTudo() {
+  const d = _analiseData;
+  if (!d) return;
+  const cotado = parseFloat($id('cot-valor').value);
+  if (!cotado || cotado <= 0) {
+    $id('bloco-resultado').style.display='none';
+    $id('bloco-simulacao').style.display='none';
+    return;
+  }
+  const qtd = parseFloat($id('cot-qtd').value) || null;
+  const margemAlvo = parseFloat($id('cot-alvo').value) || 35;
+  const margemMin  = parseFloat($id('cot-min').value)  || 30;
+  const custoRef = d.ultimo_custo || d.preco_custo_manual || 0;
+  const cmp90    = d.custo_medio_90d || d.custo_medio_total;
+  const cmp3     = d.custo_medio_3ped;
+
+  // Resultado da cotação
+  $id('bloco-resultado').style.display='';
+  const varUlt = custoRef ? ((cotado-custoRef)/custoRef*100) : null;
+  const var90  = cmp90    ? ((cotado-cmp90)/cmp90*100)       : null;
+  const var3p  = cmp3     ? ((cotado-cmp3)/cmp3*100)         : null;
+
+  function vStr(v) {
+    if (v==null) return '<span style="color:var(--muted)">—</span>';
+    const c = v>5?'#dc2626':v>0?'#d97706':v<0?'#16a34a':'var(--muted)';
+    return `<span style="color:${c};font-weight:700">${v>0?'+':''}${v.toFixed(1)}%</span>`;
+  }
+  setHTML('r-var-ult', vStr(varUlt));
+  setHTML('r-var-90',  vStr(var90));
+  setHTML('r-var-3p',  vStr(var3p));
+
+  const opp = classifOportunidade(cotado, d);
+  setHTML('r-opp-badge', `<span class="badge ${opp.cls}" style="font-size:14px">${opp.icon} ${opp.label}</span>`);
+
+  // Tendência como contexto
+  if (d.tendencia_custo && d.tendencia_custo !== 'sem_dados') {
+    setText('r-impacto', '');
+  }
+
+  // Lucro potencial
+  if (qtd && d.preco_venda > 0) {
+    const investimento = cotado * qtd;
+    const receita = d.preco_venda * qtd;
+    const lucroBruto = receita - investimento;
+    $id('r-lucro').style.display='';
+    setText('r-invest',     brl(investimento));
+    setText('r-receita',    brl(receita));
+    setText('r-lucro-bruto', brl(lucroBruto));
+    $id('r-lucro-bruto').style.color = lucroBruto > 0 ? 'var(--green)' : '#dc2626';
+  } else {
+    $id('r-lucro').style.display='none';
+  }
+
+  // Simulação de preço
+  $id('bloco-simulacao').style.display='';
+  const temVendas = d.preco_max_90d != null;
+  $id('sim-sem-hist').style.display = temVendas ? 'none' : '';
+
+  const precoVenda = d.preco_venda || 0;
+  const sim1 = precoVenda > 0 ? calcSimulacao(precoVenda, custoRef, cotado) : null;
+  const sim2 = calcCenario(cotado, margemAlvo);
+  const sim3 = calcCenario(cotado, margemMin);
+
+  // Cenário 1
+  if (sim1) {
+    setText('sim-c1-preco',  brl(sim1.preco_sugerido));
+    setText('sim-c1-margem', sim1.margem_real_pct.toFixed(1)+'%');
+    setText('sim-c1-markup', sim1.markup_pct.toFixed(1)+'%');
+    setText('sim-c1-desc', `(atual: ${sim1.margem_atual_pct.toFixed(1)}%)`);
+    setHTML('sim-c1-risco', riscoReajuste(sim1.preco_sugerido, d));
+    $id('sim-c1').style.display='flex';
+  } else { $id('sim-c1').style.display='none'; }
+
+  // Cenário 2
+  $id('sim-c2-label').textContent = `Margem alvo (${margemAlvo}%)`;
+  setText('sim-c2-preco',  brl(sim2.sugerido));
+  setText('sim-c2-margem', sim2.margemReal.toFixed(1)+'%');
+  setText('sim-c2-markup', sim2.markup.toFixed(1)+'%');
+  setHTML('sim-c2-risco', riscoReajuste(sim2.sugerido, d));
+
+  // Cenário 3
+  $id('sim-c3-label').textContent = `Margem mínima (${margemMin}%)`;
+  setText('sim-c3-preco',  brl(sim3.sugerido));
+  setText('sim-c3-margem', sim3.margemReal.toFixed(1)+'%');
+  setText('sim-c3-markup', sim3.markup.toFixed(1)+'%');
+  setHTML('sim-c3-risco', riscoReajuste(sim3.sugerido, d));
+
+  // Sem reajuste
+  if (precoVenda > 0) {
+    const margemSR = (precoVenda - cotado) / precoVenda * 100;
+    const markupSR = (precoVenda / cotado - 1) * 100;
+    const queda = sim1 ? (sim1.margem_atual_pct - margemSR) : null;
+    setText('sim-preco-atual', brl(precoVenda));
+    setText('sim-margem-sem',  margemSR.toFixed(1)+'%');
+    setText('sim-queda',       queda ? ('−'+queda.toFixed(1)) : '');
+    setText('sim-markup-sem',  markupSR.toFixed(1)+'%');
+  }
+}
+
+// ── ABA 4: GIRO ────────────────────────────────────────────────────────────
+function debGiro() { clearTimeout(_debTimer); _debTimer=setTimeout(carregarGiro,400); }
+async function carregarGiro() {
+  const p = new URLSearchParams({
+    grupo: $id('g-grupo')?.value||'',
+    abc:   $id('g-abc')?.value||'',
+    status: $id('g-status')?.value||'',
+  });
+  const res = await (_api||BB.api).get('/api/compras/giro?'+p);
+  if (!res.ok) return;
+  const tbody = $id('tbody-giro');
+  if (!res.data?.length) {
+    tbody.innerHTML='<tr><td colspan="11" style="color:var(--muted);padding:20px;text-align:center">Nenhum produto encontrado</td></tr>';
+    return;
+  }
+  tbody.innerHTML = res.data.map(r => {
+    const cobDias = r.cobertura_dias != null ? parseFloat(r.cobertura_dias) : null;
+    const statusMap = {urgente:'<span class="badge bg-red">🔴 Urgente</span>',
+      atencao:'<span class="badge bg-amber">🟡 Atenção</span>',
+      saudavel:'<span class="badge bg-green">🟢 Saudável</span>'};
+    const abcM = {A:'bg-green',B:'bg-blue',C:'bg-gray'};
+    const alertas = [];
+    if (r.alertaRuptura) alertas.push('<span class="badge bg-red" style="font-size:10px">⚠️ Ruptura</span>');
+    if (r.alertaParado)  alertas.push('<span class="badge bg-amber" style="font-size:10px">📦 Parado</span>');
+    return `<tr>
+      <td><strong>${r.descricao}</strong><br><span style="font-size:10px;color:var(--muted)">${r.codigo}</span></td>
+      <td style="font-size:12px">${r.categoria||'—'}</td>
+      <td>${r.curva_abc?`<span class="badge ${abcM[r.curva_abc]||'bg-gray'}">${r.curva_abc}</span>`:'—'}</td>
+      <td class="mono" style="text-align:right">${parseFloat(r.estoque).toFixed(r.unidade==='KG'?3:0)} ${r.unidade||''}</td>
+      <td class="mono" style="text-align:right">${r.media_diaria>0?r.media_diaria.toFixed(3):'—'}</td>
+      <td class="mono" style="text-align:right">${cobDias!=null?cobDias+' d':'—'}</td>
+      <td>${statusMap[r.urgencia]||'<span class="badge bg-gray">—</span>'}</td>
+      <td class="mono" style="text-align:right">${r.ultimo_custo?brl(r.ultimo_custo):'—'}</td>
+      <td>${tendLabel(r.tendencia_custo)}</td>
+      <td style="font-size:12px">${r.ultima_entrada_em?new Date(r.ultima_entrada_em+'T12:00').toLocaleDateString('pt-BR'):'—'}</td>
+      <td>${alertas.join(' ')||'—'}</td>
+    </tr>`;
+  }).join('');
+}
+</script>
+</body>
+</html>
