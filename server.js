@@ -772,10 +772,10 @@ app.get('/api/admin/fix-kits', require('./middleware/auth')('admin'), async (req
 // ── Health check ───────────────────────────────────────────────────────────────
 app.get('/health', async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT NOW() AS ts, version() AS ver');
-    res.json({ ok: true, ts: rows[0].ts, pg: rows[0].ver.split(' ')[1] });
+    await pool.query('SELECT 1');
+    res.json({ ok: true });
   } catch (e) {
-    res.status(503).json({ ok: false, erro: e.message });
+    res.status(503).json({ ok: false });
   }
 });
 

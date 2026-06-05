@@ -58,6 +58,17 @@ module.exports = function (pool) {
   r.get('/meus-lancamentos', async (req, res) => {
     const { mes_ref, funcionario_id } = req.query;
     if (!mes_ref || !funcionario_id) return res.status(400).json({ ok: false, erro: 'mes_ref e funcionario_id obrigatórios' });
+    // Segurança: não-admin só pode ver seus próprios lançamentos
+    const perfil = req.user?.perfil;
+    const userId = req.user?.id;
+    if (perfil !== 'admin' && perfil !== 'gestor') {
+      // Verifica se o funcionario_id solicitado corresponde ao usuário logado
+      const { rows: check } = await pool.query(
+        `SELECT id FROM funcionarios WHERE id=$1 AND usuario_id=$2 LIMIT 1`,
+        [parseInt(funcionario_id), userId]
+      ).catch(() => ({ rows: [] }));
+      if (!check.length) return res.status(403).json({ ok: false, erro: 'Acesso negado' });
+    }
     try {
       const { rows } = await pool.query(`
         SELECT * FROM rh_apontamentos

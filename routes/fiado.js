@@ -212,7 +212,7 @@ module.exports = function(pool) {
             WHERE v.cliente_id=c.id AND v.status NOT IN('cancelado','reprovado')),0) AS total_comprado,
           COALESCE((SELECT SUM(p.valor_pago) FROM pagamentos_fiado p WHERE p.cliente_id=c.id),0) AS total_pago
         FROM clientes_fiado c WHERE c.id=$1
-      `, [req.params.id]);
+      `, [parseInt(req.params.id)]);
       if (!rows.length) return res.status(404).json({ ok:false, erro:'Cliente não encontrado' });
       res.json({ ok:true, data:rows[0] });
     } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
@@ -239,7 +239,7 @@ module.exports = function(pool) {
         `UPDATE clientes_fiado SET nome=$1,telefone=$2,tipo_cliente=$3,desconto_pct=$4,
          limite_credito=$5,status=$6,observacoes=$7,updated_at=NOW()
          WHERE id=$8 RETURNING *`,
-        [nome, telefone||null, tipo_cliente, desconto_pct||0, limite_credito||null, status, observacoes||null, req.params.id]
+        [nome, telefone||null, tipo_cliente, desconto_pct||0, limite_credito||null, status, observacoes||null, parseInt(req.params.id)]
       );
       if (!rows.length) return res.status(404).json({ ok:false, erro:'Não encontrado' });
       await log(rows[0].id, 'cliente_editado', `Dados do cliente atualizados`, req.user?.nome);
@@ -412,7 +412,7 @@ module.exports = function(pool) {
       const { rows } = await pool.query(
         `UPDATE vendas_fiado SET status='aberto', saldo_restante=total_final,
          aprovado_por=$1, aprovado_em=NOW(), updated_at=NOW() WHERE id=$2 AND status='aguardando' RETURNING *`,
-        [req.user.nome, req.params.id]
+        [req.user.nome, parseInt(req.params.id)]
       );
       if (!rows.length) return res.status(404).json({ ok:false, erro:'Venda não encontrada ou já processada' });
       await log(rows[0].cliente_id, 'venda_aprovada', `Venda aprovada por ${req.user.nome}`, req.user.nome, rows[0].id);
@@ -428,7 +428,7 @@ module.exports = function(pool) {
       const { rows } = await pool.query(
         `UPDATE vendas_fiado SET status='reprovado', motivo_reprovacao=$1, saldo_restante=0,
          aprovado_por=$2, aprovado_em=NOW(), updated_at=NOW() WHERE id=$3 AND status='aguardando' RETURNING *`,
-        [motivo, req.user.nome, req.params.id]
+        [motivo, req.user.nome, parseInt(req.params.id)]
       );
       if (!rows.length) return res.status(404).json({ ok:false, erro:'Não encontrada' });
       // Se reprovado, converter para cliente normal
@@ -446,7 +446,7 @@ module.exports = function(pool) {
         `UPDATE vendas_fiado SET status='cancelado', saldo_restante=0,
          observacoes=CONCAT(COALESCE(observacoes,''),' [CANCELADO: ',CAST($1 AS TEXT),']'), updated_at=NOW()
          WHERE id=$2 AND status NOT IN('cancelado','reprovado') RETURNING *`,
-        [motivo, req.params.id]
+        [motivo, parseInt(req.params.id)]
       );
       if (!rows.length) return res.status(404).json({ ok:false, erro:'Não encontrada' });
       await log(rows[0].cliente_id, 'venda_cancelada', `Venda cancelada: ${motivo}`, req.user?.nome, rows[0].id);
