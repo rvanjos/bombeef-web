@@ -323,5 +323,135 @@ module.exports = (pool, app) => {
     } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
+
+  // ── GET /margem-real ── Sprint 4.3 ─────────────────────────────────────────
+  // Cruza vendas_produto × produtos para calcular margem real por produto
+  // Custo usado (por prioridade): custo_medio_90d → ultimo_custo → preco_custo (fallback)
+  r.get('/margem-real', async (req, res) => {
+    try {
+      const { ini, fim, categoria, abc, ordem = 'lucro' } = req.query;
+      const conds = [];
+      const params = [];
+
+      if (ini && fim) {
+        params.push(ini, fim);
+        conds.push(`vp.data_venda BETWEEN $${params.length-1} AND $${params.length}`);
+      } else if (ini) {
+        params.push(ini);
+        conds.push(`vp.data_venda >= $${params.length}`);
+      } else if (fim) {
+        params.push(fim);
+        conds.push(`vp.data_venda <= $${params.length}`);
+      }
+
+      if (categoria) {
+        params.push(categoria);
+        conds.push(`p.categoria = $${params.length}`);
+      }
+
+      const where = conds.length ? 'WHERE ' + conds.join(' AND ') : '';
+
+      const orderBy = {
+        lucro:    'lucro_bruto DESC NULLS LAST',
+        margem:   'margem_pct DESC NULLS LAST',
+        fat:      'faturamento DESC',
+        qtd:      'qtd_vendida DESC',
+        custo:    'cmv_estimado DESC NULLS LAST',
+      }[ordem] || 'lucro_bruto DESC NULLS LAST';
+
+      const { rows } = await pool.query(`
+        SELECT
+          vp.codigo,
+          vp.nome                                                         AS produto_nome,
+          p.categoria,
+          p.curva_abc,
+          p.preco_venda                                                   AS preco_venda_cadastrado,
+          SUM(vp.quantidade)                                              AS qtd_vendida,
+          ROUND(SUM(vp.valor_total), 2)                                   AS faturamento,
+          ROUND(SUM(vp.valor_total) / NULLIF(SUM(vp.quantidade), 0), 4)  AS preco_medio_realizado,
+          COUNT(DISTINCT vp.data_venda)                                   AS dias_com_venda,
+          -- Custo: prioridade custo_medio_90d > ultimo_custo > preco_custo
+          COALESCE(
+            NULLIF(MAX(p.custo_medio_90d), 0),
+            NULLIF(MAX(p.ultimo_custo), 0),
+            NULLIF(MAX(p.preco_custo), 0)
+          )                                                               AS custo_unit_usado,
+          CASE
+            WHEN MAX(p.custo_medio_90d) IS NOT NULL AND MAX(p.custo_medio_90d) > 0 THEN 'custo_medio_90d'
+            WHEN MAX(p.ultimo_custo) IS NOT NULL AND MAX(p.ultimo_custo) > 0        THEN 'ultimo_custo'
+            WHEN MAX(p.preco_custo) IS NOT NULL AND MAX(p.preco_custo) > 0          THEN 'preco_custo'
+            ELSE 'sem_custo'
+          END                                                             AS fonte_custo,
+          -- CMV estimado = quantidade vendida × custo unitário usado
+          ROUND(
+            SUM(vp.quantidade) * COALESCE(
+              NULLIF(MAX(p.custo_medio_90d), 0),
+              NULLIF(MAX(p.ultimo_custo), 0),
+              NULLIF(MAX(p.preco_custo), 0)
+            ), 2
+          )                                                               AS cmv_estimado,
+          -- Lucro bruto = faturamento - CMV
+          ROUND(
+            SUM(vp.valor_total) - SUM(vp.quantidade) * COALESCE(
+              NULLIF(MAX(p.custo_medio_90d), 0),
+              NULLIF(MAX(p.ultimo_custo), 0),
+              NULLIF(MAX(p.preco_custo), 0)
+            ), 2
+          )                                                               AS lucro_bruto,
+          -- Margem % = (faturamento - CMV) / faturamento × 100
+          CASE
+            WHEN SUM(vp.valor_total) > 0 AND COALESCE(
+              NULLIF(MAX(p.custo_medio_90d), 0),
+              NULLIF(MAX(p.ultimo_custo), 0),
+              NULLIF(MAX(p.preco_custo), 0)
+            ) IS NOT NULL
+            THEN ROUND(
+              (1 - SUM(vp.quantidade) * COALESCE(
+                NULLIF(MAX(p.custo_medio_90d), 0),
+                NULLIF(MAX(p.ultimo_custo), 0),
+                NULLIF(MAX(p.preco_custo), 0)
+              ) / SUM(vp.valor_total)) * 100, 1)
+            ELSE NULL
+          END                                                             AS margem_pct,
+          -- Alerta: custo subiu mas preço não foi reajustado
+          ROUND((MAX(p.ultimo_custo) - MAX(p.preco_custo)) / NULLIF(MAX(p.preco_custo), 0) * 100, 1)
+                                                                          AS variacao_custo_vs_cadastro,
+          MAX(p.tendencia_custo)                                          AS tendencia_custo,
+          MAX(p.variacao_custo_pct)                                       AS variacao_ultimo_custo_pct
+        FROM vendas_produto vp
+        LEFT JOIN produtos p ON p.codigo = vp.codigo AND p.ativo = true
+        ${where}
+        GROUP BY vp.codigo, vp.nome, p.categoria, p.curva_abc, p.preco_venda
+        ORDER BY ${orderBy}
+      `, params);
+
+      // Filtro por ABC (feito em memória pois curva_abc vem do cadastro)
+      const filtrado = abc ? rows.filter(r => r.curva_abc === abc) : rows;
+
+      // Totalizadores
+      const totalFat    = filtrado.reduce((s, r) => s + parseFloat(r.faturamento || 0), 0);
+      const totalCMV    = filtrado.reduce((s, r) => s + parseFloat(r.cmv_estimado || 0), 0);
+      const totalLucro  = filtrado.reduce((s, r) => s + parseFloat(r.lucro_bruto || 0), 0);
+      const semCusto    = filtrado.filter(r => r.fonte_custo === 'sem_custo').length;
+      const comCusto90d = filtrado.filter(r => r.fonte_custo === 'custo_medio_90d').length;
+
+      res.json({
+        ok: true,
+        data: filtrado,
+        resumo: {
+          total_produtos:   filtrado.length,
+          sem_custo:        semCusto,
+          com_custo_90d:    comCusto90d,
+          faturamento_total: parseFloat(totalFat.toFixed(2)),
+          cmv_total:         parseFloat(totalCMV.toFixed(2)),
+          lucro_bruto_total: parseFloat(totalLucro.toFixed(2)),
+          margem_media_pct:  totalFat > 0
+            ? parseFloat(((1 - totalCMV / totalFat) * 100).toFixed(1))
+            : null,
+        },
+      });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
   return r;
 };
