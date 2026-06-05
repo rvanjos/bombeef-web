@@ -90,6 +90,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);fon
   <button class="tab" onclick="showTab('historico',this)">📋 Histórico</button>
   <button class="tab" onclick="showTab('analise',this)">🔍 Análise de Compra</button>
   <button class="tab" onclick="showTab('giro',this)">📊 Giro e Cobertura</button>
+  <button class="tab" onclick="showTab('planejamento',this)">📦 Planejamento</button>
 </div>
 
 <!-- ── ABA 1: IMPORTAÇÃO ─────────────────────────────────────────────────── -->
@@ -466,6 +467,7 @@ function showTab(name, btn) {
   btn.classList.add('active');
   if (name === 'historico' && !$id('tbody-historico').dataset.loaded) carregarHistorico();
   if (name === 'giro') carregarGiro();
+  if (name === 'planejamento') { /* carregado manualmente pelo botão */ }
 }
 
 // ── ABA 1: IMPORTAÇÃO ─────────────────────────────────────────────────────
@@ -831,5 +833,259 @@ async function carregarGiro() {
   }).join('');
 }
 </script>
+
+<!-- ── ABA PLANEJAMENTO ──────────────────────────────────────────────── -->
+<div id="sec-planejamento" class="sec">
+  <!-- Controles -->
+  <div style="padding:14px 14px 0">
+    <div class="card" style="padding:12px 14px;margin-bottom:12px">
+      <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+        <div>
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:3px">Orçamento disponível (R$)</div>
+          <input id="pl-orcamento" type="number" step="100" min="0" placeholder="Ex: 10000"
+            style="border:1px solid var(--border);border-radius:7px;padding:7px 11px;font-size:14px;font-family:'DM Sans',sans-serif;width:180px"
+            onkeydown="if(event.key==='Enter')gerarPlanejamento()">
+        </div>
+        <div>
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:3px">Curva ABC</div>
+          <select id="pl-abc" style="border:1px solid var(--border);border-radius:7px;padding:7px 11px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff">
+            <option value="">Todas</option>
+            <option value="A">A</option>
+            <option value="B">B</option>
+            <option value="C">C</option>
+          </select>
+        </div>
+        <div>
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:3px">Status</div>
+          <select id="pl-status" style="border:1px solid var(--border);border-radius:7px;padding:7px 11px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff">
+            <option value="">Todos</option>
+            <option value="urgente">🔴 Urgente</option>
+            <option value="atencao">🟡 Atenção</option>
+            <option value="saudavel">🟢 Saudável</option>
+          </select>
+        </div>
+        <button onclick="gerarPlanejamento()" class="btn" style="height:36px;padding:0 20px;font-size:13px">
+          📦 Gerar sugestão
+        </button>
+        <button onclick="gerarOrcamento()" id="pl-btn-orcamento" class="btn btn-g" style="height:36px;padding:0 20px;font-size:13px;display:none">
+          💰 Distribuir orçamento
+        </button>
+      </div>
+    </div>
+
+    <!-- Cards de resumo -->
+    <div id="pl-cards" style="display:none;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+      <div style="background:#fff;border-radius:10px;border:1px solid var(--border);padding:12px 16px;flex:1;min-width:130px">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">🔴 Urgentes</div>
+        <div style="font-size:22px;font-weight:800;font-family:'DM Mono',monospace;margin-top:4px" id="pl-n-urgentes">—</div>
+      </div>
+      <div style="background:#fff;border-radius:10px;border:1px solid var(--border);padding:12px 16px;flex:1;min-width:130px">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">🟡 Atenção</div>
+        <div style="font-size:22px;font-weight:800;font-family:'DM Mono',monospace;margin-top:4px" id="pl-n-atencao">—</div>
+      </div>
+      <div style="background:#fff;border-radius:10px;border:1px solid var(--border);padding:12px 16px;flex:1;min-width:130px">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">Produtos</div>
+        <div style="font-size:22px;font-weight:800;font-family:'DM Mono',monospace;margin-top:4px" id="pl-n-total">—</div>
+      </div>
+      <div id="pl-card-orc" style="display:none;background:#fff;border-radius:10px;border:1px solid var(--border);padding:12px 16px;flex:1;min-width:130px">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">Orçamento</div>
+        <div style="font-size:22px;font-weight:800;font-family:'DM Mono',monospace;margin-top:4px" id="pl-orc-total">—</div>
+      </div>
+      <div id="pl-card-util" style="display:none;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:12px 16px;flex:1;min-width:130px">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--green)">Valor utilizado</div>
+        <div style="font-size:22px;font-weight:800;font-family:'DM Mono',monospace;color:var(--green);margin-top:4px" id="pl-orc-util">—</div>
+      </div>
+      <div id="pl-card-rest" style="display:none;background:#fff;border-radius:10px;border:1px solid var(--border);padding:12px 16px;flex:1;min-width:130px">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">Restante</div>
+        <div style="font-size:22px;font-weight:800;font-family:'DM Mono',monospace;margin-top:4px" id="pl-orc-rest">—</div>
+      </div>
+      <div style="background:#fff;border-radius:10px;border:1px solid var(--border);padding:12px 16px;flex:1;min-width:160px">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">Valor estimado total</div>
+        <div style="font-size:22px;font-weight:800;font-family:'DM Mono',monospace;color:var(--red);margin-top:4px" id="pl-valor-total">—</div>
+      </div>
+    </div>
+
+    <!-- Tabela -->
+    <div style="overflow-x:auto;background:#fff;border-radius:10px;border:1px solid var(--border)">
+      <table class="tbl" style="min-width:860px">
+        <thead><tr>
+          <th>Produto</th>
+          <th style="text-align:center">ABC</th>
+          <th style="text-align:right">Cobertura</th>
+          <th style="text-align:center">Status</th>
+          <th style="text-align:right">Qtd Sugerida</th>
+          <th style="text-align:right" id="pl-th-aprovada" style="display:none">Qtd Aprovada</th>
+          <th style="text-align:right">Custo Unit.</th>
+          <th style="text-align:right">Valor Estimado</th>
+          <th style="text-align:right" id="pl-th-aprovado-val" style="display:none">Valor Aprovado</th>
+          <th>Tendência</th>
+          <th id="pl-th-parcial" style="display:none;text-align:center">Parcial</th>
+        </tr></thead>
+        <tbody id="pl-tbody">
+          <tr><td colspan="11" style="text-align:center;padding:32px;color:var(--muted)">
+            Informe um orçamento e clique em "Gerar sugestão"
+          </td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Rodapé total -->
+    <div id="pl-rodape" style="display:none;text-align:right;padding:10px 4px;font-size:13px;color:var(--muted)">
+      Total estimado da compra: <strong id="pl-rodape-total" style="color:var(--red);font-family:'DM Mono',monospace;font-size:14px">—</strong>
+      <span id="pl-rodape-orc" style="display:none"> · Valor aprovado: <strong id="pl-rodape-aprovado" style="color:var(--green);font-family:'DM Mono',monospace;font-size:14px">—</strong></span>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Planejamento ──────────────────────────────────────────────────────────────
+const _pbrl = v => v!=null ? 'R$ '+parseFloat(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—';
+const _pnum = (v,d=3) => v!=null ? parseFloat(v).toLocaleString('pt-BR',{minimumFractionDigits:d,maximumFractionDigits:d}) : '—';
+
+const _statusBadge = s => ({
+  urgente: '<span class="badge bg-red">🔴 Urgente</span>',
+  atencao: '<span class="badge bg-amber">🟡 Atenção</span>',
+  saudavel:'<span class="badge bg-green">🟢 Saudável</span>',
+  sem_venda:'<span class="badge bg-gray" style="font-size:10px">sem venda</span>',
+}[s]||'—');
+
+const _abcBpl = v => {
+  if(!v) return '—';
+  const m={A:'bg-green',B:'bg-blue',C:'bg-gray'};
+  return `<span class="badge ${m[v]||'bg-gray'}">${v}</span>`;
+};
+
+function _ptset(id,v){const e=$id(id);if(e)e.textContent=v;}
+function _pshow(id,show){const e=$id(id);if(e)e.style.display=show?'':'none';}
+
+async function gerarPlanejamento() {
+  const abc    = $id('pl-abc')?.value   || '';
+  const status = $id('pl-status')?.value || '';
+  const tbody  = $id('pl-tbody');
+  if(!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:24px;color:var(--muted)">⏳ Carregando...</td></tr>';
+  _pshow('pl-cards', false);
+  _pshow('pl-rodape', false);
+  // Esconder colunas de orçamento
+  ['pl-card-orc','pl-card-util','pl-card-rest','pl-th-aprovada','pl-th-aprovado-val','pl-th-parcial','pl-rodape-orc'].forEach(id => _pshow(id, false));
+  $id('pl-btn-orcamento').style.display = 'none';
+
+  const p = new URLSearchParams({ abc, status });
+  try {
+    const api = window.BB?.api || window._api;
+    const res = await api.get('/api/compras/planejamento?' + p);
+    if(!res.ok){ tbody.innerHTML=`<tr><td colspan="11" style="text-align:center;padding:24px;color:#dc2626">❌ ${res.erro||'Erro'}</td></tr>`; return; }
+
+    const r = res.resumo;
+    _pshow('pl-cards', true);
+    _ptset('pl-n-urgentes', r.urgentes);
+    _ptset('pl-n-atencao',  r.atencao);
+    _ptset('pl-n-total',    r.total);
+    _ptset('pl-valor-total', _pbrl(r.valor_total_estimado));
+
+    window._plData = res.data; // guardar para distribuição de orçamento
+
+    if(!res.data?.length){
+      tbody.innerHTML='<tr><td colspan="11" style="text-align:center;padding:32px;color:var(--muted)">Nenhum produto com compra sugerida</td></tr>';
+      _pshow('pl-rodape', false);
+      return;
+    }
+
+    tbody.innerHTML = res.data.map(row => {
+      const valEst = row.custo_unitario && row.qtd_sugerida
+        ? parseFloat((row.qtd_sugerida * row.custo_unitario).toFixed(2)) : null;
+      return `<tr>
+        <td><strong style="font-size:12px">${row.produto_nome||row.codigo}</strong>
+            <div style="font-size:10px;color:var(--muted)">${row.codigo}</div></td>
+        <td style="text-align:center">${_abcBpl(row.curva_abc)}</td>
+        <td style="text-align:right;font-family:'DM Mono',monospace;font-size:12px">
+          ${row.cobertura_dias!=null ? row.cobertura_dias+'d' : '—'}</td>
+        <td style="text-align:center">${_statusBadge(row.status)}</td>
+        <td style="text-align:right;font-family:'DM Mono',monospace;font-size:12px">${_pnum(row.qtd_sugerida)} ${row.unidade||''}</td>
+        <td style="display:none" class="col-aprovada"></td>
+        <td style="text-align:right;font-family:'DM Mono',monospace;font-size:12px">${_pbrl(row.custo_unitario)}</td>
+        <td style="text-align:right;font-family:'DM Mono',monospace;font-size:12px">${_pbrl(valEst)}</td>
+        <td style="display:none" class="col-aprovado-val"></td>
+        <td style="font-size:12px">${row.tendencia_custo==='alta'?'<span style="color:#dc2626;font-weight:700">📈 Alta</span>':row.tendencia_custo==='baixa'?'<span style="color:#16a34a;font-weight:700">📉 Baixa</span>':row.tendencia_custo==='estavel'?'➡️ Estável':'—'}</td>
+        <td style="display:none;text-align:center" class="col-parcial"></td>
+      </tr>`;
+    }).join('');
+
+    _ptset('pl-rodape-total', _pbrl(r.valor_total_estimado));
+    _pshow('pl-rodape', true);
+
+    const orc = parseFloat($id('pl-orcamento')?.value || 0);
+    if(orc > 0) $id('pl-btn-orcamento').style.display = '';
+
+  } catch(e){
+    tbody.innerHTML=`<tr><td colspan="11" style="text-align:center;padding:24px;color:#dc2626">❌ ${e.message}</td></tr>`;
+  }
+}
+
+async function gerarOrcamento() {
+  const orc = parseFloat($id('pl-orcamento')?.value || 0);
+  if(!orc || orc<=0){ alert('Informe o orçamento disponível'); return; }
+  const tbody = $id('pl-tbody');
+  tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:24px;color:var(--muted)">⏳ Distribuindo orçamento...</td></tr>';
+  _pshow('pl-cards', false);
+
+  try {
+    const api = window.BB?.api || window._api;
+    const res = await api.get('/api/compras/orcamento?valor='+orc);
+    if(!res.ok){ tbody.innerHTML=`<tr><td colspan="11" style="text-align:center;padding:24px;color:#dc2626">❌ ${res.erro||'Erro'}</td></tr>`; return; }
+
+    const r = res.resumo;
+    _pshow('pl-cards', true);
+    _ptset('pl-n-urgentes', r.urgentes_atendidos);
+    _ptset('pl-n-atencao',  r.atencao_atendidos);
+    _ptset('pl-n-total',    r.produtos_selecionados);
+    _ptset('pl-valor-total', _pbrl(r.valor_utilizado));
+
+    // Cards de orçamento
+    _pshow('pl-card-orc',  true); _ptset('pl-orc-total', _pbrl(r.orcamento));
+    _pshow('pl-card-util', true); _ptset('pl-orc-util',  _pbrl(r.valor_utilizado));
+    _pshow('pl-card-rest', true); _ptset('pl-orc-rest',  _pbrl(r.valor_restante));
+
+    // Mostrar colunas extras
+    ['pl-th-aprovada','pl-th-aprovado-val','pl-th-parcial'].forEach(id => _pshow(id, true));
+
+    if(!res.data?.length){
+      tbody.innerHTML='<tr><td colspan="11" style="text-align:center;padding:32px;color:var(--muted)">Nenhum produto selecionado</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = res.data.map(row => {
+      const valEst = row.custo_unitario && row.qtd_sugerida
+        ? parseFloat((row.qtd_sugerida*row.custo_unitario).toFixed(2)) : null;
+      const parcialBadge = row.parcial
+        ? '<span class="badge bg-amber" style="font-size:10px">parcial</span>'
+        : '<span class="badge bg-green" style="font-size:10px">integral</span>';
+      return `<tr${row.parcial?' style="background:#fffbeb;"':''}>
+        <td><strong style="font-size:12px">${row.produto_nome||row.codigo}</strong>
+            <div style="font-size:10px;color:var(--muted)">${row.codigo} · #${row.prioridade}</div></td>
+        <td style="text-align:center">${_abcBpl(row.curva_abc)}</td>
+        <td style="text-align:right;font-family:'DM Mono',monospace;font-size:12px">${row.cobertura_dias!=null?row.cobertura_dias+'d':'—'}</td>
+        <td style="text-align:center">${_statusBadge(row.status)}</td>
+        <td style="text-align:right;font-family:'DM Mono',monospace;font-size:12px">${_pnum(row.qtd_sugerida)} ${row.unidade||''}</td>
+        <td style="text-align:right;font-family:'DM Mono',monospace;font-size:12px;font-weight:700">${_pnum(row.qtd_aprovada)} ${row.unidade||''}</td>
+        <td style="text-align:right;font-family:'DM Mono',monospace;font-size:12px">${_pbrl(row.custo_unitario)}</td>
+        <td style="text-align:right;font-family:'DM Mono',monospace;font-size:12px">${_pbrl(valEst)}</td>
+        <td style="text-align:right;font-family:'DM Mono',monospace;font-size:12px;color:var(--green);font-weight:700">${_pbrl(row.valor_aprovado)}</td>
+        <td style="font-size:12px">${row.tendencia_custo==='alta'?'<span style="color:#dc2626;font-weight:700">📈 Alta</span>':row.tendencia_custo==='baixa'?'<span style="color:#16a34a;font-weight:700">📉 Baixa</span>':row.tendencia_custo==='estavel'?'➡️ Estável':'—'}</td>
+        <td style="text-align:center">${parcialBadge}</td>
+      </tr>`;
+    }).join('');
+
+    _ptset('pl-rodape-total', _pbrl(r.orcamento));
+    _ptset('pl-rodape-aprovado', _pbrl(r.valor_utilizado));
+    _pshow('pl-rodape', true);
+    _pshow('pl-rodape-orc', true);
+
+  } catch(e){
+    tbody.innerHTML=`<tr><td colspan="11" style="text-align:center;padding:24px;color:#dc2626">❌ ${e.message}</td></tr>`;
+  }
+}
+</script>
+
 </body>
 </html>
