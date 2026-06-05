@@ -650,6 +650,7 @@ async function carregarCampanhas() {
         <span style="font-size:12px;color:var(--muted)">${brl(c.preco_referencia)}</span>
         <div style="display:flex;gap:6px">
           <button class="btn btn-s btn-sm" onclick="event.stopPropagation();editarCampanha(${c.id})">✏️ Editar</button>
+          <button class="btn btn-s btn-sm" onclick="event.stopPropagation();abrirPlanejamento(${c.id},'${c.nome.replace(/'/g,\"\\'\")}')">📦 Planejar</button>
           <button class="btn btn-p btn-sm" onclick="event.stopPropagation();showTab('novo-pedido');setTimeout(()=>selecionarCampanha(${c.id}),100)">➕ Pedido</button>
         </div>
       </div>
@@ -1693,6 +1694,139 @@ else { setTimeout(initGestaoKits, 200); }
   if(window.self===window.top) f.style.display='block';
 })();
 </script>
+<script>
+// ── Planejamento de Kit ── Sprint 4.5-A ─────────────────────────────────────
+let _plkCampanhaId = null;
+
+function abrirPlanejamento(id, nome) {
+  _plkCampanhaId = id;
+  const el = document.getElementById('pl-kit-titulo');
+  if(el) el.textContent = '📦 Planejamento — ' + nome;
+  document.getElementById('plk-resultado').style.display = 'none';
+  document.getElementById('modal-planejamento').classList.add('open');
+}
+
+async function calcularPlanejamento() {
+  if(!_plkCampanhaId) return;
+  const qtd      = parseInt(document.getElementById('plk-qtd')?.value || 50);
+  const dataAcao = document.getElementById('plk-data-acao')?.value   || '';
+  const dataLim  = document.getElementById('plk-data-limite')?.value  || '';
+  const tbody    = document.getElementById('plk-tbody');
+  tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--muted)">⏳ Calculando...</td></tr>';
+  document.getElementById('plk-resultado').style.display = '';
+
+  const p = new URLSearchParams({ qtd });
+  if(dataAcao) p.set('data_acao', dataAcao);
+  if(dataLim)  p.set('data_limite', dataLim);
+
+  try {
+    const res = await api.get('/api/kits-campanha/campanhas/'+_plkCampanhaId+'/planejamento?'+p);
+    if(!res.ok){ tbody.innerHTML=`<tr><td colspan="7" style="text-align:center;padding:20px;color:#dc2626">❌ ${res.erro||'Erro'}</td></tr>`; return; }
+
+    const r = res.resumo;
+    const statusColors = { ok:'background:#f0fdf4;border-color:#bbf7d0;color:#14532d',
+      atencao:'background:#fffbeb;border-color:#fcd34d;color:#92400e',
+      urgente:'background:#fef2f2;border-color:#fecaca;color:#991b1b' };
+    const statusLabel = { ok:'✅ Estoque suficiente', atencao:'⚠️ Falta comprar itens', urgente:'🔴 Urgente — prazo próximo' };
+
+    document.getElementById('plk-cards').innerHTML = `
+      <div style="border-radius:8px;border:1px solid;padding:8px 12px;font-size:13px;font-weight:600;${statusColors[res.status]||''}">${statusLabel[res.status]||res.status}</div>
+      <div style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:8px 14px"><div style="color:var(--muted);font-size:10px;text-transform:uppercase;font-weight:700">Kits planejados</div><div style="font-size:18px;font-weight:800;font-family:monospace">${qtd}</div></div>
+      <div style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:8px 14px"><div style="color:var(--muted);font-size:10px;text-transform:uppercase;font-weight:700">Produtos com falta</div><div style="font-size:18px;font-weight:800;font-family:monospace;color:${r.produtos_com_falta>0?'#dc2626':'#16a34a'}">${r.produtos_com_falta}</div></div>
+      <div style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:8px 14px"><div style="color:var(--muted);font-size:10px;text-transform:uppercase;font-weight:700">Valor estimado compra</div><div style="font-size:18px;font-weight:800;font-family:monospace;color:var(--red-l)">R$ ${parseFloat(r.valor_total_estimado).toLocaleString('pt-BR',{minimumFractionDigits:2})}</div></div>
+    `;
+
+    const brl2 = v => v!=null?'R\$ '+parseFloat(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}):'—';
+    const num4 = v => v!=null?parseFloat(v).toLocaleString('pt-BR',{minimumFractionDigits:3,maximumFractionDigits:3}):'—';
+    const ftLabel = f => ({
+      custo_medio_90d:'<span style="background:#d1e7dd;color:#0a4a22;border-radius:4px;padding:1px 5px;font-size:10px;font-weight:700">CMP-90d</span>',
+      ultimo_custo:'<span style="background:#fff3cd;color:#856404;border-radius:4px;padding:1px 5px;font-size:10px;font-weight:700">último</span>',
+      preco_custo:'<span style="background:#fde68a;color:#92400e;border-radius:4px;padding:1px 5px;font-size:10px;font-weight:700">manual</span>',
+      sem_custo:'<span style="background:#f8d7da;color:#721c24;border-radius:4px;padding:1px 5px;font-size:10px;font-weight:700">sem custo</span>',
+    }[f]||'');
+
+    tbody.innerHTML = (res.itens||[]).map(it => {
+      const faltaBg = it.falta_comprar > 0 ? 'background:#fef2f2' : '';
+      return `<tr style="${faltaBg}">
+        <td style="padding:7px 10px"><strong>${it.produto_nome||it.produto_codigo}</strong><div style="font-size:10px;color:var(--muted)">${it.produto_codigo} · ${it.slot_nome}</div></td>
+        <td style="text-align:right;padding:7px 10px;font-family:monospace">${num4(it.qtd_por_kit)} ${it.unidade}</td>
+        <td style="text-align:right;padding:7px 10px;font-family:monospace">${num4(it.necessidade_total)}</td>
+        <td style="text-align:right;padding:7px 10px;font-family:monospace;color:${it.estoque_ok?'#16a34a':'inherit'}">${num4(it.estoque_atual)}</td>
+        <td style="text-align:right;padding:7px 10px;font-family:monospace;font-weight:${it.falta_comprar>0?700:400};color:${it.falta_comprar>0?'#dc2626':'var(--muted)'}">${it.falta_comprar>0?num4(it.falta_comprar):'✅ ok'}</td>
+        <td style="text-align:right;padding:7px 10px;font-family:monospace">${brl2(it.custo_unitario)} ${ftLabel(it.fonte_custo)}</td>
+        <td style="text-align:right;padding:7px 10px;font-family:monospace;font-weight:${it.valor_estimado?700:400};color:${it.valor_estimado?'var(--red-l)':'var(--muted)'}">${brl2(it.valor_estimado)}</td>
+      </tr>`;
+    }).join('');
+
+    document.getElementById('plk-total').textContent = brl2(r.valor_total_estimado);
+
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:20px;color:#dc2626">❌ ${e.message}</td></tr>`;
+  }
+}
+</script>
+
+
+<!-- ── Modal Planejamento de Kit ──────────────────────────────────────── -->
+<div id="modal-planejamento" class="modal" onclick="if(event.target===this)fecharModal('modal-planejamento')">
+  <div class="modal-box" style="max-width:760px">
+    <div class="modal-hdr">
+      <span id="pl-kit-titulo">📦 Planejamento de Kit</span>
+      <button onclick="fecharModal('modal-planejamento')" class="btn btn-s btn-sm">✕</button>
+    </div>
+    <div class="modal-body" style="padding:14px">
+
+      <!-- Controles -->
+      <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px">
+        <div>
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:3px">Quantidade de kits</div>
+          <input type="number" id="plk-qtd" value="50" min="1" step="1"
+            style="width:110px;border:1px solid var(--border);border-radius:6px;padding:6px 9px;font-size:14px;font-family:inherit">
+        </div>
+        <div>
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:3px">Data da ação</div>
+          <input type="date" id="plk-data-acao"
+            style="border:1px solid var(--border);border-radius:6px;padding:6px 9px;font-size:13px;font-family:inherit">
+        </div>
+        <div>
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:3px">Data limite pedido</div>
+          <input type="date" id="plk-data-limite"
+            style="border:1px solid var(--border);border-radius:6px;padding:6px 9px;font-size:13px;font-family:inherit">
+        </div>
+        <button onclick="calcularPlanejamento()" class="btn btn-p" style="height:34px;padding:0 16px;font-size:13px">
+          🔍 Calcular necessidade
+        </button>
+      </div>
+
+      <!-- Resultado -->
+      <div id="plk-resultado" style="display:none">
+        <!-- Cards -->
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px" id="plk-cards"></div>
+        <!-- Tabela -->
+        <div style="overflow-x:auto;border-radius:8px;border:1px solid var(--border)">
+          <table style="width:100%;border-collapse:collapse;font-size:12px">
+            <thead>
+              <tr style="background:#f9fafb">
+                <th style="padding:8px 10px;text-align:left;font-weight:700;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.4px">Produto</th>
+                <th style="padding:8px 10px;text-align:right;font-weight:700;color:var(--muted);font-size:11px">Qtd/kit</th>
+                <th style="padding:8px 10px;text-align:right;font-weight:700;color:var(--muted);font-size:11px">Necessário</th>
+                <th style="padding:8px 10px;text-align:right;font-weight:700;color:var(--muted);font-size:11px">Estoque</th>
+                <th style="padding:8px 10px;text-align:right;font-weight:700;color:var(--muted);font-size:11px">Falta comprar</th>
+                <th style="padding:8px 10px;text-align:right;font-weight:700;color:var(--muted);font-size:11px">Custo unit.</th>
+                <th style="padding:8px 10px;text-align:right;font-weight:700;color:var(--muted);font-size:11px">Valor est.</th>
+              </tr>
+            </thead>
+            <tbody id="plk-tbody"></tbody>
+          </table>
+        </div>
+        <div id="plk-rodape" style="text-align:right;padding:8px 4px;font-size:12px;color:var(--muted)">
+          Valor total estimado de compra: <strong id="plk-total" style="font-size:14px;color:var(--red-l)">—</strong>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
 
 </body>
 </html>

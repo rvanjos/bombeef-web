@@ -1022,5 +1022,142 @@ module.exports = function (pool, app) {
     } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
+
+  // ── GET /campanhas/:id/planejamento ── Sprint 4.5-A ──────────────────────
+  // Calcula necessidade de compra para produzir N kits de uma campanha.
+  // Usa produtos.estoque (estoque real) e custo_medio_90d > ultimo_custo > preco_custo.
+  // NÃO usa kit_estoque_interno (saldo interno do módulo de pedidos).
+  r.get('/campanhas/:id/planejamento', async (req, res) => {
+    try {
+      const campanhaId = parseInt(req.params.id);
+      const qtdKits    = Math.max(1, parseInt(req.query.qtd) || 1);
+      const dataAcao   = req.query.data_acao   || null;
+      const dataLimite = req.query.data_limite || null;
+
+      // Buscar campanha
+      const { rows: camps } = await pool.query(
+        `SELECT id, nome, descricao, data_inicio, data_fim, status FROM kit_campanhas WHERE id=$1`,
+        [campanhaId]
+      );
+      if (!camps.length) return res.status(404).json({ ok: false, erro: 'Campanha não encontrada' });
+      const campanha = camps[0];
+
+      // Buscar slots obrigatórios da campanha
+      const { rows: slots } = await pool.query(
+        `SELECT id, nome, tipo, quantidade, obrigatorio, produtos_permitidos
+         FROM kit_campanha_slots WHERE campanha_id=$1 ORDER BY ordem`,
+        [campanhaId]
+      );
+      if (!slots.length) return res.status(400).json({ ok: false, erro: 'Campanha sem slots configurados' });
+
+      // Coletar todos os produto_ids únicos dos slots
+      const todosIds = [...new Set(
+        slots.flatMap(s => (s.produtos_permitidos || []).map(Number).filter(Boolean))
+      )];
+
+      if (!todosIds.length) {
+        return res.status(400).json({ ok: false, erro: 'Nenhum produto vinculado aos slots da campanha' });
+      }
+
+      // Buscar dados reais dos produtos (estoque + custos + nome)
+      const { rows: prods } = await pool.query(
+        `SELECT id, codigo, descricao AS nome, unidade,
+                COALESCE(estoque, 0)        AS estoque_atual,
+                preco_custo, ultimo_custo, custo_medio_90d
+         FROM produtos WHERE id = ANY($1)`,
+        [todosIds]
+      );
+      const prodMap = {};
+      prods.forEach(p => { prodMap[p.id] = p; });
+
+      // Montar itens de planejamento por slot
+      const itens = [];
+      let totalFaltaComprar = 0;
+      let valorTotalEstimado = 0;
+      let algumFalta = false;
+
+      for (const slot of slots) {
+        const prodIds = (slot.produtos_permitidos || []).map(Number).filter(Boolean);
+        if (!prodIds.length) continue;
+
+        for (const pid of prodIds) {
+          const p = prodMap[pid];
+          if (!p) continue;
+
+          const qtdPorKit       = parseFloat(slot.quantidade || 1);
+          const necessidadeTotal = parseFloat((qtdPorKit * qtdKits).toFixed(4));
+          const estoqueAtual    = parseFloat(p.estoque_atual || 0);
+          const faltaComprar    = parseFloat(Math.max(0, necessidadeTotal - estoqueAtual).toFixed(4));
+
+          // Custo: prioridade custo_medio_90d > ultimo_custo > preco_custo
+          let custoUnit = null, fonteCusto = 'sem_custo';
+          if (p.custo_medio_90d && parseFloat(p.custo_medio_90d) > 0) {
+            custoUnit = parseFloat(p.custo_medio_90d); fonteCusto = 'custo_medio_90d';
+          } else if (p.ultimo_custo && parseFloat(p.ultimo_custo) > 0) {
+            custoUnit = parseFloat(p.ultimo_custo); fonteCusto = 'ultimo_custo';
+          } else if (p.preco_custo && parseFloat(p.preco_custo) > 0) {
+            custoUnit = parseFloat(p.preco_custo); fonteCusto = 'preco_custo';
+          }
+
+          const valorEstimado = custoUnit != null && faltaComprar > 0
+            ? parseFloat((faltaComprar * custoUnit).toFixed(2)) : null;
+
+          if (faltaComprar > 0) { algumFalta = true; totalFaltaComprar += faltaComprar; }
+          if (valorEstimado)   valorTotalEstimado += valorEstimado;
+
+          itens.push({
+            slot_nome:         slot.nome,
+            slot_tipo:         slot.tipo,
+            produto_id:        p.id,
+            produto_codigo:    p.codigo,
+            produto_nome:      p.nome,
+            unidade:           p.unidade || 'un',
+            qtd_por_kit:       qtdPorKit,
+            necessidade_total: necessidadeTotal,
+            estoque_atual:     estoqueAtual,
+            falta_comprar:     faltaComprar,
+            custo_unitario:    custoUnit,
+            fonte_custo:       fonteCusto,
+            valor_estimado:    valorEstimado,
+            estoque_ok:        estoqueAtual >= necessidadeTotal,
+          });
+        }
+      }
+
+      // Status geral
+      let statusGeral = 'ok';
+      if (algumFalta) {
+        statusGeral = 'atencao';
+        // Urgente se data_limite definida e está em <= 3 dias
+        if (dataLimite) {
+          const diasRestantes = Math.ceil((new Date(dataLimite) - new Date()) / 86400000);
+          if (diasRestantes <= 3) statusGeral = 'urgente';
+        }
+      }
+
+      res.json({
+        ok: true,
+        campanha: { id: campanha.id, nome: campanha.nome, status: campanha.status },
+        data_acao:   dataAcao,
+        data_limite: dataLimite,
+        qtd_kits:    qtdKits,
+        status:      statusGeral,
+        itens,
+        resumo: {
+          total_slots:          slots.length,
+          total_produtos:       itens.length,
+          produtos_com_falta:   itens.filter(i => i.falta_comprar > 0).length,
+          produtos_sem_custo:   itens.filter(i => i.fonte_custo === 'sem_custo').length,
+          valor_total_estimado: parseFloat(valorTotalEstimado.toFixed(2)),
+          estoque_suficiente:   !algumFalta,
+        },
+      });
+
+    } catch(e) {
+      console.error('[kits/planejamento]', e.message);
+      res.status(500).json({ ok: false, erro: e.message });
+    }
+  });
+
   return r;
 };
