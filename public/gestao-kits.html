@@ -175,6 +175,7 @@ if (window.self !== window.top) {
 
 <div class="tabs">
   <button class="tab active" onclick="showTab('campanhas')">🎯 Campanhas</button>
+  <button class="tab" onclick="showTab('calendario')">📅 Calendário Comercial</button>
   <button class="tab" onclick="showTab('novo-pedido')">➕ Novo Pedido</button>
   <button class="tab" onclick="showTab('pedidos')">📋 Pedidos</button>
   <button class="tab" onclick="showTab('separacao')">📦 Separação</button>
@@ -552,6 +553,7 @@ function showTab(t) {
   document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
   document.getElementById('tab-'+t).classList.add('active');
   if (t==='campanhas')   carregarCampanhas();
+  if (t==='calendario')  carregarCalendario();
   if (t==='pedidos')     { carregarPedidos(); preencherSelectCampanhas('#f-camp-ped'); }
   if (t==='separacao')   carregarSeparacao();
   if (t==='conciliacao') { carregarConciliacao(); preencherSelectCampanhas('#conc-camp'); }
@@ -1693,15 +1695,156 @@ else { setTimeout(initGestaoKits, 200); }
   // Só exibe quando acessado diretamente (fora de iframe)
   if(window.self===window.top) f.style.display='block';
 })();
+
+</div>
+
+<!-- ── ABA CALENDÁRIO COMERCIAL ─────────────────────────────────────────── -->
+<div id="tab-calendario" class="tab-content" style="padding:14px">
+
+  <!-- Filtros -->
+  <div style="background:#fff;border-radius:10px;border:1px solid var(--border);padding:12px 14px;margin-bottom:12px;display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+    <div>
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:3px">Mês</div>
+      <input type="month" id="cal-mes" style="border:1px solid var(--border);border-radius:6px;padding:6px 9px;font-size:12px;font-family:inherit" onchange="carregarCalendario()">
+    </div>
+    <div>
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:3px">Status</div>
+      <select id="cal-status" style="border:1px solid var(--border);border-radius:6px;padding:6px 9px;font-size:12px;font-family:inherit;background:#fff" onchange="carregarCalendario()">
+        <option value="">Todos</option>
+        <option value="urgente">🔴 Urgente</option>
+        <option value="atencao">🟠 Atenção</option>
+        <option value="planejado">🟢 Planejado</option>
+        <option value="finalizado">⚫ Finalizado</option>
+      </select>
+    </div>
+    <div style="display:flex;align-items:flex-end;gap:6px">
+      <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer">
+        <input type="checkbox" id="cal-pendentes" onchange="carregarCalendario()">
+        Apenas com compra pendente
+      </label>
+    </div>
+    <button onclick="carregarCalendario()" style="border:1px solid var(--border);border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer;background:#f9fafb;font-family:inherit">🔄 Atualizar</button>
+  </div>
+
+  <!-- Cards de resumo executivo -->
+  <div id="cal-cards" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+    <div style="background:#fff;border-radius:10px;border:1px solid var(--border);padding:12px 16px;flex:1;min-width:130px">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">Campanhas futuras</div>
+      <div style="font-size:22px;font-weight:800;font-family:monospace;margin-top:4px" id="cal-n-futuras">—</div>
+    </div>
+    <div style="background:#fff7ed;border-radius:10px;border:1px solid #fdba74;padding:12px 16px;flex:1;min-width:130px">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#9a3412">🔴 Urgentes</div>
+      <div style="font-size:22px;font-weight:800;font-family:monospace;margin-top:4px;color:#dc2626" id="cal-n-urgentes">—</div>
+    </div>
+    <div style="background:#fff;border-radius:10px;border:1px solid var(--border);padding:12px 16px;flex:1;min-width:130px">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">🟠 Atenção</div>
+      <div style="font-size:22px;font-weight:800;font-family:monospace;margin-top:4px;color:#f97316" id="cal-n-atencao">—</div>
+    </div>
+  </div>
+
+  <!-- Tabela de campanhas -->
+  <div style="overflow-x:auto;background:#fff;border-radius:10px;border:1px solid var(--border)">
+    <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead>
+        <tr style="background:#f9fafb">
+          <th style="padding:9px 12px;text-align:left;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)">Status</th>
+          <th style="padding:9px 12px;text-align:left;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)">Campanha</th>
+          <th style="padding:9px 12px;text-align:center;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)">Data da ação</th>
+          <th style="padding:9px 12px;text-align:center;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)">Data limite pedido</th>
+          <th style="padding:9px 12px;text-align:right;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)">Dias p/ limite</th>
+          <th style="padding:9px 12px;text-align:right;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)">Qtd planejada</th>
+          <th style="padding:9px 12px;text-align:right;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)">Vendidos</th>
+          <th style="padding:9px 12px;text-align:center;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)">Ações</th>
+        </tr>
+      </thead>
+      <tbody id="cal-tbody">
+        <tr><td colspan="8" style="text-align:center;padding:32px;color:var(--muted)">Carregando...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+
 </script>
 <script>
 // ── Planejamento de Kit ── Sprint 4.5-A ─────────────────────────────────────
 let _plkCampanhaId = null;
 let _plkSlotsChoice = [];
 
-async function abrirPlanejamento(id, nome) {
+async function carregarCalendario() {
+  const mes        = document.getElementById('cal-mes')?.value        || '';
+  const statusCal  = document.getElementById('cal-status')?.value     || '';
+  const pendentes  = document.getElementById('cal-pendentes')?.checked ? '1' : '';
+  const tbody      = document.getElementById('cal-tbody');
+  if(!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--muted)">⏳ Carregando...</td></tr>';
+
+  const p = new URLSearchParams();
+  if(mes)       p.set('mes', mes);
+  if(statusCal) p.set('status_cal', statusCal);
+  if(pendentes) p.set('apenas_pendentes', '1');
+
+  try {
+    const res = await api.get('/api/kits-campanha/calendario?' + p);
+    if(!res.ok){ tbody.innerHTML='<tr><td colspan="8" style="text-align:center;padding:24px;color:#dc2626">❌ '+( res.erro||'Erro')+'</td></tr>'; return; }
+
+    const r = res.resumo;
+    var setEl = function(id,v){var e=document.getElementById(id);if(e)e.textContent=v;};
+    setEl('cal-n-futuras',  r.campanhas_futuras);
+    setEl('cal-n-urgentes', r.urgentes);
+    setEl('cal-n-atencao',  r.atencao);
+
+    if(!res.data || !res.data.length){
+      tbody.innerHTML='<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--muted)">Nenhuma campanha encontrada</td></tr>';
+      return;
+    }
+
+    var fmtDt = function(d){ return d ? new Date(d+'T12:00').toLocaleDateString('pt-BR') : '—'; };
+    var statusBadge = function(s, dias){
+      if(s==='urgente')   return '<span style="background:#fee2e2;color:#991b1b;border-radius:5px;padding:2px 8px;font-size:10px;font-weight:700">🔴 URGENTE</span>';
+      if(s==='atencao')   return '<span style="background:#ffedd5;color:#9a3412;border-radius:5px;padding:2px 8px;font-size:10px;font-weight:700">🟠 ATENÇÃO</span>';
+      if(s==='finalizado') return '<span style="background:#f3f4f6;color:#6b7280;border-radius:5px;padding:2px 8px;font-size:10px;font-weight:700">⚫ FINALIZADO</span>';
+      return '<span style="background:#dcfce7;color:#14532d;border-radius:5px;padding:2px 8px;font-size:10px;font-weight:700">🟢 PLANEJADO</span>';
+    };
+    var diasStr = function(d){
+      if(d===null||d===undefined) return '—';
+      if(d<0) return '<span style="color:#6b7280">'+Math.abs(d)+'d atrás</span>';
+      if(d===0) return '<span style="color:#dc2626;font-weight:700">Hoje!</span>';
+      var cor = d<=3?'#dc2626':d<=7?'#f97316':'#374151';
+      return '<span style="color:'+cor+';font-weight:'+(d<=7?700:400)+'">'+d+'d</span>';
+    };
+
+    tbody.innerHTML = res.data.map(function(c){
+      var rowBg = c.status_cal==='urgente' ? 'background:#fff5f5;' : c.status_cal==='atencao' ? 'background:#fffbeb;' : '';
+      return '<tr style="'+rowBg+'">'
+        +'<td style="padding:9px 12px">'+statusBadge(c.status_cal)+'</td>'
+        +'<td style="padding:9px 12px"><strong>'+c.nome+'</strong>'+(c.descricao?'<div style="font-size:10px;color:var(--muted)">'+c.descricao+'</div>':'')+'</td>'
+        +'<td style="text-align:center;padding:9px 12px;font-size:12px">'+fmtDt(c.data_acao)+'</td>'
+        +'<td style="text-align:center;padding:9px 12px;font-size:12px">'+fmtDt(c.data_limite)+'</td>'
+        +'<td style="text-align:right;padding:9px 12px">'+diasStr(c.dias_ate_limite)+'</td>'
+        +'<td style="text-align:right;padding:9px 12px;font-family:monospace">'+(c.limite_campanha>0?c.limite_campanha:'—')+'</td>'
+        +'<td style="text-align:right;padding:9px 12px;font-family:monospace">'+c.vendidos+'</td>'
+        +'<td style="text-align:center;padding:9px 8px">'
+          +(c.status_cal!=='finalizado'
+            ?'<button onclick="abrirPlanejamento('+c.id+',\''+c.nome.replace(/'/g,"\'")+'\',\''+( c.data_acao||'')+'\',\''+( c.data_limite||'')+'\','+c.limite_campanha+')" style="border:1px solid var(--border);border-radius:5px;padding:4px 9px;font-size:11px;cursor:pointer;background:#f9fafb;font-family:inherit">📦 Planejar</button>'
+            :'<span style="font-size:11px;color:var(--muted)">encerrada</span>')
+        +'</td>'
+        +'</tr>';
+    }).join('');
+
+  } catch(e){
+    tbody.innerHTML='<tr><td colspan="8" style="text-align:center;padding:24px;color:#dc2626">❌ '+e.message+'</td></tr>';
+  }
+}
+
+
+async function abrirPlanejamento(id, nome, dataAcaoPre, dataLimitePre, qtdPre) {
   _plkCampanhaId = id;
   _plkSlotsChoice = [];
+  // Pré-preencher campos se vierem do calendário
+  if(dataAcaoPre)  { var el=document.getElementById('plk-data-acao');   if(el) el.value=dataAcaoPre; }
+  if(dataLimitePre){ var el2=document.getElementById('plk-data-limite'); if(el2) el2.value=dataLimitePre; }
+  if(qtdPre && parseInt(qtdPre)>0){ var el3=document.getElementById('plk-qtd'); if(el3) el3.value=qtdPre; }
   const el = document.getElementById('pl-kit-titulo');
   if(el) el.textContent = '📦 Planejamento — ' + nome;
   document.getElementById('plk-resultado').style.display = 'none';

@@ -1205,5 +1205,107 @@ module.exports = function (pool, app) {
     }
   });
 
+
+  // ── GET /calendario ── Sprint 4.5-B ────────────────────────────────────────
+  // Retorna campanhas enriquecidas com dias restantes e status do calendário.
+  // Usa exclusivamente kit_campanhas — sem novas tabelas.
+  r.get('/calendario', async (req, res) => {
+    try {
+      const { mes, status_cal, apenas_pendentes } = req.query;
+
+      const { rows } = await pool.query(`
+        SELECT c.id, c.nome, c.descricao, c.status,
+               c.data_inicio, c.data_fim, c.limite_campanha, c.preco_referencia,
+               COALESCE(
+                 (SELECT COUNT(*) FROM kit_pedidos p
+                  WHERE p.campanha_id=c.id AND p.status NOT IN ('cancelado','rascunho')), 0
+               ) AS vendidos,
+               COALESCE(
+                 (SELECT COUNT(*) FROM kit_campanha_slots s WHERE s.campanha_id=c.id), 0
+               ) AS total_slots
+        FROM kit_campanhas c
+        ORDER BY c.data_inicio ASC NULLS LAST, c.criado_em DESC
+      `);
+
+      const hoje = new Date(); hoje.setHours(0,0,0,0);
+
+      const enriquecidos = rows.map(c => {
+        // Dias restantes calculados a partir de data_fim (prazo da campanha)
+        const dataAcao   = c.data_inicio ? new Date(c.data_inicio) : null;
+        const dataLimite = c.data_fim    ? new Date(c.data_fim)    : null;
+
+        const diasAteAcao    = dataAcao    ? Math.ceil((dataAcao - hoje)    / 86400000) : null;
+        const diasAteLimite  = dataLimite  ? Math.ceil((dataLimite - hoje)  / 86400000) : null;
+
+        // Status do calendário
+        let status_cal;
+        if (c.status === 'encerrada') {
+          status_cal = 'finalizado';
+        } else if (diasAteLimite !== null && diasAteLimite <= 3) {
+          status_cal = 'urgente';
+        } else if (diasAteLimite !== null && diasAteLimite <= 7) {
+          status_cal = 'atencao';
+        } else {
+          status_cal = 'planejado';
+        }
+
+        return {
+          id:               c.id,
+          nome:             c.nome,
+          descricao:        c.descricao,
+          status:           c.status,
+          status_cal,
+          data_acao:        c.data_inicio,
+          data_limite:      c.data_fim,
+          dias_ate_acao:    diasAteAcao,
+          dias_ate_limite:  diasAteLimite,
+          limite_campanha:  parseInt(c.limite_campanha) || 0,
+          preco_referencia: parseFloat(c.preco_referencia) || 0,
+          vendidos:         parseInt(c.vendidos) || 0,
+          total_slots:      parseInt(c.total_slots) || 0,
+        };
+      });
+
+      // Filtros
+      let filtrado = enriquecidos;
+
+      if (mes) {
+        // mes = "YYYY-MM"
+        filtrado = filtrado.filter(c => {
+          const d = c.data_acao || c.data_limite;
+          return d && d.slice(0, 7) === mes;
+        });
+      }
+      if (status_cal) {
+        filtrado = filtrado.filter(c => c.status_cal === status_cal);
+      }
+      if (apenas_pendentes === '1') {
+        // Apenas campanhas com data futura ou sem data mas ativas
+        filtrado = filtrado.filter(c =>
+          c.status !== 'encerrada' &&
+          (c.dias_ate_acao === null || c.dias_ate_acao >= 0)
+        );
+      }
+
+      // Resumo executivo
+      const futuras  = filtrado.filter(c => c.status_cal !== 'finalizado');
+      const urgentes = filtrado.filter(c => c.status_cal === 'urgente').length;
+
+      res.json({
+        ok: true,
+        data: filtrado,
+        resumo: {
+          total:             filtrado.length,
+          campanhas_futuras: futuras.length,
+          urgentes,
+          atencao:           filtrado.filter(c => c.status_cal === 'atencao').length,
+        },
+      });
+    } catch(e) {
+      console.error('[kits/calendario]', e.message);
+      res.status(500).json({ ok: false, erro: e.message });
+    }
+  });
+
   return r;
 };
