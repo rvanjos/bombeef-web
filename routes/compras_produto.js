@@ -185,23 +185,37 @@ module.exports = function(pool) {
     const ws = wb.Sheets[wb.SheetNames[0]];
     const raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
 
-    // Detectar linha de cabeçalho (linha 2 no layout PDV)
-    let hdrRow = null, hdrIdx = -1;
+    // Detectar linha de cabeçalho — planilha PDV tem 2 linhas de header (mescladas)
+    // Linha 1: cabeçalhos de grupos (Valor Total, Total Liquido, etc)
+    // Linha 2: sub-cabeçalhos com nomes de colunas
+    let hdrRow = null, hdrRow1 = null, hdrIdx = -1;
     for (let i = 0; i < Math.min(raw.length, 5); i++) {
       const r2 = raw[i];
       if (r2 && r2.some && r2.some(v => v && typeof v === 'string' &&
           (v.toLowerCase().includes('produto') || v.toLowerCase().includes('cód')))) {
-        hdrRow = r2; hdrIdx = i; break;
+        hdrRow = r2;
+        hdrIdx = i;
+        // Linha 1 é sempre a anterior (para colunas mescladas sem valor na linha 2)
+        hdrRow1 = i > 0 ? raw[i-1] : null;
+        break;
       }
     }
     if (!hdrRow) return res.status(400).json({ ok: false, erro: 'Cabeçalho não encontrado' });
 
+    // Combinar: onde hdrRow tem null, usar hdrRow1 (colunas mescladas)
+    const hdrCombined = hdrRow.map((v, i) => v || (hdrRow1 && hdrRow1[i]) || null);
+
     // Mapeamento por nome de coluna
+    const norm = s => String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
     const ci = (nomes) => {
       for (const nm of nomes) {
-        const idx = hdrRow.findIndex(h => h && typeof h === 'string' &&
-          h.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').includes(
-            nm.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'')));
+        // 1ª tentativa: match exato
+        const exact = hdrCombined.findIndex(h => h && typeof h === 'string' && norm(h) === norm(nm));
+        if (exact >= 0) return exact;
+      }
+      for (const nm of nomes) {
+        // 2ª tentativa: contém
+        const idx = hdrCombined.findIndex(h => h && typeof h === 'string' && norm(h).includes(norm(nm)));
         if (idx >= 0) return idx;
       }
       return -1;
@@ -219,7 +233,18 @@ module.exports = function(pool) {
     const iGrp  = ci(['grupo']);
     const iSub  = ci(['subgrupo']);
     const iCFOP = ci(['cfop']);
-    const iQtd  = ci(['quantidade']);   // coluna Entrada Quantidade
+    // Preferir 2ª ocorrência de "quantidade" (Entrada) — fallback para a 1ª (Saída, ok quando Fator=1)
+    const iQtd = (() => {
+      let count = 0;
+      for (let j = 0; j < hdrCombined.length; j++) {
+        const h = hdrCombined[j];
+        if (h && typeof h === 'string' && h.toLowerCase().trim() === 'quantidade') {
+          count++;
+          if (count === 2) return j; // Entrada
+        }
+      }
+      return ci(['quantidade']); // fallback 1ª ocorrência
+    })();
     const iUn   = ci(['unidade']);      // coluna Entrada Unidade
     const iVlUn = ci(['valor unitário','valor unitario']); // pega a 1ª — depois pega a 2ª
     const iVlTot= ci(['valor total']);
@@ -229,8 +254,8 @@ module.exports = function(pool) {
     // Para "Entrada Valor Unitário" precisamos do 2º match de "valor unitário"
     const iVlUnEnt = (() => {
       let count = 0;
-      for (let j = 0; j < hdrRow.length; j++) {
-        const h = hdrRow[j];
+      for (let j = 0; j < hdrCombined.length; j++) {
+        const h = hdrCombined[j];
         if (h && typeof h === 'string' && h.toLowerCase().includes('valor unit')) {
           count++;
           if (count === 2) return j; // 2ª ocorrência = Entrada
