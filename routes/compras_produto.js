@@ -884,5 +884,183 @@ module.exports = function(pool) {
     }
   });
 
+
+  // ── GET /orcamento ── Sprint 4.4-B ────────────────────────────────────────
+  // Distribui orçamento disponível pelos produtos com maior prioridade de compra.
+  // Reutiliza internamente a mesma lógica e query do GET /planejamento — sem duplicar regras.
+  r.get('/orcamento', async (req, res) => {
+    try {
+      const orcamento = parseFloat(req.query.valor);
+      if (!orcamento || orcamento <= 0) {
+        return res.status(400).json({ ok: false, erro: 'Parâmetro "valor" obrigatório e maior que zero' });
+      }
+
+      // ── Reutilizar a mesma query do /planejamento (sem filtros, limite alto) ──
+      const { rows } = await pool.query(`
+        SELECT
+          p.codigo,
+          p.descricao                                           AS produto_nome,
+          p.curva_abc,
+          p.categoria,
+          p.unidade,
+          COALESCE(p.estoque, 0)                               AS estoque_atual,
+          COALESCE(
+            NULLIF(p.custo_medio_90d, 0),
+            NULLIF(p.ultimo_custo, 0),
+            NULLIF(p.preco_custo, 0)
+          )                                                    AS custo_unitario,
+          CASE
+            WHEN p.custo_medio_90d IS NOT NULL AND p.custo_medio_90d > 0 THEN 'custo_medio_90d'
+            WHEN p.ultimo_custo    IS NOT NULL AND p.ultimo_custo    > 0 THEN 'ultimo_custo'
+            WHEN p.preco_custo     IS NOT NULL AND p.preco_custo     > 0 THEN 'preco_custo'
+            ELSE 'sem_custo'
+          END                                                  AS fonte_custo,
+          p.tendencia_custo,
+          COALESCE(v.media_diaria, 0)                          AS venda_media_diaria
+        FROM produtos p
+        LEFT JOIN (
+          SELECT codigo,
+            ROUND(SUM(quantidade)::numeric / NULLIF(COUNT(DISTINCT data_venda), 0), 4) AS media_diaria
+          FROM vendas_produto
+          WHERE data_venda >= CURRENT_DATE - 30
+          GROUP BY codigo
+        ) v ON v.codigo = p.codigo
+        WHERE p.ativo = true
+          AND (COALESCE(p.estoque, 0) > 0 OR COALESCE(v.media_diaria, 0) > 0
+               OR p.ultimo_custo IS NOT NULL)
+        ORDER BY p.curva_abc NULLS LAST, p.descricao
+        LIMIT 500
+      `);
+
+      // ── Calcular campos derivados (mesma lógica do /planejamento) ──────────
+      const semCusto = [];
+      const candidatos = [];
+
+      rows.forEach(r => {
+        const estoque   = parseFloat(r.estoque_atual    || 0);
+        const vendaDia  = parseFloat(r.venda_media_diaria || 0);
+        const custoUnit = r.custo_unitario ? parseFloat(r.custo_unitario) : null;
+
+        // Excluir sem custo ou sem qtd sugerida
+        if (!custoUnit || custoUnit <= 0 || r.fonte_custo === 'sem_custo') {
+          semCusto.push(r.codigo); return;
+        }
+
+        const diasAlvo = r.curva_abc === 'A' ? 21
+                       : r.curva_abc === 'B' ? 15
+                       : r.curva_abc === 'C' ? 10 : 15;
+
+        const coberturaDias = vendaDia > 0
+          ? parseFloat((estoque / vendaDia).toFixed(1)) : null;
+
+        const qtdSugerida = vendaDia > 0
+          ? parseFloat(Math.max(0, vendaDia * diasAlvo - estoque).toFixed(3)) : 0;
+
+        if (qtdSugerida <= 0) return; // nada a comprar
+
+        const status = coberturaDias === null ? 'sem_venda'
+                     : coberturaDias < 5     ? 'urgente'
+                     : coberturaDias < 15    ? 'atencao'
+                     : 'saudavel';
+
+        if (status === 'sem_venda') return; // sem histórico → não entra no orçamento
+
+        candidatos.push({
+          codigo: r.codigo, produto_nome: r.produto_nome,
+          curva_abc: r.curva_abc || null, categoria: r.categoria || null,
+          unidade: r.unidade || null, status,
+          estoque_atual: estoque, cobertura_dias: coberturaDias,
+          qtd_sugerida: qtdSugerida, custo_unitario: custoUnit,
+          fonte_custo: r.fonte_custo, tendencia_custo: r.tendencia_custo || null,
+        });
+      });
+
+      // ── Score de prioridade: status × curva ────────────────────────────────
+      // urgente=0, atencao=1, saudavel=2 × ABC: A=0, B=1, C=2, null=3
+      const scoreStatus = { urgente: 0, atencao: 1, saudavel: 2 };
+      const scoreABC    = { A: 0, B: 1, C: 2 };
+      const prioridade  = r =>
+        (scoreStatus[r.status] ?? 3) * 4 + (scoreABC[r.curva_abc] ?? 3);
+
+      // Desempate: menor cobertura → maior venda → (sem faturamento histórico aqui)
+      candidatos.sort((a, b) => {
+        const dp = prioridade(a) - prioridade(b);
+        if (dp !== 0) return dp;
+        const dc = (a.cobertura_dias ?? 999) - (b.cobertura_dias ?? 999);
+        if (dc !== 0) return dc;
+        return parseFloat(b.venda_media_diaria) - parseFloat(a.venda_media_diaria);
+      });
+
+      // ── Distribuir orçamento ───────────────────────────────────────────────
+      let restante  = orcamento;
+      let prioIdx   = 1;
+      let urgAtend  = 0, atenAtend = 0;
+      const selecionados = [];
+
+      for (const c of candidatos) {
+        if (restante <= 0.01) break;
+
+        const valorPleno = parseFloat((c.qtd_sugerida * c.custo_unitario).toFixed(2));
+        let qtdAprovada, valorAprovado, parcial = false;
+
+        if (valorPleno <= restante + 0.001) {
+          // Cabe integralmente
+          qtdAprovada  = c.qtd_sugerida;
+          valorAprovado = valorPleno;
+        } else {
+          // Cabe apenas parcialmente
+          qtdAprovada  = parseFloat((restante / c.custo_unitario).toFixed(3));
+          valorAprovado = parseFloat((qtdAprovada * c.custo_unitario).toFixed(2));
+          parcial = true;
+        }
+
+        restante = parseFloat((restante - valorAprovado).toFixed(2));
+        if (c.status === 'urgente') urgAtend++;
+        if (c.status === 'atencao') atenAtend++;
+
+        selecionados.push({
+          codigo:          c.codigo,
+          produto_nome:    c.produto_nome,
+          curva_abc:       c.curva_abc,
+          categoria:       c.categoria,
+          unidade:         c.unidade,
+          status:          c.status,
+          prioridade:      prioIdx++,
+          estoque_atual:   c.estoque_atual,
+          cobertura_dias:  c.cobertura_dias,
+          qtd_sugerida:    c.qtd_sugerida,
+          qtd_aprovada:    qtdAprovada,
+          custo_unitario:  c.custo_unitario,
+          valor_aprovado:  valorAprovado,
+          fonte_custo:     c.fonte_custo,
+          tendencia_custo: c.tendencia_custo,
+          parcial,
+        });
+
+        if (parcial) break; // orçamento esgotado
+      }
+
+      const valorUtilizado = parseFloat((orcamento - restante).toFixed(2));
+
+      res.json({
+        ok: true,
+        data: selecionados,
+        resumo: {
+          orcamento:             parseFloat(orcamento.toFixed(2)),
+          valor_utilizado:       valorUtilizado,
+          valor_restante:        parseFloat(restante.toFixed(2)),
+          produtos_selecionados: selecionados.length,
+          urgentes_atendidos:    urgAtend,
+          atencao_atendidos:     atenAtend,
+          produtos_sem_custo:    semCusto.length,
+        },
+      });
+
+    } catch(e) {
+      console.error('[compras/orcamento]', e.message);
+      res.status(500).json({ ok: false, erro: e.message });
+    }
+  });
+
   return r;
 };
