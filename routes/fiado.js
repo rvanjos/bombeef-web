@@ -118,13 +118,21 @@ module.exports = function(pool) {
     try {
       // Garante coluna funcionario_id
       await pool.query(`ALTER TABLE clientes_fiado ADD COLUMN IF NOT EXISTS funcionario_id INTEGER`).catch(()=>{});
+      // Garantir unicidade de funcionario_id para evitar duplicatas
+      await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_clientes_fiado_func ON clientes_fiado(funcionario_id) WHERE funcionario_id IS NOT NULL`).catch(()=>{});
+      // Remover duplicatas existentes (manter o de menor id)
+      await pool.query(`
+        DELETE FROM clientes_fiado a
+        WHERE a.funcionario_id IS NOT NULL
+          AND a.id > (SELECT MIN(b.id) FROM clientes_fiado b WHERE b.funcionario_id=a.funcionario_id)
+      `).catch(()=>{});
       // Cria clientes para funcionários que ainda não existem
       const { rows: funcs } = await pool.query(`SELECT f.id, f.nome FROM funcionarios f WHERE f.ativo=true`).catch(()=>({rows:[]})); // F2-13: rh_funcionarios → funcionarios
       for (const f of funcs) {
         await pool.query(`
           INSERT INTO clientes_fiado(nome, tipo_cliente, funcionario_id, status)
           VALUES($1, 'funcionario', $2, 'ativo')
-          ON CONFLICT DO NOTHING
+          ON CONFLICT (funcionario_id) DO NOTHING
         `, [f.nome, f.id]).catch(()=>{});
       }
       // Migra retiradas existentes para vendas_fiado
