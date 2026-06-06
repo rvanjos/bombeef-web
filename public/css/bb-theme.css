@@ -458,11 +458,7 @@ input, select, button, textarea {
   /* Subtítulo do header oculto (economiza espaço) */
   .ph-sub { display: none; }
 
-  /* ph-actions vai para linha nova em telas muito pequenas */
-  @media (max-width: 480px) {
-    .ph { flex-direction: column; align-items: flex-start; }
-    .ph-actions { width: 100%; justify-content: flex-end; margin-top: 6px; }
-  }
+  /* ph-actions: em telas muito pequenas vai para linha nova — ver @media 480px abaixo */
 
   /* Botões no mobile: mínimo de 44px de altura (acessibilidade) */
   .bb-btn { min-height: 36px; }
@@ -475,14 +471,21 @@ input, select, button, textarea {
     gap:                   8px;
   }
 
+  /* Ocultar funções de escritório em mobile */
+  .bb-desktop-only { display: none !important; }
+
+}
+
+/* Telas muito pequenas (iPhone SE): ph-actions na linha nova */
+@media (max-width: 480px) {
+  .ph { flex-direction: column; align-items: flex-start; }
+  .ph-actions { width: 100%; justify-content: flex-end; margin-top: 6px; }
+  .bb-kpi-val { font-size: 16px; }
+  .bb-kpi-grid { grid-template-columns: 1fr; }
 }
 
 /* Ocultar em mobile (elementos de escritório/admin) */
 .bb-desktop-only { display: block; }
-
-@media (max-width: 768px) {
-  .bb-desktop-only { display: none !important; }
-}
 
 /* Telas muito pequenas (iPhone SE, etc.) */
 @media (max-width: 390px) {
