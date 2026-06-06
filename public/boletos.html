@@ -229,8 +229,8 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
   <!-- Toolbar -->
   <div class="toolbar">
     <button class="btn btn-p" onclick="abrirModal()">＋ Novo Boleto</button>
-    <button class="btn btn-s" onclick="abrirImportXML()">📥 Importar XML</button>
-    <button class="btn btn-s" onclick="abrirImportPDF()">📄 Importar PDF</button>
+    <button class="btn btn-s bb-desktop-only" onclick="abrirImportXML()">📥 Importar XML</button>
+    <button class="btn btn-s bb-desktop-only" onclick="abrirImportPDF()">📄 Importar PDF</button>
     <div class="search-wrap"><input type="text" id="busca" placeholder="Buscar fornecedor, NF..." oninput="filtrar()"></div>
     <select class="flt" id="flt-status" onchange="carregar()">
       <option value="todos" selected>Todos</option><option value="avencer">A Vencer</option>

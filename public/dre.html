@@ -467,7 +467,7 @@ thead th{padding:6px 9px;}
         </div>
       </div>
       <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn bs" onclick="abrirSessoes()">📂 Restaurar Sessão</button>
+        <button class="btn bs bb-desktop-only" onclick="abrirSessoes()">📂 Restaurar Sessão</button>
         <button class="btn bs" onclick="abrirManual()">＋ Lançamento Manual</button>
       </div>
     </div>
@@ -495,24 +495,24 @@ thead th{padding:6px 9px;}
       <div class="toolbar-top">
         <!-- Grupo: Importar -->
         <span class="grp-label">Importar</span>
-        <button class="btn bs" style="padding:5px 10px;font-size:11px" onclick="document.getElementById('f-ofx').click()" title="Importar extrato OFX ou XLSX">🏦 OFX/XLSX</button>
-        <button class="btn bs" style="padding:5px 10px;font-size:11px" onclick="document.getElementById('f-cc').click()" title="Importar fatura CC">💳 Fatura CC</button>
-        <button class="btn bs" style="padding:5px 10px;font-size:11px" onclick="importBoletos()" title="Boletos do sistema">📄 Boletos DB</button>
+        <button class="btn bs bb-desktop-only" style="padding:5px 10px;font-size:11px" onclick="document.getElementById('f-ofx').click()" title="Importar extrato OFX ou XLSX" class="btn bs bb-desktop-only">🏦 OFX/XLSX</button>
+        <button class="btn bs bb-desktop-only" style="padding:5px 10px;font-size:11px" onclick="document.getElementById('f-cc').click()" title="Importar fatura CC" class="btn bs bb-desktop-only">💳 Fatura CC</button>
+        <button class="btn bs bb-desktop-only" style="padding:5px 10px;font-size:11px" onclick="importBoletos()" title="Boletos do sistema">📄 Boletos DB</button>
         <button class="btn bs" style="padding:5px 10px;font-size:11px" onclick="abrirManual()">＋ Manual</button>
-        <button class="btn bs" style="padding:5px 10px;font-size:11px" onclick="abrirProvisao()" title="Provisão em múltiplos meses">📅 Provisão</button>
+        <button class="btn bs" style="padding:5px 10px;font-size:11px" onclick="abrirProvisao()" title="Provisão em múltiplos meses" class="btn bs bb-desktop-only">📅 Provisão</button>
 
         <div class="sep"></div>
 
         <!-- Grupo: Ações -->
         <button class="btn bg" style="padding:5px 11px;font-size:11px" onclick="salvarTodos()" title="Salvar todos os lançamentos">💾 Salvar</button>
-        <button class="btn bs" style="padding:5px 10px;font-size:11px" onclick="exportarExcel()" title="Exportar para Excel">📊 Excel</button>
-        <button class="btn bs" style="padding:5px 10px;font-size:11px" onclick="abrirSessoes()" title="Histórico de sessões">🗂 Sessões</button>
+        <button class="btn bs bb-desktop-only" style="padding:5px 10px;font-size:11px" onclick="exportarExcel()" title="Exportar para Excel">📊 Excel</button>
+        <button class="btn bs" style="padding:5px 10px;font-size:11px" onclick="abrirSessoes()" title="Histórico de sessões" class="btn bs bb-desktop-only">🗂 Sessões</button>
 
 
         <div class="sep"></div>
 
         <!-- Grupo: Visual -->
-        <button class="btn bs" style="padding:5px 10px;font-size:11px" onclick="abrirCategorias()" title="Gerenciar categorias">⚙️ Categorias</button>
+        <button class="btn bs bb-desktop-only" style="padding:5px 10px;font-size:11px" onclick="abrirCategorias()" title="Gerenciar categorias">⚙️ Categorias</button>
         <button class="btn bs" style="padding:5px 10px;font-size:11px;background:#fff3cd;color:#856404;border-color:#ffc107" onclick="toggleStatusCartoes()" title="Ver status de importação por cartão">💳 Status Cartões</button>
         <button class="btn bs" style="padding:5px 10px;font-size:11px" id="btn-expand" onclick="toggleExpandido()" title="Expandir">⤢</button>
         <button class="btn bs" style="padding:5px 10px;font-size:11px" onclick="toggleColsPicker(event)" title="Escolher colunas">⊞ Colunas</button>
@@ -574,8 +574,8 @@ thead th{padding:6px 9px;}
 
           <div class="fsb-actions">
             <button class="fsb-btn primary" onclick="salvarTodos()" style="background:var(--green)">💾 Salvar</button>
-            <button class="fsb-btn secondary" onclick="exportarExcel()">📊 Exportar Excel</button>
-            <button class="fsb-btn secondary" onclick="abrirSessoes()">🗂 Sessões</button>
+            <button class="fsb-btn secondary bb-desktop-only" onclick="exportarExcel()">📊 Exportar Excel</button>
+            <button class="fsb-btn secondary bb-desktop-only" onclick="abrirSessoes()">🗂 Sessões</button>
 
             <button class="fsb-btn danger" onclick="limparTudo()">🗑 Limpar tudo</button>
           </div>

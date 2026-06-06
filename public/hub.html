@@ -151,7 +151,7 @@ body{display:flex;flex-direction:column;overflow-y:auto;}
   </div>
   <div class="ph-actions">
     <span class="ph-hora bb-hide-mobile" id="ph-hora" style="font-size:12px;opacity:.75;color:#fff">—</span>
-    <button class="btn-att" onclick="carregar()">↻ Atualizar</button>
+    <button class="btn-att bb-btn bb-btn-secondary" onclick="carregar()">↻ Atualizar</button>
   </div>
 </div>
 
@@ -646,6 +646,7 @@ function renderCompras(data) {
         <strong style="font-size:13px">Compra Urgente</strong>
         <span class="compras-badge badge-urgente">${urgentes.length} produto(s) — cobertura &lt; 5 dias</span>
       </div>
+      <div class="bb-table-wrap">
       <table class="comp-table">
         <thead><tr>
           <th>Produto</th><th class="r">Estoque</th>
@@ -653,6 +654,7 @@ function renderCompras(data) {
         </tr></thead>
         <tbody>${linhasTabela(urgentes)}</tbody>
       </table>
+      </div><!-- /bb-table-wrap -->
     </div>`;
   }
 
@@ -663,6 +665,7 @@ function renderCompras(data) {
         <strong style="font-size:13px">Comprar em Breve</strong>
         <span class="compras-badge badge-breve">${breve.length} produto(s) — cobertura 5 a 15 dias</span>
       </div>
+      <div class="bb-table-wrap">
       <table class="comp-table">
         <thead><tr>
           <th>Produto</th><th class="r">Estoque</th>
@@ -670,6 +673,7 @@ function renderCompras(data) {
         </tr></thead>
         <tbody>${linhasTabela(breve)}</tbody>
       </table>
+      </div><!-- /bb-table-wrap -->
     </div>`;
   }
 
@@ -685,10 +689,12 @@ function renderCompras(data) {
         <strong style="font-size:12px">Compra Urgente</strong>
         <span class="compras-badge badge-urgente">${urgentes.length} produto(s)</span>
       </div>
+      <div class="bb-table-wrap">
       <table class="comp-table">
         <thead><tr><th>Produto</th><th class="r">Estoque</th><th class="r">Cobertura</th><th class="r">Sugestão</th></tr></thead>
         <tbody>${linhasTabela(top5Urgentes)}</tbody>
       </table></div>`;
+      </div><!-- /bb-table-wrap -->
   }
   if (top5Breve.length > 0) {
     htmlCompacto += `<div class="compras-grupo">
@@ -697,10 +703,12 @@ function renderCompras(data) {
         <strong style="font-size:12px">Comprar em Breve</strong>
         <span class="compras-badge badge-breve">${breve.length} produto(s)</span>
       </div>
+      <div class="bb-table-wrap">
       <table class="comp-table">
         <thead><tr><th>Produto</th><th class="r">Estoque</th><th class="r">Cobertura</th><th class="r">Sugestão</th></tr></thead>
         <tbody>${linhasTabela(top5Breve)}</tbody>
       </table></div>`;
+      </div><!-- /bb-table-wrap -->
   }
 
   const totalCriticos = urgentes.length + breve.length;
@@ -727,13 +735,17 @@ function abrirModalCompras() {
 
   if (urgentes.length > 0) {
     html += `<div class="compras-grupo"><div class="compras-header"><span>🔴</span><strong>Compra Urgente (${urgentes.length})</strong></div>
+      <div class="bb-table-wrap">
       <table class="comp-table"><thead><tr><th>Produto</th><th class="r">Estoque</th><th class="r">Média/dia</th><th class="r">Cobertura</th><th class="r">Sugestão</th></tr></thead>
       <tbody>${linhasTabela(urgentes)}</tbody></table></div>`;
+      </div><!-- /bb-table-wrap -->
   }
   if (breve.length > 0) {
     html += `<div class="compras-grupo"><div class="compras-header"><span>🟡</span><strong>Comprar em Breve (${breve.length})</strong></div>
+      <div class="bb-table-wrap">
       <table class="comp-table"><thead><tr><th>Produto</th><th class="r">Estoque</th><th class="r">Média/dia</th><th class="r">Cobertura</th><th class="r">Sugestão</th></tr></thead>
       <tbody>${linhasTabela(breve)}</tbody></table></div>`;
+      </div><!-- /bb-table-wrap -->
   }
   html += `<div style="font-size:10px;color:var(--muted);margin-top:8px">Base: últimos ${janela_dias} dias</div></div>`;
 

@@ -577,7 +577,7 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
     <input type="date" id="flt-hist-ate" class="flt" style="padding:6px 9px;border:1px solid var(--border);border-radius:7px;font-size:12px" onchange="carregarHistorico()">
     <button class="btn btn-s" onclick="limparFiltrosHist()">✕ Limpar</button>
     <button class="btn btn-s" id="hist-expand-btn" onclick="toggleHistExpand()" title="Expandir / compactar visualização">⤢ Expandir</button>
-    <button class="btn btn-s" onclick="exportarHistXLS()" title="Exportar para Excel formatado" style="background:#217346;color:#fff;border-color:#217346">📊 Excel</button>
+    <button class="btn btn-s bb-desktop-only" onclick="exportarHistXLS()" title="Exportar para Excel formatado" style="background:#217346;color:#fff;border-color:#217346">📊 Excel</button>
     <span id="hist-count" style="font-size:11px;color:var(--muted);margin-left:4px"></span>
   </div>
   <div class="card">

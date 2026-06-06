@@ -488,7 +488,7 @@ function onFileChange(file) {
   $id('imp-status').style.display='';
   $id('imp-status').innerHTML = `<div class="alert alert-info">
     <div><strong>${file.name}</strong> — ${(file.size/1024).toFixed(0)} KB</div>
-    <button class="btn" onclick="enviarImportacao()" style="margin-top:8px">📥 Importar agora →</button>
+    <button class="btn bb-desktop-only" onclick="enviarImportacao()" style="margin-top:8px">📥 Importar agora →</button>
   </div>`;
   window._fileToImport = file;
 }

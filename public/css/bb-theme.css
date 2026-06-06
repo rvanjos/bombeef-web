@@ -447,6 +447,13 @@
 
 }
 
+/* Ocultar em mobile (elementos de escritório/admin) */
+.bb-desktop-only { display: block; }
+
+@media (max-width: 768px) {
+  .bb-desktop-only { display: none !important; }
+}
+
 /* Telas muito pequenas (iPhone SE, etc.) */
 @media (max-width: 390px) {
   .bb-kpi-val      { font-size: 16px; }
