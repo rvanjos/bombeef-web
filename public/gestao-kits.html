@@ -1998,11 +1998,11 @@ async function calcularPlanejamento() {
 
 
 <!-- ── Modal Planejamento de Kit ──────────────────────────────────────── -->
-<div id="modal-planejamento" class="modal" onclick="if(event.target===this)fecharModal('modal-planejamento')">
-  <div class="modal-box" style="max-width:760px">
-    <div class="modal-hdr">
-      <span id="pl-kit-titulo">📦 Planejamento de Kit</span>
-      <button onclick="fecharModal('modal-planejamento')" class="btn btn-s btn-sm">✕</button>
+<div id="modal-planejamento" class="modal-bg" onclick="if(event.target===this)fecharModal('modal-planejamento')">
+  <div class="modal modal-lg">
+    <div class="modal-h">
+      <h3 id="pl-kit-titulo">📦 Planejamento de Kit</h3>
+      <button class="modal-x" onclick="fecharModal('modal-planejamento')">×</button>
     </div>
     <div class="modal-body" style="padding:14px">
 
