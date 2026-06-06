@@ -131,9 +131,16 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
 </head>
 <body>
 <div class="ph">
-  <span style="font-size:20px">💰</span>
-  <h2>Faturamento</h2>
-  <div class="ph-sub" id="ph-sub">—</div>
+  <div class="ph-identity">
+    <span class="ph-icon">💳</span>
+    <div>
+      <h1 class="ph-title">Faturamento</h1>
+      <p class="ph-sub">Importação, conferência e reconciliação de vendas</p>
+    </div>
+  </div>
+  <div class="ph-actions">
+    <span id="ph-sub" style="font-size:11px;opacity:.7;color:#fff"></span>
+  </div>
 </div>
 <script>if(window.self!==window.top){var ph=document.querySelector('.ph');if(ph)ph.style.display='none';}</script>
 <div class="body">

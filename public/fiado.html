@@ -111,11 +111,18 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
 </head>
 <body>
 <div class="ph">
-  <span style="font-size:20px">💳</span>
-  <h2>Compras Pendentes</h2>
-  <div class="ph-sub" id="ph-sub">Carregando...</div>
-  <button class="btn btn-red btn-sm" style="margin-left:12px" onclick="abrirNovaVenda()">＋ Nova Venda</button>
-  <button class="btn btn-gray btn-sm" style="margin-left:6px" onclick="abrirPagamento()">💵 Pagamento</button>
+  <div class="ph-identity">
+    <span class="ph-icon">🧾</span>
+    <div>
+      <h1 class="ph-title">Fiado</h1>
+      <p class="ph-sub">Compras pendentes, clientes, funcionários e aprovações</p>
+    </div>
+  </div>
+  <div class="ph-actions">
+    <span id="ph-sub" style="font-size:11px;opacity:.7;color:#fff"></span>
+    <button class="btn btn-red btn-sm" onclick="abrirNovaVenda()">＋ Nova Venda</button>
+    <button class="btn btn-gray btn-sm" onclick="abrirPagamento()">💵 Pagamento</button>
+  </div>
 </div>
 
 <!-- Abas -->
