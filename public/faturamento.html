@@ -242,13 +242,13 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
       <button class="btn btn-g" onclick="abrirImport()">📥 Importar CSV</button>
     </div>
     <div class="card">
-      <table class="tbl">
+      <div style="overflow-x:auto"><table class="tbl">
         <thead><tr>
           <th>Período</th><th>Tipo</th><th>Pessoas</th><th>Ticket Médio</th>
           <th>Descontos</th><th>Fat. Bruto</th><th>Fat. Líquido</th><th></th>
         </tr></thead>
         <tbody id="tbody-periodos"></tbody>
-      </table>
+      </table></div>
       <div class="empty" id="empty-periodos" style="display:none">Nenhum período importado ainda.</div>
     </div>
   </div>
@@ -385,7 +385,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
 
     <!-- Tabela por dia -->
     <div class="card" id="rec-tabela-wrap">
-      <table class="tbl">
+      <div style="overflow-x:auto"><table class="tbl">
         <thead><tr>
           <th>Data</th>
           <th style="text-align:right">Vendido Xmenu</th>
@@ -395,7 +395,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
           <th style="text-align:center">Status</th>
         </tr></thead>
         <tbody id="rec-tbody"></tbody>
-      </table>
+      </table></div>
       <div class="empty" id="rec-empty" style="display:none">Selecione um mês com dados do Xmenu importados.</div>
     </div>
   </div>

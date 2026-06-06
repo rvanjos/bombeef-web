@@ -245,7 +245,7 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
   </div>
   <!-- Tabela -->
   <div class="card">
-    <table class="tbl">
+    <div style="overflow-x:auto"><table class="tbl">
       <thead><tr>
         <th>Fornecedor / Produto</th>
         <th title="Número da Nota Fiscal">NF-e Nº</th>
@@ -254,7 +254,7 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
         <th>Categoria</th><th>Valor</th><th>Status</th><th title="Lançamento do extrato vinculado">Extrato</th><th>Ações</th>
       </tr></thead>
       <tbody id="tbody"></tbody>
-    </table>
+    </table></div>
     <div class="empty" id="empty" style="display:none">
       <div class="empty-icon">📄</div>
       <p>Nenhum boleto encontrado</p>
