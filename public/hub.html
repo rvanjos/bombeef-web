@@ -165,7 +165,9 @@ window.onBBReady = () => {
   atualizarRelogio();
   setInterval(atualizarRelogio, 30000);
   carregar();
+  carregarCampanhasHub().catch(function(){});
   setInterval(carregar, 300000); // refresh 5min
+  setInterval(carregarCampanhasHub, 300000);
 };
 
 function atualizarRelogio() {
@@ -412,6 +414,12 @@ function render(d) {
 
   <div class="secao" id="sec-criticos">
     <div class="sec-title">🏦 Módulos Críticos — Financeiro</div>
+    <!-- Sprint 4.5-C: Próximas Campanhas -->
+    <div class="card" id="campanhas-card">
+      <div class="card-title">📅 Próximas Campanhas</div>
+      <div id="campanhas-lista" style="font-size:12px;color:var(--muted)">Carregando...</div>
+    </div>
+
     <div id="criticos-card" class="card">
       <div style="font-size:12px;color:var(--muted)">⏳ Carregando...</div>
     </div>
@@ -829,6 +837,29 @@ window.addEventListener('message', e => {
     window._hubTimer = setTimeout(carregar, 2500);
   }
 });
+
+// Sprint 4.5-C — Próximas Campanhas
+async function carregarCampanhasHub() {
+  var el = document.getElementById('campanhas-lista');
+  if(!el) return;
+  try {
+    var api2 = window.BB?.api || window._api;
+    var res = await api2.get('/api/kits-campanha/calendario?apenas_pendentes=1');
+    if(!res.ok || !res.data || !res.data.length) { el.textContent='Nenhuma campanha próxima'; return; }
+    var sopIco   = {compra_urgente:'🔴',planejamento_pendente:'🟠',orcamento_pendente:'🟡',pronto:'🟢',finalizado:'⚫'};
+    var sopLabel = {compra_urgente:'Compra urgente',planejamento_pendente:'Planejamento pendente',orcamento_pendente:'Orçamento pendente',pronto:'Pronto',finalizado:'Finalizado'};
+    el.innerHTML = res.data.slice(0,5).map(function(c){
+      var ico  = sopIco[c.status_op]  || '🔵';
+      var lbl  = sopLabel[c.status_op] || c.status_op || '';
+      var dias = c.dias_ate_limite!==null ? (c.dias_ate_limite<=0?'hoje / passou':'faltam '+c.dias_ate_limite+'d') : '';
+      return '<div style="padding:6px 0;border-bottom:1px solid #f3f4f6;display:flex;justify-content:space-between;align-items:center">'
+        +'<div><strong style="font-size:12px">'+c.nome+'</strong>'
+        +(dias?'<div style="font-size:10px;color:var(--muted)">'+dias+'</div>':'')+'</div>'
+        +'<span style="font-size:11px;font-weight:600">'+ico+' '+lbl+'</span></div>';
+    }).join('');
+  } catch(e2) { el.textContent='—'; }
+}
+
 </script>
 </body>
 </html>

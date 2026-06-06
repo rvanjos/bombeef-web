@@ -1754,6 +1754,7 @@ else { setTimeout(initGestaoKits, 200); }
           <th style="padding:9px 12px;text-align:right;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)">Dias p/ limite</th>
           <th style="padding:9px 12px;text-align:right;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)">Qtd planejada</th>
           <th style="padding:9px 12px;text-align:right;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)">Vendidos</th>
+          <th style="padding:9px 12px;text-align:center;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)">Status Operacional</th>
           <th style="padding:9px 12px;text-align:center;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)">Ações</th>
         </tr>
       </thead>
@@ -1770,6 +1771,9 @@ else { setTimeout(initGestaoKits, 200); }
 // ── Planejamento de Kit ── Sprint 4.5-A ─────────────────────────────────────
 let _plkCampanhaId = null;
 let _plkSlotsChoice = [];
+let _plkQtdCalc = 0;
+let _plkValorCalc = null;
+
 
 async function carregarCalendario() {
   const mes        = document.getElementById('cal-mes')?.value        || '';
@@ -1824,7 +1828,17 @@ async function carregarCalendario() {
         +'<td style="text-align:right;padding:9px 12px">'+diasStr(c.dias_ate_limite)+'</td>'
         +'<td style="text-align:right;padding:9px 12px;font-family:monospace">'+(c.limite_campanha>0?c.limite_campanha:'—')+'</td>'
         +'<td style="text-align:right;padding:9px 12px;font-family:monospace">'+c.vendidos+'</td>'
+        // Badge status operacional
+        var sopMap = {
+          compra_urgente:       '<span style="background:#fee2e2;color:#991b1b;border-radius:5px;padding:2px 7px;font-size:10px;font-weight:700">🔴 Compra urgente</span>',
+          planejamento_pendente:'<span style="background:#ffedd5;color:#9a3412;border-radius:5px;padding:2px 7px;font-size:10px;font-weight:700">🟠 Planejamento pendente</span>',
+          orcamento_pendente:   '<span style="background:#fefce8;color:#713f12;border-radius:5px;padding:2px 7px;font-size:10px;font-weight:700">🟡 Orçamento não definido</span>',
+          pronto:               '<span style="background:#dcfce7;color:#14532d;border-radius:5px;padding:2px 7px;font-size:10px;font-weight:700">🟢 Pronto</span>',
+          finalizado:           '<span style="background:#f3f4f6;color:#6b7280;border-radius:5px;padding:2px 7px;font-size:10px;font-weight:700">⚫ Finalizado</span>',
+        };
+        var sopBadge = sopMap[c.status_op] || '<span style="font-size:11px;color:var(--muted)">—</span>';
         +'<td style="text-align:center;padding:9px 8px">'
+          +'<td style="text-align:center;padding:9px 8px">'+sopBadge+'</td>'
           +(c.status_cal!=='finalizado'
             ?'<button onclick="abrirPlanejamento('+c.id+',\''+c.nome.replace(/'/g,"\'")+'\',\''+( c.data_acao||'')+'\',\''+( c.data_limite||'')+'\','+c.limite_campanha+')" style="border:1px solid var(--border);border-radius:5px;padding:4px 9px;font-size:11px;cursor:pointer;background:#f9fafb;font-family:inherit">📦 Planejar</button>'
             :'<span style="font-size:11px;color:var(--muted)">encerrada</span>')
@@ -1869,7 +1883,37 @@ async function abrirPlanejamento(id, nome, dataAcaoPre, dataLimitePre, qtdPre) {
       } else if(choiceArea) { choiceArea.style.display = 'none'; }
     } else if(choiceArea) { choiceArea.style.display = 'none'; }
   } catch(e2) { if(choiceArea) choiceArea.style.display = 'none'; }
+  // Pré-carregar planejamento salvo
+  try {
+    const ps = await api.get('/api/kits-campanha/campanhas/'+id+'/planejamento-salvo');
+    if(ps.ok && ps.data) {
+      var elQ=document.getElementById('plk-qtd'); if(elQ && ps.data.qtd_prevista) elQ.value=ps.data.qtd_prevista;
+      var elO=document.getElementById('plk-orcamento')||document.getElementById('pl-orcamento');
+      var elObs=document.getElementById('plk-obs'); if(elObs) elObs.value=ps.data.observacoes||'';
+      document.getElementById('plk-salvo-msg').style.display='none';
+    }
+  } catch(ePs) { /* silencioso */ }
   document.getElementById('modal-planejamento').classList.add('open');
+}
+
+async function salvarPlanejamento() {
+  if(!_plkCampanhaId) return;
+  const qtd  = parseInt(document.getElementById('plk-qtd')?.value || _plkQtdCalc || 0);
+  const obs  = document.getElementById('plk-obs')?.value || '';
+  const orc  = document.getElementById('pl-orcamento')?.value || null;
+  if(!qtd) { alert('Execute o cálculo antes de salvar'); return; }
+  try {
+    const r = await api.post('/api/kits-campanha/campanhas/'+_plkCampanhaId+'/salvar-planejamento', {
+      qtd_prevista: qtd,
+      orcamento_previsto: orc ? parseFloat(orc) : null,
+      valor_estimado: _plkValorCalc,
+      observacoes: obs || null,
+    });
+    if(r.ok) {
+      var msg = document.getElementById('plk-salvo-msg');
+      if(msg){ msg.style.display=''; setTimeout(()=>msg.style.display='none', 3000); }
+    }
+  } catch(e) { alert('Erro ao salvar: '+e.message); }
 }
 
 async function calcularPlanejamento() {
@@ -1932,6 +1976,8 @@ async function calcularPlanejamento() {
     }).join('');
 
     document.getElementById('plk-total').textContent = brl2(r.valor_total_estimado);
+    _plkQtdCalc = qtd;
+    _plkValorCalc = r.valor_total_estimado || 0;
     // Slots pendentes
     var pendArea = document.getElementById('plk-pendentes');
     if(pendArea){
@@ -2011,6 +2057,21 @@ async function calcularPlanejamento() {
         </div>
         <div id="plk-rodape" style="text-align:right;padding:8px 4px;font-size:12px;color:var(--muted)">
           Valor total estimado de compra: <strong id="plk-total" style="font-size:14px;color:var(--red-l)">—</strong>
+        </div>
+
+        <!-- Salvar planejamento -->
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+          <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+            <div style="flex:1">
+              <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:3px">Observações (opcional)</div>
+              <input type="text" id="plk-obs" placeholder="Ex: Comprar na Guidara, aguardar promoção Minerva..."
+                style="width:100%;border:1px solid var(--border);border-radius:6px;padding:6px 9px;font-size:12px;font-family:inherit">
+            </div>
+            <button onclick="salvarPlanejamento()" style="height:32px;padding:0 16px;font-size:12px;background:var(--red-l);color:#fff;border:none;border-radius:6px;cursor:pointer;font-family:inherit;font-weight:600;white-space:nowrap">
+              💾 Salvar planejamento
+            </button>
+            <span id="plk-salvo-msg" style="font-size:11px;color:#16a34a;display:none">✅ Salvo!</span>
+          </div>
         </div>
       </div>
 

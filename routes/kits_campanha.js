@@ -178,6 +178,22 @@ module.exports = function (pool, app) {
       CREATE INDEX IF NOT EXISTS idx_kit_reservas_pedido  ON kit_reservas(pedido_id);
       CREATE INDEX IF NOT EXISTS idx_kit_reservas_produto ON kit_reservas(produto_id);
     `).catch(() => {});
+
+    // Sprint 4.5-C: planejamento persistente
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS campanha_planejamento (
+        id                 SERIAL PRIMARY KEY,
+        campanha_id        INTEGER NOT NULL REFERENCES kit_campanhas(id) ON DELETE CASCADE,
+        qtd_prevista       INTEGER NOT NULL DEFAULT 0,
+        orcamento_previsto NUMERIC(14,2),
+        valor_estimado     NUMERIC(14,2),
+        observacoes        TEXT,
+        criado_em          TIMESTAMPTZ DEFAULT NOW(),
+        atualizado_em      TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(campanha_id)
+      )
+    `).catch(() => {});
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_camp_plan ON campanha_planejamento(campanha_id)`).catch(() => {});
   }
   initTables().catch(e => console.error('[kits_campanha] init:', e.message));
 
@@ -1216,6 +1232,7 @@ module.exports = function (pool, app) {
       const { rows } = await pool.query(`
         SELECT c.id, c.nome, c.descricao, c.status,
                c.data_inicio, c.data_fim, c.limite_campanha, c.preco_referencia,
+               cp.qtd_prevista, cp.orcamento_previsto, cp.valor_estimado, cp.observacoes,
                COALESCE(
                  (SELECT COUNT(*) FROM kit_pedidos p
                   WHERE p.campanha_id=c.id AND p.status NOT IN ('cancelado','rascunho')), 0
@@ -1224,6 +1241,7 @@ module.exports = function (pool, app) {
                  (SELECT COUNT(*) FROM kit_campanha_slots s WHERE s.campanha_id=c.id), 0
                ) AS total_slots
         FROM kit_campanhas c
+        LEFT JOIN campanha_planejamento cp ON cp.campanha_id = c.id
         ORDER BY c.data_inicio ASC NULLS LAST, c.criado_em DESC
       `);
 
@@ -1249,11 +1267,27 @@ module.exports = function (pool, app) {
           status_cal = 'planejado';
         }
 
+        // Status operacional — calculado dinamicamente, nunca persistido
+        const temPlan = c.qtd_prevista != null;
+        let status_op;
+        if (c.status === 'encerrada') {
+          status_op = 'finalizado';
+        } else if (diasAteLimite !== null && diasAteLimite <= 3) {
+          status_op = 'compra_urgente';       // prioridade máxima
+        } else if (!temPlan) {
+          status_op = 'planejamento_pendente';
+        } else if (!c.orcamento_previsto || parseFloat(c.orcamento_previsto) <= 0) {
+          status_op = 'orcamento_pendente';
+        } else {
+          status_op = 'pronto';
+        }
+
         return {
           id:               c.id,
           nome:             c.nome,
           descricao:        c.descricao,
           status:           c.status,
+          status_op,
           status_cal,
           data_acao:        c.data_inicio,
           data_limite:      c.data_fim,
@@ -1263,6 +1297,12 @@ module.exports = function (pool, app) {
           preco_referencia: parseFloat(c.preco_referencia) || 0,
           vendidos:         parseInt(c.vendidos) || 0,
           total_slots:      parseInt(c.total_slots) || 0,
+          // planejamento salvo
+          tem_planejamento:    temPlan,
+          qtd_prevista:        c.qtd_prevista ? parseInt(c.qtd_prevista) : null,
+          orcamento_previsto:  c.orcamento_previsto ? parseFloat(c.orcamento_previsto) : null,
+          valor_estimado:      c.valor_estimado ? parseFloat(c.valor_estimado) : null,
+          observacoes:         c.observacoes || null,
         };
       });
 
@@ -1303,6 +1343,53 @@ module.exports = function (pool, app) {
       });
     } catch(e) {
       console.error('[kits/calendario]', e.message);
+      res.status(500).json({ ok: false, erro: e.message });
+    }
+  });
+
+
+  // ── POST /campanhas/:id/salvar-planejamento ── Sprint 4.5-C ───────────────
+  // UPSERT: cria ou sobrescreve o planejamento da campanha.
+  // Não persiste status — ele é calculado dinamicamente.
+  r.post('/campanhas/:id/salvar-planejamento', async (req, res) => {
+    try {
+      const campanhaId = parseInt(req.params.id);
+      const { qtd_prevista, orcamento_previsto, valor_estimado, observacoes } = req.body;
+      if (!campanhaId || !qtd_prevista) {
+        return res.status(400).json({ ok: false, erro: 'campanha_id e qtd_prevista obrigatórios' });
+      }
+      await pool.query(`
+        INSERT INTO campanha_planejamento
+          (campanha_id, qtd_prevista, orcamento_previsto, valor_estimado, observacoes, atualizado_em)
+        VALUES ($1, $2, $3, $4, $5, NOW())
+        ON CONFLICT (campanha_id) DO UPDATE SET
+          qtd_prevista       = EXCLUDED.qtd_prevista,
+          orcamento_previsto = EXCLUDED.orcamento_previsto,
+          valor_estimado     = EXCLUDED.valor_estimado,
+          observacoes        = EXCLUDED.observacoes,
+          atualizado_em      = NOW()
+      `, [campanhaId, parseInt(qtd_prevista),
+          orcamento_previsto ? parseFloat(orcamento_previsto) : null,
+          valor_estimado     ? parseFloat(valor_estimado)     : null,
+          observacoes        || null]);
+      res.json({ ok: true });
+    } catch(e) {
+      console.error('[kits/salvar-planejamento]', e.message);
+      res.status(500).json({ ok: false, erro: e.message });
+    }
+  });
+
+  // ── GET /campanhas/:id/planejamento-salvo ── Sprint 4.5-C ─────────────────
+  // Retorna o planejamento salvo (sem status — calculado na tela).
+  r.get('/campanhas/:id/planejamento-salvo', async (req, res) => {
+    try {
+      const { rows } = await pool.query(
+        `SELECT qtd_prevista, orcamento_previsto, valor_estimado, observacoes, atualizado_em
+         FROM campanha_planejamento WHERE campanha_id=$1 LIMIT 1`,
+        [parseInt(req.params.id)]
+      );
+      res.json({ ok: true, data: rows[0] || null });
+    } catch(e) {
       res.status(500).json({ ok: false, erro: e.message });
     }
   });
