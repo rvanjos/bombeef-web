@@ -1082,7 +1082,7 @@ async function desvincularExtrato(dbId) {
 
 async function carregarCategorias() {
   try {
-    const d = await api.get('/api/dre/categorias');
+    const d = await api.get('/api/dre/categorias/publico');
     if (!d.ok || !d.data.length) return;
     _dreCategorias = d.data;
     // Agrupa por grupo para optgroup

@@ -44,6 +44,17 @@ module.exports = function (pool, app) {
     next();
   };
   const r = express.Router();
+  // ── GET /categorias/publico — leitura aberta a todos os perfis autenticados ──
+  // Necessário para que Boletos (gestor/caixa) popule o plano de contas na importação NF-e
+  r.get('/categorias/publico', autenticar(), async (req, res) => {
+    try {
+      const { rows } = await pool.query(
+        `SELECT grupo, subgrupo, label_exibicao, ordem FROM categorias_dre WHERE ativo=true ORDER BY grupo ASC, ordem ASC, subgrupo ASC`
+      );
+      res.json({ ok: true, data: rows });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
   r.use(autenticar(['admin','financeiro','contabil']));
 
   // Perfil contabil: somente leitura — bloqueia qualquer escrita
