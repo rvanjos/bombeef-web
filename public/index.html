@@ -169,11 +169,11 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
 /* Meta de faturamento — hero bar */
 .fat-hero{background:var(--white);border:1px solid var(--border);border-radius:14px;padding:18px 20px;margin-bottom:16px;box-shadow:var(--shadow);display:flex;gap:20px;align-items:center;flex-wrap:wrap;}
 .fat-hero.hidden{display:none;}
-.fat-hero-info{flex:1;min-width:200px;}
+.fat-hero-info{flex:1;min-width:0;}
 .fat-hero-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:4px;}
 .fat-hero-val{font-size:28px;font-weight:700;font-family:'DM Mono',monospace;color:var(--text);}
 .fat-hero-sub{font-size:12px;color:var(--muted);margin-top:2px;}
-.fat-hero-bar-wrap{flex:2;min-width:200px;}
+.fat-hero-bar-wrap{flex:2;min-width:0;}
 .fat-bar-track{height:14px;background:#f0ebe4;border-radius:7px;overflow:hidden;position:relative;}
 .fat-bar-fill{height:100%;border-radius:7px;transition:width .8s cubic-bezier(.4,0,.2,1);position:relative;}
 .fat-bar-fill::after{content:'';position:absolute;top:0;left:0;right:0;bottom:0;background:linear-gradient(90deg,transparent 0%,rgba(255,255,255,.25) 50%,transparent 100%);animation:shimmer 2s infinite;}
@@ -182,7 +182,7 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
 .fat-pct{font-size:22px;font-weight:800;font-family:'DM Mono',monospace;min-width:60px;text-align:right;}
 
 /* KPI row — compacto */
-.kpi-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:16px;}
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:16px;}
 .kpi-card{background:var(--white);border:1px solid var(--border);border-radius:11px;padding:13px 15px;border-left:4px solid var(--border);box-shadow:var(--shadow);transition:all .15s;cursor:pointer;position:relative;overflow:hidden;}
 .kpi-card:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,.1);}
 .kpi-card.k-red{border-left-color:var(--red-l);}
@@ -325,6 +325,18 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
 }
 @keyframes spin{to{transform:rotate(360deg);}}
 .spinner-label{font-size:12px;color:var(--muted);font-weight:600;letter-spacing:.3px;}
+
+/* ── Dashboard Mobile ───────────────────────────────────────────────── */
+@media(max-width:768px){
+  .kpi-row{grid-template-columns:1fr 1fr;}
+  .dash-row{grid-template-columns:1fr;}
+  .dash-row.tres{grid-template-columns:1fr;}
+  .dash-card{width:100%;max-width:100%;min-width:0;}
+  .fat-hero{flex-direction:column;}
+  .fat-hero-val{font-size:22px;}
+  .portal-page{padding:10px 8px;}
+  .dash-title{font-size:17px;}
+}
 </style>
 <!-- F1-01: Barramento de eventos — distribuição de eventos SSE para iframes -->
 <script src="js/bb-events.js"></script>
@@ -2046,8 +2058,7 @@ async function carregarLogoDoServidor() {
      Reprodução, cópia ou redistribuição proibidas.
      © 2024-2025 AR Boutique de Carnes LTDA
      ============================================================ -->
-<style>
-.bb-footer{display:none !important;visibility:hidden !important;height:0 !important;overflow:hidden !important;padding:0 !important;border:none !important;}
+<style>.bb-footer{display:none !important;visibility:hidden !important;height:0 !important;overflow:hidden !important;padding:0 !important;border:none !important;}
 .bb-footer strong{color:#aaa;}
 .bb-footer .bb-f-cnpj{font-family:monospace;letter-spacing:.5px;}
 </style>
