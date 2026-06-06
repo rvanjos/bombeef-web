@@ -16,7 +16,8 @@
   --border:#e8e0d8;--shadow:0 2px 12px rgba(0,0,0,.08);
 }
 *{box-sizing:border-box;margin:0;padding:0;}
-html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);overflow:hidden;}
+html,html{width:100%;max-width:100%;overflow-x:hidden;}
+body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);overflow:hidden;}
 
 /* ── SCREENS ──────────────────────────────────────────────────────────── */
 .screen{display:none;position:fixed;inset:0;z-index:10;flex-direction:column;}
@@ -26,7 +27,7 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
 #scr-login{
   background:var(--red);
   background-image:repeating-linear-gradient(45deg,transparent,transparent 10px,rgba(255,255,255,.03) 10px,rgba(255,255,255,.03) 20px);
-  align-items:center;justify-content:center;
+  display:flex;align-items:center;justify-content:center;
 }
 .lw{width:400px;max-width:94vw;background:var(--white);border-radius:18px;padding:40px 36px;box-shadow:0 20px 60px rgba(0,0,0,.35);position:relative;}
 .lw::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg,var(--red-d),var(--gold),var(--red-d));border-radius:18px 18px 0 0;}
@@ -52,6 +53,7 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
   background-image:repeating-linear-gradient(45deg,transparent,transparent 10px,rgba(255,255,255,.03) 10px,rgba(255,255,255,.03) 20px);
   height:56px;padding:0 20px;display:flex;align-items:center;gap:10px;
   flex-shrink:0;box-shadow:0 3px 16px rgba(139,0,0,.4);z-index:20;
+  width:100%;max-width:100%;box-sizing:border-box;
 }
 .ph-logo{width:34px;height:34px;background:var(--gold);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0;}
 .ph-brand h1{font-family:'Playfair Display',serif;font-size:15px;color:#fff;font-weight:700;}
@@ -292,7 +294,7 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
 .mob-nav-item .mob-icon{font-size:18px;width:26px;text-align:center;}
 .mob-active-label{display:none;font-size:13px;font-weight:700;color:#fff;margin-left:8px;}
 
-@media(max-width:700px){
+@media(max-width:768px){
   .kpi-grid{grid-template-columns:1fr 1fr;}
   .sys-grid{grid-template-columns:1fr;}
   .portal-page{padding:12px 10px;}
