@@ -1,0 +1,454 @@
+/*
+ * bb-theme.css — Design System Base · Bom Beef
+ * Sprint 5.1-A · Junho 2026
+ *
+ * Este arquivo é a fundação visual compartilhada do sistema.
+ * Apenas classes prefixadas com .bb- e ajustes do .ph (PageHeader existente).
+ * Nenhum seletor global agressivo (button, table, input) é sobrescrito aqui.
+ * Convive de forma não-destrutiva com os estilos legados de cada módulo.
+ */
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   1. VARIÁVEIS OFICIAIS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* ── Identidade Bom Beef ─────────────────────────────────────── */
+  --bb-red:        #8B0000;          /* Vermelho principal — ação primária   */
+  --bb-red-h:      #6b0000;          /* Hover do vermelho                    */
+  --bb-red-l:      #dc2626;          /* Vermelho claro — alertas críticos    */
+  --bb-red-bg:     #fef2f2;          /* Fundo vermelho suave                 */
+  --bb-red-bd:     #fecaca;          /* Borda vermelha suave                 */
+
+  /* ── Semânticas ──────────────────────────────────────────────── */
+  --bb-green:      #16a34a;          /* Positivo, aprovado, OK               */
+  --bb-green-bg:   #f0fdf4;
+  --bb-green-bd:   #bbf7d0;
+
+  --bb-amber:      #d97706;          /* Atenção, pendente                    */
+  --bb-amber-bg:   #fffbeb;
+  --bb-amber-bd:   #fcd34d;
+
+  --bb-blue:       #1d4ed8;          /* Informação, link                     */
+  --bb-blue-bg:    #eff6ff;
+  --bb-blue-bd:    #bfdbfe;
+
+  /* ── Neutros ─────────────────────────────────────────────────── */
+  --bb-text:       #1a1a1a;          /* Texto principal                      */
+  --bb-muted:      #6b7280;          /* Texto secundário                     */
+  --bb-border:     #e5e7eb;          /* Bordas                               */
+  --bb-bg:         #f7f4f0;          /* Fundo da página                      */
+  --bb-white:      #ffffff;
+
+  /* ── Tipografia ──────────────────────────────────────────────── */
+  --bb-sans:       'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  --bb-mono:       'DM Mono', 'Courier New', monospace;
+
+  /* ── Sombras ─────────────────────────────────────────────────── */
+  --bb-shadow:     0 2px 8px rgba(0, 0, 0, .10);
+  --bb-shadow-sm:  0 1px 3px rgba(0, 0, 0, .08);
+  --bb-shadow-md:  0 4px 16px rgba(0, 0, 0, .12);
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   2. BOTÕES
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.bb-btn {
+  font-family:    var(--bb-sans);
+  font-size:      13px;
+  font-weight:    600;
+  line-height:    1.4;
+  padding:        7px 14px;
+  border-radius:  7px;
+  border:         none;
+  cursor:         pointer;
+  display:        inline-flex;
+  align-items:    center;
+  gap:            5px;
+  white-space:    nowrap;
+  transition:     opacity .15s, background .15s;
+  text-decoration: none;
+}
+.bb-btn:hover         { opacity: .88; }
+.bb-btn:active        { opacity: .75; }
+.bb-btn:disabled,
+.bb-btn[disabled]     { opacity: .45; cursor: not-allowed; }
+
+/* Primário — vermelho Bom Beef: Salvar, Confirmar, Aprovar, Nova [Entidade] */
+.bb-btn-primary {
+  background: var(--bb-red);
+  color:      #fff;
+}
+.bb-btn-primary:hover { background: var(--bb-red-h); opacity: 1; }
+
+/* Secundário — branco com borda: Editar, Exportar, Importar, Ver */
+.bb-btn-secondary {
+  background: var(--bb-white);
+  color:      var(--bb-red);
+  border:     1.5px solid var(--bb-red);
+}
+
+/* Terciário — cinza neutro: Cancelar, Voltar, Fechar, Limpar */
+.bb-btn-tertiary {
+  background: #f3f4f6;
+  color:      #374151;
+  border:     1px solid var(--bb-border);
+}
+
+/* Perigo — uso restrito: Excluir, Rejeitar */
+.bb-btn-danger {
+  background: var(--bb-red-l);
+  color:      #fff;
+}
+
+/* Ghost — ações em tabelas/cards, compacto */
+.bb-btn-ghost {
+  background:  transparent;
+  color:       var(--bb-red);
+  border:      none;
+  padding:     4px 8px;
+  font-size:   12px;
+  border-radius: 5px;
+}
+.bb-btn-ghost:hover { background: var(--bb-red-bg); opacity: 1; }
+
+/* Modificadores de tamanho */
+.bb-btn-sm { padding: 4px 10px; font-size: 11px; border-radius: 5px; }
+.bb-btn-lg { padding: 10px 20px; font-size: 14px; border-radius: 8px; }
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   3. CARDS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.bb-card {
+  background:    var(--bb-white);
+  border:        1px solid var(--bb-border);
+  border-radius: 10px;
+  padding:       14px 16px;
+  box-shadow:    var(--bb-shadow);
+}
+
+/* Card KPI — indicador principal com borda lateral colorida */
+.bb-kpi {
+  border-left: 3px solid var(--bb-red);
+}
+
+.bb-kpi-val {
+  font-size:   22px;
+  font-weight: 800;
+  font-family: var(--bb-mono);
+  line-height: 1.2;
+  color:       var(--bb-text);
+}
+
+.bb-kpi-lbl {
+  font-size:      10px;
+  text-transform: uppercase;
+  letter-spacing: .8px;
+  color:          var(--bb-muted);
+  font-weight:    700;
+  margin-bottom:  4px;
+}
+
+/* Variantes de cor para borda lateral do KPI */
+.bb-kpi-green  { border-left-color: var(--bb-green); }
+.bb-kpi-amber  { border-left-color: var(--bb-amber); }
+.bb-kpi-blue   { border-left-color: var(--bb-blue);  }
+.bb-kpi-red    { border-left-color: var(--bb-red-l); }
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   4. BADGES
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.bb-badge {
+  display:       inline-block;
+  border-radius: 4px;
+  padding:       2px 7px;
+  font-size:     10px;
+  font-weight:   700;
+  line-height:   1.5;
+  white-space:   nowrap;
+  font-family:   var(--bb-sans);
+}
+
+.bb-badge-green { background: var(--bb-green-bg); color: #14532d;  border: 1px solid var(--bb-green-bd); }
+.bb-badge-amber { background: var(--bb-amber-bg); color: #92400e;  border: 1px solid var(--bb-amber-bd); }
+.bb-badge-red   { background: var(--bb-red-bg);   color: #991b1b;  border: 1px solid var(--bb-red-bd);   }
+.bb-badge-blue  { background: var(--bb-blue-bg);  color: #1e3a8a;  border: 1px solid var(--bb-blue-bd);  }
+.bb-badge-gray  { background: #f3f4f6;             color: #374151;  border: 1px solid #d1d5db;            }
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   5. BARRA DE FILTROS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.bb-filtros {
+  background:    var(--bb-white);
+  border:        1px solid var(--bb-border);
+  border-radius: 9px;
+  padding:       10px 14px;
+  margin-bottom: 12px;
+  display:       flex;
+  gap:           8px;
+  align-items:   flex-end;
+  flex-wrap:     wrap;
+}
+
+.bb-filtros-label {
+  font-size:      10px;
+  font-weight:    700;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  color:          var(--bb-muted);
+  display:        block;
+  margin-bottom:  3px;
+}
+
+.bb-filtros-group {
+  display:        flex;
+  flex-direction: column;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   6. TABELAS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Wrapper obrigatório para proteção mobile */
+.bb-table-wrap {
+  overflow-x:    auto;
+  border-radius: 9px;
+  border:        1px solid var(--bb-border);
+  background:    var(--bb-white);
+  -webkit-overflow-scrolling: touch; /* scroll suave iOS */
+}
+
+.bb-table {
+  width:           100%;
+  border-collapse: collapse;
+  font-size:       13px;
+  font-family:     var(--bb-sans);
+}
+
+.bb-table thead tr {
+  background: #f9fafb;
+}
+
+.bb-table th {
+  padding:        9px 12px;
+  text-align:     left;
+  font-size:      11px;
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  color:          var(--bb-muted);
+  font-weight:    700;
+  white-space:    nowrap;
+  position:       sticky;
+  top:            0;
+  background:     #f9fafb;
+  border-bottom:  2px solid var(--bb-border);
+}
+
+.bb-table td {
+  padding:    9px 12px;
+  border-top: 1px solid var(--bb-border);
+  color:      var(--bb-text);
+}
+
+.bb-table tbody tr:hover td {
+  background: #f9fafb;
+}
+
+.bb-table td.bb-mono,
+.bb-table th.bb-mono {
+  font-family: var(--bb-mono);
+}
+
+.bb-table td.bb-right,
+.bb-table th.bb-right {
+  text-align: right;
+}
+
+.bb-table td.bb-center,
+.bb-table th.bb-center {
+  text-align: center;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   7. PAGE HEADER (.ph)
+   Ajuste não-destrutivo: usa as classes .ph existentes e adiciona
+   .ph-identity, .ph-icon, .ph-title, .ph-actions (ausentes hoje).
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* O .ph base já existe em cada módulo com background vermelho.
+   Aqui apenas complementamos com flex layout e os sub-elementos novos. */
+.ph {
+  display:         flex;
+  align-items:     center;
+  gap:             10px;
+  justify-content: space-between;
+  flex-wrap:       wrap;
+}
+
+/* Lado esquerdo: ícone + título + subtítulo */
+.ph-identity {
+  display:     flex;
+  align-items: center;
+  gap:         10px;
+  flex:        1;
+  min-width:   0;
+}
+
+.ph-icon {
+  font-size:   20px;
+  flex-shrink: 0;
+}
+
+.ph-title {
+  font-size:   15px;
+  font-weight: 700;
+  color:       #fff;
+  margin:      0;
+  line-height: 1.2;
+}
+
+.ph-sub {
+  font-size:   11px;
+  opacity:     .75;
+  margin:      2px 0 0;
+  color:       #fff;
+}
+
+/* Lado direito: botões de ação principais */
+.ph-actions {
+  display:     flex;
+  gap:         6px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+/* Botão dentro do ph-actions (variante branca sobre fundo vermelho) */
+.ph-actions .bb-btn-secondary {
+  background: rgba(255,255,255,.15);
+  color:      #fff;
+  border-color: rgba(255,255,255,.4);
+}
+.ph-actions .bb-btn-secondary:hover {
+  background: rgba(255,255,255,.25);
+  opacity: 1;
+}
+.ph-actions .bb-btn-tertiary {
+  background: rgba(255,255,255,.1);
+  color:      rgba(255,255,255,.85);
+  border-color: rgba(255,255,255,.25);
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   8. UTILITÁRIOS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Empty state */
+.bb-empty {
+  text-align: center;
+  padding:    40px 20px;
+  color:      var(--bb-muted);
+}
+.bb-empty-icon {
+  font-size:     40px;
+  margin-bottom: 8px;
+  display:       block;
+}
+.bb-empty-text {
+  font-size:   14px;
+  font-weight: 600;
+  margin:      0 0 4px;
+  color:       var(--bb-text);
+}
+.bb-empty-sub {
+  font-size: 12px;
+  color:     var(--bb-muted);
+  margin:    0;
+}
+
+/* Loading state */
+.bb-loading {
+  text-align:  center;
+  padding:     24px;
+  color:       var(--bb-muted);
+  font-size:   13px;
+}
+
+/* Separador visual */
+.bb-divider {
+  border:        none;
+  border-top:    1px solid var(--bb-border);
+  margin:        12px 0;
+}
+
+/* Alerta inline */
+.bb-alert {
+  border-radius: 8px;
+  padding:       9px 13px;
+  font-size:     12px;
+  display:       flex;
+  align-items:   flex-start;
+  gap:           8px;
+}
+.bb-alert-red    { background: var(--bb-red-bg);   color: #991b1b;  border: 1px solid var(--bb-red-bd);   }
+.bb-alert-amber  { background: var(--bb-amber-bg); color: #92400e;  border: 1px solid var(--bb-amber-bd); }
+.bb-alert-green  { background: var(--bb-green-bg); color: #14532d;  border: 1px solid var(--bb-green-bd); }
+.bb-alert-blue   { background: var(--bb-blue-bg);  color: #1e3a8a;  border: 1px solid var(--bb-blue-bd);  }
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   9. MOBILE
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 768px) {
+
+  /* Ocultar elementos não essenciais em mobile */
+  .bb-hide-mobile { display: none !important; }
+
+  /* KPI menor em mobile */
+  .bb-kpi-val { font-size: 18px; }
+
+  /* Filtros em coluna no mobile */
+  .bb-filtros {
+    flex-direction: column;
+    align-items:    stretch;
+  }
+  .bb-filtros .bb-btn { width: 100%; justify-content: center; }
+
+  /* Subtítulo do header oculto (economiza espaço) */
+  .ph-sub { display: none; }
+
+  /* ph-actions vai para linha nova em telas muito pequenas */
+  @media (max-width: 480px) {
+    .ph { flex-direction: column; align-items: flex-start; }
+    .ph-actions { width: 100%; justify-content: flex-end; margin-top: 6px; }
+  }
+
+  /* Botões no mobile: mínimo de 44px de altura (acessibilidade) */
+  .bb-btn { min-height: 36px; }
+  .bb-btn-sm { min-height: 28px; }
+
+  /* Cards KPI em grid 2 colunas no mobile */
+  .bb-kpi-grid {
+    display:               grid;
+    grid-template-columns: 1fr 1fr;
+    gap:                   8px;
+  }
+
+}
+
+/* Telas muito pequenas (iPhone SE, etc.) */
+@media (max-width: 390px) {
+  .bb-kpi-val      { font-size: 16px; }
+  .bb-kpi-grid     { grid-template-columns: 1fr; }
+}
