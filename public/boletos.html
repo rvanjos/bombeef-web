@@ -196,7 +196,18 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
 </style>
 </head>
 <body>
-<div class="ph"><span style="font-size:20px">📄</span><h2>Boletos & NF-e</h2><div class="ph-sub" id="ph-sub">carregando...</div></div>
+<div class="ph">
+  <div class="ph-identity">
+    <span class="ph-icon">📄</span>
+    <div>
+      <h1 class="ph-title">Boletos</h1>
+      <p class="ph-sub">Controle de contas a pagar e importação de NF-e</p>
+    </div>
+  </div>
+  <div class="ph-actions">
+    <span id="ph-sub" style="font-size:11px;opacity:.7;color:#fff"></span>
+  </div>
+</div>
 <script>if(window.self!==window.top){var ph=document.querySelector('.ph');if(ph)ph.style.display='none';}</script>
 <div class="body">
   <!-- KPIs -->

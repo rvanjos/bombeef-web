@@ -226,12 +226,21 @@ thead th{padding:6px 9px;}
 <!-- HEADER -->
 <script>if(window.self!==window.top){document.addEventListener('DOMContentLoaded',function(){var ph=document.querySelector('.ph');if(ph)ph.style.display='none';});}</script>
 <div class="ph">
-  <span style="font-size:17px">📊</span>
-  <h2>DRE & Classificador de Extrato</h2>
-  <div class="sdot" id="sd"></div>
-  <span style="font-size:11px;color:rgba(255,255,255,.6);margin-left:4px" id="st">online</span>
-  <span id="save-ind" style="font-size:10px;color:rgba(255,255,255,.5);margin-left:8px;display:none"></span>
-  <span style="font-size:11px;color:rgba(255,255,255,.5);margin-left:auto" id="ph-sub">—</span>
+  <div class="ph-identity">
+    <span class="ph-icon">📊</span>
+    <div>
+      <h1 class="ph-title">DRE</h1>
+      <p class="ph-sub">Classificação financeira, fechamento e diagnóstico mensal</p>
+    </div>
+  </div>
+  <div class="ph-actions">
+    <div style="display:flex;align-items:center;gap:6px">
+      <div class="sdot" id="sd"></div>
+      <span style="font-size:11px;color:rgba(255,255,255,.65)" id="st">online</span>
+      <span id="save-ind" style="font-size:10px;color:rgba(255,255,255,.5);margin-left:4px;display:none"></span>
+      <span style="font-size:11px;color:rgba(255,255,255,.5);margin-left:8px" id="ph-sub">—</span>
+    </div>
+  </div>
 </div>
 
 <!-- DASHBOARD COMPACTO — faixa fina única linha -->

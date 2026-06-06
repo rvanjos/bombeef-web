@@ -142,12 +142,15 @@ body{display:flex;flex-direction:column;overflow-y:auto;}
 <body>
 
 <div class="ph">
-  <div class="ph-left">
-    <span style="font-size:19px">🎛️</span>
-    <h2>Hub Operacional</h2>
+  <div class="ph-identity">
+    <span class="ph-icon">🎛️</span>
+    <div>
+      <h1 class="ph-title">Hub Operacional</h1>
+      <p class="ph-sub">Centro de comando diário do Bom Beef</p>
+    </div>
   </div>
-  <div style="display:flex;align-items:center;gap:10px;">
-    <span class="ph-hora" id="ph-hora">—</span>
+  <div class="ph-actions">
+    <span class="ph-hora bb-hide-mobile" id="ph-hora" style="font-size:12px;opacity:.75;color:#fff">—</span>
     <button class="btn-att" onclick="carregar()">↻ Atualizar</button>
   </div>
 </div>
