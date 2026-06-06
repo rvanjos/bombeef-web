@@ -352,6 +352,306 @@ if (window.self !== window.top) {
   <div id="rel-content"></div>
 </div>
 
+<!-- ── ABA CALENDÁRIO COMERCIAL ─────────────────────────────────────────── -->
+<div id="tab-calendario" class="tab-content" style="padding:14px">
+
+  <!-- Filtros -->
+  <div style="background:#fff;border-radius:10px;border:1px solid var(--border);padding:12px 14px;margin-bottom:12px;display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+    <div>
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:3px">Mês</div>
+      <input type="month" id="cal-mes" style="border:1px solid var(--border);border-radius:6px;padding:6px 9px;font-size:12px;font-family:inherit" onchange="carregarCalendario()">
+    </div>
+    <div>
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:3px">Status</div>
+      <select id="cal-status" style="border:1px solid var(--border);border-radius:6px;padding:6px 9px;font-size:12px;font-family:inherit;background:#fff" onchange="carregarCalendario()">
+        <option value="">Todos</option>
+        <option value="urgente">🔴 Urgente</option>
+        <option value="atencao">🟠 Atenção</option>
+        <option value="planejado">🟢 Planejado</option>
+        <option value="finalizado">⚫ Finalizado</option>
+      </select>
+    </div>
+    <div style="display:flex;align-items:flex-end;gap:6px">
+      <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer">
+        <input type="checkbox" id="cal-pendentes" onchange="carregarCalendario()">
+        Apenas com compra pendente
+      </label>
+    </div>
+    <button onclick="carregarCalendario()" style="border:1px solid var(--border);border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer;background:#f9fafb;font-family:inherit">🔄 Atualizar</button>
+  </div>
+
+  <!-- Cards de resumo executivo -->
+  <div id="cal-cards" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+    <div style="background:#fff;border-radius:10px;border:1px solid var(--border);padding:12px 16px;flex:1;min-width:130px">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">Campanhas futuras</div>
+      <div style="font-size:22px;font-weight:800;font-family:monospace;margin-top:4px" id="cal-n-futuras">—</div>
+    </div>
+    <div style="background:#fff7ed;border-radius:10px;border:1px solid #fdba74;padding:12px 16px;flex:1;min-width:130px">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#9a3412">🔴 Urgentes</div>
+      <div style="font-size:22px;font-weight:800;font-family:monospace;margin-top:4px;color:#dc2626" id="cal-n-urgentes">—</div>
+    </div>
+    <div style="background:#fff;border-radius:10px;border:1px solid var(--border);padding:12px 16px;flex:1;min-width:130px">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">🟠 Atenção</div>
+      <div style="font-size:22px;font-weight:800;font-family:monospace;margin-top:4px;color:#f97316" id="cal-n-atencao">—</div>
+    </div>
+  </div>
+
+  <!-- Tabela de campanhas -->
+  <div style="overflow-x:auto;background:#fff;border-radius:10px;border:1px solid var(--border)">
+    <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead>
+        <tr style="background:#f9fafb">
+          <th style="padding:9px 12px;text-align:left;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)">Status</th>
+          <th style="padding:9px 12px;text-align:left;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)">Campanha</th>
+          <th style="padding:9px 12px;text-align:center;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)">Data da ação</th>
+          <th style="padding:9px 12px;text-align:center;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)">Data limite pedido</th>
+          <th style="padding:9px 12px;text-align:right;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)">Dias p/ limite</th>
+          <th style="padding:9px 12px;text-align:right;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)">Qtd planejada</th>
+          <th style="padding:9px 12px;text-align:right;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)">Vendidos</th>
+          <th style="padding:9px 12px;text-align:center;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)">Status Operacional</th>
+          <th style="padding:9px 12px;text-align:center;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)">Ações</th>
+        </tr>
+      </thead>
+      <tbody id="cal-tbody">
+        <tr><td colspan="8" style="text-align:center;padding:32px;color:var(--muted)">Carregando...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+
+</script>
+<script>
+// ── Planejamento de Kit ── Sprint 4.5-A ─────────────────────────────────────
+let _plkCampanhaId = null;
+let _plkSlotsChoice = [];
+let _plkQtdCalc = 0;
+let _plkValorCalc = null;
+
+
+async function carregarCalendario() {
+  const mes        = document.getElementById('cal-mes')?.value        || '';
+  const statusCal  = document.getElementById('cal-status')?.value     || '';
+  const pendentes  = document.getElementById('cal-pendentes')?.checked ? '1' : '';
+  const tbody      = document.getElementById('cal-tbody');
+  if(!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--muted)">⏳ Carregando...</td></tr>';
+
+  const p = new URLSearchParams();
+  if(mes)       p.set('mes', mes);
+  if(statusCal) p.set('status_cal', statusCal);
+  if(pendentes) p.set('apenas_pendentes', '1');
+
+  try {
+    const res = await api.get('/api/kits-campanha/calendario?' + p);
+    if(!res.ok){ tbody.innerHTML='<tr><td colspan="8" style="text-align:center;padding:24px;color:#dc2626">❌ '+( res.erro||'Erro')+'</td></tr>'; return; }
+
+    const r = res.resumo;
+    var setEl = function(id,v){var e=document.getElementById(id);if(e)e.textContent=v;};
+    setEl('cal-n-futuras',  r.campanhas_futuras);
+    setEl('cal-n-urgentes', r.urgentes);
+    setEl('cal-n-atencao',  r.atencao);
+
+    if(!res.data || !res.data.length){
+      tbody.innerHTML='<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--muted)">Nenhuma campanha encontrada</td></tr>';
+      return;
+    }
+
+    var fmtDt = function(d){ return d ? new Date(d+'T12:00').toLocaleDateString('pt-BR') : '—'; };
+    var statusBadge = function(s, dias){
+      if(s==='urgente')   return '<span style="background:#fee2e2;color:#991b1b;border-radius:5px;padding:2px 8px;font-size:10px;font-weight:700">🔴 URGENTE</span>';
+      if(s==='atencao')   return '<span style="background:#ffedd5;color:#9a3412;border-radius:5px;padding:2px 8px;font-size:10px;font-weight:700">🟠 ATENÇÃO</span>';
+      if(s==='finalizado') return '<span style="background:#f3f4f6;color:#6b7280;border-radius:5px;padding:2px 8px;font-size:10px;font-weight:700">⚫ FINALIZADO</span>';
+      return '<span style="background:#dcfce7;color:#14532d;border-radius:5px;padding:2px 8px;font-size:10px;font-weight:700">🟢 PLANEJADO</span>';
+    };
+    var diasStr = function(d){
+      if(d===null||d===undefined) return '—';
+      if(d<0) return '<span style="color:#6b7280">'+Math.abs(d)+'d atrás</span>';
+      if(d===0) return '<span style="color:#dc2626;font-weight:700">Hoje!</span>';
+      var cor = d<=3?'#dc2626':d<=7?'#f97316':'#374151';
+      return '<span style="color:'+cor+';font-weight:'+(d<=7?700:400)+'">'+d+'d</span>';
+    };
+
+    tbody.innerHTML = res.data.map(function(c){
+      var rowBg = c.status_cal==='urgente' ? 'background:#fff5f5;' : c.status_cal==='atencao' ? 'background:#fffbeb;' : '';
+      return '<tr style="'+rowBg+'">'
+        +'<td style="padding:9px 12px">'+statusBadge(c.status_cal)+'</td>'
+        +'<td style="padding:9px 12px"><strong>'+c.nome+'</strong>'+(c.descricao?'<div style="font-size:10px;color:var(--muted)">'+c.descricao+'</div>':'')+'</td>'
+        +'<td style="text-align:center;padding:9px 12px;font-size:12px">'+fmtDt(c.data_acao)+'</td>'
+        +'<td style="text-align:center;padding:9px 12px;font-size:12px">'+fmtDt(c.data_limite)+'</td>'
+        +'<td style="text-align:right;padding:9px 12px">'+diasStr(c.dias_ate_limite)+'</td>'
+        +'<td style="text-align:right;padding:9px 12px;font-family:monospace">'+(c.limite_campanha>0?c.limite_campanha:'—')+'</td>'
+        +'<td style="text-align:right;padding:9px 12px;font-family:monospace">'+c.vendidos+'</td>'
+        // Badge status operacional
+        var sopMap = {
+          compra_urgente:       '<span style="background:#fee2e2;color:#991b1b;border-radius:5px;padding:2px 7px;font-size:10px;font-weight:700">🔴 Compra urgente</span>',
+          planejamento_pendente:'<span style="background:#ffedd5;color:#9a3412;border-radius:5px;padding:2px 7px;font-size:10px;font-weight:700">🟠 Planejamento pendente</span>',
+          orcamento_pendente:   '<span style="background:#fefce8;color:#713f12;border-radius:5px;padding:2px 7px;font-size:10px;font-weight:700">🟡 Orçamento não definido</span>',
+          pronto:               '<span style="background:#dcfce7;color:#14532d;border-radius:5px;padding:2px 7px;font-size:10px;font-weight:700">🟢 Pronto</span>',
+          finalizado:           '<span style="background:#f3f4f6;color:#6b7280;border-radius:5px;padding:2px 7px;font-size:10px;font-weight:700">⚫ Finalizado</span>',
+        };
+        var sopBadge = sopMap[c.status_op] || '<span style="font-size:11px;color:var(--muted)">—</span>';
+        +'<td style="text-align:center;padding:9px 8px">'
+          +'<td style="text-align:center;padding:9px 8px">'+sopBadge+'</td>'
+          +(c.status_cal!=='finalizado'
+            ?'<button onclick="abrirPlanejamento('+c.id+',\''+c.nome.replace(/'/g,"\'")+'\',\''+( c.data_acao||'')+'\',\''+( c.data_limite||'')+'\','+c.limite_campanha+')" style="border:1px solid var(--border);border-radius:5px;padding:4px 9px;font-size:11px;cursor:pointer;background:#f9fafb;font-family:inherit">📦 Planejar</button>'
+            :'<span style="font-size:11px;color:var(--muted)">encerrada</span>')
+        +'</td>'
+        +'</tr>';
+    }).join('');
+
+  } catch(e){
+    tbody.innerHTML='<tr><td colspan="8" style="text-align:center;padding:24px;color:#dc2626">❌ '+e.message+'</td></tr>';
+  }
+}
+
+
+async function abrirPlanejamento(id, nome, dataAcaoPre, dataLimitePre, qtdPre) {
+  _plkCampanhaId = id;
+  _plkSlotsChoice = [];
+  // Pré-preencher campos se vierem do calendário
+  if(dataAcaoPre)  { var el=document.getElementById('plk-data-acao');   if(el) el.value=dataAcaoPre; }
+  if(dataLimitePre){ var el2=document.getElementById('plk-data-limite'); if(el2) el2.value=dataLimitePre; }
+  if(qtdPre && parseInt(qtdPre)>0){ var el3=document.getElementById('plk-qtd'); if(el3) el3.value=qtdPre; }
+  const el = document.getElementById('pl-kit-titulo');
+  if(el) el.textContent = '📦 Planejamento — ' + nome;
+  document.getElementById('plk-resultado').style.display = 'none';
+  // Carregar slots choice antes de abrir
+  const choiceArea = document.getElementById('plk-choices');
+  if(choiceArea) { choiceArea.innerHTML = '<span style="font-size:12px;color:var(--muted)">⏳ Carregando slots...</span>'; choiceArea.style.display = ''; }
+  try {
+    const dc = await api.get('/api/kits-campanha/campanhas/'+id);
+    if(dc.ok) {
+      const slotsC = (dc.data.slots||[]).filter(function(s){return s.tipo==='choice' && s.obrigatorio;});
+      _plkSlotsChoice = slotsC;
+      if(slotsC.length && choiceArea) {
+        choiceArea.innerHTML = '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px">Escolha o produto de cada slot:</div>' +
+          slotsC.map(function(s){
+            var prods = (s.produtos_info||[]).filter(Boolean);
+            return '<div style="margin-bottom:8px"><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">'+s.nome+'</label>'
+              +'<select id="plk-choice-'+s.id+'" style="border:1px solid var(--border);border-radius:6px;padding:6px 9px;font-size:12px;font-family:inherit;min-width:200px;background:#fff">'
+              +'<option value="">— selecionar produto —</option>'
+              +prods.map(function(p){return '<option value="'+p.id+'">'+( p.descricao||p.codigo)+'</option>';}).join('')
+              +'</select></div>';
+          }).join('');
+      } else if(choiceArea) { choiceArea.style.display = 'none'; }
+    } else if(choiceArea) { choiceArea.style.display = 'none'; }
+  } catch(e2) { if(choiceArea) choiceArea.style.display = 'none'; }
+  // Pré-carregar planejamento salvo
+  try {
+    const ps = await api.get('/api/kits-campanha/campanhas/'+id+'/planejamento-salvo');
+    if(ps.ok && ps.data) {
+      var elQ=document.getElementById('plk-qtd'); if(elQ && ps.data.qtd_prevista) elQ.value=ps.data.qtd_prevista;
+      var elO=document.getElementById('plk-orcamento')||document.getElementById('pl-orcamento');
+      var elObs=document.getElementById('plk-obs'); if(elObs) elObs.value=ps.data.observacoes||'';
+      document.getElementById('plk-salvo-msg').style.display='none';
+    }
+  } catch(ePs) { /* silencioso */ }
+  document.getElementById('modal-planejamento').classList.add('open');
+}
+
+async function salvarPlanejamento() {
+  if(!_plkCampanhaId) return;
+  const qtd  = parseInt(document.getElementById('plk-qtd')?.value || _plkQtdCalc || 0);
+  const obs  = document.getElementById('plk-obs')?.value || '';
+  const orc  = document.getElementById('pl-orcamento')?.value || null;
+  if(!qtd) { alert('Execute o cálculo antes de salvar'); return; }
+  try {
+    const r = await api.post('/api/kits-campanha/campanhas/'+_plkCampanhaId+'/salvar-planejamento', {
+      qtd_prevista: qtd,
+      orcamento_previsto: orc ? parseFloat(orc) : null,
+      valor_estimado: _plkValorCalc,
+      observacoes: obs || null,
+    });
+    if(r.ok) {
+      var msg = document.getElementById('plk-salvo-msg');
+      if(msg){ msg.style.display=''; setTimeout(()=>msg.style.display='none', 3000); }
+    }
+  } catch(e) { alert('Erro ao salvar: '+e.message); }
+}
+
+async function calcularPlanejamento() {
+  if(!_plkCampanhaId) return;
+  const qtd      = parseInt(document.getElementById('plk-qtd')?.value || 50);
+  const dataAcao = document.getElementById('plk-data-acao')?.value   || '';
+  const dataLim  = document.getElementById('plk-data-limite')?.value  || '';
+  const tbody    = document.getElementById('plk-tbody');
+  tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--muted)">⏳ Calculando...</td></tr>';
+  document.getElementById('plk-resultado').style.display = '';
+
+  const p = new URLSearchParams({ qtd });
+  if(dataAcao) p.set('data_acao', dataAcao);
+  if(dataLim)  p.set('data_limite', dataLim);
+  // Coletar escolhas dos slots choice
+  var choicesObj = {};
+  (_plkSlotsChoice||[]).forEach(function(s){
+    var sel = document.getElementById('plk-choice-'+s.id);
+    if(sel && sel.value) choicesObj[s.id] = sel.value;
+  });
+  if(Object.keys(choicesObj).length) p.set('choices', JSON.stringify(choicesObj));
+
+  try {
+    const res = await api.get('/api/kits-campanha/campanhas/'+_plkCampanhaId+'/planejamento?'+p);
+    if(!res.ok){ tbody.innerHTML=`<tr><td colspan="7" style="text-align:center;padding:20px;color:#dc2626">❌ ${res.erro||'Erro'}</td></tr>`; return; }
+
+    const r = res.resumo;
+    const statusColors = { ok:'background:#f0fdf4;border-color:#bbf7d0;color:#14532d',
+      atencao:'background:#fffbeb;border-color:#fcd34d;color:#92400e',
+      urgente:'background:#fef2f2;border-color:#fecaca;color:#991b1b' };
+    const statusLabel = { ok:'✅ Estoque suficiente', atencao:'⚠️ Falta comprar itens', urgente:'🔴 Urgente — prazo próximo' };
+
+    document.getElementById('plk-cards').innerHTML = `
+      <div style="border-radius:8px;border:1px solid;padding:8px 12px;font-size:13px;font-weight:600;${statusColors[res.status]||''}">${statusLabel[res.status]||res.status}</div>
+      <div style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:8px 14px"><div style="color:var(--muted);font-size:10px;text-transform:uppercase;font-weight:700">Kits planejados</div><div style="font-size:18px;font-weight:800;font-family:monospace">${qtd}</div></div>
+      <div style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:8px 14px"><div style="color:var(--muted);font-size:10px;text-transform:uppercase;font-weight:700">Produtos com falta</div><div style="font-size:18px;font-weight:800;font-family:monospace;color:${r.produtos_com_falta>0?'#dc2626':'#16a34a'}">${r.produtos_com_falta}</div></div>
+      <div style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:8px 14px"><div style="color:var(--muted);font-size:10px;text-transform:uppercase;font-weight:700">Valor estimado compra</div><div style="font-size:18px;font-weight:800;font-family:monospace;color:var(--red-l)">R$ ${parseFloat(r.valor_total_estimado).toLocaleString('pt-BR',{minimumFractionDigits:2})}</div></div>
+    `;
+
+    const brl2 = v => v!=null?'R\$ '+parseFloat(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}):'—';
+    const num4 = v => v!=null?parseFloat(v).toLocaleString('pt-BR',{minimumFractionDigits:3,maximumFractionDigits:3}):'—';
+    const ftLabel = f => ({
+      custo_medio_90d:'<span style="background:#d1e7dd;color:#0a4a22;border-radius:4px;padding:1px 5px;font-size:10px;font-weight:700">CMP-90d</span>',
+      ultimo_custo:'<span style="background:#fff3cd;color:#856404;border-radius:4px;padding:1px 5px;font-size:10px;font-weight:700">último</span>',
+      preco_custo:'<span style="background:#fde68a;color:#92400e;border-radius:4px;padding:1px 5px;font-size:10px;font-weight:700">manual</span>',
+      sem_custo:'<span style="background:#f8d7da;color:#721c24;border-radius:4px;padding:1px 5px;font-size:10px;font-weight:700">sem custo</span>',
+    }[f]||'');
+
+    tbody.innerHTML = (res.itens||[]).map(it => {
+      const faltaBg = it.falta_comprar > 0 ? 'background:#fef2f2' : '';
+      return `<tr style="${faltaBg}">
+        <td style="padding:7px 10px"><strong>${it.produto_nome||it.produto_codigo}</strong><div style="font-size:10px;color:var(--muted)">${it.produto_codigo} · ${it.slot_nome}</div></td>
+        <td style="text-align:right;padding:7px 10px;font-family:monospace">${num4(it.qtd_por_kit)} ${it.unidade}</td>
+        <td style="text-align:right;padding:7px 10px;font-family:monospace">${num4(it.necessidade_total)}</td>
+        <td style="text-align:right;padding:7px 10px;font-family:monospace;color:${it.estoque_ok?'#16a34a':'inherit'}">${num4(it.estoque_atual)}</td>
+        <td style="text-align:right;padding:7px 10px;font-family:monospace;font-weight:${it.falta_comprar>0?700:400};color:${it.falta_comprar>0?'#dc2626':'var(--muted)'}">${it.falta_comprar>0?num4(it.falta_comprar):'✅ ok'}</td>
+        <td style="text-align:right;padding:7px 10px;font-family:monospace">${brl2(it.custo_unitario)} ${ftLabel(it.fonte_custo)}</td>
+        <td style="text-align:right;padding:7px 10px;font-family:monospace;font-weight:${it.valor_estimado?700:400};color:${it.valor_estimado?'var(--red-l)':'var(--muted)'}">${brl2(it.valor_estimado)}</td>
+      </tr>`;
+    }).join('');
+
+    document.getElementById('plk-total').textContent = brl2(r.valor_total_estimado);
+    _plkQtdCalc = qtd;
+    _plkValorCalc = r.valor_total_estimado || 0;
+    // Slots pendentes
+    var pendArea = document.getElementById('plk-pendentes');
+    if(pendArea){
+      var pends = (res.slots_pendentes||[]).filter(function(s){return s.motivo==='aguardando_selecao';});
+      if(pends.length){
+        pendArea.style.display='';
+        pendArea.innerHTML='<div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:9px 13px;font-size:12px;color:#92400e">'
+          +'⚠️ <strong>'+pends.length+' slot(s) aguardando seleção</strong> — escolha um produto acima: '
+          +pends.map(function(s){return '<strong>'+s.slot_nome+'</strong>';}).join(', ')+'</div>';
+      } else { pendArea.style.display='none'; }
+    }
+
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:20px;color:#dc2626">❌ ${e.message}</td></tr>`;
+  }
+}
+</script>
+
+
+
 <!-- ══ MODAL CAMPANHA ═════════════════════════════════════════════════════ -->
 <div class="modal-bg" id="modal-campanha">
   <div class="modal modal-lg">
@@ -1695,307 +1995,6 @@ else { setTimeout(initGestaoKits, 200); }
   // Só exibe quando acessado diretamente (fora de iframe)
   if(window.self===window.top) f.style.display='block';
 })();
-
-</div>
-
-<!-- ── ABA CALENDÁRIO COMERCIAL ─────────────────────────────────────────── -->
-<div id="tab-calendario" class="tab-content" style="padding:14px">
-
-  <!-- Filtros -->
-  <div style="background:#fff;border-radius:10px;border:1px solid var(--border);padding:12px 14px;margin-bottom:12px;display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
-    <div>
-      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:3px">Mês</div>
-      <input type="month" id="cal-mes" style="border:1px solid var(--border);border-radius:6px;padding:6px 9px;font-size:12px;font-family:inherit" onchange="carregarCalendario()">
-    </div>
-    <div>
-      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:3px">Status</div>
-      <select id="cal-status" style="border:1px solid var(--border);border-radius:6px;padding:6px 9px;font-size:12px;font-family:inherit;background:#fff" onchange="carregarCalendario()">
-        <option value="">Todos</option>
-        <option value="urgente">🔴 Urgente</option>
-        <option value="atencao">🟠 Atenção</option>
-        <option value="planejado">🟢 Planejado</option>
-        <option value="finalizado">⚫ Finalizado</option>
-      </select>
-    </div>
-    <div style="display:flex;align-items:flex-end;gap:6px">
-      <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer">
-        <input type="checkbox" id="cal-pendentes" onchange="carregarCalendario()">
-        Apenas com compra pendente
-      </label>
-    </div>
-    <button onclick="carregarCalendario()" style="border:1px solid var(--border);border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer;background:#f9fafb;font-family:inherit">🔄 Atualizar</button>
-  </div>
-
-  <!-- Cards de resumo executivo -->
-  <div id="cal-cards" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
-    <div style="background:#fff;border-radius:10px;border:1px solid var(--border);padding:12px 16px;flex:1;min-width:130px">
-      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">Campanhas futuras</div>
-      <div style="font-size:22px;font-weight:800;font-family:monospace;margin-top:4px" id="cal-n-futuras">—</div>
-    </div>
-    <div style="background:#fff7ed;border-radius:10px;border:1px solid #fdba74;padding:12px 16px;flex:1;min-width:130px">
-      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#9a3412">🔴 Urgentes</div>
-      <div style="font-size:22px;font-weight:800;font-family:monospace;margin-top:4px;color:#dc2626" id="cal-n-urgentes">—</div>
-    </div>
-    <div style="background:#fff;border-radius:10px;border:1px solid var(--border);padding:12px 16px;flex:1;min-width:130px">
-      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">🟠 Atenção</div>
-      <div style="font-size:22px;font-weight:800;font-family:monospace;margin-top:4px;color:#f97316" id="cal-n-atencao">—</div>
-    </div>
-  </div>
-
-  <!-- Tabela de campanhas -->
-  <div style="overflow-x:auto;background:#fff;border-radius:10px;border:1px solid var(--border)">
-    <table style="width:100%;border-collapse:collapse;font-size:12px">
-      <thead>
-        <tr style="background:#f9fafb">
-          <th style="padding:9px 12px;text-align:left;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)">Status</th>
-          <th style="padding:9px 12px;text-align:left;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)">Campanha</th>
-          <th style="padding:9px 12px;text-align:center;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)">Data da ação</th>
-          <th style="padding:9px 12px;text-align:center;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)">Data limite pedido</th>
-          <th style="padding:9px 12px;text-align:right;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)">Dias p/ limite</th>
-          <th style="padding:9px 12px;text-align:right;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)">Qtd planejada</th>
-          <th style="padding:9px 12px;text-align:right;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)">Vendidos</th>
-          <th style="padding:9px 12px;text-align:center;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)">Status Operacional</th>
-          <th style="padding:9px 12px;text-align:center;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)">Ações</th>
-        </tr>
-      </thead>
-      <tbody id="cal-tbody">
-        <tr><td colspan="8" style="text-align:center;padding:32px;color:var(--muted)">Carregando...</td></tr>
-      </tbody>
-    </table>
-  </div>
-</div>
-
-
-</script>
-<script>
-// ── Planejamento de Kit ── Sprint 4.5-A ─────────────────────────────────────
-let _plkCampanhaId = null;
-let _plkSlotsChoice = [];
-let _plkQtdCalc = 0;
-let _plkValorCalc = null;
-
-
-async function carregarCalendario() {
-  const mes        = document.getElementById('cal-mes')?.value        || '';
-  const statusCal  = document.getElementById('cal-status')?.value     || '';
-  const pendentes  = document.getElementById('cal-pendentes')?.checked ? '1' : '';
-  const tbody      = document.getElementById('cal-tbody');
-  if(!tbody) return;
-  tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--muted)">⏳ Carregando...</td></tr>';
-
-  const p = new URLSearchParams();
-  if(mes)       p.set('mes', mes);
-  if(statusCal) p.set('status_cal', statusCal);
-  if(pendentes) p.set('apenas_pendentes', '1');
-
-  try {
-    const res = await api.get('/api/kits-campanha/calendario?' + p);
-    if(!res.ok){ tbody.innerHTML='<tr><td colspan="8" style="text-align:center;padding:24px;color:#dc2626">❌ '+( res.erro||'Erro')+'</td></tr>'; return; }
-
-    const r = res.resumo;
-    var setEl = function(id,v){var e=document.getElementById(id);if(e)e.textContent=v;};
-    setEl('cal-n-futuras',  r.campanhas_futuras);
-    setEl('cal-n-urgentes', r.urgentes);
-    setEl('cal-n-atencao',  r.atencao);
-
-    if(!res.data || !res.data.length){
-      tbody.innerHTML='<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--muted)">Nenhuma campanha encontrada</td></tr>';
-      return;
-    }
-
-    var fmtDt = function(d){ return d ? new Date(d+'T12:00').toLocaleDateString('pt-BR') : '—'; };
-    var statusBadge = function(s, dias){
-      if(s==='urgente')   return '<span style="background:#fee2e2;color:#991b1b;border-radius:5px;padding:2px 8px;font-size:10px;font-weight:700">🔴 URGENTE</span>';
-      if(s==='atencao')   return '<span style="background:#ffedd5;color:#9a3412;border-radius:5px;padding:2px 8px;font-size:10px;font-weight:700">🟠 ATENÇÃO</span>';
-      if(s==='finalizado') return '<span style="background:#f3f4f6;color:#6b7280;border-radius:5px;padding:2px 8px;font-size:10px;font-weight:700">⚫ FINALIZADO</span>';
-      return '<span style="background:#dcfce7;color:#14532d;border-radius:5px;padding:2px 8px;font-size:10px;font-weight:700">🟢 PLANEJADO</span>';
-    };
-    var diasStr = function(d){
-      if(d===null||d===undefined) return '—';
-      if(d<0) return '<span style="color:#6b7280">'+Math.abs(d)+'d atrás</span>';
-      if(d===0) return '<span style="color:#dc2626;font-weight:700">Hoje!</span>';
-      var cor = d<=3?'#dc2626':d<=7?'#f97316':'#374151';
-      return '<span style="color:'+cor+';font-weight:'+(d<=7?700:400)+'">'+d+'d</span>';
-    };
-
-    tbody.innerHTML = res.data.map(function(c){
-      var rowBg = c.status_cal==='urgente' ? 'background:#fff5f5;' : c.status_cal==='atencao' ? 'background:#fffbeb;' : '';
-      return '<tr style="'+rowBg+'">'
-        +'<td style="padding:9px 12px">'+statusBadge(c.status_cal)+'</td>'
-        +'<td style="padding:9px 12px"><strong>'+c.nome+'</strong>'+(c.descricao?'<div style="font-size:10px;color:var(--muted)">'+c.descricao+'</div>':'')+'</td>'
-        +'<td style="text-align:center;padding:9px 12px;font-size:12px">'+fmtDt(c.data_acao)+'</td>'
-        +'<td style="text-align:center;padding:9px 12px;font-size:12px">'+fmtDt(c.data_limite)+'</td>'
-        +'<td style="text-align:right;padding:9px 12px">'+diasStr(c.dias_ate_limite)+'</td>'
-        +'<td style="text-align:right;padding:9px 12px;font-family:monospace">'+(c.limite_campanha>0?c.limite_campanha:'—')+'</td>'
-        +'<td style="text-align:right;padding:9px 12px;font-family:monospace">'+c.vendidos+'</td>'
-        // Badge status operacional
-        var sopMap = {
-          compra_urgente:       '<span style="background:#fee2e2;color:#991b1b;border-radius:5px;padding:2px 7px;font-size:10px;font-weight:700">🔴 Compra urgente</span>',
-          planejamento_pendente:'<span style="background:#ffedd5;color:#9a3412;border-radius:5px;padding:2px 7px;font-size:10px;font-weight:700">🟠 Planejamento pendente</span>',
-          orcamento_pendente:   '<span style="background:#fefce8;color:#713f12;border-radius:5px;padding:2px 7px;font-size:10px;font-weight:700">🟡 Orçamento não definido</span>',
-          pronto:               '<span style="background:#dcfce7;color:#14532d;border-radius:5px;padding:2px 7px;font-size:10px;font-weight:700">🟢 Pronto</span>',
-          finalizado:           '<span style="background:#f3f4f6;color:#6b7280;border-radius:5px;padding:2px 7px;font-size:10px;font-weight:700">⚫ Finalizado</span>',
-        };
-        var sopBadge = sopMap[c.status_op] || '<span style="font-size:11px;color:var(--muted)">—</span>';
-        +'<td style="text-align:center;padding:9px 8px">'
-          +'<td style="text-align:center;padding:9px 8px">'+sopBadge+'</td>'
-          +(c.status_cal!=='finalizado'
-            ?'<button onclick="abrirPlanejamento('+c.id+',\''+c.nome.replace(/'/g,"\'")+'\',\''+( c.data_acao||'')+'\',\''+( c.data_limite||'')+'\','+c.limite_campanha+')" style="border:1px solid var(--border);border-radius:5px;padding:4px 9px;font-size:11px;cursor:pointer;background:#f9fafb;font-family:inherit">📦 Planejar</button>'
-            :'<span style="font-size:11px;color:var(--muted)">encerrada</span>')
-        +'</td>'
-        +'</tr>';
-    }).join('');
-
-  } catch(e){
-    tbody.innerHTML='<tr><td colspan="8" style="text-align:center;padding:24px;color:#dc2626">❌ '+e.message+'</td></tr>';
-  }
-}
-
-
-async function abrirPlanejamento(id, nome, dataAcaoPre, dataLimitePre, qtdPre) {
-  _plkCampanhaId = id;
-  _plkSlotsChoice = [];
-  // Pré-preencher campos se vierem do calendário
-  if(dataAcaoPre)  { var el=document.getElementById('plk-data-acao');   if(el) el.value=dataAcaoPre; }
-  if(dataLimitePre){ var el2=document.getElementById('plk-data-limite'); if(el2) el2.value=dataLimitePre; }
-  if(qtdPre && parseInt(qtdPre)>0){ var el3=document.getElementById('plk-qtd'); if(el3) el3.value=qtdPre; }
-  const el = document.getElementById('pl-kit-titulo');
-  if(el) el.textContent = '📦 Planejamento — ' + nome;
-  document.getElementById('plk-resultado').style.display = 'none';
-  // Carregar slots choice antes de abrir
-  const choiceArea = document.getElementById('plk-choices');
-  if(choiceArea) { choiceArea.innerHTML = '<span style="font-size:12px;color:var(--muted)">⏳ Carregando slots...</span>'; choiceArea.style.display = ''; }
-  try {
-    const dc = await api.get('/api/kits-campanha/campanhas/'+id);
-    if(dc.ok) {
-      const slotsC = (dc.data.slots||[]).filter(function(s){return s.tipo==='choice' && s.obrigatorio;});
-      _plkSlotsChoice = slotsC;
-      if(slotsC.length && choiceArea) {
-        choiceArea.innerHTML = '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px">Escolha o produto de cada slot:</div>' +
-          slotsC.map(function(s){
-            var prods = (s.produtos_info||[]).filter(Boolean);
-            return '<div style="margin-bottom:8px"><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">'+s.nome+'</label>'
-              +'<select id="plk-choice-'+s.id+'" style="border:1px solid var(--border);border-radius:6px;padding:6px 9px;font-size:12px;font-family:inherit;min-width:200px;background:#fff">'
-              +'<option value="">— selecionar produto —</option>'
-              +prods.map(function(p){return '<option value="'+p.id+'">'+( p.descricao||p.codigo)+'</option>';}).join('')
-              +'</select></div>';
-          }).join('');
-      } else if(choiceArea) { choiceArea.style.display = 'none'; }
-    } else if(choiceArea) { choiceArea.style.display = 'none'; }
-  } catch(e2) { if(choiceArea) choiceArea.style.display = 'none'; }
-  // Pré-carregar planejamento salvo
-  try {
-    const ps = await api.get('/api/kits-campanha/campanhas/'+id+'/planejamento-salvo');
-    if(ps.ok && ps.data) {
-      var elQ=document.getElementById('plk-qtd'); if(elQ && ps.data.qtd_prevista) elQ.value=ps.data.qtd_prevista;
-      var elO=document.getElementById('plk-orcamento')||document.getElementById('pl-orcamento');
-      var elObs=document.getElementById('plk-obs'); if(elObs) elObs.value=ps.data.observacoes||'';
-      document.getElementById('plk-salvo-msg').style.display='none';
-    }
-  } catch(ePs) { /* silencioso */ }
-  document.getElementById('modal-planejamento').classList.add('open');
-}
-
-async function salvarPlanejamento() {
-  if(!_plkCampanhaId) return;
-  const qtd  = parseInt(document.getElementById('plk-qtd')?.value || _plkQtdCalc || 0);
-  const obs  = document.getElementById('plk-obs')?.value || '';
-  const orc  = document.getElementById('pl-orcamento')?.value || null;
-  if(!qtd) { alert('Execute o cálculo antes de salvar'); return; }
-  try {
-    const r = await api.post('/api/kits-campanha/campanhas/'+_plkCampanhaId+'/salvar-planejamento', {
-      qtd_prevista: qtd,
-      orcamento_previsto: orc ? parseFloat(orc) : null,
-      valor_estimado: _plkValorCalc,
-      observacoes: obs || null,
-    });
-    if(r.ok) {
-      var msg = document.getElementById('plk-salvo-msg');
-      if(msg){ msg.style.display=''; setTimeout(()=>msg.style.display='none', 3000); }
-    }
-  } catch(e) { alert('Erro ao salvar: '+e.message); }
-}
-
-async function calcularPlanejamento() {
-  if(!_plkCampanhaId) return;
-  const qtd      = parseInt(document.getElementById('plk-qtd')?.value || 50);
-  const dataAcao = document.getElementById('plk-data-acao')?.value   || '';
-  const dataLim  = document.getElementById('plk-data-limite')?.value  || '';
-  const tbody    = document.getElementById('plk-tbody');
-  tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--muted)">⏳ Calculando...</td></tr>';
-  document.getElementById('plk-resultado').style.display = '';
-
-  const p = new URLSearchParams({ qtd });
-  if(dataAcao) p.set('data_acao', dataAcao);
-  if(dataLim)  p.set('data_limite', dataLim);
-  // Coletar escolhas dos slots choice
-  var choicesObj = {};
-  (_plkSlotsChoice||[]).forEach(function(s){
-    var sel = document.getElementById('plk-choice-'+s.id);
-    if(sel && sel.value) choicesObj[s.id] = sel.value;
-  });
-  if(Object.keys(choicesObj).length) p.set('choices', JSON.stringify(choicesObj));
-
-  try {
-    const res = await api.get('/api/kits-campanha/campanhas/'+_plkCampanhaId+'/planejamento?'+p);
-    if(!res.ok){ tbody.innerHTML=`<tr><td colspan="7" style="text-align:center;padding:20px;color:#dc2626">❌ ${res.erro||'Erro'}</td></tr>`; return; }
-
-    const r = res.resumo;
-    const statusColors = { ok:'background:#f0fdf4;border-color:#bbf7d0;color:#14532d',
-      atencao:'background:#fffbeb;border-color:#fcd34d;color:#92400e',
-      urgente:'background:#fef2f2;border-color:#fecaca;color:#991b1b' };
-    const statusLabel = { ok:'✅ Estoque suficiente', atencao:'⚠️ Falta comprar itens', urgente:'🔴 Urgente — prazo próximo' };
-
-    document.getElementById('plk-cards').innerHTML = `
-      <div style="border-radius:8px;border:1px solid;padding:8px 12px;font-size:13px;font-weight:600;${statusColors[res.status]||''}">${statusLabel[res.status]||res.status}</div>
-      <div style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:8px 14px"><div style="color:var(--muted);font-size:10px;text-transform:uppercase;font-weight:700">Kits planejados</div><div style="font-size:18px;font-weight:800;font-family:monospace">${qtd}</div></div>
-      <div style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:8px 14px"><div style="color:var(--muted);font-size:10px;text-transform:uppercase;font-weight:700">Produtos com falta</div><div style="font-size:18px;font-weight:800;font-family:monospace;color:${r.produtos_com_falta>0?'#dc2626':'#16a34a'}">${r.produtos_com_falta}</div></div>
-      <div style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:8px 14px"><div style="color:var(--muted);font-size:10px;text-transform:uppercase;font-weight:700">Valor estimado compra</div><div style="font-size:18px;font-weight:800;font-family:monospace;color:var(--red-l)">R$ ${parseFloat(r.valor_total_estimado).toLocaleString('pt-BR',{minimumFractionDigits:2})}</div></div>
-    `;
-
-    const brl2 = v => v!=null?'R\$ '+parseFloat(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}):'—';
-    const num4 = v => v!=null?parseFloat(v).toLocaleString('pt-BR',{minimumFractionDigits:3,maximumFractionDigits:3}):'—';
-    const ftLabel = f => ({
-      custo_medio_90d:'<span style="background:#d1e7dd;color:#0a4a22;border-radius:4px;padding:1px 5px;font-size:10px;font-weight:700">CMP-90d</span>',
-      ultimo_custo:'<span style="background:#fff3cd;color:#856404;border-radius:4px;padding:1px 5px;font-size:10px;font-weight:700">último</span>',
-      preco_custo:'<span style="background:#fde68a;color:#92400e;border-radius:4px;padding:1px 5px;font-size:10px;font-weight:700">manual</span>',
-      sem_custo:'<span style="background:#f8d7da;color:#721c24;border-radius:4px;padding:1px 5px;font-size:10px;font-weight:700">sem custo</span>',
-    }[f]||'');
-
-    tbody.innerHTML = (res.itens||[]).map(it => {
-      const faltaBg = it.falta_comprar > 0 ? 'background:#fef2f2' : '';
-      return `<tr style="${faltaBg}">
-        <td style="padding:7px 10px"><strong>${it.produto_nome||it.produto_codigo}</strong><div style="font-size:10px;color:var(--muted)">${it.produto_codigo} · ${it.slot_nome}</div></td>
-        <td style="text-align:right;padding:7px 10px;font-family:monospace">${num4(it.qtd_por_kit)} ${it.unidade}</td>
-        <td style="text-align:right;padding:7px 10px;font-family:monospace">${num4(it.necessidade_total)}</td>
-        <td style="text-align:right;padding:7px 10px;font-family:monospace;color:${it.estoque_ok?'#16a34a':'inherit'}">${num4(it.estoque_atual)}</td>
-        <td style="text-align:right;padding:7px 10px;font-family:monospace;font-weight:${it.falta_comprar>0?700:400};color:${it.falta_comprar>0?'#dc2626':'var(--muted)'}">${it.falta_comprar>0?num4(it.falta_comprar):'✅ ok'}</td>
-        <td style="text-align:right;padding:7px 10px;font-family:monospace">${brl2(it.custo_unitario)} ${ftLabel(it.fonte_custo)}</td>
-        <td style="text-align:right;padding:7px 10px;font-family:monospace;font-weight:${it.valor_estimado?700:400};color:${it.valor_estimado?'var(--red-l)':'var(--muted)'}">${brl2(it.valor_estimado)}</td>
-      </tr>`;
-    }).join('');
-
-    document.getElementById('plk-total').textContent = brl2(r.valor_total_estimado);
-    _plkQtdCalc = qtd;
-    _plkValorCalc = r.valor_total_estimado || 0;
-    // Slots pendentes
-    var pendArea = document.getElementById('plk-pendentes');
-    if(pendArea){
-      var pends = (res.slots_pendentes||[]).filter(function(s){return s.motivo==='aguardando_selecao';});
-      if(pends.length){
-        pendArea.style.display='';
-        pendArea.innerHTML='<div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:9px 13px;font-size:12px;color:#92400e">'
-          +'⚠️ <strong>'+pends.length+' slot(s) aguardando seleção</strong> — escolha um produto acima: '
-          +pends.map(function(s){return '<strong>'+s.slot_nome+'</strong>';}).join(', ')+'</div>';
-      } else { pendArea.style.display='none'; }
-    }
-
-  } catch(e) {
-    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:20px;color:#dc2626">❌ ${e.message}</td></tr>`;
-  }
-}
-</script>
-
 
 <!-- ── Modal Planejamento de Kit ──────────────────────────────────────── -->
 <div id="modal-planejamento" class="modal-bg" onclick="if(event.target===this)fecharModal('modal-planejamento')">

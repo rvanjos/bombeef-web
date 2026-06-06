@@ -843,7 +843,7 @@ async function carregarCampanhasHub() {
   var el = document.getElementById('campanhas-lista');
   if(!el) return;
   try {
-    var api2 = window.BB?.api || window._api;
+    var api2 = _api || (window.BB && window.BB.api);
     var res = await api2.get('/api/kits-campanha/calendario?apenas_pendentes=1');
     if(!res.ok || !res.data || !res.data.length) { el.textContent='Nenhuma campanha próxima'; return; }
     var sopIco   = {compra_urgente:'🔴',planejamento_pendente:'🟠',orcamento_pendente:'🟡',pronto:'🟢',finalizado:'⚫'};
