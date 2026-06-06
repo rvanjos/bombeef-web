@@ -9,6 +9,34 @@
  */
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   0. RESET GLOBAL DE VIEWPORT — previne overflow horizontal em iOS/Safari
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Garante que nenhum elemento force scroll horizontal na janela */
+html {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  -webkit-text-size-adjust: 100%; /* evita zoom automático de fonte no iOS */
+}
+
+body {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+/* box-sizing global: padding não adiciona à largura */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+/* Inputs, selects e botões nunca ultrapassam o container pai */
+input, select, button, textarea {
+  max-width: 100%;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
    1. VARIÁVEIS OFICIAIS
    ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -288,6 +316,8 @@
 /* O .ph base já existe em cada módulo com background vermelho.
    Aqui apenas complementamos com flex layout e os sub-elementos novos. */
 .ph {
+  max-width:       100%;
+  overflow-x:      hidden;
   display:         flex;
   align-items:     center;
   gap:             10px;
