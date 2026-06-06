@@ -397,8 +397,9 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
 </div>
 
 
-
-
+<script>
+let periodos = [];
+let api, fmt;
 // ── Controle de filtros de período ───────────────────────────────────────────
 function atualizarFiltrosPeriodo() {
   const modo = document.getElementById('flt-modo').value;
@@ -905,6 +906,24 @@ function fmtDt(s){
   const [y,m,d] = s.split('-');
   return `${d}/${m}/${y}`;
 }
+
+// ── Inicialização via api.js ──────────────────────────────────────────────────
+window.onBBReady = () => {
+  api = BB.api;
+  fmt = BB.fmt;
+  // Popular select de ano
+  const anoEl = document.getElementById('flt-ano');
+  if (anoEl && !anoEl.options.length) {
+    const anoAtual = new Date().getFullYear();
+    for (let a = anoAtual; a >= 2023; a--) {
+      const opt = document.createElement('option');
+      opt.value = a; opt.textContent = a;
+      if (a === anoAtual) opt.selected = true;
+      anoEl.appendChild(opt);
+    }
+  }
+  carregar();
+};
 </script>
 
 <!-- ============================================================
