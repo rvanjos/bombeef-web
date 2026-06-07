@@ -20,7 +20,68 @@
 *{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden;}
 @media(max-width:768px){
+  /* ── Base ─────────────────────────────────────────── */
   body{height:auto;min-height:100vh;overflow:auto;-webkit-overflow-scrolling:touch;}
+
+  /* ── Layout principal ──────────────────────────────── */
+  .split{flex-direction:column;overflow:visible;}
+  .main{overflow:visible;}
+
+  /* ── Painel DRE lateral → vira modal full-width ──── */
+  .dre-p{width:100%;min-width:0;border-left:none;border-top:2px solid var(--border);}
+
+  /* ── Toolbar de importação: compacta ────────────────── */
+  .toolbar-top{flex-wrap:wrap;gap:4px;padding:6px 10px;}
+
+  /* ── Aviso modo: inicia compacto no mobile ──────────── */
+  #aviso-modo-dre{flex-wrap:nowrap;}
+  #aviso-modo-texto{display:none;}
+  #aviso-modo-dre.expandido #aviso-modo-texto{display:inline;}
+  #aviso-modo-dre{cursor:pointer;}
+
+  /* ── Painel pendências: compacto ─────────────────────── */
+  #pp-detalhe{max-height:140px;overflow-y:auto;}
+
+  /* ── Tabela desktop: oculta no mobile ───────────────── */
+  #dre-tbl-scroll{display:none !important;}
+
+  /* ── Cards mobile: visíveis ─────────────────────────── */
+  #dre-cards-mobile{display:flex !important;}
+
+  /* ── Cards de lançamento ────────────────────────────── */
+  .dre-card-m{
+    background:#fff;border:1px solid var(--border);border-radius:9px;
+    padding:10px 12px;font-size:12px;
+  }
+  .dre-card-m-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px;}
+  .dre-card-m-desc{flex:1;min-width:0;}
+  .dre-card-m-data{font-size:10px;color:var(--muted);margin-bottom:2px;}
+  .dre-card-m-nome{font-weight:600;line-height:1.3;word-break:break-word;}
+  .dre-card-m-fonte{font-size:10px;color:var(--muted);margin-top:1px;}
+  .dre-card-m-val{font-weight:700;font-family:var(--bb-mono,monospace);white-space:nowrap;font-size:14px;}
+  .dre-card-m-val.neg{color:var(--red-l,#dc2626);}
+  .dre-card-m-val.pos{color:var(--green,#16a34a);}
+  .dre-card-m-bot{display:flex;align-items:center;justify-content:space-between;gap:8px;padding-top:6px;border-top:1px solid #f3f4f6;margin-top:4px;}
+  .dre-card-m-cat{font-size:10px;color:var(--muted);flex:1;min-width:0;}
+  .dre-card-m-cat strong{color:var(--text,#1a1a1a);font-size:11px;}
+  .dre-card-m-act{display:flex;gap:4px;}
+  .dre-card-m-act button{font-size:11px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:#f9fafb;cursor:pointer;}
+
+  /* ── FSB simplificado no mobile ─────────────────────── */
+  .fsb{width:100% !important;border-left:none !important;border-top:1px solid var(--border);}
+  .fsb-actions{flex-direction:row;flex-wrap:wrap;gap:6px;padding:8px 12px;}
+  .fsb-btn{flex:1;min-width:80px;text-align:center;padding:8px 6px;font-size:11px;}
+
+  /* ── KPI row no painel DRE ───────────────────────────── */
+  .dre-kpi-row{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
+
+  /* ── Dropzone: ocultar no mobile ────────────────────── */
+  #dz-area{display:none !important;}
+
+  /* ── Overflow protection ──────────────────────────────  */
+  #tbl-area,#painel-pendencias,.ctrl,.toolbar-top{
+    max-width:100%;width:100%;box-sizing:border-box;
+  }
 }
 /* HEADER */
 .ph{background:var(--red);background-image:repeating-linear-gradient(45deg,transparent,transparent 10px,rgba(255,255,255,.03) 10px,rgba(255,255,255,.03) 20px);padding:10px 18px;display:flex;align-items:center;gap:10px;flex-shrink:0;}
@@ -496,7 +557,7 @@ thead th{padding:6px 9px;}
       <!-- TOOLBAR TOP LIMPA -->
       <div class="toolbar-top">
         <!-- Grupo: Importar -->
-        <span class="grp-label">Importar</span>
+        <span class="grp-label bb-desktop-only">Importar</span>
         <button class="btn bs bb-desktop-only" style="padding:5px 10px;font-size:11px" onclick="document.getElementById('f-ofx').click()" title="Importar extrato OFX ou XLSX" class="btn bs bb-desktop-only">🏦 OFX/XLSX</button>
         <button class="btn bs bb-desktop-only" style="padding:5px 10px;font-size:11px" onclick="document.getElementById('f-cc').click()" title="Importar fatura CC" class="btn bs bb-desktop-only">💳 Fatura CC</button>
         <button class="btn bs bb-desktop-only" style="padding:5px 10px;font-size:11px" onclick="importBoletos()" title="Boletos do sistema">📄 Boletos DB</button>
@@ -508,7 +569,7 @@ thead th{padding:6px 9px;}
         <!-- Grupo: Ações -->
         <button class="btn bg" style="padding:5px 11px;font-size:11px" onclick="salvarTodos()" title="Salvar todos os lançamentos">💾 Salvar</button>
         <button class="btn bs bb-desktop-only" style="padding:5px 10px;font-size:11px" onclick="exportarExcel()" title="Exportar para Excel">📊 Excel</button>
-        <button class="btn bs" style="padding:5px 10px;font-size:11px" onclick="abrirSessoes()" title="Histórico de sessões" class="btn bs bb-desktop-only">🗂 Sessões</button>
+        <button class="btn bs bb-desktop-only" style="padding:5px 10px;font-size:11px" onclick="abrirSessoes()" title="Histórico de sessões">🗂 Sessões</button>
 
 
         <div class="sep"></div>
@@ -516,7 +577,7 @@ thead th{padding:6px 9px;}
         <!-- Grupo: Visual -->
         <button class="btn bs bb-desktop-only" style="padding:5px 10px;font-size:11px" onclick="abrirCategorias()" title="Gerenciar categorias">⚙️ Categorias</button>
         <button class="btn bs" style="padding:5px 10px;font-size:11px;background:#fff3cd;color:#856404;border-color:#ffc107" onclick="toggleStatusCartoes()" title="Ver status de importação por cartão">💳 Status Cartões</button>
-        <button class="btn bs" style="padding:5px 10px;font-size:11px" id="btn-expand" onclick="toggleExpandido()" title="Expandir">⤢</button>
+        <button class="btn bs" class="bb-desktop-only" style="padding:5px 10px;font-size:11px" id="btn-expand" onclick="toggleExpandido()" title="Expandir">⤢</button>
         <button class="btn bs" style="padding:5px 10px;font-size:11px" onclick="toggleColsPicker(event)" title="Escolher colunas">⊞ Colunas</button>
         <button class="btn bs" style="padding:5px 10px;font-size:11px" onclick="toggleSidebar()" id="toggle-sidebar-btn" title="Mostrar/ocultar filtros">☰ Filtros</button>
       </div>
@@ -579,7 +640,7 @@ thead th{padding:6px 9px;}
             <button class="fsb-btn secondary bb-desktop-only" onclick="exportarExcel()">📊 Exportar Excel</button>
             <button class="fsb-btn secondary bb-desktop-only" onclick="abrirSessoes()">🗂 Sessões</button>
 
-            <button class="fsb-btn danger" onclick="limparTudo()">🗑 Limpar tudo</button>
+            <button class="fsb-btn danger bb-desktop-only" onclick="limparTudo()">🗑 Limpar tudo</button>
           </div>
         </div>
 
@@ -615,6 +676,10 @@ thead th{padding:6px 9px;}
           <div id="footer-note" style="padding:6px 14px;font-size:11px;color:var(--muted);text-align:right"></div>
         </div>
       </div>
+
+      <!-- CARDS MOBILE: renderizados pelo mesmo render() via JS -->
+      <div id="dre-cards-mobile" style="display:none;flex-direction:column;gap:6px;padding:8px 12px;overflow-y:auto"></div>
+
     </div>
 
     <!-- BULK BAR (sticky bottom, igual ao sistema anterior) -->
@@ -2454,6 +2519,7 @@ function render() {
   const mesFiltro = document.getElementById('f-mes').value;
   const MAX_RENDER = mesFiltro ? 9999 : 500;
   const listaRender = lista.length > MAX_RENDER ? lista.slice(0, MAX_RENDER) : lista;
+  window._dreListaAtual = lista; // expõe para renderCardsMobile
   const avisoLimit = lista.length > MAX_RENDER 
     ? `<tr><td colspan="10" style="text-align:center;padding:8px;background:#fff8e6;font-size:12px;color:#856404">
         ⚠️ Exibindo ${MAX_RENDER} de ${lista.length} lançamentos. Selecione um mês no filtro para ver todos.
@@ -2509,6 +2575,7 @@ function render() {
   }).join('');
 
   document.getElementById('footer-note').textContent = `${listaRender.length} de ${lista.length} lançamento(s) exibido(s) · ${TXS.length} total`;
+  try { renderCardsMobile(lista); } catch(_) {} // cards mobile
 }
 
 function fmtMes(m) {
@@ -6293,6 +6360,67 @@ function toggleDREGrupo(gid) {
 // Aliases de compatibilidade
 function exportarExcel() { gerarExcelDRE(); }
 function limparTudo() { if(confirm('Limpar toda a sessão?')) limpar(); }
+
+// ── Mobile: toggle aviso modo caixa/competência ───────────────────────────
+(function() {
+  const aviso = document.getElementById('aviso-modo-dre');
+  if (aviso) {
+    aviso.addEventListener('click', function() {
+      this.classList.toggle('expandido');
+    });
+  }
+})();
+
+// ── Mobile: renderizar cards de lançamentos ────────────────────────────────
+// Executa após cada render() para atualizar os cards mobile
+const _renderOriginal = typeof render === 'function' ? render : null;
+
+function renderCardsMobile(lista) {
+  const el = document.getElementById('dre-cards-mobile');
+  if (!el) return;
+  if (window.innerWidth > 768) { el.style.display = 'none'; return; }
+
+  if (!lista || !lista.length) {
+    el.innerHTML = '<div style="text-align:center;padding:24px;color:var(--muted);font-size:13px">Nenhum lançamento encontrado</div>';
+    return;
+  }
+
+  const fmtVal = v => {
+    const n = parseFloat(v || 0);
+    return (n < 0 ? '- ' : '') + 'R$ ' + Math.abs(n).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
+  };
+  const fmtDt = d => {
+    if (!d) return '—';
+    const parts = d.split('-');
+    if (parts.length === 3) return parts[2]+'/'+parts[1]+'/'+parts[0];
+    return d;
+  };
+
+  el.innerHTML = lista.map(tx => {
+    const neg = parseFloat(tx.valor || 0) < 0;
+    const cat = tx.categoria || '<em style="color:var(--muted)">Sem categoria</em>';
+    const pend = !tx.categoria ? ' style="border-left:3px solid #f59e0b"' : '';
+    return \`<div class="dre-card-m"\${pend}>
+      <div class="dre-card-m-top">
+        <div class="dre-card-m-desc">
+          <div class="dre-card-m-data">\${fmtDt(tx.data)}\${tx.mes_caixa ? ' · ' + tx.mes_caixa : ''}</div>
+          <div class="dre-card-m-nome">\${tx.lancamento || '—'}</div>
+          \${tx.fornecedor ? \`<div class="dre-card-m-fonte">\${tx.fornecedor}</div>\` : ''}
+          \${tx.fonte ? \`<div class="dre-card-m-fonte">Fonte: \${tx.fonte}</div>\` : ''}
+        </div>
+        <div class="dre-card-m-val \${neg ? 'neg' : 'pos'}">\${fmtVal(tx.valor)}</div>
+      </div>
+      <div class="dre-card-m-bot">
+        <div class="dre-card-m-cat">Categoria: <strong>\${cat}</strong></div>
+        <div class="dre-card-m-act">
+          <button onclick="abrirEdicao('\${tx.id}')" title="Editar">✏️</button>
+        </div>
+      </div>
+    </div>\`;
+  }).join('');
+}
+
+// cards mobile: hook integrado diretamente em render()
 </script>
 <!-- Modal Drill-Down DRE -->
 <div class="mbg" id="m-drill" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center">
