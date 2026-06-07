@@ -251,6 +251,119 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
   </div>
 </div>
 
+<!-- Modal de Kit -->
+<div id="m-kit" class="mbg" onclick="if(event.target===this)fecharKit()">
+  <div class="modal" style="max-width:700px;padding:0">
+    <div style="background:var(--red);padding:14px 20px;border-radius:14px 14px 0 0;display:flex;align-items:center;justify-content:space-between">
+      <span id="kit-t" style="color:#fff;font-weight:700;font-size:14px">Novo Kit</span>
+      <button onclick="fecharKit()" style="background:none;border:none;color:rgba(255,255,255,.8);font-size:20px;cursor:pointer;line-height:1">×</button>
+    </div>
+    <div style="padding:18px 20px;overflow-y:auto;max-height:calc(90vh - 60px)">
+      <input type="hidden" id="k-id">
+      <div style="display:grid;grid-template-columns:1fr 2fr;gap:10px;margin-bottom:12px">
+        <div>
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:3px">Código</label>
+          <input id="k-cod" type="text" placeholder="Ex: KIT001" style="width:100%;border:1px solid var(--border);border-radius:7px;padding:7px 10px;font-size:13px;font-family:inherit">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:3px">Nome *</label>
+          <input id="k-nome" type="text" placeholder="Nome do kit" style="width:100%;border:1px solid var(--border);border-radius:7px;padding:7px 10px;font-size:13px;font-family:inherit">
+        </div>
+      </div>
+      <div style="margin-bottom:12px">
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:3px">Descrição</label>
+        <textarea id="k-desc" rows="2" style="width:100%;border:1px solid var(--border);border-radius:7px;padding:7px 10px;font-size:13px;font-family:inherit;resize:vertical"></textarea>
+      </div>
+      <div style="margin-bottom:14px">
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:3px">Preço de Venda Sugerido (R$)</label>
+        <input id="k-pvenda" type="number" step="0.01" min="0" placeholder="0,00" style="width:160px;border:1px solid var(--border);border-radius:7px;padding:7px 10px;font-size:13px;font-family:inherit">
+      </div>
+      <!-- Itens do kit -->
+      <div style="border-top:1px solid var(--border);padding-top:12px;margin-bottom:10px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <span style="font-size:12px;font-weight:700;text-transform:uppercase;color:var(--muted);letter-spacing:.4px">Itens do Kit</span>
+          <button onclick="addKitItem()" style="font-size:12px;padding:4px 10px;background:var(--red);color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600">＋ Adicionar Item</button>
+        </div>
+        <!-- Busca de produto -->
+        <div style="position:relative;margin-bottom:8px">
+          <input id="k-busca" type="text" placeholder="Buscar produto por código ou nome..." oninput="buscarProdKit(this.value)"
+            style="width:100%;border:1px solid var(--border);border-radius:7px;padding:7px 10px;font-size:13px;font-family:inherit">
+          <div id="k-sugestoes" style="display:none;position:absolute;left:0;right:0;top:100%;background:#fff;border:1px solid var(--border);border-radius:0 0 7px 7px;box-shadow:0 4px 12px rgba(0,0,0,.1);z-index:50;max-height:160px;overflow-y:auto"></div>
+        </div>
+        <div id="kit-itens" style="min-height:40px"></div>
+      </div>
+      <!-- Resumo de custo/margem -->
+      <div id="kc-detalhe" style="background:#f8f9fa;border-radius:9px;padding:12px 14px;font-size:12px">
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:8px">
+          <div><div style="color:var(--muted);font-size:10px;text-transform:uppercase;font-weight:700;margin-bottom:2px">Custo Matéria</div><div id="kc-mat" style="font-weight:700;font-family:monospace">—</div></div>
+          <div><div style="color:var(--muted);font-size:10px;text-transform:uppercase;font-weight:700;margin-bottom:2px">Cartão <span id="kc-cartao-pct" style="font-weight:400;color:var(--muted)"></span></div><div id="kc-cartao" style="font-family:monospace">—</div></div>
+          <div><div style="color:var(--muted);font-size:10px;text-transform:uppercase;font-weight:700;margin-bottom:2px">Royalties <span id="kc-roy-pct" style="font-weight:400;color:var(--muted)"></span></div><div id="kc-roy" style="font-family:monospace">—</div></div>
+          <div><div style="color:var(--muted);font-size:10px;text-transform:uppercase;font-weight:700;margin-bottom:2px">Desp. <span id="kc-desp-pct"></span></div><div id="kc-desp" style="font-family:monospace">—</div></div>
+          <div><div style="color:var(--muted);font-size:10px;text-transform:uppercase;font-weight:700;margin-bottom:2px">Imp. <span id="kc-imp-pct"></span></div><div id="kc-imp" style="font-family:monospace">—</div></div>
+          <div><div style="color:var(--muted);font-size:10px;text-transform:uppercase;font-weight:700;margin-bottom:2px">Fixos <span id="kc-fix-pct"></span></div><div id="kc-fix" style="font-family:monospace">—</div></div>
+        </div>
+        <div style="border-top:1px solid var(--border);padding-top:8px;display:flex;gap:16px">
+          <div><span style="color:var(--muted);font-size:11px">Custo total:</span> <strong id="kc-tot" style="font-family:monospace">—</strong></div>
+          <div><span style="color:var(--muted);font-size:11px">Lucro mín.:</span> <strong id="kc-min" style="font-family:monospace">—</strong></div>
+          <div><span style="color:var(--muted);font-size:11px">Ideal:</span> <strong id="kc-ideal" style="font-family:monospace">—</strong></div>
+        </div>
+        <div id="kc-result" style="margin-top:8px;font-size:12px;font-weight:700"></div>
+        <div id="kc-status" style="margin-top:4px;font-size:11px;color:var(--muted)"></div>
+      </div>
+      <!-- Botões de ação -->
+      <div id="promo-btns" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
+        <button onclick="fecharKit()" style="padding:7px 16px;background:#f3f4f6;color:#374151;border:1px solid var(--border);border-radius:7px;cursor:pointer;font-size:13px;font-family:inherit">Cancelar</button>
+        <button onclick="salvarKit()" style="padding:7px 16px;background:var(--red);color:#fff;border:none;border-radius:7px;cursor:pointer;font-size:13px;font-family:inherit;font-weight:600">💾 Salvar Kit</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal de Semana -->
+<div id="m-semana" class="mbg" onclick="if(event.target===this)fecharSemana()">
+  <div class="modal" style="max-width:500px;padding:0">
+    <div style="background:var(--red);padding:14px 20px;border-radius:14px 14px 0 0;display:flex;align-items:center;justify-content:space-between">
+      <span id="semana-t" style="color:#fff;font-weight:700;font-size:14px">Registrar Semana</span>
+      <button onclick="fecharSemana()" style="background:none;border:none;color:rgba(255,255,255,.8);font-size:20px;cursor:pointer;line-height:1">×</button>
+    </div>
+    <div style="padding:18px 20px">
+      <input type="hidden" id="s-id">
+      <div style="margin-bottom:12px">
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:3px">Kit *</label>
+        <select id="s-kit" style="width:100%;border:1px solid var(--border);border-radius:7px;padding:7px 10px;font-size:13px;font-family:inherit;background:#fff"></select>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+        <div>
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:3px">Início da Semana</label>
+          <input id="s-ini" type="date" oninput="calcFimSemana()" style="width:100%;border:1px solid var(--border);border-radius:7px;padding:7px 10px;font-size:13px;font-family:inherit">
+          <div id="s-semana-label" style="font-size:10px;color:var(--muted);margin-top:3px"></div>
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:3px">Vendidos *</label>
+          <input id="s-vend" type="number" min="0" step="1" placeholder="0" oninput="calcPctSemana()" style="width:100%;border:1px solid var(--border);border-radius:7px;padding:7px 10px;font-size:13px;font-family:inherit">
+        </div>
+      </div>
+      <div style="margin-bottom:12px">
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:3px">Produzidos (opcional)</label>
+        <input id="s-prod" type="number" min="0" step="1" placeholder="0" oninput="calcPctSemana()" style="width:100%;border:1px solid var(--border);border-radius:7px;padding:7px 10px;font-size:13px;font-family:inherit">
+        <div style="display:flex;align-items:center;gap:8px;margin-top:6px">
+          <span id="s-pct-preview" style="font-size:13px;font-weight:700;color:var(--green)"></span>
+          <span id="s-pct-badge" style="font-size:10px;background:#f0fdf4;color:#14532d;border:1px solid #bbf7d0;border-radius:5px;padding:2px 7px;font-weight:700;display:none"></span>
+          <input type="hidden" id="s-pct-val">
+        </div>
+      </div>
+      <div style="margin-bottom:14px">
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:3px">Observações</label>
+        <textarea id="s-obs" rows="2" style="width:100%;border:1px solid var(--border);border-radius:7px;padding:7px 10px;font-size:13px;font-family:inherit;resize:vertical"></textarea>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button onclick="fecharSemana()" style="padding:7px 16px;background:#f3f4f6;color:#374151;border:1px solid var(--border);border-radius:7px;cursor:pointer;font-size:13px;font-family:inherit">Cancelar</button>
+        <button onclick="salvarSemana()" style="padding:7px 16px;background:var(--red);color:#fff;border:none;border-radius:7px;cursor:pointer;font-size:13px;font-family:inherit;font-weight:600">💾 Salvar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 // Variáveis globais usadas pelo módulo
 let api, fmt, toast;
