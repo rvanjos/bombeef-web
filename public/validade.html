@@ -406,7 +406,7 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
       <button class="btn" style="padding:5px 12px;background:#f1f5f9;color:#475569;border:1px solid #cbd5e1" onclick="encerrarSelecionadosVal('descartado')">🗑 Marcar descartado</button>
     </div>
     <div class="card">
-      <table class="tbl" id="tbl-val">
+      <div style="overflow-x:auto"><table class="tbl" id="tbl-val">
         <div class="val-sel-bar" id="val-sel-bar">
           <span id="val-sel-count" style="font-weight:700;color:var(--red-l)">0 selecionados</span>
           <button class="btn btn-s" style="padding:4px 10px;font-size:11px" onclick="valSelecionarTodos()">Todos da página</button>
@@ -429,7 +429,7 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
           <th>Ações</th>
         </tr></thead>
         <tbody id="tbody-val"></tbody>
-      </table>
+      </table></div>
       <div class="empty" id="empty-val" style="display:none">
         <div style="font-size:32px;margin-bottom:8px">📦</div>
         <p>Nenhum item encontrado</p>
@@ -444,12 +444,12 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
       <input type="month" id="flt-mes-perdas" class="flt" style="padding:7px 10px" onchange="carregarPerdas()">
       <button class="btn btn-s" onclick="abrirRelPerdas()" style="background:#fff0f0;color:#991b1b;border-color:#fca5a5" title="Relatório de perdas">🖨️ Rel. Perdas</button>
       <div style="margin-left:auto;font-size:13px" id="meta-perdas-info"></div>
-    </div>
+    <<div style="overflow-x:auto">/div>
     <div class="card">
       <table class="tbl">
         <thead><tr><th>Data</th><th>Produto</th><th>Motivo</th><th>Qtd</th><th>Valor Perda</th><th>Funcionário</th><th>Ações</th></tr></thead>
         <tbody id="tbody-perdas"></tbody>
-      </table>
+      </table></div>
       <div class="empty" id="empty-perdas" style="display:none"><p>Nenhuma perda registrada</p></div>
     </div>
   </div>
@@ -578,7 +578,7 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
     <button class="btn btn-s" onclick="limparFiltrosHist()">✕ Limpar</button>
     <button class="btn btn-s" id="hist-expand-btn" onclick="toggleHistExpand()" title="Expandir / compactar visualização">⤢ Expandir</button>
     <button class="btn btn-s bb-desktop-only" onclick="exportarHistXLS()" title="Exportar para Excel formatado" style="background:#217346;color:#fff;border-color:#217346">📊 Excel</button>
-    <span id="hist-count" style="font-size:11px;color:var(--muted);margin-left:4px"></span>
+    <span id="hist-count" style="font-size:11px;color:va<div style="overflow-x:auto">r(--muted);margin-left:4px"></span>
   </div>
   <div class="card">
     <table class="tbl">
@@ -588,7 +588,7 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
         <th style="text-align:center">Ações</th>
       </tr></thead>
       <tbody id="tbody-hist"></tbody>
-    </table>
+    </table></div>
     <div class="empty" id="empty-hist" style="display:none"><p>Nenhum item no histórico.</p></div>
   </div>
 </div>
