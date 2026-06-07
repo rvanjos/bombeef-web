@@ -932,6 +932,54 @@ window.onBBReady = () => {
   }
   carregar();
 };
+
+// ── Compatibilidade: aliases e funções ausentes ──────────────────────────
+
+// showTab: alterna entre seções do faturamento
+function showTab(id, btn) {
+  ['sec-visao','sec-periodos','sec-mensal','sec-reconciliacao'].forEach(s => {
+    const el = document.getElementById(s);
+    if (el) el.style.display = s === 'sec-' + id ? '' : 'none';
+  });
+  document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  if (id === 'periodos')     carregarPeriodos();
+  else if (id === 'mensal')  carregarMensal();
+  else                       carregar();
+}
+
+// abrirImportListagem: abre modal de importação de listagem PDV
+function abrirImportListagem() { abrirImport(); }
+
+// abrirImportFormas: abre modal de importação de formas de pagamento
+function abrirImportFormas() { abrirImport(); }
+
+// limparFaturamento: limpa os dados do período
+function limparFaturamento() {
+  if (!confirm('Limpar todos os dados de faturamento do período?')) return;
+  if (typeof limpar === 'function') limpar();
+}
+
+// abrirLancCaixa: abre seção de lançamento de caixa (reconciliação)
+function abrirLancCaixa() {
+  showTab('reconciliacao', document.querySelector('[onclick*="reconciliacao"]'));
+}
+
+// carregarReconciliacao: carrega dados de reconciliação para o mês selecionado
+async function carregarReconciliacao() {
+  const mes = document.getElementById('rec-mes')?.value;
+  if (!mes) return;
+  // Reutiliza o carregar() com o mês selecionado
+  try {
+    const d = await api.get('/api/faturamento/resumo?mes=' + mes);
+    if (d.ok) renderKPIs(d.data);
+    const aviso = document.getElementById('rec-aviso-dre');
+    if (aviso) aviso.style.display = d.ok ? 'none' : '';
+  } catch(e) {
+    const aviso = document.getElementById('rec-aviso-dre');
+    if (aviso) aviso.style.display = '';
+  }
+}
 </script>
 
 <!-- ============================================================

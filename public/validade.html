@@ -2780,6 +2780,16 @@ async function processarImport(inp){
   carregar(); carregarKPIs();
   try { window.parent.postMessage({type:'bb_refresh_kpis'},'*'); } catch(_) {}
 }
+
+// toggleBannerAcoes — oculta/exibe o painel de ações pendentes
+function toggleBannerAcoes() {
+  const body = document.getElementById('dash-acoes-body');
+  const btn  = document.getElementById('btn-toggle-acoes');
+  if (!body) return;
+  const hidden = body.style.display === 'none';
+  body.style.display = hidden ? '' : 'none';
+  if (btn) btn.textContent = hidden ? '▾ ocultar' : '▸ mostrar';
+}
 </script>
 
 <!-- ============================================================

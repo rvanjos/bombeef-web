@@ -6287,6 +6287,10 @@ function toggleDREGrupo(gid) {
   rows.forEach(r => r.style.display = hidden ? '' : 'none');
   if (ico) ico.textContent = hidden ? '▼' : '▶';
 }
+
+// Aliases de compatibilidade
+function exportarExcel() { gerarExcelDRE(); }
+function limparTudo() { if(confirm('Limpar toda a sessão?')) limpar(); }
 </script>
 <!-- Modal Drill-Down DRE -->
 <div class="mbg" id="m-drill" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center">
