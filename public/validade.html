@@ -800,10 +800,15 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
 </div>
 
 <script>
-const {api, fmt, toast} = BB;
+let api, fmt, toast;
 let itens=[], perdas=[], funcionarios=[];
 
-window.onBBReady = () => { init(); };
+window.onBBReady = () => {
+  api   = BB.api;
+  fmt   = BB.fmt;
+  toast = BB.toast;
+  init();
+};
 
 async function carregarAcoesValidade(){
   const d = await api.get('/api/config/acoes-validade');
@@ -831,9 +836,12 @@ function _valLoadError(msg) {
   const txt = document.getElementById('val-load-msg');
   const btn = document.getElementById('val-retry-btn');
   const bar = document.getElementById('val-load-bar');
+  const el  = document.getElementById('val-loading');
   if (txt) { txt.textContent = msg; txt.style.color = '#dc2626'; }
   if (btn) btn.style.display = '';
   if (bar) bar.style.background = '#dc2626';
+  // Reduzir o overlay para não bloquear a interface
+  if (el) { el.style.background = 'rgba(247,244,240,.97)'; }
 }
 
 let _initTentativas = 0;
