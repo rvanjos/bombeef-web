@@ -16,14 +16,14 @@
 html {
   width: 100%;
   max-width: 100%;
-  overflow-x: hidden;
-  -webkit-text-size-adjust: 100%; /* evita zoom automático de fonte no iOS */
+  /* NÃO usar overflow-x:hidden aqui — quebra position:fixed no iOS/Safari */
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
   width: 100%;
   max-width: 100%;
-  overflow-x: hidden;
+  /* NÃO usar overflow-x:hidden aqui — quebra position:fixed no iOS/Safari */
 }
 
 /* box-sizing global: padding não adiciona à largura */
