@@ -386,7 +386,7 @@ module.exports = function(pool) {
         await client.query(
           `UPDATE vendas_fiado SET
              subtotal_venda=$1, desconto_total=$2, total_final=$3, saldo_restante=$4,
-             observacoes=COALESCE($5, observacoes), atualizado_em=NOW()
+             observacoes=COALESCE($5, observacoes), updated_at=NOW()
            WHERE id=$6`,
           [subtotal.toFixed(2), desconto_total.toFixed(2), total_final.toFixed(2),
            novo_saldo.toFixed(2), observacoes||null, parseInt(req.params.id)]
