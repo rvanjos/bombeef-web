@@ -735,8 +735,7 @@ async function procSync(inp){
 }
 
 // ── Funções de Kit e Semana (compartilhadas com kits-composicao) ──────────
-let kitItems = []; let prods = [];
-let CFG = {cartao:3,royalties:4.875,desperdicio:5,imposto:6,fixos:25,lucro:15,margensMinimas:{picanha:35,outros:25}};
+// (kitItems, prods e CFG já declarados no escopo acima)
 function fecharKit(){document.getElementById('m-kit').classList.remove('open');}
 function salvarKit(){
   const id=document.getElementById('k-id').value;
