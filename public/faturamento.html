@@ -408,7 +408,10 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
 <script>
 let periodos = [];
 let api, fmt;
-let chartFat = null, chartPag = null, chartCat = null, chartVcat = null;
+let chartFat = null;
+let chartPag = null;
+let chartCat = null;
+let chartVcat = null;
 // ── Controle de filtros de período ───────────────────────────────────────────
 function atualizarFiltrosPeriodo() {
   const modo = document.getElementById('flt-modo').value;

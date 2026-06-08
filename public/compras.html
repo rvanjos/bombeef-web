@@ -584,7 +584,7 @@ async function carregarHistorico() {
 
 // ── ABA 3: ANÁLISE ─────────────────────────────────────────────────────────
 let _buscaTimer = null;
-function onBuscaInput() {
+async function onBuscaInput() {
   clearTimeout(_buscaTimer);
   _buscaTimer = setTimeout(async () => {
     const q = $id('a-busca').value.trim();

@@ -2002,7 +2002,7 @@ function syncPesagem(){
 }
 
 let _buscarProdTimer = null;
-function buscarProdVal(){
+async function buscarProdVal(){
   clearTimeout(_buscarProdTimer);
   const cod = document.getElementById('v-cod').value.trim();
   const info = document.getElementById('v-cod-info');

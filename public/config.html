@@ -908,6 +908,18 @@ async function excluirAcao(id){
   if(d.ok){ toast('Removida'); carregarAcoes(); }
   else toast('Erro: '+d.erro);
 }
+
+// abrirSenhaPropia: abre modal de senha para o próprio usuário logado
+async function abrirSenhaPropia() {
+  try {
+    const me = await api.get('/auth/me');
+    if (me.ok && me.data) {
+      abrirSenha(me.data.id || me.data.usuario_id, me.data.nome || me.data.email, false);
+    }
+  } catch(e) {
+    abrirSenha(null, 'Minha conta', false);
+  }
+}
 </script>
 <!-- Modal Ação de Validade -->
 <div class="modal-bg" id="modal-acao">
