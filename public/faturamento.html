@@ -814,17 +814,25 @@ function configurarPctSimples() {
 let arquivoSel = null;
 function abrirImport(){
   const hoje = new Date().toISOString().slice(0,10);
-  document.getElementById('imp-ini').value = hoje;
-  document.getElementById('imp-fim').value = hoje;
-  document.getElementById('imp-label').value = '';
-  document.getElementById('f-nome').textContent = '';
-  document.getElementById('imp-preview').style.display = 'none';
-  arquivoSel = null;
+  const elIni = document.getElementById('imp-ini');
+  const elFim = document.getElementById('imp-fim');
+  const elLbl = document.getElementById('imp-label');
+  const elNome = document.getElementById('f-nome');
+  const elPrev = document.getElementById('imp-preview');
   const fc = document.getElementById('f-csv');
-  if(fc) fc.value = ''; // reseta para onchange disparar mesmo arquivo
-  document.getElementById('modal-import').classList.add('open');
+  if(elIni) elIni.value = hoje;
+  if(elFim) elFim.value = hoje;
+  if(elLbl) elLbl.value = '';
+  if(elNome) elNome.textContent = '';
+  if(elPrev) elPrev.style.display = 'none';
+  arquivoSel = null;
+  if(fc) fc.value = '';
+  document.getElementById('modal-import').style.display = 'flex';
 }
-function fecharModal(){ document.getElementById('modal-import').classList.remove('open'); }
+function fecharModal(){
+  const m = document.getElementById('modal-import');
+  if(m) m.style.display = 'none';
+}
 
 function selecionarArq(input){
   const file = input.files[0];
@@ -952,11 +960,79 @@ function showTab(id, btn) {
   else                       carregar();
 }
 
-// abrirImportListagem: abre modal de importação de listagem PDV
-function abrirImportListagem() { abrirImport(); }
+// abrirImportListagem — modal dedicado XMenu Listagem
+let _arqListagem = null;
+function abrirImportListagem() {
+  _arqListagem = null;
+  const el = document.getElementById('f-listagem');
+  if(el) el.value = '';
+  const nm = document.getElementById('f-listagem-nome');
+  if(nm) nm.textContent = '';
+  document.getElementById('modal-import-listagem').style.display = 'flex';
+}
+function selecionarArqListagem(input) {
+  _arqListagem = input.files[0];
+  const nm = document.getElementById('f-listagem-nome');
+  if(nm) nm.textContent = _arqListagem ? '✅ ' + _arqListagem.name : '';
+}
+async function importarListagem() {
+  if(!_arqListagem) { BB.toast('Selecione o arquivo CSV'); return; }
+  const btn = document.getElementById('btn-imp-listagem');
+  if(btn) btn.textContent = '⏳ Importando...';
+  try {
+    const fd = new FormData();
+    fd.append('arquivo', _arqListagem);
+    const resp = await fetch('/api/faturamento/import-listagem', {
+      method:'POST', headers:{ Authorization: 'Bearer '+BB.api.token() }, body: fd
+    });
+    const d = await resp.json();
+    if(d.ok) {
+      BB.toast(`✅ ${d.dias} dias importados · ${d.atualizados||0} atualizados · R$ ${BB.fmt.brl(d.fat_total).replace('R$ ','')}`);
+      document.getElementById('modal-import-listagem').style.display = 'none';
+      carregar();
+    } else {
+      BB.toast('❌ Erro: ' + d.erro);
+    }
+  } catch(e) { BB.toast('❌ ' + e.message); }
+  if(btn) btn.textContent = '💾 Importar';
+}
 
-// abrirImportFormas: abre modal de importação de formas de pagamento
-function abrirImportFormas() { abrirImport(); }
+// abrirImportFormas — modal dedicado XMenu Rel.205
+let _arqFormas = null;
+function abrirImportFormas() {
+  _arqFormas = null;
+  const el = document.getElementById('f-formas');
+  if(el) el.value = '';
+  const nm = document.getElementById('f-formas-nome');
+  if(nm) nm.textContent = '';
+  document.getElementById('modal-import-formas').style.display = 'flex';
+}
+function selecionarArqFormas(input) {
+  _arqFormas = input.files[0];
+  const nm = document.getElementById('f-formas-nome');
+  if(nm) nm.textContent = _arqFormas ? '✅ ' + _arqFormas.name : '';
+}
+async function importarFormas() {
+  if(!_arqFormas) { BB.toast('Selecione o arquivo CSV'); return; }
+  const btn = document.getElementById('btn-imp-formas');
+  if(btn) btn.textContent = '⏳ Importando...';
+  try {
+    const fd = new FormData();
+    fd.append('arquivo', _arqFormas);
+    const resp = await fetch('/api/faturamento/import-formas', {
+      method:'POST', headers:{ Authorization: 'Bearer '+BB.api.token() }, body: fd
+    });
+    const d = await resp.json();
+    if(d.ok) {
+      BB.toast(`✅ ${d.dias} dias atualizados com formas de pagamento`);
+      document.getElementById('modal-import-formas').style.display = 'none';
+      carregar();
+    } else {
+      BB.toast('❌ Erro: ' + d.erro);
+    }
+  } catch(e) { BB.toast('❌ ' + e.message); }
+  if(btn) btn.textContent = '💾 Importar';
+}
 
 // limparFaturamento: limpa os dados do período
 function limparFaturamento() {
@@ -995,6 +1071,87 @@ async function carregarReconciliacao() {
      Reprodução, cópia ou redistribuição proibidas.
      © 2024-2025 AR Boutique de Carnes LTDA
      ============================================================ -->
+
+
+<!-- ── MODAL: Importar Listagem XMenu ────────────────────────────────── -->
+<div class="modal-bg" id="modal-import-listagem" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center;padding:16px">
+  <div style="background:#fff;border-radius:13px;width:100%;max-width:460px;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+    <div style="background:#1a5c8a;padding:14px 20px;border-radius:13px 13px 0 0;display:flex;justify-content:space-between;align-items:center">
+      <div style="color:#fff;font-weight:700;font-size:15px">📋 Importar Listagem XMenu</div>
+      <button onclick="document.getElementById('modal-import-listagem').style.display='none'" style="background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:6px;padding:4px 12px;cursor:pointer;font-size:18px">×</button>
+    </div>
+    <div style="padding:20px">
+      <p style="font-size:12px;color:#7a7068;margin-bottom:14px">Relatório <strong>Listagem de Vendas por Dia</strong> exportado do Portal XMenu. Importa faturamento diário, NFC-e e MEI por dia.</p>
+      <div style="margin-bottom:14px">
+        <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;color:#7a7068;margin-bottom:6px">Arquivo CSV do XMenu</label>
+        <input type="file" id="f-listagem" accept=".csv,.txt" onchange="selecionarArqListagem(this)" style="width:100%;padding:8px;border:1px solid #e8e0d8;border-radius:7px;font-size:13px;font-family:inherit">
+        <div id="f-listagem-nome" style="font-size:12px;color:#1a7a4a;margin-top:6px"></div>
+      </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px">
+        <button onclick="document.getElementById('modal-import-listagem').style.display='none'" style="padding:9px 18px;border:1px solid #e8e0d8;border-radius:7px;background:#fff;cursor:pointer;font-size:13px">Cancelar</button>
+        <button id="btn-imp-listagem" onclick="importarListagem()" style="padding:9px 18px;background:#1a5c8a;color:#fff;border:none;border-radius:7px;cursor:pointer;font-size:13px;font-weight:600">💾 Importar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL: Importar Formas de Pagamento (Rel.205) ─────────────────── -->
+<div class="modal-bg" id="modal-import-formas" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center;padding:16px">
+  <div style="background:#fff;border-radius:13px;width:100%;max-width:460px;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+    <div style="background:#6040c0;padding:14px 20px;border-radius:13px 13px 0 0;display:flex;justify-content:space-between;align-items:center">
+      <div style="color:#fff;font-weight:700;font-size:15px">💳 Formas de Pagamento — Rel. 205</div>
+      <button onclick="document.getElementById('modal-import-formas').style.display='none'" style="background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:6px;padding:4px 12px;cursor:pointer;font-size:18px">×</button>
+    </div>
+    <div style="padding:20px">
+      <p style="font-size:12px;color:#7a7068;margin-bottom:14px">Relatório <strong>205 — Formas de Pagamento</strong> exportado do Portal XMenu. Enriquece os dias já importados com Dinheiro, PIX, Cartão etc.</p>
+      <div style="margin-bottom:14px">
+        <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;color:#7a7068;margin-bottom:6px">Arquivo CSV Rel. 205</label>
+        <input type="file" id="f-formas" accept=".csv,.txt" onchange="selecionarArqFormas(this)" style="width:100%;padding:8px;border:1px solid #e8e0d8;border-radius:7px;font-size:13px;font-family:inherit">
+        <div id="f-formas-nome" style="font-size:12px;color:#1a7a4a;margin-top:6px"></div>
+      </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px">
+        <button onclick="document.getElementById('modal-import-formas').style.display='none'" style="padding:9px 18px;border:1px solid #e8e0d8;border-radius:7px;background:#fff;cursor:pointer;font-size:13px">Cancelar</button>
+        <button id="btn-imp-formas" onclick="importarFormas()" style="padding:9px 18px;background:#6040c0;color:#fff;border:none;border-radius:7px;cursor:pointer;font-size:13px;font-weight:600">💾 Importar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL: Importar CSV PDV (período manual) ───────────────────────── -->
+<div class="modal-bg" id="modal-import" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center;padding:16px">
+  <div style="background:#fff;border-radius:13px;width:100%;max-width:460px;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+    <div style="background:#8B0000;padding:14px 20px;border-radius:13px 13px 0 0;display:flex;justify-content:space-between;align-items:center">
+      <div style="color:#fff;font-weight:700;font-size:15px">📥 Importar CSV — Período</div>
+      <button onclick="document.getElementById('modal-import').style.display='none';fecharModal()" style="background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:6px;padding:4px 12px;cursor:pointer;font-size:18px">×</button>
+    </div>
+    <div style="padding:20px">
+      <div style="margin-bottom:12px">
+        <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;color:#7a7068;margin-bottom:6px">Arquivo CSV</label>
+        <input type="file" id="f-csv" accept=".csv,.txt" onchange="selecionarArq(this)" style="width:100%;padding:8px;border:1px solid #e8e0d8;border-radius:7px;font-size:13px;font-family:inherit">
+        <div id="f-nome" style="font-size:12px;color:#1a7a4a;margin-top:6px"></div>
+      </div>
+      <div id="imp-preview" style="display:none;background:#f7f4f0;border-radius:7px;padding:10px 12px;font-size:12px;margin-bottom:12px;color:#1a1a1a"></div>
+      <div style="display:flex;gap:10px;margin-bottom:12px">
+        <div style="flex:1">
+          <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;color:#7a7068;margin-bottom:6px">Data início</label>
+          <input type="date" id="imp-ini" style="width:100%;padding:8px;border:1px solid #e8e0d8;border-radius:7px;font-size:13px;font-family:inherit">
+        </div>
+        <div style="flex:1">
+          <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;color:#7a7068;margin-bottom:6px">Data fim</label>
+          <input type="date" id="imp-fim" style="width:100%;padding:8px;border:1px solid #e8e0d8;border-radius:7px;font-size:13px;font-family:inherit">
+        </div>
+      </div>
+      <div style="margin-bottom:14px">
+        <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;color:#7a7068;margin-bottom:6px">Label (opcional)</label>
+        <input type="text" id="imp-label" placeholder="ex: Semana 1 Junho" style="width:100%;padding:8px;border:1px solid #e8e0d8;border-radius:7px;font-size:13px;font-family:inherit">
+      </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px">
+        <button onclick="fecharModal()" style="padding:9px 18px;border:1px solid #e8e0d8;border-radius:7px;background:#fff;cursor:pointer;font-size:13px">Cancelar</button>
+        <button id="btn-importar" onclick="importar()" style="padding:9px 18px;background:#8B0000;color:#fff;border:none;border-radius:7px;cursor:pointer;font-size:13px;font-weight:600">💾 Importar</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 </body>
 </html>
