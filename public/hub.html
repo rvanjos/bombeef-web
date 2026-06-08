@@ -694,7 +694,6 @@ function renderCompras(data) {
         <thead><tr><th>Produto</th><th class="r">Estoque</th><th class="r">Cobertura</th><th class="r">Sugestão</th></tr></thead>
         <tbody>${linhasTabela(top5Urgentes)}</tbody>
       </table></div>`;
-      </div><!-- /bb-table-wrap -->
   }
   if (top5Breve.length > 0) {
     htmlCompacto += `<div class="compras-grupo">
@@ -708,7 +707,6 @@ function renderCompras(data) {
         <thead><tr><th>Produto</th><th class="r">Estoque</th><th class="r">Cobertura</th><th class="r">Sugestão</th></tr></thead>
         <tbody>${linhasTabela(top5Breve)}</tbody>
       </table></div>`;
-      </div><!-- /bb-table-wrap -->
   }
 
   const totalCriticos = urgentes.length + breve.length;
@@ -738,14 +736,12 @@ function abrirModalCompras() {
       <div class="bb-table-wrap">
       <table class="comp-table"><thead><tr><th>Produto</th><th class="r">Estoque</th><th class="r">Média/dia</th><th class="r">Cobertura</th><th class="r">Sugestão</th></tr></thead>
       <tbody>${linhasTabela(urgentes)}</tbody></table></div>`;
-      </div><!-- /bb-table-wrap -->
   }
   if (breve.length > 0) {
     html += `<div class="compras-grupo"><div class="compras-header"><span>🟡</span><strong>Comprar em Breve (${breve.length})</strong></div>
       <div class="bb-table-wrap">
       <table class="comp-table"><thead><tr><th>Produto</th><th class="r">Estoque</th><th class="r">Média/dia</th><th class="r">Cobertura</th><th class="r">Sugestão</th></tr></thead>
       <tbody>${linhasTabela(breve)}</tbody></table></div>`;
-      </div><!-- /bb-table-wrap -->
   }
   html += `<div style="font-size:10px;color:var(--muted);margin-top:8px">Base: últimos ${janela_dias} dias</div></div>`;
 

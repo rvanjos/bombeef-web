@@ -514,9 +514,9 @@ async function abrirPlanejamento(id, nome, dataAcaoPre, dataLimitePre, qtdPre) {
   _plkCampanhaId = id;
   _plkSlotsChoice = [];
   // Pré-preencher campos se vierem do calendário
-  if(dataAcaoPre)  { var el=document.getElementById('plk-data-acao');   if(el) el.value=dataAcaoPre; }
-  if(dataLimitePre){ var el2=document.getElementById('plk-data-limite'); if(el2) el2.value=dataLimitePre; }
-  if(qtdPre && parseInt(qtdPre)>0){ var el3=document.getElementById('plk-qtd'); if(el3) el3.value=qtdPre; }
+  if(dataAcaoPre)  { const elAcao=document.getElementById('plk-data-acao');     if(elAcao) elAcao.value=dataAcaoPre; }
+  if(dataLimitePre){ const elLimite=document.getElementById('plk-data-limite'); if(elLimite) elLimite.value=dataLimitePre; }
+  if(qtdPre && parseInt(qtdPre)>0){ const elQtd=document.getElementById('plk-qtd'); if(elQtd) elQtd.value=qtdPre; }
   const el = document.getElementById('pl-kit-titulo');
   if(el) el.textContent = '📦 Planejamento — ' + nome;
   document.getElementById('plk-resultado').style.display = 'none';
@@ -956,7 +956,7 @@ async function carregarCampanhas() {
         <span style="font-size:12px;color:var(--muted)">${brl(c.preco_referencia)}</span>
         <div style="display:flex;gap:6px">
           <button class="btn btn-s btn-sm" onclick="event.stopPropagation();editarCampanha(${c.id})">✏️ Editar</button>
-          <button class="btn btn-s btn-sm" onclick="event.stopPropagation();abrirPlanejamento(${c.id},'${c.nome.replace(/'/g,\"\\'\")}')">📦 Planejar</button>
+          <button class="btn btn-s btn-sm" onclick="event.stopPropagation();abrirPlanejamento(${c.id},'${c.nome.replace(/'/g,"&#39;")}')">📦 Planejar</button>
           <button class="btn btn-p btn-sm" onclick="event.stopPropagation();showTab('novo-pedido');setTimeout(()=>selecionarCampanha(${c.id}),100)">➕ Pedido</button>
         </div>
       </div>

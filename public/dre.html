@@ -6400,23 +6400,23 @@ function renderCardsMobile(lista) {
     const neg = parseFloat(tx.valor || 0) < 0;
     const cat = tx.categoria || '<em style="color:var(--muted)">Sem categoria</em>';
     const pend = !tx.categoria ? ' style="border-left:3px solid #f59e0b"' : '';
-    return \`<div class="dre-card-m"\${pend}>
+    return `<div class="dre-card-m"${pend}>
       <div class="dre-card-m-top">
         <div class="dre-card-m-desc">
-          <div class="dre-card-m-data">\${fmtDt(tx.data)}\${tx.mes_caixa ? ' · ' + tx.mes_caixa : ''}</div>
-          <div class="dre-card-m-nome">\${tx.lancamento || '—'}</div>
-          \${tx.fornecedor ? \`<div class="dre-card-m-fonte">\${tx.fornecedor}</div>\` : ''}
-          \${tx.fonte ? \`<div class="dre-card-m-fonte">Fonte: \${tx.fonte}</div>\` : ''}
+          <div class="dre-card-m-data">${fmtDt(tx.data)}${tx.mes_caixa ? ' · ' + tx.mes_caixa : ''}</div>
+          <div class="dre-card-m-nome">${tx.lancamento || '—'}</div>
+          ${tx.fornecedor ? `<div class="dre-card-m-fonte">${tx.fornecedor}</div>` : ''}
+          ${tx.fonte ? `<div class="dre-card-m-fonte">Fonte: ${tx.fonte}</div>` : ''}
         </div>
-        <div class="dre-card-m-val \${neg ? 'neg' : 'pos'}">\${fmtVal(tx.valor)}</div>
+        <div class="dre-card-m-val ${neg ? 'neg' : 'pos'}">${fmtVal(tx.valor)}</div>
       </div>
       <div class="dre-card-m-bot">
-        <div class="dre-card-m-cat">Categoria: <strong>\${cat}</strong></div>
+        <div class="dre-card-m-cat">Categoria: <strong>${cat}</strong></div>
         <div class="dre-card-m-act">
-          <button onclick="abrirEdicao('\${tx.id}')" title="Editar">✏️</button>
+          <button onclick="abrirEdicao('${tx.id}')" title="Editar">✏️</button>
         </div>
       </div>
-    </div>\`;
+    </div>`;
   }).join('');
 }
 
