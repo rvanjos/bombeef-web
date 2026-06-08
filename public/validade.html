@@ -1049,7 +1049,7 @@ async function carregarKPIs(){
     document.getElementById('k-alerta').textContent  = fmt.n(d.data.alerta);
     document.getElementById('k-vencidos').textContent= fmt.n(d.data.vencidos);
     document.getElementById('k-semcod').textContent  = fmt.n(d.data.semCodigo);
-    document.getElementById('ph-sub').textContent    = `${d.data.alerta} em alerta · ${d.data.vencidos} vencidos`;
+    const _phSub = document.getElementById('ph-sub') || document.querySelector('.ph-sub'); if(_phSub) _phSub.textContent = `${d.data.alerta} em alerta · ${d.data.vencidos} vencidos`;
     if(d.data.semCodigo>0) document.getElementById('btn-semcod').style.display='';
   }
 

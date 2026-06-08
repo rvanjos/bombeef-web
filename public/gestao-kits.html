@@ -1072,7 +1072,7 @@ let _buscarTimer = {};
 // Cache de resultados por slot para uso no addEventListener
 let _slotBuscaCache = {};
 
-function buscarProdSlot(idx, q) {
+async function buscarProdSlot(idx, q) {
   clearTimeout(_buscarTimer[idx]);
   if (!q || q.length < 2) {
     const el = document.getElementById('slot-sugestoes-'+idx);
