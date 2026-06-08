@@ -737,7 +737,7 @@ async function procSync(inp){
 // ── Funções de Kit e Semana (compartilhadas com kits-composicao) ──────────
 // (kitItems, prods e CFG já declarados no escopo acima)
 function fecharKit(){document.getElementById('m-kit').classList.remove('open');}
-function salvarKit(){
+async function salvarKit(){
   const id=document.getElementById('k-id').value;
   const body={
     codigo:document.getElementById('k-cod').value.trim(),
@@ -757,7 +757,7 @@ function salvarKit(){
   }
 }
 function fecharSemana() { document.getElementById('m-semana').classList.remove('open'); }
-function salvarSemana() {
+async function salvarSemana() {
   const id   = document.getElementById('s-id').value;
   const kitId= document.getElementById('s-kit').value;
   const ini  = document.getElementById('s-ini').value;
@@ -861,7 +861,7 @@ function calcCustoTotalKit(custoMat){
   const op = opSobreVenda; // para compatibilidade
   return{op,opSobreVenda,despMat,custoComDesp,mkOp,mkIdeal,precoMin,precoIdeal};
 }
-function buscarProdKit(i,cod){
+async function buscarProdKit(i,cod){
   if(cod.length<2)return;
   const d=await api.get(`/api/produtos/${cod}`);
   if(d.ok){
