@@ -842,11 +842,17 @@ async function enviar(rota) {
 
 // Recebe eventos do barramento
 window.addEventListener('message', e => {
-  const ev = e.data?.bbEvent || e.data?.type;
+  // Formato do portal: { type:'bb_data_changed', evento:{ type:'dre_atualizado' } }
+  const ev = e.data?.evento?.type || e.data?.bbEvent || e.data?.type;
   if (['PERDA_REGISTRADA','VALIDADE_DESCARTADA','ESTOQUE_ATUALIZADO',
-       'MOVIMENTO_ESTOQUE','FATURAMENTO_ATUALIZADO','BOLETO_PAGO'].includes(ev)) {
+       'MOVIMENTO_ESTOQUE','FATURAMENTO_ATUALIZADO','BOLETO_PAGO',
+       'dre_atualizado','faturamento_atualizado','boletos_atualizado'].includes(ev)) {
     clearTimeout(window._hubTimer);
-    window._hubTimer = setTimeout(carregar, 2500);
+    window._hubTimer = setTimeout(async () => {
+      // Invalidar cache do servidor antes de recarregar
+      try { await (_api||BB.api).get('/api/hub/invalidar-cache'); } catch(_) {}
+      carregar();
+    }, 2500);
   }
 });
 

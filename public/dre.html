@@ -1447,6 +1447,40 @@ async function carregarSessao() {
   atualizarAvisoModo();
   // Garante que a tabela esteja visível se há lançamentos
   if (TXS.length) showTable();
+  // Após carregar, salva res_final silenciosamente para Dashboard/Hub lerem valor correto
+  // Só executa se há lançamentos classificados (evita sobrescrever com zeros)
+  if (TXS.length) {
+    setTimeout(async () => {
+      try {
+        const meses = [...new Set(TXS.map(t => t.mes || mesRef))];
+        for (const m of meses) {
+          let _res = null;
+          try { _res = calcResultadoDRE(m); } catch(_) {}
+          if (!_res || (!_res.receitas && !_res.despesas)) continue;
+          const sid = (window._sessoesPorMes && window._sessoesPorMes[m]) || (m === mesRef ? sessId : null);
+          const txsMes = TXS.filter(t => (t.mes||mesRef) === m);
+          await api.post('/api/dre/salvar', {
+            sessao_id: sid,
+            mes_ref: m,
+            descricao: `Sessão ${m} — ${txsMes.length} lançamentos`,
+            dados_json: {
+              transactions: txsMes,
+              loadedFiles: m === mesRef ? files : [],
+              supplierMem: supMem,
+            },
+            resultado: {
+              receitas:   _res.receitas,
+              despesas:   _res.despesas,
+              cmv:        _res.cmv,
+              lucroBruto: _res.lucroBruto,
+              lucroOp:    _res.lucroOp,
+              final:      _res.final,
+            },
+          });
+        }
+      } catch(_) {}
+    }, 1500);
+  }
 }
 
 async function trocarMes() {
