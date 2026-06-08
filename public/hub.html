@@ -50,11 +50,11 @@ body{display:flex;flex-direction:column;overflow-y:auto;}
 .card-title{font-size:10px;text-transform:uppercase;letter-spacing:.9px;font-weight:700;color:var(--muted);margin-bottom:11px;}
 
 /* ── VENDAS CARD ── */
-.vendas-grid{display:grid;grid-template-columns:1fr 1px 1fr 1px 1fr;gap:0;}
-.vdiv{width:1px;background:var(--border);margin:0 14px;}
-.vbloco{}
+.vendas-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;}
+.vdiv{display:none;}
+.vbloco{min-width:0;overflow-wrap:anywhere;}
 .v-label{font-size:9px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);font-weight:700;}
-.v-val{font-family:'DM Mono',monospace;font-size:22px;font-weight:700;color:var(--text);margin:3px 0 2px;}
+.v-val{font-family:'DM Mono',monospace;font-size:22px;font-weight:700;color:var(--text);margin:3px 0 2px;overflow-wrap:anywhere;word-break:break-word;}
 .v-val.sem-dado{color:var(--muted);font-size:16px;}
 .v-sub{font-size:11px;color:var(--muted);}
 .v-comp{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;margin-top:4px;padding:2px 7px;border-radius:5px;}
@@ -64,7 +64,7 @@ body{display:flex;flex-direction:column;overflow-y:auto;}
 
 /* ── META BAR ── */
 .meta-wrap{margin-top:10px;padding-top:10px;border-top:1px solid var(--border);}
-.meta-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;}
+.meta-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;gap:4px;}
 .meta-lbl{font-size:11px;color:var(--muted);}
 .meta-pct{font-family:'DM Mono',monospace;font-size:13px;font-weight:700;}
 .meta-bar-bg{background:#f0ebe4;border-radius:4px;height:7px;overflow:hidden;}
@@ -136,7 +136,7 @@ body{display:flex;flex-direction:column;overflow-y:auto;}
 
 /* ── GRID ── */
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
-@media(max-width:900px){.grid2{grid-template-columns:1fr;}.vendas-grid{grid-template-columns:1fr;}.vdiv{display:none;}}
+@media(max-width:900px){.grid2{grid-template-columns:1fr;}.vendas-grid{grid-template-columns:1fr;gap:12px;}.vdiv{display:none;}}
 </style>
 </head>
 <body>

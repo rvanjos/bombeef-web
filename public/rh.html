@@ -9,14 +9,14 @@
 <link rel="stylesheet" href="/css/bb-theme.css">
 :root{--red:#8B0000;--red-l:#C0392B;--green:#1a7a4a;--green-l:#e8f5ee;--orange:#c76b00;--blue:#1a5c8a;--bg:#f7f4f0;--white:#fff;--text:#1a1a1a;--muted:#7a7068;--border:#e8e0d8;--shadow:0 2px 12px rgba(0,0,0,0.08);}
 *{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);display:flex;flex-direction:column;height:100vh;overflow:hidden;}
 header{background:var(--red);padding:14px 24px;display:flex;align-items:center;gap:12px;box-shadow:0 3px 12px rgba(139,0,0,0.4);}
 header h1{font-family:'Playfair Display',serif;font-size:18px;color:#fff;}
 header p{font-size:10px;color:rgba(255,255,255,.7);letter-spacing:1px;text-transform:uppercase;}
-main{padding:16px 24px;max-width:1400px;margin:0 auto;}
+main{padding:16px 24px;max-width:1400px;margin:0 auto;flex:1;overflow-y:auto;width:100%;}
 
 /* Tabs */
-.tabs{display:flex;gap:0;padding:0 4px;background:var(--white);border-bottom:2px solid var(--border);overflow-x:auto;scrollbar-width:none;}
+.tabs{display:flex;gap:0;padding:0 4px;background:var(--white);border-bottom:2px solid var(--border);overflow-x:auto;scrollbar-width:none;flex-shrink:0;}
 .tab,.tab-btn{
   padding:10px 16px;font-size:12px;font-weight:600;cursor:pointer;
   border:none;background:none;color:var(--muted);

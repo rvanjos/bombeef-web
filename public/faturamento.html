@@ -14,12 +14,12 @@
   --bg:#f7f4f0;--white:#fff;--text:#1a1a1a;--muted:#7a7068;--border:#e8e0d8;
   --shadow:0 2px 12px rgba(0,0,0,.08);}
 *{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);display:flex;flex-direction:column;height:100vh;overflow:hidden;}
 .ph{background:var(--red);color:#fff;padding:12px 22px;box-shadow:0 2px 12px rgba(139,0,0,.3);display:flex;align-items:center;gap:10px;
   display:flex;align-items:center;gap:10px;}
 .ph h2{font-size:16px;font-weight:700;}
 .ph-sub{margin-left:auto;font-size:11px;opacity:.7;}
-.body{padding:16px;}
+.body{padding:16px;flex:1;overflow-y:auto;}
 /* KPIs */
 .kpi-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px;}
 .kpi{background:var(--white);border-radius:10px;padding:13px 15px;box-shadow:var(--shadow);border-top:3px solid var(--border);}
@@ -62,8 +62,9 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
   background:var(--white);font-family:'DM Sans',sans-serif;}
 /* Charts */
 .charts-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;}
-.chart-card{background:var(--white);border-radius:10px;box-shadow:var(--shadow);padding:16px;}
-.chart-title{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;
+.chart-card{background:var(--white);border-radius:10px;box-shadow:var(--shadow);padding:16px;overflow:hidden;}
+.chart-card canvas{max-height:280px;width:100%!important;}
+  .chart-title{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;
   letter-spacing:.6px;margin-bottom:12px;}
 /* Categorias */
 .cat-bar{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:12px;}
@@ -100,7 +101,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
 .pag-cred{background:#e8f0ff;color:#1a5c8a;}.pag-deb{background:#e8fff0;color:#1a7a4a;}
 .pag-pix{background:#f0ffe8;color:#2d7a00;}.pag-din{background:#fff8e0;color:#b35c00;}
 .pag-vou{background:#f5e8ff;color:#6040c0;}.pag-out{background:#f0f0f0;color:#555;}
-@media(max-width:700px){.kpi-grid{grid-template-columns:1fr 1fr;}.charts-row{grid-template-columns:1fr;}}
+@media(max-width:700px){.kpi-grid{grid-template-columns:1fr 1fr;}.charts-row{grid-template-columns:1fr;}.chart-card canvas{max-height:220px;}}
 
 /* ── Normalização bb-base ────────────────────────────────────────────────── */
 /* Botão primário */
