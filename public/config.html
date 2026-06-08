@@ -362,8 +362,9 @@ async function init(){
 
   const hoje = new Date();
   const mesVal = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
-  document.getElementById('meta-mes').value = mesVal;
-  document.getElementById('meta-mes-label').textContent = `${String(hoje.getMonth()+1).padStart(2,'0')}/${hoje.getFullYear()}`;
+  const _elMM=document.getElementById('meta-mes'), _elML=document.getElementById('meta-mes-label');
+  if(_elMM) _elMM.value = mesVal;
+  if(_elML) _elML.textContent = `${String(hoje.getMonth()+1).padStart(2,'0')}/${hoje.getFullYear()}`;
 
   carregarMeta();
   carregarMetas();
@@ -600,11 +601,12 @@ async function inativarFunc(id){
 
 // ── Metas ──────────────────────────────────────────────────────────────────
 async function carregarMeta(){
-  const mesVal = document.getElementById('meta-mes').value;
+  const _elMM2=document.getElementById('meta-mes'); if(!_elMM2) return;
+  const mesVal = _elMM2.value;
   if(!mesVal) return;
   const [y,m] = mesVal.split('-');
   const mes = `${m}/${y}`;
-  document.getElementById('meta-mes-label').textContent = mes;
+  const _elML2=document.getElementById('meta-mes-label'); if(_elML2) _elML2.textContent = mes;
   const d = await api.get(`/api/config/metas/${encodeURIComponent(mes)}`);
   if(!d.ok) return;
   const mt = d.data;
@@ -616,7 +618,8 @@ async function carregarMeta(){
 }
 
 async function salvarMeta(){
-  const mesVal = document.getElementById('meta-mes').value;
+  const _elMM3=document.getElementById('meta-mes'); if(!_elMM3) return;
+  const mesVal = _elMM3.value;
   if(!mesVal){ toast('Selecione o mês'); return; }
   const [y,m] = mesVal.split('-');
   const body = {

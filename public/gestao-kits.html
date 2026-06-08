@@ -519,7 +519,7 @@ async function abrirPlanejamento(id, nome, dataAcaoPre, dataLimitePre, qtdPre) {
   if(qtdPre && parseInt(qtdPre)>0){ const elQtd=document.getElementById('plk-qtd'); if(elQtd) elQtd.value=qtdPre; }
   const el = document.getElementById('pl-kit-titulo');
   if(el) el.textContent = '📦 Planejamento — ' + nome;
-  document.getElementById('plk-resultado').style.display = 'none';
+  const _plkRes=document.getElementById('plk-resultado'); if(_plkRes) _plkRes.style.display = 'none';
   // Carregar slots choice antes de abrir
   const choiceArea = document.getElementById('plk-choices');
   if(choiceArea) { choiceArea.innerHTML = '<span style="font-size:12px;color:var(--muted)">⏳ Carregando slots...</span>'; choiceArea.style.display = ''; }
@@ -581,7 +581,7 @@ async function calcularPlanejamento() {
   const dataLim  = document.getElementById('plk-data-limite')?.value  || '';
   const tbody    = document.getElementById('plk-tbody');
   tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--muted)">⏳ Calculando...</td></tr>';
-  document.getElementById('plk-resultado').style.display = '';
+  const _plkRes2=document.getElementById('plk-resultado'); if(_plkRes2) _plkRes2.style.display = '';
 
   const p = new URLSearchParams({ qtd });
   if(dataAcao) p.set('data_acao', dataAcao);
