@@ -76,6 +76,14 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);fon
 /* Gráfico SVG simples */
 .evo-bar{display:flex;align-items:flex-end;gap:4px;height:60px;margin-top:8px;}
 .evo-bar-col{flex:1;background:var(--red);border-radius:3px 3px 0 0;opacity:.8;min-width:8px;}
+
+/* ── Lista de Compra ────────────────────────────────────────────────────── */
+.pl-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:3px}
+.pl-inp{border:1px solid var(--border);border-radius:7px;padding:7px 11px;font-size:13px;font-family:'DM Sans',sans-serif;background:var(--white);height:36px}
+.pl-kpi{background:var(--white);border-radius:10px;border:1px solid var(--border);padding:10px 14px;min-width:110px;flex:1}
+.pl-kpi-l{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)}
+.pl-kpi-v{font-size:20px;font-weight:800;font-family:'DM Mono',monospace;margin-top:3px}
+.pl-qtd:focus,.pl-preco:focus{outline:none;border-color:var(--red);box-shadow:0 0 0 2px rgba(139,0,0,.1)}
 </style>
 </head>
 <body>
@@ -854,19 +862,23 @@ async function carregarGiro() {
 
 <!-- ── ABA PLANEJAMENTO ──────────────────────────────────────────────── -->
 <div id="sec-planejamento" class="sec">
-  <!-- Controles -->
   <div style="padding:14px 14px 0">
+
+    <!-- Filtros e controles -->
     <div class="card" style="padding:12px 14px;margin-bottom:12px">
       <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
         <div>
-          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:3px">Orçamento disponível (R$)</div>
-          <input id="pl-orcamento" type="number" step="100" min="0" placeholder="Ex: 10000"
-            style="border:1px solid var(--border);border-radius:7px;padding:7px 11px;font-size:14px;font-family:'DM Sans',sans-serif;width:180px"
-            onkeydown="if(event.key==='Enter')gerarPlanejamento()">
+          <div class="pl-lbl">Status</div>
+          <select id="pl-status" class="pl-inp" onchange="carregarListaCompra()">
+            <option value="">Todos</option>
+            <option value="urgente">🔴 Urgente</option>
+            <option value="atencao">🟡 Atenção</option>
+            <option value="saudavel">🟢 Saudável</option>
+          </select>
         </div>
         <div>
-          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:3px">Curva ABC</div>
-          <select id="pl-abc" style="border:1px solid var(--border);border-radius:7px;padding:7px 11px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff">
+          <div class="pl-lbl">Curva ABC</div>
+          <select id="pl-abc" class="pl-inp" onchange="carregarListaCompra()">
             <option value="">Todas</option>
             <option value="A">A</option>
             <option value="B">B</option>
@@ -874,235 +886,422 @@ async function carregarGiro() {
           </select>
         </div>
         <div>
-          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:3px">Status</div>
-          <select id="pl-status" style="border:1px solid var(--border);border-radius:7px;padding:7px 11px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff">
-            <option value="">Todos</option>
-            <option value="urgente">🔴 Urgente</option>
-            <option value="atencao">🟡 Atenção</option>
-            <option value="saudavel">🟢 Saudável</option>
-          </select>
+          <div class="pl-lbl">Buscar produto</div>
+          <input id="pl-busca" class="pl-inp" placeholder="Nome ou código..." style="width:180px"
+            oninput="filtrarListaCompra()">
         </div>
-        <button onclick="gerarPlanejamento()" class="btn" style="height:36px;padding:0 20px;font-size:13px">
-          📦 Gerar sugestão
+        <button onclick="carregarListaCompra()" class="btn btn-p" style="height:36px;padding:0 18px">
+          🔄 Atualizar
         </button>
-        <button onclick="gerarOrcamento()" id="pl-btn-orcamento" class="btn btn-g" style="height:36px;padding:0 20px;font-size:13px;display:none">
-          💰 Distribuir orçamento
+        <button onclick="imprimirListaCompra()" class="btn btn-s" style="height:36px;padding:0 14px">
+          🖨️ Imprimir
         </button>
+        <div style="margin-left:auto;display:flex;align-items:center;gap:6px">
+          <span style="font-size:11px;color:var(--muted)">Selecionados:</span>
+          <span id="pl-total-sel" style="font-size:14px;font-weight:700;font-family:'DM Mono',monospace;color:var(--red)">R$ 0,00</span>
+          <button onclick="limparSelecao()" class="btn btn-s" style="height:28px;padding:0 10px;font-size:11px">
+            ✕ Limpar
+          </button>
+        </div>
       </div>
     </div>
 
-    <!-- Cards de resumo -->
-    <div id="pl-cards" style="display:none;gap:10px;margin-bottom:12px;flex-wrap:wrap">
-      <div style="background:#fff;border-radius:10px;border:1px solid var(--border);padding:12px 16px;flex:1;min-width:130px">
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">🔴 Urgentes</div>
-        <div style="font-size:22px;font-weight:800;font-family:'DM Mono',monospace;margin-top:4px" id="pl-n-urgentes">—</div>
-      </div>
-      <div style="background:#fff;border-radius:10px;border:1px solid var(--border);padding:12px 16px;flex:1;min-width:130px">
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">🟡 Atenção</div>
-        <div style="font-size:22px;font-weight:800;font-family:'DM Mono',monospace;margin-top:4px" id="pl-n-atencao">—</div>
-      </div>
-      <div style="background:#fff;border-radius:10px;border:1px solid var(--border);padding:12px 16px;flex:1;min-width:130px">
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">Produtos</div>
-        <div style="font-size:22px;font-weight:800;font-family:'DM Mono',monospace;margin-top:4px" id="pl-n-total">—</div>
-      </div>
-      <div id="pl-card-orc" style="display:none;background:#fff;border-radius:10px;border:1px solid var(--border);padding:12px 16px;flex:1;min-width:130px">
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">Orçamento</div>
-        <div style="font-size:22px;font-weight:800;font-family:'DM Mono',monospace;margin-top:4px" id="pl-orc-total">—</div>
-      </div>
-      <div id="pl-card-util" style="display:none;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:12px 16px;flex:1;min-width:130px">
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--green)">Valor utilizado</div>
-        <div style="font-size:22px;font-weight:800;font-family:'DM Mono',monospace;color:var(--green);margin-top:4px" id="pl-orc-util">—</div>
-      </div>
-      <div id="pl-card-rest" style="display:none;background:#fff;border-radius:10px;border:1px solid var(--border);padding:12px 16px;flex:1;min-width:130px">
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">Restante</div>
-        <div style="font-size:22px;font-weight:800;font-family:'DM Mono',monospace;margin-top:4px" id="pl-orc-rest">—</div>
-      </div>
-      <div style="background:#fff;border-radius:10px;border:1px solid var(--border);padding:12px 16px;flex:1;min-width:160px">
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">Valor estimado total</div>
-        <div style="font-size:22px;font-weight:800;font-family:'DM Mono',monospace;color:var(--red);margin-top:4px" id="pl-valor-total">—</div>
-      </div>
+    <!-- Cards KPI -->
+    <div id="pl-cards" style="display:none;display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+      <div class="pl-kpi"><div class="pl-kpi-l">🔴 Urgentes</div><div class="pl-kpi-v" id="pk-urgentes">—</div></div>
+      <div class="pl-kpi"><div class="pl-kpi-l">🟡 Atenção</div><div class="pl-kpi-v" id="pk-atencao">—</div></div>
+      <div class="pl-kpi"><div class="pl-kpi-l">Total na lista</div><div class="pl-kpi-v" id="pk-total">—</div></div>
+      <div class="pl-kpi"><div class="pl-kpi-l">✅ Selecionados</div><div class="pl-kpi-v" id="pk-selecionados" style="color:var(--green)">0</div></div>
+      <div class="pl-kpi" style="flex:2;min-width:200px"><div class="pl-kpi-l">💰 Total selecionado</div><div class="pl-kpi-v" id="pk-valor-sel" style="color:var(--red)">R$ 0,00</div></div>
     </div>
 
-    <!-- Tabela -->
-    <div style="overflow-x:auto;background:#fff;border-radius:10px;border:1px solid var(--border)">
-      <table class="tbl" style="min-width:860px">
-        <thead><tr>
-          <th>Produto</th>
-          <th style="text-align:center">ABC</th>
-          <th style="text-align:right">Cobertura</th>
-          <th style="text-align:center">Status</th>
-          <th style="text-align:right">Qtd Sugerida</th>
-          <th style="text-align:right" id="pl-th-aprovada" style="display:none">Qtd Aprovada</th>
-          <th style="text-align:right">Custo Unit.</th>
-          <th style="text-align:right">Valor Estimado</th>
-          <th style="text-align:right" id="pl-th-aprovado-val" style="display:none">Valor Aprovado</th>
-          <th>Tendência</th>
-          <th id="pl-th-parcial" style="display:none;text-align:center">Parcial</th>
-        </tr></thead>
+    <!-- Tabela principal -->
+    <div style="overflow-x:auto;background:#fff;border-radius:12px;border:1px solid var(--border)">
+      <table class="tbl" style="min-width:1000px" id="pl-table">
+        <thead>
+          <tr style="background:var(--bg)">
+            <th style="width:36px;text-align:center">
+              <input type="checkbox" id="pl-chk-all" onchange="selecionarTodos(this.checked)" title="Selecionar todos">
+            </th>
+            <th>Produto</th>
+            <th style="text-align:center">ABC</th>
+            <th style="text-align:right">Estoque</th>
+            <th style="text-align:right">Cobertura</th>
+            <th style="text-align:center">Status</th>
+            <th style="text-align:right">Qtd Sugerida</th>
+            <th style="text-align:right">Qtd Comprar</th>
+            <th style="text-align:right">Últ. Preço</th>
+            <th style="text-align:right">Média 90d</th>
+            <th style="text-align:right">Preço Cotado</th>
+            <th style="text-align:right">Total</th>
+            <th>Tendência</th>
+          </tr>
+        </thead>
         <tbody id="pl-tbody">
-          <tr><td colspan="11" style="text-align:center;padding:32px;color:var(--muted)">
-            Informe um orçamento e clique em "Gerar sugestão"
+          <tr><td colspan="13" style="text-align:center;padding:32px;color:var(--muted)">
+            Clique em "Atualizar" para carregar a lista de compras
           </td></tr>
         </tbody>
       </table>
     </div>
 
-    <!-- Rodapé total -->
-    <div id="pl-rodape" style="display:none;text-align:right;padding:10px 4px;font-size:13px;color:var(--muted)">
-      Total estimado da compra: <strong id="pl-rodape-total" style="color:var(--red);font-family:'DM Mono',monospace;font-size:14px">—</strong>
-      <span id="pl-rodape-orc" style="display:none"> · Valor aprovado: <strong id="pl-rodape-aprovado" style="color:var(--green);font-family:'DM Mono',monospace;font-size:14px">—</strong></span>
+    <!-- Rodapé com totalizador -->
+    <div id="pl-rodape" style="display:none;background:#fff;border-radius:10px;border:1px solid var(--border);padding:12px 16px;margin-top:10px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <div style="font-size:12px;color:var(--muted)">
+        <span id="pl-rod-count">0</span> itens selecionados
+      </div>
+      <div style="display:flex;align-items:center;gap:16px">
+        <span style="font-size:12px;color:var(--muted)">Total estimado (qtd sugerida):</span>
+        <span id="pl-rod-estimado" style="font-family:'DM Mono',monospace;font-size:13px;color:var(--muted)">R$ 0,00</span>
+        <span style="font-size:12px;color:var(--muted)">Total selecionado:</span>
+        <strong id="pl-rod-total" style="font-family:'DM Mono',monospace;font-size:15px;color:var(--red)">R$ 0,00</strong>
+      </div>
     </div>
+
   </div>
 </div>
 
 <script>
-// ── Planejamento ──────────────────────────────────────────────────────────────
+// ── Lista de Compra Operacional ───────────────────────────────────────────────
 const _pbrl = v => v!=null ? 'R$ '+parseFloat(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—';
 const _pnum = (v,d=3) => v!=null ? parseFloat(v).toLocaleString('pt-BR',{minimumFractionDigits:d,maximumFractionDigits:d}) : '—';
+const _pnum2 = (v) => v!=null ? parseFloat(v).toLocaleString('pt-BR',{minimumFractionDigits:0,maximumFractionDigits:3}) : '—';
+
+let _plRaw    = [];   // dados completos da API
+let _plFiltro = [];   // dados filtrados por busca
+let _plSel    = {};   // { codigo: { qtd, preco } } — seleções do usuário
 
 const _statusBadge = s => ({
-  urgente: '<span class="badge bg-red">🔴 Urgente</span>',
-  atencao: '<span class="badge bg-amber">🟡 Atenção</span>',
-  saudavel:'<span class="badge bg-green">🟢 Saudável</span>',
+  urgente:  '<span class="badge bg-red" style="font-size:10px">🔴 Urgente</span>',
+  atencao:  '<span class="badge bg-amber" style="font-size:10px">🟡 Atenção</span>',
+  saudavel: '<span class="badge bg-green" style="font-size:10px">🟢 Ok</span>',
   sem_venda:'<span class="badge bg-gray" style="font-size:10px">sem venda</span>',
 }[s]||'—');
 
 const _abcBpl = v => {
-  if(!v) return '—';
+  if(!v) return '<span style="color:var(--muted);font-size:11px">—</span>';
   const m={A:'bg-green',B:'bg-blue',C:'bg-gray'};
   return `<span class="badge ${m[v]||'bg-gray'}">${v}</span>`;
 };
 
-function _ptset(id,v){const e=$id(id);if(e)e.textContent=v;}
-function _pshow(id,show){const e=$id(id);if(e)e.style.display=show?'':'none';}
+const _tendIcon = t =>
+  t==='alta'   ? '<span style="color:#dc2626;font-weight:700;font-size:11px">📈 Alta</span>'  :
+  t==='baixa'  ? '<span style="color:#16a34a;font-weight:700;font-size:11px">📉 Baixa</span>' :
+  t==='estavel'? '<span style="color:var(--muted);font-size:11px">➡️ Estável</span>'           : '—';
 
-async function gerarPlanejamento() {
-  const abc    = $id('pl-abc')?.value   || '';
-  const status = $id('pl-status')?.value || '';
-  const tbody  = $id('pl-tbody');
+function _setText(id,v){const e=document.getElementById(id);if(e)e.textContent=v;}
+
+async function carregarListaCompra() {
+  const abc    = document.getElementById('pl-abc')?.value   || '';
+  const status = document.getElementById('pl-status')?.value || '';
+  const tbody  = document.getElementById('pl-tbody');
   if(!tbody) return;
-  tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:24px;color:var(--muted)">⏳ Carregando...</td></tr>';
-  _pshow('pl-cards', false);
-  _pshow('pl-rodape', false);
-  // Esconder colunas de orçamento
-  ['pl-card-orc','pl-card-util','pl-card-rest','pl-th-aprovada','pl-th-aprovado-val','pl-th-parcial','pl-rodape-orc'].forEach(id => _pshow(id, false));
-  $id('pl-btn-orcamento').style.display = 'none';
+  tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;padding:24px;color:var(--muted)">⏳ Carregando...</td></tr>';
 
-  const p = new URLSearchParams({ abc, status });
+  const p = new URLSearchParams({ abc, status, limite: 500 });
   try {
     const api = window.BB?.api || window._api;
     const res = await api.get('/api/compras/planejamento?' + p);
-    if(!res.ok){ tbody.innerHTML=`<tr><td colspan="11" style="text-align:center;padding:24px;color:#dc2626">❌ ${res.erro||'Erro'}</td></tr>`; return; }
-
-    const r = res.resumo;
-    _pshow('pl-cards', true);
-    _ptset('pl-n-urgentes', r.urgentes);
-    _ptset('pl-n-atencao',  r.atencao);
-    _ptset('pl-n-total',    r.total);
-    _ptset('pl-valor-total', _pbrl(r.valor_total_estimado));
-
-    window._plData = res.data; // guardar para distribuição de orçamento
-
-    if(!res.data?.length){
-      tbody.innerHTML='<tr><td colspan="11" style="text-align:center;padding:32px;color:var(--muted)">Nenhum produto com compra sugerida</td></tr>';
-      _pshow('pl-rodape', false);
+    if(!res.ok){
+      tbody.innerHTML=`<tr><td colspan="13" style="text-align:center;padding:24px;color:#dc2626">❌ ${res.erro||'Erro'}</td></tr>`;
       return;
     }
-
-    tbody.innerHTML = res.data.map(row => {
-      const valEst = row.custo_unitario && row.qtd_sugerida
-        ? parseFloat((row.qtd_sugerida * row.custo_unitario).toFixed(2)) : null;
-      return `<tr>
-        <td><strong style="font-size:12px">${row.produto_nome||row.codigo}</strong>
-            <div style="font-size:10px;color:var(--muted)">${row.codigo}</div></td>
-        <td style="text-align:center">${_abcBpl(row.curva_abc)}</td>
-        <td style="text-align:right;font-family:'DM Mono',monospace;font-size:12px">
-          ${row.cobertura_dias!=null ? row.cobertura_dias+'d' : '—'}</td>
-        <td style="text-align:center">${_statusBadge(row.status)}</td>
-        <td style="text-align:right;font-family:'DM Mono',monospace;font-size:12px">${_pnum(row.qtd_sugerida)} ${row.unidade||''}</td>
-        <td style="display:none" class="col-aprovada"></td>
-        <td style="text-align:right;font-family:'DM Mono',monospace;font-size:12px">${_pbrl(row.custo_unitario)}</td>
-        <td style="text-align:right;font-family:'DM Mono',monospace;font-size:12px">${_pbrl(valEst)}</td>
-        <td style="display:none" class="col-aprovado-val"></td>
-        <td style="font-size:12px">${row.tendencia_custo==='alta'?'<span style="color:#dc2626;font-weight:700">📈 Alta</span>':row.tendencia_custo==='baixa'?'<span style="color:#16a34a;font-weight:700">📉 Baixa</span>':row.tendencia_custo==='estavel'?'➡️ Estável':'—'}</td>
-        <td style="display:none;text-align:center" class="col-parcial"></td>
-      </tr>`;
-    }).join('');
-
-    _ptset('pl-rodape-total', _pbrl(r.valor_total_estimado));
-    _pshow('pl-rodape', true);
-
-    const orc = parseFloat($id('pl-orcamento')?.value || 0);
-    if(orc > 0) $id('pl-btn-orcamento').style.display = '';
-
-  } catch(e){
-    tbody.innerHTML=`<tr><td colspan="11" style="text-align:center;padding:24px;color:#dc2626">❌ ${e.message}</td></tr>`;
+    _plRaw = res.data || [];
+    // KPIs
+    const r = res.resumo;
+    document.getElementById('pl-cards').style.display = 'flex';
+    _setText('pk-urgentes', r.urgentes);
+    _setText('pk-atencao',  r.atencao);
+    _setText('pk-total',    r.total);
+    _atualizarTotaisCard();
+    filtrarListaCompra();
+  } catch(e) {
+    tbody.innerHTML=`<tr><td colspan="13" style="text-align:center;padding:24px;color:#dc2626">❌ ${e.message}</td></tr>`;
   }
 }
 
-async function gerarOrcamento() {
-  const orc = parseFloat($id('pl-orcamento')?.value || 0);
-  if(!orc || orc<=0){ alert('Informe o orçamento disponível'); return; }
-  const tbody = $id('pl-tbody');
-  tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:24px;color:var(--muted)">⏳ Distribuindo orçamento...</td></tr>';
-  _pshow('pl-cards', false);
+function filtrarListaCompra() {
+  const busca = (document.getElementById('pl-busca')?.value||'').toLowerCase().trim();
+  _plFiltro = busca
+    ? _plRaw.filter(r =>
+        (r.produto_nome||'').toLowerCase().includes(busca) ||
+        (r.codigo||'').toLowerCase().includes(busca))
+    : [..._plRaw];
+  _renderListaCompra();
+}
 
-  try {
-    const api = window.BB?.api || window._api;
-    const res = await api.get('/api/compras/orcamento?valor='+orc);
-    if(!res.ok){ tbody.innerHTML=`<tr><td colspan="11" style="text-align:center;padding:24px;color:#dc2626">❌ ${res.erro||'Erro'}</td></tr>`; return; }
+function _renderListaCompra() {
+  const tbody = document.getElementById('pl-tbody');
+  if(!tbody) return;
 
-    const r = res.resumo;
-    _pshow('pl-cards', true);
-    _ptset('pl-n-urgentes', r.urgentes_atendidos);
-    _ptset('pl-n-atencao',  r.atencao_atendidos);
-    _ptset('pl-n-total',    r.produtos_selecionados);
-    _ptset('pl-valor-total', _pbrl(r.valor_utilizado));
+  if(!_plFiltro.length) {
+    tbody.innerHTML='<tr><td colspan="13" style="text-align:center;padding:32px;color:var(--muted)">Nenhum produto encontrado</td></tr>';
+    document.getElementById('pl-rodape').style.display='none';
+    return;
+  }
 
-    // Cards de orçamento
-    _pshow('pl-card-orc',  true); _ptset('pl-orc-total', _pbrl(r.orcamento));
-    _pshow('pl-card-util', true); _ptset('pl-orc-util',  _pbrl(r.valor_utilizado));
-    _pshow('pl-card-rest', true); _ptset('pl-orc-rest',  _pbrl(r.valor_restante));
+  const rows = _plFiltro.map(row => {
+    const sel = _plSel[row.codigo];
+    const checked = sel ? 'checked' : '';
+    const qtdVal  = sel ? sel.qtd   : (row.qtd_sugerida > 0 ? row.qtd_sugerida : '');
+    const precoVal = sel ? sel.preco : (row.custo_unitario || '');
 
-    // Mostrar colunas extras
-    ['pl-th-aprovada','pl-th-aprovado-val','pl-th-parcial'].forEach(id => _pshow(id, true));
+    // Calcular total da linha
+    const qtdN   = parseFloat(qtdVal)  || 0;
+    const precoN = parseFloat(precoVal) || 0;
+    const total  = qtdN > 0 && precoN > 0 ? qtdN * precoN : null;
 
-    if(!res.data?.length){
-      tbody.innerHTML='<tr><td colspan="11" style="text-align:center;padding:32px;color:var(--muted)">Nenhum produto selecionado</td></tr>';
-      return;
+    // Badge de variação de preço
+    const vPct = row.variacao_custo_pct;
+    let varBadge = '';
+    if (vPct != null) {
+      const cls = vPct > 5 ? 'color:#dc2626' : vPct < -5 ? 'color:#16a34a' : 'color:var(--muted)';
+      const sinal = vPct > 0 ? '+' : '';
+      varBadge = `<span style="font-size:10px;${cls}">${sinal}${parseFloat(vPct).toFixed(1)}%</span>`;
     }
 
-    tbody.innerHTML = res.data.map(row => {
-      const valEst = row.custo_unitario && row.qtd_sugerida
-        ? parseFloat((row.qtd_sugerida*row.custo_unitario).toFixed(2)) : null;
-      const parcialBadge = row.parcial
-        ? '<span class="badge bg-amber" style="font-size:10px">parcial</span>'
-        : '<span class="badge bg-green" style="font-size:10px">integral</span>';
-      return `<tr${row.parcial?' style="background:#fffbeb;"':''}>
-        <td><strong style="font-size:12px">${row.produto_nome||row.codigo}</strong>
-            <div style="font-size:10px;color:var(--muted)">${row.codigo} · #${row.prioridade}</div></td>
-        <td style="text-align:center">${_abcBpl(row.curva_abc)}</td>
-        <td style="text-align:right;font-family:'DM Mono',monospace;font-size:12px">${row.cobertura_dias!=null?row.cobertura_dias+'d':'—'}</td>
-        <td style="text-align:center">${_statusBadge(row.status)}</td>
-        <td style="text-align:right;font-family:'DM Mono',monospace;font-size:12px">${_pnum(row.qtd_sugerida)} ${row.unidade||''}</td>
-        <td style="text-align:right;font-family:'DM Mono',monospace;font-size:12px;font-weight:700">${_pnum(row.qtd_aprovada)} ${row.unidade||''}</td>
-        <td style="text-align:right;font-family:'DM Mono',monospace;font-size:12px">${_pbrl(row.custo_unitario)}</td>
-        <td style="text-align:right;font-family:'DM Mono',monospace;font-size:12px">${_pbrl(valEst)}</td>
-        <td style="text-align:right;font-family:'DM Mono',monospace;font-size:12px;color:var(--green);font-weight:700">${_pbrl(row.valor_aprovado)}</td>
-        <td style="font-size:12px">${row.tendencia_custo==='alta'?'<span style="color:#dc2626;font-weight:700">📈 Alta</span>':row.tendencia_custo==='baixa'?'<span style="color:#16a34a;font-weight:700">📉 Baixa</span>':row.tendencia_custo==='estavel'?'➡️ Estável':'—'}</td>
-        <td style="text-align:center">${parcialBadge}</td>
-      </tr>`;
-    }).join('');
+    // Cor da linha por status
+    const rowBg = row.status==='urgente' ? 'background:#fff5f5' :
+                  row.status==='atencao' ? 'background:#fffbeb' : '';
 
-    _ptset('pl-rodape-total', _pbrl(r.orcamento));
-    _ptset('pl-rodape-aprovado', _pbrl(r.valor_utilizado));
-    _pshow('pl-rodape', true);
-    _pshow('pl-rodape-orc', true);
+    return `<tr style="${rowBg}" data-codigo="${row.codigo}">
+      <td style="text-align:center">
+        <input type="checkbox" class="pl-chk" data-codigo="${row.codigo}"
+          ${checked} onchange="onCheckLinha(this,'${row.codigo}')">
+      </td>
+      <td>
+        <div style="font-size:12px;font-weight:700">${row.produto_nome||row.codigo}</div>
+        <div style="font-size:10px;color:var(--muted)">${row.codigo}${row.ultimo_fornecedor ? ' · ' + row.ultimo_fornecedor : ''}</div>
+      </td>
+      <td style="text-align:center">${_abcBpl(row.curva_abc)}</td>
+      <td style="text-align:right;font-family:'DM Mono',monospace;font-size:12px">
+        ${_pnum2(row.estoque_atual)} ${row.unidade||''}
+      </td>
+      <td style="text-align:right;font-family:'DM Mono',monospace;font-size:12px">
+        ${row.cobertura_dias!=null ? row.cobertura_dias+'d' : '—'}
+      </td>
+      <td style="text-align:center">${_statusBadge(row.status)}</td>
+      <td style="text-align:right;font-family:'DM Mono',monospace;font-size:12px;color:var(--muted)">
+        ${row.qtd_sugerida > 0 ? _pnum2(row.qtd_sugerida)+' '+(row.unidade||'') : '—'}
+      </td>
+      <td style="padding:4px 8px">
+        <input type="number" class="pl-qtd" min="0" step="0.001"
+          placeholder="${row.qtd_sugerida > 0 ? _pnum2(row.qtd_sugerida) : '0'}"
+          value="${qtdVal}"
+          data-codigo="${row.codigo}"
+          style="width:80px;padding:4px 7px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:'DM Mono',monospace;text-align:right"
+          oninput="onInputLinha(this,'${row.codigo}','qtd')"
+          onfocus="if(!document.querySelector('[data-codigo=\'${row.codigo}\'].pl-chk').checked)document.querySelector('[data-codigo=\'${row.codigo}\'].pl-chk').click()">
+      </td>
+      <td style="text-align:right;font-family:'DM Mono',monospace;font-size:12px">
+        ${row.ultimo_custo != null ? _pbrl(row.ultimo_custo) : '—'}
+        ${row.ultima_entrada_em ? '<div style="font-size:10px;color:var(--muted)">'+row.ultima_entrada_em.split('-').reverse().join('/')+'</div>' : ''}
+      </td>
+      <td style="text-align:right;font-family:'DM Mono',monospace;font-size:12px">
+        ${row.custo_medio_90d != null ? _pbrl(row.custo_medio_90d) : (row.custo_medio_3ped != null ? _pbrl(row.custo_medio_3ped) : '—')}
+        ${varBadge ? '<div>'+varBadge+'</div>' : ''}
+      </td>
+      <td style="padding:4px 8px">
+        <input type="number" class="pl-preco" min="0" step="0.01"
+          placeholder="${row.custo_unitario ? parseFloat(row.custo_unitario).toFixed(2).replace('.',',') : '0,00'}"
+          value="${precoVal || ''}"
+          data-codigo="${row.codigo}"
+          style="width:90px;padding:4px 7px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:'DM Mono',monospace;text-align:right"
+          oninput="onInputLinha(this,'${row.codigo}','preco')"
+          onfocus="if(!document.querySelector('[data-codigo=\'${row.codigo}\'].pl-chk').checked)document.querySelector('[data-codigo=\'${row.codigo}\'].pl-chk').click()">
+      </td>
+      <td style="text-align:right;font-family:'DM Mono',monospace;font-size:12px;font-weight:700;color:${total?'var(--text)':'var(--muted)'}">
+        <span class="pl-linha-total" data-codigo="${row.codigo}">${total ? _pbrl(total) : '—'}</span>
+      </td>
+      <td>${_tendIcon(row.tendencia_custo)}</td>
+    </tr>`;
+  }).join('');
 
-  } catch(e){
-    tbody.innerHTML=`<tr><td colspan="11" style="text-align:center;padding:24px;color:#dc2626">❌ ${e.message}</td></tr>`;
+  tbody.innerHTML = rows;
+
+  // Atualizar totais e rodapé
+  _atualizarTotaisCard();
+  _atualizarRodape();
+  document.getElementById('pl-rodape').style.display = '';
+}
+
+// Quando clica no checkbox de uma linha
+function onCheckLinha(el, codigo) {
+  const row = _plRaw.find(r => r.codigo === codigo);
+  if(!row) return;
+  if(el.checked) {
+    if(!_plSel[codigo]) {
+      const qtdInp   = document.querySelector(`.pl-qtd[data-codigo="${codigo}"]`);
+      const precoInp = document.querySelector(`.pl-preco[data-codigo="${codigo}"]`);
+      const qtd   = parseFloat(qtdInp?.value)   || row.qtd_sugerida   || 0;
+      const preco = parseFloat(precoInp?.value)  || row.custo_unitario || 0;
+      _plSel[codigo] = { qtd, preco };
+      if(qtdInp && !qtdInp.value)   qtdInp.value   = qtd   > 0 ? qtd   : '';
+      if(precoInp && !precoInp.value) precoInp.value = preco > 0 ? preco : '';
+    }
+  } else {
+    delete _plSel[codigo];
+  }
+  _recalcLinha(codigo);
+  _atualizarTotaisCard();
+  _atualizarRodape();
+}
+
+// Quando digita qtd ou preco
+function onInputLinha(el, codigo, campo) {
+  if(!_plSel[codigo]) {
+    // Auto-selecionar ao digitar
+    const chk = document.querySelector(`.pl-chk[data-codigo="${codigo}"]`);
+    if(chk && !chk.checked) { chk.checked = true; }
+    const row = _plRaw.find(r => r.codigo === codigo);
+    if(row) _plSel[codigo] = { qtd: row.qtd_sugerida||0, preco: row.custo_unitario||0 };
+  }
+  const val = parseFloat(el.value) || 0;
+  if(_plSel[codigo]) _plSel[codigo][campo] = val;
+  _recalcLinha(codigo);
+  _atualizarTotaisCard();
+  _atualizarRodape();
+}
+
+function _recalcLinha(codigo) {
+  const sel = _plSel[codigo];
+  const span = document.querySelector(`.pl-linha-total[data-codigo="${codigo}"]`);
+  if(!span) return;
+  if(sel && sel.qtd > 0 && sel.preco > 0) {
+    const total = sel.qtd * sel.preco;
+    span.textContent = _pbrl(total);
+    span.style.color = 'var(--text)';
+  } else {
+    span.textContent = '—';
+    span.style.color = 'var(--muted)';
   }
 }
+
+function _atualizarTotaisCard() {
+  const selecionados = Object.keys(_plSel).length;
+  const valorSel = Object.values(_plSel)
+    .reduce((s, v) => s + (v.qtd||0) * (v.preco||0), 0);
+  _setText('pk-selecionados', selecionados);
+  const brl = _pbrl(valorSel);
+  _setText('pk-valor-sel',  brl);
+  _setText('pl-total-sel',  brl);
+  document.getElementById('pl-chk-all').indeterminate =
+    selecionados > 0 && selecionados < _plFiltro.length;
+}
+
+function _atualizarRodape() {
+  const selecionados = Object.keys(_plSel).length;
+  const valorSel = Object.values(_plSel)
+    .reduce((s, v) => s + (v.qtd||0) * (v.preco||0), 0);
+  const estimado = _plFiltro
+    .reduce((s, r) => s + (r.valor_estimado||0), 0);
+  _setText('pl-rod-count',    selecionados + ' iten' + (selecionados!==1?'s':''));
+  _setText('pl-rod-estimado', _pbrl(estimado));
+  _setText('pl-rod-total',    _pbrl(valorSel));
+}
+
+function selecionarTodos(checked) {
+  _plFiltro.forEach(row => {
+    const chk = document.querySelector(`.pl-chk[data-codigo="${row.codigo}"]`);
+    if(checked) {
+      if(!_plSel[row.codigo]) {
+        const qtd   = row.qtd_sugerida   || 0;
+        const preco = row.custo_unitario  || 0;
+        _plSel[row.codigo] = { qtd, preco };
+        // Preencher inputs se vazios
+        const qi = document.querySelector(`.pl-qtd[data-codigo="${row.codigo}"]`);
+        const pi = document.querySelector(`.pl-preco[data-codigo="${row.codigo}"]`);
+        if(qi && !qi.value && qtd > 0) qi.value = qtd;
+        if(pi && !pi.value && preco > 0) pi.value = preco;
+        _recalcLinha(row.codigo);
+      }
+      if(chk) chk.checked = true;
+    } else {
+      delete _plSel[row.codigo];
+      if(chk) chk.checked = false;
+      _recalcLinha(row.codigo);
+    }
+  });
+  _atualizarTotaisCard();
+  _atualizarRodape();
+}
+
+function limparSelecao() {
+  _plSel = {};
+  document.querySelectorAll('.pl-chk').forEach(c => c.checked = false);
+  document.querySelectorAll('.pl-linha-total').forEach(s => { s.textContent='—'; s.style.color='var(--muted)'; });
+  document.getElementById('pl-chk-all').checked = false;
+  _atualizarTotaisCard();
+  _atualizarRodape();
+}
+
+function imprimirListaCompra() {
+  const selecionados = Object.entries(_plSel);
+  const linhas = selecionados.length > 0
+    ? selecionados.map(([codigo, sel]) => {
+        const row = _plRaw.find(r => r.codigo === codigo);
+        const nome = row?.produto_nome || codigo;
+        const total = (sel.qtd||0) * (sel.preco||0);
+        return `<tr>
+          <td>${nome}</td><td>${codigo}</td>
+          <td style="text-align:right">${_pnum2(sel.qtd)} ${row?.unidade||''}</td>
+          <td style="text-align:right">${_pbrl(sel.preco)}</td>
+          <td style="text-align:right;font-weight:700">${_pbrl(total)}</td>
+          <td>${row?.ultimo_fornecedor||'—'}</td>
+        </tr>`;
+      }).join('')
+    : _plFiltro.map(row => {
+        const total = (row.qtd_sugerida||0) * (row.custo_unitario||0);
+        return `<tr>
+          <td>${row.produto_nome||row.codigo}</td><td>${row.codigo}</td>
+          <td style="text-align:right">${_pnum2(row.qtd_sugerida)} ${row.unidade||''}</td>
+          <td style="text-align:right">${_pbrl(row.custo_unitario)}</td>
+          <td style="text-align:right;font-weight:700">${_pbrl(total)}</td>
+          <td>${row.ultimo_fornecedor||'—'}</td>
+        </tr>`;
+      }).join('');
+
+  const totalGeral = selecionados.length > 0
+    ? Object.values(_plSel).reduce((s,v) => s + (v.qtd||0)*(v.preco||0), 0)
+    : _plFiltro.reduce((s,r) => s + (r.valor_estimado||0), 0);
+
+  const win = window.open('','_blank');
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+    <title>Lista de Compras — Bom Beef</title>
+    <style>
+      body{font-family:Arial,sans-serif;padding:20px;font-size:12px;color:#1a1a1a}
+      h2{color:#8B0000;margin-bottom:4px}
+      table{width:100%;border-collapse:collapse;margin-top:12px}
+      th{background:#f5f0eb;padding:7px 10px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;border-bottom:2px solid #e8e0d8}
+      td{padding:7px 10px;border-bottom:1px solid #f0ebe4}
+      .total-row{font-weight:700;background:#f9f6f3;font-size:13px}
+      @media print{button{display:none}}
+    </style></head><body>
+    <h2>🛒 Lista de Compras — Bom Beef Valinhos</h2>
+    <p style="font-size:11px;color:#666;margin-bottom:4px">
+      ${selecionados.length > 0 ? selecionados.length+' itens selecionados' : _plFiltro.length+' itens (lista completa)'}
+      · Impresso em ${new Date().toLocaleString('pt-BR')}
+    </p>
+    <table>
+      <thead><tr>
+        <th>Produto</th><th>Código</th><th style="text-align:right">Qtd</th>
+        <th style="text-align:right">Preço Unit.</th><th style="text-align:right">Total</th>
+        <th>Fornecedor</th>
+      </tr></thead>
+      <tbody>${linhas}</tbody>
+      <tfoot><tr class="total-row">
+        <td colspan="4" style="text-align:right;padding:10px">TOTAL GERAL</td>
+        <td style="text-align:right;padding:10px;color:#8B0000">${_pbrl(totalGeral)}</td>
+        <td></td>
+      </tr></tfoot>
+    </table>
+    </body></html>`);
+  win.document.close();
+  win.onload = () => win.print();
+}
+
+</script>
+
 
 function imprimirHistoricoCompras() {
   const ini = document.getElementById('h-ini')?.value || '';

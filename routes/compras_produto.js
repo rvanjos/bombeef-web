@@ -801,7 +801,14 @@ module.exports = function(pool) {
           p.unidade,
           COALESCE(p.estoque, 0)                               AS estoque_atual,
           p.estoque_minimo,
-          -- Custo unitário: prioridade custo_medio_90d > ultimo_custo > preco_custo
+          -- Custos históricos completos
+          p.ultimo_custo,
+          p.custo_medio_3ped,
+          p.custo_medio_90d,
+          p.ultimo_fornecedor,
+          TO_CHAR(p.ultima_entrada_em, 'YYYY-MM-DD')           AS ultima_entrada_em,
+          p.variacao_custo_pct,
+          -- Custo de referência: prioridade custo_medio_90d > ultimo_custo > preco_custo
           COALESCE(
             NULLIF(p.custo_medio_90d, 0),
             NULLIF(p.ultimo_custo, 0),
@@ -872,22 +879,29 @@ module.exports = function(pool) {
         }
 
         return {
-          codigo:            r.codigo,
-          produto_nome:      r.produto_nome,
-          categoria:         r.categoria || null,
-          curva_abc:         r.curva_abc || null,
-          unidade:           r.unidade   || null,
-          estoque_atual:     estoque,
-          estoque_minimo:    parseFloat(r.estoque_minimo || 0),
+          codigo:             r.codigo,
+          produto_nome:       r.produto_nome,
+          categoria:          r.categoria || null,
+          curva_abc:          r.curva_abc || null,
+          unidade:            r.unidade   || null,
+          estoque_atual:      estoque,
+          estoque_minimo:     parseFloat(r.estoque_minimo || 0),
           venda_media_diaria: vendaDia,
-          cobertura_dias:    coberturaDias,
-          dias_alvo_estoque: diasAlvo,
-          qtd_sugerida:      qtdSugerida,
-          custo_unitario:    custoUnit,
-          fonte_custo:       r.fonte_custo,
-          valor_estimado:    valorEstimado,
-          tendencia_custo:   r.tendencia_custo || null,
+          cobertura_dias:     coberturaDias,
+          dias_alvo_estoque:  diasAlvo,
+          qtd_sugerida:       qtdSugerida,
+          custo_unitario:     custoUnit,
+          fonte_custo:        r.fonte_custo,
+          valor_estimado:     valorEstimado,
+          tendencia_custo:    r.tendencia_custo || null,
           status,
+          // Campos extras para análise de preço
+          ultimo_custo:       r.ultimo_custo      ? parseFloat(r.ultimo_custo)      : null,
+          custo_medio_3ped:   r.custo_medio_3ped  ? parseFloat(r.custo_medio_3ped)  : null,
+          custo_medio_90d:    r.custo_medio_90d   ? parseFloat(r.custo_medio_90d)   : null,
+          ultimo_fornecedor:  r.ultimo_fornecedor  || null,
+          ultima_entrada_em:  r.ultima_entrada_em  || null,
+          variacao_custo_pct: r.variacao_custo_pct ? parseFloat(r.variacao_custo_pct) : null,
         };
       });
 
