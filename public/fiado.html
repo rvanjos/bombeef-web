@@ -482,9 +482,55 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
         <button class="mdx" onclick="fecharModal('m-extrato')">×</button>
       </div>
     </div>
+    <!-- Barra de filtros do extrato -->
+    <div id="ext-filtros" style="padding:10px 14px;background:var(--bg);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+      <select id="ext-tipo-filtro" onchange="onExtFiltroChange()" style="padding:6px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;background:var(--white);font-family:'DM Sans',sans-serif;cursor:pointer">
+        <option value="tudo">📋 Tudo</option>
+        <option value="mes">📅 Por mês</option>
+        <option value="pedido">📦 Por pedido</option>
+        <option value="data">🗓️ Por data</option>
+      </select>
+      <!-- Filtro por mês -->
+      <div id="ext-filtro-mes" style="display:none;align-items:center;gap:6px">
+        <input type="month" id="ext-mes-val" onchange="renderExtrato(window._extratoClienteId)"
+          style="padding:6px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;background:var(--white)">
+      </div>
+      <!-- Filtro por pedido -->
+      <div id="ext-filtro-pedido" style="display:none;align-items:center;gap:6px">
+        <select id="ext-pedido-val" onchange="renderExtrato(window._extratoClienteId)"
+          style="padding:6px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;background:var(--white);min-width:180px;font-family:'DM Sans',sans-serif">
+          <option value="">— Selecione o pedido —</option>
+        </select>
+      </div>
+      <!-- Filtro por intervalo de data -->
+      <div id="ext-filtro-data" style="display:none;align-items:center;gap:6px">
+        <span style="font-size:12px;color:var(--muted)">De</span>
+        <input type="date" id="ext-data-ini" onchange="renderExtrato(window._extratoClienteId)"
+          style="padding:6px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;background:var(--white)">
+        <span style="font-size:12px;color:var(--muted)">até</span>
+        <input type="date" id="ext-data-fim" onchange="renderExtrato(window._extratoClienteId)"
+          style="padding:6px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;background:var(--white)">
+      </div>
+      <!-- Botão limpar filtros -->
+      <button onclick="limparFiltrosExtrato()" style="padding:5px 10px;border:1px solid var(--border);border-radius:7px;font-size:11px;background:var(--white);cursor:pointer;font-family:'DM Sans',sans-serif;margin-left:auto">✕ Limpar</button>
+      <!-- Info sobre o filtro ativo -->
+      <span id="ext-filtro-info" style="font-size:11px;color:var(--muted)"></span>
+    </div>
     <div class="mdb" style="padding:0" id="ext-body"></div>
-    <div class="mdf">
-      <button class="btn btn-gray" onclick="fecharModal('m-extrato')">Fechar</button>
+    <div class="mdf" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-gray btn-sm" onclick="fecharModal('m-extrato')">Fechar</button>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-gray btn-sm" onclick="imprimirExtrato()"
+          style="display:flex;align-items:center;gap:5px">
+          🖨️ Imprimir extrato
+        </button>
+        <button class="btn btn-blue btn-sm" onclick="compartilharExtrato()"
+          style="display:flex;align-items:center;gap:5px">
+          📤 Copiar para WhatsApp
+        </button>
+      </div>
     </div>
   </div>
 </div>
@@ -1293,17 +1339,54 @@ async function verExtratoCli(clienteId) {
   document.getElementById('ext-titulo').textContent = cli.nome;
   document.getElementById('ext-sub').textContent    = `${cli.telefone||''} · ${cli.tipo_cliente==='socio'?'🤝 Sócio':cli.tipo_cliente==='especial'?`⭐ Especial (${cli.desconto_pct||0}% desc)`:'👤 Normal'}`;
   window._extratoClienteId = clienteId;
-  renderExtrato(clienteId);
+  resetFiltrosExtrato();
   document.getElementById('m-extrato').classList.add('open');
 }
 
 function renderExtrato(clienteId) {
-  const vendasCli = _vendas
+  // ── Ler filtros ativos ────────────────────────────────
+  const tipoFiltro = document.getElementById('ext-tipo-filtro')?.value || 'tudo';
+  const mesFiltro  = document.getElementById('ext-mes-val')?.value || '';       // "2026-05"
+  const pedidoFiltro = document.getElementById('ext-pedido-val')?.value || '';  // id da venda
+  const dataIni    = document.getElementById('ext-data-ini')?.value || '';      // "2026-05-01"
+  const dataFim    = document.getElementById('ext-data-fim')?.value || '';      // "2026-05-31"
+
+  let vendasCli = _vendas
     .filter(v=>v.cliente_id===clienteId && v.status!=='cancelado' && v.status!=='reprovado')
     .sort((a,b)=> a.data_compra < b.data_compra ? -1 : 1);
-  const pagsCli = _pagamentos
+  let pagsCli = _pagamentos
     .filter(p=>p.cliente_id===clienteId)
     .sort((a,b)=> a.data_pagamento < b.data_pagamento ? -1 : 1);
+
+  // ── Aplicar filtro ────────────────────────────────────
+  let filtroInfo = '';
+  if (tipoFiltro === 'mes' && mesFiltro) {
+    vendasCli = vendasCli.filter(v => v.data_compra && v.data_compra.startsWith(mesFiltro));
+    pagsCli   = pagsCli.filter(p => p.data_pagamento && p.data_pagamento.startsWith(mesFiltro));
+    const [ano, mes] = mesFiltro.split('-');
+    const nomes = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+    filtroInfo = `${nomes[parseInt(mes)-1]}/${ano}`;
+  } else if (tipoFiltro === 'pedido' && pedidoFiltro) {
+    vendasCli = vendasCli.filter(v => String(v.id) === String(pedidoFiltro));
+    // Manter pagamentos do mês do pedido selecionado para contexto correto de saldo
+    // Mas mostrar apenas o pedido selecionado na lista
+    pagsCli = [];
+    filtroInfo = `Pedido #${pedidoFiltro}`;
+  } else if (tipoFiltro === 'data' && (dataIni || dataFim)) {
+    if (dataIni) {
+      vendasCli = vendasCli.filter(v => v.data_compra >= dataIni);
+      pagsCli   = pagsCli.filter(p => p.data_pagamento >= dataIni);
+    }
+    if (dataFim) {
+      vendasCli = vendasCli.filter(v => v.data_compra <= dataFim + 'T23:59:59');
+      pagsCli   = pagsCli.filter(p => p.data_pagamento <= dataFim + 'T23:59:59');
+    }
+    filtroInfo = dataIni && dataFim ? `${fmtDtBr(dataIni)} → ${fmtDtBr(dataFim)}`
+               : dataIni ? `a partir de ${fmtDtBr(dataIni)}`
+               : `até ${fmtDtBr(dataFim)}`;
+  }
+  const elInfo = document.getElementById('ext-filtro-info');
+  if (elInfo) elInfo.textContent = filtroInfo ? `📌 ${filtroInfo}` : '';
 
   // Mescla compras e pagamentos em ordem cronológica
   const eventos = [
@@ -1419,6 +1502,131 @@ function renderExtrato(clienteId) {
         <tbody>${linhas || '<tr><td colspan="6" style="padding:24px;text-align:center;color:var(--muted)">Nenhum lançamento</td></tr>'}</tbody>
       </table>
     </div>`;
+}
+
+// ── Funções de controle do filtro do extrato ──────────────
+function onExtFiltroChange() {
+  const tipo = document.getElementById('ext-tipo-filtro').value;
+  const divMes    = document.getElementById('ext-filtro-mes');
+  const divPedido = document.getElementById('ext-filtro-pedido');
+  const divData   = document.getElementById('ext-filtro-data');
+
+  divMes.style.display    = tipo === 'mes'    ? 'flex' : 'none';
+  divPedido.style.display = tipo === 'pedido' ? 'flex' : 'none';
+  divData.style.display   = tipo === 'data'   ? 'flex' : 'none';
+
+  // Se mudou para "pedido", popular o select com as vendas do cliente
+  if (tipo === 'pedido') {
+    const cliId = window._extratoClienteId;
+    const vendas = _vendas
+      .filter(v => v.cliente_id === cliId && v.status !== 'cancelado' && v.status !== 'reprovado')
+      .sort((a, b) => b.data_compra < a.data_compra ? -1 : 1);
+    const sel = document.getElementById('ext-pedido-val');
+    sel.innerHTML = '<option value="">— Selecione o pedido —</option>' +
+      vendas.map(v =>
+        `<option value="${v.id}">📦 ${fmtDtBr(v.data_compra)} — ${fmt.brl(parseFloat(v.total_final||0))}</option>`
+      ).join('');
+  }
+
+  // Se mudou para mês, pré-preencher com o mês atual
+  if (tipo === 'mes') {
+    const el = document.getElementById('ext-mes-val');
+    if (!el.value) {
+      const d = new Date();
+      el.value = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    }
+  }
+
+  renderExtrato(window._extratoClienteId);
+}
+
+function limparFiltrosExtrato() {
+  document.getElementById('ext-tipo-filtro').value = 'tudo';
+  document.getElementById('ext-mes-val').value     = '';
+  document.getElementById('ext-pedido-val').value  = '';
+  document.getElementById('ext-data-ini').value    = '';
+  document.getElementById('ext-data-fim').value    = '';
+  // Ocultar todos os sub-filtros
+  ['ext-filtro-mes','ext-filtro-pedido','ext-filtro-data'].forEach(id => {
+    document.getElementById(id).style.display = 'none';
+  });
+  renderExtrato(window._extratoClienteId);
+}
+
+// Resetar filtros ao abrir o extrato
+function resetFiltrosExtrato() {
+  const el = document.getElementById('ext-tipo-filtro');
+  if (el) el.value = 'tudo';
+  limparFiltrosExtrato();
+}
+
+function compartilharExtrato() {
+  const cliId = window._extratoClienteId;
+  const cli = _clientes.find(c => c.id === cliId);
+  if (!cli) return;
+
+  // Ler filtro ativo para o título
+  const filtroInfo = document.getElementById('ext-filtro-info')?.textContent || '';
+
+  const vendasFiltradas = (() => {
+    // Recalcular com os filtros atuais
+    const tipo = document.getElementById('ext-tipo-filtro')?.value || 'tudo';
+    const mes  = document.getElementById('ext-mes-val')?.value || '';
+    const pedido = document.getElementById('ext-pedido-val')?.value || '';
+    const ini  = document.getElementById('ext-data-ini')?.value || '';
+    const fim  = document.getElementById('ext-data-fim')?.value || '';
+
+    let vs = _vendas.filter(v => v.cliente_id === cliId && v.status !== 'cancelado' && v.status !== 'reprovado')
+      .sort((a,b) => a.data_compra < b.data_compra ? -1 : 1);
+
+    if (tipo === 'mes' && mes) vs = vs.filter(v => v.data_compra?.startsWith(mes));
+    if (tipo === 'pedido' && pedido) vs = vs.filter(v => String(v.id) === String(pedido));
+    if (tipo === 'data') {
+      if (ini) vs = vs.filter(v => v.data_compra >= ini);
+      if (fim) vs = vs.filter(v => v.data_compra <= fim + 'T23:59:59');
+    }
+    return vs;
+  })();
+
+  // Montar texto simples para WhatsApp
+  const totalPeriodo = vendasFiltradas.reduce((s,v) => s+parseFloat(v.total_final||0), 0);
+  const saldoAberto  = parseFloat(cli.saldo_aberto || 0);
+
+  let txt = `🧾 *Extrato Fiado — ${cli.nome}*
+`;
+  if (filtroInfo) txt += `📌 ${filtroInfo.replace('📌 ','')}
+`;
+  txt += `
+`;
+
+  vendasFiltradas.forEach(v => {
+    txt += `📦 *Compra ${fmtDtBr(v.data_compra)}* — ${fmt.brl(parseFloat(v.total_final||0))}
+`;
+    (v.itens||[]).forEach(i => {
+      const qtd = parseFloat(i.quantidade||0).toLocaleString('pt-BR', {minimumFractionDigits:0, maximumFractionDigits:3});
+      txt += `  • ${i.nome_produto} (${qtd} un) — ${fmt.brl(parseFloat(i.valor_final_item||0))}
+`;
+    });
+  });
+
+  txt += `
+💰 *Total do período: ${fmt.brl(totalPeriodo)}*
+`;
+  txt += `📌 *Saldo em aberto: ${fmt.brl(saldoAberto)}*`;
+
+  // Copiar para área de transferência
+  navigator.clipboard.writeText(txt).then(() => {
+    toast('📋 Copiado para a área de transferência! Cole no WhatsApp.', 3000);
+  }).catch(() => {
+    // Fallback para browsers sem clipboard
+    const ta = document.createElement('textarea');
+    ta.value = txt;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    toast('📋 Copiado para a área de transferência!', 3000);
+  });
 }
 
 function fmtDtBr(d) {
