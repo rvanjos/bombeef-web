@@ -421,19 +421,25 @@ module.exports = function(pool) {
           if (dup2.rows.length) { ignorados++; continue; }
         }
 
-        await client.query(`
-          INSERT INTO compras_produto
-            (importacao_id,produto_codigo,produto_id,produto_nome,grupo,subgrupo,
-             fornecedor_nome,fornecedor_cnpj,fornecedor_codigo,numero_nfe,serie_nfe,
-             cod_item_nfe,cfop,id_entrada_pdv,data_emissao,data_entrada,
-             quantidade,unidade,valor_unitario,valor_total,valor_total_liquido,
-             icmsst,origem,arquivo_importado)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
-        `, [impId,it.produto_codigo,prodId,it.produto_nome,it.grupo,it.subgrupo,
-            it.fornecedor_nome,it.fornecedor_cnpj,it.fornecedor_codigo,it.numero_nfe,
-            it.serie_nfe,it.cod_item_nfe,it.cfop,it.id_entrada_pdv,it.data_emissao,
-            it.data_entrada,it.quantidade,it.unidade,it.valor_unitario,it.valor_total,
-            it.valor_total_liquido,it.icmsst,'pdv_xlsx',it.arquivo_importado]);
+        try {
+          await client.query(`
+            INSERT INTO compras_produto
+              (importacao_id,produto_codigo,produto_id,produto_nome,grupo,subgrupo,
+               fornecedor_nome,fornecedor_cnpj,fornecedor_codigo,numero_nfe,serie_nfe,
+               cod_item_nfe,cfop,id_entrada_pdv,data_emissao,data_entrada,
+               quantidade,unidade,valor_unitario,valor_total,valor_total_liquido,
+               icmsst,origem,arquivo_importado)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
+          `, [impId,it.produto_codigo,prodId,it.produto_nome,it.grupo,it.subgrupo,
+              it.fornecedor_nome,it.fornecedor_cnpj,it.fornecedor_codigo,it.numero_nfe,
+              it.serie_nfe,it.cod_item_nfe,it.cfop,it.id_entrada_pdv,it.data_emissao,
+              it.data_entrada,it.quantidade,it.unidade,it.valor_unitario,it.valor_total,
+              it.valor_total_liquido,it.icmsst,'pdv_xlsx',it.arquivo_importado]);
+        } catch(eIns) {
+          // Duplicate key (idx_cp_dedup) — linha já existe, contar como ignorado
+          if (eIns.code === '23505') { ignorados++; continue; }
+          throw eIns; // outro erro — relançar
+        }
 
         importados++;
         if (prodId) codigosAfetados.add(it.produto_codigo);
