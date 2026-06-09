@@ -864,7 +864,7 @@ async function carregarGiro() {
 <div id="sec-planejamento" class="sec">
   <div style="padding:14px 14px 0">
 
-    <!-- Filtros e controles -->
+    <!-- ── Filtros ───────────────────────────────────────────────────── -->
     <div class="card" style="padding:12px 14px;margin-bottom:12px">
       <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
         <div>
@@ -886,28 +886,22 @@ async function carregarGiro() {
           </select>
         </div>
         <div>
-          <div class="pl-lbl">Buscar produto</div>
-          <input id="pl-busca" class="pl-inp" placeholder="Nome ou código..." style="width:180px"
+          <div class="pl-lbl">Buscar</div>
+          <input id="pl-busca" class="pl-inp" placeholder="Nome ou código…" style="width:180px"
             oninput="filtrarListaCompra()">
         </div>
-        <button onclick="carregarListaCompra()" class="btn btn-p" style="height:36px;padding:0 18px">
-          🔄 Atualizar
-        </button>
-        <button onclick="imprimirListaCompra()" class="btn btn-s" style="height:36px;padding:0 14px">
-          🖨️ Imprimir
-        </button>
-        <div style="margin-left:auto;display:flex;align-items:center;gap:6px">
-          <span style="font-size:11px;color:var(--muted)">Selecionados:</span>
+        <button onclick="carregarListaCompra()" class="btn btn-p" style="height:36px;padding:0 18px">🔄 Atualizar</button>
+        <button onclick="imprimirListaCompra()" class="btn btn-s" style="height:36px;padding:0 14px">🖨️ Imprimir</button>
+        <button onclick="copiarWhatsApp()" class="btn btn-s" style="height:36px;padding:0 14px;background:#25d366;color:#fff;border-color:#25d366">📤 WhatsApp</button>
+        <div style="margin-left:auto;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
           <span id="pl-total-sel" style="font-size:14px;font-weight:700;font-family:'DM Mono',monospace;color:var(--red)">R$ 0,00</span>
-          <button onclick="limparSelecao()" class="btn btn-s" style="height:28px;padding:0 10px;font-size:11px">
-            ✕ Limpar
-          </button>
+          <button onclick="limparSelecao()" class="btn btn-s" style="height:28px;padding:0 10px;font-size:11px">✕ Limpar</button>
         </div>
       </div>
     </div>
 
-    <!-- Cards KPI -->
-    <div id="pl-cards" style="display:none;display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+    <!-- ── KPIs ──────────────────────────────────────────────────────── -->
+    <div id="pl-cards" style="display:none;gap:10px;margin-bottom:12px;flex-wrap:wrap">
       <div class="pl-kpi"><div class="pl-kpi-l">🔴 Urgentes</div><div class="pl-kpi-v" id="pk-urgentes">—</div></div>
       <div class="pl-kpi"><div class="pl-kpi-l">🟡 Atenção</div><div class="pl-kpi-v" id="pk-atencao">—</div></div>
       <div class="pl-kpi"><div class="pl-kpi-l">Total na lista</div><div class="pl-kpi-v" id="pk-total">—</div></div>
@@ -915,9 +909,15 @@ async function carregarGiro() {
       <div class="pl-kpi" style="flex:2;min-width:200px"><div class="pl-kpi-l">💰 Total selecionado</div><div class="pl-kpi-v" id="pk-valor-sel" style="color:var(--red)">R$ 0,00</div></div>
     </div>
 
-    <!-- Tabela principal -->
+    <!-- ── Totalizador por fornecedor ────────────────────────────────── -->
+    <div id="pl-forn-resumo" style="display:none;background:#fff;border-radius:10px;border:1px solid var(--border);padding:10px 14px;margin-bottom:10px;font-size:12px">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:8px">Total por fornecedor</div>
+      <div id="pl-forn-lista" style="display:flex;flex-wrap:wrap;gap:8px 20px"></div>
+    </div>
+
+    <!-- ── Tabela ─────────────────────────────────────────────────────── -->
     <div style="overflow-x:auto;background:#fff;border-radius:12px;border:1px solid var(--border)">
-      <table class="tbl" style="min-width:1000px" id="pl-table">
+      <table class="tbl" style="min-width:1060px" id="pl-table">
         <thead>
           <tr style="background:var(--bg)">
             <th style="width:36px;text-align:center">
@@ -929,31 +929,33 @@ async function carregarGiro() {
             <th style="text-align:right">Cobertura</th>
             <th style="text-align:center">Status</th>
             <th style="text-align:right">Qtd Sugerida</th>
-            <th style="text-align:right">Qtd Comprar</th>
+            <th style="text-align:right;width:95px">Qtd Comprar</th>
             <th style="text-align:right">Últ. Preço</th>
             <th style="text-align:right">Média 90d</th>
-            <th style="text-align:right">Preço Cotado</th>
+            <th style="text-align:right;width:115px">Preço Cotado</th>
+            <th style="text-align:center;width:80px">Avaliação</th>
             <th style="text-align:right">Total</th>
-            <th>Tendência</th>
+            <th>Tend.</th>
+            <th style="width:130px">Obs.</th>
           </tr>
         </thead>
         <tbody id="pl-tbody">
-          <tr><td colspan="13" style="text-align:center;padding:32px;color:var(--muted)">
+          <tr><td colspan="15" style="text-align:center;padding:32px;color:var(--muted)">
             Clique em "Atualizar" para carregar a lista de compras
           </td></tr>
         </tbody>
       </table>
     </div>
 
-    <!-- Rodapé com totalizador -->
+    <!-- ── Rodapé ─────────────────────────────────────────────────────── -->
     <div id="pl-rodape" style="display:none;background:#fff;border-radius:10px;border:1px solid var(--border);padding:12px 16px;margin-top:10px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
       <div style="font-size:12px;color:var(--muted)">
         <span id="pl-rod-count">0</span> itens selecionados
       </div>
-      <div style="display:flex;align-items:center;gap:16px">
-        <span style="font-size:12px;color:var(--muted)">Total estimado (qtd sugerida):</span>
+      <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+        <span style="font-size:12px;color:var(--muted)">Estimado total:</span>
         <span id="pl-rod-estimado" style="font-family:'DM Mono',monospace;font-size:13px;color:var(--muted)">R$ 0,00</span>
-        <span style="font-size:12px;color:var(--muted)">Total selecionado:</span>
+        <span style="font-size:12px;color:var(--muted)">Selecionado:</span>
         <strong id="pl-rod-total" style="font-family:'DM Mono',monospace;font-size:15px;color:var(--red)">R$ 0,00</strong>
       </div>
     </div>
@@ -962,64 +964,76 @@ async function carregarGiro() {
 </div>
 
 <script>
-// ── Lista de Compra Operacional ───────────────────────────────────────────────
-const _pbrl = v => v!=null ? 'R$ '+parseFloat(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—';
-const _pnum = (v,d=3) => v!=null ? parseFloat(v).toLocaleString('pt-BR',{minimumFractionDigits:d,maximumFractionDigits:d}) : '—';
-const _pnum2 = (v) => v!=null ? parseFloat(v).toLocaleString('pt-BR',{minimumFractionDigits:0,maximumFractionDigits:3}) : '—';
+// ── Lista de Compra Operacional — Sprint 6.5-B ────────────────────────────
+const _pbrl  = v => v!=null ? 'R$ '+parseFloat(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—';
+const _pnum2 = v => v!=null ? parseFloat(v).toLocaleString('pt-BR',{minimumFractionDigits:0,maximumFractionDigits:3}) : '—';
 
-let _plRaw    = [];   // dados completos da API
-let _plFiltro = [];   // dados filtrados por busca
-let _plSel    = {};   // { codigo: { qtd, preco } } — seleções do usuário
+let _plRaw    = [];   // todos os dados da API
+let _plFiltro = [];   // filtrado por busca/abc/status
+// _plSel: { [codigo]: { qtd, preco, obs } }  — persiste entre filtros
+let _plSel    = {};
 
 const _statusBadge = s => ({
-  urgente:  '<span class="badge bg-red" style="font-size:10px">🔴 Urgente</span>',
+  urgente:  '<span class="badge bg-red"   style="font-size:10px">🔴 Urgente</span>',
   atencao:  '<span class="badge bg-amber" style="font-size:10px">🟡 Atenção</span>',
   saudavel: '<span class="badge bg-green" style="font-size:10px">🟢 Ok</span>',
-  sem_venda:'<span class="badge bg-gray" style="font-size:10px">sem venda</span>',
+  sem_venda:'<span class="badge bg-gray"  style="font-size:10px">sem venda</span>',
 }[s]||'—');
 
-const _abcBpl = v => {
+const _abcBadge = v => {
   if(!v) return '<span style="color:var(--muted);font-size:11px">—</span>';
-  const m={A:'bg-green',B:'bg-blue',C:'bg-gray'};
-  return `<span class="badge ${m[v]||'bg-gray'}">${v}</span>`;
+  return `<span class="badge ${{A:'bg-green',B:'bg-blue',C:'bg-gray'}[v]||'bg-gray'}">${v}</span>`;
 };
 
 const _tendIcon = t =>
-  t==='alta'   ? '<span style="color:#dc2626;font-weight:700;font-size:11px">📈 Alta</span>'  :
-  t==='baixa'  ? '<span style="color:#16a34a;font-weight:700;font-size:11px">📉 Baixa</span>' :
-  t==='estavel'? '<span style="color:var(--muted);font-size:11px">➡️ Estável</span>'           : '—';
+  t==='alta'    ? '<span style="color:#dc2626;font-size:11px;font-weight:700">📈</span>'  :
+  t==='baixa'   ? '<span style="color:#16a34a;font-size:11px;font-weight:700">📉</span>'  :
+  t==='estavel' ? '<span style="color:var(--muted);font-size:11px">➡️</span>'             : '—';
+
+// Badge de avaliação do preço cotado vs média 90d
+function _precoBadge(cotado, media90) {
+  if(!cotado || cotado <= 0)  return '<span style="color:var(--muted);font-size:10px">—</span>';
+  if(!media90 || media90 <= 0) return '<span style="font-size:10px;color:var(--muted)">sem hist.</span>';
+  const diff = (cotado - media90) / media90 * 100;
+  if (diff <= 0)   return '<span style="background:#dcfce7;color:#16a34a;padding:2px 6px;border-radius:5px;font-size:10px;font-weight:700">🟢 Bom</span>';
+  if (diff <= 10)  return '<span style="background:#fef9c3;color:#92400e;padding:2px 6px;border-radius:5px;font-size:10px;font-weight:700">🟡 Atenção</span>';
+  return           '<span style="background:#fee2e2;color:#dc2626;padding:2px 6px;border-radius:5px;font-size:10px;font-weight:700">🔴 Caro</span>';
+}
 
 function _setText(id,v){const e=document.getElementById(id);if(e)e.textContent=v;}
 
+// ── Carregar da API ───────────────────────────────────────────────────────
 async function carregarListaCompra() {
-  const abc    = document.getElementById('pl-abc')?.value   || '';
+  const abc    = document.getElementById('pl-abc')?.value    || '';
   const status = document.getElementById('pl-status')?.value || '';
   const tbody  = document.getElementById('pl-tbody');
   if(!tbody) return;
-  tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;padding:24px;color:var(--muted)">⏳ Carregando...</td></tr>';
+  tbody.innerHTML = `<tr><td colspan="15" style="text-align:center;padding:24px;color:var(--muted)">⏳ Carregando…</td></tr>`;
 
   const p = new URLSearchParams({ abc, status, limite: 500 });
   try {
     const api = window.BB?.api || window._api;
     const res = await api.get('/api/compras/planejamento?' + p);
     if(!res.ok){
-      tbody.innerHTML=`<tr><td colspan="13" style="text-align:center;padding:24px;color:#dc2626">❌ ${res.erro||'Erro'}</td></tr>`;
+      tbody.innerHTML=`<tr><td colspan="15" style="text-align:center;padding:24px;color:#dc2626">❌ ${res.erro||'Erro'}</td></tr>`;
       return;
     }
     _plRaw = res.data || [];
-    // KPIs
+
+    // KPIs de resumo
     const r = res.resumo;
     document.getElementById('pl-cards').style.display = 'flex';
     _setText('pk-urgentes', r.urgentes);
     _setText('pk-atencao',  r.atencao);
     _setText('pk-total',    r.total);
-    _atualizarTotaisCard();
+
     filtrarListaCompra();
   } catch(e) {
-    tbody.innerHTML=`<tr><td colspan="13" style="text-align:center;padding:24px;color:#dc2626">❌ ${e.message}</td></tr>`;
+    tbody.innerHTML=`<tr><td colspan="15" style="text-align:center;padding:24px;color:#dc2626">❌ ${e.message}</td></tr>`;
   }
 }
 
+// ── Filtrar sem perder seleção ────────────────────────────────────────────
 function filtrarListaCompra() {
   const busca = (document.getElementById('pl-busca')?.value||'').toLowerCase().trim();
   _plFiltro = busca
@@ -1030,39 +1044,43 @@ function filtrarListaCompra() {
   _renderListaCompra();
 }
 
+// ── Renderizar tabela ─────────────────────────────────────────────────────
 function _renderListaCompra() {
   const tbody = document.getElementById('pl-tbody');
   if(!tbody) return;
 
   if(!_plFiltro.length) {
-    tbody.innerHTML='<tr><td colspan="13" style="text-align:center;padding:32px;color:var(--muted)">Nenhum produto encontrado</td></tr>';
+    tbody.innerHTML=`<tr><td colspan="15" style="text-align:center;padding:32px;color:var(--muted)">Nenhum produto encontrado</td></tr>`;
     document.getElementById('pl-rodape').style.display='none';
     return;
   }
 
   const rows = _plFiltro.map(row => {
-    const sel = _plSel[row.codigo];
-    const checked = sel ? 'checked' : '';
-    const qtdVal  = sel ? sel.qtd   : (row.qtd_sugerida > 0 ? row.qtd_sugerida : '');
-    const precoVal = sel ? sel.preco : (row.custo_unitario || '');
+    const sel      = _plSel[row.codigo];
+    const checked  = sel ? 'checked' : '';
+    const qtdVal   = sel != null ? sel.qtd   : (row.qtd_sugerida > 0 ? row.qtd_sugerida : '');
+    const precoVal = sel != null ? sel.preco  : (row.custo_unitario || '');
+    const obsVal   = sel?.obs || '';
 
-    // Calcular total da linha
-    const qtdN   = parseFloat(qtdVal)  || 0;
+    const qtdN   = parseFloat(qtdVal)   || 0;
     const precoN = parseFloat(precoVal) || 0;
     const total  = qtdN > 0 && precoN > 0 ? qtdN * precoN : null;
 
-    // Badge de variação de preço
     const vPct = row.variacao_custo_pct;
     let varBadge = '';
     if (vPct != null) {
-      const cls = vPct > 5 ? 'color:#dc2626' : vPct < -5 ? 'color:#16a34a' : 'color:var(--muted)';
+      const cls   = vPct > 5 ? 'color:#dc2626' : vPct < -5 ? 'color:#16a34a' : 'color:var(--muted)';
       const sinal = vPct > 0 ? '+' : '';
       varBadge = `<span style="font-size:10px;${cls}">${sinal}${parseFloat(vPct).toFixed(1)}%</span>`;
     }
 
-    // Cor da linha por status
     const rowBg = row.status==='urgente' ? 'background:#fff5f5' :
                   row.status==='atencao' ? 'background:#fffbeb' : '';
+
+    // Badge de avaliação do preço cotado
+    const avalBadge = precoN > 0
+      ? _precoBadge(precoN, row.custo_medio_90d || row.custo_medio_3ped)
+      : '<span style="color:var(--muted);font-size:10px">—</span>';
 
     return `<tr style="${rowBg}" data-codigo="${row.codigo}">
       <td style="text-align:center">
@@ -1071,9 +1089,9 @@ function _renderListaCompra() {
       </td>
       <td>
         <div style="font-size:12px;font-weight:700">${row.produto_nome||row.codigo}</div>
-        <div style="font-size:10px;color:var(--muted)">${row.codigo}${row.ultimo_fornecedor ? ' · ' + row.ultimo_fornecedor : ''}</div>
+        <div style="font-size:10px;color:var(--muted)">${row.codigo}${row.ultimo_fornecedor?' · <strong>'+row.ultimo_fornecedor+'</strong>':''}</div>
       </td>
-      <td style="text-align:center">${_abcBpl(row.curva_abc)}</td>
+      <td style="text-align:center">${_abcBadge(row.curva_abc)}</td>
       <td style="text-align:right;font-family:'DM Mono',monospace;font-size:12px">
         ${_pnum2(row.estoque_atual)} ${row.unidade||''}
       </td>
@@ -1084,60 +1102,78 @@ function _renderListaCompra() {
       <td style="text-align:right;font-family:'DM Mono',monospace;font-size:12px;color:var(--muted)">
         ${row.qtd_sugerida > 0 ? _pnum2(row.qtd_sugerida)+' '+(row.unidade||'') : '—'}
       </td>
-      <td style="padding:4px 8px">
+      <td style="padding:3px 6px">
         <input type="number" class="pl-qtd" min="0" step="0.001"
           placeholder="${row.qtd_sugerida > 0 ? _pnum2(row.qtd_sugerida) : '0'}"
           value="${qtdVal}"
           data-codigo="${row.codigo}"
-          style="width:80px;padding:4px 7px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:'DM Mono',monospace;text-align:right"
+          style="width:78px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:'DM Mono',monospace;text-align:right"
           oninput="onInputLinha(this,'${row.codigo}','qtd')"
-          onfocus="if(!document.querySelector('[data-codigo=\'${row.codigo}\'].pl-chk').checked)document.querySelector('[data-codigo=\'${row.codigo}\'].pl-chk').click()">
+          onfocus="autoCheck('${row.codigo}')">
       </td>
       <td style="text-align:right;font-family:'DM Mono',monospace;font-size:12px">
         ${row.ultimo_custo != null ? _pbrl(row.ultimo_custo) : '—'}
         ${row.ultima_entrada_em ? '<div style="font-size:10px;color:var(--muted)">'+row.ultima_entrada_em.split('-').reverse().join('/')+'</div>' : ''}
       </td>
       <td style="text-align:right;font-family:'DM Mono',monospace;font-size:12px">
-        ${row.custo_medio_90d != null ? _pbrl(row.custo_medio_90d) : (row.custo_medio_3ped != null ? _pbrl(row.custo_medio_3ped) : '—')}
+        ${row.custo_medio_90d != null ? _pbrl(row.custo_medio_90d) : row.custo_medio_3ped != null ? _pbrl(row.custo_medio_3ped) : '—'}
         ${varBadge ? '<div>'+varBadge+'</div>' : ''}
       </td>
-      <td style="padding:4px 8px">
+      <td style="padding:3px 6px">
         <input type="number" class="pl-preco" min="0" step="0.01"
           placeholder="${row.custo_unitario ? parseFloat(row.custo_unitario).toFixed(2).replace('.',',') : '0,00'}"
-          value="${precoVal || ''}"
+          value="${precoVal||''}"
           data-codigo="${row.codigo}"
-          style="width:90px;padding:4px 7px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:'DM Mono',monospace;text-align:right"
+          style="width:88px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:'DM Mono',monospace;text-align:right"
           oninput="onInputLinha(this,'${row.codigo}','preco')"
-          onfocus="if(!document.querySelector('[data-codigo=\'${row.codigo}\'].pl-chk').checked)document.querySelector('[data-codigo=\'${row.codigo}\'].pl-chk').click()">
+          onfocus="autoCheck('${row.codigo}')">
+      </td>
+      <td style="text-align:center">
+        <span class="pl-aval" data-codigo="${row.codigo}">${avalBadge}</span>
       </td>
       <td style="text-align:right;font-family:'DM Mono',monospace;font-size:12px;font-weight:700;color:${total?'var(--text)':'var(--muted)'}">
         <span class="pl-linha-total" data-codigo="${row.codigo}">${total ? _pbrl(total) : '—'}</span>
       </td>
       <td>${_tendIcon(row.tendencia_custo)}</td>
+      <td style="padding:3px 6px">
+        <input type="text" class="pl-obs" maxlength="60"
+          placeholder="Observação…"
+          value="${obsVal.replace(/"/g,'&quot;')}"
+          data-codigo="${row.codigo}"
+          style="width:120px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;font-size:11px;font-family:'DM Sans',sans-serif;color:var(--muted)"
+          oninput="onInputLinha(this,'${row.codigo}','obs')">
+      </td>
     </tr>`;
   }).join('');
 
   tbody.innerHTML = rows;
-
-  // Atualizar totais e rodapé
   _atualizarTotaisCard();
   _atualizarRodape();
+  _atualizarFornResumo();
   document.getElementById('pl-rodape').style.display = '';
 }
 
-// Quando clica no checkbox de uma linha
+// ── Auto-selecionar ao focar num input ───────────────────────────────────
+function autoCheck(codigo) {
+  const chk = document.querySelector(`.pl-chk[data-codigo="${codigo}"]`);
+  if(chk && !chk.checked) { chk.checked = true; onCheckLinha(chk, codigo); }
+}
+
+// ── Checkbox ─────────────────────────────────────────────────────────────
 function onCheckLinha(el, codigo) {
   const row = _plRaw.find(r => r.codigo === codigo);
   if(!row) return;
   if(el.checked) {
     if(!_plSel[codigo]) {
-      const qtdInp   = document.querySelector(`.pl-qtd[data-codigo="${codigo}"]`);
-      const precoInp = document.querySelector(`.pl-preco[data-codigo="${codigo}"]`);
-      const qtd   = parseFloat(qtdInp?.value)   || row.qtd_sugerida   || 0;
-      const preco = parseFloat(precoInp?.value)  || row.custo_unitario || 0;
-      _plSel[codigo] = { qtd, preco };
-      if(qtdInp && !qtdInp.value)   qtdInp.value   = qtd   > 0 ? qtd   : '';
-      if(precoInp && !precoInp.value) precoInp.value = preco > 0 ? preco : '';
+      const qi = document.querySelector(`.pl-qtd[data-codigo="${codigo}"]`);
+      const pi = document.querySelector(`.pl-preco[data-codigo="${codigo}"]`);
+      const oi = document.querySelector(`.pl-obs[data-codigo="${codigo}"]`);
+      const qtd   = parseFloat(qi?.value)  || row.qtd_sugerida   || 0;
+      const preco = parseFloat(pi?.value)  || row.custo_unitario || 0;
+      const obs   = oi?.value || '';
+      _plSel[codigo] = { qtd, preco, obs };
+      if(qi && !qi.value && qtd > 0)    qi.value   = qtd;
+      if(pi && !pi.value && preco > 0)  pi.value   = preco;
     }
   } else {
     delete _plSel[codigo];
@@ -1145,73 +1181,124 @@ function onCheckLinha(el, codigo) {
   _recalcLinha(codigo);
   _atualizarTotaisCard();
   _atualizarRodape();
+  _atualizarFornResumo();
 }
 
-// Quando digita qtd ou preco
+// ── Input de qtd / preco / obs ────────────────────────────────────────────
 function onInputLinha(el, codigo, campo) {
   if(!_plSel[codigo]) {
-    // Auto-selecionar ao digitar
-    const chk = document.querySelector(`.pl-chk[data-codigo="${codigo}"]`);
-    if(chk && !chk.checked) { chk.checked = true; }
     const row = _plRaw.find(r => r.codigo === codigo);
-    if(row) _plSel[codigo] = { qtd: row.qtd_sugerida||0, preco: row.custo_unitario||0 };
+    const chk = document.querySelector(`.pl-chk[data-codigo="${codigo}"]`);
+    if(chk) chk.checked = true;
+    if(row) _plSel[codigo] = {
+      qtd:   parseFloat(document.querySelector(`.pl-qtd[data-codigo="${codigo}"]`)?.value)  || row.qtd_sugerida   || 0,
+      preco: parseFloat(document.querySelector(`.pl-preco[data-codigo="${codigo}"]`)?.value) || row.custo_unitario || 0,
+      obs:   document.querySelector(`.pl-obs[data-codigo="${codigo}"]`)?.value || '',
+    };
   }
-  const val = parseFloat(el.value) || 0;
-  if(_plSel[codigo]) _plSel[codigo][campo] = val;
-  _recalcLinha(codigo);
-  _atualizarTotaisCard();
-  _atualizarRodape();
+  if(_plSel[codigo]) {
+    const val = campo === 'obs' ? el.value : (parseFloat(el.value) || 0);
+    _plSel[codigo][campo] = val;
+  }
+  if(campo !== 'obs') {
+    _recalcLinha(codigo);
+    _atualizarTotaisCard();
+    _atualizarRodape();
+    _atualizarFornResumo();
+    // Atualizar badge de avaliação
+    if(campo === 'preco') {
+      const row = _plRaw.find(r => r.codigo === codigo);
+      const span = document.querySelector(`.pl-aval[data-codigo="${codigo}"]`);
+      if(span && row) {
+        const preco = parseFloat(el.value) || 0;
+        const media = row.custo_medio_90d || row.custo_medio_3ped;
+        span.innerHTML = _precoBadge(preco, media);
+      }
+    }
+  }
 }
 
+// ── Recalcular total da linha ─────────────────────────────────────────────
 function _recalcLinha(codigo) {
-  const sel = _plSel[codigo];
+  const sel  = _plSel[codigo];
   const span = document.querySelector(`.pl-linha-total[data-codigo="${codigo}"]`);
   if(!span) return;
   if(sel && sel.qtd > 0 && sel.preco > 0) {
-    const total = sel.qtd * sel.preco;
-    span.textContent = _pbrl(total);
-    span.style.color = 'var(--text)';
+    span.textContent  = _pbrl(sel.qtd * sel.preco);
+    span.style.color  = 'var(--text)';
+    span.style.fontWeight = '700';
   } else {
     span.textContent = '—';
     span.style.color = 'var(--muted)';
+    span.style.fontWeight = '';
   }
 }
 
+// ── Totalizadores ─────────────────────────────────────────────────────────
 function _atualizarTotaisCard() {
   const selecionados = Object.keys(_plSel).length;
-  const valorSel = Object.values(_plSel)
-    .reduce((s, v) => s + (v.qtd||0) * (v.preco||0), 0);
-  _setText('pk-selecionados', selecionados);
+  const valorSel = Object.values(_plSel).reduce((s,v) => s+(v.qtd||0)*(v.preco||0), 0);
   const brl = _pbrl(valorSel);
-  _setText('pk-valor-sel',  brl);
-  _setText('pl-total-sel',  brl);
-  document.getElementById('pl-chk-all').indeterminate =
-    selecionados > 0 && selecionados < _plFiltro.length;
+  _setText('pk-selecionados', selecionados);
+  _setText('pk-valor-sel',    brl);
+  _setText('pl-total-sel',    brl);
+  const chkAll = document.getElementById('pl-chk-all');
+  if(chkAll) chkAll.indeterminate = selecionados > 0 && selecionados < _plFiltro.length;
 }
 
 function _atualizarRodape() {
   const selecionados = Object.keys(_plSel).length;
-  const valorSel = Object.values(_plSel)
-    .reduce((s, v) => s + (v.qtd||0) * (v.preco||0), 0);
-  const estimado = _plFiltro
-    .reduce((s, r) => s + (r.valor_estimado||0), 0);
-  _setText('pl-rod-count',    selecionados + ' iten' + (selecionados!==1?'s':''));
+  const valorSel  = Object.values(_plSel).reduce((s,v) => s+(v.qtd||0)*(v.preco||0), 0);
+  const estimado  = _plFiltro.reduce((s,r) => s+(r.valor_estimado||0), 0);
+  _setText('pl-rod-count',    selecionados+' iten'+(selecionados!==1?'s':''));
   _setText('pl-rod-estimado', _pbrl(estimado));
   _setText('pl-rod-total',    _pbrl(valorSel));
 }
 
+// ── Totalizador por fornecedor ────────────────────────────────────────────
+function _atualizarFornResumo() {
+  const el = document.getElementById('pl-forn-lista');
+  const wrap = document.getElementById('pl-forn-resumo');
+  if(!el || !wrap) return;
+
+  const totForn = {};
+  Object.entries(_plSel).forEach(([codigo, sel]) => {
+    const row  = _plRaw.find(r => r.codigo === codigo);
+    const forn = row?.ultimo_fornecedor || 'Sem fornecedor';
+    const val  = (sel.qtd||0) * (sel.preco||0);
+    totForn[forn] = (totForn[forn]||0) + val;
+  });
+
+  const keys = Object.keys(totForn);
+  if(!keys.length) { wrap.style.display='none'; return; }
+  wrap.style.display = '';
+
+  // Ordenar: maior valor primeiro, "Sem fornecedor" por último
+  keys.sort((a,b) => {
+    if(a==='Sem fornecedor') return 1;
+    if(b==='Sem fornecedor') return -1;
+    return totForn[b] - totForn[a];
+  });
+
+  el.innerHTML = keys.map(f => `
+    <div style="display:flex;align-items:baseline;gap:5px">
+      <span style="font-size:11px;font-weight:700;color:var(--text)">${f}</span>
+      <span style="font-family:'DM Mono',monospace;font-size:12px;color:var(--red)">${_pbrl(totForn[f])}</span>
+    </div>`).join('');
+}
+
+// ── Selecionar todos ──────────────────────────────────────────────────────
 function selecionarTodos(checked) {
   _plFiltro.forEach(row => {
     const chk = document.querySelector(`.pl-chk[data-codigo="${row.codigo}"]`);
     if(checked) {
       if(!_plSel[row.codigo]) {
-        const qtd   = row.qtd_sugerida   || 0;
-        const preco = row.custo_unitario  || 0;
-        _plSel[row.codigo] = { qtd, preco };
-        // Preencher inputs se vazios
         const qi = document.querySelector(`.pl-qtd[data-codigo="${row.codigo}"]`);
         const pi = document.querySelector(`.pl-preco[data-codigo="${row.codigo}"]`);
-        if(qi && !qi.value && qtd > 0) qi.value = qtd;
+        const qtd   = row.qtd_sugerida   || 0;
+        const preco = row.custo_unitario || 0;
+        _plSel[row.codigo] = { qtd, preco, obs: '' };
+        if(qi && !qi.value && qtd > 0)   qi.value = qtd;
         if(pi && !pi.value && preco > 0) pi.value = preco;
         _recalcLinha(row.codigo);
       }
@@ -1224,73 +1311,94 @@ function selecionarTodos(checked) {
   });
   _atualizarTotaisCard();
   _atualizarRodape();
+  _atualizarFornResumo();
 }
 
+// ── Limpar seleção ────────────────────────────────────────────────────────
 function limparSelecao() {
   _plSel = {};
   document.querySelectorAll('.pl-chk').forEach(c => c.checked = false);
-  document.querySelectorAll('.pl-linha-total').forEach(s => { s.textContent='—'; s.style.color='var(--muted)'; });
-  document.getElementById('pl-chk-all').checked = false;
-  _atualizarTotaisCard();
-  _atualizarRodape();
+  document.querySelectorAll('.pl-linha-total').forEach(s => { s.textContent='—'; s.style.color='var(--muted)'; s.style.fontWeight=''; });
+  document.querySelectorAll('.pl-aval').forEach(s => { s.innerHTML='<span style="color:var(--muted);font-size:10px">—</span>'; });
+  const ca = document.getElementById('pl-chk-all'); if(ca) ca.checked=false;
+  _atualizarTotaisCard(); _atualizarRodape(); _atualizarFornResumo();
 }
 
-function imprimirListaCompra() {
-  const selecionados = Object.entries(_plSel);
-  const linhas = selecionados.length > 0
-    ? selecionados.map(([codigo, sel]) => {
-        const row = _plRaw.find(r => r.codigo === codigo);
-        const nome = row?.produto_nome || codigo;
-        const total = (sel.qtd||0) * (sel.preco||0);
-        return `<tr>
-          <td>${nome}</td><td>${codigo}</td>
-          <td style="text-align:right">${_pnum2(sel.qtd)} ${row?.unidade||''}</td>
-          <td style="text-align:right">${_pbrl(sel.preco)}</td>
-          <td style="text-align:right;font-weight:700">${_pbrl(total)}</td>
-          <td>${row?.ultimo_fornecedor||'—'}</td>
-        </tr>`;
-      }).join('')
-    : _plFiltro.map(row => {
-        const total = (row.qtd_sugerida||0) * (row.custo_unitario||0);
-        return `<tr>
-          <td>${row.produto_nome||row.codigo}</td><td>${row.codigo}</td>
-          <td style="text-align:right">${_pnum2(row.qtd_sugerida)} ${row.unidade||''}</td>
-          <td style="text-align:right">${_pbrl(row.custo_unitario)}</td>
-          <td style="text-align:right;font-weight:700">${_pbrl(total)}</td>
-          <td>${row.ultimo_fornecedor||'—'}</td>
-        </tr>`;
-      }).join('');
+// ── Helper: agrupar itens por fornecedor ─────────────────────────────────
+function _itensPorFornecedor(entries) {
+  const grupos = {};
+  entries.forEach(([codigo, sel]) => {
+    const row  = _plRaw.find(r => r.codigo === codigo);
+    const forn = row?.ultimo_fornecedor || 'Sem fornecedor';
+    if(!grupos[forn]) grupos[forn] = [];
+    grupos[forn].push({ codigo, sel, row });
+  });
+  // Ordenar: Sem fornecedor por último
+  const keys = Object.keys(grupos).sort((a,b) => {
+    if(a==='Sem fornecedor') return 1;
+    if(b==='Sem fornecedor') return -1;
+    return a.localeCompare(b, 'pt-BR');
+  });
+  return { grupos, keys };
+}
 
-  const totalGeral = selecionados.length > 0
-    ? Object.values(_plSel).reduce((s,v) => s + (v.qtd||0)*(v.preco||0), 0)
-    : _plFiltro.reduce((s,r) => s + (r.valor_estimado||0), 0);
+// ── Imprimir agrupado por fornecedor ─────────────────────────────────────
+function imprimirListaCompra() {
+  const entries = Object.entries(_plSel).length > 0
+    ? Object.entries(_plSel)
+    : _plFiltro.map(r => [r.codigo, {
+        qtd:   r.qtd_sugerida   || 0,
+        preco: r.custo_unitario || 0,
+        obs:   '',
+      }]);
+
+  const { grupos, keys } = _itensPorFornecedor(entries);
+  let totalGeral = 0;
+  let corpoHtml  = '';
+
+  keys.forEach(forn => {
+    const itens    = grupos[forn];
+    const subTotal = itens.reduce((s,{sel}) => s+(sel.qtd||0)*(sel.preco||0), 0);
+    totalGeral    += subTotal;
+    corpoHtml += `<tr style="background:#f5f0eb"><td colspan="5" style="padding:8px 10px;font-weight:700;font-size:12px;color:#8B0000">
+      📦 ${forn} — ${_pbrl(subTotal)}</td></tr>`;
+    itens.forEach(({codigo, sel, row}) => {
+      const nome  = row?.produto_nome || codigo;
+      const total = (sel.qtd||0)*(sel.preco||0);
+      corpoHtml += `<tr>
+        <td>${nome}<br><span style="font-size:10px;color:#666">${codigo}</span></td>
+        <td style="text-align:right;font-family:monospace">${_pnum2(sel.qtd)} ${row?.unidade||''}</td>
+        <td style="text-align:right;font-family:monospace">${_pbrl(sel.preco)}</td>
+        <td style="text-align:right;font-family:monospace;font-weight:700">${_pbrl(total)}</td>
+        <td style="font-size:11px;color:#666">${sel.obs||''}</td>
+      </tr>`;
+    });
+  });
 
   const win = window.open('','_blank');
   win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
     <title>Lista de Compras — Bom Beef</title>
     <style>
-      body{font-family:Arial,sans-serif;padding:20px;font-size:12px;color:#1a1a1a}
+      body{font-family:Arial,sans-serif;padding:20px;font-size:12px}
       h2{color:#8B0000;margin-bottom:4px}
       table{width:100%;border-collapse:collapse;margin-top:12px}
       th{background:#f5f0eb;padding:7px 10px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;border-bottom:2px solid #e8e0d8}
-      td{padding:7px 10px;border-bottom:1px solid #f0ebe4}
-      .total-row{font-weight:700;background:#f9f6f3;font-size:13px}
-      @media print{button{display:none}}
+      td{padding:6px 10px;border-bottom:1px solid #f0ebe4}
+      .total-row td{font-weight:700;font-size:13px;background:#f9f6f3}
     </style></head><body>
     <h2>🛒 Lista de Compras — Bom Beef Valinhos</h2>
     <p style="font-size:11px;color:#666;margin-bottom:4px">
-      ${selecionados.length > 0 ? selecionados.length+' itens selecionados' : _plFiltro.length+' itens (lista completa)'}
-      · Impresso em ${new Date().toLocaleString('pt-BR')}
+      ${entries.length} itens · Impresso em ${new Date().toLocaleString('pt-BR')}
     </p>
     <table>
       <thead><tr>
-        <th>Produto</th><th>Código</th><th style="text-align:right">Qtd</th>
-        <th style="text-align:right">Preço Unit.</th><th style="text-align:right">Total</th>
-        <th>Fornecedor</th>
+        <th>Produto</th><th style="text-align:right">Qtd</th>
+        <th style="text-align:right">Preço Unit.</th>
+        <th style="text-align:right">Total</th><th>Obs.</th>
       </tr></thead>
-      <tbody>${linhas}</tbody>
+      <tbody>${corpoHtml}</tbody>
       <tfoot><tr class="total-row">
-        <td colspan="4" style="text-align:right;padding:10px">TOTAL GERAL</td>
+        <td colspan="3" style="text-align:right;padding:10px">TOTAL GERAL</td>
         <td style="text-align:right;padding:10px;color:#8B0000">${_pbrl(totalGeral)}</td>
         <td></td>
       </tr></tfoot>
@@ -1298,6 +1406,50 @@ function imprimirListaCompra() {
     </body></html>`);
   win.document.close();
   win.onload = () => win.print();
+}
+
+// ── Copiar para WhatsApp ──────────────────────────────────────────────────
+function copiarWhatsApp() {
+  const entries = Object.entries(_plSel);
+  if(!entries.length) {
+    alert('Selecione pelo menos um item antes de copiar para o WhatsApp.');
+    return;
+  }
+  const { grupos, keys } = _itensPorFornecedor(entries);
+  let txt = '🛒 *Pedido de Compra — Bom Beef*\n';
+  txt += `📅 ${new Date().toLocaleDateString('pt-BR')}\n\n`;
+  let totalGeral = 0;
+
+  keys.forEach(forn => {
+    const itens = grupos[forn];
+    const sub   = itens.reduce((s,{sel}) => s+(sel.qtd||0)*(sel.preco||0), 0);
+    totalGeral += sub;
+    txt += `*${forn.toUpperCase()}*\n`;
+    itens.forEach(({sel, row, codigo}) => {
+      const nome  = row?.produto_nome || codigo;
+      const un    = row?.unidade || '';
+      const total = (sel.qtd||0)*(sel.preco||0);
+      txt += `• ${nome}: ${_pnum2(sel.qtd)} ${un}`;
+      if(sel.preco) txt += ` — R$ ${parseFloat(sel.preco).toFixed(2).replace('.',',')}/${un}`;
+      if(total) txt += ` = R$ ${parseFloat(total).toFixed(2).replace('.',',')}`;
+      if(sel.obs) txt += `\n  _${sel.obs}_`;
+      txt += '\n';
+    });
+    txt += `_Subtotal: R$ ${parseFloat(sub).toFixed(2).replace('.',',')}_\n\n`;
+  });
+
+  txt += `💰 *Total estimado: R$ ${parseFloat(totalGeral).toFixed(2).replace('.',',')}*`;
+
+  navigator.clipboard.writeText(txt).then(() => {
+    const btn = document.querySelector('[onclick="copiarWhatsApp()"]');
+    const orig = btn ? btn.textContent : '';
+    if(btn){ btn.textContent='✅ Copiado!'; setTimeout(()=>btn.textContent=orig, 2500); }
+  }).catch(() => {
+    const ta = document.createElement('textarea');
+    ta.value = txt; document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); document.body.removeChild(ta);
+    alert('Copiado para a área de transferência!');
+  });
 }
 
 </script>
