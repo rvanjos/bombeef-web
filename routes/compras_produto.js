@@ -421,6 +421,10 @@ module.exports = function(pool) {
           if (dup2.rows.length) { ignorados++; continue; }
         }
 
+        // SAVEPOINT antes do INSERT para proteger a transação de erros de duplicate key.
+        // No PostgreSQL, qualquer erro dentro de uma transação a marca como "aborted".
+        // Com SAVEPOINT podemos fazer ROLLBACK parcial sem abortar a transação toda.
+        await client.query('SAVEPOINT sp_ins');
         try {
           await client.query(`
             INSERT INTO compras_produto
@@ -435,7 +439,11 @@ module.exports = function(pool) {
               it.serie_nfe,it.cod_item_nfe,it.cfop,it.id_entrada_pdv,it.data_emissao,
               it.data_entrada,it.quantidade,it.unidade,it.valor_unitario,it.valor_total,
               it.valor_total_liquido,it.icmsst,'pdv_xlsx',it.arquivo_importado]);
+          await client.query('RELEASE SAVEPOINT sp_ins');
         } catch(eIns) {
+          // Reverter apenas este INSERT, manter a transação ativa
+          await client.query('ROLLBACK TO SAVEPOINT sp_ins');
+          await client.query('RELEASE SAVEPOINT sp_ins');
           // Duplicate key (idx_cp_dedup) — linha já existe, contar como ignorado
           if (eIns.code === '23505') { ignorados++; continue; }
           throw eIns; // outro erro — relançar
