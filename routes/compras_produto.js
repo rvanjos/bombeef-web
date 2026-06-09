@@ -482,7 +482,9 @@ module.exports = function(pool) {
   r.get('/importacoes', async (req, res) => {
     try {
       const { rows } = await pool.query(`
-        SELECT id, nome_arquivo, periodo_ini, periodo_fim,
+        SELECT id, nome_arquivo,
+               TO_CHAR(periodo_ini, 'YYYY-MM-DD') AS periodo_ini,
+               TO_CHAR(periodo_fim, 'YYYY-MM-DD') AS periodo_fim,
                total_linhas, total_ignorados, total_sem_vinculo,
                total_valor, fornecedores_json, criado_em
         FROM compras_importacoes ORDER BY criado_em DESC LIMIT 50
@@ -507,6 +509,8 @@ module.exports = function(pool) {
 
       const { rows } = await pool.query(`
         SELECT cp.*,
+          TO_CHAR(cp.data_entrada, 'YYYY-MM-DD') AS data_entrada,
+          TO_CHAR(cp.data_emissao, 'YYYY-MM-DD') AS data_emissao,
           LAG(cp.valor_unitario) OVER (PARTITION BY cp.produto_codigo ORDER BY cp.data_entrada, cp.id) AS custo_anterior
         FROM compras_produto cp
         ${where}
