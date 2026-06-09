@@ -286,7 +286,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
         </div>
         <!-- Busca de produto -->
         <div style="position:relative;margin-bottom:8px">
-          <input id="k-busca" type="text" placeholder="Buscar produto por código ou nome..." oninput="buscarProdKit(this.value)"
+          <input id="k-busca" type="text" placeholder="Buscar produto por código ou nome..." oninput="buscarProdKitGlobal(this.value)" onkeydown="navSugKitGlobal(event)"
             style="width:100%;border:1px solid var(--border);border-radius:7px;padding:7px 10px;font-size:13px;font-family:inherit">
           <div id="k-sugestoes" style="display:none;position:absolute;left:0;right:0;top:100%;background:#fff;border:1px solid var(--border);border-radius:0 0 7px 7px;box-shadow:0 4px 12px rgba(0,0,0,.1);z-index:50;max-height:160px;overflow-y:auto"></div>
         </div>
@@ -803,6 +803,66 @@ function renderKitItems(){
     </div>`;
   }).join('');
   recalcKit();
+}
+
+
+let _kGlobalTimer = null;
+let _kGlobalCache = [];
+let _kGlobalIdx = -1;
+
+async function buscarProdKitGlobal(q) {
+  const sug = document.getElementById('k-sugestoes');
+  if (!sug) return;
+  if (!q || q.length < 2) { sug.style.display = 'none'; return; }
+  clearTimeout(_kGlobalTimer);
+  _kGlobalTimer = setTimeout(async () => {
+    const d = await api.get('/api/produtos/buscar?q=' + encodeURIComponent(q));
+    if (!d.ok || !d.data.length) { sug.style.display = 'none'; return; }
+    _kGlobalCache = d.data;
+    _kGlobalIdx = -1;
+    sug.innerHTML = d.data.map((p, idx) =>
+      `<div data-idx="${idx}" style="padding:7px 10px;cursor:pointer;border-bottom:1px solid #f5f0e8;font-size:12px;display:flex;justify-content:space-between;align-items:center"
+        onmousedown="selecionarProdKitGlobal(${idx})"
+        onmouseover="this.style.background='#fdf5e8'" onmouseout="this.style.background=''">
+        <span><span style="font-family:monospace;color:var(--muted);font-size:10px;margin-right:6px">${p.codigo||''}</span><strong>${p.descricao||''}</strong></span>
+        <span style="font-size:11px;color:var(--muted);margin-left:8px;flex-shrink:0">Custo: R$ ${parseFloat(p.preco_custo||0).toFixed(2)}</span>
+      </div>`
+    ).join('');
+    sug.style.display = 'block';
+  }, 200);
+}
+
+function navSugKitGlobal(e) {
+  const sug = document.getElementById('k-sugestoes');
+  if (!sug || sug.style.display === 'none') return;
+  const items = sug.querySelectorAll('[data-idx]');
+  if (!items.length) return;
+  if (e.key === 'ArrowDown') { e.preventDefault(); _kGlobalIdx = Math.min(_kGlobalIdx + 1, items.length - 1); }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); _kGlobalIdx = Math.max(_kGlobalIdx - 1, 0); }
+  else if (e.key === 'Enter' && _kGlobalIdx >= 0) { e.preventDefault(); selecionarProdKitGlobal(_kGlobalIdx); return; }
+  else if (e.key === 'Escape') { sug.style.display = 'none'; return; }
+  items.forEach((it, idx) => { it.style.background = idx === _kGlobalIdx ? '#fdf5e8' : ''; });
+}
+
+function selecionarProdKitGlobal(idx) {
+  const p = _kGlobalCache[idx];
+  if (!p) return;
+  // Adicionar item já com custo e venda preenchidos
+  kitItems.push({
+    codigo:     p.codigo || '',
+    descricao:  p.descricao || '',
+    quantidade: 1,
+    precoCusto: parseFloat(p.preco_custo || 0),
+    precoVenda: parseFloat(p.preco_venda || 0),
+    estoque:    parseFloat(p.estoque || 0),
+  });
+  // Limpar campo de busca e sugestões
+  const busca = document.getElementById('k-busca');
+  if (busca) busca.value = '';
+  const sug = document.getElementById('k-sugestoes');
+  if (sug) sug.style.display = 'none';
+  _kGlobalCache = [];
+  renderKitItems();
 }
 
 let _kitSugTimers = {};

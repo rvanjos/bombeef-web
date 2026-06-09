@@ -920,7 +920,7 @@ module.exports = function (pool, app) {
     const { q } = req.query;
     try {
       const { rows } = await pool.query(`
-        SELECT id, codigo, descricao, preco_custo,
+        SELECT id, codigo, descricao, preco_custo, preco_venda,
                COALESCE((SELECT saldo FROM kit_estoque_interno WHERE produto_id=p.id),0) AS saldo_interno
         FROM produtos p
         WHERE ativo=true AND (descricao ILIKE $1 OR codigo ILIKE $1)
