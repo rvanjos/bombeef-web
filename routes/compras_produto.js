@@ -189,14 +189,27 @@ module.exports = function(pool) {
     // Linha 1: cabeçalhos de grupos (Valor Total, Total Liquido, etc)
     // Linha 2: sub-cabeçalhos com nomes de colunas
     let hdrRow = null, hdrRow1 = null, hdrIdx = -1;
-    for (let i = 0; i < Math.min(raw.length, 5); i++) {
+    for (let i = 0; i < Math.min(raw.length, 6); i++) {
       const r2 = raw[i];
       if (r2 && r2.some && r2.some(v => v && typeof v === 'string' &&
           (v.toLowerCase().includes('produto') || v.toLowerCase().includes('cód')))) {
-        hdrRow = r2;
-        hdrIdx = i;
-        // Linha 1 é sempre a anterior (para colunas mescladas sem valor na linha 2)
-        hdrRow1 = i > 0 ? raw[i-1] : null;
+        // Verificar se a linha seguinte é o sub-header real (mais colunas preenchidas)
+        // Padrão do PDV TOTVS: linha i é cabeçalho de grupo, linha i+1 tem os nomes reais
+        const r3 = raw[i + 1];
+        const r2filled  = r2.filter(v => v !== null && v !== '').length;
+        const r3filled  = r3 ? r3.filter(v => v !== null && v !== '').length : 0;
+        const r3hasCod  = r3 && r3.some(v => v && typeof v === 'string' && v.toLowerCase().includes('cód'));
+        const r3hasProd = r3 && r3.some(v => v && typeof v === 'string' && v.toLowerCase() === 'produto');
+        if (r3 && r3filled > r2filled && (r3hasCod || r3hasProd)) {
+          // Linha i é cabeçalho de grupo (hdrRow1), linha i+1 é o header real
+          hdrRow  = r3;
+          hdrRow1 = r2;
+          hdrIdx  = i + 1;
+        } else {
+          hdrRow  = r2;
+          hdrIdx  = i;
+          hdrRow1 = i > 0 ? raw[i-1] : null;
+        }
         break;
       }
     }
