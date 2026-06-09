@@ -183,6 +183,19 @@ module.exports = function(pool) {
     }
 
     const ws = wb.Sheets[wb.SheetNames[0]];
+
+    // Alguns arquivos TOTVS têm o atributo !ref incorreto (ex: A1:C1) devido a
+    // células mescladas que o SheetJS não contabiliza no range automático.
+    // Recalcular o range real a partir das células existentes.
+    const _wsKeys = Object.keys(ws).filter(k => !k.startsWith('!'));
+    if (_wsKeys.length > 0) {
+      const _addrs = _wsKeys.map(k => XLSX.utils.decode_cell(k));
+      const _maxR  = Math.max(..._addrs.map(a => a.r));
+      const _maxC  = Math.max(..._addrs.map(a => a.c));
+      const _realRef = XLSX.utils.encode_range({ s: {r:0,c:0}, e: {r:_maxR, c:_maxC} });
+      if (ws['!ref'] !== _realRef) ws['!ref'] = _realRef;
+    }
+
     const raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
 
     // Detectar linha de cabeçalho — planilha PDV tem 2 linhas de header (mescladas)
