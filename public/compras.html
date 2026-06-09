@@ -149,6 +149,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);fon
       <div class="fg" style="justify-content:flex-end">
         <label>&nbsp;</label>
         <button class="btn btn-s" onclick="carregarHistorico()">🔍 Buscar</button>
+        <button class="btn btn-s" onclick="imprimirHistoricoCompras()">🖨️ Imprimir</button>
       </div>
     </div>
   </div>
@@ -1095,6 +1096,33 @@ async function gerarOrcamento() {
   } catch(e){
     tbody.innerHTML=`<tr><td colspan="11" style="text-align:center;padding:24px;color:#dc2626">❌ ${e.message}</td></tr>`;
   }
+}
+
+function imprimirHistoricoCompras() {
+  const ini = document.getElementById('h-ini')?.value || '';
+  const fim = document.getElementById('h-fim')?.value || '';
+  const filtroDesc = ini || fim
+    ? (ini?ini.split('-').reverse().join('/'):'início')+'  →  '+(fim?fim.split('-').reverse().join('/'):'hoje')
+    : 'Todos os registros';
+  const tabela = document.getElementById('hist-table-wrap') || document.querySelector('#sec-historico .card');
+  const corpo = tabela?.innerHTML || document.querySelector('#sec-historico')?.innerHTML || '';
+  const win = window.open('','_blank');
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+    <title>Compras — Histórico</title>
+    <style>body{font-family:'DM Sans',Arial,sans-serif;padding:20px;font-size:12px;color:#1a1a1a}
+table{width:100%;border-collapse:collapse;margin-bottom:12px}
+th{background:#f5f0eb;padding:7px 10px;text-align:left;font-size:10px;font-weight:700;
+   text-transform:uppercase;letter-spacing:.5px;border-bottom:2px solid #e8e0d8}
+td{padding:7px 10px;border-bottom:1px solid #f0ebe4;font-size:12px}
+h1,h2{color:#8B0000;margin-bottom:4px}
+.no-print,button,.btn{display:none!important}</style>
+    </head><body>
+    <h2>🛒 Histórico de Compras — Bom Beef Valinhos</h2>
+    <p style="font-size:11px;color:#666;margin-bottom:14px">Período: ${filtroDesc} · Impresso em ${new Date().toLocaleString('pt-BR')}</p>
+    ${corpo}
+    </body></html>`);
+  win.document.close();
+  win.onload = () => win.print();
 }
 </script>
 

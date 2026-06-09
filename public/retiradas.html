@@ -139,6 +139,7 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
       <option value="">Todos os funcionários</option>
     </select>
     <input type="month" id="flt-mes" class="flt" style="padding:7px 10px" onchange="carregar()">
+      <button class="btn btn-s" onclick="imprimirRetiradas()">🖨️ Imprimir</button>
   </div>
 
   <!-- Tabela -->
@@ -778,6 +779,32 @@ async function abrirRelatorio(){
 	<td style="color:${parseFloat(f.saldo||0)>=0?'var(--green)':'var(--red-l)'};font-weight:600">${fmt.brl(f.saldo||0)}</td>
       </tr>`).join('')}</tbody>
     </table>`;
+}
+
+function imprimirRetiradas() {
+  const mes = document.getElementById('flt-mes')?.value || '';
+  const [ano, m] = mes ? mes.split('-') : ['',''];
+  const nomes = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  const mesLabel = mes ? nomes[parseInt(m)-1]+'/'+ano : 'Todos';
+  const func = document.getElementById('flt-func')?.options[document.getElementById('flt-func')?.selectedIndex]?.text || 'Todos';
+  const corpo = document.querySelector('.body')?.innerHTML || '';
+  const win = window.open('','_blank');
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+    <title>Retiradas — ${mesLabel}</title>
+    <style>body{font-family:'DM Sans',Arial,sans-serif;padding:20px;font-size:12px;color:#1a1a1a}
+table{width:100%;border-collapse:collapse;margin-bottom:12px}
+th{background:#f5f0eb;padding:7px 10px;text-align:left;font-size:10px;font-weight:700;
+   text-transform:uppercase;letter-spacing:.5px;border-bottom:2px solid #e8e0d8}
+td{padding:7px 10px;border-bottom:1px solid #f0ebe4;font-size:12px}
+h1,h2{color:#8B0000;margin-bottom:4px}
+.no-print,button,.btn,.toolbar{display:none!important}</style>
+    </head><body>
+    <h2>💸 Retiradas de Funcionários — Bom Beef Valinhos</h2>
+    <p style="font-size:11px;color:#666;margin-bottom:14px">Mês: ${mesLabel} · Funcionário: ${func} · Impresso em ${new Date().toLocaleString('pt-BR')}</p>
+    ${corpo}
+    </body></html>`);
+  win.document.close();
+  win.onload = () => win.print();
 }
 </script>
 

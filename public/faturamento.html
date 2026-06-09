@@ -1065,6 +1065,42 @@ async function carregarReconciliacao() {
     if (aviso) aviso.style.display = '';
   }
 }
+
+function imprimirFaturamento() {
+  const filtroDesc = (() => {
+    const modo = document.getElementById('flt-modo')?.value || '';
+    const ano  = document.getElementById('flt-ano')?.value  || '';
+    const mes  = document.getElementById('flt-mes-sel')?.value || '';
+    if (modo === 'ano')      return 'Ano '+ano;
+    if (modo === 'mes')      return ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][parseInt(mes)-1]+'/'+ano;
+    const ini = document.getElementById('flt-data-ini')?.value || '';
+    const fim = document.getElementById('flt-data-fim')?.value || '';
+    if (ini || fim) return (ini?ini.split('-').reverse().join('/'):'')+(fim?' → '+fim.split('-').reverse().join('/'):'');
+    return 'Período atual';
+  })();
+  const corpo = document.querySelector('.body')?.innerHTML || '';
+  const win = window.open('','_blank');
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+    <title>Faturamento — Imprimir</title>
+    <style>body{font-family:'DM Sans',Arial,sans-serif;padding:20px;font-size:12px;color:#1a1a1a}
+table{width:100%;border-collapse:collapse;margin-bottom:12px}
+th{background:#f5f0eb;padding:7px 10px;text-align:left;font-size:10px;font-weight:700;
+   text-transform:uppercase;letter-spacing:.5px;border-bottom:2px solid #e8e0d8}
+td{padding:7px 10px;border-bottom:1px solid #f0ebe4;font-size:12px}
+h1,h2{color:#8B0000;margin-bottom:4px}
+h3{color:#444;font-size:13px;margin:14px 0 6px}
+.no-print,button,.btn{display:none!important}
+canvas{max-width:100%;height:auto!important}
+@media print{.no-print{display:none}}.toolbar,.tabs,.ph,button,.btn,.no-print{display:none!important}
+    .chart-card,.charts-row{page-break-inside:avoid}</style>
+    </head><body>
+    <h2>💳 Faturamento — Bom Beef Valinhos</h2>
+    <p style="font-size:11px;color:#666;margin-bottom:14px">Período: ${filtroDesc} · Impresso em ${new Date().toLocaleString('pt-BR')}</p>
+    ${corpo}
+    </body></html>`);
+  win.document.close();
+  win.onload = () => win.print();
+}
 </script>
 
 <!-- ============================================================
