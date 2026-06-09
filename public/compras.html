@@ -525,12 +525,18 @@ async function enviarImportacao() {
       $id('imp-status').innerHTML = html;
       carregarImpHist();
       window._fileToImport = null;
+      const inp = document.getElementById('inp-file');
+      if (inp) inp.value = '';
     } else {
       $id('imp-status').innerHTML = `<div class="alert alert-err">❌ ${res.erro||'Erro ao importar'}</div>`;
     }
   } catch(e) {
     $id('imp-status').innerHTML = `<div class="alert alert-err">❌ ${e.message}</div>`;
   }
+  // Resetar input para permitir tentar novamente
+  const inp2 = document.getElementById('inp-file');
+  if (inp2) inp2.value = '';
+  window._fileToImport = null;
 }
 
 async function carregarImpHist() {
