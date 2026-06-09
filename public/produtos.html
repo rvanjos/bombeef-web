@@ -159,11 +159,13 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
 <body>
 <div class="ph"><span style="font-size:20px">📦</span><h2>Produtos & Kits</h2><div class="ph-sub" id="ph-sub">—</div></div>
 <div class="body">
-  <div class="kpi-row">
+  <div style="background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);padding:16px;margin-bottom:16px;padding-bottom:12px;">
+      <div class="kpi-row">
     <div class="kc"><div class="kc-l">Produtos Ativos</div><div class="kc-v" id="k-at">—</div></div>
     <div class="kc"><div class="kc-l">Fornecedores</div><div class="kc-v" id="k-fn">—</div></div>
     <div class="kc"><div class="kc-l">Preço Médio</div><div class="kc-v" id="k-pm">—</div></div>
   </div>
+    </div>
   <div class="tabs">
     <button class="tab a" onclick="showSec('prod',this)">📦 Produtos</button>
     <button class="tab" onclick="showSec('cfg',this)">⚙️ Parâmetros</button>
@@ -171,7 +173,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
 
   <!-- PRODUTOS -->
   <div id="sec-prod">
-    <div class="toolbar" style="flex-wrap:wrap;gap:6px">
+    <div style="background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);padding:16px;margin-bottom:16px;padding-bottom:10px;">
+      <div class="toolbar" style="flex-wrap:wrap;gap:6px">
       <button class="btn btn-g" onclick="abrirProd()">＋ Novo Produto</button>
       <div style="position:relative;display:inline-block" id="sync-menu-wrap">
         <button class="btn btn-s" onclick="toggleSyncMenu()" id="sync-menu-btn">📥 Sincronizar PDV ▾</button>
@@ -211,6 +214,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
         <option value="desc_asc">Descrição A→Z</option>
       </select>
       <span id="badge-margem-neg" style="display:none;background:#fff0f0;color:var(--red-l);border:1px solid #f5c6c6;border-radius:7px;padding:4px 10px;font-size:11px;font-weight:700"></span>
+    </div>
     </div>
     <div class="card" style="overflow-x:auto">
       <table class="tbl" style="min-width:600px">

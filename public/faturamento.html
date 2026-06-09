@@ -149,13 +149,15 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
 <div class="body">
 
   <!-- KPIs -->
-  <div class="kpi-grid">
+  <div style="background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);padding:16px;margin-bottom:16px;padding-bottom:14px;">
+      <div class="kpi-grid">
     <div class="kpi verde"><div class="kpi-l">Fat. Bruto (período)</div><div class="kpi-v" id="k-bruto">—</div><div class="kpi-s" id="k-bruto-s"></div></div>
     <div class="kpi verde"><div class="kpi-l">Fat. Líquido</div><div class="kpi-v" id="k-liq">—</div><div class="kpi-s" id="k-liq-s"></div></div>
     <div class="kpi laranja"><div class="kpi-l">Ticket Médio</div><div class="kpi-v" id="k-ticket">—</div><div class="kpi-s" id="k-ticket-s">por atendimento</div></div>
     <div class="kpi azul"><div class="kpi-l">Atendimentos</div><div class="kpi-v" id="k-pessoas">—</div><div class="kpi-s">pessoas</div></div>
     <div class="kpi vermelho"><div class="kpi-l">Descontos</div><div class="kpi-v" id="k-desc">—</div><div class="kpi-s" id="k-desc-s"></div></div>
   </div>
+    </div>
 
   <div class="tabs">
     <button class="tab active" id="tab-visao" onclick="showTab('visao',this)">📊 Visão Geral</button>
