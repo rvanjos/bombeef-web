@@ -492,3 +492,148 @@ input, select, button, textarea {
   .bb-kpi-val      { font-size: 16px; }
   .bb-kpi-grid     { grid-template-columns: 1fr; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SPRINT 5.5-A — Layout shell utilitário
+   Regra: não sobrescreve html/body global — classes opcionais aplicadas
+   por módulo explicitamente.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Shell de página (substitui body flex+height quando necessário) ───────── */
+.bb-page-shell {
+  min-height:       100vh;
+  background:       var(--bb-bg);
+  font-family:      var(--bb-sans);
+  display:          flex;
+  flex-direction:   column;
+  color:            var(--bb-text);
+}
+
+/* ── Área principal scrollável ───────────────────────────────────────────── */
+.bb-page-main {
+  flex:             1;
+  overflow-y:       auto;
+  overflow-x:       hidden;
+  padding:          16px 22px;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ── Seção / painel visual ───────────────────────────────────────────────── */
+.bb-section {
+  background:       var(--bb-white);
+  border:           1px solid var(--bb-border);
+  border-radius:    12px;
+  box-shadow:       var(--bb-shadow);
+  padding:          16px;
+  margin-bottom:    14px;
+}
+
+.bb-section-title {
+  font-size:        10px;
+  font-weight:      700;
+  text-transform:   uppercase;
+  letter-spacing:   .7px;
+  color:            var(--bb-muted);
+  margin-bottom:    12px;
+}
+
+/* ── Grids utilitários ───────────────────────────────────────────────────── */
+.bb-grid         { display: grid; gap: 14px; }
+.bb-grid-2       { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.bb-grid-3       { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.bb-grid-4       { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.bb-grid-auto    { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.bb-grid-auto-sm { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+
+/* Garantia de não vazar em grids */
+.bb-grid > * { min-width: 0; overflow-wrap: anywhere; }
+
+/* ── Barra de ações / filtros ────────────────────────────────────────────── */
+.bb-toolbar {
+  display:          flex;
+  align-items:      center;
+  flex-wrap:        wrap;
+  gap:              8px;
+  padding:          10px 0;
+  margin-bottom:    12px;
+}
+
+.bb-toolbar-right {
+  margin-left:      auto;
+  display:          flex;
+  align-items:      center;
+  gap:              8px;
+  flex-wrap:        wrap;
+}
+
+/* ── Chart card ─────────────────────────────────────────────────────────── */
+.bb-chart-card {
+  background:       var(--bb-white);
+  border:           1px solid var(--bb-border);
+  border-radius:    12px;
+  box-shadow:       var(--bb-shadow);
+  padding:          16px;
+  overflow:         hidden;
+}
+
+.bb-chart-card canvas {
+  max-height:       280px;
+  width:            100% !important;
+  display:          block;
+}
+
+.bb-chart-title {
+  font-size:        11px;
+  font-weight:      700;
+  text-transform:   uppercase;
+  letter-spacing:   .6px;
+  color:            var(--bb-muted);
+  margin-bottom:    12px;
+}
+
+/* ── Progress bar ────────────────────────────────────────────────────────── */
+.bb-progress-wrap {
+  margin-top:       8px;
+  padding-top:      8px;
+  border-top:       1px solid var(--bb-border);
+}
+
+.bb-progress-row {
+  display:          flex;
+  align-items:      center;
+  justify-content:  space-between;
+  gap:              8px;
+  margin-bottom:    4px;
+}
+
+.bb-progress-lbl  { font-size: 11px; color: var(--bb-muted); flex: 1; min-width: 0; }
+.bb-progress-pct  { font-family: var(--bb-mono); font-size: 12px; font-weight: 700; flex-shrink: 0; }
+
+.bb-progress-bg {
+  background:       #f0ebe4;
+  border-radius:    4px;
+  height:           6px;
+  overflow:         hidden;
+}
+
+.bb-progress-fill {
+  height:           100%;
+  border-radius:    4px;
+  transition:       width .3s ease;
+}
+
+/* ── Responsividade ──────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .bb-page-main         { padding: 12px; }
+  .bb-grid-2,
+  .bb-grid-3,
+  .bb-grid-4            { grid-template-columns: 1fr; }
+  .bb-grid-auto         { grid-template-columns: 1fr; }
+  .bb-toolbar           { gap: 6px; }
+  .bb-chart-card canvas { max-height: 220px; }
+}
+
+@media (max-width: 480px) {
+  .bb-page-main         { padding: 8px; }
+  .bb-grid-auto-sm      { grid-template-columns: 1fr 1fr; }
+}

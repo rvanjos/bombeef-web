@@ -19,10 +19,10 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
   display:flex;align-items:center;gap:10px;}
 .ph h2{font-size:16px;font-weight:700;}
 .ph-sub{margin-left:auto;font-size:11px;opacity:.7;}
-.body{padding:16px;flex:1;overflow-y:auto;}
+.body{padding:16px 20px;flex:1;overflow-y:auto;}
 /* KPIs */
-.kpi-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px;}
-.kpi{background:var(--white);border-radius:10px;padding:13px 15px;box-shadow:var(--shadow);border-top:3px solid var(--border);}
+.kpi-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-bottom:14px;}
+.kpi{background:var(--white);border-radius:10px;padding:13px 15px;box-shadow:var(--shadow);border-top:3px solid var(--border);;min-width:0;}
 .kpi.verde{border-top-color:var(--green);}
 .kpi.laranja{border-top-color:var(--orange);}
 .kpi.azul{border-top-color:var(--blue);}
@@ -31,7 +31,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
 .kpi-v{font-size:22px;font-weight:700;line-height:1;}
 .kpi-s{font-size:11px;color:var(--muted);margin-top:3px;}
 /* Tabs */
-.tabs{display:flex;gap:4px;margin-bottom:12px;border-bottom:2px solid var(--border);padding-bottom:0;}
+.tabs{display:flex;gap:4px;margin-bottom:12px;border-bottom:2px solid var(--border);padding-bottom:0;;flex-shrink:0;}
 .tab,.tab-btn{
   padding:10px 16px;font-size:12px;font-weight:600;cursor:pointer;
   border:none;background:none;color:var(--muted);
@@ -61,9 +61,10 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
 .flt{padding:6px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;
   background:var(--white);font-family:'DM Sans',sans-serif;}
 /* Charts */
-.charts-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;}
-.chart-card{background:var(--white);border-radius:10px;box-shadow:var(--shadow);padding:16px;overflow:hidden;}
-.chart-card canvas{max-height:280px;width:100%!important;}
+.charts-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:12px;}
+.chart-card{background:var(--white);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);padding:16px;overflow:hidden;}
+.chart-card canvas{max-height:280px;width:100%!important;display:block;}
+  .fat-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
   .chart-title{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;
   letter-spacing:.6px;margin-bottom:12px;}
 /* Categorias */
@@ -188,7 +189,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
       </select>
 
       <!-- Intervalo personalizado -->
-      <div id="flt-intervalo-wrap" style="display:none;display:none;align-items:center;gap:4px">
+      <div id="flt-intervalo-wrap" style="display:none;align-items:center;gap:4px">
         <input type="date" id="flt-data-ini" class="flt" onchange="carregar()" style="min-width:130px">
         <span style="font-size:11px;color:var(--muted)">até</span>
         <input type="date" id="flt-data-fim" class="flt" onchange="carregar()" style="min-width:130px">
