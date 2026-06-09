@@ -14,11 +14,11 @@
   --c-vencido:#8B0000; --c-critico:#C0392B; --c-alerta:#c76b00; --c-ok:#1a7a4a;
 }
 *{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);display:flex;flex-direction:column;height:100vh;overflow:hidden}
 .ph{background:var(--red);padding:12px 22px;display:flex;align-items:center;gap:10px;box-shadow:0 2px 12px rgba(139,0,0,.3);}
 .ph h2{font-family:'Playfair Display',serif;font-size:17px;color:#fff;font-weight:700;}
 .ph-sub{font-size:11px;color:rgba(255,255,255,.7);margin-left:auto;}
-.body{padding:18px 18px;max-width:1400px;margin:0 auto;}
+.body{padding:18px 18px;max-width:1400px;margin:0 auto;;flex:1;overflow-y:auto;}
 
 /* ── KPI CARDS ── */
 .kpi-row{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px;}
@@ -116,7 +116,7 @@ tr[onclick]{touch-action:pan-y;-webkit-tap-highlight-color:rgba(0,0,0,0.05);}
 .fg-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
 .fg-info{font-size:11px;color:var(--green);margin-top:3px;font-weight:600;}
 .modal-foot{padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:9px;justify-content:flex-end;}
-.alerta-box{background:#fff8e6;border:1px solid #f5c842;border-radius:8px;padding:11px;font-size:12px;margin-bottom:10px;}
+.alerta-box{background:#fff8e6;border:1px solid #f5c842;border-radius:12px;padding:11px;font-size:12px;margin-bottom:10px;}
 
 /* Dashboard de validade */
 .dash-kpi-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px;}
@@ -132,7 +132,7 @@ tr[onclick]{touch-action:pan-y;-webkit-tap-highlight-color:rgba(0,0,0,0.05);}
 .dk-val.vencido{color:#8B0000;}.dk-val.critico{color:#C0392B;}
 .dk-val.alerta{color:var(--c-alerta);}.dk-val.atencao{color:#1a5c8a;}.dk-val.ok{color:var(--c-ok);}
 .crit-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px;margin-bottom:14px;}
-.crit-card{background:var(--white);border-radius:9px;box-shadow:var(--shadow);padding:12px 14px;border-left:4px solid #ddd;cursor:pointer;transition:transform .12s;}
+.crit-card{background:var(--white);border-radius:12px;box-shadow:var(--shadow);padding:12px 14px;border-left:4px solid #ddd;cursor:pointer;transition:transform .12s;}
 .crit-card:hover{transform:translateY(-2px);}
 .crit-card.vencido{border-left-color:#8B0000;background:#fffafa;}
 .crit-card.critico{border-left-color:#C0392B;background:#fffcfc;}
