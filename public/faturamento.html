@@ -31,7 +31,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
 .kpi-v{font-size:22px;font-weight:700;line-height:1;;line-height:1.2;overflow-wrap:anywhere;}
 .kpi-s{font-size:11px;color:var(--muted);margin-top:3px;}
 /* Tabs */
-.tabs{display:flex;gap:4px;margin-bottom:12px;border-bottom:2px solid var(--border);padding-bottom:0;;flex-shrink:0;}
+.tabs{display:flex;gap:4px;margin-bottom:12px;border-bottom:2px solid var(--border);padding-bottom:0;;flex-shrink:0;;padding-top:4px;}
+.tab-content{padding:16px 0;}
 .tab,.tab-btn{
   padding:10px 16px;font-size:12px;font-weight:600;cursor:pointer;
   border:none;background:none;color:var(--muted);
@@ -165,7 +166,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
   </div>
 
   <!-- ── VISÃO GERAL ── -->
-  <div id="sec-visao">
+  <div id="sec-visao" style="padding-top:14px">
     <div class="toolbar" style="flex-wrap:wrap;gap:6px;align-items:center">
       <!-- Modo de período -->
       <select class="flt" id="flt-modo" onchange="atualizarFiltrosPeriodo()" style="min-width:160px">
