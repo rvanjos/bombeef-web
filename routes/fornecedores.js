@@ -159,6 +159,98 @@ module.exports = (pool) => {
   });
 
 
+  // ── POST /api/fornecedores/sincronizar ──────────────────────────────────────
+  // Popula fornecedores e fornecedor_produtos a partir do histórico de compras
+  router.post('/sincronizar', autenticar(['admin','gestor']), async (req, res) => {
+    try {
+      // 1. Upsert de todos os fornecedores distintos em compras_produto
+      const { rows: fornRows } = await pool.query(`
+        SELECT DISTINCT
+          fornecedor_cnpj                                    AS cnpj,
+          MAX(fornecedor_nome) FILTER (WHERE fornecedor_nome IS NOT NULL) AS nome
+        FROM compras_produto
+        WHERE fornecedor_cnpj IS NOT NULL AND fornecedor_cnpj <> ''
+        GROUP BY fornecedor_cnpj
+      `);
+
+      let novosForn = 0, novosProds = 0;
+
+      for (const f of fornRows) {
+        if (!f.cnpj || f.cnpj.length < 11) continue;
+        const r = await pool.query(`
+          INSERT INTO fornecedores (cnpj_fornecedor, razao_social)
+          VALUES ($1, $2)
+          ON CONFLICT (cnpj_fornecedor) DO UPDATE
+            SET razao_social  = CASE
+              WHEN fornecedores.razao_social IS NULL OR fornecedores.razao_social = ''
+              THEN EXCLUDED.razao_social
+              ELSE fornecedores.razao_social
+            END,
+            atualizado_em = NOW()
+        `, [f.cnpj, f.nome || f.cnpj]);
+        if (r.rowCount) novosForn++;
+      }
+
+      // 2. Upsert de todos os pares (fornecedor, produto) com agregados
+      const { rows: prodRows } = await pool.query(`
+        SELECT
+          fornecedor_cnpj                              AS cnpj,
+          produto_codigo,
+          MAX(produto_nome)                            AS produto_nome,
+          MAX(data_entrada) FILTER (
+            WHERE valor_unitario = (
+              SELECT valor_unitario FROM compras_produto cp2
+              WHERE cp2.fornecedor_cnpj = cp.fornecedor_cnpj
+                AND cp2.produto_codigo  = cp.produto_codigo
+              ORDER BY data_entrada DESC NULLS LAST LIMIT 1
+            )
+          )                                            AS ultima_compra,
+          (SELECT cp3.valor_unitario FROM compras_produto cp3
+           WHERE cp3.fornecedor_cnpj = cp.fornecedor_cnpj
+             AND cp3.produto_codigo  = cp.produto_codigo
+           ORDER BY cp3.data_entrada DESC NULLS LAST LIMIT 1
+          )                                            AS ultimo_preco,
+          COUNT(*)                                     AS compras_count
+        FROM compras_produto cp
+        WHERE fornecedor_cnpj IS NOT NULL
+          AND produto_codigo   IS NOT NULL
+        GROUP BY fornecedor_cnpj, produto_codigo
+      `);
+
+      for (const p of prodRows) {
+        if (!p.cnpj || !p.produto_codigo) continue;
+        await pool.query(`
+          INSERT INTO fornecedor_produtos
+            (cnpj_fornecedor, produto_codigo, produto_nome,
+             ultima_compra, ultimo_preco, compras_count)
+          VALUES ($1, $2, $3, $4, $5, $6)
+          ON CONFLICT (cnpj_fornecedor, produto_codigo) DO UPDATE
+            SET produto_nome  = COALESCE(EXCLUDED.produto_nome, fornecedor_produtos.produto_nome),
+                ultima_compra = GREATEST(EXCLUDED.ultima_compra, fornecedor_produtos.ultima_compra),
+                ultimo_preco  = CASE
+                  WHEN EXCLUDED.ultima_compra >= COALESCE(fornecedor_produtos.ultima_compra,'1900-01-01')
+                  THEN EXCLUDED.ultimo_preco
+                  ELSE fornecedor_produtos.ultimo_preco
+                END,
+                compras_count = GREATEST(EXCLUDED.compras_count, fornecedor_produtos.compras_count),
+                atualizado_em = NOW()
+        `, [p.cnpj, p.produto_codigo, p.produto_nome,
+            p.ultima_compra, p.ultimo_preco, parseInt(p.compras_count) || 1]);
+        novosProds++;
+      }
+
+      res.json({
+        ok: true,
+        fornecedores_sincronizados: novosForn,
+        produtos_sincronizados:     novosProds,
+        msg: `Sincronizados ${novosForn} fornecedor(es) e ${novosProds} produto(s) do histórico de compras.`
+      });
+    } catch(e) {
+      console.error('[fornecedores/sincronizar]', e.message);
+      res.status(500).json({ ok: false, erro: e.message });
+    }
+  });
+
   // ── GET /api/fornecedores/catalogo ──────────────────────────────────────────
   // Retorna todos os fornecedores com seus produtos agrupados (visão catálogo)
   router.get('/catalogo', autenticar(), async (req, res) => {

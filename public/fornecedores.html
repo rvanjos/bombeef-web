@@ -128,6 +128,7 @@ tbody td{padding:10px 12px;font-size:13px;vertical-align:middle;}
           oninput="filtrarCatalogo()"
           style="padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:'DM Sans',sans-serif;width:180px">
         <button onclick="carregarCatalogo()" class="btn btn-s" style="height:36px">🔄 Atualizar</button>
+        <button onclick="sincronizarHistorico()" class="btn btn-p" style="height:36px;padding:0 14px" id="btn-sinc-hist">⚡ Sincronizar histórico</button>
         <button onclick="expandirTodosForn()" class="btn btn-s" style="height:36px;padding:0 10px;font-size:11px">▼ Expandir todos</button>
         <button onclick="colapsarTodosForn()" class="btn btn-s" style="height:36px;padding:0 10px;font-size:11px">▶ Colapsar todos</button>
         <span id="cat-resumo" style="font-size:12px;color:var(--muted)"></span>
@@ -693,6 +694,32 @@ function colapsarTodosForn() {
     const arr = document.getElementById('cat-arrow-' + i);
     if (arr) arr.textContent = '▶';
   });
+}
+
+
+async function sincronizarHistorico() {
+  const btn = document.getElementById('btn-sinc-hist');
+  if(btn){ btn.disabled = true; btn.textContent = '⏳ Sincronizando…'; }
+  try {
+    const apiFn = _api || window.BB?.api;
+    const res = await apiFn.post ? 
+      apiFn.post('/api/fornecedores/sincronizar', {}) :
+      await fetch('/api/fornecedores/sincronizar', {
+        method:'POST',
+        headers:{'Content-Type':'application/json','Authorization':'Bearer '+sessionStorage.getItem('bb_token')},
+        body:'{}'
+      }).then(r=>r.json());
+    if(res.ok) {
+      toast('✅ ' + res.msg);
+      await carregarCatalogo();
+    } else {
+      toast('❌ ' + (res.erro || 'Erro ao sincronizar'));
+    }
+  } catch(e) {
+    toast('❌ ' + e.message);
+  } finally {
+    if(btn){ btn.disabled = false; btn.textContent = '⚡ Sincronizar histórico'; }
+  }
 }
 
 </script>
