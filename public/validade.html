@@ -248,7 +248,7 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
 </div>
 
 <!-- Loading overlay -->
-<div id="val-loading" style="position:fixed;inset:0;background:rgba(247,244,240,.95);z-index:999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px">
+<div id="val-loading" style="position:fixed;inset:0;background:rgba(247,244,240,.95);z-index:999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;transition:opacity .4s">
   <div style="font-size:36px">🗓</div>
   <div style="font-size:15px;font-weight:600;color:#8B0000">Carregando Validade...</div>
   <div style="width:180px;background:#ede8e0;border-radius:8px;height:6px;overflow:hidden">
@@ -829,7 +829,12 @@ function _valLoadStep(pct, msg) {
 
 function _valLoadHide() {
   const el = document.getElementById('val-loading');
-  if (el) { el.style.opacity = '0'; el.style.transition = 'opacity .4s'; setTimeout(() => el.remove(), 400); }
+  if (el) {
+    el.style.pointerEvents = 'none'; // imediato — não bloqueia mais
+    el.style.opacity = '0';
+    el.style.transition = 'opacity .4s';
+    setTimeout(() => { try { el.remove(); } catch(_) {} }, 450);
+  }
 }
 
 function _valLoadError(msg) {
@@ -838,10 +843,15 @@ function _valLoadError(msg) {
   const bar = document.getElementById('val-load-bar');
   const el  = document.getElementById('val-loading');
   if (txt) { txt.textContent = msg; txt.style.color = '#dc2626'; }
-  if (btn) btn.style.display = '';
+  if (btn) { btn.style.display = ''; btn.style.marginTop = '12px'; }
   if (bar) bar.style.background = '#dc2626';
-  // Reduzir o overlay para não bloquear a interface
-  if (el) { el.style.background = 'rgba(247,244,240,.97)'; }
+  // CRÍTICO: remover pointer-events para não bloquear a interface atrás
+  if (el) {
+    el.style.background = 'rgba(247,244,240,.97)';
+    el.style.pointerEvents = 'none';
+    // Permitir cliques apenas no botão de retry
+    if (btn) btn.style.pointerEvents = 'auto';
+  }
 }
 
 let _initTentativas = 0;
