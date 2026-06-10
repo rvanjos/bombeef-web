@@ -64,6 +64,26 @@ tbody td{padding:10px 12px;font-size:13px;vertical-align:middle;}
 .fg-row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
 .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%) translateY(60px);background:#1a1a1a;color:#fff;padding:8px 20px;border-radius:9px;font-size:13px;z-index:9999;transition:transform .3s;pointer-events:none;font-family:'DM Sans',sans-serif;white-space:nowrap;}
 .toast.show{transform:translateX(-50%) translateY(0);}
+
+/* ── Abas de navegação ────────────────────────────────────── */
+.nav-tabs{display:flex;gap:2px;border-bottom:2px solid var(--border);margin-bottom:14px;}
+.nav-tab{padding:8px 18px;background:none;border:none;border-bottom:3px solid transparent;
+  margin-bottom:-2px;cursor:pointer;font-size:13px;font-weight:600;color:var(--muted);
+  font-family:'DM Sans',sans-serif;transition:.15s}
+.nav-tab:hover{color:var(--text)}
+.nav-tab.active{color:var(--red);border-bottom-color:var(--red)}
+
+/* ── Catálogo ─────────────────────────────────────────────── */
+.cat-forn-card{background:var(--white);border:1px solid var(--border);border-radius:12px;
+  box-shadow:var(--shadow);margin-bottom:12px;overflow:hidden}
+.cat-forn-head{padding:12px 16px;cursor:pointer;display:flex;align-items:center;gap:10px;
+  background:var(--bg);border-bottom:1px solid var(--border)}
+.cat-forn-head:hover{background:#f0ebe4}
+.cat-forn-nome{font-size:13px;font-weight:700;flex:1}
+.cat-forn-meta{font-size:11px;color:var(--muted)}
+.cat-forn-body{display:none}
+.cat-forn-body.open{display:block}
+.cat-forn-search{padding:8px 12px;background:#faf9f7;border-bottom:1px solid var(--border)}
 </style>
 </head>
 <body>
@@ -74,6 +94,10 @@ tbody td{padding:10px 12px;font-size:13px;vertical-align:middle;}
   <span class="ph-sub" id="ph-perfil"></span>
 </div>
 
+<div class="nav-tabs">
+  <button class="nav-tab active" onclick="mudarAba('fornecedores', this)">🏭 Fornecedores</button>
+  <button class="nav-tab" onclick="mudarAba('catalogo', this)">📦 Catálogo de Produtos</button>
+</div>
 <div class="toolbar">
   <div class="search-box">
     <input type="text" id="inp-busca" placeholder="Buscar por nome, fantasia ou CNPJ..." oninput="buscar()">
@@ -87,8 +111,34 @@ tbody td{padding:10px 12px;font-size:13px;vertical-align:middle;}
 </div>
 
 <div class="content">
-  <div id="lista-wrap"></div>
-</div>
+    <!-- ABA: Fornecedores -->
+    <div id="sec-fornecedores">
+      <div id="lista-wrap"></div>
+    </div>
+
+    <!-- ABA: Catálogo de Produtos -->
+    <div id="sec-catalogo" style="display:none">
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
+        <div class="search-box" style="flex:1;min-width:200px">
+          <input type="text" id="cat-busca" placeholder="Buscar fornecedor…"
+            oninput="filtrarCatalogo()" style="width:100%">
+          <span class="search-ico">🔍</span>
+        </div>
+        <input type="text" id="cat-busca-prod" placeholder="Filtrar por produto…"
+          oninput="filtrarCatalogo()"
+          style="padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:'DM Sans',sans-serif;width:180px">
+        <button onclick="carregarCatalogo()" class="btn btn-s" style="height:36px">🔄 Atualizar</button>
+        <button onclick="expandirTodosForn()" class="btn btn-s" style="height:36px;padding:0 10px;font-size:11px">▼ Expandir todos</button>
+        <button onclick="colapsarTodosForn()" class="btn btn-s" style="height:36px;padding:0 10px;font-size:11px">▶ Colapsar todos</button>
+        <span id="cat-resumo" style="font-size:12px;color:var(--muted)"></span>
+      </div>
+      <div id="cat-wrap">
+        <div style="text-align:center;padding:32px;color:var(--muted)">
+          Clique em "Atualizar" para carregar o catálogo
+        </div>
+      </div>
+    </div>
+  </div>
 
 <!-- Modal Fornecedor -->
 <div class="mbg" id="m-forn" onclick="if(event.target===this)fechar()">
@@ -463,6 +513,188 @@ function toast(msg) {
   clearTimeout(_toastLocal);
   _toastLocal = setTimeout(() => el.classList.remove('show'), 2800);
 }
+
+
+// ═══════════════════════════════════════════════════════════════
+// CATÁLOGO DE PRODUTOS POR FORNECEDOR
+// ═══════════════════════════════════════════════════════════════
+let _catalogoRaw = [];
+
+function mudarAba(aba, btn) {
+  // Atualizar botões
+  document.querySelectorAll('.nav-tab').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+
+  // Mostrar/ocultar seções
+  const secForn = document.getElementById('sec-fornecedores');
+  const secCat  = document.getElementById('sec-catalogo');
+  const toolbar = document.querySelector('.toolbar');
+
+  if (aba === 'catalogo') {
+    if (secForn) secForn.style.display = 'none';
+    if (secCat)  secCat.style.display  = '';
+    if (toolbar) toolbar.style.display = 'none';
+    // Carregar automaticamente se ainda não carregou
+    if (!_catalogoRaw.length) carregarCatalogo();
+  } else {
+    if (secForn) secForn.style.display = '';
+    if (secCat)  secCat.style.display  = 'none';
+    if (toolbar) toolbar.style.display = '';
+  }
+}
+
+async function carregarCatalogo() {
+  const wrap = document.getElementById('cat-wrap');
+  if (!wrap) return;
+  wrap.innerHTML = '<div style="text-align:center;padding:32px;color:var(--muted)">⏳ Carregando catálogo…</div>';
+
+  try {
+    const apiFn = _api || window.BB?.api;
+    const res = await apiFn.get('/api/fornecedores/catalogo');
+    if (!res.ok) throw new Error(res.erro || 'Erro ao carregar catálogo');
+    _catalogoRaw = res.data || [];
+
+    const totalForn = _catalogoRaw.length;
+    const totalProd = _catalogoRaw.reduce((s, f) => s + (f.produtos?.length || 0), 0);
+    const el = document.getElementById('cat-resumo');
+    if (el) el.textContent = totalForn + ' fornecedor(es) · ' + totalProd + ' produto(s)';
+
+    renderCatalogo(_catalogoRaw);
+  } catch(e) {
+    wrap.innerHTML = `<div style="text-align:center;padding:32px;color:#dc2626">❌ ${e.message}</div>`;
+  }
+}
+
+function filtrarCatalogo() {
+  const bForn = (document.getElementById('cat-busca')?.value || '').toLowerCase().trim();
+  const bProd = (document.getElementById('cat-busca-prod')?.value || '').toLowerCase().trim();
+
+  const filtrado = _catalogoRaw
+    .map(f => {
+      // Filtrar fornecedor por nome
+      const nomeOk = !bForn ||
+        (f.nome_display || '').toLowerCase().includes(bForn) ||
+        (f.razao_social || '').toLowerCase().includes(bForn);
+      if (!nomeOk) return null;
+
+      // Filtrar produtos por nome/código
+      const prods = bProd
+        ? (f.produtos || []).filter(p =>
+            (p.produto_nome || '').toLowerCase().includes(bProd) ||
+            (p.produto_codigo || '').toLowerCase().includes(bProd))
+        : (f.produtos || []);
+
+      if (!prods.length && bProd) return null;
+      return { ...f, produtos: prods };
+    })
+    .filter(Boolean);
+
+  const el = document.getElementById('cat-resumo');
+  if (el) {
+    const totalP = filtrado.reduce((s, f) => s + (f.produtos?.length || 0), 0);
+    el.textContent = filtrado.length + ' fornecedor(es) · ' + totalP + ' produto(s)';
+  }
+
+  renderCatalogo(filtrado);
+}
+
+function renderCatalogo(data) {
+  const wrap = document.getElementById('cat-wrap');
+  if (!wrap) return;
+
+  if (!data.length) {
+    wrap.innerHTML = '<div style="text-align:center;padding:32px;color:var(--muted)">Nenhum resultado encontrado</div>';
+    return;
+  }
+
+  const brl = v => v != null
+    ? 'R$ ' + parseFloat(v).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2})
+    : '—';
+  const fmtDt = d => d ? d.split('-').reverse().join('/') : '—';
+  const abcBadge = v => v
+    ? `<span style="background:${{A:'#dcfce7',B:'#dbeafe',C:'#f3f4f6'}[v]||'#f3f4f6'};color:${{A:'#16a34a',B:'#2563eb',C:'#6b7280'}[v]||'#6b7280'};padding:1px 7px;border-radius:4px;font-size:10px;font-weight:700">${v}</span>`
+    : '';
+
+  wrap.innerHTML = data.map((f, idx) => {
+    const nProds   = f.produtos?.length || 0;
+    const ultiComp = f.ultima_compra ? fmtDt(f.ultima_compra) : '—';
+
+    const linhasProd = (f.produtos || []).map(p => `
+      <tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:8px 16px">
+          <span style="font-size:12px;font-weight:600">${p.produto_nome || p.produto_codigo}</span>
+          <span style="font-size:10px;color:var(--muted);margin-left:6px">${p.produto_codigo}</span>
+          ${p.categoria ? `<span style="font-size:10px;color:var(--muted)"> · ${p.categoria}</span>` : ''}
+        </td>
+        <td style="padding:8px;text-align:center">${abcBadge(p.curva_abc)}</td>
+        <td style="padding:8px;text-align:right;font-family:'DM Mono',monospace;font-size:12px;font-weight:700">
+          ${brl(p.ultimo_preco)}
+        </td>
+        <td style="padding:8px;text-align:right;font-size:11px;color:var(--muted)">
+          ${fmtDt(p.ultima_compra)}
+        </td>
+        <td style="padding:8px;text-align:right;font-size:11px;color:var(--muted)">
+          ${p.estoque != null ? parseFloat(p.estoque).toLocaleString('pt-BR',{maximumFractionDigits:3}) + ' ' + (p.unidade||'') : '—'}
+        </td>
+        <td style="padding:8px;text-align:right;font-size:11px;color:var(--muted)">${p.compras_count || 1}x</td>
+      </tr>`).join('');
+
+    return `
+      <div class="cat-forn-card">
+        <div class="cat-forn-head" onclick="toggleCatForn(${idx})">
+          <div>
+            <div class="cat-forn-nome">${f.nome_display || f.razao_social}</div>
+            ${f.nome_display !== f.razao_social
+              ? `<div style="font-size:10px;color:var(--muted)">${f.razao_social}</div>` : ''}
+          </div>
+          <div class="cat-forn-meta">
+            ${nProds} produto(s) · última compra: ${ultiComp}
+          </div>
+          <span style="font-size:14px;color:var(--muted);margin-left:8px" id="cat-arrow-${idx}">▶</span>
+        </div>
+        <div class="cat-forn-body" id="cat-body-${idx}">
+          <table style="width:100%;border-collapse:collapse">
+            <thead>
+              <tr style="background:var(--bg)">
+                <th style="padding:7px 16px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">Produto</th>
+                <th style="padding:7px 8px;text-align:center;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">ABC</th>
+                <th style="padding:7px 8px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">Último Preço</th>
+                <th style="padding:7px 8px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">Última Compra</th>
+                <th style="padding:7px 8px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">Estoque</th>
+                <th style="padding:7px 8px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)"># Compras</th>
+              </tr>
+            </thead>
+            <tbody>${linhasProd}</tbody>
+          </table>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function toggleCatForn(idx) {
+  const body  = document.getElementById('cat-body-' + idx);
+  const arrow = document.getElementById('cat-arrow-' + idx);
+  if (!body) return;
+  const open = body.classList.toggle('open');
+  if (arrow) arrow.textContent = open ? '▼' : '▶';
+}
+
+// Expandir todos / colapsar todos
+function expandirTodosForn() {
+  document.querySelectorAll('.cat-forn-body').forEach((b, i) => {
+    b.classList.add('open');
+    const arr = document.getElementById('cat-arrow-' + i);
+    if (arr) arr.textContent = '▼';
+  });
+}
+function colapsarTodosForn() {
+  document.querySelectorAll('.cat-forn-body').forEach((b, i) => {
+    b.classList.remove('open');
+    const arr = document.getElementById('cat-arrow-' + i);
+    if (arr) arr.textContent = '▶';
+  });
+}
+
 </script>
 </body>
 </html>

@@ -159,6 +159,54 @@ module.exports = (pool) => {
   });
 
 
+  // ── GET /api/fornecedores/catalogo ──────────────────────────────────────────
+  // Retorna todos os fornecedores com seus produtos agrupados (visão catálogo)
+  router.get('/catalogo', autenticar(), async (req, res) => {
+    try {
+      const { q, forn } = req.query;
+
+      // Buscar todos os fornecedores com produtos cadastrados
+      const { rows } = await pool.query(`
+        SELECT
+          f.cnpj_fornecedor,
+          COALESCE(f.nome_fantasia, f.razao_social)  AS nome_display,
+          f.razao_social,
+          f.nome_fantasia,
+          f.categoria_padrao,
+          COUNT(fp.produto_codigo)                   AS total_produtos,
+          MAX(fp.ultima_compra)                      AS ultima_compra,
+          SUM(fp.compras_count)                      AS total_compras,
+          json_agg(
+            json_build_object(
+              'produto_codigo', fp.produto_codigo,
+              'produto_nome',   fp.produto_nome,
+              'ultimo_preco',   fp.ultimo_preco,
+              'ultima_compra',  TO_CHAR(fp.ultima_compra,'YYYY-MM-DD'),
+              'compras_count',  fp.compras_count,
+              'curva_abc',      p.curva_abc,
+              'categoria',      p.categoria,
+              'unidade',        p.unidade,
+              'estoque',        p.estoque
+            ) ORDER BY fp.compras_count DESC, fp.produto_nome
+          ) AS produtos
+        FROM fornecedores f
+        INNER JOIN fornecedor_produtos fp ON fp.cnpj_fornecedor = f.cnpj_fornecedor
+        LEFT  JOIN produtos p ON p.codigo = fp.produto_codigo
+        WHERE f.ativo = true
+          ${q ? "AND (f.razao_social ILIKE '%' || $1 || '%' OR f.nome_fantasia ILIKE '%' || $1 || '%')" : ''}
+          ${forn ? `AND f.cnpj_fornecedor = ${q ? '$2' : '$1'}` : ''}
+        GROUP BY f.cnpj_fornecedor, f.razao_social, f.nome_fantasia, f.categoria_padrao
+        ORDER BY nome_display
+      `, [...(q ? [q] : []), ...(forn ? [forn] : [])]);
+
+      res.json({ ok: true, data: rows });
+    } catch(e) {
+      console.error('[fornecedores/catalogo]', e.message);
+      res.status(500).json({ ok: false, erro: e.message });
+    }
+  });
+
+
   // ── GET /api/fornecedores/:cnpj/produtos ────────────────────────────────────
   // Retorna todos os produtos já fornecidos por este fornecedor com histórico
   router.get('/:cnpj/produtos', autenticar(), async (req, res) => {
