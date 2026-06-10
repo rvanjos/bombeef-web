@@ -3322,31 +3322,55 @@ function ccrEnviarParaDRE() {
   setTimeout(_revinculateCC, 200);
   ccrAlertarPagamentoSemFatura(faturaId, _ccrMesCC, _ccrBandeira);
 
-  // ── Sprint 6.7-B: registrar fatura no painel de controle ─────────────────
-  const valorTotal = _ccrLancs.reduce((s,l) => s + Math.abs(parseFloat(l.valor||0)), 0);
-  const cartaoNome = _ccrBandeira || 'Cartão';
-  api.post('/api/dre/cartao-faturas', {
-    cartao:        cartaoNome,
-    bandeira:      _ccrBandeira || null,
-    competencia:   _ccrMesCC,
-    valor_total:   valorTotal,
-    qtd_itens:     _ccrLancs.length,
-    arquivo_nome:  _ccrFileName || null,
-    fatura_id_ref: faturaId,
-    itens: _ccrLancs.map(l => ({
-      data:       l.data       || null,
-      lancamento: l.lancamento || l.razaoSocial || '',
-      valor:      l.valor,
-      categoria:  l.categoria  || null,
-      portador:   l.portador   || null,
-    })),
-  }).then(r => {
-    if (r.ok) {
-      if (r.possivel_duplicidade) {
-        setTimeout(() => toast('⚠️ Possível duplicidade: já existe fatura com este cartão/mês/valor.'), 600);
-      }
-      // Recarregar painel de controle se estiver visível
-      if (typeof carregarCartaoFaturas === 'function') carregarCartaoFaturas();
+  // ── Sprint 6.7-C: registrar fatura com deduplicação ───────────────────────
+  const valorTotal  = _ccrLancs.reduce((s,l) => s + Math.abs(parseFloat(l.valor||0)), 0);
+  const cartaoNome  = _ccrBandeira || 'Cartão';
+  const hashFatura  = _cfHashFatura(cartaoNome, _ccrMesCC, valorTotal, _ccrFileName);
+  const itensPayload = _ccrLancs.map(l => ({
+    data:       l.data       || null,
+    descricao:  l.lancamento || l.razaoSocial || '',
+    lancamento: l.lancamento || l.razaoSocial || '',
+    valor:      l.valor,
+    categoria:  l.categoria  || null,
+    portador:   l.portador   || null,
+  }));
+
+  // Verificar duplicata antes de salvar
+  api.post('/api/dre/cartao-faturas/verificar', {
+    hash_fatura:  hashFatura,
+    cartao:       cartaoNome,
+    competencia:  _ccrMesCC,
+    valor_total:  valorTotal,
+  }).then(async r => {
+    if (!r.ok) return; // falha silenciosa, não impede o DRE de funcionar
+
+    if (r.duplicata) {
+      // Mostrar modal de duplicata
+      _cfMostrarModalDuplicata(r.fatura, {
+        cartao:       cartaoNome,
+        bandeira:     _ccrBandeira || null,
+        competencia:  _ccrMesCC,
+        valor_total:  valorTotal,
+        qtd_itens:    _ccrLancs.length,
+        arquivo_nome: _ccrFileName || null,
+        hash_fatura:  hashFatura,
+        fatura_id_ref: faturaId,
+        itens: itensPayload,
+      });
+    } else {
+      // Nova importação — registrar normalmente
+      const reg = await api.post('/api/dre/cartao-faturas', {
+        cartao:       cartaoNome,
+        bandeira:     _ccrBandeira || null,
+        competencia:  _ccrMesCC,
+        valor_total:  valorTotal,
+        qtd_itens:    _ccrLancs.length,
+        arquivo_nome: _ccrFileName || null,
+        hash_fatura:  hashFatura,
+        fatura_id_ref: faturaId,
+        itens:        itensPayload,
+      });
+      if (reg?.ok && typeof carregarCartaoFaturas === 'function') carregarCartaoFaturas();
     }
   }).catch(() => {});
 }
@@ -6548,6 +6572,7 @@ async function carregarCartaoFaturas() {
         <td style="text-align:right;font-family:'DM Mono',monospace;font-weight:700">${_cfBrl(f.valor_total)}</td>
         <td style="text-align:right;font-size:12px">${f.qtd_itens || 0}</td>
         <td style="text-align:center">${_cfStatusBadge(f.status)}</td>
+        <td style="text-align:center">${_cfSituacaoBadge(f.situacao)}</td>
         <td style="font-size:11px;color:var(--muted)">${f.importado_fmt || '—'}</td>
         <td style="text-align:center">
           <button onclick="verItensFatura(${f.id}, '${(f.cartao||'').replace(/'/g,"\'")} · ${f.competencia||''}')"
@@ -6597,6 +6622,88 @@ async function verItensFatura(faturaId, titulo) {
   } catch(e) {
     tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:20px;color:#dc2626">❌ ${e.message}</td></tr>`;
   }
+}
+
+
+
+// ═══════════════════════════════════════════════════════════════
+// SPRINT 6.7-C — DEDUPLICAÇÃO DE FATURAS
+// ═══════════════════════════════════════════════════════════════
+
+let _cfDupPayload  = null; // payload pendente enquanto modal duplicata está aberto
+let _cfDupFaturaId = null; // id da fatura existente
+
+// Hash da fatura — combinação de cartão + competência + valor + nome do arquivo
+function _cfHashFatura(cartao, competencia, valor, arquivo) {
+  const c = (cartao || '').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,20);
+  const m = (competencia || '').replace(/[^0-9]/g,'').slice(0,6);
+  const v = Math.round(parseFloat(valor || 0) * 100);
+  const f = (arquivo || '').replace(/[^a-zA-Z0-9]/g,'').toLowerCase().slice(0,20);
+  return `${c}_${m}_${v}_${f}`;
+}
+
+// Mostrar modal de duplicata
+function _cfMostrarModalDuplicata(fatura, payload) {
+  _cfDupPayload  = payload;
+  _cfDupFaturaId = fatura.id;
+
+  const setText = (id, v) => { const e = document.getElementById(id); if(e) e.textContent = v; };
+  setText('cf-dup-cartao', fatura.cartao || '—');
+  setText('cf-dup-comp',   fatura.competencia || '—');
+  setText('cf-dup-valor',  fatura.valor_total != null
+    ? 'R$ ' + parseFloat(fatura.valor_total).toLocaleString('pt-BR',{minimumFractionDigits:2})
+    : '—');
+  setText('cf-dup-data', fatura.importado_em
+    ? new Date(fatura.importado_em).toLocaleString('pt-BR')
+    : '—');
+  const sitMap = {
+    NORMAL:'Normal', REPROCESSADA:'🔄 Reprocessada',
+    COM_DIFERENCAS:'⚠️ Com diferenças', DUPLICADA:'Duplicada'
+  };
+  setText('cf-dup-sit', sitMap[fatura.situacao] || fatura.situacao || '—');
+
+  document.getElementById('m-cf-duplicata').style.display = 'flex';
+}
+
+function _cfCancelarDuplicata() {
+  document.getElementById('m-cf-duplicata').style.display = 'none';
+  _cfDupPayload  = null;
+  _cfDupFaturaId = null;
+  toast('ℹ️ Importação cancelada — fatura já existente.');
+}
+
+async function _cfReprocessar() {
+  if (!_cfDupPayload || !_cfDupFaturaId) return;
+  document.getElementById('m-cf-duplicata').style.display = 'none';
+
+  try {
+    const res = await api.post('/api/dre/cartao-faturas', {
+      ..._cfDupPayload,
+      reprocessar:          true,
+      fatura_existente_id:  _cfDupFaturaId,
+    });
+    if (res.ok) {
+      const msg = res.msg || `Reprocessado: ${res.mantidos||0} mantidos, ${res.novos||0} novos, ${res.removidos||0} removidos.`;
+      toast(`✅ ${msg}`);
+      if (typeof carregarCartaoFaturas === 'function') carregarCartaoFaturas();
+    } else {
+      toast('❌ Erro ao reprocessar: ' + (res.erro || ''));
+    }
+  } catch(e) {
+    toast('❌ ' + e.message);
+  }
+  _cfDupPayload  = null;
+  _cfDupFaturaId = null;
+}
+
+// Badge de situação para o painel
+function _cfSituacaoBadge(s) {
+  return ({
+    'NORMAL':        '',
+    'REPROCESSADA':  '<span style="background:#ede9fe;color:#6d28d9;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:700">🔄 Reprocessada</span>',
+    'COM_DIFERENCAS':'<span style="background:#fef3c7;color:#92400e;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:700">⚠️ Diferenças</span>',
+    'DUPLICADA':     '<span style="background:#fee2e2;color:#dc2626;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:700">🚫 Duplicada</span>',
+  }[s] || '');
 }
 
 </script>
@@ -6653,6 +6760,48 @@ async function verItensFatura(faturaId, titulo) {
      ============================================================ -->
 
 <!-- ═══════════════════════════════════════════════════════════════
+     SPRINT 6.7-C — MODAL DE DUPLICATA DE FATURA
+═══════════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="m-cf-duplicata" style="z-index:700;display:none">
+  <div style="background:#fff;border-radius:14px;width:100%;max-width:480px;box-shadow:0 20px 60px rgba(0,0,0,.3);overflow:hidden">
+    <div style="background:#f59e0b;padding:14px 20px;display:flex;align-items:center;gap:10px">
+      <span style="font-size:20px">⚠️</span>
+      <div>
+        <div style="color:#fff;font-size:14px;font-weight:700">Fatura já importada</div>
+        <div style="color:rgba(255,255,255,.85);font-size:11px">Esta fatura já existe no sistema</div>
+      </div>
+    </div>
+    <div style="padding:20px">
+      <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:14px;margin-bottom:16px;font-size:13px">
+        <div style="display:grid;grid-template-columns:auto 1fr;gap:4px 12px">
+          <span style="color:var(--muted);font-size:11px">Cartão</span>
+          <strong id="cf-dup-cartao">—</strong>
+          <span style="color:var(--muted);font-size:11px">Competência</span>
+          <strong id="cf-dup-comp">—</strong>
+          <span style="color:var(--muted);font-size:11px">Valor</span>
+          <strong id="cf-dup-valor" style="color:#dc2626">—</strong>
+          <span style="color:var(--muted);font-size:11px">Importada em</span>
+          <span id="cf-dup-data" style="font-size:11px">—</span>
+          <span style="color:var(--muted);font-size:11px">Situação</span>
+          <span id="cf-dup-sit">—</span>
+        </div>
+      </div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:16px">
+        Clique em <strong>Reprocessar</strong> para atualizar a fatura existente preservando classificações, ou <strong>Cancelar</strong> para não importar.
+      </p>
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button onclick="_cfCancelarDuplicata()" style="padding:8px 18px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:13px;cursor:pointer;font-family:'DM Sans',sans-serif">
+          Cancelar
+        </button>
+        <button onclick="_cfReprocessar()" style="padding:8px 18px;background:#8B0000;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif">
+          🔄 Reprocessar
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════
      SPRINT 6.7-B — PAINEL DE CONTROLE DE FATURAS DE CARTÃO
 ═══════════════════════════════════════════════════════════════ -->
 <div class="modal-overlay" id="m-cartao-faturas" onclick="if(event.target===this)fecharControleFaturas()" style="z-index:600">
@@ -6698,6 +6847,7 @@ async function verItensFatura(faturaId, titulo) {
             <th style="text-align:right">Valor</th>
             <th style="text-align:right">Itens</th>
             <th style="text-align:center">Status</th>
+            <th style="text-align:center">Situação</th>
             <th>Importado em</th>
             <th style="text-align:center">Ações</th>
           </tr>

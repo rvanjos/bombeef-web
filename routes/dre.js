@@ -466,6 +466,15 @@ module.exports = function (pool, app) {
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_cf_competencia ON cartao_faturas(competencia)`).catch(()=>{});
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_cfi_fatura ON cartao_fatura_itens(fatura_id)`).catch(()=>{});
 
+    // Sprint 6.7-C: novas colunas para deduplicação
+    await pool.query(`ALTER TABLE cartao_faturas ADD COLUMN IF NOT EXISTS hash_fatura TEXT`).catch(()=>{});
+    await pool.query(`ALTER TABLE cartao_faturas ADD COLUMN IF NOT EXISTS situacao TEXT DEFAULT 'NORMAL'`).catch(()=>{});
+    await pool.query(`ALTER TABLE cartao_faturas ADD COLUMN IF NOT EXISTS log_json JSONB DEFAULT '[]'`).catch(()=>{});
+    await pool.query(`ALTER TABLE cartao_fatura_itens ADD COLUMN IF NOT EXISTS hash_item TEXT`).catch(()=>{});
+    await pool.query(`ALTER TABLE cartao_fatura_itens ADD COLUMN IF NOT EXISTS removido BOOLEAN DEFAULT false`).catch(()=>{});
+    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_cf_hash ON cartao_faturas(hash_fatura) WHERE hash_fatura IS NOT NULL`).catch(()=>{});
+    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_cfi_hash ON cartao_fatura_itens(fatura_id, hash_item) WHERE hash_item IS NOT NULL`).catch(()=>{});
+
 
     // Limpa duplicatas de categorias NAO_OPER que foram inseridas em deploys anteriores
     await pool.query(`
@@ -1314,7 +1323,7 @@ module.exports = function (pool, app) {
         SELECT
           id, cartao, bandeira, competencia, vencimento,
           valor_total, qtd_itens, status, arquivo_nome,
-          possivel_duplicidade, importado_em,
+          possivel_duplicidade, situacao, importado_em,
           TO_CHAR(importado_em, 'YYYY-MM-DD HH24:MI') AS importado_fmt
         FROM cartao_faturas
         ORDER BY importado_em DESC
@@ -1341,62 +1350,197 @@ module.exports = function (pool, app) {
     }
   });
 
-  // POST /api/dre/cartao-faturas — registra uma nova fatura importada
-  r.post('/cartao-faturas', autenticar(), async (req, res) => {
-    const { cartao, bandeira, competencia, valor_total, qtd_itens,
-            arquivo_nome, hash_arquivo, fatura_id_ref, itens, sessao_id } = req.body;
-
-    if (!cartao || !competencia) {
-      return res.status(400).json({ ok: false, erro: 'cartao e competencia são obrigatórios' });
-    }
-
+  // POST /api/dre/cartao-faturas/verificar — verifica duplicidade ANTES de importar
+  r.post('/cartao-faturas/verificar', autenticar(), async (req, res) => {
+    const { hash_fatura, cartao, competencia, valor_total } = req.body;
     try {
-      const uid = req.user?.id || null;
+      let existing = null;
 
-      // Verificar possível duplicidade (cartão + competência + valor)
-      const dup = await pool.query(`
-        SELECT id FROM cartao_faturas
-        WHERE cartao = $1 AND competencia = $2 AND ABS(valor_total - $3) < 0.02
-        LIMIT 1
-      `, [cartao, competencia, parseFloat(valor_total || 0)]);
-
-      const possDup = dup.rows.length > 0;
-      if (possDup) {
-        console.log(`[cartao-faturas] possível duplicidade: ${cartao} ${competencia} R$${valor_total}`);
+      // Prioridade 1: hash do arquivo/fatura
+      if (hash_fatura) {
+        const r1 = await pool.query(
+          `SELECT id, cartao, competencia, valor_total, importado_em, situacao, status
+           FROM cartao_faturas WHERE hash_fatura = $1 LIMIT 1`,
+          [hash_fatura]
+        );
+        if (r1.rows.length) existing = r1.rows[0];
       }
 
+      // Prioridade 2: cartão + competência + valor
+      if (!existing && cartao && competencia && valor_total != null) {
+        const r2 = await pool.query(
+          `SELECT id, cartao, competencia, valor_total, importado_em, situacao, status
+           FROM cartao_faturas
+           WHERE cartao = $1 AND competencia = $2 AND ABS(valor_total - $3) < 0.02
+           ORDER BY importado_em DESC LIMIT 1`,
+          [cartao, competencia, parseFloat(valor_total)]
+        );
+        if (r2.rows.length) existing = r2.rows[0];
+      }
+
+      if (existing) {
+        return res.json({
+          ok: true,
+          duplicata: true,
+          fatura: {
+            id:          existing.id,
+            cartao:      existing.cartao,
+            competencia: existing.competencia,
+            valor_total: existing.valor_total,
+            importado_em:existing.importado_em,
+            situacao:    existing.situacao,
+            status:      existing.status,
+          }
+        });
+      }
+
+      res.json({ ok: true, duplicata: false });
+    } catch(e) {
+      console.error('[dre/verificar-fatura]', e.message);
+      res.status(500).json({ ok: false, erro: e.message });
+    }
+  });
+
+  // POST /api/dre/cartao-faturas — registra nova fatura ou reprocessa existente
+  r.post('/cartao-faturas', autenticar(), async (req, res) => {
+    const { cartao, bandeira, competencia, valor_total, qtd_itens,
+            arquivo_nome, hash_fatura, fatura_id_ref, itens, sessao_id,
+            reprocessar, fatura_existente_id } = req.body;
+
+    if (!cartao || !competencia)
+      return res.status(400).json({ ok: false, erro: 'cartao e competencia são obrigatórios' });
+
+    try {
+      const uid  = req.user?.id || null;
+      const agora = new Date().toISOString();
+
+      // ── REPROCESSAMENTO ────────────────────────────────────────────────────
+      if (reprocessar && fatura_existente_id) {
+        const existRes = await pool.query(
+          `SELECT id, log_json, valor_total FROM cartao_faturas WHERE id = $1`,
+          [fatura_existente_id]
+        );
+        if (!existRes.rows.length)
+          return res.status(404).json({ ok: false, erro: 'Fatura não encontrada' });
+
+        const faturaId   = fatura_existente_id;
+        const logAtual   = existRes.rows[0].log_json || [];
+
+        // Atualizar fatura (preserva status e vínculos)
+        await pool.query(`
+          UPDATE cartao_faturas SET
+            valor_total   = $1,
+            qtd_itens     = $2,
+            arquivo_nome  = COALESCE($3, arquivo_nome),
+            hash_fatura   = COALESCE($4, hash_fatura),
+            situacao      = 'REPROCESSADA',
+            log_json      = $5::jsonb,
+            atualizado_em = NOW()
+          WHERE id = $6
+        `, [parseFloat(valor_total || 0), parseInt(qtd_itens || 0),
+            arquivo_nome || null, hash_fatura || null,
+            JSON.stringify([...logAtual, { acao:'REPROCESSADA', em: agora, usuario_id: uid }]),
+            faturaId]);
+
+        // Reconciliar itens: preservar categorias dos existentes, inserir novos, marcar removidos
+        let novos = 0, mantidos = 0, removidos = 0;
+
+        if (itens && itens.length) {
+          // Itens existentes com hash
+          const existItems = await pool.query(
+            `SELECT id, hash_item, categoria_dre FROM cartao_fatura_itens
+             WHERE fatura_id = $1 AND removido = false`,
+            [faturaId]
+          );
+          const existMap = new Map(existItems.rows.map(r => [r.hash_item, r]));
+          const novosHashes = new Set();
+
+          for (const it of itens.slice(0, 500)) {
+            const h = _hashItem(it);
+            novosHashes.add(h);
+            if (existMap.has(h)) {
+              mantidos++;
+            } else {
+              // Item novo — inserir preservando categoria se houver
+              const catExist = existMap.get(h)?.categoria_dre || it.categoria || null;
+              await pool.query(`
+                INSERT INTO cartao_fatura_itens
+                  (fatura_id, data_compra, descricao, valor, categoria_dre, portador, hash_item)
+                VALUES ($1,$2,$3,$4,$5,$6,$7)
+                ON CONFLICT (fatura_id, hash_item) DO NOTHING
+              `, [faturaId, it.data || null,
+                  it.descricao || it.lancamento || null,
+                  parseFloat(it.valor || 0),
+                  catExist, it.portador || null, h]);
+              novos++;
+            }
+          }
+
+          // Marcar removidos (itens que não vieram na nova importação)
+          for (const [h, row] of existMap) {
+            if (!novosHashes.has(h)) {
+              await pool.query(
+                `UPDATE cartao_fatura_itens SET removido=true WHERE id=$1`,
+                [row.id]
+              );
+              removidos++;
+            }
+          }
+
+          // Atualizar situação se houve diferenças
+          if (novos > 0 || removidos > 0) {
+            await pool.query(
+              `UPDATE cartao_faturas SET situacao='COM_DIFERENCAS' WHERE id=$1`,
+              [faturaId]
+            );
+          }
+        }
+
+        return res.json({
+          ok: true, id: faturaId, reprocessado: true,
+          novos, mantidos, removidos,
+          msg: `Reprocessado: ${mantidos} mantidos, ${novos} novos, ${removidos} removidos.`
+        });
+      }
+
+      // ── NOVA IMPORTAÇÃO ────────────────────────────────────────────────────
       const { rows } = await pool.query(`
         INSERT INTO cartao_faturas
           (cartao, bandeira, competencia, valor_total, qtd_itens,
-           arquivo_nome, hash_arquivo, fatura_id_ref, possivel_duplicidade,
-           sessao_id, usuario_id, status)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'IMPORTADA')
+           arquivo_nome, hash_fatura, fatura_id_ref, possivel_duplicidade,
+           sessao_id, usuario_id, status, situacao, log_json)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,false,$9,$10,'IMPORTADA','NORMAL',$11)
         RETURNING id
       `, [cartao, bandeira || null, competencia,
           parseFloat(valor_total || 0), parseInt(qtd_itens || 0),
-          arquivo_nome || null, hash_arquivo || null, fatura_id_ref || null,
-          possDup, sessao_id || null, uid]);
+          arquivo_nome || null, hash_fatura || null, fatura_id_ref || null,
+          sessao_id || null, uid,
+          JSON.stringify([{ acao:'IMPORTADA', em: agora, usuario_id: uid }])]);
 
       const faturaDbId = rows[0].id;
 
-      // Gravar itens se enviados
       if (itens && itens.length) {
         for (const it of itens.slice(0, 500)) {
+          const h = _hashItem(it);
           await pool.query(`
             INSERT INTO cartao_fatura_itens
-              (fatura_id, data_compra, descricao, valor, categoria_dre, portador)
-            VALUES ($1,$2,$3,$4,$5,$6)
-          `, [faturaDbId, it.data || null, it.descricao || it.lancamento || null,
-              parseFloat(it.valor || 0), it.categoria || null, it.portador || null]);
+              (fatura_id, data_compra, descricao, valor, categoria_dre, portador, hash_item)
+            VALUES ($1,$2,$3,$4,$5,$6,$7)
+            ON CONFLICT (fatura_id, hash_item) DO NOTHING
+          `, [faturaDbId, it.data || null,
+              it.descricao || it.lancamento || null,
+              parseFloat(it.valor || 0),
+              it.categoria || null, it.portador || null, h]);
         }
       }
 
-      res.json({ ok: true, id: faturaDbId, possivel_duplicidade: possDup });
+      res.json({ ok: true, id: faturaDbId, reprocessado: false });
     } catch(e) {
       console.error('[dre/cartao-faturas POST]', e.message);
       res.status(500).json({ ok: false, erro: e.message });
     }
   });
+
 
   // GET /api/dre/cartao-faturas/:id/itens — itens de uma fatura específica
   r.get('/cartao-faturas/:id/itens', autenticar(), async (req, res) => {
@@ -1427,6 +1571,18 @@ module.exports = function (pool, app) {
       res.status(500).json({ ok: false, erro: e.message });
     }
   });
+
+
+  // ── Helper: hash de item de fatura ──────────────────────────────────────────
+  function _hashItem(it) {
+    const desc  = (it.descricao || it.lancamento || '').toUpperCase()
+                    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+                    .replace(/[^A-Z0-9 ]/g,'').replace(/\s+/g,' ').trim();
+    const data  = (it.data || '').slice(0,10);
+    const valor = Math.round(parseFloat(it.valor || 0) * 100);
+    const parc  = (it.parcela || '').toString().trim();
+    return `${data}|${desc}|${valor}|${parc}`;
+  }
 
 
   // ── Helpers ────────────────────────────────────────────────────────────────
