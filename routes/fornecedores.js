@@ -72,12 +72,36 @@ module.exports = (pool) => {
       // 1. Upsert de todos os fornecedores distintos em compras_produto
       const { rows: fornRows } = await pool.query(`
         SELECT DISTINCT
-          fornecedor_cnpj                                    AS cnpj,
+          REGEXP_REPLACE(fornecedor_cnpj, '[^0-9]', '', 'g') AS cnpj,
           MAX(fornecedor_nome) FILTER (WHERE fornecedor_nome IS NOT NULL) AS nome
         FROM compras_produto
         WHERE fornecedor_cnpj IS NOT NULL AND fornecedor_cnpj <> ''
-        GROUP BY fornecedor_cnpj
+        GROUP BY REGEXP_REPLACE(fornecedor_cnpj, '[^0-9]', '', 'g')
       `);
+
+      // Limpar duplicatas de fornecedor_produtos com CNPJ formatado diferente
+      await pool.query(`
+        DELETE FROM fornecedor_produtos fp1
+        USING fornecedor_produtos fp2
+        WHERE fp1.id > fp2.id
+          AND REGEXP_REPLACE(fp1.cnpj_fornecedor, '[^0-9]', '', 'g')
+            = REGEXP_REPLACE(fp2.cnpj_fornecedor, '[^0-9]', '', 'g')
+          AND fp1.produto_codigo = fp2.produto_codigo
+      `).catch(() => {});
+
+      // Normalizar CNPJs existentes em fornecedor_produtos
+      await pool.query(`
+        UPDATE fornecedor_produtos
+        SET cnpj_fornecedor = REGEXP_REPLACE(cnpj_fornecedor, '[^0-9]', '', 'g')
+        WHERE cnpj_fornecedor ~ '[^0-9]'
+      `).catch(() => {});
+
+      // Normalizar CNPJs em fornecedores
+      await pool.query(`
+        UPDATE fornecedores
+        SET cnpj_fornecedor = REGEXP_REPLACE(cnpj_fornecedor, '[^0-9]', '', 'g')
+        WHERE cnpj_fornecedor ~ '[^0-9]'
+      `).catch(() => {});
 
       let novosForn = 0, novosProds = 0;
 
@@ -100,7 +124,7 @@ module.exports = (pool) => {
       // 2. Upsert de todos os pares (fornecedor, produto) com agregados
       const { rows: prodRows } = await pool.query(`
         SELECT
-          fornecedor_cnpj                              AS cnpj,
+          REGEXP_REPLACE(fornecedor_cnpj, '[^0-9]', '', 'g') AS cnpj,
           produto_codigo,
           MAX(produto_nome)                            AS produto_nome,
           MAX(data_entrada) FILTER (
@@ -120,7 +144,7 @@ module.exports = (pool) => {
         FROM compras_produto cp
         WHERE fornecedor_cnpj IS NOT NULL
           AND produto_codigo   IS NOT NULL
-        GROUP BY fornecedor_cnpj, produto_codigo
+        GROUP BY REGEXP_REPLACE(fornecedor_cnpj, '[^0-9]', '', 'g'), produto_codigo
       `);
 
       for (const p of prodRows) {
@@ -172,7 +196,7 @@ module.exports = (pool) => {
           f.nome_fantasia,
           f.categoria_padrao,
           COUNT(fp.produto_codigo)                   AS total_produtos,
-          MAX(fp.ultima_compra)                      AS ultima_compra,
+          TO_CHAR(MAX(fp.ultima_compra), 'YYYY-MM-DD') AS ultima_compra,
           SUM(fp.compras_count)                      AS total_compras,
           json_agg(
             json_build_object(
@@ -188,7 +212,7 @@ module.exports = (pool) => {
             ) ORDER BY fp.compras_count DESC, fp.produto_nome
           ) AS produtos
         FROM fornecedores f
-        INNER JOIN fornecedor_produtos fp ON fp.cnpj_fornecedor = f.cnpj_fornecedor
+        INNER JOIN fornecedor_produtos fp ON fp.cnpj_fornecedor = REGEXP_REPLACE(f.cnpj_fornecedor, '[^0-9]', '', 'g')
         LEFT  JOIN produtos p ON p.codigo = fp.produto_codigo
         WHERE f.ativo = true
           ${q ? "AND (f.razao_social ILIKE '%' || $1 || '%' OR f.nome_fantasia ILIKE '%' || $1 || '%')" : ''}
@@ -214,7 +238,7 @@ module.exports = (pool) => {
         SELECT
           fp.produto_codigo,
           fp.produto_nome,
-          fp.ultima_compra,
+          TO_CHAR(fp.ultima_compra, 'YYYY-MM-DD') AS ultima_compra,
           fp.ultimo_preco,
           fp.compras_count,
           fp.atualizado_em,
