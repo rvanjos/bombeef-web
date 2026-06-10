@@ -192,6 +192,7 @@ let _categorias   = [];
 
 window.onBBReady = async () => {
   const { api, fmt, toast } = BB;
+  _api = api;
   const me = await api.get('/auth/me');
   if (me.ok) document.getElementById('ph-perfil').textContent = me.data.email || me.data.perfil;
 
@@ -397,9 +398,10 @@ async function carregarProdutosFornecedor(cnpj) {
   tbody.innerHTML = '<tr><td colspan="6" style="padding:16px;text-align:center;color:var(--muted)">⏳ Carregando produtos…</td></tr>';
 
   try {
+    const apiFn = _api || window.BB?.api;
     const [resProd, resRes] = await Promise.all([
-      _api.get('/api/fornecedores/' + cnpj + '/produtos'),
-      _api.get('/api/fornecedores/' + cnpj + '/resumo-compras'),
+      apiFn.get('/api/fornecedores/' + cnpj + '/produtos'),
+      apiFn.get('/api/fornecedores/' + cnpj + '/resumo-compras'),
     ]);
 
     // KPIs
