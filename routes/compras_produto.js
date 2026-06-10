@@ -468,6 +468,64 @@ module.exports = function(pool) {
           console.warn('[compras] recalc warn:', e.message));
       }
 
+      // ── Sincronizar fornecedores e catálogo de produtos ────────────────────
+      // Executado fora da transação principal para não bloquear em caso de erro
+      setImmediate(async () => {
+        try {
+          // 1. Upsert de cada fornecedor descoberto
+          const fornSeen2 = [...new Map(
+            itens.filter(it => it.fornecedor_cnpj && it.fornecedor_nome)
+              .map(it => [it.fornecedor_cnpj.replace(/\D/g,''), it])
+          ).values()];
+
+          for (const f of fornSeen2) {
+            const cnpjF = f.fornecedor_cnpj.replace(/\D/g,'');
+            if (!cnpjF || cnpjF.length < 11) continue;
+            await pool.query(`
+              INSERT INTO fornecedores (cnpj_fornecedor, razao_social)
+              VALUES ($1, $2)
+              ON CONFLICT (cnpj_fornecedor) DO UPDATE
+                SET razao_social  = CASE WHEN fornecedores.razao_social IS NULL OR fornecedores.razao_social = '' THEN $2 ELSE fornecedores.razao_social END,
+                    atualizado_em = NOW()
+            `, [cnpjF, f.fornecedor_nome]);
+          }
+
+          // 2. Upsert de cada produto por fornecedor no catálogo
+          const vistos = new Map();
+          for (const it of itens) {
+            if (!it.fornecedor_cnpj || !it.produto_codigo) continue;
+            const key = (it.fornecedor_cnpj.replace(/\D/g,'')) + '::' + it.produto_codigo;
+            if (!vistos.has(key)) vistos.set(key, it);
+          }
+
+          for (const it of vistos.values()) {
+            const cnpjF = (it.fornecedor_cnpj || '').replace(/\D/g,'');
+            if (!cnpjF) continue;
+            await pool.query(`
+              INSERT INTO fornecedor_produtos
+                (cnpj_fornecedor, produto_codigo, produto_nome, ultima_compra, ultimo_preco, compras_count)
+              VALUES ($1, $2, $3, $4, $5, 1)
+              ON CONFLICT (cnpj_fornecedor, produto_codigo) DO UPDATE
+                SET produto_nome  = COALESCE(EXCLUDED.produto_nome, fornecedor_produtos.produto_nome),
+                    ultima_compra = GREATEST(EXCLUDED.ultima_compra, fornecedor_produtos.ultima_compra),
+                    ultimo_preco  = CASE
+                      WHEN EXCLUDED.ultima_compra >= COALESCE(fornecedor_produtos.ultima_compra, '1900-01-01')
+                      THEN EXCLUDED.ultimo_preco
+                      ELSE fornecedor_produtos.ultimo_preco
+                    END,
+                    compras_count = fornecedor_produtos.compras_count + 1,
+                    atualizado_em = NOW()
+            `, [cnpjF, it.produto_codigo, it.produto_nome,
+                it.data_entrada || it.data_emissao || null,
+                it.valor_unitario || null]);
+          }
+
+          console.log('[compras/import] Sincronizou', fornSeen2.length, 'fornecedor(es) e', vistos.size, 'produto(s)');
+        } catch(eSinc) {
+          console.error('[compras/import] Erro sincronização:', eSinc.message);
+        }
+      });
+
       res.json({ ok: true, importacao_id: impId, importados, ignorados,
         sem_vinculo: semVinculo, sem_vinculo_lista: semVinculoList.slice(0, 20) });
 

@@ -5,6 +5,25 @@ module.exports = (pool) => {
   const router = express.Router();
 
   // Garante tabela
+  // Tabela de relacionamento fornecedor → produtos (populada pela importação de compras)
+  pool.query(`
+    CREATE TABLE IF NOT EXISTS fornecedor_produtos (
+      id               SERIAL PRIMARY KEY,
+      cnpj_fornecedor  TEXT NOT NULL,
+      produto_codigo   TEXT NOT NULL,
+      produto_nome     TEXT,
+      ultima_compra    DATE,
+      ultimo_preco     NUMERIC(12,4),
+      compras_count    INT DEFAULT 1,
+      atualizado_em    TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(cnpj_fornecedor, produto_codigo)
+    )
+  `).catch(()=>{});
+
+  pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_fp_cnpj ON fornecedor_produtos(cnpj_fornecedor)
+  `).catch(()=>{});
+
   pool.query(`
     CREATE TABLE IF NOT EXISTS fornecedores (
       id               SERIAL PRIMARY KEY,
@@ -136,6 +155,74 @@ module.exports = (pool) => {
       res.json(rows);
     } catch (err) {
       res.status(500).json({ erro: 'Erro ao buscar boletos do fornecedor.' });
+    }
+  });
+
+
+  // ── GET /api/fornecedores/:cnpj/produtos ────────────────────────────────────
+  // Retorna todos os produtos já fornecidos por este fornecedor com histórico
+  router.get('/:cnpj/produtos', autenticar(), async (req, res) => {
+    const cnpj = req.params.cnpj.replace(/\D/g, '');
+    try {
+      const { rows } = await pool.query(`
+        SELECT
+          fp.produto_codigo,
+          fp.produto_nome,
+          fp.ultima_compra,
+          fp.ultimo_preco,
+          fp.compras_count,
+          fp.atualizado_em,
+          p.descricao   AS descricao_cadastro,
+          p.curva_abc,
+          p.categoria,
+          p.estoque     AS estoque_atual,
+          p.unidade,
+          -- Histórico de preços dos últimos 6 meses
+          (SELECT json_agg(sub ORDER BY sub.data_entrada DESC)
+           FROM (
+             SELECT DISTINCT ON (TO_CHAR(cp2.data_entrada,'YYYY-MM'))
+               TO_CHAR(cp2.data_entrada,'YYYY-MM-DD') AS data_entrada,
+               cp2.valor_unitario,
+               cp2.numero_nfe
+             FROM compras_produto cp2
+             WHERE cp2.fornecedor_cnpj = $1
+               AND cp2.produto_codigo  = fp.produto_codigo
+               AND cp2.data_entrada   >= NOW() - INTERVAL '6 months'
+             ORDER BY TO_CHAR(cp2.data_entrada,'YYYY-MM'), cp2.data_entrada DESC
+             LIMIT 6
+           ) sub
+          ) AS historico_precos
+        FROM fornecedor_produtos fp
+        LEFT JOIN produtos p ON p.codigo = fp.produto_codigo
+        WHERE fp.cnpj_fornecedor = $1
+        ORDER BY fp.compras_count DESC, fp.produto_nome
+      `, [cnpj]);
+      res.json({ ok: true, data: rows });
+    } catch(e) {
+      console.error('[fornecedores/:cnpj/produtos]', e.message);
+      res.status(500).json({ ok: false, erro: e.message });
+    }
+  });
+
+  // ── GET /api/fornecedores/:cnpj/resumo-compras ──────────────────────────────
+  // KPIs de compras do fornecedor
+  router.get('/:cnpj/resumo-compras', autenticar(), async (req, res) => {
+    const cnpj = req.params.cnpj.replace(/\D/g, '');
+    try {
+      const { rows } = await pool.query(`
+        SELECT
+          COUNT(DISTINCT numero_nfe)                              AS total_nfes,
+          COUNT(DISTINCT produto_codigo)                          AS total_produtos,
+          SUM(valor_total_liquido)                                AS total_comprado,
+          MAX(data_entrada)                                       AS ultima_compra,
+          MIN(data_entrada)                                       AS primeira_compra,
+          COUNT(*)                                                AS total_itens
+        FROM compras_produto
+        WHERE fornecedor_cnpj = $1
+      `, [cnpj]);
+      res.json({ ok: true, data: rows[0] });
+    } catch(e) {
+      res.status(500).json({ ok: false, erro: e.message });
     }
   });
 

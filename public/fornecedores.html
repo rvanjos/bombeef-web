@@ -50,7 +50,7 @@ tbody td{padding:10px 12px;font-size:13px;vertical-align:middle;}
 /* Modal */
 .mbg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;align-items:center;justify-content:center;}
 .mbg.open{display:flex;}
-.md{background:var(--white);border-radius:14px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.18);margin:16px;}
+.md{background:var(--white);border-radius:14px;width:100%;max-width:820px;max-height:90vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.18);margin:16px;}
 .md-head{padding:16px 20px 0;display:flex;align-items:center;justify-content:space-between;}
 .md-head h3{font-family:'Playfair Display',serif;font-size:16px;color:var(--red);}
 .md-head button{background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);line-height:1;}
@@ -144,6 +144,35 @@ tbody td{padding:10px 12px;font-size:13px;vertical-align:middle;}
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
           <input type="checkbox" id="f-ativo" checked> Fornecedor ativo
         </label>
+      </div>
+    </div>
+    <!-- Painel de Produtos Fornecidos (visível só ao editar) -->
+    <div id="forn-prod-panel" style="display:none;border-top:1px solid var(--border);padding:0">
+      <div style="padding:12px 20px;background:var(--bg);display:flex;align-items:center;justify-content:space-between">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted)">
+          📦 Produtos Fornecidos
+        </div>
+        <div style="display:flex;gap:12px;align-items:center">
+          <span id="forn-kpi-produtos" style="font-size:11px;color:var(--muted)"></span>
+          <span id="forn-kpi-total"    style="font-size:12px;font-weight:700;color:var(--red);font-family:'DM Mono',monospace"></span>
+        </div>
+      </div>
+      <div style="max-height:320px;overflow-y:auto;overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:12px">
+          <thead>
+            <tr style="background:var(--bg)">
+              <th style="padding:7px 12px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);border-bottom:1px solid var(--border)">Produto</th>
+              <th style="padding:7px 8px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);border-bottom:1px solid var(--border)">ABC</th>
+              <th style="padding:7px 8px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);border-bottom:1px solid var(--border)">Último Preço</th>
+              <th style="padding:7px 8px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);border-bottom:1px solid var(--border)">Última Compra</th>
+              <th style="padding:7px 8px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);border-bottom:1px solid var(--border)">Histórico 6m</th>
+              <th style="padding:7px 8px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);border-bottom:1px solid var(--border)"># Compras</th>
+            </tr>
+          </thead>
+          <tbody id="forn-prod-tbody">
+            <tr><td colspan="6" style="padding:16px;text-align:center;color:var(--muted)">Carregando…</td></tr>
+          </tbody>
+        </table>
       </div>
     </div>
     <div class="md-foot">
@@ -256,6 +285,8 @@ function abrirNovo() {
   document.getElementById('m-titulo').textContent = 'Novo Fornecedor';
   document.getElementById('fg-ativo').style.display = 'none';
   limparForm();
+  const panel = document.getElementById('forn-prod-panel');
+  if(panel) panel.style.display = 'none';
   document.getElementById('f-cnpj').disabled = false;
   document.getElementById('m-forn').classList.add('open');
   setTimeout(() => document.getElementById('f-cnpj').focus(), 100);
@@ -279,6 +310,8 @@ function abrirEditar(cnpj) {
   document.getElementById('f-ativo').checked   = f.ativo !== false;
   document.getElementById('f-categoria').value = f.categoria_padrao || '';
   document.getElementById('m-forn').classList.add('open');
+  // Carregar painel de produtos
+  carregarProdutosFornecedor(cnpj.replace(/\D/g,''));
 }
 
 function fechar() {
@@ -353,6 +386,71 @@ function formatCNPJ(cnpj) {
 }
 
 let _toastLocal;
+async function carregarProdutosFornecedor(cnpj) {
+  const panel  = document.getElementById('forn-prod-panel');
+  const tbody  = document.getElementById('forn-prod-tbody');
+  const kpiProd= document.getElementById('forn-kpi-produtos');
+  const kpiTot = document.getElementById('forn-kpi-total');
+  if (!panel || !tbody) return;
+
+  panel.style.display = '';
+  tbody.innerHTML = '<tr><td colspan="6" style="padding:16px;text-align:center;color:var(--muted)">⏳ Carregando produtos…</td></tr>';
+
+  try {
+    const [resProd, resRes] = await Promise.all([
+      _api.get('/api/fornecedores/' + cnpj + '/produtos'),
+      _api.get('/api/fornecedores/' + cnpj + '/resumo-compras'),
+    ]);
+
+    // KPIs
+    if (resRes.ok && resRes.data) {
+      const r = resRes.data;
+      kpiProd.textContent = `${r.total_produtos || 0} produto(s) · ${r.total_nfes || 0} NF(s)`;
+      const tot = parseFloat(r.total_comprado || 0);
+      kpiTot.textContent = tot > 0 ? 'R$ ' + tot.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '';
+    }
+
+    if (!resProd.ok || !resProd.data?.length) {
+      tbody.innerHTML = '<tr><td colspan="6" style="padding:20px;text-align:center;color:var(--muted)">Nenhum produto encontrado. Importe planilhas de compras para popular automaticamente.</td></tr>';
+      return;
+    }
+
+    const brl = v => v != null ? 'R$ ' + parseFloat(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—';
+    const fmtDt = d => d ? d.split('-').reverse().join('/') : '—';
+    const abcBadge = v => v ? `<span style="background:${{A:'#dcfce7',B:'#dbeafe',C:'#f3f4f6'}[v]||'#f3f4f6'};color:${{A:'#16a34a',B:'#2563eb',C:'#6b7280'}[v]||'#6b7280'};padding:1px 6px;border-radius:4px;font-size:10px;font-weight:700">${v}</span>` : '—';
+
+    tbody.innerHTML = resProd.data.map(p => {
+      // Histórico de preços mini-gráfico (últimos valores)
+      let hist = '';
+      if (p.historico_precos?.length) {
+        const vals = p.historico_precos.slice(0, 4).map(h =>
+          `<span title="${fmtDt(h.data_entrada)}" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted)">${parseFloat(h.valor_unitario).toFixed(2).replace('.',',')}</span>`
+        ).join(' · ');
+        hist = `<div style="font-size:10px;line-height:1.4">${vals}</div>`;
+      }
+
+      return `<tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:8px 12px">
+          <div style="font-size:12px;font-weight:600">${p.produto_nome || p.produto_codigo}</div>
+          <div style="font-size:10px;color:var(--muted)">${p.produto_codigo}${p.categoria ? ' · ' + p.categoria : ''}</div>
+        </td>
+        <td style="padding:8px;text-align:right">${abcBadge(p.curva_abc)}</td>
+        <td style="padding:8px;text-align:right;font-family:'DM Mono',monospace;font-size:12px;font-weight:700">
+          ${brl(p.ultimo_preco)}
+        </td>
+        <td style="padding:8px;text-align:right;font-size:11px;color:var(--muted)">
+          ${fmtDt(p.ultima_compra)}
+        </td>
+        <td style="padding:8px;text-align:right">${hist || '—'}</td>
+        <td style="padding:8px;text-align:right;font-size:12px;color:var(--muted)">${p.compras_count || 1}x</td>
+      </tr>`;
+    }).join('');
+
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="6" style="padding:16px;text-align:center;color:#dc2626">❌ ${e.message}</td></tr>`;
+  }
+}
+
 function toast(msg) {
   if (typeof BB !== 'undefined' && BB.toast) { BB.toast(msg); return; }
   // fallback local
