@@ -1639,55 +1639,47 @@ async function confirmarImportCC() {
     }
     return;
   }
-  // CSV / XLSX
+  // CSV / XLSX — roteamento unificado por conteúdo
   toast('💳 Processando fatura CC...');
   let lancs = [];
+  const buf = await file.arrayBuffer();
 
-  // Tentar CSV de texto primeiro (ex: Caixa, Nubank, outros exports CSV)
   if (ext === 'csv') {
-    try {
-      const csvBuf = await file.arrayBuffer();
-      let csvText = '';
-      try { csvText = new TextDecoder('utf-8').decode(csvBuf); }
-      catch(_) { csvText = new TextDecoder('latin-1').decode(csvBuf); }
+    let csvText = '';
+    try { csvText = new TextDecoder('utf-8').decode(buf); }
+    catch(_) { csvText = new TextDecoder('latin-1').decode(buf); }
+    const firstLine = (csvText.charCodeAt(0) === 0xFEFF ? csvText.slice(1) : csvText)
+      .split(/\r?\n/)[0].toLowerCase();
 
-      // Detectar formato Caixa: cabeçalho com 'cartao_final' ou 'natureza'
-      const firstLine = csvText.split(/\r?\n/)[0].toLowerCase();
-      if (firstLine.includes('cartao_final') || firstLine.includes('natureza')) {
-        lancs = parseCCCaixaCSV(csvText);
-        if (lancs.length) toast(`💳 CSV Caixa: ${lancs.length} lançamento(s) encontrado(s)`);
-      }
-      // C6 Bank: cabeçalho com 'data de compra' e 'final do cartão'
-      else if (firstLine.includes('data de compra') || firstLine.includes('final do cart')) {
-        lancs = parseCCC6CSV(csvText);
-        if (lancs.length) toast(`💳 CSV C6: ${lancs.length} lançamento(s) encontrado(s)`);
-      }
-      // Se não reconheceu, tentar via XLSX (que também lê CSV)
-      if (!lancs.length) {
-        const wb2 = XLSX.read(csvBuf, {type:'array'});
-        const ws2 = wb2.Sheets[wb2.SheetNames[0]];
-        const rows2 = XLSX.utils.sheet_to_json(ws2, {header:1, defval:''});
-        lancs = parseCCRows(rows2);
-      }
-    } catch(csvErr) {
-      console.warn('[CC CSV]', csvErr.message);
+    if (firstLine.includes('cartao_final') || firstLine.includes('natureza')) {
+      lancs = parseCCCaixaCSV(csvText);
+      if (lancs.length) toast(`💳 CSV Caixa: ${lancs.length} lançamentos`);
+    } else if (firstLine.includes('data de compra') || firstLine.includes('final do cart')) {
+      lancs = parseCCC6CSV(csvText);
+      if (lancs.length) toast(`💳 CSV C6: ${lancs.length} lançamentos`);
+    } else if (firstLine.includes('cnpj') && firstLine.includes('portador')) {
+      const wb2 = XLSX.read(buf, {type:'array'});
+      const ws2 = wb2.Sheets[wb2.SheetNames[0]];
+      lancs = parseCCItauEmpresasCSV(XLSX.utils.sheet_to_json(ws2, {header:1, defval:''}));
+      if (lancs.length) toast(`💳 CSV Itaú: ${lancs.length} lançamentos`);
     }
-  }
-
-  // XLSX normal
-  if (!lancs.length && ext !== 'csv') {
-    const buf = await file.arrayBuffer();
-    const wb  = XLSX.read(buf, {type:'array', cellDates:true});
+    if (!lancs.length) {
+      try {
+        const wb2 = XLSX.read(buf, {type:'array'});
+        const ws2 = wb2.Sheets[wb2.SheetNames[0]];
+        lancs = parseCCRows(XLSX.utils.sheet_to_json(ws2, {header:1, defval:''}));
+        if (lancs.length) toast(`💳 CSV: ${lancs.length} lançamentos detectados`);
+      } catch(_) {}
+    }
+  } else {
+    const wb = XLSX.read(buf, {type:'array', cellDates:true});
     const abaImportacao = wb.SheetNames.find(n => /importa|dre/i.test(n));
     if (abaImportacao) {
-      const ws = wb.Sheets[abaImportacao];
-      const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
-      lancs = parseCCRowsChatGPT(rows);
-      toast(`💳 Formato ChatGPT detectado (aba "${abaImportacao}")`);
+      lancs = parseCCRowsChatGPT(XLSX.utils.sheet_to_json(wb.Sheets[abaImportacao], {header:1, defval:''}));
+      toast(`💳 Formato DRE Export: ${lancs.length} lançamentos`);
     } else {
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
-      lancs = parseCCRows(rows);
+      lancs = parseCCRows(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1, defval:''}));
+      if (lancs.length) toast(`💳 XLSX: ${lancs.length} lançamentos detectados`);
     }
   }
 
