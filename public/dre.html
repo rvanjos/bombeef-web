@@ -2470,9 +2470,12 @@ function parseCCRows(rows) {
     if (cD>=0 && row[cD]) {
       const d=row[cD];
       if (d instanceof Date) dt=d.toISOString().slice(0,10);
-      else { const s=String(d).trim();
+      else if (typeof d === 'number' && d > 40000 && d < 60000) {
+        dt = new Date(Math.round((d - 25569) * 86400 * 1000)).toISOString().slice(0,10);
+      } else { const s=String(d).trim();
         if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) dt=s.split('/').reverse().join('-');
-        else dt=s.slice(0,10); }
+        else if (/^\d{4}-\d{2}-\d{2}/.test(s)) dt=s.slice(0,10);
+        else dt=''; }
     }
     const mes = dt ? dt.slice(5,7)+'/'+dt.slice(0,4) : mesRef;
     const parc = cP>=0 ? String(row[cP]||'') : '';
