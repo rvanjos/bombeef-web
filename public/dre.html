@@ -1695,8 +1695,11 @@ async function confirmarImportCC() {
   lancs.forEach(l => {
     // mes = mês da COMPRA (competência, vem do parser pela data real)
     if (!l.mes) l.mes = mesCC;
+    // Compras parceladas da Caixa: cada parcela pertence ao mês da fatura
+    // (ex: AUTOMACAO 2000 12/12 — a parcela de junho/2026 é competência 06/2026)
+    if (l._mesCompFatura) l.mes = mesCC;
+    delete l._mesCompFatura;
     // mesCaixa = mês do PAGAMENTO da fatura (sempre o mês confirmado pelo usuário)
-    // Independente de quantos meses há no arquivo, o pagamento ocorre no mesCC
     l.mesCaixa = mesCC;
   });
 
@@ -1898,18 +1901,23 @@ function parseCCCaixaCSV(text) {
     ].filter(Boolean).join(' · ');
     const lancLabel = labelExtra ? `${desc} (${labelExtra})` : desc;
 
+    // Compras parceladas: cada parcela pertence à competência do mês de pagamento
+    // (não ao mês da compra original). Flag para o confirmarImportCC ajustar o mes.
+    const isParcelada = /parcelad/i.test(tipo) && parcela;
+
     result.push({
       id:         'caixa_' + Date.now() + '_' + i,
       data:       dataISO,
-      mes:        mesLanc,
-      lancamento: lancLabel,        // estabelecimento + cartão/parcela
-      razaoSocial:desc,             // só o nome limpo para autoClassificar
+      mes:        mesLanc,          // provisório; parceladas serão ajustadas no confirmar
+      lancamento: lancLabel,
+      razaoSocial:desc,
       valor:      -Math.abs(valorNum),
       portador:   cartao ? `Cartão ${cartao}` : '',
       parcela:    parcela || null,
       fonte:      'CC',
       bandeira:   'Caixa',
       categoria:  autoClassificar(desc, ''),
+      _mesCompFatura: isParcelada,  // flag: mes deve ser o mês da fatura
     });
   }
 
