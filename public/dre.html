@@ -2487,6 +2487,16 @@ function parseCCRows(rows) {
 }
 
 function addLancs(novos, fileName) {
+  // Limpar CC com data inválida antes de adicionar (evita duplicatas de reimport)
+  const novosCC = novos.filter(l => l.fonte === 'CC' && l.data && !l.data.includes('undef'));
+  if (novosCC.length) {
+    const novosKey = new Set(novosCC.map(l => `${String(l.valor)}|${(l.lancamento||'').slice(0,40)}`));
+    TXS = TXS.filter(t => {
+      if (t.fonte !== 'CC') return true;
+      if (t.data && !t.data.includes('undef')) return true;
+      return !novosKey.has(`${String(t.valor)}|${(t.lancamento||'').slice(0,40)}`);
+    });
+  }
   // Chaves de dedup: preferência para fitid ou boletoId, depois data|lancamento|valor
   const exFitid   = new Set(TXS.filter(t=>t.fitid).map(t=>t.fitid));
   const exBoleto  = new Set(TXS.filter(t=>t.boletoId).map(t=>String(t.boletoId)));
@@ -2513,6 +2523,12 @@ function addLancs(novos, fileName) {
     if (l.fitid && exFitid.has(l.fitid))       { dup++; continue; }
     const h = `${l.data}|${String(l.valor)}|${(l.lancamento||'').slice(0,40)}`;
     if (exHash.has(h))                          { dup++; continue; }
+    // CC: dedup por valor+desc sem data (cobre reimport após fix de data inválida)
+    if (l.fonte === 'CC') {
+      const hCC = `${String(l.valor)}|${(l.lancamento||'').slice(0,40)}`;
+      const exCC = new Set(TXS.filter(t=>t.fonte==='CC').map(t=>`${String(t.valor)}|${(t.lancamento||'').slice(0,40)}`));
+      if (exCC.has(hCC)) { dup++; continue; }
+    }
 
     // Dedup adicional: verifica se já existe lançamento com mesmo boletoId (qualquer fonte)
     if (l.boletoId) {
@@ -3555,7 +3571,7 @@ function ccrEnviarParaDRE() {
   }
   // Marca todos os lançamentos com a referência da fatura para rastrear vínculo
   const faturaId = `CC_${_ccrMesCC.replace('/','_')}${_ccrBandeira ? '_' + _ccrBandeira.replace(/\s+/g,'') : ''}`;
-  _ccrLancs.forEach(l => { l.faturaCC = faturaId; l.bandeira = _ccrBandeira || ''; });
+  _ccrLancs.forEach(l => { l.faturaCC = faturaId; l.bandeira = _ccrBandeira || l.bandeira || ''; });
   addLancs(_ccrLancs, _ccrFileName);
   fecharModal('m-cc-revisao');
   toast(`✅ ${_ccrLancs.length} lançamentos enviados para o DRE`);
