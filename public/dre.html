@@ -1640,23 +1640,51 @@ async function confirmarImportCC() {
     }
     return;
   }
-  // XLSX / CSV
+  // CSV / XLSX
   toast('💳 Processando fatura CC...');
-  const buf = await file.arrayBuffer();
-  const wb  = XLSX.read(buf, {type:'array', cellDates:true});
+  let lancs = [];
 
-  // Detecta se é o formato exportado pelo ChatGPT (aba "Importacao_DRE")
-  const abaImportacao = wb.SheetNames.find(n => /importa|dre/i.test(n));
-  let lancs;
-  if (abaImportacao) {
-    const ws = wb.Sheets[abaImportacao];
-    const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
-    lancs = parseCCRowsChatGPT(rows);
-    toast(`💳 Formato ChatGPT detectado (aba "${abaImportacao}")`);
-  } else {
-    const ws = wb.Sheets[wb.SheetNames[0]];
-    const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
-    lancs = parseCCRows(rows);
+  // Tentar CSV de texto primeiro (ex: Caixa, Nubank, outros exports CSV)
+  if (ext === 'csv') {
+    try {
+      const csvBuf = await file.arrayBuffer();
+      let csvText = '';
+      try { csvText = new TextDecoder('utf-8').decode(csvBuf); }
+      catch(_) { csvText = new TextDecoder('latin-1').decode(csvBuf); }
+
+      // Detectar formato Caixa: cabeçalho com 'cartao_final' ou 'natureza'
+      const firstLine = csvText.split(/\r?\n/)[0].toLowerCase();
+      if (firstLine.includes('cartao_final') || firstLine.includes('natureza')) {
+        lancs = parseCCCaixaCSV(csvText);
+        if (lancs.length) toast(`💳 CSV Caixa: ${lancs.length} lançamento(s) encontrado(s)`);
+      }
+      // Se não reconheceu, tentar via XLSX (que também lê CSV)
+      if (!lancs.length) {
+        const wb2 = XLSX.read(csvBuf, {type:'array'});
+        const ws2 = wb2.Sheets[wb2.SheetNames[0]];
+        const rows2 = XLSX.utils.sheet_to_json(ws2, {header:1, defval:''});
+        lancs = parseCCRows(rows2);
+      }
+    } catch(csvErr) {
+      console.warn('[CC CSV]', csvErr.message);
+    }
+  }
+
+  // XLSX normal
+  if (!lancs.length && ext !== 'csv') {
+    const buf = await file.arrayBuffer();
+    const wb  = XLSX.read(buf, {type:'array', cellDates:true});
+    const abaImportacao = wb.SheetNames.find(n => /importa|dre/i.test(n));
+    if (abaImportacao) {
+      const ws = wb.Sheets[abaImportacao];
+      const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+      lancs = parseCCRowsChatGPT(rows);
+      toast(`💳 Formato ChatGPT detectado (aba "${abaImportacao}")`);
+    } else {
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+      lancs = parseCCRows(rows);
+    }
   }
 
   if (!lancs.length) { toast('⚠️ Nenhum lançamento encontrado na fatura'); return; }
@@ -1804,6 +1832,80 @@ function parseFaturaC6(text) {
       });
     }
   }
+  return result;
+}
+
+function parseCCCaixaCSV(text) {
+  // Parser para CSV exportado pelo app Cartões CAIXA
+  // Formato: data;cartao_final;tipo;descricao;cidade;parcela;valor;natureza
+  // Encoding: UTF-8-SIG (BOM), separador ';', vírgula como decimal
+  const lines = (text.charCodeAt(0) === 0xFEFF ? text.slice(1) : text).split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  if (!lines.length) return [];
+
+  // Verificar cabeçalho esperado
+  const header = lines[0].toLowerCase();
+  if (!header.includes('data') || !header.includes('descricao')) return [];
+
+  const cols = lines[0].split(';').map(c => c.trim().toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g,''));
+  const iData    = cols.findIndex(c => c === 'data');
+  const iCartao  = cols.findIndex(c => c.includes('cartao'));
+  const iTipo    = cols.findIndex(c => c === 'tipo');
+  const iDesc    = cols.findIndex(c => c.includes('descricao') || c === 'descricao');
+  const iCidade  = cols.findIndex(c => c === 'cidade');
+  const iParcela = cols.findIndex(c => c === 'parcela');
+  const iValor   = cols.findIndex(c => c === 'valor');
+  const iNat     = cols.findIndex(c => c === 'natureza');
+
+  const result = [];
+
+  for (let i = 1; i < lines.length; i++) {
+    const parts = lines[i].split(';');
+    if (parts.length < 4) continue;
+
+    const dataStr  = (parts[iData]    || '').trim();  // dd/mm/yyyy
+    const cartao   = (parts[iCartao]  || '').trim();
+    const tipo     = (parts[iTipo]    || '').trim();
+    const desc     = (parts[iDesc]    || '').trim();
+    const cidade   = (parts[iCidade]  || '').trim();
+    const parcela  = (parts[iParcela] || '').trim();
+    const valorStr = (parts[iValor]   || '').trim().replace(',', '.');
+    const nat      = (parts[iNat]     || '').trim().toLowerCase();
+
+    if (!dataStr || !valorStr) continue;
+
+    // Ignorar créditos (cashback, pagamentos)
+    if (nat === 'crédito' || nat === 'credito') continue;
+    // Ignorar anuidade = R$ 0
+    if (!parseFloat(valorStr)) continue;
+
+    // Converter data: dd/mm/yyyy → yyyy-mm-dd
+    const [dd, mm, yyyy] = dataStr.split('/');
+    if (!dd || !mm || !yyyy) continue;
+    const dataISO = `${yyyy}-${mm}-${dd}`;
+    const mesLanc = `${mm}/${yyyy}`;
+
+    const valorNum = parseFloat(valorStr) || 0;
+
+    // Nome descritivo
+    const nomeDesc = [desc, cidade].filter(Boolean).join(' — ');
+    const portador = cartao ? `Cartão ${cartao}` : '';
+
+    result.push({
+      id:         'caixa_' + Date.now() + '_' + i,
+      data:       dataISO,
+      mes:        mesLanc,
+      lancamento: portador || nomeDesc,
+      razaoSocial:desc,
+      valor:      -Math.abs(valorNum),   // sempre débito
+      portador,
+      parcela:    parcela || null,
+      fonte:      'CC',
+      bandeira:   'Caixa',
+      categoria:  autoClassificar(desc, portador),
+    });
+  }
+
   return result;
 }
 
@@ -3724,6 +3826,60 @@ const CARTOES_MONITORADOS = [
   { id: 'itau_novo',  label: '🔵 Itaú Novo',   match: /itau.novo|itaú.novo|novo.*itau|cc.*itau(?!.*antigo)/i },
   { id: 'itau_antigo',label: '⚫ Itaú Antigo', match: /itau.antigo|itaú.antigo|antigo.*itau/i },
 ];
+
+function renderStatusCartoes() {
+  const grid = document.getElementById('cartoes-grid');
+  if (!grid) return;
+  const faturas = ccrFaturasImportadas();
+  const brl = v => 'R$ ' + parseFloat(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+
+  // Agrupar por bandeira
+  const porBandeira = {};
+  faturas.forEach(f => {
+    const key = f.bandeira || 'Cartão';
+    if (!porBandeira[key]) porBandeira[key] = { nome: key, faturas: [] };
+    porBandeira[key].faturas.push(f);
+  });
+
+  // Alerta duplicatas
+  const alertDiv = document.getElementById('cartoes-alerta');
+  const alertas = typeof ccrAlertasDuplicata === 'function' ? ccrAlertasDuplicata() : [];
+  if (alertDiv) {
+    alertDiv.style.display = alertas.length ? '' : 'none';
+    alertDiv.innerHTML = alertas.length
+      ? '<strong>⚠️ Possível duplicata detectada:</strong><br>' + alertas.map(a=>`• ${a}`).join('<br>')
+      : '';
+  }
+
+  if (!Object.keys(porBandeira).length) {
+    grid.innerHTML = '<div style="font-size:11px;color:var(--muted);grid-column:1/-1;padding:4px">Nenhuma fatura importada nesta sessão.</div>';
+    return;
+  }
+
+  grid.innerHTML = Object.values(porBandeira).map(b => {
+    const fatList = b.faturas.sort((a,z) => (z.mes||'').localeCompare(a.mes||''));
+    const cards = fatList.map(f => {
+      const classif = TXS.filter(t => t.faturaCC === f.faturaId && t.categoria).length;
+      const total   = TXS.filter(t => t.faturaCC === f.faturaId).length;
+      const pct     = total > 0 ? Math.round(classif/total*100) : 0;
+      const cor     = pct >= 100 ? '#16a34a' : pct > 0 ? '#d97706' : '#6b7280';
+      const badge   = pct >= 100 ? '✅' : pct > 0 ? '⏳' : '—';
+      return `<div style="font-size:10px;margin-bottom:4px;padding:5px 7px;background:#fff;border-radius:6px;border:1px solid var(--border)">
+        <div style="font-weight:700;color:var(--text);margin-bottom:2px">${f.mes||'—'}</div>
+        <div style="color:var(--muted)">${f.n} itens · ${brl(f.total)}</div>
+        <div style="margin-top:3px;height:3px;background:#e5e7eb;border-radius:2px">
+          <div style="height:3px;background:${cor};border-radius:2px;width:${pct}%"></div>
+        </div>
+        <div style="color:${cor};font-size:10px;margin-top:2px">${badge} ${pct}% classif.</div>
+      </div>`;
+    }).join('');
+    return `<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px;min-width:140px">
+      <div style="font-size:11px;font-weight:700;color:var(--text);margin-bottom:6px">💳 ${b.nome}</div>
+      ${cards}
+      <div style="font-size:10px;color:var(--muted);margin-top:4px;font-weight:600">Total: ${brl(b.faturas.reduce((s,f)=>s+f.total,0))}</div>
+    </div>`;
+  }).join('');
+}
 
 function toggleStatusCartoes() {
   const painel = document.getElementById('painel-cartoes');
