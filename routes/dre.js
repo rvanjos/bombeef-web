@@ -1442,7 +1442,7 @@ module.exports = function (pool, app) {
           WHERE id = $6
         `, [parseFloat(valor_total || 0), parseInt(qtd_itens || 0),
             arquivo_nome || null, hash_fatura || null,
-            JSON.stringify([...logAtual, { acao:'REPROCESSADA', em: agora, usuario_id: uid }]),
+            JSON.stringify([...logAtual, { acao:'REPROCESSADA', em: agora, usuario_id: uid, arquivo: arquivo_nome || null }]),
             faturaId]);
 
         // Reconciliar itens: preservar categorias dos existentes, inserir novos, marcar removidos
@@ -1520,7 +1520,7 @@ module.exports = function (pool, app) {
           parseFloat(valor_total || 0), parseInt(qtd_itens || 0),
           arquivo_nome || null, hash_fatura || null, fatura_id_ref || null,
           sessao_id || null, uid,
-          JSON.stringify([{ acao:'IMPORTADA', em: agora, usuario_id: uid }])]);
+          JSON.stringify([{ acao:'IMPORTADA', em: agora, usuario_id: uid, arquivo: arquivo_nome || null }])]);
 
       const faturaDbId = rows[0].id;
 
