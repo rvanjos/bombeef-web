@@ -1352,11 +1352,11 @@ module.exports = function (pool, app) {
 
   // POST /api/dre/cartao-faturas/verificar — verifica duplicidade ANTES de importar
   r.post('/cartao-faturas/verificar', autenticar(), async (req, res) => {
-    const { hash_fatura, cartao, competencia, valor_total } = req.body;
+    const { hash_fatura, cartao, competencia, valor_total, qtd_itens } = req.body;
     try {
       let existing = null;
 
-      // Prioridade 1: hash do arquivo/fatura
+      // Prioridade 1: hash da fatura (cartão+competência+valor+vencimento+qtd — sem nome do arquivo)
       if (hash_fatura) {
         const r1 = await pool.query(
           `SELECT id, cartao, competencia, valor_total, importado_em, situacao, status
@@ -1366,14 +1366,17 @@ module.exports = function (pool, app) {
         if (r1.rows.length) existing = r1.rows[0];
       }
 
-      // Prioridade 2: cartão + competência + valor
+      // Prioridade 2: cartão + competência + valor + qtd_itens (sem nome de arquivo)
+      // qtd_itens diferente = pode ser fatura diferente do mesmo mês — não bloquear automaticamente
       if (!existing && cartao && competencia && valor_total != null) {
+        const qtd = parseInt(qtd_itens || 0);
         const r2 = await pool.query(
-          `SELECT id, cartao, competencia, valor_total, importado_em, situacao, status
+          `SELECT id, cartao, competencia, valor_total, qtd_itens, importado_em, situacao, status
            FROM cartao_faturas
            WHERE cartao = $1 AND competencia = $2 AND ABS(valor_total - $3) < 0.02
+             AND ($4 = 0 OR qtd_itens = $4)
            ORDER BY importado_em DESC LIMIT 1`,
-          [cartao, competencia, parseFloat(valor_total)]
+          [cartao, competencia, parseFloat(valor_total), qtd]
         );
         if (r2.rows.length) existing = r2.rows[0];
       }
