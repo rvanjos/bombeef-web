@@ -282,6 +282,14 @@ thead th{padding:6px 9px;}
 
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;display:none;align-items:center;justify-content:center;padding:16px;}
 .modal-box{background:#fff;border-radius:16px;width:100%;max-width:600px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3);}
+
+/* ── Painel Controle de Faturas 6.7-D ──────────────────────── */
+.cf-kpi-box{background:#fff;border-radius:10px;border:1px solid var(--border);padding:10px 14px;flex:1;min-width:100px}
+.cf-kpi-l{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)}
+.cf-kpi-v{font-size:20px;font-weight:800;font-family:'DM Mono',monospace;margin-top:3px}
+.cf-filtro-btn{padding:5px 12px;background:var(--bg);border:1px solid var(--border);border-radius:16px;font-size:11px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;color:var(--muted);transition:.15s}
+.cf-filtro-btn:hover{background:#f0ebe4;color:var(--text)}
+.cf-filtro-btn.active{background:var(--red);color:#fff;border-color:var(--red)}
 </style>
 </head>
 <body>
@@ -6518,75 +6526,159 @@ function renderCardsMobile(lista) {
 
 
 // ═══════════════════════════════════════════════════════════════
-// SPRINT 6.7-B — CONTROLE DE FATURAS DE CARTÃO
+// ═══════════════════════════════════════════════════════════════
+// SPRINT 6.7-D — CONTROLE OPERACIONAL DE FATURAS
 // ═══════════════════════════════════════════════════════════════
 
-const _cfBrl = v => v != null
-  ? 'R$ ' + parseFloat(v).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2})
+const _cfBrl  = v => v != null
+  ? 'R$ ' + parseFloat(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})
   : '—';
 
 const _cfStatusBadge = s => ({
-  'IMPORTADA':   '<span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:5px;font-size:10px;font-weight:700">IMPORTADA</span>',
-  'CLASSIFICADA':'<span style="background:#dbeafe;color:#1e40af;padding:2px 8px;border-radius:5px;font-size:10px;font-weight:700">CLASSIFICADA</span>',
-  'PAGA':        '<span style="background:#dcfce7;color:#166534;padding:2px 8px;border-radius:5px;font-size:10px;font-weight:700">PAGA</span>',
+  'IMPORTADA':    '<span style="background:#f3f4f6;color:#374151;padding:2px 8px;border-radius:5px;font-size:10px;font-weight:700">📥 Importada</span>',
+  'CLASSIFICANDO':'<span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:5px;font-size:10px;font-weight:700">🟡 Classif.</span>',
+  'CLASSIFICADA': '<span style="background:#dbeafe;color:#1e40af;padding:2px 8px;border-radius:5px;font-size:10px;font-weight:700">🔵 Classificada</span>',
+  'PAGA':         '<span style="background:#dcfce7;color:#166534;padding:2px 8px;border-radius:5px;font-size:10px;font-weight:700">✅ Paga</span>',
 }[s] || `<span style="font-size:10px;color:var(--muted)">${s||'—'}</span>`);
+
+let _cfFiltroAtivo = '';
+let _cfDadosRaw    = [];
+
+function setText(id, v) { const e = document.getElementById(id); if(e) e.textContent = v; }
 
 async function abrirControleFaturas() {
   document.getElementById('m-cartao-faturas').style.display = 'flex';
   await carregarCartaoFaturas();
 }
-
 function fecharControleFaturas() {
   document.getElementById('m-cartao-faturas').style.display = 'none';
 }
 
 async function carregarCartaoFaturas() {
   const tbody = document.getElementById('cf-tbody');
-  if (!tbody) return;
+  if(!tbody) return;
   tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--muted)">⏳ Carregando…</td></tr>';
-
   try {
     const res = await api.get('/api/dre/cartao-faturas');
-    if (!res.ok) throw new Error(res.erro || 'Erro ao carregar');
+    if(!res.ok) throw new Error(res.erro||'Erro');
+    _cfDadosRaw = res.data || [];
 
     // KPIs
     const k = res.kpis;
-    const setText = (id, v) => { const e = document.getElementById(id); if(e) e.textContent = v; };
-    setText('cf-kpi-total',     k.total);
-    setText('cf-kpi-importadas', k.importadas);
-    setText('cf-kpi-pagas',     k.pagas);
-    setText('cf-kpi-valor',     _cfBrl(k.valorAberto));
+    setText('cf-kpi-total',        k.total);
+    setText('cf-kpi-importadas',   k.importadas);
+    setText('cf-kpi-classificando',k.classificando);
+    setText('cf-kpi-classif',      k.classif);
+    setText('cf-kpi-pagas',        k.pagas);
+    setText('cf-kpi-valor',        _cfBrl(k.valorAberto));
+    setText('cf-kpi-pago',         _cfBrl(k.valorPago));
+    const vb = document.getElementById('cf-kpi-venc-box');
+    if(vb) { vb.style.display = k.vencidas > 0 ? '' : 'none'; }
+    setText('cf-kpi-vencidas', k.vencidas);
 
-    if (!res.data.length) {
-      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--muted)">Nenhuma fatura importada ainda.<br><span style="font-size:11px">Importe uma fatura de cartão no DRE para começar.</span></td></tr>';
-      return;
-    }
-
-    tbody.innerHTML = res.data.map(f => `
-      <tr style="${f.possivel_duplicidade ? 'background:#fffbeb' : ''}">
-        <td>
-          <div style="font-weight:700;font-size:12px">${f.cartao}</div>
-          ${f.bandeira && f.bandeira !== f.cartao ? `<div style="font-size:10px;color:var(--muted)">${f.bandeira}</div>` : ''}
-          ${f.possivel_duplicidade ? '<div style="font-size:10px;color:#f59e0b;font-weight:700">⚠️ possível duplicidade</div>' : ''}
-        </td>
-        <td style="font-weight:600">${f.competencia || '—'}</td>
-        <td style="font-size:12px;color:var(--muted)">${f.vencimento ? f.vencimento.split('-').reverse().join('/') : '—'}</td>
-        <td style="text-align:right;font-family:'DM Mono',monospace;font-weight:700">${_cfBrl(f.valor_total)}</td>
-        <td style="text-align:right;font-size:12px">${f.qtd_itens || 0}</td>
-        <td style="text-align:center">${_cfStatusBadge(f.status)}</td>
-        <td style="text-align:center">${_cfSituacaoBadge(f.situacao)}</td>
-        <td style="font-size:11px;color:var(--muted)">${f.importado_fmt || '—'}</td>
-        <td style="text-align:center">
-          <button onclick="verItensFatura(${f.id}, '${(f.cartao||'').replace(/'/g,"\'")} · ${f.competencia||''}')"
-            style="padding:4px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:11px;cursor:pointer;font-family:'DM Sans',sans-serif">
-            🔍 Ver Itens
-          </button>
-        </td>
-      </tr>`).join('');
-
+    cfRenderTabela(_cfDadosRaw);
   } catch(e) {
     tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:24px;color:#dc2626">❌ ${e.message}</td></tr>`;
   }
+}
+
+function cfFiltrar(status, btn) {
+  _cfFiltroAtivo = status;
+  document.querySelectorAll('.cf-filtro-btn').forEach(b => b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  const filtrado = status === ''
+    ? _cfDadosRaw
+    : status === 'DUP'
+      ? _cfDadosRaw.filter(f => f.situacao && f.situacao !== 'NORMAL')
+      : _cfDadosRaw.filter(f => f.status === status);
+  cfRenderTabela(filtrado);
+}
+
+function cfRenderTabela(data) {
+  const tbody = document.getElementById('cf-tbody');
+  if(!tbody) return;
+  const hoje = new Date().toISOString().slice(0,10);
+
+  if(!data.length) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--muted)">Nenhuma fatura encontrada</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = data.map(f => {
+    const vencida = f.vencimento && f.vencimento < hoje && f.status !== 'PAGA';
+    const vencStr = f.vencimento
+      ? f.vencimento.split('-').reverse().join('/') + (vencida ? ' <span style="background:#fee2e2;color:#dc2626;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:700">⚠️ Vencida</span>' : '')
+      : '—';
+
+    const pctBar = f.pct_classificado > 0
+      ? `<div style="height:3px;background:#e5e7eb;border-radius:2px;margin-top:3px;width:60px">
+           <div style="height:3px;background:${f.pct_classificado>=100?'#2563eb':'#d97706'};border-radius:2px;width:${f.pct_classificado}%"></div>
+         </div>`
+      : '';
+
+    const acoes = f.status === 'PAGA'
+      ? `<button onclick="cfReabrir(${f.id})"
+           style="padding:3px 9px;background:#fef3c7;border:1px solid #fde68a;border-radius:6px;font-size:11px;cursor:pointer;color:#92400e;font-family:'DM Sans',sans-serif">
+           ↩ Reabrir
+         </button>`
+      : `<button onclick="cfMarcarPaga(${f.id}, '${(f.cartao||'').replace(/'/g,"\\'")} ${f.competencia||''}')"
+           style="padding:3px 9px;background:#dcfce7;border:1px solid #bbf7d0;border-radius:6px;font-size:11px;cursor:pointer;color:#166534;font-family:'DM Sans',sans-serif">
+           ✅ Marcar Paga
+         </button>`;
+
+    return `<tr style="${vencida?'background:#fff5f5':f.possivel_duplicidade?'background:#fffbeb':''}">
+      <td>
+        <div style="font-size:12px;font-weight:700">${f.cartao||'—'}</div>
+        ${f.bandeira&&f.bandeira!==f.cartao?`<div style="font-size:10px;color:var(--muted)">${f.bandeira}</div>`:''}
+        ${f.possivel_duplicidade?'<div style="font-size:10px;color:#f59e0b;font-weight:700">⚠️ possível dup.</div>':''}
+      </td>
+      <td style="font-weight:600">${f.competencia||'—'}</td>
+      <td style="font-size:12px">${vencStr}</td>
+      <td style="text-align:right;font-family:'DM Mono',monospace;font-weight:700">${_cfBrl(f.valor_total)}</td>
+      <td style="text-align:right;font-size:12px">
+        ${f.itens_total||0}
+        ${pctBar}
+        ${f.pct_classificado>0?`<div style="font-size:10px;color:var(--muted)">${f.pct_classificado}%</div>`:''}
+      </td>
+      <td style="text-align:center">${_cfStatusBadge(f.status)}</td>
+      <td style="text-align:center">${_cfSituacaoBadge(f.situacao)}</td>
+      <td style="text-align:center;white-space:nowrap">
+        <button onclick="verItensFatura(${f.id}, '${(f.cartao||'').replace(/'/g,"\\'")} · ${f.competencia||''}')"
+          style="padding:3px 9px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:11px;cursor:pointer;margin-right:4px;font-family:'DM Sans',sans-serif">
+          🔍 Ver
+        </button>
+        ${acoes}
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+async function cfMarcarPaga(id, label) {
+  if(!confirm(`Marcar como PAGA:\n${label}\n\nConfirmar?`)) return;
+  try {
+    const tkn = BB?.api?.token || sessionStorage.getItem('bb_token') || '';
+    const res = await fetch(`/api/dre/cartao-faturas/${id}/pagar`,{
+      method:'PATCH',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+tkn},
+      body:'{}'
+    }).then(r=>r.json());
+    if(res.ok) { toast('✅ Fatura marcada como paga'); await carregarCartaoFaturas(); }
+    else toast('❌ '+(res.erro||'Erro'));
+  } catch(e) { toast('❌ '+e.message); }
+}
+
+async function cfReabrir(id) {
+  if(!confirm('Reabrir esta fatura?\nO status voltará para Classificada.')) return;
+  try {
+    const tkn = BB?.api?.token || sessionStorage.getItem('bb_token') || '';
+    const res = await fetch(`/api/dre/cartao-faturas/${id}/reabrir`,{
+      method:'PATCH',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+tkn},
+      body:'{}'
+    }).then(r=>r.json());
+    if(res.ok) { toast('↩ Fatura reaberta'); await carregarCartaoFaturas(); }
+    else toast('❌ '+(res.erro||'Erro'));
+  } catch(e) { toast('❌ '+e.message); }
 }
 
 async function verItensFatura(faturaId, titulo) {
@@ -6594,41 +6686,33 @@ async function verItensFatura(faturaId, titulo) {
   document.getElementById('m-cf-itens').style.display = 'flex';
   const tbody = document.getElementById('cf-itens-tbody');
   tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:20px;color:var(--muted)">⏳ Carregando…</td></tr>';
-
   try {
     const res = await api.get(`/api/dre/cartao-faturas/${faturaId}/itens`);
-    if (!res.ok) throw new Error(res.erro);
-
-    if (!res.data.length) {
+    if(!res.ok) throw new Error(res.erro);
+    if(!res.data.length) {
       tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:20px;color:var(--muted)">Nenhum item registrado.</td></tr>';
       return;
     }
-
-    const totalVal = res.data.reduce((s, i) => s + Math.abs(parseFloat(i.valor||0)), 0);
-
+    const total = res.data.reduce((s,i) => s + Math.abs(parseFloat(i.valor||0)), 0);
     tbody.innerHTML = res.data.map(i => `
-      <tr>
-        <td style="font-size:11px;color:var(--muted);white-space:nowrap">${i.data_compra ? i.data_compra.split('-').reverse().join('/') : '—'}</td>
-        <td style="font-size:12px">${i.descricao || '—'}${i.portador ? `<div style="font-size:10px;color:var(--muted)">${i.portador}</div>` : ''}</td>
+      <tr${i.removido?' style="opacity:.45;text-decoration:line-through"':''}>
+        <td style="font-size:11px;color:var(--muted);white-space:nowrap">${i.data_compra?i.data_compra.split('-').reverse().join('/'):'—'}</td>
+        <td style="font-size:12px">${i.descricao||'—'}${i.portador?`<div style="font-size:10px;color:var(--muted)">${i.portador}</div>`:''}</td>
         <td style="text-align:right;font-family:'DM Mono',monospace;font-size:12px;font-weight:600;color:${parseFloat(i.valor||0)<0?'#dc2626':'#16a34a'}">${_cfBrl(i.valor)}</td>
         <td style="font-size:11px">${i.categoria_dre
-          ? `<span style="background:var(--bg);padding:2px 6px;border-radius:4px;font-size:10px">${i.categoria_dre}</span>`
-          : '<span style="color:#f59e0b;font-size:10px">sem categoria</span>'}</td>
+          ?`<span style="background:var(--bg);padding:2px 6px;border-radius:4px;font-size:10px">${i.categoria_dre}</span>`
+          :(i.removido?'<span style="font-size:10px;color:var(--muted)">removido</span>':'<span style="color:#f59e0b;font-size:10px">sem categoria</span>')}</td>
       </tr>`).join('') +
       `<tr style="background:var(--bg)">
         <td colspan="2" style="text-align:right;font-size:11px;font-weight:700;padding:8px 12px">Total:</td>
-        <td style="text-align:right;font-family:'DM Mono',monospace;font-weight:800;color:#dc2626;padding:8px 12px">${_cfBrl(totalVal)}</td>
+        <td style="text-align:right;font-family:'DM Mono',monospace;font-weight:800;color:#dc2626;padding:8px 12px">${_cfBrl(total)}</td>
         <td></td>
       </tr>`;
-
   } catch(e) {
     tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:20px;color:#dc2626">❌ ${e.message}</td></tr>`;
   }
 }
 
-
-
-// ═══════════════════════════════════════════════════════════════
 // SPRINT 6.7-C — DEDUPLICAÇÃO DE FATURAS
 // ═══════════════════════════════════════════════════════════════
 
@@ -6806,43 +6890,46 @@ function _cfSituacaoBadge(s) {
 </div>
 
 <!-- ═══════════════════════════════════════════════════════════════
-     SPRINT 6.7-B — PAINEL DE CONTROLE DE FATURAS DE CARTÃO
+     SPRINT 6.7-D — PAINEL OPERACIONAL DE FATURAS DE CARTÃO
 ═══════════════════════════════════════════════════════════════ -->
 <div class="modal-overlay" id="m-cartao-faturas" onclick="if(event.target===this)fecharControleFaturas()" style="z-index:600">
-  <div style="background:#fff;border-radius:16px;width:100%;max-width:1000px;max-height:92vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+  <div style="background:#fff;border-radius:16px;width:100%;max-width:1100px;max-height:92vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.3)">
 
     <!-- Header -->
     <div style="background:var(--red);padding:14px 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
       <div>
         <div style="color:#fff;font-size:15px;font-weight:700">💳 Controle de Faturas</div>
-        <div style="color:rgba(255,255,255,.7);font-size:11px;margin-top:1px">Registro de faturas de cartão importadas no DRE</div>
+        <div style="color:rgba(255,255,255,.7);font-size:11px;margin-top:1px">Gestão operacional das faturas de cartão</div>
       </div>
       <button onclick="fecharControleFaturas()" style="background:none;border:none;color:rgba(255,255,255,.8);font-size:22px;cursor:pointer;line-height:1">×</button>
     </div>
 
     <!-- KPIs -->
-    <div style="display:flex;gap:12px;padding:14px 18px;background:var(--bg);border-bottom:1px solid var(--border);flex-wrap:wrap;flex-shrink:0">
-      <div style="background:#fff;border-radius:10px;border:1px solid var(--border);padding:10px 16px;flex:1;min-width:120px">
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">Importadas</div>
-        <div id="cf-kpi-total" style="font-size:22px;font-weight:800;font-family:'DM Mono',monospace;margin-top:3px">—</div>
-      </div>
-      <div style="background:#fff;border-radius:10px;border:1px solid var(--border);padding:10px 16px;flex:1;min-width:120px">
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">Pendentes</div>
-        <div id="cf-kpi-importadas" style="font-size:22px;font-weight:800;font-family:'DM Mono',monospace;color:#f59e0b;margin-top:3px">—</div>
-      </div>
-      <div style="background:#fff;border-radius:10px;border:1px solid var(--border);padding:10px 16px;flex:1;min-width:120px">
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">Pagas</div>
-        <div id="cf-kpi-pagas" style="font-size:22px;font-weight:800;font-family:'DM Mono',monospace;color:#16a34a;margin-top:3px">—</div>
-      </div>
-      <div style="background:#fff;border-radius:10px;border:1px solid var(--border);padding:10px 16px;flex:2;min-width:160px">
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">Valor Aberto</div>
-        <div id="cf-kpi-valor" style="font-size:22px;font-weight:800;font-family:'DM Mono',monospace;color:#dc2626;margin-top:3px">—</div>
-      </div>
+    <div style="display:flex;gap:10px;padding:12px 16px;background:var(--bg);border-bottom:1px solid var(--border);flex-wrap:wrap;flex-shrink:0">
+      <div class="cf-kpi-box"><div class="cf-kpi-l">Total</div><div class="cf-kpi-v" id="cf-kpi-total">—</div></div>
+      <div class="cf-kpi-box"><div class="cf-kpi-l">📥 Importadas</div><div class="cf-kpi-v" id="cf-kpi-importadas" style="color:#6b7280">—</div></div>
+      <div class="cf-kpi-box"><div class="cf-kpi-l">🟡 Classificando</div><div class="cf-kpi-v" id="cf-kpi-classificando" style="color:#d97706">—</div></div>
+      <div class="cf-kpi-box"><div class="cf-kpi-l">🔵 Classificadas</div><div class="cf-kpi-v" id="cf-kpi-classif" style="color:#2563eb">—</div></div>
+      <div class="cf-kpi-box"><div class="cf-kpi-l">✅ Pagas</div><div class="cf-kpi-v" id="cf-kpi-pagas" style="color:#16a34a">—</div></div>
+      <div class="cf-kpi-box" style="flex:1.5;min-width:140px"><div class="cf-kpi-l">💰 Valor Aberto</div><div class="cf-kpi-v" id="cf-kpi-valor" style="color:#dc2626">—</div></div>
+      <div class="cf-kpi-box" style="flex:1.5;min-width:140px"><div class="cf-kpi-l">✅ Valor Pago</div><div class="cf-kpi-v" id="cf-kpi-pago" style="color:#16a34a">—</div></div>
+      <div class="cf-kpi-box" id="cf-kpi-venc-box" style="display:none"><div class="cf-kpi-l">⚠️ Vencidas</div><div class="cf-kpi-v" id="cf-kpi-vencidas" style="color:#dc2626">—</div></div>
+    </div>
+
+    <!-- Filtros rápidos -->
+    <div style="display:flex;gap:6px;padding:10px 16px;border-bottom:1px solid var(--border);flex-wrap:wrap;flex-shrink:0;background:#fff">
+      <button class="cf-filtro-btn active" onclick="cfFiltrar('',this)">Todas</button>
+      <button class="cf-filtro-btn" onclick="cfFiltrar('IMPORTADA',this)">📥 Importadas</button>
+      <button class="cf-filtro-btn" onclick="cfFiltrar('CLASSIFICANDO',this)">🟡 Classificando</button>
+      <button class="cf-filtro-btn" onclick="cfFiltrar('CLASSIFICADA',this)">🔵 Classificadas</button>
+      <button class="cf-filtro-btn" onclick="cfFiltrar('PAGA',this)">✅ Pagas</button>
+      <button class="cf-filtro-btn" onclick="cfFiltrar('DUP',this)">⚠️ Duplicadas/Reprocessadas</button>
+      <button onclick="carregarCartaoFaturas()" style="margin-left:auto;padding:4px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:11px;cursor:pointer;font-family:'DM Sans',sans-serif">🔄</button>
     </div>
 
     <!-- Tabela -->
     <div style="overflow-y:auto;flex:1;min-height:0">
-      <table class="tbl" style="width:100%">
+      <table class="tbl" style="width:100%;min-width:900px">
         <thead>
           <tr>
             <th>Cartão</th>
@@ -6852,7 +6939,6 @@ function _cfSituacaoBadge(s) {
             <th style="text-align:right">Itens</th>
             <th style="text-align:center">Status</th>
             <th style="text-align:center">Situação</th>
-            <th>Importado em</th>
             <th style="text-align:center">Ações</th>
           </tr>
         </thead>
@@ -6863,8 +6949,8 @@ function _cfSituacaoBadge(s) {
     </div>
 
     <!-- Footer -->
-    <div style="padding:12px 18px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;flex-shrink:0">
-      <button onclick="fecharControleFaturas()" style="padding:8px 20px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:13px;cursor:pointer;font-family:'DM Sans',sans-serif">Fechar</button>
+    <div style="padding:10px 16px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;flex-shrink:0">
+      <button onclick="fecharControleFaturas()" style="padding:7px 18px;background:var(--bg);border:1px solid var(--border);border-radius:7px;font-size:13px;cursor:pointer;font-family:'DM Sans',sans-serif">Fechar</button>
     </div>
   </div>
 </div>
@@ -6878,14 +6964,10 @@ function _cfSituacaoBadge(s) {
     </div>
     <div style="overflow-y:auto;flex:1;min-height:0">
       <table class="tbl" style="width:100%">
-        <thead>
-          <tr>
-            <th>Data</th>
-            <th>Descrição</th>
-            <th style="text-align:right">Valor</th>
-            <th>Categoria</th>
-          </tr>
-        </thead>
+        <thead><tr>
+          <th>Data</th><th>Descrição</th>
+          <th style="text-align:right">Valor</th><th>Categoria</th>
+        </tr></thead>
         <tbody id="cf-itens-tbody">
           <tr><td colspan="4" style="text-align:center;padding:20px;color:var(--muted)">Carregando…</td></tr>
         </tbody>
@@ -6896,7 +6978,6 @@ function _cfSituacaoBadge(s) {
     </div>
   </div>
 </div>
-
 </body>
 </html>
 <!-- Modal Pagar Boleto / Vincular Extrato -->

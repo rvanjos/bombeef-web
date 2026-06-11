@@ -470,6 +470,9 @@ module.exports = function (pool, app) {
     await pool.query(`ALTER TABLE cartao_faturas ADD COLUMN IF NOT EXISTS hash_fatura TEXT`).catch(()=>{});
     await pool.query(`ALTER TABLE cartao_faturas ADD COLUMN IF NOT EXISTS situacao TEXT DEFAULT 'NORMAL'`).catch(()=>{});
     await pool.query(`ALTER TABLE cartao_faturas ADD COLUMN IF NOT EXISTS log_json JSONB DEFAULT '[]'`).catch(()=>{});
+    await pool.query(`ALTER TABLE cartao_faturas ADD COLUMN IF NOT EXISTS data_pagamento DATE`).catch(()=>{});
+    await pool.query(`ALTER TABLE cartao_faturas ADD COLUMN IF NOT EXISTS usuario_pagamento INTEGER`).catch(()=>{});
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_cf_status ON cartao_faturas(status)`).catch(()=>{});
     await pool.query(`ALTER TABLE cartao_fatura_itens ADD COLUMN IF NOT EXISTS hash_item TEXT`).catch(()=>{});
     await pool.query(`ALTER TABLE cartao_fatura_itens ADD COLUMN IF NOT EXISTS removido BOOLEAN DEFAULT false`).catch(()=>{});
     await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_cf_hash ON cartao_faturas(hash_fatura) WHERE hash_fatura IS NOT NULL`).catch(()=>{});
@@ -1321,28 +1324,66 @@ module.exports = function (pool, app) {
     try {
       const { rows } = await pool.query(`
         SELECT
-          id, cartao, bandeira, competencia, vencimento,
-          valor_total, qtd_itens, status, arquivo_nome,
-          possivel_duplicidade, situacao, importado_em,
-          TO_CHAR(importado_em, 'YYYY-MM-DD HH24:MI') AS importado_fmt
-        FROM cartao_faturas
-        ORDER BY importado_em DESC
+          cf.id, cf.cartao, cf.bandeira, cf.competencia,
+          TO_CHAR(cf.vencimento, 'YYYY-MM-DD')             AS vencimento,
+          cf.valor_total, cf.qtd_itens, cf.status, cf.arquivo_nome,
+          cf.possivel_duplicidade, cf.situacao, cf.importado_em,
+          TO_CHAR(cf.importado_em, 'YYYY-MM-DD HH24:MI')   AS importado_fmt,
+          TO_CHAR(cf.data_pagamento, 'YYYY-MM-DD')          AS data_pagamento,
+          -- Contagem de itens classificados (para status automático)
+          (SELECT COUNT(*) FROM cartao_fatura_itens
+           WHERE fatura_id = cf.id AND removido = false
+             AND categoria_dre IS NOT NULL AND categoria_dre <> '') AS itens_classificados,
+          (SELECT COUNT(*) FROM cartao_fatura_itens
+           WHERE fatura_id = cf.id AND removido = false) AS itens_total
+        FROM cartao_faturas cf
+        ORDER BY cf.importado_em DESC
         LIMIT 200
       `);
 
+      // Atualizar status automático baseado em classificação dos itens
+      const rowsComStatus = rows.map(r => {
+        const tot  = parseInt(r.itens_total || 0);
+        const cls  = parseInt(r.itens_classificados || 0);
+        let statusAuto = r.status;
+        if (r.status !== 'PAGA') {
+          if (tot === 0 || cls === 0) statusAuto = 'IMPORTADA';
+          else if (cls >= tot)        statusAuto = 'CLASSIFICADA';
+          else                        statusAuto = 'CLASSIFICANDO';
+        }
+        return { ...r, status: statusAuto,
+                 pct_classificado: tot > 0 ? Math.round(cls/tot*100) : 0 };
+      });
+
+      // Persistir status calculado se mudou
+      for (const r of rowsComStatus) {
+        if (r.status !== rows.find(x => x.id === r.id)?.status) {
+          pool.query(`UPDATE cartao_faturas SET status=$1 WHERE id=$2 AND status != 'PAGA'`,
+            [r.status, r.id]).catch(()=>{});
+        }
+      }
+
       // KPIs
-      const total     = rows.length;
-      const importadas= rows.filter(r => r.status === 'IMPORTADA').length;
-      const classif   = rows.filter(r => r.status === 'CLASSIFICADA').length;
-      const pagas     = rows.filter(r => r.status === 'PAGA').length;
-      const valorAberto = rows
+      const total        = rowsComStatus.length;
+      const importadas   = rowsComStatus.filter(r => r.status === 'IMPORTADA').length;
+      const classificando= rowsComStatus.filter(r => r.status === 'CLASSIFICANDO').length;
+      const classif      = rowsComStatus.filter(r => r.status === 'CLASSIFICADA').length;
+      const pagas        = rowsComStatus.filter(r => r.status === 'PAGA').length;
+      const valorAberto  = rowsComStatus
         .filter(r => r.status !== 'PAGA')
         .reduce((s, r) => s + parseFloat(r.valor_total || 0), 0);
+      const valorPago    = rowsComStatus
+        .filter(r => r.status === 'PAGA')
+        .reduce((s, r) => s + parseFloat(r.valor_total || 0), 0);
+      const vencidas     = rowsComStatus.filter(r =>
+        r.vencimento && r.vencimento < new Date().toISOString().slice(0,10)
+        && r.status !== 'PAGA').length;
 
       res.json({
         ok: true,
-        data: rows,
-        kpis: { total, importadas, classif, pagas, valorAberto }
+        data: rowsComStatus,
+        kpis: { total, importadas, classificando, classif, pagas,
+                valorAberto, valorPago, vencidas }
       });
     } catch(e) {
       console.error('[dre/cartao-faturas]', e.message);
@@ -1562,10 +1603,58 @@ module.exports = function (pool, app) {
     }
   });
 
-  // PATCH /api/dre/cartao-faturas/:id/status — atualiza status
+  // PATCH /api/dre/cartao-faturas/:id/pagar — marca como paga
+  r.patch('/cartao-faturas/:id/pagar', autenticar(), async (req, res) => {
+    const uid = req.user?.id || null;
+    const agora = new Date().toISOString();
+    try {
+      const { rows } = await pool.query(
+        `SELECT log_json FROM cartao_faturas WHERE id=$1`, [req.params.id]
+      );
+      if (!rows.length) return res.status(404).json({ ok:false, erro:'Não encontrado' });
+      const log = [...(rows[0].log_json||[]),
+                   { acao:'PAGA', em: agora, usuario_id: uid }];
+      await pool.query(`
+        UPDATE cartao_faturas SET
+          status='PAGA', data_pagamento=NOW()::DATE,
+          usuario_pagamento=$1, log_json=$2, atualizado_em=NOW()
+        WHERE id=$3
+      `, [uid, JSON.stringify(log), req.params.id]);
+      res.json({ ok: true });
+    } catch(e) {
+      console.error('[cf/pagar]', e.message);
+      res.status(500).json({ ok: false, erro: e.message });
+    }
+  });
+
+  // PATCH /api/dre/cartao-faturas/:id/reabrir — volta para CLASSIFICADA
+  r.patch('/cartao-faturas/:id/reabrir', autenticar(), async (req, res) => {
+    const uid = req.user?.id || null;
+    const agora = new Date().toISOString();
+    try {
+      const { rows } = await pool.query(
+        `SELECT log_json FROM cartao_faturas WHERE id=$1`, [req.params.id]
+      );
+      if (!rows.length) return res.status(404).json({ ok:false, erro:'Não encontrado' });
+      const log = [...(rows[0].log_json||[]),
+                   { acao:'REABERTA', em: agora, usuario_id: uid }];
+      await pool.query(`
+        UPDATE cartao_faturas SET
+          status='CLASSIFICADA', data_pagamento=NULL,
+          usuario_pagamento=NULL, log_json=$1, atualizado_em=NOW()
+        WHERE id=$2
+      `, [JSON.stringify(log), req.params.id]);
+      res.json({ ok: true });
+    } catch(e) {
+      console.error('[cf/reabrir]', e.message);
+      res.status(500).json({ ok: false, erro: e.message });
+    }
+  });
+
+  // PATCH /api/dre/cartao-faturas/:id/status — atualiza status (mantido por compatibilidade)
   r.patch('/cartao-faturas/:id/status', autenticar(), async (req, res) => {
     const { status } = req.body;
-    if (!['IMPORTADA','CLASSIFICADA','PAGA'].includes(status))
+    if (!['IMPORTADA','CLASSIFICANDO','CLASSIFICADA','PAGA'].includes(status))
       return res.status(400).json({ ok: false, erro: 'status inválido' });
     try {
       await pool.query(`
