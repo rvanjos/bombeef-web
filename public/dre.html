@@ -774,9 +774,8 @@ thead th{padding:6px 9px;}
     <!-- Toolbar: classificar todos / filtro -->
     <div style="flex-shrink:0;padding:8px 16px;background:var(--white);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;flex-wrap:wrap">
       <span style="font-size:12px;font-weight:600;color:var(--muted)">Classificar todos como:</span>
-      <select id="ccr-bulk-cat" style="font-size:12px;padding:4px 8px;border:1px solid var(--border);border-radius:6px;max-width:220px">
-        <option value="">— escolha —</option>
-      </select>
+      <input id="ccr-bulk-cat" list="ccr-cat-dl" placeholder="Digite para buscar…" autocomplete="off"
+        style="font-size:12px;padding:4px 8px;border:1px solid var(--border);border-radius:6px;width:220px;font-family:'DM Sans',sans-serif">
       <button onclick="ccrBulkClassificar()" class="btn bp" style="padding:4px 12px;font-size:12px">Aplicar</button>
       <div style="margin-left:auto;display:flex;gap:6px">
         <button onclick="ccrFiltrar('todos')" id="ccrF-todos" class="btn bp" style="padding:3px 10px;font-size:11px">Todos</button>
@@ -3328,6 +3327,33 @@ function ccrCatOptions(catAtual) {
   return html;
 }
 
+// Gera <datalist> com todas as categorias (inserido 1x no modal)
+function ccrCatDatalistHTML() {
+  let opts = '';
+  for (const [grp, gd] of Object.entries(CATS)) {
+    for (const s of (gd.s || [])) {
+      opts += `<option value="${s}">`;
+    }
+  }
+  return `<datalist id="ccr-cat-dl">${opts}</datalist>`;
+}
+
+// Gera <input> com datalist para busca de categoria
+function ccrCatInput(fieldId, catAtual, onchangeFn, extraStyle) {
+  const val = catAtual || '';
+  const borderColor = val ? 'var(--green)' : 'var(--orange)';
+  return `<input
+    id="${fieldId}"
+    list="ccr-cat-dl"
+    value="${val.replace(/"/g, '&quot;')}"
+    placeholder="Digite para buscar…"
+    autocomplete="off"
+    onchange="${onchangeFn}"
+    oninput="${onchangeFn}"
+    style="flex:1;min-width:0;font-size:12px;padding:4px 8px;border:1px solid ${borderColor};border-radius:6px;background:#fff;font-family:'DM Sans',sans-serif;${extraStyle||''}"
+  >`;
+}
+
 // Agrupa lançamentos por nome similar (limiar 0,45)
 function ccrAgrupar(lancs) {
   const grupos = [];
@@ -3381,6 +3407,13 @@ function abrirRevisaoCC(lancs, mesCC, bandeira, fileName) {
   }
 
   ccrRenderGrupos();
+  // Inserir datalist de categorias no modal (1x)
+  const dlExist = document.getElementById('ccr-cat-dl');
+  if (!dlExist) {
+    const dlWrap = document.createElement('div');
+    dlWrap.innerHTML = ccrCatDatalistHTML();
+    document.getElementById('m-cc-revisao').appendChild(dlWrap.firstChild);
+  }
   document.getElementById('m-cc-revisao').classList.add('open');
 }
 
@@ -3430,9 +3463,7 @@ function ccrRenderGrupos() {
       <!-- Dropdown de categoria para o grupo inteiro -->
       <div style="padding:6px 14px;background:#fafaf8;border-top:1px solid var(--border);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px">
         <span style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);white-space:nowrap;flex-shrink:0">Categoria:</span>
-        <select onchange="ccrSetGrupo(${gi}, this.value)" style="flex:1;min-width:0;font-size:12px;padding:4px 8px;border:1px solid ${todasCat&&catUniforme?'var(--green)':'var(--orange)'};border-radius:6px;background:#fff">
-          ${ccrCatOptions(catUniforme ? catGrupo : '')}
-        </select>
+        ${ccrCatInput('ccrg-input-'+gi, catUniforme ? catGrupo : '', 'ccrSetGrupo('+gi+', this.value)', '')}
         ${!catUniforme && g.itens.length > 1 ? '<span style="font-size:10px;color:var(--orange);white-space:nowrap;flex-shrink:0">⚠ variadas</span>' : ''}
       </div>
       <!-- Itens individuais (colapsáveis) -->
@@ -3441,9 +3472,7 @@ function ccrRenderGrupos() {
         <div style="padding:6px 14px;border-bottom:1px solid #f0ece6;display:grid;grid-template-columns:80px 1fr 180px 80px;gap:8px;align-items:center;font-size:12px">
           <span style="color:var(--muted);font-family:'DM Mono',monospace;white-space:nowrap">${item.data ? fmt.date(item.data) : '—'}</span>
           <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)" title="${item.lancamento||''}">${item.lancamento||'—'}</span>
-          <select onchange="ccrSetItem('${item.id}', this.value)" style="font-size:11px;padding:2px 6px;border:1px solid var(--border);border-radius:4px;width:100%">
-            ${ccrCatOptions(item.categoria)}
-          </select>
+          ${ccrCatInput('ccri-'+item.id, item.categoria, "ccrSetItem('"+item.id+"', this.value)", 'width:100%;font-size:11px;')}
           <span style="text-align:right;font-family:'DM Mono',monospace;font-weight:600;color:var(--red-l);white-space:nowrap">${fmt.brl(Math.abs(parseFloat(item.valor||0)))}</span>
         </div>`).join('')}
       </div>
@@ -3467,16 +3496,33 @@ function ccrToggleGrupo(gi) {
 function ccrSetGrupo(gi, cat) {
   const g = _ccrGrupos[gi];
   if (!g) return;
+  // Só aceitar valores que existam no catálogo (ignora digitação parcial)
+  const catValida = cat === '' || Object.values(CATS).some(gd => (gd.s||[]).includes(cat));
+  if (!catValida) return;
   g.itens.forEach(item => {
     const l = _ccrLancs.find(x => x.id === item.id);
     if (l) { l.categoria = cat; item.categoria = cat; }
   });
-  ccrRenderGrupos();
+  // Atualizar borda e cor sem re-renderizar (preserva foco do input)
+  const inp = document.getElementById('ccrg-input-' + gi);
+  if (inp) inp.style.borderColor = cat ? 'var(--green)' : 'var(--orange)';
+  const card = document.getElementById('ccrg-' + gi);
+  if (card) {
+    const hdr = card.querySelector('div[style*="background"]');
+    if (hdr) hdr.style.background = cat ? '#f0fdf4' : '#fffbeb';
+  }
+  ccrAtualizarProgresso();
 }
 
 function ccrSetItem(id, cat) {
+  // Só aceitar categoria válida (ignora digitação parcial)
+  const catValida = cat === '' || Object.values(CATS).some(gd => (gd.s||[]).includes(cat));
+  if (!catValida) return;
   const l = _ccrLancs.find(x => x.id === id);
   if (l) l.categoria = cat;
+  // Atualizar borda do input
+  const inp = document.getElementById('ccri-' + id);
+  if (inp) inp.style.borderColor = cat ? 'var(--green)' : 'var(--orange)';
   // Re-renderiza apenas os contadores sem recriar tudo
   const nPend = _ccrLancs.filter(l => !l.categoria).length;
   const pct   = _ccrLancs.length ? Math.round((_ccrLancs.length - nPend) / _ccrLancs.length * 100) : 100;
