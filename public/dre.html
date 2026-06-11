@@ -1658,6 +1658,11 @@ async function confirmarImportCC() {
         lancs = parseCCCaixaCSV(csvText);
         if (lancs.length) toast(`💳 CSV Caixa: ${lancs.length} lançamento(s) encontrado(s)`);
       }
+      // C6 Bank: cabeçalho com 'data de compra' e 'final do cartão'
+      else if (firstLine.includes('data de compra') || firstLine.includes('final do cart')) {
+        lancs = parseCCC6CSV(csvText);
+        if (lancs.length) toast(`💳 CSV C6: ${lancs.length} lançamento(s) encontrado(s)`);
+      }
       // Se não reconheceu, tentar via XLSX (que também lê CSV)
       if (!lancs.length) {
         const wb2 = XLSX.read(csvBuf, {type:'array'});
@@ -1771,6 +1776,83 @@ function parseFaturaItauPDF(text) {
       });
     }
   }
+  return result;
+}
+
+function parseCCC6CSV(text) {
+  // Parser para CSV exportado pelo app C6 Bank
+  // Formato: Data de Compra;Nome no Cartão;Final do Cartão;Categoria;Descrição;Parcela;Valor (em US$);Cotação (em R$);Valor (em R$)
+  const lines = (text.charCodeAt(0) === 0xFEFF ? text.slice(1) : text)
+    .split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  if (lines.length < 2) return [];
+
+  // Verificar cabeçalho
+  const header = lines[0].toLowerCase();
+  if (!header.includes('data de compra') && !header.includes('final do cartão') && !header.includes('final do cartao')) return [];
+
+  const cols  = lines[0].split(';').map(c => c.trim().toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, ''));
+  const iData  = cols.findIndex(c => c.includes('data'));
+  const iFinal = cols.findIndex(c => c.includes('final'));
+  const iCat   = cols.findIndex(c => c === 'categoria');
+  const iDesc  = cols.findIndex(c => c.includes('descricao') || c === 'descricao');
+  const iParc  = cols.findIndex(c => c === 'parcela');
+  const iValR  = cols.findLastIndex(c => c.includes('valor'));   // última coluna valor = R$
+
+  const result = [];
+
+  for (let i = 1; i < lines.length; i++) {
+    const parts = lines[i].split(';');
+    if (parts.length < 6) continue;
+
+    const dataStr  = (parts[iData]  || '').trim();   // dd/mm/yyyy
+    const final_   = (parts[iFinal] || '').trim();   // 4 dígitos
+    const desc     = (parts[iDesc]  || '').trim();
+    const parcela  = (parts[iParc]  || '').trim();   // "Única", "1/12", "5/10"...
+    const valorStr = (parts[iValR]  || '').trim().replace(',', '.');
+
+    if (!dataStr || !desc || !valorStr) continue;
+
+    const valor = parseFloat(valorStr);
+    if (isNaN(valor)) continue;
+
+    // Créditos (pagamento de fatura, estorno de tarifa com valor negativo) — ignorar
+    if (valor < 0) continue;
+    // Zero — ignorar
+    if (valor === 0) continue;
+
+    // Pagamento de fatura / Estorno só de pagamento
+    if (/^pag\s+fatura|^pagamento\s+fatura|^pag fatura boleto/i.test(desc)) continue;
+
+    // Data: dd/mm/yyyy → yyyy-mm-dd
+    const [dd, mm, yyyy] = dataStr.split('/');
+    if (!dd || !mm || !yyyy) continue;
+    const dataISO = `${yyyy}-${mm}-${dd}`;
+    const mesLanc = `${mm}/${yyyy}`;
+
+    // Estornos de tarifa viram crédito positivo no DRE
+    const isEstorno = /^estorno/i.test(desc);
+    const valorFinal = isEstorno ? Math.abs(valor) : -Math.abs(valor);
+
+    const portador = final_ ? `C6 (Final ${final_})` : 'C6 Bank';
+    const parcLabel = parcela && parcela !== 'Única' ? ` (Parc. ${parcela})` : '';
+    const lancLabel = `${desc}${parcLabel}`;
+
+    result.push({
+      id:          'c6_' + Date.now() + '_' + i,
+      data:        dataISO,
+      mes:         mesLanc,
+      lancamento:  lancLabel,
+      razaoSocial: desc,
+      valor:       valorFinal,
+      portador,
+      parcela:     parcela !== 'Única' ? parcela : null,
+      fonte:       'CC',
+      bandeira:    'C6 Bank',
+      categoria:   autoClassificar(desc, portador),
+    });
+  }
+
   return result;
 }
 
