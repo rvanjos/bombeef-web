@@ -1891,18 +1891,25 @@ function parseCCCaixaCSV(text) {
     const nomeDesc = [desc, cidade].filter(Boolean).join(' — ');
     const portador = cartao ? `Cartão ${cartao}` : '';
 
+    // Montar label legível: ESTABELECIMENTO [Cartão XXXX] [parcela X/Y]
+    const labelExtra = [
+      cartao ? `Cartão ${cartao}` : '',
+      parcela ? `Parc. ${parcela}` : '',
+    ].filter(Boolean).join(' · ');
+    const lancLabel = labelExtra ? `${desc} (${labelExtra})` : desc;
+
     result.push({
       id:         'caixa_' + Date.now() + '_' + i,
       data:       dataISO,
       mes:        mesLanc,
-      lancamento: portador || nomeDesc,
-      razaoSocial:desc,
-      valor:      -Math.abs(valorNum),   // sempre débito
-      portador,
+      lancamento: lancLabel,        // estabelecimento + cartão/parcela
+      razaoSocial:desc,             // só o nome limpo para autoClassificar
+      valor:      -Math.abs(valorNum),
+      portador:   cartao ? `Cartão ${cartao}` : '',
       parcela:    parcela || null,
       fonte:      'CC',
       bandeira:   'Caixa',
-      categoria:  autoClassificar(desc, portador),
+      categoria:  autoClassificar(desc, ''),
     });
   }
 
