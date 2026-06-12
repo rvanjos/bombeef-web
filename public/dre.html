@@ -4233,8 +4233,11 @@ function _verificarDuplicatasFaturaCC() {
     const val = Math.abs(parseFloat(t.valor||0));
     if (val < 10) continue;
     const dtBase = t.data ? new Date(t.data) : null;
+    // Ignorar lançamentos já resolvidos pelo usuário
+    if (t._dupResolvido) continue;
     const dup = TXS.find(x => {
       if (x.id === t.id || x.fonte === 'CC' || x.ignorar) return false;
+      if (x._dupResolvido) return false;
       if (Math.abs(Math.abs(parseFloat(x.valor||0)) - val) > val * 0.02) return false;
       if (['Pagamento de Fatura CC','Pagamento de Cartão'].includes(x.categoria)) return false;
       if (x.vinculadoFaturaCC) return false;
