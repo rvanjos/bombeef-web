@@ -1385,6 +1385,9 @@ async function carregarSessao() {
       }
       // Remove projeções persistidas por engano — são sempre recalculadas dinamicamente
       TXS = TXS.filter(t => t.fonte !== 'PREV_RECEITA');
+      // Limpar CC com data inválida de imports antigos (serial Excel não convertido)
+      TXS = TXS.filter(t => t.fonte !== 'CC' ||
+        (t.data && !t.data.startsWith('undefined')));
 
       if (dados.loadedFiles?.length) files = [...files, ...dados.loadedFiles];
       if (dados.supplierMem) {
@@ -2523,11 +2526,27 @@ function addLancs(novos, fileName) {
     if (l.fitid && exFitid.has(l.fitid))       { dup++; continue; }
     const h = `${l.data}|${String(l.valor)}|${(l.lancamento||'').slice(0,40)}`;
     if (exHash.has(h))                          { dup++; continue; }
-    // CC: dedup por valor+desc sem data (cobre reimport após fix de data inválida)
+    // CC: verificar se já existe lançamento com mesmo valor+desc
     if (l.fonte === 'CC') {
       const hCC = `${String(l.valor)}|${(l.lancamento||'').slice(0,40)}`;
-      const exCC = new Set(TXS.filter(t=>t.fonte==='CC').map(t=>`${String(t.valor)}|${(t.lancamento||'').slice(0,40)}`));
-      if (exCC.has(hCC)) { dup++; continue; }
+      const existing = TXS.find(t => t.fonte === 'CC' &&
+        `${String(t.valor)}|${(t.lancamento||'').slice(0,40)}` === hCC);
+      if (existing) {
+        // Se já tem faturaCC → duplicata real → bloquear
+        if (existing.faturaCC && l.faturaCC && existing.faturaCC === l.faturaCC) {
+          dup++; continue;
+        }
+        // Se não tem faturaCC ou bandeira → atualizar (lançamento de import antigo)
+        if (!existing.faturaCC && l.faturaCC) {
+          existing.faturaCC = l.faturaCC;
+          existing.bandeira = l.bandeira || existing.bandeira;
+          existing.data     = l.data || existing.data; // corrigir data inválida
+          existing.mes      = l.mes  || existing.mes;
+          atualiz++; continue;
+        }
+        // Mesmo faturaCC → bloquear duplicata
+        if (existing.faturaCC === l.faturaCC) { dup++; continue; }
+      }
     }
 
     // Dedup adicional: verifica se já existe lançamento com mesmo boletoId (qualquer fonte)
