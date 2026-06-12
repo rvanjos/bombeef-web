@@ -6581,25 +6581,21 @@ async function gerarExcelDRE() {
     } catch(e) { console.error('[gerarExcelDRE] modo', modo, e); }
   }
 
+  // Exportar direto via SheetJS no browser (sem servidor)
   try {
-    const resp = await fetch('/api/dre/exportar-excel', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + BB.api.token() },
-      body: JSON.stringify({ abas })
-    });
-    if (!resp.ok) throw new Error('Erro HTTP ' + resp.status);
-    const blob = await resp.blob();
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    a.href     = url;
-    a.download = `DRE_BomBeef_${new Date().getFullYear()}.xlsx`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast('✅ DRE exportado com formatação profissional!');
+    const wb = XLSX.utils.book_new();
+    for (const { modo, nome } of modosExport) {
+      const dados = montarDados(modo);
+      const ws    = toWorksheet(dados);
+      XLSX.utils.book_append_sheet(wb, ws, nome);
+    }
+    const ano = new Date().getFullYear();
+    XLSX.writeFile(wb, `DRE_BomBeef_${ano}.xlsx`);
+    toast('✅ Excel exportado com sucesso!');
   } catch(e) {
     console.error('[gerarExcelDRE]', e);
-    toast('⚠️ Erro no servidor — usando exportação básica');
-    exportXLS(); // fallback
+    toast('⚠️ Erro ao gerar Excel: ' + e.message);
+    exportXLS();
   }
 }
 
