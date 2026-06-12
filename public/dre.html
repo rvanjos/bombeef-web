@@ -3424,7 +3424,8 @@ function ccrAgrupar(lancs) {
       // Datas diferentes = compras distintas, mesmo que mesmo estabelecimento
       const mesmaNome = tokenSim(nome, g.nomeRef) >= 0.45;
       const mesmaData = g.itens[0]?.data === l.data;
-      if (mesmaNome && mesmaData) { achado = g; break; }
+      const mesmoValor = String(g.itens[0]?.valor) === String(l.valor);
+      if (mesmaNome && mesmaData && mesmoValor) { achado = g; break; }
     }
     if (achado) {
       achado.itens.push(l);
