@@ -1992,9 +1992,6 @@ function parseCCCaixaCSV(text) {
 }
 
 function parseFaturaCaixa(text) {
-  // Parser para fatura PDF Cartões Caixa
-  // Suporta múltiplos cartões, compras à vista e parceladas
-  // Lida com colunas separadas (desc/cidade/valor em linhas distintas)
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
   const fullText = lines.join('\n');
 
@@ -2002,49 +1999,62 @@ function parseFaturaCaixa(text) {
   const mv = fullText.match(/VENCIMENTO\s+(\d{2})\/(\d{2})\/(\d{4})/i);
   const anoRef     = mv ? parseInt(mv[3]) : new Date().getFullYear();
   const mesVencNum = mv ? parseInt(mv[2]) : new Date().getMonth() + 1;
-  const mm_venc    = String(mesVencNum).padStart(2,'0');
 
-  // Encontrar início do Demonstrativo
+  // Encontrar Demonstrativo e fim
   const demo_idx = lines.findIndex(l => l === 'Demonstrativo');
   if (demo_idx < 0) return [];
-
-  // end_idx: linha com "Valor total desta fatura R$..." (com valor), não o cabeçalho
-  const end_idx = lines.findIndex((l,i) => i > demo_idx && /Valor total desta fatura\s+R\$/i.test(l));
+  const end_idx = lines.findIndex((l,i) => i > demo_idx &&
+    /Valor total desta fatura\s+R\$/.test(l));
   const endLine = end_idx >= 0 ? end_idx : lines.length;
 
-  // Mapear seções COMPRAS e portadores
+  // Coletar TODOS os blocos de valores (valor numérico + D/C)
+  // Cada bloco "Crédito/Débito R$" inicia uma sequência de valores
+  const allValBlocks = [];
+  for (let i = demo_idx; i < endLine + 30 && i < lines.length; i++) {
+    if (/^Crédito\/Débito R\$/.test(lines[i])) {
+      const vals = [];
+      for (let j = i+1; j < i+30 && j < lines.length; j++) {
+        const mv2 = lines[j].match(/^([\d.]+,\d{2})\s*([DC])$/);
+        if (mv2) {
+          let v = parseFloat(mv2[1].replace(/\./g,'').replace(',','.'));
+          if (mv2[2] === 'D') v = -v;
+          vals.push(Math.round(v * 100) / 100);
+        } else if (vals.length > 0 && !/^[\d.]+,\d{2}/.test(lines[j]) &&
+                   /^[A-Z]/.test(lines[j] || '')) break;
+      }
+      if (vals.length) allValBlocks.push({ lineIdx: i, vals });
+    }
+    // Também coletar blocos sem cabeçalho (parceladas que vêm antes)
+  }
+
+  // Mapear seções de lançamentos
   const sections = [];
   let portador = '';
   for (let i = demo_idx; i < endLine; i++) {
     const l = lines[i];
-    const mp = l.match(/^([A-ZÁÀÃÂÉÊÍÓÔÕÚÇ][A-Za-záàãâéêíóôõúç\s]+?)\s*\(Cart[aã]o\s+(\d+)\)$/i);
-    if (mp && !/COMPRAS|Total/i.test(mp[1])) {
+    const mp = l.match(/^([A-ZÁÀÃÂÉÊÍÓÔÕÚÇ][A-Za-záàãâéêíóôõúç\s]+?)\s*\(Cart[aã]o\s+(\d+)\)/);
+    if (mp && !/COMPRAS|Total/i.test(mp[1]))
       portador = `${mp[1].trim()} (Final ${mp[2]})`;
-    }
-    if (/COMPRAS\s*\(/i.test(l) && !/COMPRAS PARCELADAS/i.test(l)) {
+    if (/COMPRAS\s*\(/i.test(l) && !/COMPRAS PARCELADAS/i.test(l))
       sections.push({ idx: i, portador, tipo: 'compras' });
-    } else if (/COMPRAS PARCELADAS\s*\(/i.test(l)) {
+    else if (/COMPRAS PARCELADAS\s*\(/i.test(l))
       sections.push({ idx: i, portador, tipo: 'parceladas' });
-    }
   }
 
   const result = [];
-
-  function removerEspacos(s) { return s.replace(/\s{2,}/g,' ').trim(); }
-  function autoClassificar(desc) { return null; } // classificação será feita pelo fluxo padrão
+  function cleanDesc(s) { return s.replace(/\s{2,}/g,' ').trim(); }
 
   for (let si = 0; si < sections.length; si++) {
     const sec = sections[si];
-    const nextSecIdx = si + 1 < sections.length ? sections[si+1].idx : endLine;
-    const searchEnd  = Math.min(nextSecIdx + 5, endLine);
+    const nextSecIdx = si+1 < sections.length ? sections[si+1].idx : endLine;
 
-    // Encontrar "Total COMPRAS" desta seção (não do próximo cartão)
+    // Encontrar Total desta seção
     let totalIdx = nextSecIdx;
-    for (let i = sec.idx + 1; i < nextSecIdx; i++) {
+    for (let i = sec.idx+1; i < nextSecIdx; i++) {
       if (/^Total\s+COMPRAS/i.test(lines[i])) { totalIdx = i; break; }
     }
 
-    // Coletar lançamentos DD/MM entre sec.idx+1 e totalIdx
+    // Coletar lançamentos (linhas DD/MM DESCRIÇÃO)
     const lancList = [];
     let i = sec.idx + 1;
     while (i < totalIdx) {
@@ -2054,56 +2064,74 @@ function parseFaturaCaixa(text) {
       if (md) {
         lancList.push({ dia: md[1], mes: md[2], desc: md[3].trim() });
         i++;
-        // Pular cidade (linha curta sem data/valor/keyword)
+        // Pular cidade (próxima linha curta sem data/valor/keyword)
         if (i < totalIdx) {
           const nl = lines[i];
           if (!/^\d{2}\/\d{2}/.test(nl) && !/^[\d.]+,\d{2}/.test(nl) &&
-              !/^(Total|Cidade|Valor|Créd|Data)/i.test(nl)) { i++; }
+              !/^(Total|Cidade|Valor|Créd|Data)/i.test(nl)) i++;
         }
-      } else { i++; }
+      } else i++;
     }
-
     if (!lancList.length) continue;
 
-    // Localizar bloco de valores
-    let crIdx = -1, tfIdx = -1;
-    for (let j = totalIdx; j < searchEnd; j++) {
-      if (/^Crédito\/Débito R\$/.test(lines[j])) { crIdx = j; break; }
-    }
-    for (let j = totalIdx; j < searchEnd; j++) {
-      if (/^Total final/i.test(lines[j])) { tfIdx = j; break; }
-    }
+    // Encontrar o bloco de valores correspondente
+    // Para parceladas: procurar bloco com valores D entre totalIdx e nextSecIdx+10
+    // Para compras à vista: pode estar após todo o 2º cartão (layout 2 colunas)
+    let valores = [];
 
-    // Onde começam os valores e se precisa pular anuidade
-    const startVals   = crIdx >= 0 ? crIdx + 1 : tfIdx >= 0 ? tfIdx + 1 : totalIdx + 1;
-    const skipAnuidade = crIdx >= 0; // após Crédito/Débito R$, 1° valor é anuidade
-
-    const valores = [];
-    let skipped = !skipAnuidade;
-    for (let j = startVals; j < startVals + lancList.length + 3 && valores.length < lancList.length; j++) {
-      const mv2 = lines[j]?.match(/^([\d.]+,\d{2})\s*([DC])$/);
-      if (mv2) {
-        let v = parseFloat(mv2[1].replace(/\./g,'').replace(',','.'));
-        if (mv2[2] === 'D') v = -v;
-        if (!skipped) { skipped = true; continue; } // pular anuidade
-        valores.push(Math.round(v * 100) / 100);
+    if (sec.tipo === 'parceladas') {
+      // Valores das parceladas: linhas com valD imediatamente após Total COMPRAS PARCELADAS
+      for (let j = totalIdx + 1; j < totalIdx + 10 && j < endLine + 5; j++) {
+        const mv2 = lines[j]?.match(/^([\d.]+,\d{2})\s*([DC])$/);
+        if (mv2) {
+          let v = parseFloat(mv2[1].replace(/\./g,'').replace(',','.'));
+          if (mv2[2] === 'D') v = -v;
+          if (Math.abs(v) > 0) valores.push(Math.round(v*100)/100);
+        }
+      }
+      valores = valores.slice(0, lancList.length);
+    } else {
+      // Compras à vista: usar o bloco allValBlocks mais próximo APÓS totalIdx
+      // Pular 1 valor (anuidade) se o bloco tiver n+1 valores
+      let bestBlock = null;
+      // Procurar o bloco Crédito/Débito R$ mais próximo após totalIdx (pode estar longe)
+      for (let j = totalIdx; j < lines.length && j < endLine + 50; j++) {
+        if (/^Crédito\/Débito R\$/.test(lines[j])) {
+          // Coletar valores a partir de j+1
+          const rawVals = [];
+          for (let k = j+1; k < j+30 && k < lines.length; k++) {
+            const mv2 = lines[k].match(/^([\d.]+,\d{2})\s*([DC])$/);
+            if (mv2) {
+              let v = parseFloat(mv2[1].replace(/\./g,'').replace(',','.'));
+              if (mv2[2] === 'D') v = -v;
+              rawVals.push(Math.round(v*100)/100);
+            } else if (rawVals.length > 0 && /^[A-Za-z]/.test(lines[k]||'')) break;
+          }
+          // Pular 1 valor de anuidade (primeiro valor)
+          // Pular o primeiro valor (anuidade diferenciada)
+          const rawSkip = rawVals.slice(1);
+          const debitos = rawSkip.filter(v => v < 0);
+          if (debitos.length >= lancList.length) {
+            valores = debitos.slice(0, lancList.length);
+            break;
+          } else if (rawSkip.length >= lancList.length) {
+            valores = rawSkip.slice(0, lancList.length);
+            break;
+          }
+        }
       }
     }
 
-    // Correlacionar lançamentos com valores
+    // Correlacionar lançamentos ↔ valores
     lancList.forEach(({ dia, mes: mesComp, desc }, idx) => {
       const v = valores[idx] != null ? valores[idx] : null;
       if (v == null) return;
-
-      // Tratar parcelas "NOME  NN DE NN"
       const mp2 = desc.match(/^(.+?)\s+(\d{2})\s+DE\s+(\d{2})\s*$/i);
       const descFinal = mp2
-        ? `${removerEspacos(mp2[1])} (Parc ${mp2[2]}/${mp2[3]})`
-        : removerEspacos(desc);
-
+        ? `${cleanDesc(mp2[1])} (Parc ${mp2[2]}/${mp2[3]})`
+        : cleanDesc(desc);
       const anoComp = parseInt(mesComp) > mesVencNum + 2 ? anoRef - 1 : anoRef;
       const mesStr  = `${mesComp}/${anoComp}`;
-
       result.push({
         id: `cc_caixa_${Date.now()}_${si}_${idx}`,
         lancamento: descFinal,
@@ -2118,9 +2146,9 @@ function parseFaturaCaixa(text) {
       });
     });
   }
-
   return result;
 }
+
 
 function parseFaturaGenerica(text) {
   // Tenta pegar linhas com padrão: data + descrição + valor
