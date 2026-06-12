@@ -2142,7 +2142,7 @@ function parseFaturaCaixa(text) {
         categoria: null,
         fonte: 'CC',
         portador: sec.portador,
-        razaoSocial: descFinal,
+        razaoSocial: descFinal.replace(/\s*\(Parc.*?\)\s*$/i, '').trim(),
       });
     });
   }
@@ -3416,7 +3416,8 @@ function ccrCatInput(fieldId, catAtual, onchangeFn, extraStyle) {
 function ccrAgrupar(lancs) {
   const grupos = [];
   for (const l of lancs) {
-    const nome = l.lancamento || l.razaoSocial || '';
+    // Usar razaoSocial (sem portador) para agrupamento — evita agrupar por 'Cartão 9284'
+    const nome = l.razaoSocial || l.lancamento || '';
     let achado = null;
     for (const g of grupos) {
       if (tokenSim(nome, g.nomeRef) >= 0.45) { achado = g; break; }
