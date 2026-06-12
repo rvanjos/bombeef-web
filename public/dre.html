@@ -7194,6 +7194,52 @@ function _cfSituacaoBadge(s) {
   }[s] || '');
 }
 
+
+// ── Corrigir meses das faturas CC já importadas ──────────────────────────────
+function corrigirMesesCC() {
+  // Extrair o mês correto do faturaCC (ex: CC_05_2026_Caixa → 05/2026)
+  let corrigidos = 0;
+  let semId = 0;
+
+  TXS.forEach(t => {
+    if (t.fonte !== 'CC' || !t.faturaCC) return;
+
+    // Extrair mês do faturaId: CC_MM_YYYY ou CC_MM_YYYY_Bandeira
+    const m = t.faturaCC.match(/CC_(\d{2})_(\d{4})/);
+    if (!m) { semId++; return; }
+
+    const mesCerto = `${m[1]}/${m[2]}`;
+
+    // Corrigir mesCaixa se estiver diferente
+    if (t.mesCaixa !== mesCerto) {
+      t.mesCaixa = mesCerto;
+      corrigidos++;
+    }
+  });
+
+  if (corrigidos === 0 && semId === 0) {
+    toast('✅ Todos os lançamentos CC já estão com o mês correto.');
+    return;
+  }
+
+  if (corrigidos > 0) {
+    toast(`✅ ${corrigidos} lançamento(s) corrigido(s). Salvando…`);
+    // Salvar a sessão automaticamente
+    setTimeout(() => {
+      const btnSalvar = document.querySelector('[onclick*="salvarSessao"]') ||
+                        document.getElementById('btn-salvar');
+      if (btnSalvar) btnSalvar.click();
+      else if (typeof salvarSessao === 'function') salvarSessao();
+    }, 300);
+    renderStatusCartoes();
+    render();
+  }
+
+  if (semId > 0) {
+    console.warn(`[corrigirMesesCC] ${semId} lançamento(s) CC sem faturaCC reconhecível`);
+  }
+}
+
 </script>
 <!-- Modal Drill-Down DRE -->
 <div class="mbg" id="m-drill" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center">
@@ -7324,7 +7370,8 @@ function _cfSituacaoBadge(s) {
       <button class="cf-filtro-btn" onclick="cfFiltrar('CLASSIFICADA',this)">🔵 Classificadas</button>
       <button class="cf-filtro-btn" onclick="cfFiltrar('PAGA',this)">✅ Pagas</button>
       <button class="cf-filtro-btn" onclick="cfFiltrar('DUP',this)">⚠️ Duplicadas/Reprocessadas</button>
-      <button onclick="carregarCartaoFaturas()" style="margin-left:auto;padding:4px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:11px;cursor:pointer;font-family:'DM Sans',sans-serif">🔄</button>
+      <button onclick="corrigirMesesCC()" style="margin-left:4px;padding:4px 10px;background:#fef3c7;border:1px solid #fde68a;border-radius:6px;font-size:11px;cursor:pointer;font-family:'DM Sans',sans-serif;color:#92400e" title="Corrigir meses das faturas CC já importadas">🔧 Corrigir meses</button>
+        <button onclick="carregarCartaoFaturas()" style="margin-left:auto;padding:4px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:11px;cursor:pointer;font-family:'DM Sans',sans-serif">🔄</button>
     </div>
 
     <!-- Tabela -->
