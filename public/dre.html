@@ -1654,7 +1654,7 @@ async function confirmarImportCC() {
     const firstLine = (csvText.charCodeAt(0) === 0xFEFF ? csvText.slice(1) : csvText)
       .split(/\r?\n/)[0].toLowerCase();
 
-    if (firstLine.includes('cartao_final') || firstLine.includes('natureza')) {
+    if (firstLine.includes('cartao_final') || firstLine.includes('natureza') || firstLine.includes('data_lancamento')) {
       lancs = parseCCCaixaCSV(csvText);
       if (lancs.length) toast(`💳 CSV Caixa: ${lancs.length} lançamentos`);
     } else if (firstLine.includes('data de compra') || firstLine.includes('final do cart')) {
@@ -1919,15 +1919,15 @@ function parseCCCaixaCSV(text) {
 
   // Verificar cabeçalho esperado
   const header = lines[0].toLowerCase();
-  if (!header.includes('data') || !header.includes('descricao')) return [];
+  if (!header.includes('data') && !header.includes('natureza') && !header.includes('cartao')) return [];
 
   const cols = lines[0].split(';').map(c => c.trim().toLowerCase()
     .normalize('NFD').replace(/[̀-ͯ]/g,''));
-  const iData    = cols.findIndex(c => c === 'data');
+  const iData    = cols.findIndex(c => c === 'data' || c.startsWith('data_lanc') || c.startsWith('data_comp'));
   const iCartao  = cols.findIndex(c => c.includes('cartao'));
   const iTipo    = cols.findIndex(c => c === 'tipo');
   const iDesc    = cols.findIndex(c => c.includes('descricao') || c === 'descricao');
-  const iCidade  = cols.findIndex(c => c === 'cidade');
+  const iCidade  = cols.findIndex(c => c === 'cidade' || c.startsWith('cidade'));
   const iParcela = cols.findIndex(c => c === 'parcela');
   const iValor   = cols.findIndex(c => c === 'valor');
   const iNat     = cols.findIndex(c => c === 'natureza');
