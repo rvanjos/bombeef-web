@@ -3708,10 +3708,13 @@ function ccrFaturasImportadas() {
   const map = {};
   TXS.filter(t => t.faturaCC).forEach(t => {
     if (!map[t.faturaCC]) {
+      // Extrair mês do faturaId: CC_05_2026_Caixa → 05/2026
+      const mMatch = t.faturaCC.match(/CC_(\d{2})_(\d{4})/);
+      const mesFromId = mMatch ? `${mMatch[1]}/${mMatch[2]}` : null;
       map[t.faturaCC] = {
         faturaId: t.faturaCC,
         bandeira: t.bandeira || '—',
-        mes: t.mesCaixa || t.mes,
+        mes: mesFromId || t.mesCaixa || t.mes,
         total: 0,
         n: 0
       };
