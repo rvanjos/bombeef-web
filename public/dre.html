@@ -3416,11 +3416,15 @@ function ccrCatInput(fieldId, catAtual, onchangeFn, extraStyle) {
 function ccrAgrupar(lancs) {
   const grupos = [];
   for (const l of lancs) {
-    // Usar razaoSocial (sem portador) para agrupamento — evita agrupar por 'Cartão 9284'
+    // Usar razaoSocial (sem portador/parcela) para comparação de nome
     const nome = l.razaoSocial || l.lancamento || '';
     let achado = null;
     for (const g of grupos) {
-      if (tokenSim(nome, g.nomeRef) >= 0.45) { achado = g; break; }
+      // Só agrupa se: nome similar E mesma data (mesma compra)
+      // Datas diferentes = compras distintas, mesmo que mesmo estabelecimento
+      const mesmaNome = tokenSim(nome, g.nomeRef) >= 0.45;
+      const mesmaData = g.itens[0]?.data === l.data;
+      if (mesmaNome && mesmaData) { achado = g; break; }
     }
     if (achado) {
       achado.itens.push(l);
