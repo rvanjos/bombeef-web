@@ -4055,10 +4055,18 @@ function renderStatusCartoes() {
   }
 
   grid.innerHTML = Object.values(porBandeira).map(b => {
-    const fatList = b.faturas.sort((a,z) => (z.mes||'').localeCompare(a.mes||''));
+    // Consolidar meses duplicados (mesma fatura importada de formas diferentes)
+    const _mesMapa = {};
+    b.faturas.forEach(f => {
+      const key = f.mes || '—';
+      if (!_mesMapa[key]) _mesMapa[key] = { ...f, faturaIds: [f.faturaId] };
+      else { _mesMapa[key].n += f.n; _mesMapa[key].total += f.total; _mesMapa[key].faturaIds.push(f.faturaId); }
+    });
+    const fatList = Object.values(_mesMapa).sort((a,z) => (z.mes||'').localeCompare(a.mes||''));
     const cards = fatList.map(f => {
-      const classif = TXS.filter(t => t.faturaCC === f.faturaId && t.categoria).length;
-      const total   = TXS.filter(t => t.faturaCC === f.faturaId).length;
+      const _ids = f.faturaIds || [f.faturaId];
+      const classif = TXS.filter(t => _ids.includes(t.faturaCC) && t.categoria).length;
+      const total   = TXS.filter(t => _ids.includes(t.faturaCC)).length;
       const pct     = total > 0 ? Math.round(classif/total*100) : 0;
       const cor     = pct >= 100 ? '#16a34a' : pct > 0 ? '#d97706' : '#6b7280';
       const badge   = pct >= 100 ? '✅' : pct > 0 ? '⏳' : '—';
@@ -4215,30 +4223,65 @@ function renderStatusCartoes() {
 
 // Verifica se itens de fatura CC já constam no extrato (duplicata)
 function _verificarDuplicatasFaturaCC() {
-  // Pega todos os lançamentos de origem CC (fatura importada)
-  const txsCC = TXS.filter(t => t.fonte === 'CC' && t.categoria && !t.ignorar);
+  const txsCC = TXS.filter(t => t.fonte === 'CC' && !t.ignorar);
   if (!txsCC.length) return null;
-
-  // Para cada lançamento CC, verifica se há extrato com mesmo valor e data próxima
-  const duplicatas = [];
+  const dups = [];
   for (const t of txsCC) {
     const val = Math.abs(parseFloat(t.valor||0));
-    if (val < 10) continue; // ignora valores muito pequenos
+    if (val < 10) continue;
     const dtBase = t.data ? new Date(t.data) : null;
     const dup = TXS.find(x => {
       if (x.id === t.id || x.fonte === 'CC' || x.ignorar) return false;
       if (Math.abs(Math.abs(parseFloat(x.valor||0)) - val) > val * 0.02) return false;
-      // Verifica se não é pagamento de fatura (que é o comportamento correto)
-      if (x.categoria === 'Pagamento de Fatura CC' || x.categoria === 'Pagamento de Cartão') return false;
+      if (['Pagamento de Fatura CC','Pagamento de Cartão'].includes(x.categoria)) return false;
       if (x.vinculadoFaturaCC) return false;
       if (!dtBase || !x.data) return false;
-      const dtX = new Date(x.data);
-      return Math.abs(dtX - dtBase) < 7 * 86400000; // ±7 dias
+      return Math.abs(new Date(x.data) - dtBase) < 7 * 86400000;
     });
-    if (dup) duplicatas.push(`${t.lancamento||t.razaoSocial||'?'} (${fmt.brl(val)}) aparece na fatura CC e no extrato`);
-    if (duplicatas.length >= 3) break;
+    if (dup) dups.push({ cc: t, ext: dup });
+    if (dups.length >= 5) break;
   }
-  return duplicatas.length ? duplicatas.join('<br>') : null;
+  if (!dups.length) return null;
+  // Renderizar como lista acionável
+  return dups.map(({cc, ext}) => {
+    const val = fmt.brl(Math.abs(parseFloat(cc.valor||0)));
+    const nome = cc.razaoSocial || cc.lancamento || '?';
+    return `<div style="margin-bottom:6px;padding:6px 8px;background:#fff;border-radius:6px;border:1px solid #ffc107">
+      <div style="font-size:11px;font-weight:700">${nome} — ${val}</div>
+      <div style="font-size:10px;color:#666;margin:2px 0">
+        💳 Fatura: ${cc.data||'?'} · ${cc.lancamento||'?'}<br>
+        🏦 Extrato: ${ext.data||'?'} · ${ext.lancamento||'?'}
+      </div>
+      <div style="display:flex;gap:6px;margin-top:5px">
+        <button onclick="_resolverDup('manter_cc','${cc.id}','${ext.id}')"
+          style="padding:3px 8px;font-size:10px;border-radius:5px;cursor:pointer;background:#dcfce7;border:1px solid #86efac;color:#166534;font-family:'DM Sans',sans-serif">
+          ✅ Manter fatura CC, ignorar extrato
+        </button>
+        <button onclick="_resolverDup('manter_ext','${cc.id}','${ext.id}')"
+          style="padding:3px 8px;font-size:10px;border-radius:5px;cursor:pointer;background:#dbeafe;border:1px solid #93c5fd;color:#1e40af;font-family:'DM Sans',sans-serif">
+          🏦 Manter extrato, ignorar fatura
+        </button>
+        <button onclick="_resolverDup('ambos','${cc.id}','${ext.id}')"
+          style="padding:3px 8px;font-size:10px;border-radius:5px;cursor:pointer;background:#f3f4f6;border:1px solid #d1d5db;color:#374151;font-family:'DM Sans',sans-serif">
+          ⚠️ São diferentes, manter os dois
+        </button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function _resolverDup(acao, idCC, idExt) {
+  const txCC  = TXS.find(t => t.id === idCC);
+  const txExt = TXS.find(t => t.id === idExt);
+  if (acao === 'manter_cc' && txExt)  { txExt.ignorar = true; txExt.categoria = 'NAO_OPER'; }
+  if (acao === 'manter_ext' && txCC)  { txCC.ignorar = true; }
+  if (acao === 'ambos') {
+    if (txCC)  txCC._dupResolvido  = true;
+    if (txExt) txExt._dupResolvido = true;
+  }
+  renderStatusCartoes();
+  render();
+  toast('✅ Duplicata resolvida');
 }
 
 // ── SIDEBAR DE FILTROS ───────────────────────────────────────────────────────
