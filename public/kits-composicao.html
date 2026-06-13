@@ -655,6 +655,7 @@ function renderK(lista){
     <td style="font-size:12px;color:${k._statusCor};font-weight:600">${k._status} ${k._marg?`(${k._marg}%)`:'—'}</td>
     <td style="font-size:12px">${(k.itens||[]).length}</td>
     <td onclick="event.stopPropagation()">
+      <button class="act" onclick="verItensKit('${k.id}','${(k.nome||k.codigo||'').replace(/'/g,'')}')" title="Ver itens">🔍</button>
       <button class="act" onclick="abrirKit('${k.id}')">✏️</button>
       <button class="act" onclick="excluirKit('${k.id}')" style="color:var(--red-l)">🗑</button>
     </td>
@@ -689,6 +690,8 @@ function renderK(lista){
         <div style="display:flex;gap:6px">
           <button onclick="event.stopPropagation();excluirKit('${k.id}')"
             style="background:#fee2e2;border:none;border-radius:7px;padding:6px 10px;cursor:pointer;font-size:13px">🗑</button>
+          <button onclick="event.stopPropagation();verItensKit('${k.id}','${(k.nome||k.codigo||'').replace(/'/g,'')}')"
+            style="background:#dbeafe;border:none;border-radius:7px;padding:6px 10px;cursor:pointer;font-size:13px">🔍</button>
           <button onclick="event.stopPropagation();abrirKit('${k.id}')"
             style="background:var(--red);border:none;border-radius:7px;padding:6px 14px;cursor:pointer;font-size:13px;color:#fff;font-weight:600">
             Abrir →
@@ -699,30 +702,52 @@ function renderK(lista){
   }).join('');
 }
 
-function abrirKit(id){
-  const k=id?kits.find(x=>x.id==id):null;
-  document.getElementById('kit-t').textContent=k?'Editar Kit':'Novo Kit';
-  document.getElementById('k-id').value=k?.id||'';
-  document.getElementById('k-cod').value=k?.codigo||'';
-  document.getElementById('k-nome').value=k?.nome||'';
-  document.getElementById('k-desc').value=k?.descricao||'';
-  document.getElementById('k-pvenda').value=k?.preco_venda||'';
-  kitItems=k?.itens?k.itens.map(i=>{
-    // Tenta buscar precoVenda do catálogo local
-    const prod = prods.find(p => String(p.codigo||'') === String(i.codigo_produto||''));
-    return {
-      codigo:       i.codigo_produto||'',
-      descricao:    i.descricao_produto||i.prod_desc||'',
-      quantidade:   i.quantidade||1,
-      precoCusto:   i.preco_custo_unitario||0,
-      precoVenda:   parseFloat(prod?.preco_venda||i.preco_venda_atual||0),
-      ignorarMargem:!!i.ignorar_margem,
-      custoKit:     i.custo_kit!=null?parseFloat(i.custo_kit):null
-    };
-  }):[];
+async function abrirKit(id){
+  document.getElementById('m-kit').classList.add('open');
+  document.getElementById('kit-t').textContent = id ? 'Editar Kit' : 'Novo Kit';
+
+  // Resetar campos enquanto carrega
+  document.getElementById('k-id').value = '';
+  document.getElementById('k-cod').value = '';
+  document.getElementById('k-nome').value = '';
+  document.getElementById('k-desc').value = '';
+  document.getElementById('k-pvenda').value = '';
+  kitItems = [];
+  renderKitItems();
+
+  if (id) {
+    try {
+      // Buscar kit COM itens via GET /:id
+      const d = await api.get(`/api/kits/${id}`);
+      if (!d.ok) { toast('Erro ao carregar kit'); return; }
+      const k = d.data;
+
+      document.getElementById('k-id').value    = k.id;
+      document.getElementById('k-cod').value   = k.codigo || '';
+      document.getElementById('k-nome').value  = k.nome || '';
+      document.getElementById('k-desc').value  = k.descricao || '';
+      document.getElementById('k-pvenda').value = k.preco_venda || '';
+
+      kitItems = (k.itens || []).map(i => {
+        const prod = prods.find(p => String(p.codigo||'') === String(i.codigo_produto||''));
+        return {
+          codigo:        i.codigo_produto || '',
+          descricao:     i.descricao_produto || i.prod_desc || '',
+          quantidade:    i.quantidade || 1,
+          precoCusto:    i.preco_custo_unitario || 0,
+          precoVenda:    parseFloat(prod?.preco_venda || i.preco_venda_atual || 0),
+          ignorarMargem: !!i.ignorar_margem,
+          custoKit:      i.custo_kit != null ? parseFloat(i.custo_kit) : null,
+          estoque:       prod?.estoque ?? null,
+        };
+      });
+    } catch(e) {
+      toast('Erro ao carregar kit: ' + e.message);
+    }
+  }
+
   atualizarCfgKit();
   renderKitItems();
-  document.getElementById('m-kit').classList.add('open');
 }
 function fecharKit(){document.getElementById('m-kit').classList.remove('open');}
 
@@ -1038,6 +1063,123 @@ async function excluirKit(id){
 }
 
 // ── Configuração ───────────────────────────────────────────────────────────
+</script>
+<!-- Modal Ver Itens do Kit -->
+<div id="m-ver-kit" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:900;align-items:center;justify-content:center;padding:16px">
+  <div style="background:#fff;border-radius:14px;width:100%;max-width:560px;max-height:85vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+    <div style="background:var(--red);padding:14px 18px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+      <div>
+        <div id="ver-kit-titulo" style="color:#fff;font-size:14px;font-weight:700">Composição do Kit</div>
+        <div id="ver-kit-sub" style="color:rgba(255,255,255,.75);font-size:11px;margin-top:1px"></div>
+      </div>
+      <button onclick="fecharVerKit()" style="background:none;border:none;color:rgba(255,255,255,.8);font-size:22px;cursor:pointer;line-height:1">×</button>
+    </div>
+    <div style="overflow-y:auto;flex:1;min-height:0">
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead>
+          <tr style="background:var(--bg)">
+            <th style="padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">Produto</th>
+            <th style="padding:8px 12px;text-align:right;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">Qtd</th>
+            <th style="padding:8px 12px;text-align:right;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">Custo/un</th>
+            <th style="padding:8px 12px;text-align:right;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">Subtotal</th>
+          </tr>
+        </thead>
+        <tbody id="ver-kit-itens"></tbody>
+        <tfoot id="ver-kit-foot"></tfoot>
+      </table>
+    </div>
+    <div style="padding:12px 16px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
+      <div id="ver-kit-info" style="font-size:11px;color:var(--muted)"></div>
+      <div style="display:flex;gap:8px">
+        <button onclick="verKitEditar()" style="padding:7px 16px;background:var(--bg);border:1px solid var(--border);border-radius:7px;font-size:12px;cursor:pointer;font-family:inherit">✏️ Editar</button>
+        <button onclick="fecharVerKit()" style="padding:7px 16px;background:var(--red);color:#fff;border:none;border-radius:7px;font-size:12px;cursor:pointer;font-family:inherit">Fechar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let _verKitId = null;
+
+async function verItensKit(id, nome) {
+  _verKitId = id;
+  const m = document.getElementById('m-ver-kit');
+  m.style.display = 'flex';
+  document.getElementById('ver-kit-titulo').textContent = nome || 'Composição do Kit';
+  document.getElementById('ver-kit-sub').textContent = 'Carregando…';
+  document.getElementById('ver-kit-itens').innerHTML = '';
+  document.getElementById('ver-kit-foot').innerHTML = '';
+  document.getElementById('ver-kit-info').textContent = '';
+
+  try {
+    const d = await api.get(`/api/kits/${id}`);
+    if (!d.ok) throw new Error(d.erro || 'Erro ao carregar');
+    const k = d.data;
+    const itens = k.itens || [];
+
+    document.getElementById('ver-kit-titulo').textContent = k.nome || k.codigo || nome;
+    document.getElementById('ver-kit-sub').textContent =
+      `Código: ${k.codigo || '—'} · ${itens.length} item(ns)`;
+
+    const brl = v => 'R$ ' + parseFloat(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:4});
+
+    if (!itens.length) {
+      document.getElementById('ver-kit-itens').innerHTML =
+        '<tr><td colspan="4" style="padding:24px;text-align:center;color:var(--muted)">Nenhum item cadastrado</td></tr>';
+    } else {
+      let totalCusto = 0;
+      document.getElementById('ver-kit-itens').innerHTML = itens.map(it => {
+        const qtd      = parseFloat(it.quantidade || 1);
+        const custo    = parseFloat(it.preco_custo_unitario || 0);
+        const subtotal = qtd * custo;
+        totalCusto += subtotal;
+        return `<tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:8px 12px">
+            <div style="font-weight:600;color:var(--text)">${it.descricao_produto || it.prod_desc || '—'}</div>
+            <div style="font-size:10px;color:var(--muted);font-family:'DM Mono',monospace">${it.codigo_produto || ''}</div>
+            ${it.unidade ? `<div style="font-size:10px;color:var(--muted)">${it.unidade}</div>` : ''}
+          </td>
+          <td style="padding:8px 12px;text-align:right;font-family:'DM Mono',monospace;font-weight:700">${parseFloat(qtd).toLocaleString('pt-BR',{maximumFractionDigits:3})}</td>
+          <td style="padding:8px 12px;text-align:right;font-family:'DM Mono',monospace">${brl(custo)}</td>
+          <td style="padding:8px 12px;text-align:right;font-family:'DM Mono',monospace;font-weight:700;color:var(--orange)">${brl(subtotal)}</td>
+        </tr>`;
+      }).join('');
+
+      const pvenda = parseFloat(k.preco_venda || 0);
+      const margem = pvenda > 0 ? ((pvenda - totalCusto) / pvenda * 100).toFixed(1) : null;
+      document.getElementById('ver-kit-foot').innerHTML = `
+        <tr style="background:var(--bg)">
+          <td colspan="3" style="padding:10px 12px;font-weight:700;font-size:12px">Custo Total</td>
+          <td style="padding:10px 12px;text-align:right;font-weight:800;font-size:13px;font-family:'DM Mono',monospace;color:#dc2626">${brl(totalCusto)}</td>
+        </tr>
+        ${pvenda > 0 ? `<tr>
+          <td colspan="3" style="padding:6px 12px;font-size:11px;color:var(--muted)">Preço de venda</td>
+          <td style="padding:6px 12px;text-align:right;font-family:'DM Mono',monospace;color:#16a34a;font-weight:700">${brl(pvenda)}</td>
+        </tr>
+        ${margem ? `<tr>
+          <td colspan="3" style="padding:6px 12px;font-size:11px;color:var(--muted)">Margem estimada</td>
+          <td style="padding:6px 12px;text-align:right;font-family:'DM Mono',monospace;font-weight:700;color:${parseFloat(margem)>0?'#16a34a':'#dc2626'}">${margem}%</td>
+        </tr>` : ''}` : ''}`;
+    }
+
+    document.getElementById('ver-kit-info').textContent =
+      k.descricao ? k.descricao : '';
+  } catch(e) {
+    document.getElementById('ver-kit-itens').innerHTML =
+      `<tr><td colspan="4" style="padding:24px;text-align:center;color:#dc2626">❌ ${e.message}</td></tr>`;
+  }
+}
+
+function fecharVerKit() {
+  document.getElementById('m-ver-kit').style.display = 'none';
+  _verKitId = null;
+}
+
+async function verKitEditar() {
+  const id = _verKitId;
+  fecharVerKit();
+  if (id) await abrirKit(id);
+}
 </script>
 </body>
 </html>
