@@ -702,53 +702,33 @@ function renderK(lista){
   }).join('');
 }
 
-async function abrirKit(id){
-  document.getElementById('m-kit').classList.add('open');
-  document.getElementById('kit-t').textContent = id ? 'Editar Kit' : 'Novo Kit';
-
-  // Resetar campos enquanto carrega
-  document.getElementById('k-id').value = '';
-  document.getElementById('k-cod').value = '';
-  document.getElementById('k-nome').value = '';
-  document.getElementById('k-desc').value = '';
-  document.getElementById('k-pvenda').value = '';
-  kitItems = [];
-  renderKitItems();
-
-  if (id) {
-    try {
-      // Buscar kit COM itens via GET /:id
-      const d = await api.get(`/api/kits/${id}`);
-      if (!d.ok) { toast('Erro ao carregar kit'); return; }
-      const k = d.data;
-
-      document.getElementById('k-id').value    = k.id;
-      document.getElementById('k-cod').value   = k.codigo || '';
-      document.getElementById('k-nome').value  = k.nome || '';
-      document.getElementById('k-desc').value  = k.descricao || '';
-      document.getElementById('k-pvenda').value = k.preco_venda || '';
-
-      kitItems = (k.itens || []).map(i => {
-        const prod = prods.find(p => String(p.codigo||'') === String(i.codigo_produto||''));
-        return {
-          codigo:        i.codigo_produto || '',
-          descricao:     i.descricao_produto || i.prod_desc || '',
-          quantidade:    i.quantidade || 1,
-          precoCusto:    i.preco_custo_unitario || 0,
-          precoVenda:    parseFloat(prod?.preco_venda || i.preco_venda_atual || 0),
-          ignorarMargem: !!i.ignorar_margem,
-          custoKit:      i.custo_kit != null ? parseFloat(i.custo_kit) : null,
-          estoque:       prod?.estoque ?? null,
-        };
-      });
-    } catch(e) {
-      toast('Erro ao carregar kit: ' + e.message);
-    }
-  }
-
+function abrirKit(id){
+  const k=id?kits.find(x=>x.id==id||x.id==parseInt(id)):null;
+  document.getElementById('kit-t').textContent=k?'Editar Kit':'Novo Kit';
+  document.getElementById('k-id').value=k?.id||'';
+  document.getElementById('k-cod').value=k?.codigo||'';
+  document.getElementById('k-nome').value=k?.nome||'';
+  document.getElementById('k-desc').value=k?.descricao||'';
+  document.getElementById('k-pvenda').value=k?.preco_venda||'';
+  kitItems=k?.itens?k.itens.map(i=>{
+    const prod = prods.find(p => String(p.codigo||'') === String(i.codigo_produto||''));
+    return {
+      codigo:       i.codigo_produto||'',
+      descricao:    i.descricao_produto||i.prod_desc||'',
+      quantidade:   i.quantidade||1,
+      precoCusto:   i.preco_custo_unitario||0,
+      precoVenda:   parseFloat(prod?.preco_venda||i.preco_venda_atual||0),
+      ignorarMargem:!!i.ignorar_margem,
+      custoKit:     i.custo_kit!=null?parseFloat(i.custo_kit):null,
+      estoque:      prod?.estoque??null,
+    };
+  }):[];
   atualizarCfgKit();
   renderKitItems();
+  document.getElementById('m-kit').classList.add('open');
 }
+
+
 function fecharKit(){document.getElementById('m-kit').classList.remove('open');}
 
 function atualizarCfgKit(){
@@ -1178,7 +1158,7 @@ function fecharVerKit() {
 async function verKitEditar() {
   const id = _verKitId;
   fecharVerKit();
-  if (id) await abrirKit(id);
+  if (id) abrirKit(id);
 }
 </script>
 </body>
