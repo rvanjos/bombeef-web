@@ -707,36 +707,29 @@ function renderK(lista){
 }
 
 function abrirKit(id){
-  try {
-    const k=id?kits.find(x=>x.id==id||x.id==parseInt(id)):null;
-    document.getElementById('kit-t').textContent=k?'Editar Kit':'Novo Kit';
-    document.getElementById('k-id').value=k?.id||'';
-    document.getElementById('k-cod').value=k?.codigo||'';
-    document.getElementById('k-nome').value=k?.nome||'';
-    document.getElementById('k-desc').value=k?.descricao||'';
-    document.getElementById('k-pvenda').value=k?.preco_venda||'';
-    kitItems=k?.itens?k.itens.map(i=>{
-      const prod = prods.find(p => String(p.codigo||'') === String(i.codigo_produto||''));
-      return {
-        codigo:       i.codigo_produto||'',
-        descricao:    i.descricao_produto||i.prod_desc||'',
-        quantidade:   i.quantidade||1,
-        precoCusto:   i.preco_custo_unitario||0,
-        precoVenda:   parseFloat(prod?.preco_venda||i.preco_venda_atual||0),
-        ignorarMargem:!!i.ignorar_margem,
-        custoKit:     i.custo_kit!=null?parseFloat(i.custo_kit):null,
-        estoque:      prod?.estoque??null,
-      };
-    }):[];
-    atualizarCfgKit();
-    renderKitItems();
-    document.getElementById('m-kit').classList.add('open');
-  } catch(e) {
-    console.error('[abrirKit] erro:', e);
-    // Abrir modal mesmo com erro parcial
-    document.getElementById('m-kit').classList.add('open');
-    if (typeof toast !== 'undefined') toast('⚠️ Erro ao carregar kit: ' + e.message);
-  }
+  const k=id?kits.find(x=>x.id==id||x.id==parseInt(id)):null;
+  document.getElementById('kit-t').textContent=k?'Editar Kit':'Novo Kit';
+  document.getElementById('k-id').value=k?.id||'';
+  document.getElementById('k-cod').value=k?.codigo||'';
+  document.getElementById('k-nome').value=k?.nome||'';
+  document.getElementById('k-desc').value=k?.descricao||'';
+  document.getElementById('k-pvenda').value=k?.preco_venda||'';
+  kitItems=k?.itens?k.itens.map(i=>{
+    const prod = prods.find(p => String(p.codigo||'') === String(i.codigo_produto||''));
+    return {
+      codigo:       i.codigo_produto||'',
+      descricao:    i.descricao_produto||i.prod_desc||'',
+      quantidade:   i.quantidade||1,
+      precoCusto:   i.preco_custo_unitario||0,
+      precoVenda:   parseFloat(prod?.preco_venda||i.preco_venda_atual||0),
+      ignorarMargem:!!i.ignorar_margem,
+      custoKit:     i.custo_kit!=null?parseFloat(i.custo_kit):null,
+      estoque:      prod?.estoque??null,
+    };
+  }):[];
+  atualizarCfgKit();
+  renderKitItems();
+  document.getElementById('m-kit').classList.add('open');
 }
 
 
