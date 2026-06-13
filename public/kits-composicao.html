@@ -254,12 +254,12 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
 
 <!-- Modal de Kit -->
 <div id="m-kit" class="mbg" onclick="if(event.target===this)fecharKit()">
-  <div style="background:#fff;border-radius:14px;width:100%;max-width:700px;padding:0;box-shadow:0 20px 60px rgba(0,0,0,.3);overflow:hidden">
+  <div style="background:#fff;border-radius:14px;width:100%;max-width:700px;padding:0;box-shadow:0 20px 60px rgba(0,0,0,.3);display:flex;flex-direction:column;max-height:92vh;">
     <div style="background:var(--red);padding:14px 20px;border-radius:14px 14px 0 0;display:flex;align-items:center;justify-content:space-between">
       <span id="kit-t" style="color:#fff;font-weight:700;font-size:14px">Novo Kit</span>
       <button onclick="fecharKit()" style="background:none;border:none;color:rgba(255,255,255,.8);font-size:20px;cursor:pointer;line-height:1">×</button>
     </div>
-    <div style="padding:18px 20px;overflow-y:auto;max-height:calc(90vh - 60px)">
+    <div style="padding:18px 20px;overflow-y:auto;flex:1;min-height:0;">
       <input type="hidden" id="k-id">
       <div style="display:grid;grid-template-columns:1fr 2fr;gap:10px;margin-bottom:12px">
         <div>
@@ -312,10 +312,13 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
         <div id="kc-result" style="margin-top:8px;font-size:12px;font-weight:700"></div>
         <div id="kc-status" style="margin-top:4px;font-size:11px;color:var(--muted)"></div>
       </div>
-      <!-- Botões de ação -->
-      <div id="promo-btns" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
+    </div>
+    <!-- Footer fixo fora do scroll -->
+    <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:space-between;align-items:center;flex-shrink:0;background:#fff;border-radius:0 0 14px 14px">
+      <div id="promo-btns" style="display:flex;gap:6px;flex-wrap:wrap;flex:1"></div>
+      <div style="display:flex;gap:8px;flex-shrink:0">
         <button onclick="fecharKit()" style="padding:7px 16px;background:#f3f4f6;color:#374151;border:1px solid var(--border);border-radius:7px;cursor:pointer;font-size:13px;font-family:inherit">Cancelar</button>
-        <button onclick="salvarKit()" style="padding:7px 16px;background:var(--red);color:#fff;border:none;border-radius:7px;cursor:pointer;font-size:13px;font-family:inherit;font-weight:600">💾 Salvar Kit</button>
+        <button onclick="salvarKit()" style="padding:7px 18px;background:var(--red);color:#fff;border:none;border-radius:7px;cursor:pointer;font-size:13px;font-family:inherit;font-weight:600">💾 Salvar Kit</button>
       </div>
     </div>
   </div>
