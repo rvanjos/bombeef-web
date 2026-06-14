@@ -65,7 +65,10 @@ tr[onclick]{touch-action:pan-y;-webkit-tap-highlight-color:rgba(0,0,0,0.05);}
 *{-webkit-overflow-scrolling:touch;}
 .tbl{width:100%;border-collapse:collapse;}
 .tbl th{background:#fdf6ee;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700;padding:9px 12px;text-align:left;border-bottom:2px solid var(--border);}
-.tbl td{padding:8px 12px;font-size:12px;border-bottom:1px solid #f5efe8;vertical-align:middle;}
+.tbl td{padding:6px 8px;font-size:12px;border-bottom:1px solid #f5efe8;vertical-align:middle;}
+  #tbl-val{table-layout:fixed;width:100%;}
+  #tbl-val th,#tbl-val td{padding:5px 7px;font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  #tbl-val td:nth-child(3){white-space:normal;max-width:160px;}
 /* Linhas coloridas por urgência — igual ao sistema anterior */
 .tbl tr.row-vencido td{background:#fff0f0!important;}
 .tbl tr.row-vencido:hover td{background:#ffe8e8!important;}
@@ -416,17 +419,17 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
       </div>
       <div style="overflow-x:auto"><table class="tbl" id="tbl-val">
         <thead><tr>
-          <th style="width:32px"><input type="checkbox" class="row-sel" id="val-sel-all" id2="sel-all" onchange="valToggleSelAll(this); toggleSelAll(this);" title="Selecionar todos"></th>
-          <th style="width:90px">Código</th>
+          <th style="width:28px"><input type="checkbox" class="row-sel" id="val-sel-all" id2="sel-all" onchange="valToggleSelAll(this); toggleSelAll(this);" title="Selecionar todos"></th>
+          <th style="width:70px">Código</th>
           <th>Descrição</th>
-          <th>Lote</th>
-          <th>Validade</th>
-          <th>Dias</th>
-          <th>Ação Prevista</th>
-          <th>Última Conf.</th>
-          <th>Responsável</th>
-          <th style="width:90px">Status</th>
-          <th>Ações</th>
+          <th style="width:70px">Lote</th>
+          <th style="width:80px">Validade</th>
+          <th style="width:44px">Dias</th>
+          <th style="width:90px">Ação Prev.</th>
+          <th style="width:80px">Últ. Conf.</th>
+          <th style="width:90px">Responsável</th>
+          <th style="width:80px">Status</th>
+          <th style="width:72px">Ações</th>
         </tr></thead>
         <tbody id="tbody-val"></tbody>
       </table></div>
@@ -1533,7 +1536,7 @@ function renderVal(lista){
         <td style="white-space:nowrap">
           <button class="act-btn" onclick="abrirModal(${v.id})" title="Editar">✏️</button>
           ${!v.codigo?`<button class="act-btn" onclick="abrirVincular(${v.id})" title="Vincular código">🔗</button>`:''}
-          <button class="act-btn" onclick="marcarVendidoRapido(${v.id})" style="background:#dcfce7;color:#166534;border:1px solid #86efac;padding:3px 8px;border-radius:5px;font-size:11px;font-weight:600" title="Marcar como vendido — não entra como perda">✅ Vendido</button>
+          <button class="act-btn" onclick="marcarVendidoRapido(${v.id})" style="background:#dcfce7;color:#166534;border:1px solid #86efac;padding:3px 6px;border-radius:5px;font-size:13px" title="Marcar como vendido — não entra como perda">✅</button>
           ${v.status!=='descartado'?`<button class="act-btn" onclick="perdaRapida(${v.id})" style="color:var(--red-l)" title="Registrar como perda/descarte">📉</button>`:''}
           <button class="act-btn" onclick="excluirItem(${v.id})" style="color:var(--muted);font-size:13px" title="Excluir">×</button>
         </td>
