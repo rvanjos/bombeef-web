@@ -6195,6 +6195,13 @@ function exportXLS(){
     /* Cabeçalho */
     .h-titulo { background:#8B0000; color:#fff; font-weight:bold; font-size:14pt; padding:10px 12px; }
     .h-col { background:#8B0000; color:#fff; font-weight:bold; text-align:center; }
+  /* Freeze primeira coluna do DRE renderizado */
+  .dre-freeze { position:sticky; left:0; z-index:3; }
+  .dre-freeze-hd { position:sticky; left:0; z-index:4; background:#8B0000; }
+  #dre-full-body table { border-collapse:collapse; }
+  .cat-row.left { background:var(--bg,#f7f4f0); }
+  .grp-row-hd { background:#8B0000; }
+  .sec-row-hd { background:#5a0000; }
     .h-col-tot { background:#5a2020; color:#fff; font-weight:bold; text-align:center; }
     /* Seção */
     .sec-label { background:#f7f4f0; color:#888; font-weight:bold; font-size:8pt; text-transform:uppercase; letter-spacing:1px; }
@@ -6226,7 +6233,7 @@ function exportXLS(){
   // Espaço
   html += `<tr><td colspan="${lastCol}" style="background:#fff5f5;height:4px"></td></tr>`;
   // Header colunas
-  html += `<tr><th class="h-col" style="text-align:left;min-width:300px">GRUPO / CATEGORIA</th>`;
+  html += `<tr><th class="h-col dre-freeze-hd" style="text-align:left;min-width:260px;max-width:260px">GRUPO / CATEGORIA</th>`;
   meses.forEach(m => { html += `<th class="h-col">${nomeMes(m)}</th>`; });
   if(showTot) html += `<th class="h-col-tot">TOTAL</th>`;
   html += `</tr>`;
@@ -6243,12 +6250,12 @@ function exportXLS(){
     const isDesp=gk!=='RECEITAS';
     const ghCls=gk==='RECEITAS'?'g-receitas':gk==='CMV'?'g-cmv':'g-oper';
     // Header grupo
-    html += `<tr><td colspan="${lastCol}" class="${ghCls}">&nbsp; ${label}</td></tr>`;
+    html += `<tr><td class="${ghCls} dre-freeze" style="min-width:260px;max-width:260px">&nbsp; ${label}</td>${Array(lastCol-1).fill("<td class=\"" + ghCls + "\"></td>").join("")}</tr>`;
     // Categorias
     for (const [cat,mD] of Object.entries(dataD[gk])) {
       const totC=Object.values(mD).reduce((s,v)=>s+v,0);
       html += `<tr>`;
-      html += `<td class="cat-row left">&nbsp;&nbsp;&nbsp;&nbsp;· ${cat}</td>`;
+      html += `<td class="cat-row left dre-freeze" style="min-width:260px;max-width:260px">&nbsp;&nbsp;&nbsp;&nbsp;· ${cat}</td>`;
       meses.forEach(m => {
         const v=mD[m]||0; const disp=isDesp?-Math.abs(v):v;
         const cls=v===0?'val-zero':disp>=0?'val-pos':'val-neg';
@@ -6263,7 +6270,7 @@ function exportXLS(){
     // Subtotal
     const totG=sgt(gk);
     html += `<tr>`;
-    html += `<td class="${stCls} left bold">▶ SUBTOTAL ${label}</td>`;
+    html += `<td class="${stCls} left bold dre-freeze" style="min-width:260px;max-width:260px">▶ SUBTOTAL ${label}</td>`;
     meses.forEach(m => {
       const v=sg(gk,m); const disp=isDesp?-Math.abs(v):v;
       html += `<td class="${stCls} mono">${v===0?'—':brl2(disp)}</td>`;
@@ -6278,13 +6285,13 @@ function exportXLS(){
   }
 
   function addSecLabelXLS(label) {
-    html += `<tr><td colspan="${lastCol}" class="sec-label">&nbsp;${label}</td></tr>`;
+    html += `<tr><td colspan="${lastCol}" class="sec-label dre-freeze" style="min-width:260px;max-width:260px">&nbsp;${label}</td></tr>`;
   }
 
   function addResultadoXLS(label, emoji, acumMes, cls, clsVal) {
     const tot=meses.reduce((s,m)=>s+(acumMes[m]||0),0);
     html += `<tr>`;
-    html += `<td class="${cls} left">${emoji} ${label}</td>`;
+    html += `<td class="${cls} left dre-freeze" style="min-width:260px;max-width:260px">${emoji} ${label}</td>`;
     meses.forEach(m => {
       const v=acumMes[m]||0;
       const vc = cls==='res-fin' ? (v>=0?'res-fin-val':'res-fin-neg') : cls;
