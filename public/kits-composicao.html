@@ -254,7 +254,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
 
 <!-- Modal de Kit -->
 <div id="m-kit" class="mbg" onclick="if(event.target===this)fecharKit()">
-  <div style="background:#fff;border-radius:14px;width:100%;max-width:700px;padding:0;box-shadow:0 20px 60px rgba(0,0,0,.3);display:flex;flex-direction:column;max-height:92vh;">
+  <div style="background:#fff;border-radius:14px;width:100%;max-width:960px;padding:0;box-shadow:0 20px 60px rgba(0,0,0,.3);display:flex;flex-direction:column;max-height:92vh;">
     <div style="background:var(--red);padding:14px 20px;border-radius:14px 14px 0 0;display:flex;align-items:center;justify-content:space-between">
       <span id="kit-t" style="color:#fff;font-weight:700;font-size:14px">Novo Kit</span>
       <button onclick="fecharKit()" style="background:none;border:none;color:rgba(255,255,255,.8);font-size:20px;cursor:pointer;line-height:1">×</button>
@@ -279,8 +279,11 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
         <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:3px">Preço de Venda Sugerido (R$)</label>
         <input id="k-pvenda" type="number" step="0.01" min="0" placeholder="0,00" style="width:160px;border:1px solid var(--border);border-radius:7px;padding:7px 10px;font-size:13px;font-family:inherit">
       </div>
-      <!-- Itens do kit -->
-      <div style="border-top:1px solid var(--border);padding-top:12px;margin-bottom:10px">
+      <!-- Layout 2 colunas: itens | análise de custos -->
+      <div style="display:flex;gap:14px;align-items:flex-start;border-top:1px solid var(--border);padding-top:12px">
+      <!-- Coluna esquerda: itens -->
+      <div style="flex:1;min-width:0">
+      <div style="margin-bottom:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
           <span style="font-size:12px;font-weight:700;text-transform:uppercase;color:var(--muted);letter-spacing:.4px">Itens do Kit</span>
           <button onclick="addKitItem()" style="font-size:12px;padding:4px 10px;background:var(--red);color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600">＋ Adicionar Item</button>
@@ -292,9 +295,10 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
           <div id="k-sugestoes" style="display:none;position:absolute;left:0;right:0;top:100%;background:#fff;border:1px solid var(--border);border-radius:0 0 7px 7px;box-shadow:0 4px 12px rgba(0,0,0,.1);z-index:50;max-height:160px;overflow-y:auto"></div>
         </div>
         <div id="kit-itens" style="min-height:40px"></div>
-      </div>
-      <!-- Resumo de custo/margem -->
-      <div id="kc-detalhe" style="background:#f8f9fa;border-radius:9px;padding:12px 14px;font-size:12px">
+      </div><!-- fim div itens -->
+      </div><!-- fim coluna esquerda -->
+      <!-- Coluna direita: análise de custos (sticky) -->
+      <div id="kc-detalhe" style="width:240px;flex-shrink:0;background:#f8f9fa;border-radius:9px;padding:12px 14px;font-size:12px;position:sticky;top:0">
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:8px">
           <div><div style="color:var(--muted);font-size:10px;text-transform:uppercase;font-weight:700;margin-bottom:2px">Custo Matéria</div><div id="kc-mat" style="font-weight:700;font-family:monospace">—</div></div>
           <div><div style="color:var(--muted);font-size:10px;text-transform:uppercase;font-weight:700;margin-bottom:2px">Cartão <span id="kc-cartao-pct" style="font-weight:400;color:var(--muted)"></span></div><div id="kc-cartao" style="font-family:monospace">—</div></div>
@@ -311,8 +315,9 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
         </div>
         <div id="kc-result" style="margin-top:8px;font-size:12px;font-weight:700"></div>
         <div id="kc-status" style="margin-top:4px;font-size:11px;color:var(--muted)"></div>
-      </div>
-    </div>
+      </div><!-- fim kc-detalhe -->
+      </div><!-- fim container flex 2 colunas -->
+    </div><!-- fim scroll -->
     <!-- Footer fixo fora do scroll -->
     <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:space-between;align-items:center;flex-shrink:0;background:#fff;border-radius:0 0 14px 14px">
       <div id="promo-btns" style="display:flex;gap:6px;flex-wrap:wrap;flex:1"></div>
