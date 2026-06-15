@@ -103,6 +103,15 @@ module.exports = (pool) => {
         WHERE cnpj_fornecedor ~ '[^0-9]'
       `).catch(() => {});
 
+      // Remover fornecedores duplicados (mesmo CNPJ normalizado, manter o menor id)
+      await pool.query(`
+        DELETE FROM fornecedores f1
+        USING fornecedores f2
+        WHERE f1.id > f2.id
+          AND REGEXP_REPLACE(f1.cnpj_fornecedor,'[^0-9]','','g')
+            = REGEXP_REPLACE(f2.cnpj_fornecedor,'[^0-9]','','g')
+      `).catch(() => {});
+
       let novosForn = 0, novosProds = 0;
 
       for (const f of fornRows) {
@@ -147,13 +156,21 @@ module.exports = (pool) => {
         GROUP BY REGEXP_REPLACE(fornecedor_cnpj, '[^0-9]', '', 'g'), produto_codigo
       `);
 
-      for (const p of prodRows) {
-        if (!p.cnpj || !p.produto_codigo) continue;
+      // Batch upsert usando unnest — muito mais rápido que loop sequencial
+      const validProds = prodRows.filter(p => p.cnpj && p.produto_codigo);
+      if (validProds.length) {
+        const cnpjs      = validProds.map(p => p.cnpj);
+        const codigos    = validProds.map(p => p.produto_codigo);
+        const nomes      = validProds.map(p => p.produto_nome || '');
+        const compras    = validProds.map(p => p.ultima_compra || null);
+        const precos     = validProds.map(p => p.ultimo_preco || null);
+        const counts     = validProds.map(p => parseInt(p.compras_count) || 1);
         await pool.query(`
           INSERT INTO fornecedor_produtos
-            (cnpj_fornecedor, produto_codigo, produto_nome,
-             ultima_compra, ultimo_preco, compras_count)
-          VALUES ($1, $2, $3, $4, $5, $6)
+            (cnpj_fornecedor, produto_codigo, produto_nome, ultima_compra, ultimo_preco, compras_count)
+          SELECT * FROM unnest(
+            $1::text[], $2::text[], $3::text[], $4::date[], $5::numeric[], $6::int[]
+          ) AS t(cnpj_fornecedor, produto_codigo, produto_nome, ultima_compra, ultimo_preco, compras_count)
           ON CONFLICT (cnpj_fornecedor, produto_codigo) DO UPDATE
             SET produto_nome  = COALESCE(EXCLUDED.produto_nome, fornecedor_produtos.produto_nome),
                 ultima_compra = GREATEST(EXCLUDED.ultima_compra, fornecedor_produtos.ultima_compra),
@@ -164,9 +181,8 @@ module.exports = (pool) => {
                 END,
                 compras_count = GREATEST(EXCLUDED.compras_count, fornecedor_produtos.compras_count),
                 atualizado_em = NOW()
-        `, [p.cnpj, p.produto_codigo, p.produto_nome,
-            p.ultima_compra, p.ultimo_preco, parseInt(p.compras_count) || 1]);
-        novosProds++;
+        `, [cnpjs, codigos, nomes, compras, precos, counts]);
+        novosProds = validProds.length;
       }
 
       res.json({
