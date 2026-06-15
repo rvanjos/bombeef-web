@@ -664,6 +664,10 @@ thead th{padding:6px 9px;}
       </div>
 
       <!-- TABELA -->
+        <!-- Scrollbar espelho horizontal fixo na base da área de lançamentos -->
+        <div id="tbl-scroll-mirror" style="overflow-x:auto;overflow-y:hidden;height:10px;flex-shrink:0;border-top:1px solid var(--border)">
+          <div id="tbl-scroll-mirror-inner" style="height:1px"></div>
+        </div>
         <div id="dre-tbl-scroll" style="flex:1;overflow-y:auto;overflow-x:auto;min-width:0">
           <table id="tbl-main">
             <thead><tr>
@@ -951,12 +955,12 @@ thead th{padding:6px 9px;}
         <button onclick="fecharModal('m-dre')" style="background:none;border:none;color:rgba(255,255,255,.8);font-size:22px;cursor:pointer;line-height:1">×</button>
       </div>
     </div>
-    <!-- Barra de scroll espelho no topo -->
-    <div id="dre-scroll-top">
-      <div id="dre-scroll-top-inner"></div>
-    </div>
     <div style="overflow:auto;flex:1;min-height:0" id="dre-modal-scroll">
       <div id="dre-full-body" style="padding:16px;min-width:max-content"></div>
+    </div>
+    <!-- Barra de scroll espelho — fixada na base do modal, sempre visível -->
+    <div id="dre-scroll-top" style="position:sticky;bottom:0;z-index:20;background:var(--bg);border-top:1px solid var(--border)">
+      <div id="dre-scroll-top-inner"></div>
     </div>
   </div>
 </div>
@@ -4253,7 +4257,8 @@ function _verificarDuplicatasFaturaCC() {
       if (['Pagamento de Fatura CC','Pagamento de Cartão'].includes(x.categoria)) return false;
       if (x.vinculadoFaturaCC) return false;
       if (!dtBase || !x.data) return false;
-      return Math.abs(new Date(x.data) - dtBase) < 7 * 86400000;
+      // Só considera duplicata se mesma data ou diferença de 1 dia (atraso de débito)
+      return Math.abs(new Date(x.data) - dtBase) < 2 * 86400000;
     });
     if (dup) dups.push({ cc: t, ext: dup });
     if (dups.length >= 5) break;
@@ -4760,6 +4765,21 @@ function initDREScrollEspelho() {
   const sync = () => { inner.style.width = scroll.scrollWidth + 'px'; };
   top.addEventListener('scroll',    () => { scroll.scrollLeft = top.scrollLeft; });
   scroll.addEventListener('scroll', () => { top.scrollLeft = scroll.scrollLeft; });
+
+  // Sincronizar scrollbar espelho da tabela principal
+  const tblScroll  = document.getElementById('dre-tbl-scroll');
+  const tblMirror  = document.getElementById('tbl-scroll-mirror');
+  const tblInner   = document.getElementById('tbl-scroll-mirror-inner');
+  if (tblScroll && tblMirror && tblInner) {
+    const syncTblWidth = () => {
+      const tbl = tblScroll.querySelector('table');
+      if (tbl) tblInner.style.width = tbl.scrollWidth + 'px';
+    };
+    syncTblWidth();
+    new MutationObserver(syncTblWidth).observe(tblScroll, { childList: true, subtree: true });
+    tblMirror.addEventListener('scroll', () => { tblScroll.scrollLeft = tblMirror.scrollLeft; });
+    tblScroll.addEventListener('scroll', () => { tblMirror.scrollLeft = tblScroll.scrollLeft; });
+  }
   if (window.ResizeObserver) new ResizeObserver(sync).observe(scroll);
   sync();
 }
