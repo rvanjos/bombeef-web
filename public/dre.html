@@ -4990,6 +4990,12 @@ function _buildDRE(el, full) {
   const TDL='padding:5px '+(full?'14':'10')+'px;text-align:left;font-size:12px;border-bottom:1px solid #f5efe8';
   const cols=meses.length+(showTot?2:1);
 
+  // ── Constantes de sticky/freeze ─────────────────────────────────────────
+  const W   = (full?'260':'200')+'px'; // largura da col fixa
+  const FZL = 'position:sticky;left:0;z-index:20;min-width:'+W+';max-width:'+W+';'; // freeze esq
+  const FZH = 'position:sticky;left:0;top:0;z-index:80;min-width:'+W+';max-width:'+W+';'; // canto
+  const STK = 'position:sticky;top:34px;z-index:40;'; // sticky grupos abaixo do header
+
   // ── renderGrupo: linhas detalhadas de um grupo ────────────────────────────
   function renderGrupo(gk) {
     if (!data[gk]) return '';
@@ -4998,18 +5004,18 @@ function _buildDRE(el, full) {
     const ghBg=gk==='RECEITAS'?'#1a5c2a':gk==='CMV'?'#5a2020':'#374151';
     const gid='dreg-'+(full?'f':'s')+'-'+gk;
     let rows='';
-    rows+='<tr class="dre-grp-hdr" style="cursor:pointer;position:sticky;top:33px;z-index:3" onclick="toggleDREGrupo(\''+gid+'\')">'
-         +'<td style="padding:6px 14px;background:'+ghBg+';color:#fff;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.5px;position:sticky;left:0;z-index:4;min-width:'+(full?'260':'200')+'px;max-width:'+(full?'260':'200')+'px">'
+    rows+='<tr onclick="toggleDREGrupo(\''+gid+'\')" style="cursor:pointer">'
+         +'<td style="'+STK+FZL+'padding:6px 14px;background:'+ghBg+';color:#fff;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.5px">'
          +'<span id="'+gid+'-ico">▼</span> '+(g?g.l:gk)
          +'<span style="float:right;font-size:10px;font-weight:400;opacity:.5">CLIQUE PARA RECOLHER</span>'
          +'</td>'
-         +'<td colspan="'+(cols-1)+'" style="background:'+ghBg+'"></td>'
+         +'<td colspan="'+(cols-1)+'" style="'+STK+'background:'+ghBg+'"></td>'
          +'</tr>';
     for (const [cat,mD] of Object.entries(data[gk])) {
       const totC=Object.values(mD).reduce((s,v)=>s+v,0);
       const escapedCat=cat.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
       rows+='<tr class="'+gid+'-row">'
-           +'<td style="'+TDL+';padding-left:'+(full?'22':'18')+'px;color:var(--muted);'+FZLFT+';background:#fafaf8;min-width:'+(full?'260':'200')+'px;max-width:'+(full?'260':'200')+'px">· '+cat+'</td>'
+           +'<td style="'+TDL+';'+FZL+'padding-left:'+(full?'22':'18')+'px;color:var(--muted);background:#fafaf8">· '+cat+'</td>'
            +meses.map(m=>'<td style="'+TD+(mD[m]?';cursor:pointer':'')+'" ondblclick="'+(mD[m]?'drillDown(\''+escapedCat+'\',\''+m+'\')':'')+'">'
              +fv(mD[m]||0,isDesp)+pct(mD[m]||0,recTotalMes[m])
              +'</td>').join('')
@@ -5028,7 +5034,7 @@ function _buildDRE(el, full) {
     const totG=sgt(gk);
     const gid='dreg-'+(full?'f':'s')+'-'+gk;
     return '<tr class="'+gid+'-row" style="background:'+stBg+'">'
-      +'<td style="'+TDL+';font-weight:700;color:'+stCol+';'+FZLFT+';background:'+stBg+';min-width:'+(full?'260':'200')+'px;max-width:'+(full?'260':'200')+'px">▶ SUBTOTAL '+(g?g.l:gk)+'</td>'
+      +'<td style="'+TDL+';'+FZL+'font-weight:700;color:'+stCol+';background:'+stBg+'">▶ SUBTOTAL '+(g?g.l:gk)+'</td>'
       +meses.map(m=>{const v=sg(gk,m);if(acumMes)acumMes[m]=(acumMes[m]||0)+v;
         return '<td style="'+TD+';font-weight:700;color:'+(v>=0?'var(--green)':'var(--red-l)')+'">'+fmt.brl(isDesp?-Math.abs(v):v)+pct(v,recTotalMes[m])+'</td>';}).join('')
       +(showTot?'<td style="'+TD+';font-weight:700;color:'+(totG>=0?'var(--green)':'var(--red-l)')+'">'+fmt.brl(isDesp?-Math.abs(totG):totG)+'</td>':'')
@@ -5040,7 +5046,7 @@ function _buildDRE(el, full) {
   function renderResultado(label, emoji, acumMes, bgRow, borderColor) {
     const tot=meses.reduce((s,m)=>s+(acumMes[m]||0),0);
     return '<tr style="background:'+bgRow+';border-top:3px solid '+borderColor+'">'
-      +'<td style="padding:10px 14px;font-weight:800;font-size:13px;letter-spacing:.2px;'+FZLFT+';background:'+bgRow+';min-width:'+(full?'260':'200')+'px;max-width:'+(full?'260':'200')+'px">'+emoji+' '+label+'</td>'
+      +'<td style="'+FZL+'padding:10px 14px;font-weight:800;font-size:13px;letter-spacing:.2px;background:'+bgRow+'">'+emoji+' '+label+'</td>'
       +meses.map(m=>{const v=acumMes[m]||0;
         return '<td style="padding:10px;text-align:right;font-family:\'DM Mono\',monospace;font-weight:800;font-size:13px;border-right:1px solid rgba(0,0,0,.08);color:'+(v>=0?'#1a7a4a':'#c0392b')+'">'+(v>=0?'+':'')+fmt.brl(v)+'</td>';}).join('')
       +(showTot?'<td style="padding:10px;text-align:right;font-family:\'DM Mono\',monospace;font-weight:800;font-size:13px;color:'+(tot>=0?'#1a7a4a':'#c0392b')+'">'+(tot>=0?'+':'')+fmt.brl(tot)+'</td>':'')
@@ -5050,18 +5056,15 @@ function _buildDRE(el, full) {
 
   // ── renderSecLabel: cabeçalho de seção ────────────────────────────────────
   function renderSecLabel(label) {
-    return '<tr style="position:sticky;top:66px;z-index:2"><td style="padding:8px 14px 4px;background:#f7f4f0;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);border-top:2px solid #e8e0d8;'+FZLFT+';min-width:'+(full?'260':'200')+'px;max-width:'+(full?'260':'200')+'px">'+label+'</td><td colspan="'+(cols-1)+'" style="background:#f7f4f0;border-top:2px solid #e8e0d8"></td></tr>';
+    return '<tr><td style="'+STK+FZL+'padding:8px 14px 4px;background:#f0ece6;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#7a6a58;border-top:2px solid #e8e0d8">'+label+'</td><td colspan="'+(cols-1)+'" style="'+STK+'background:#f0ece6;border-top:2px solid #e8e0d8"></td></tr>';
   }
 
   // ── Cabeçalho da tabela ───────────────────────────────────────────────────
-  const FZLFT='position:sticky;left:0;z-index:3;';
-  const FZHD='position:sticky;left:0;z-index:5;';
-  const STTOP='position:sticky;top:0;z-index:4;';
-  let h='<div style="overflow-x:auto"><table style="width:100%;border-collapse:separate;border-spacing:0;font-size:12px">'
-    +'<thead style="position:sticky;top:0;z-index:4"><tr>'
-    +'<th style="'+THL+';'+FZHD+';min-width:'+(full?'260':'200')+'px;max-width:'+(full?'260':'200')+'px">Grupo / Categoria</th>'
-    +meses.map(m=>'<th style="'+TH+';'+STTOP+'">'+fmtMes(m)+'</th>').join('')
-    +(showTot?'<th style="'+TH+';background:#5a2020;'+STTOP+'">TOTAL</th>':'')
+  let h='<div style="overflow-x:auto;position:relative"><table style="width:100%;border-collapse:separate;border-spacing:0;font-size:12px">'
+    +'<thead><tr>'
+    +'<th style="'+THL+';'+FZH+'">Grupo / Categoria</th>'
+    +meses.map(m=>'<th style="'+TH+';position:sticky;top:0;z-index:50">'+fmtMes(m)+'</th>').join('')
+    +(showTot?'<th style="'+TH+';background:#5a2020;position:sticky;top:0;z-index:50">TOTAL</th>':'')
     +'</tr></thead><tbody>';
 
   // ── Acumuladores por estágio ──────────────────────────────────────────────
