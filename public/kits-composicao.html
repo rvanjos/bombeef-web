@@ -277,27 +277,26 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
       </div>
       <div style="margin-bottom:14px">
         <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:3px">Preço de Venda Sugerido (R$)</label>
-        <input id="k-pvenda" type="number" step="0.01" min="0" placeholder="0,00" style="width:160px;border:1px solid var(--border);border-radius:7px;padding:7px 10px;font-size:13px;font-family:inherit">
+        <input id="k-pvenda" type="number" step="0.01" min="0" placeholder="0,00" oninput="recalcKit()" style="width:160px;border:1px solid var(--border);border-radius:7px;padding:7px 10px;font-size:13px;font-family:inherit">
       </div>
       <!-- Análise de Custos — sempre visível acima dos itens -->
-      <div id="kc-detalhe" style="background:#f8f9fa;border-radius:9px;padding:12px 14px;font-size:12px;margin-bottom:14px;border:1px solid var(--border)">
-<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:8px">
-          <div><div style="color:var(--muted);font-size:10px;text-transform:uppercase;font-weight:700;margin-bottom:2px">Custo Matéria</div><div id="kc-mat" style="font-weight:700;font-family:monospace">—</div></div>
-          <div><div style="color:var(--muted);font-size:10px;text-transform:uppercase;font-weight:700;margin-bottom:2px">Cartão <span id="kc-cartao-pct" style="font-weight:400;color:var(--muted)"></span></div><div id="kc-cartao" style="font-family:monospace">—</div></div>
-          <div><div style="color:var(--muted);font-size:10px;text-transform:uppercase;font-weight:700;margin-bottom:2px">Royalties <span id="kc-roy-pct" style="font-weight:400;color:var(--muted)"></span></div><div id="kc-roy" style="font-family:monospace">—</div></div>
-          <div><div style="color:var(--muted);font-size:10px;text-transform:uppercase;font-weight:700;margin-bottom:2px">Desp. <span id="kc-desp-pct"></span></div><div id="kc-desp" style="font-family:monospace">—</div></div>
-          <div><div style="color:var(--muted);font-size:10px;text-transform:uppercase;font-weight:700;margin-bottom:2px">Imp. <span id="kc-imp-pct"></span></div><div id="kc-imp" style="font-family:monospace">—</div></div>
-          <div><div style="color:var(--muted);font-size:10px;text-transform:uppercase;font-weight:700;margin-bottom:2px">Fixos <span id="kc-fix-pct"></span></div><div id="kc-fix" style="font-family:monospace">—</div></div>
-          <div><div style="color:var(--muted);font-size:10px;text-transform:uppercase;font-weight:700;margin-bottom:2px">Lucro mín. <span id="kc-lucro-pct"></span></div></div>
+      <div id="kc-detalhe" style="background:#fff8f2;border-radius:10px;padding:14px 16px;margin-bottom:14px;border:1px solid #f5dfc0">
+        <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:#8B0000;margin-bottom:10px">📊 Análise de Custos</div>
+        <div style="display:flex;flex-direction:column;gap:5px;font-size:12px">
+          <div style="display:flex;justify-content:space-between"><span style="color:#555">Custo Materiais</span><strong id="kc-mat" style="font-family:'DM Mono',monospace;color:#c0392b">—</strong></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:#555">💳 Cartão (<span id="kc-cartao-pct"></span>%)</span><span id="kc-cartao" style="font-family:'DM Mono',monospace">—</span></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:#555">🏷️ Royalties (<span id="kc-roy-pct"></span>%)</span><span id="kc-roy" style="font-family:'DM Mono',monospace">—</span></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:#555">♻️ Desperdício (<span id="kc-desp-pct"></span>%)</span><span id="kc-desp" style="font-family:'DM Mono',monospace">—</span></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:#555">🧾 Impostos (<span id="kc-imp-pct"></span>%)</span><span id="kc-imp" style="font-family:'DM Mono',monospace">—</span></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:#555">🏗️ Fixos (<span id="kc-fix-pct"></span>%)</span><span id="kc-fix" style="font-family:'DM Mono',monospace">—</span></div>
+          <div style="border-top:1px solid #f0d5b0;margin:5px 0"></div>
+          <div style="display:flex;justify-content:space-between;font-weight:700"><span>Custo Total Operacional</span><strong id="kc-tot" style="font-family:'DM Mono',monospace;color:#c0392b">—</strong></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:#555">Preço Mínimo</span><strong id="kc-min" style="font-family:'DM Mono',monospace">—</strong></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:#555">Preço Ideal (<span id="kc-lucro-pct"></span>% lucro)</span><strong id="kc-ideal" style="font-family:'DM Mono',monospace;color:#27ae60">—</strong></div>
         </div>
-        <div style="border-top:1px solid var(--border);padding-top:8px;display:flex;gap:16px">
-          <div><span style="color:var(--muted);font-size:11px">Custo total:</span> <strong id="kc-tot" style="font-family:monospace">—</strong></div>
-          <div><span style="color:var(--muted);font-size:11px">Lucro mín.:</span> <strong id="kc-min" style="font-family:monospace">—</strong></div>
-          <div><span style="color:var(--muted);font-size:11px">Ideal:</span> <strong id="kc-ideal" style="font-family:monospace">—</strong></div>
-        </div>
-        <div id="kc-result" style="margin-top:8px;font-size:12px;font-weight:700"></div>
-        <div id="kc-status" style="margin-top:4px;font-size:11px;color:var(--muted)"></div>
-            </div>
+        <div id="kc-result" style="margin-top:10px;font-size:12px;border-radius:7px;padding:8px 10px"></div>
+        <div id="kc-status" style="margin-top:3px;font-size:11px;font-weight:600"></div>
+      </div>
       <!-- Itens do kit -->
       <div style="border-top:1px solid var(--border);padding-top:12px;margin-bottom:10px">
       <div style="margin-bottom:10px">
