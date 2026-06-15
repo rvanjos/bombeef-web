@@ -6168,7 +6168,7 @@ function exportXLS(){
   <head><meta charset="UTF-8">
   <style>
     body { font-family: Calibri, Arial, sans-serif; font-size: 10pt; }
-    table { border-collapse: collapse; width: 100%; }
+    table { border-collapse: separate; border-spacing: 0; width: 100%; }
     td, th { padding: 4px 8px; border: 1px solid #e0d8d0; white-space: nowrap; }
     .mono { font-family: 'Courier New', monospace; text-align: right; }
     .bold { font-weight: bold; }
@@ -6218,15 +6218,36 @@ function exportXLS(){
     .res-fin-val { background:#2d2d2d; color:#2ecc71; font-weight:bold; font-size:13pt; font-family:'Courier New'; text-align:right; }
     .res-fin-neg { background:#2d2d2d; color:#e74c3c; font-weight:bold; font-size:13pt; font-family:'Courier New'; text-align:right; }
     .sep { background:#e8e0d8; height:2px; }
-  </style></head><body><table>`;
+
+    /* ─── Freeze coluna GRUPO/CATEGORIA e linha de meses ─── */
+    .dre-freeze    { position: sticky; left: 0; z-index: 3; }
+    .dre-freeze-hd { position: sticky; left: 0; z-index: 5; }
+    .dre-hdr-row th { position: sticky; top: 0; z-index: 4; }
+    .dre-hdr-row th.dre-freeze-hd { z-index: 6; }
+    /* Backgrounds por classe para freeze funcionar */
+    .g-receitas.dre-freeze  { background: #1a5c2a; }
+    .g-cmv.dre-freeze       { background: #5a2020; }
+    .g-oper.dre-freeze      { background: #374151; }
+    .cat-row.dre-freeze     { background: #fafaf8; }
+    .sec-label.dre-freeze   { background: #f7f4f0; }
+    .st-receitas.dre-freeze { background: #e8f7ef; }
+    .st-cmv.dre-freeze      { background: #fff0f0; }
+    .st-oper.dre-freeze     { background: #f5f0eb; }
+    .res-bruto.dre-freeze   { background: #e8f7ef; }
+    .res-op.dre-freeze      { background: #eff6ff; }
+    .res-ant.dre-freeze     { background: #fffbeb; }
+    .res-fin.dre-freeze     { background: #1a1a1a; }
+    .h-col.dre-freeze-hd   { background: #8B0000; }
+    .h-col-tot.dre-freeze-hd { background: #5a2020; }
+    </style></head><body><table>`;
 
   // Título
   html += `<tr><td colspan="${lastCol}" class="h-titulo">🥩 BOM BEEF — DRE GERENCIAL &nbsp;&nbsp; <span style="font-size:9pt;font-weight:normal">Exportado em ${new Date().toLocaleString('pt-BR')}</span></td></tr>`;
   // Espaço
   html += `<tr><td colspan="${lastCol}" style="background:#fff5f5;height:4px"></td></tr>`;
   // Header colunas
-  html += `<tr><th class="h-col dre-freeze-hd" style="text-align:left;min-width:260px;max-width:260px">GRUPO / CATEGORIA</th>`;
-  meses.forEach(m => { html += `<th class="h-col">${nomeMes(m)}</th>`; });
+  html += `<tr class="dre-hdr-row"><th class="h-col dre-freeze-hd" style="text-align:left;min-width:260px;max-width:260px">GRUPO / CATEGORIA</th>`;
+  meses.forEach(m => { html += `<th class="h-col" style="position:sticky;top:0;z-index:4;background:#8B0000">${nomeMes(m)}</th>`; });
   if(showTot) html += `<th class="h-col-tot">TOTAL</th>`;
   html += `</tr>`;
 
