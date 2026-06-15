@@ -1466,9 +1466,9 @@ function renderExtrato(clienteId) {
     }
   }).join('');
 
-  const saldoFinal = parseFloat(_clientes.find(c=>c.id===clienteId)?.saldo_aberto||0);
   const totalComprado = vendasCli.reduce((s,v)=>s+parseFloat(v.total_final||0),0);
   const totalPago     = pagsCli.reduce((s,p)=>s+parseFloat(p.valor_pago||0),0);
+  const saldoFinal    = totalComprado - totalPago;
 
   document.getElementById('ext-body').innerHTML = `
     <!-- Totalizadores no topo -->
@@ -1656,7 +1656,8 @@ function imprimirExtrato() {
   const pagsCli = _pagamentos?.filter(p => p.cliente_id === cliId) || [];
   const totalComprado = vendasPrint.reduce((s,v) => s + parseFloat(v.total_final||0), 0);
   const totalPago     = pagsCli.reduce((s,p) => s + parseFloat(p.valor_pago||0), 0);
-  const saldoFinal    = parseFloat(cli.saldo_aberto || 0);
+  const saldoFinal    = totalComprado - totalPago;
+  const saldoTotal    = parseFloat(cli.saldo_aberto || 0); // saldo real (todas as compras)
   const hoje = new Date().toLocaleDateString('pt-BR');
 
   // Linhas da tabela
@@ -1777,8 +1778,9 @@ function imprimirExtrato() {
         <div class="kpi-val">${fmt.brl(totalPago)}</div>
       </div>
       <div class="kpi kpi-saldo">
-        <div class="kpi-label">Saldo em Aberto</div>
+        <div class="kpi-label">Saldo em Aberto${tipo !== 'tudo' ? ' (período)' : ''}</div>
         <div class="kpi-val">${fmt.brl(saldoFinal)}</div>
+        ${tipo !== 'tudo' ? `<div style="font-size:10px;color:#888;margin-top:3px">Total cliente: ${fmt.brl(saldoTotal)}</div>` : ''}
       </div>
     </div>
 
