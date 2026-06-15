@@ -1445,6 +1445,46 @@ module.exports = function (pool, app) {
     }
   });
 
+  // PATCH /api/dre/cartao-faturas/sincronizar-categorias — sincroniza classificações DRE → cartao_fatura_itens
+  r.patch('/cartao-faturas/sincronizar-categorias', autenticar(), async (req, res) => {
+    const { itens } = req.body; // [{ faturaCC, hash_item, categoria }]
+    if (!Array.isArray(itens) || !itens.length) return res.json({ ok: true, atualizados: 0 });
+    try {
+      let atualizados = 0;
+      for (const it of itens) {
+        if (!it.hash_item || !it.categoria) continue;
+        // Localizar cartao_faturas pelo faturaCC (ex: CC_05_2026_Caixa)
+        let faturaId = null;
+        if (it.faturaCC) {
+          const mMatch = it.faturaCC.match(/CC_(\d{2})_(\d{4})(?:_(.+))?/);
+          if (mMatch) {
+            const comp = `${mMatch[1]}/${mMatch[2]}`;
+            const band = (mMatch[3] || '').replace(/_/g,' ');
+            const fRes = await pool.query(
+              `SELECT id FROM cartao_faturas WHERE competencia=$1
+               ${band ? "AND (bandeira ILIKE $2 OR cartao ILIKE $2)" : ''}
+               ORDER BY importado_em DESC LIMIT 1`,
+              band ? [comp, `%${band}%`] : [comp]
+            );
+            if (fRes.rows.length) faturaId = fRes.rows[0].id;
+          }
+        }
+        if (!faturaId) continue;
+        // Atualizar apenas categoria_dre — não mexer em status PAGA nem outros campos
+        const upd = await pool.query(
+          `UPDATE cartao_fatura_itens SET categoria_dre=$1
+           WHERE fatura_id=$2 AND hash_item=$3 AND removido=false`,
+          [it.categoria, faturaId, it.hash_item]
+        );
+        atualizados += upd.rowCount;
+      }
+      res.json({ ok: true, atualizados });
+    } catch(e) {
+      console.error('[sincronizar-categorias]', e.message);
+      res.status(500).json({ ok: false, erro: e.message });
+    }
+  });
+
   // POST /api/dre/cartao-faturas — registra nova fatura ou reprocessa existente
   r.post('/cartao-faturas', autenticar(), async (req, res) => {
     const { cartao, bandeira, competencia, valor_total, qtd_itens,

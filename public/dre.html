@@ -1463,13 +1463,21 @@ async function carregarSessao() {
   if (TXS.length) {
     setTimeout(async () => {
       try {
-        const meses = [...new Set(TXS.map(t => t.mes || mesRef))];
+        // Incluir mesCaixa dos CC como meses a salvar (Bug 6.7-F fix)
+        const mesesSet = new Set(TXS.map(t => t.mes || mesRef));
+        TXS.filter(t => t.faturaCC && t.mesCaixa).forEach(t => mesesSet.add(t.mesCaixa));
+        const meses = [...mesesSet];
         for (const m of meses) {
           let _res = null;
           try { _res = calcResultadoDRE(m); } catch(_) {}
           if (!_res || (!_res.receitas && !_res.despesas)) continue;
           const sid = (window._sessoesPorMes && window._sessoesPorMes[m]) || (m === mesRef ? sessId : null);
-          const txsMes = TXS.filter(t => (t.mes||mesRef) === m);
+          // CC: incluir também lançamentos cujo mesCaixa bate com m (fatura paga neste mês)
+          const txsMes = TXS.filter(t => {
+            if ((t.mes||mesRef) === m) return true;
+            if (t.faturaCC && t.mesCaixa === m && (t.mes||mesRef) !== m) return true;
+            return false;
+          });
           await api.post('/api/dre/salvar', {
             sessao_id: sid,
             mes_ref: m,
@@ -3683,6 +3691,9 @@ function ccrEnviarParaDRE() {
       if (reg?.ok && typeof carregarCartaoFaturas === 'function') carregarCartaoFaturas();
     }
   }).catch(() => {});
+
+  // Bug 6.7-F: sincronizar categorias classificadas → cartao_fatura_itens
+  _sincronizarCategoriesCC(_ccrLancs, faturaId);
 }
 
 // Alerta se existe lançamento "Pagamento de Fatura CC" no mês sem vínculo
@@ -7236,6 +7247,37 @@ function corrigirMesesCC() {
 
   if (semId > 0) {
     console.warn(`[corrigirMesesCC] ${semId} lançamento(s) CC sem faturaCC reconhecível`);
+  }
+}
+
+
+// ── 6.7-F: Sincronizar categorias CC → cartao_fatura_itens ──────────────────
+function _hashItemCC(l) {
+  // Mesmo algoritmo do backend _hashItem
+  const desc  = (l.razaoSocial || l.lancamento || '').toUpperCase()
+                  .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+                  .replace(/[^A-Z0-9 ]/g,'').replace(/\s+/g,' ').trim();
+  const data  = (l.data || '').slice(0,10);
+  const valor = Math.round(parseFloat(l.valor || 0) * 100);
+  const parc  = (l.parcela || '').toString().trim();
+  return `${data}|${desc}|${valor}|${parc}`;
+}
+
+async function _sincronizarCategoriesCC(lancs, faturaIdRef) {
+  if (!lancs || !lancs.length) return;
+  // Montar payload apenas com itens classificados que têm faturaCC
+  const itens = lancs
+    .filter(l => l.categoria && l.faturaCC)
+    .map(l => ({
+      faturaCC:  l.faturaCC,
+      hash_item: _hashItemCC(l),
+      categoria: l.categoria,
+    }));
+  if (!itens.length) return;
+  try {
+    await api.post('/api/dre/cartao-faturas/sincronizar-categorias', { itens });
+  } catch(e) {
+    console.warn('[sincronizarCategoriesCC]', e.message);
   }
 }
 
