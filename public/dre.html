@@ -664,10 +664,6 @@ thead th{padding:6px 9px;}
       </div>
 
       <!-- TABELA -->
-        <!-- Scrollbar espelho horizontal fixo na base da área de lançamentos -->
-        <div id="tbl-scroll-mirror" style="overflow-x:auto;overflow-y:hidden;height:10px;flex-shrink:0;border-top:1px solid var(--border)">
-          <div id="tbl-scroll-mirror-inner" style="height:1px"></div>
-        </div>
         <div id="dre-tbl-scroll" style="flex:1;overflow-y:auto;overflow-x:auto;min-width:0">
           <table id="tbl-main">
             <thead><tr>
@@ -4766,20 +4762,6 @@ function initDREScrollEspelho() {
   top.addEventListener('scroll',    () => { scroll.scrollLeft = top.scrollLeft; });
   scroll.addEventListener('scroll', () => { top.scrollLeft = scroll.scrollLeft; });
 
-  // Sincronizar scrollbar espelho da tabela principal
-  const tblScroll  = document.getElementById('dre-tbl-scroll');
-  const tblMirror  = document.getElementById('tbl-scroll-mirror');
-  const tblInner   = document.getElementById('tbl-scroll-mirror-inner');
-  if (tblScroll && tblMirror && tblInner) {
-    const syncTblWidth = () => {
-      const tbl = tblScroll.querySelector('table');
-      if (tbl) tblInner.style.width = tbl.scrollWidth + 'px';
-    };
-    syncTblWidth();
-    new MutationObserver(syncTblWidth).observe(tblScroll, { childList: true, subtree: true });
-    tblMirror.addEventListener('scroll', () => { tblScroll.scrollLeft = tblMirror.scrollLeft; });
-    tblScroll.addEventListener('scroll', () => { tblMirror.scrollLeft = tblScroll.scrollLeft; });
-  }
   if (window.ResizeObserver) new ResizeObserver(sync).observe(scroll);
   sync();
 }
@@ -6196,12 +6178,22 @@ function exportXLS(){
     .h-titulo { background:#8B0000; color:#fff; font-weight:bold; font-size:14pt; padding:10px 12px; }
     .h-col { background:#8B0000; color:#fff; font-weight:bold; text-align:center; }
   /* Freeze primeira coluna do DRE renderizado */
-  .dre-freeze { position:sticky; left:0; z-index:3; }
-  .dre-freeze-hd { position:sticky; left:0; z-index:4; background:#8B0000; }
-  #dre-full-body table { border-collapse:collapse; }
-  .cat-row.left { background:var(--bg,#f7f4f0); }
-  .grp-row-hd { background:#8B0000; }
-  .sec-row-hd { background:#5a0000; }
+  .dre-freeze    { position:sticky !important; left:0 !important; z-index:3; }
+  .dre-freeze-hd { position:sticky !important; left:0 !important; z-index:4; background:#8B0000 !important; }
+  #dre-full-body table { border-collapse:separate !important; border-spacing:0 !important; }
+  /* Backgrounds explícitos por classe — sem eles o td fica transparente ao rolar */
+  .g-receitas.dre-freeze { background:#1a5c2a !important; }
+  .g-cmv.dre-freeze      { background:#5a2020 !important; }
+  .g-oper.dre-freeze     { background:#374151 !important; }
+  .cat-row.dre-freeze    { background:#fafaf8 !important; }
+  .sec-label.dre-freeze  { background:#f7f4f0 !important; }
+  .st-receitas.dre-freeze{ background:#e8f7ef !important; }
+  .st-cmv.dre-freeze     { background:#fff0f0 !important; }
+  .st-oper.dre-freeze    { background:#f5f0eb !important; }
+  .res-bruto.dre-freeze  { background:#e8f7ef !important; }
+  .res-op.dre-freeze     { background:#eff6ff !important; }
+  .res-ant.dre-freeze    { background:#fffbeb !important; }
+  .res-fin.dre-freeze    { background:#1a1a1a !important; }
     .h-col-tot { background:#5a2020; color:#fff; font-weight:bold; text-align:center; }
     /* Seção */
     .sec-label { background:#f7f4f0; color:#888; font-weight:bold; font-size:8pt; text-transform:uppercase; letter-spacing:1px; }
