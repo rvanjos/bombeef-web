@@ -736,12 +736,13 @@ function abrirKit(id){
 function fecharKit(){document.getElementById('m-kit').classList.remove('open');}
 
 function atualizarCfgKit(){
-  document.getElementById('kc-cartao-pct').textContent=CFG.cartao;
-  document.getElementById('kc-roy-pct').textContent=CFG.royalties;
-  document.getElementById('kc-desp-pct').textContent=CFG.desperdicio;
-  document.getElementById('kc-imp-pct').textContent=CFG.imposto;
-  document.getElementById('kc-fix-pct').textContent=CFG.fixos;
-  document.getElementById('kc-lucro-pct').textContent=CFG.lucro;
+  const set = (id, v) => { const el = document.getElementById(id); if(el) el.textContent = v; };
+  set('kc-cartao-pct', CFG.cartao);
+  set('kc-roy-pct',    CFG.royalties);
+  set('kc-desp-pct',   CFG.desperdicio);
+  set('kc-imp-pct',    CFG.imposto);
+  set('kc-fix-pct',    CFG.fixos);
+  set('kc-lucro-pct',  CFG.lucro);
 }
 
 function addKitItem(){
@@ -995,6 +996,7 @@ function recalcKit(){
   const rc=document.getElementById('kc-result');
   const st=document.getElementById('kc-status');
   const dt=document.getElementById('kc-detalhe');
+  if(!rc||!st) return; // elementos do modal ainda não renderizados
   if(pv>0){
     if(pv>=precoIdeal){rc.className='result-box ok';st.textContent='✅ Margem excelente!';st.style.color='var(--green)';}
     else if(pv>=precoMin){rc.className='result-box warn';st.textContent='⚠️ Margem mínima — viável mas sem o lucro alvo';st.style.color='var(--orange)';}
