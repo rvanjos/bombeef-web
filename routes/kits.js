@@ -38,6 +38,7 @@ module.exports = function (pool) {
     for (const [col, def] of [
       ['codigo','TEXT'],['descricao','TEXT'],['margem','NUMERIC(5,2) DEFAULT 0'],
       ['ativo','BOOLEAN DEFAULT true'],['atualizado_em','TIMESTAMPTZ DEFAULT NOW()'],
+      ['data_inicio','DATE'],['data_fim','DATE'],
     ]) await pool.query(`ALTER TABLE kits ADD COLUMN IF NOT EXISTS ${col} ${def}`).catch(() => {});
 
     await pool.query(`
@@ -126,7 +127,7 @@ module.exports = function (pool) {
           (SELECT COALESCE(SUM(ki.quantidade * COALESCE(NULLIF(ki.preco_custo_unitario,0), p.preco_custo, 0)),0)
            FROM kit_itens ki LEFT JOIN produtos p ON p.id = ki.produto_id
            WHERE ki.kit_id = k.id) AS custo_total
-        FROM kits k ${where} ORDER BY k.nome ASC
+        FROM kits k ${where} ORDER BY k.data_inicio ASC NULLS LAST, k.nome ASC
       `, params);
 
       const ids = kits.map(k => k.id);
@@ -251,7 +252,7 @@ module.exports = function (pool) {
 
   // POST /
   r.post('/', async (req, res) => {
-    const { codigo, nome, descricao, precoVenda, margem, itens = [] } = req.body;
+    const { codigo, nome, descricao, precoVenda, margem, dataInicio, dataFim, itens = [] } = req.body;
     if (!nome) return res.status(400).json({ ok: false, erro: 'nome é obrigatório' });
     const client = await pool.connect();
     try {
@@ -323,12 +324,13 @@ module.exports = function (pool) {
         UPDATE kits SET
           ${nomeColPut} = COALESCE($1, ${nomeColPut}), descricao = COALESCE($2, descricao),
           preco_venda = COALESCE($3, preco_venda), margem = COALESCE($4, margem),
+          data_inicio = $6, data_fim = $7,
           atualizado_em = NOW()
         WHERE id = $5
       `, [nome||null, descricao||null,
           precoVenda !== undefined ? parseFloat(precoVenda) : null,
           margem !== undefined ? parseFloat(margem) : null,
-          numId]);
+          numId, dataInicio||null, dataFim||null]);
 
       if (Array.isArray(itens)) {
         const { rows: kitRow } = await client.query(

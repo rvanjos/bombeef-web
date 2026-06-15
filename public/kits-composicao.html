@@ -286,6 +286,21 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
           <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:3px">Preço de Venda (R$)</label>
           <input id="k-pvenda" type="number" step="0.01" min="0" placeholder="0,00" oninput="recalcKit()" style="width:160px;border:1px solid var(--border);border-radius:7px;padding:7px 10px;font-size:13px;font-family:inherit">
         </div>
+        <!-- Período de validade do kit -->
+        <div style="margin-bottom:14px">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:5px">Período do Kit</label>
+          <div style="display:flex;align-items:center;gap:8px">
+            <div>
+              <label style="font-size:10px;color:var(--muted);display:block;margin-bottom:2px">De</label>
+              <input id="k-data-inicio" type="date" oninput="atualizarNomeKit()" style="border:1px solid var(--border);border-radius:7px;padding:6px 10px;font-size:12px;font-family:inherit;color:var(--text)">
+            </div>
+            <span style="color:var(--muted);margin-top:14px">→</span>
+            <div>
+              <label style="font-size:10px;color:var(--muted);display:block;margin-bottom:2px">Até</label>
+              <input id="k-data-fim" type="date" oninput="atualizarNomeKit()" style="border:1px solid var(--border);border-radius:7px;padding:6px 10px;font-size:12px;font-family:inherit;color:var(--text)">
+            </div>
+          </div>
+        </div>
         <!-- Itens do kit -->
         <div style="border-top:1px solid var(--border);padding-top:12px">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
@@ -751,6 +766,8 @@ function abrirKit(id){
   document.getElementById('k-nome').value=k?.nome||'';
   document.getElementById('k-desc').value=k?.descricao||'';
   document.getElementById('k-pvenda').value=k?.preco_venda||'';
+  document.getElementById('k-data-inicio').value=k?.data_inicio||'';
+  document.getElementById('k-data-fim').value=k?.data_fim||'';
   kitItems=k?.itens?k.itens.map(i=>{
     const prod = prods.find(p => String(p.codigo||'') === String(i.codigo_produto||''));
     return {
@@ -1060,6 +1077,8 @@ async function salvarKit(){
     nome:document.getElementById('k-nome').value.trim(),
     descricao:document.getElementById('k-desc').value.trim(),
     precoVenda:parseFloat(document.getElementById('k-pvenda').value)||0,
+    dataInicio:document.getElementById('k-data-inicio')?.value||null,
+    dataFim:document.getElementById('k-data-fim')?.value||null,
     itens:kitItems.map(i=>({codigo:i.codigo,descricao:i.descricao,quantidade:parseFloat(i.quantidade||1),precoCusto:parseFloat(i.precoCusto||0),ignorarMargem:!!i.ignorarMargem,custoKit:i.custoKit!=null?parseFloat(i.custoKit):null}))
   };
   if(!body.codigo||!body.nome){toast('Código e nome obrigatórios');return;}
@@ -1196,6 +1215,17 @@ async function verKitEditar() {
   const id = _verKitId;
   fecharVerKit();
   if (id) abrirKit(id);
+}
+
+function atualizarNomeKit() {
+  // Só auto-preenche o nome se estiver vazio ou seguir o padrão "Kit Dia Dia ..."
+  const nome = document.getElementById('k-nome');
+  if (!nome || nome.value && !nome.value.match(/^Kit Dia Dia/)) return;
+  const di = document.getElementById('k-data-inicio')?.value;
+  const df = document.getElementById('k-data-fim')?.value;
+  if (!di || !df) return;
+  const fmt = d => { const [y,m,day] = d.split('-'); return `${day}/${m}`; };
+  nome.value = `Kit Dia Dia ${fmt(di)} até ${fmt(df)}`;
 }
 </script>
 </body>
