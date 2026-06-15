@@ -307,7 +307,7 @@ module.exports = function (pool) {
 
   // PUT /:id
   r.put('/:id', async (req, res) => {
-    const { nome, descricao, precoVenda, margem, itens } = req.body;
+    const { nome, descricao, precoVenda, margem, dataInicio, dataFim, itens } = req.body;
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
