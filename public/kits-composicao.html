@@ -947,25 +947,21 @@ async function buscarProdKit(i,cod){
 }
 
 function recalcKit(){
-  // matReal = custo total de todos os itens (usado para mostrar custo total)
-  // matMargem = custo para cálculo de margem (exclui itens próx. vencimento)
+  const _set=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
   const matReal=kitItems.reduce((s,i)=>s+(parseFloat(i.quantidade||1)*parseFloat(i.precoCusto||0)),0);
   const matMargem=kitItems.reduce((s,i)=>{
     const qtd=parseFloat(i.quantidade||1);
     if(i.ignorarMargem){
-      // Usa custoKit se definido (venda anti-desperdício), caso contrário 0 no cálculo de margem
       const ck=i.custoKit!=null&&i.custoKit>0?parseFloat(i.custoKit):0;
       return s+(qtd*ck);
     }
     return s+(qtd*parseFloat(i.precoCusto||0));
   },0);
   const matDescartado=matReal-matMargem;
-  const mat=matMargem; // preço mínimo calculado sem os itens próx. vencimento
-  const pv=parseFloat(document.getElementById('k-pvenda').value)||0;
-  // Cartão, royalties, impostos, fixos: sobre preço de venda
-  // Desperdício: sobre custo dos materiais
+  const mat=matMargem;
+  const pv=parseFloat(document.getElementById('k-pvenda')?.value)||0;
   const opSobreVenda = CFG.cartao + CFG.royalties + CFG.imposto + CFG.fixos;
-  const despMat = mat * CFG.desperdicio / 100;           // R$ sobre custo
+  const despMat = mat * CFG.desperdicio / 100;
   const custoComDesp = mat + despMat;
   const mkOp   = 1 / (1 - opSobreVenda/100);
   const mkIdeal= 1 / (1 - (opSobreVenda + CFG.lucro)/100);
@@ -975,50 +971,48 @@ function recalcKit(){
   const custoTotal= custoComDesp + custoSobreVenda;
   const lucroR = pv > 0 ? pv - custoTotal : 0;
   const margR  = pv > 0 ? (lucroR / pv * 100) : 0;
-  const op = opSobreVenda; // para exibição
+  const op = opSobreVenda;
 
-  // Custo materiais
-  document.getElementById('kc-mat').textContent=
-    matDescartado>0
-      ? fmt.brl(matReal)+` (⏱ ${fmt.brl(matDescartado)} s/ margem)`
-      : fmt.brl(matReal);
-  if(pv>0){
-    document.getElementById('kc-cartao').textContent=fmt.brl(pv*CFG.cartao/100);
-    document.getElementById('kc-roy').textContent=fmt.brl(pv*CFG.royalties/100);
-    document.getElementById('kc-desp').textContent=fmt.brl(despMat);   // sobre custo!
-    document.getElementById('kc-imp').textContent=fmt.brl(pv*CFG.imposto/100);
-    document.getElementById('kc-fix').textContent=fmt.brl(pv*CFG.fixos/100);
-    document.getElementById('kc-tot').textContent=fmt.brl(custoTotal);
-  } else {
-    ['kc-cartao','kc-roy','kc-desp','kc-imp','kc-fix','kc-tot'].forEach(id=>document.getElementById(id).textContent='—');
-  }
-  document.getElementById('kc-min').textContent=fmt.brl(precoMin);
-  document.getElementById('kc-ideal').textContent=fmt.brl(precoIdeal);
+  // Custo materiais — sempre
+  _set('kc-mat', matDescartado>0
+    ? fmt.brl(matReal)+` (⏱ ${fmt.brl(matDescartado)} s/ margem)`
+    : fmt.brl(matReal));
+
+  // Custos operacionais — usa pv se definido, senão usa precoMin como estimativa
+  const pvBase = pv > 0 ? pv : precoMin;
+  _set('kc-cartao', fmt.brl(pvBase*CFG.cartao/100));
+  _set('kc-roy',    fmt.brl(pvBase*CFG.royalties/100));
+  _set('kc-desp',   fmt.brl(despMat));
+  _set('kc-imp',    fmt.brl(pvBase*CFG.imposto/100));
+  _set('kc-fix',    fmt.brl(pvBase*CFG.fixos/100));
+  _set('kc-tot',    fmt.brl(pv>0 ? custoTotal : custoComDesp + precoMin*opSobreVenda/100));
+  _set('kc-min',    fmt.brl(precoMin));
+  _set('kc-ideal',  fmt.brl(precoIdeal));
 
   const rc=document.getElementById('kc-result');
   const st=document.getElementById('kc-status');
   const dt=document.getElementById('kc-detalhe');
-  if(!rc||!st) return; // elementos do modal ainda não renderizados
+  if(!rc||!st) return;
+
   if(pv>0){
     if(pv>=precoIdeal){rc.className='result-box ok';st.textContent='✅ Margem excelente!';st.style.color='var(--green)';}
     else if(pv>=precoMin){rc.className='result-box warn';st.textContent='⚠️ Margem mínima — viável mas sem o lucro alvo';st.style.color='var(--orange)';}
-    else if(matDescartado>0){rc.className='result-box warn';st.textContent='⏱ Kit Anti-Desperdício — margem calculada sem itens próx. do vencimento';st.style.color='var(--orange)';}
-    else{rc.className='result-box bad';st.textContent='❌ Preço abaixo do mínimo — prejuízo';st.style.color='var(--red-l)';}
-    dt.textContent=`Lucro real: ${fmt.brl(lucroR)} (${margR.toFixed(1)}%) · Custo total: ${fmt.pct(op)}`;
+    else{rc.className='result-box bad';st.textContent='❌ Abaixo do mínimo — prejuízo operacional';st.style.color='var(--red-l)';}
+    rc.innerHTML=`<div style="font-size:13px;font-weight:700">Lucro real: ${fmt.brl(lucroR)} (${margR.toFixed(1)}%) · Custo total: ${fmt.pct(op)}</div>`;
   } else {
-    rc.className='result-box';st.textContent='Informe o preço de venda';st.style.color='var(--muted)';dt.textContent='';
+    rc.className='result-box';
+    rc.innerHTML=`<div style="font-size:11px;color:var(--muted)">💡 Informe o preço de venda para ver a margem real</div>`;
+    st.textContent='';st.style.color='';
   }
+  if(dt) dt.style.display='';
 
   // Botões de preço sugerido
-  const pb=document.getElementById('promo-btns');
-  pb.innerHTML='';
-  if(mat>0){
-    [precoMin,precoIdeal,psico(precoIdeal),psico(precoIdeal)+10].forEach(p=>{
-      const b=document.createElement('button');
-      b.className='promo-btn'; b.textContent='R$ '+p.toFixed(2).replace('.',',');
-      b.onclick=()=>{document.getElementById('k-pvenda').value=p.toFixed(2);recalcKit();};
-      pb.appendChild(b);
-    });
+  const pbtns=document.getElementById('promo-btns');
+  if(pbtns){
+    pbtns.innerHTML=[psico(precoMin),psico(precoIdeal),psico(precoIdeal)+10].map(p=>`
+      <button onclick="document.getElementById('k-pvenda').value=${p.toFixed(2)};recalcKit()"
+        style="padding:4px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;cursor:pointer;background:var(--bg);font-family:'DM Mono',monospace"
+        title="Aplicar preço sugerido">R$ ${p.toLocaleString('pt-BR',{minimumFractionDigits:2})}</button>`).join('');
   }
 }
 
