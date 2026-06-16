@@ -1679,8 +1679,8 @@ function imprimirExtrato() {
       linhasHtml += `<tr class="row-item">
         <td style="padding-left:20px">· ${i.nome_produto||'—'}</td>
         <td style="text-align:center">${qtd} un</td>
-        <td style="text-align:right">${fmt.brl(parseFloat(i.preco_venda_unit||0))}</td>
-        <td style="text-align:right;color:#888">${fmt.brl(parseFloat(i.custo_unit||0))}</td>
+        <td style="text-align:right">${fmt.brl(parseFloat(i.valor_unit_venda||0))}</td>
+        <td style="text-align:right;color:#888">${fmt.brl(parseFloat(i.valor_unit_custo||0))}</td>
         <td style="text-align:right;font-weight:600">${fmt.brl(parseFloat(i.valor_final_item||0))}</td>
         <td></td>
       </tr>`;
