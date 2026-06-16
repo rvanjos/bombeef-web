@@ -267,7 +267,7 @@ module.exports = function(pool) {
         SELECT v.*, c.nome AS cliente_nome, c.tipo_cliente, c.telefone,
           (SELECT json_agg(i ORDER BY i.id) FROM itens_venda_fiado i WHERE i.venda_id=v.id) AS itens
         FROM vendas_fiado v JOIN clientes_fiado c ON c.id=v.cliente_id
-        ${where} ORDER BY v.data_compra DESC, v.id DESC LIMIT 200
+        ${where} ORDER BY v.data_compra DESC, v.id DESC LIMIT 2000
       `, params);
       res.json({ ok:true, data:rows });
     } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
