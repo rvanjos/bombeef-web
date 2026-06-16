@@ -1519,15 +1519,16 @@ function onExtFiltroChange() {
 
   // Se mudou para "pedido", popular o select com as vendas do cliente
   if (tipo === 'pedido') {
-    const cliId = window._extratoClienteId;
+    const cliId = parseInt(window._extratoClienteId);
     const vendas = _vendas
       .filter(v => v.cliente_id === cliId && v.status !== 'cancelado' && v.status !== 'reprovado')
       .sort((a, b) => b.data_compra < a.data_compra ? -1 : 1);
     const sel = document.getElementById('ext-pedido-val');
-    sel.innerHTML = '<option value="">— Selecione o pedido —</option>' +
+    sel.innerHTML = '<option value="">— Todos os pedidos —</option>' +
       vendas.map(v =>
         `<option value="${v.id}">📦 ${fmtDtBr(v.data_compra)} — ${fmt.brl(parseFloat(v.total_final||0))}</option>`
       ).join('');
+    // Não pré-seleciona — "Todos os pedidos" mostra tudo
   }
 
   // Se mudou para mês, pré-preencher com o mês atual
