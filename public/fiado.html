@@ -1353,11 +1353,21 @@ function renderExtrato(clienteId) {
   const dataIni    = document.getElementById('ext-data-ini')?.value || '';      // "2026-05-01"
   const dataFim    = document.getElementById('ext-data-fim')?.value || '';      // "2026-05-31"
 
+  // DIAGNÓSTICO TEMPORÁRIO
+  const todasVendasCliente = _vendas.filter(v => parseInt(v.cliente_id) === clienteId);
+  console.log('[renderExtrato] clienteId=', clienteId, 'tipo=', typeof clienteId);
+  console.log('[renderExtrato] total _vendas=', _vendas.length);
+  console.log('[renderExtrato] vendas deste cliente (parseInt)=', todasVendasCliente.length);
+  console.log('[renderExtrato] primeiros cliente_ids=', _vendas.slice(0,5).map(v=>({id:v.cliente_id, tipo:typeof v.cliente_id})));
+  if (todasVendasCliente.length === 0 && _vendas.length > 0) {
+    console.log('[renderExtrato] IDs únicos em _vendas=', [...new Set(_vendas.map(v=>v.cliente_id))].slice(0,10));
+  }
+
   let vendasCli = _vendas
-    .filter(v=>v.cliente_id===clienteId && v.status!=='cancelado' && v.status!=='reprovado')
+    .filter(v=>parseInt(v.cliente_id)===clienteId && v.status!=='cancelado' && v.status!=='reprovado')
     .sort((a,b)=> a.data_compra < b.data_compra ? -1 : 1);
   let pagsCli = _pagamentos
-    .filter(p=>p.cliente_id===clienteId)
+    .filter(p=>parseInt(p.cliente_id)===clienteId)
     .sort((a,b)=> a.data_pagamento < b.data_pagamento ? -1 : 1);
 
   // ── Aplicar filtro ────────────────────────────────────
