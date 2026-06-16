@@ -66,9 +66,9 @@ tr[onclick]{touch-action:pan-y;-webkit-tap-highlight-color:rgba(0,0,0,0.05);}
 .tbl{width:100%;border-collapse:collapse;}
 .tbl th{background:#fdf6ee;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700;padding:9px 12px;text-align:left;border-bottom:2px solid var(--border);}
 .tbl td{padding:6px 8px;font-size:12px;border-bottom:1px solid #f5efe8;vertical-align:middle;}
-  #tbl-val{table-layout:fixed;width:100%;min-width:780px;}
-  #tbl-val th,#tbl-val td{padding:4px 6px;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-  #tbl-val td:nth-child(3){white-space:normal;max-width:160px;}
+  #tbl-val{table-layout:auto;width:max-content;min-width:100%;}
+  #tbl-val th,#tbl-val td{padding:4px 6px;font-size:11px;white-space:nowrap;}
+  #tbl-val th:nth-child(3),#tbl-val td:nth-child(3){white-space:normal;min-width:160px;max-width:280px;}
 /* Linhas coloridas por urgência — igual ao sistema anterior */
 .tbl tr.row-vencido td{background:#fff0f0!important;}
 .tbl tr.row-vencido:hover td{background:#ffe8e8!important;}
@@ -419,17 +419,17 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
       </div>
       <div style="overflow-x:auto"><table class="tbl" id="tbl-val">
         <thead><tr>
-          <th style="width:24px"><input type="checkbox" class="row-sel" id="val-sel-all" id2="sel-all" onchange="valToggleSelAll(this); toggleSelAll(this);" title="Selecionar todos"></th>
-          <th style="width:55px">Cód.</th>
-          <th>Descrição</th>
-          <th style="width:60px">Lote</th>
-          <th style="width:76px">Validade</th>
-          <th style="width:38px">Dias</th>
-          <th style="width:80px">Ação Prev.</th>
-          <th style="width:74px">Últ. Conf.</th>
-          <th style="width:80px">Responsável</th>
-          <th style="width:70px">Status</th>
-          <th style="width:60px">Ações</th>
+          <th style="min-width:24px;width:24px"><input type="checkbox" class="row-sel" id="val-sel-all" id2="sel-all" onchange="valToggleSelAll(this); toggleSelAll(this);" title="Selecionar todos"></th>
+          <th style="min-width:55px">Cód.</th>
+          <th style="min-width:160px">Descrição</th>
+          <th style="min-width:60px">Lote</th>
+          <th style="min-width:82px">Validade</th>
+          <th style="min-width:42px">Dias</th>
+          <th style="min-width:90px">Ação Prev.</th>
+          <th style="min-width:82px">Últ. Conf.</th>
+          <th style="min-width:90px">Responsável</th>
+          <th style="min-width:72px">Status</th>
+          <th style="min-width:60px">Ações</th>
         </tr></thead>
         <tbody id="tbody-val"></tbody>
       </table></div>
