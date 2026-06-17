@@ -3624,24 +3624,17 @@ function ccrFiltrar(tipo) {
   ccrRenderGrupos();
 }
 
-function ccrEnviarParaDRE() {
+// Sprint 6.7-I: verificar duplicidade ANTES de addLancs()
+async function ccrEnviarParaDRE() {
   const nPend = _ccrLancs.filter(l => !l.categoria).length;
   if (nPend > 0) {
     const ok = confirm(`⚠️ ${nPend} lançamento(s) ainda sem categoria. Enviar assim mesmo?`);
     if (!ok) return;
   }
-  // Marca todos os lançamentos com a referência da fatura para rastrear vínculo
-  const faturaId = `CC_${_ccrMesCC.replace('/','_')}${_ccrBandeira ? '_' + _ccrBandeira.replace(/\s+/g,'') : ''}`;
-  _ccrLancs.forEach(l => { l.faturaCC = faturaId; l.bandeira = _ccrBandeira || l.bandeira || ''; });
-  addLancs(_ccrLancs, _ccrFileName);
-  fecharModal('m-cc-revisao');
-  toast(`✅ ${_ccrLancs.length} lançamentos enviados para o DRE`);
-  setTimeout(_revinculateCC, 200);
-  ccrAlertarPagamentoSemFatura(faturaId, _ccrMesCC, _ccrBandeira);
 
-  // ── Sprint 6.7-C: registrar fatura com deduplicação ───────────────────────
-  const valorTotal  = _ccrLancs.reduce((s,l) => s + Math.abs(parseFloat(l.valor||0)), 0);
+  const faturaId    = `CC_${_ccrMesCC.replace('/','_')}${_ccrBandeira ? '_' + _ccrBandeira.replace(/\s+/g,'') : ''}`;
   const cartaoNome  = _ccrBandeira || 'Cartão';
+  const valorTotal  = _ccrLancs.reduce((s,l) => s + Math.abs(parseFloat(l.valor||0)), 0);
   const itensPayload = _ccrLancs.map(l => ({
     data:       l.data       || null,
     descricao:  l.lancamento || l.razaoSocial || '',
@@ -3650,51 +3643,64 @@ function ccrEnviarParaDRE() {
     categoria:  l.categoria  || null,
     portador:   l.portador   || null,
   }));
-  const hashFatura  = _cfHashFatura(cartaoNome, _ccrMesCC, valorTotal, _ccrFileName, _ccrVencimento || null, itensPayload.length);
+  const hashFatura = _cfHashFatura(cartaoNome, _ccrMesCC, valorTotal, _ccrFileName, _ccrVencimento || null, itensPayload.length);
 
-  // Verificar duplicata antes de salvar
-  api.post('/api/dre/cartao-faturas/verificar', {
-    hash_fatura:  hashFatura,
-    cartao:       cartaoNome,
-    competencia:  _ccrMesCC,
-    valor_total:  valorTotal,
-    qtd_itens:    itensPayload.length,
-  }).then(async r => {
-    if (!r.ok) return; // falha silenciosa, não impede o DRE de funcionar
+  // ── Verificar duplicidade: banco + TXS ───────────────────────────────────
+  const jaEmTXS = TXS.some(t => t.faturaCC === faturaId && t.fonte === 'CC');
 
-    if (r.duplicata) {
-      // Mostrar modal de duplicata
-      _cfMostrarModalDuplicata(r.fatura, {
-        cartao:       cartaoNome,
-        bandeira:     _ccrBandeira || null,
-        competencia:  _ccrMesCC,
-        valor_total:  valorTotal,
-        qtd_itens:    _ccrLancs.length,
-        arquivo_nome: _ccrFileName || null,
-        hash_fatura:  hashFatura,
-        fatura_id_ref: faturaId,
-        itens: itensPayload,
-      });
-    } else {
-      // Nova importação — registrar normalmente
-      const reg = await api.post('/api/dre/cartao-faturas', {
-        cartao:       cartaoNome,
-        bandeira:     _ccrBandeira || null,
-        competencia:  _ccrMesCC,
-        valor_total:  valorTotal,
-        qtd_itens:    _ccrLancs.length,
-        arquivo_nome: _ccrFileName || null,
-        hash_fatura:  hashFatura,
-        fatura_id_ref: faturaId,
-        itens:        itensPayload,
-      });
-      if (reg?.ok && typeof carregarCartaoFaturas === 'function') carregarCartaoFaturas();
-    }
-  }).catch(() => {});
+  let duplicataDb = null;
+  try {
+    const vRes = await api.post('/api/dre/cartao-faturas/verificar', {
+      hash_fatura: hashFatura, cartao: cartaoNome,
+      competencia: _ccrMesCC, valor_total: valorTotal, qtd_itens: itensPayload.length,
+    });
+    if (vRes.ok && vRes.duplicata) duplicataDb = vRes.fatura;
+  } catch(e) { /* falha silenciosa — não bloqueia */ }
 
-  // Bug 6.7-F: sincronizar categorias classificadas → cartao_fatura_itens
+  if (jaEmTXS || duplicataDb) {
+    // Guardar contexto para as opções do modal
+    _cfDupPayload  = {
+      cartao: cartaoNome, bandeira: _ccrBandeira || null,
+      competencia: _ccrMesCC, valor_total: valorTotal,
+      qtd_itens: _ccrLancs.length, arquivo_nome: _ccrFileName || null,
+      hash_fatura: hashFatura, fatura_id_ref: faturaId, itens: itensPayload,
+    };
+    _cfDupFaturaId  = duplicataDb?.id || null;
+    _cfDupFaturaIdCC = faturaId; // faturaCC para substituição em TXS
+    _cfDupLancsAtual = _ccrLancs.slice(); // lançamentos atuais a substituir
+    _cfMostrarModalDuplicataLanc(duplicataDb, faturaId, jaEmTXS);
+    return; // NÃO chama addLancs()
+  }
+
+  // ── Fatura nova — enviar normalmente ────────────────────────────────────
+  _ccrExecutarEnvioNovo(faturaId, cartaoNome, valorTotal, itensPayload, hashFatura);
+}
+
+// Envia fatura nova ao DRE sem verificação (chamado após confirmar que não é duplicata)
+async function _ccrExecutarEnvioNovo(faturaId, cartaoNome, valorTotal, itensPayload, hashFatura) {
+  _ccrLancs.forEach(l => { l.faturaCC = faturaId; l.bandeira = _ccrBandeira || l.bandeira || ''; });
+  addLancs(_ccrLancs, _ccrFileName);
+  fecharModal('m-cc-revisao');
+  toast(`✅ ${_ccrLancs.length} lançamentos enviados para o DRE`);
+  setTimeout(_revinculateCC, 200);
+  ccrAlertarPagamentoSemFatura(faturaId, _ccrMesCC, _ccrBandeira);
+
+  try {
+    const reg = await api.post('/api/dre/cartao-faturas', {
+      cartao: cartaoNome, bandeira: _ccrBandeira || null,
+      competencia: _ccrMesCC, valor_total: valorTotal,
+      qtd_itens: _ccrLancs.length, arquivo_nome: _ccrFileName || null,
+      hash_fatura: hashFatura, fatura_id_ref: faturaId, itens: itensPayload,
+    });
+    if (reg?.ok && typeof carregarCartaoFaturas === 'function') carregarCartaoFaturas();
+  } catch(e) {}
+
   _sincronizarCategoriesCC(_ccrLancs, faturaId);
 }
+
+// Variáveis de contexto para modal de duplicata de lançamentos
+let _cfDupFaturaIdCC = null;
+let _cfDupLancsAtual = [];
 
 // Alerta se existe lançamento "Pagamento de Fatura CC" no mês sem vínculo
 function ccrAlertarPagamentoSemFatura(faturaId, mesCC, bandeira) {
@@ -7195,6 +7201,92 @@ async function _cfReprocessar() {
   _cfDupFaturaId = null;
 }
 
+// Sprint 6.7-I: mostrar modal com contexto de lançamentos (TXS + banco)
+function _cfMostrarModalDuplicataLanc(faturaDb, faturaIdCC, jaEmTXS) {
+  // Preencher campos do modal existente
+  const setText = (id, v) => { const e = document.getElementById(id); if(e) e.textContent = v||'—'; };
+  if (faturaDb) {
+    setText('cf-dup-cartao', faturaDb.cartao);
+    setText('cf-dup-comp',   faturaDb.competencia);
+    setText('cf-dup-valor',  faturaDb.valor_total != null
+      ? 'R$ ' + parseFloat(faturaDb.valor_total).toLocaleString('pt-BR',{minimumFractionDigits:2})
+      : '—');
+    setText('cf-dup-data', faturaDb.importado_em
+      ? new Date(faturaDb.importado_em).toLocaleString('pt-BR') : '—');
+    const sitMap = { NORMAL:'Normal', REPROCESSADA:'🔄 Reprocessada',
+                     COM_DIFERENCAS:'⚠️ Com diferenças', DUPLICADA:'Duplicada',
+                     RECONSTRUIDA:'🔧 Reconstruída' };
+    setText('cf-dup-sit', sitMap[faturaDb.situacao] || faturaDb.situacao);
+  } else {
+    // Só em TXS, sem registro no banco
+    setText('cf-dup-cartao', faturaIdCC);
+    setText('cf-dup-comp',   _ccrMesCC);
+    setText('cf-dup-valor',  '—');
+    setText('cf-dup-data',   'Sessão atual');
+    setText('cf-dup-sit',    'Sem registro no banco');
+  }
+  // Aviso TXS
+  const aviso = document.getElementById('cf-dup-txs-aviso');
+  if (aviso) aviso.style.display = jaEmTXS ? '' : 'none';
+  // Botão substituir só aparece se há lançamentos em TXS
+  const btnSubst = document.getElementById('cf-dup-btn-subst');
+  if (btnSubst) btnSubst.style.display = jaEmTXS ? '' : 'none';
+  document.getElementById('m-cf-duplicata').style.display = 'flex';
+}
+
+// Sprint 6.7-I: substituir lançamentos antigos da fatura em TXS pelos novos,
+// preservando categorias onde descrição+data+valor batem
+async function _ccrSubstituirLancamentos() {
+  if (!_cfDupFaturaIdCC || !_cfDupLancsAtual.length) return;
+  document.getElementById('m-cf-duplicata').style.display = 'none';
+
+  const faturaIdCC = _cfDupFaturaIdCC;
+  const novos      = _cfDupLancsAtual;
+
+  // Mapear categorias dos lançamentos antigos por hash simples (data|desc|valor)
+  const catMap = {};
+  TXS.filter(t => t.faturaCC === faturaIdCC && t.fonte === 'CC').forEach(t => {
+    const k = `${t.data||''}|${(t.lancamento||'').trim().toUpperCase()}|${Math.round(Math.abs(parseFloat(t.valor||0))*100)}`;
+    if (t.categoria) catMap[k] = t.categoria;
+  });
+
+  // Remover lançamentos antigos da fatura de TXS
+  const antes = TXS.length;
+  for (let i = TXS.length - 1; i >= 0; i--) {
+    if (TXS[i].faturaCC === faturaIdCC && TXS[i].fonte === 'CC') TXS.splice(i, 1);
+  }
+  const removidos = antes - TXS.length;
+
+  // Aplicar categorias preservadas nos novos
+  novos.forEach(l => {
+    const k = `${l.data||''}|${(l.lancamento||'').trim().toUpperCase()}|${Math.round(Math.abs(parseFloat(l.valor||0))*100)}`;
+    if (!l.categoria && catMap[k]) l.categoria = catMap[k];
+    l.faturaCC = faturaIdCC;
+    l.bandeira = _ccrBandeira || l.bandeira || '';
+  });
+
+  // Adicionar novos lançamentos
+  addLancs(novos, _ccrFileName);
+  fecharModal('m-cc-revisao');
+  toast(`✅ ${removidos} lançamento(s) substituído(s) · ${novos.length} inserido(s)`);
+  setTimeout(_revinculateCC, 200);
+
+  // Reprocessar controle no banco se existir
+  if (_cfDupPayload && _cfDupFaturaId) {
+    try {
+      await api.post('/api/dre/cartao-faturas', {
+        ..._cfDupPayload, reprocessar: true, fatura_existente_id: _cfDupFaturaId,
+      });
+      if (typeof carregarCartaoFaturas === 'function') carregarCartaoFaturas();
+    } catch(e) {}
+  }
+
+  _cfDupPayload    = null;
+  _cfDupFaturaId   = null;
+  _cfDupFaturaIdCC = null;
+  _cfDupLancsAtual = [];
+}
+
 // Badge de situação para o painel
 function _cfSituacaoBadge(s) {
   return ({
@@ -7365,12 +7457,18 @@ async function _sincronizarCategoriesCC(lancs, faturaIdRef) {
       <p style="font-size:12px;color:var(--muted);margin-bottom:16px">
         Clique em <strong>Reprocessar</strong> para atualizar a fatura existente preservando classificações, ou <strong>Cancelar</strong> para não importar.
       </p>
-      <div style="display:flex;gap:10px;justify-content:flex-end">
-        <button onclick="_cfCancelarDuplicata()" style="padding:8px 18px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:13px;cursor:pointer;font-family:'DM Sans',sans-serif">
+      <p id="cf-dup-txs-aviso" style="font-size:11px;background:#fee2e2;border:1px solid #fca5a5;border-radius:6px;padding:8px 10px;margin-bottom:12px;display:none">
+        ⚠️ Esta fatura já possui lançamentos no DRE desta sessão.
+      </p>
+      <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
+        <button onclick="_cfCancelarDuplicata()" style="padding:8px 14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif">
           Cancelar
         </button>
-        <button onclick="_cfReprocessar()" style="padding:8px 18px;background:#8B0000;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif">
-          🔄 Reprocessar
+        <button onclick="_cfReprocessar()" style="padding:8px 14px;background:#f59e0b;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif" title="Atualiza cartao_faturas sem duplicar lançamentos no DRE">
+          🔄 Só atualizar controle
+        </button>
+        <button onclick="_ccrSubstituirLancamentos()" id="cf-dup-btn-subst" style="padding:8px 14px;background:#dc2626;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif" title="Remove lançamentos antigos da fatura e insere os novos, preservando categorias">
+          🔁 Substituir lançamentos
         </button>
       </div>
     </div>
