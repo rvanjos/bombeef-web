@@ -581,19 +581,19 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
     <button class="btn btn-s" onclick="limparFiltrosHist()">✕ Limpar</button>
     <button class="btn btn-s" id="hist-expand-btn" onclick="toggleHistExpand()" title="Expandir / compactar visualização">⤢ Expandir</button>
     <button class="btn btn-s bb-desktop-only" onclick="exportarHistXLS()" title="Exportar para Excel formatado" style="background:#217346;color:#fff;border-color:#217346">📊 Excel</button>
-    <span id="hist-count" style="font-size:11px;color:va<div style="overflow-x:auto">r(--muted);margin-left:4px"></span>
+    <span id="hist-count" style="font-size:11px;color:var(--muted);margin-left:4px"></span>
   </div>
-  <div class="card">
-    <table class="tbl">
+  <div style="overflow-x:auto">
+    <table class="tbl" id="tbl-hist">
       <thead><tr>
         <th>Código</th><th>Produto</th><th>Validade</th>
         <th>Encerrado em</th><th>Motivo</th><th>Ação Prev.</th><th>Observação</th><th>Responsável</th>
         <th style="text-align:center">Ações</th>
       </tr></thead>
       <tbody id="tbody-hist"></tbody>
-    </table></div>
-    <div class="empty" id="empty-hist" style="display:none"><p>Nenhum item no histórico.</p></div>
+    </table>
   </div>
+  <div class="empty" id="empty-hist" style="display:none"><p>Nenhum item no histórico.</p></div>
 </div>
 
 <!-- Modal Editar Histórico -->
