@@ -1707,6 +1707,108 @@ module.exports = function (pool, app) {
   });
 
 
+  // POST /api/dre/cartao-faturas/reconstruir — backfill de cartao_faturas a partir das sessões DRE
+  r.post('/cartao-faturas/reconstruir', autenticar(), async (req, res) => {
+    try {
+      // 1) Buscar todas as sessões com seus dados_json
+      const { rows: sessoes } = await pool.query(
+        `SELECT id, mes_ref, dados_json FROM dre_sessoes WHERE dados_json IS NOT NULL ORDER BY mes_ref`
+      );
+
+      // 2) Extrair lançamentos CC e agrupar por faturaCC
+      const grupos = {}; // faturaCC → { cartao, bandeira, competencia, itens[] }
+      for (const s of sessoes) {
+        const txs = s.dados_json?.transactions || [];
+        for (const t of txs) {
+          const fid = t.faturaCC;
+          if (!fid || t.fonte !== 'CC') continue;
+          if (!grupos[fid]) {
+            // Extrair competência do faturaCC (ex: CC_05_2026_Caixa → 05/2026)
+            const mMatch = fid.match(/CC_(\d{2})_(\d{4})/);
+            const comp = mMatch ? `${mMatch[1]}/${mMatch[2]}` : s.mes_ref;
+            grupos[fid] = {
+              faturaCC:    fid,
+              cartao:      t.bandeira || fid.replace(/CC_\d{2}_\d{4}_?/,'') || 'Cartão',
+              bandeira:    t.bandeira || null,
+              competencia: comp,
+              itens: [],
+            };
+          }
+          grupos[fid].itens.push({
+            data:      t.data       || null,
+            descricao: t.lancamento || t.razaoSocial || '',
+            valor:     t.valor,
+            categoria: t.categoria  || null,
+            portador:  t.portador   || null,
+          });
+        }
+      }
+
+      const agora = new Date().toISOString();
+      let faturasCriadas = 0, faturasIgnoradas = 0, itensCriados = 0, itensIgnorados = 0;
+
+      for (const [fid, g] of Object.entries(grupos)) {
+        const valorTotal = g.itens.reduce((s, i) => s + Math.abs(parseFloat(i.valor || 0)), 0);
+        const qtdItens   = g.itens.length;
+
+        // 3) Verificar se já existe por fatura_id_ref (campo que guarda o faturaCC)
+        const exists = await pool.query(
+          `SELECT id FROM cartao_faturas WHERE fatura_id_ref = $1 LIMIT 1`,
+          [fid]
+        );
+
+        let faturaDbId;
+        if (exists.rows.length) {
+          faturaDbId = exists.rows[0].id;
+          faturasIgnoradas++;
+        } else {
+          // 4) Criar fatura
+          const ins = await pool.query(`
+            INSERT INTO cartao_faturas
+              (cartao, bandeira, competencia, valor_total, qtd_itens,
+               arquivo_nome, fatura_id_ref, status, situacao, log_json, usuario_id)
+            VALUES ($1,$2,$3,$4,$5,'Reconstruído do DRE',$6,'IMPORTADA','RECONSTRUIDA',$7,$8)
+            RETURNING id
+          `, [
+            g.cartao, g.bandeira, g.competencia,
+            valorTotal, qtdItens, fid,
+            JSON.stringify([{ acao:'BACKFILL', em: agora, origem: 'dre_sessoes' }]),
+            req.user?.id || null,
+          ]);
+          faturaDbId = ins.rows[0].id;
+          faturasCriadas++;
+        }
+
+        // 5) Inserir itens ausentes
+        for (const it of g.itens.slice(0, 500)) {
+          const h = _hashItem(it);
+          const r2 = await pool.query(
+            `SELECT id FROM cartao_fatura_itens WHERE fatura_id=$1 AND hash_item=$2 LIMIT 1`,
+            [faturaDbId, h]
+          );
+          if (r2.rows.length) { itensIgnorados++; continue; }
+          await pool.query(`
+            INSERT INTO cartao_fatura_itens
+              (fatura_id, data_compra, descricao, valor, categoria_dre, portador, hash_item)
+            VALUES ($1,$2,$3,$4,$5,$6,$7)
+            ON CONFLICT (fatura_id, hash_item) DO NOTHING
+          `, [faturaDbId, it.data, it.descricao, parseFloat(it.valor || 0),
+              it.categoria || null, it.portador || null, h]);
+          itensCriados++;
+        }
+      }
+
+      res.json({
+        ok: true,
+        faturasCriadas, faturasIgnoradas, itensCriados, itensIgnorados,
+        msg: `${faturasCriadas} fatura(s) criada(s), ${faturasIgnoradas} já existiam, ${itensCriados} itens inseridos.`,
+      });
+    } catch(e) {
+      console.error('[dre/cartao-faturas/reconstruir]', e.message);
+      res.status(500).json({ ok: false, erro: e.message });
+    }
+  });
+
   // ── Helper: hash de item de fatura ──────────────────────────────────────────
   function _hashItem(it) {
     const desc  = (it.descricao || it.lancamento || '').toUpperCase()

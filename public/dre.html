@@ -4062,7 +4062,12 @@ async function renderStatusCartoes() {
     const kpis    = res.kpis  || {};
 
     if (!faturas.length) {
-      grid.innerHTML = '<div style="font-size:11px;color:var(--muted);padding:8px">Nenhuma fatura registrada no banco.</div>';
+      grid.innerHTML = `<div style="font-size:12px;color:var(--muted);padding:8px">
+        Nenhuma fatura registrada no banco.
+        <button onclick="reconstruirFaturasAntigas()" style="margin-left:10px;padding:4px 12px;background:var(--primary);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:11px;font-family:'DM Sans',sans-serif">
+          🔄 Reconstruir faturas antigas
+        </button>
+      </div>`;
       return;
     }
 
@@ -4113,6 +4118,33 @@ async function renderStatusCartoes() {
     grid.innerHTML = `<div style="font-size:11px;color:#dc2626;padding:8px">❌ ${e.message}</div>`;
   }
 }
+
+// Sprint 6.7-H: reconstruir cartao_faturas a partir dos lançamentos CC salvos nas sessões DRE
+async function reconstruirFaturasAntigas() {
+  const grid = document.getElementById('cartoes-grid');
+  if (grid) grid.innerHTML = '<div style="font-size:11px;color:var(--muted);padding:8px">⏳ Reconstruindo faturas…</div>';
+  try {
+    const res = await api.post('/api/dre/cartao-faturas/reconstruir', {});
+    if (!res.ok) throw new Error(res.erro || 'Erro ao reconstruir');
+    toast(`✅ ${res.msg}`);
+    // Exibir resumo
+    if (grid) {
+      grid.innerHTML = `<div style="font-size:12px;padding:10px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;margin-bottom:8px">
+        <strong>✅ Reconstrução concluída</strong><br>
+        📁 Faturas criadas: <strong>${res.faturasCriadas}</strong> &nbsp;·&nbsp;
+        ⏭ Já existiam: <strong>${res.faturasIgnoradas}</strong><br>
+        📋 Itens inseridos: <strong>${res.itensCriados}</strong> &nbsp;·&nbsp;
+        ⏭ Já existiam: <strong>${res.itensIgnorados}</strong>
+      </div>`;
+    }
+    // Recarregar painel após 1s
+    setTimeout(renderStatusCartoes, 1000);
+  } catch(e) {
+    toast('❌ ' + e.message);
+    if (grid) grid.innerHTML = `<div style="font-size:11px;color:#dc2626;padding:8px">❌ ${e.message}</div>`;
+  }
+}
+
 
 // Verifica se itens de fatura CC já constam no extrato (duplicata)
 function _verificarDuplicatasFaturaCC() {
