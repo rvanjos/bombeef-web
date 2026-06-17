@@ -213,9 +213,11 @@ module.exports = function(pool) {
         const manter = ids[0].id;
         const excluir = ids.slice(1).map(r => r.id);
         for (const eid of excluir) {
-          // Reatribuir vendas e pagamentos para o registro principal antes de deletar
+          // Reatribuir todas as referências para o registro principal antes de deletar
           await pool.query(`UPDATE vendas_fiado SET cliente_id=$1 WHERE cliente_id=$2`, [manter, eid]);
           await pool.query(`UPDATE pagamentos_fiado SET cliente_id=$1 WHERE cliente_id=$2`, [manter, eid]);
+          // historico_fiado tem FK nullable — reatribuir ou nullar
+          await pool.query(`UPDATE historico_fiado SET cliente_id=$1 WHERE cliente_id=$2`, [manter, eid]).catch(()=>{});
           await pool.query(`DELETE FROM clientes_fiado WHERE id=$1`, [eid]);
           removidos++;
         }
