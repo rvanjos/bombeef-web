@@ -5931,9 +5931,57 @@ async function importBoletos(){
       // Dias restantes a projetar
       const diasRestantes = Math.max(0, diasMes - diasRealizados);
 
-      // Média diária e projeção
-      const mediaDiaria = totalRealizado / diasRealizados;
-      const projecao = mediaDiaria * diasRestantes;
+      // ── Projeção ponderada: meta × fator de desempenho ──────────────────────
+      // Busca a meta do mês para ponderar a projeção
+      const dm = await api.get(`/api/faturamento/meta/${mesEnc}`).catch(()=>({ok:false}));
+      const meta = dm.ok && dm.data?.meta ? parseFloat(dm.data.meta) : 0;
+
+      // Peso do tempo decorrido no mês (0 a 1)
+      const pesoTempo = diasRealizados / diasMes;
+
+      // Se temos meta definida, usar projeção ponderada
+      // Se não temos meta, usar média diária simples como fallback
+      let projecao, metodoDesc;
+
+      if (meta > 0) {
+        // Esperado até agora = meta × % do mês decorrido
+        const esperadoAteAgora = meta * pesoTempo;
+
+        // Fator de desempenho = o quanto estamos acima/abaixo do esperado
+        const fatorDesempenho = totalRealizado / esperadoAteAgora;
+
+        // Projeção ponderada:
+        // - Base: a meta para os dias restantes (meta × % restante do mês)
+        // - Ajuste: ponderado pelo fator de desempenho, mas amortizado
+        //   Amortização: quanto mais avançado o mês, menos o fator importa
+        //   (no dia 28 de 30, a projeção é quase igual ao realizado)
+        //
+        // Peso do fator decresce à medida que o mês avança:
+        // No dia 1: fator tem 100% de peso na projeção restante
+        // No dia 15: fator tem 50% de peso
+        // No dia 28: fator tem 7% de peso (quase meta pura)
+        const pesoFator = 1 - pesoTempo; // quanto mais avançado, menos peso no fator
+        const fatorPonderado = 1 + (fatorDesempenho - 1) * pesoFator;
+
+        // Projeção = dias restantes projetados com fator ponderado sobre a meta/dia
+        const metaDiaria = meta / diasMes;
+        projecao = metaDiaria * diasRestantes * fatorPonderado;
+
+        // Garantir que a projeção não seja negativa
+        projecao = Math.max(0, projecao);
+
+        const totalProjetado = totalRealizado + projecao;
+        const pctMeta = Math.round(totalProjetado / meta * 100);
+        const pctFator = Math.round(fatorDesempenho * 100);
+
+        metodoDesc = `Ponderado: desempenho ${pctFator}% vs esperado · projetado total ${fmt.brl(totalProjetado)} (${pctMeta}% da meta R$ ${fmt.brl(meta)})`;
+      } else {
+        // Sem meta definida: média diária simples (fallback)
+        const mediaDiaria = totalRealizado / diasRealizados;
+        projecao = mediaDiaria * diasRestantes;
+        const totalProjetado = totalRealizado + projecao;
+        metodoDesc = `Média diária ${fmt.brl(totalRealizado / diasRealizados)}/dia · sem meta definida · total ${fmt.brl(totalProjetado)}`;
+      }
 
       if (projecao > 1) {
         const dtPrev = `${yyyy}-${mm}-${String(diasMes).padStart(2,'0')}`;
@@ -5942,7 +5990,7 @@ async function importBoletos(){
           data: dtPrev,
           mes: mesRef,
           mesCaixa: mesRef,
-          lancamento: `📈 PROJEÇÃO DE RECEITA — Média diária ${fmt.brl(mediaDiaria)}/dia × ${diasRestantes} dias restantes`,
+          lancamento: `📈 PROJEÇÃO DE RECEITA — ${meta > 0 ? 'Meta ponderada pelo desempenho' : 'Média diária'} · ${diasRestantes} dias restantes`,
           razaoSocial: 'Projeção por Média Diária',
           valor: Math.round(projecao * 100) / 100,
           categoria: 'VENDAS DE MERCADORIAS',
@@ -5950,13 +5998,7 @@ async function importBoletos(){
           ignorar: false,
         });
 
-        // Busca meta para comparar (opcional)
-        const dm = await api.get(`/api/faturamento/meta/${mesEnc}`).catch(()=>({ok:false}));
-        const meta = dm.ok && dm.data?.meta ? parseFloat(dm.data.meta) : 0;
-        const totalProjetado = totalRealizado + projecao;
-        const pctMeta = meta > 0 ? ` · ${Math.round(totalProjetado/meta*100)}% da meta` : '';
-
-        toast(`✅ Boletos + Projeção: ${fmt.brl(projecao)} (realiz. ${fmt.brl(totalRealizado)} em ${diasRealizados}d · projetado total ${fmt.brl(totalProjetado)}${pctMeta})`);
+        toast(`✅ Boletos + Projeção: ${fmt.brl(projecao)} · ${metodoDesc}`);
       } else {
         // Mês encerrado ou realizado até o fim — sem projeção
         toast(`✅ Boletos carregados · Total realizado: ${fmt.brl(totalRealizado)}`);
