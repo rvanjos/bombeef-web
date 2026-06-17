@@ -188,6 +188,44 @@ module.exports = function(pool) {
     } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
   });
 
+  // Deduplicar clientes_fiado funcionários por nome (manter o que tem mais vendas ou menor id)
+  r.post('/dedup-funcionarios', async (req, res) => {
+    try {
+      // Para cada nome duplicado de funcionario, manter o id com mais vendas (ou menor id), remover os outros
+      const { rows: dups } = await pool.query(`
+        SELECT nome, COUNT(*) as qtd
+        FROM clientes_fiado
+        WHERE tipo_cliente = 'funcionario'
+        GROUP BY nome
+        HAVING COUNT(*) > 1
+      `);
+      let removidos = 0;
+      for (const d of dups) {
+        // Pegar todos os ids desse nome, ordenados: primeiro o que tem funcionario_id, depois por mais vendas, depois menor id
+        const { rows: ids } = await pool.query(`
+          SELECT c.id,
+            (SELECT COUNT(*) FROM vendas_fiado v WHERE v.cliente_id=c.id) AS nvend,
+            c.funcionario_id
+          FROM clientes_fiado c
+          WHERE c.nome=$1 AND c.tipo_cliente='funcionario'
+          ORDER BY (c.funcionario_id IS NOT NULL) DESC, nvend DESC, c.id ASC
+        `, [d.nome]);
+        const manter = ids[0].id;
+        const excluir = ids.slice(1).map(r => r.id);
+        for (const eid of excluir) {
+          // Reatribuir vendas e pagamentos para o registro principal antes de deletar
+          await pool.query(`UPDATE vendas_fiado SET cliente_id=$1 WHERE cliente_id=$2`, [manter, eid]);
+          await pool.query(`UPDATE pagamentos_fiado SET cliente_id=$1 WHERE cliente_id=$2`, [manter, eid]);
+          await pool.query(`DELETE FROM clientes_fiado WHERE id=$1`, [eid]);
+          removidos++;
+        }
+      }
+      res.json({ ok: true, removidos, msg: `${removidos} registro(s) duplicado(s) removido(s).` });
+    } catch(e) {
+      res.status(500).json({ ok: false, erro: e.message });
+    }
+  });
+
   r.get('/clientes', async (req, res) => {
     try {
       const { rows } = await pool.query(`

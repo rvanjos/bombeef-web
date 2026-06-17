@@ -186,6 +186,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
     <input class="flt" type="text" placeholder="🔍 Buscar funcionário..." id="busca-func-ret" oninput="renderFuncionarios()" style="min-width:200px">
     <button class="btn btn-red" onclick="abrirNovaVendaFuncionario()">＋ Nova Retirada</button>
     <button class="btn btn-gray" onclick="sincFuncionarios()">🔄 Sincronizar com RH</button>
+    <button class="btn btn-gray" onclick="dedupFuncionarios()" style="background:#fef3c7;border-color:#fde68a;color:#92400e" title="Remove registros duplicados de funcionários">🧹 Remover duplicatas</button>
   </div>
 
   <!-- Cards de funcionários com saldo -->
@@ -615,6 +616,15 @@ async function sincFuncionarios() {
   toast(`✅ ${d.criados} funcionário(s) sincronizado(s)!`);
   await carregarTudo();
 }
+
+async function dedupFuncionarios() {
+  if (!confirm('Remover registros duplicados de funcionários? Vendas e pagamentos serão consolidados no registro principal.')) return;
+  const r = await api.post('/api/fiado/dedup-funcionarios', {});
+  if (!r.ok) { toast('❌ ' + (r.erro || 'Erro')); return; }
+  toast(`✅ ${r.msg}`);
+  await carregarTudo();
+}
+
 
 let _filtroTipoVenda = null;
 
