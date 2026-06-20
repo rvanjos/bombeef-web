@@ -18,7 +18,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
 .ph{background:var(--red);padding:12px 22px;display:flex;align-items:center;gap:10px;box-shadow:0 2px 12px rgba(139,0,0,.3);}
 .ph h2{font-family:'Playfair Display',serif;font-size:17px;color:#fff;font-weight:700;}
 .ph-sub{font-size:11px;color:rgba(255,255,255,.7);margin-left:auto;}
-.body{padding:18px 18px;flex:1;overflow-y:auto;overflow-x:auto;width:100%;background:var(--bg);}
+.body{padding:18px 18px;flex:1;overflow-y:auto;overflow-x:hidden;width:100%;background:var(--bg);}
 
 /* ── KPI CARDS ── */
 .kpi-row{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px;}
@@ -417,7 +417,7 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
         <button class="btn btn-s" style="padding:4px 10px;font-size:11px" onclick="encerrarSelecionados('descartado')">🗑️ Marcar descartado</button>
         <button class="btn btn-r" style="padding:4px 10px;font-size:11px" onclick="excluirSelecionadosVal()">✕ Excluir</button>
       </div>
-      <div style="overflow-x:auto"><table class="tbl" id="tbl-val">
+      <div style="overflow-x:auto;width:100%"><table class="tbl" id="tbl-val">
         <thead><tr>
           <th style="min-width:24px;width:24px"><input type="checkbox" class="row-sel" id="val-sel-all" id2="sel-all" onchange="valToggleSelAll(this); toggleSelAll(this);" title="Selecionar todos"></th>
           <th style="min-width:55px">Cód.</th>
