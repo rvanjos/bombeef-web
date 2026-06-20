@@ -18,10 +18,10 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
 .ph{background:var(--red);padding:12px 22px;display:flex;align-items:center;gap:10px;box-shadow:0 2px 12px rgba(139,0,0,.3);}
 .ph h2{font-family:'Playfair Display',serif;font-size:17px;color:#fff;font-weight:700;}
 .ph-sub{font-size:11px;color:rgba(255,255,255,.7);margin-left:auto;}
-.body{padding:18px 18px;flex:1;overflow-y:auto;overflow-x:hidden;width:100%;background:var(--bg);}
+.body{padding:18px 18px;flex:1;overflow-y:auto;overflow-x:auto;width:100%;background:var(--bg);}
 
 /* ── KPI CARDS ── */
-.kpi-row{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px;}
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:14px;}
 .kc{background:var(--white);border:1px solid var(--border);border-radius:10px;padding:13px 14px;border-left:4px solid var(--orange);box-shadow:var(--shadow);cursor:default;}
 .kc.g{border-left-color:var(--green);} .kc.r{border-left-color:var(--red-l);} .kc.b{border-left-color:var(--blue);} .kc.d{border-left-color:#666;}
 .kc-l{font-size:9px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);font-weight:700;margin-bottom:3px;}
