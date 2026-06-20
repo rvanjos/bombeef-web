@@ -83,8 +83,23 @@ body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var
   scrollbar-width:none;
   padding:10px 0 20px;
   box-shadow:2px 0 8px rgba(0,0,0,.04);
+  transition:width .22s ease, box-shadow .22s ease;
+  position:relative;
+  z-index:50;
 }
 .pnav::-webkit-scrollbar{display:none;}
+/* Collapsed */
+.pnav.collapsed{width:44px;overflow:visible;}
+.pnav.collapsed .pnav-section,.pnav.collapsed .tab-label,.pnav.collapsed .nav-pin-btn span{display:none;}
+.pnav.collapsed .pnav-tab{padding:10px 0;justify-content:center;gap:0;border-left:3px solid transparent;}
+.pnav.collapsed .tab-icon{font-size:17px;}
+.pnav.collapsed .pnav-tab:hover::after{
+  content:attr(data-label);
+  position:absolute;left:44px;top:50%;transform:translateY(-50%);
+  background:#333;color:#fff;padding:4px 10px;border-radius:6px;
+  font-size:11px;font-weight:600;white-space:nowrap;z-index:200;
+  pointer-events:none;box-shadow:0 2px 8px rgba(0,0,0,.25);
+}
 .pnav-tab{
   display:flex;
   align-items:center;
@@ -102,15 +117,36 @@ body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var
   width:100%;
   transition:.15s;
   white-space:nowrap;
+  position:relative;
 }
 .pnav-tab .tab-icon{font-size:15px;flex-shrink:0;}
-.pnav-tab .tab-label{overflow:hidden;text-overflow:ellipsis;}
+.pnav-tab .tab-label{overflow:hidden;text-overflow:ellipsis;transition:opacity .15s;}
 .pnav-tab:hover{color:var(--red);background:#fff5f5;}
 .pnav-tab.active{color:var(--red);background:#fff0f0;border-left-color:var(--red);font-weight:700;}
 .pnav-section{
   font-size:9px;text-transform:uppercase;letter-spacing:1px;
   color:var(--muted);padding:14px 18px 4px;opacity:.6;
+  transition:opacity .15s;
 }
+/* Botão de colapso/pin */
+.nav-toggle-btn{
+  display:flex;align-items:center;justify-content:center;
+  width:28px;height:28px;border-radius:50%;border:1px solid var(--border);
+  background:var(--white);cursor:pointer;font-size:13px;
+  box-shadow:0 1px 4px rgba(0,0,0,.1);transition:.15s;
+  position:absolute;right:-14px;top:18px;z-index:100;
+}
+.nav-toggle-btn:hover{background:#fff5f5;border-color:var(--red);color:var(--red);}
+.nav-pin-btn{
+  display:flex;align-items:center;gap:5px;
+  padding:6px 14px;font-size:10px;font-weight:600;
+  color:var(--muted);cursor:pointer;border:none;background:none;
+  font-family:'DM Sans',sans-serif;width:100%;text-align:left;
+  border-top:1px solid var(--border);margin-top:auto;padding-top:10px;
+  transition:.15s;
+}
+.nav-pin-btn:hover{color:var(--red);}
+.nav-pin-btn.pinned{color:var(--red);}
 
 /* Portal body — row com sidebar */
 .portal-body{
@@ -415,42 +451,49 @@ body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var
   <!-- Sidebar lateral (desktop) -->
   <div class="portal-body">
   <nav class="pnav" id="pnav">
+    <!-- Botão de colapso flutuante -->
+    <button class="nav-toggle-btn" id="nav-toggle-btn" onclick="togglePnav()" title="Recolher menu">‹</button>
 
     <div class="pnav-section">🏠 Principal</div>
-    <button class="pnav-tab active" onclick="showTab('dashboard')" data-tab="dashboard"><span class="tab-icon">🏠</span><span class="tab-label">Dashboard</span></button>
-    <button class="pnav-tab" onclick="showTab('hub')" data-tab="hub"><span class="tab-icon">🎛️</span><span class="tab-label">Hub Operacional</span></button>
+    <button class="pnav-tab active" data-label="Dashboard" onclick="showTab('dashboard')" data-tab="dashboard"><span class="tab-icon">🏠</span><span class="tab-label">Dashboard</span></button>
+    <button class="pnav-tab" data-label="Hub Operacional" onclick="showTab('hub')" data-tab="hub"><span class="tab-icon">🎛️</span><span class="tab-label">Hub Operacional</span></button>
 
     <div class="pnav-section">💰 Financeiro</div>
-    <button class="pnav-tab" onclick="showTab('dre')"          data-tab="dre"          data-perfil="admin,financeiro,contabil"><span class="tab-icon">📊</span><span class="tab-label">DRE</span></button>
-    <button class="pnav-tab" onclick="showTab('boletos')"      data-tab="boletos"      data-perfil="admin,gestor,financeiro,contabil"><span class="tab-icon">📄</span><span class="tab-label">Boletos</span></button>
-    <button class="pnav-tab" onclick="showTab('faturamento')"  data-tab="faturamento"  data-perfil="admin,gestor,financeiro,contabil"><span class="tab-icon">💰</span><span class="tab-label">Faturamento</span></button>
-    <button class="pnav-tab" onclick="showTab('vendasproduto')" data-tab="vendasproduto" data-perfil="admin,gestor"><span class="tab-icon">📈</span><span class="tab-label">Análise Vendas</span></button>
+    <button class="pnav-tab" data-label="DRE" onclick="showTab('dre')"          data-tab="dre"          data-perfil="admin,financeiro,contabil"><span class="tab-icon">📊</span><span class="tab-label">DRE</span></button>
+    <button class="pnav-tab" data-label="Boletos" onclick="showTab('boletos')"      data-tab="boletos"      data-perfil="admin,gestor,financeiro,contabil"><span class="tab-icon">📄</span><span class="tab-label">Boletos</span></button>
+    <button class="pnav-tab" data-label="Faturamento" onclick="showTab('faturamento')"  data-tab="faturamento"  data-perfil="admin,gestor,financeiro,contabil"><span class="tab-icon">💰</span><span class="tab-label">Faturamento</span></button>
+    <button class="pnav-tab" data-label="Análise Vendas" onclick="showTab('vendasproduto')" data-tab="vendasproduto" data-perfil="admin,gestor"><span class="tab-icon">📈</span><span class="tab-label">Análise Vendas</span></button>
 
     <div class="pnav-section">📦 Estoque</div>
-    <button class="pnav-tab" onclick="showTab('produtos')"  data-tab="produtos"  data-perfil="admin,gestor,estoque"><span class="tab-icon">📦</span><span class="tab-label">Produtos</span></button>
-    <button class="pnav-tab" onclick="showTab('cortes')"    data-tab="cortes"    data-perfil="admin,gestor,estoque"><span class="tab-icon">🔪</span><span class="tab-label">Cortes</span></button>
-    <button class="pnav-tab" onclick="showTab('validade')"  data-tab="validade"  data-perfil="admin,gestor,estoque,caixa"><span class="tab-icon">🗓</span><span class="tab-label">Validade</span></button>
-    <button class="pnav-tab" onclick="showTab('compras')"   data-tab="compras"   data-perfil="admin,gestor"><span class="tab-icon">🛒</span><span class="tab-label">Compras</span></button>
+    <button class="pnav-tab" data-label="Produtos" onclick="showTab('produtos')"  data-tab="produtos"  data-perfil="admin,gestor,estoque"><span class="tab-icon">📦</span><span class="tab-label">Produtos</span></button>
+    <button class="pnav-tab" data-label="Cortes" onclick="showTab('cortes')"    data-tab="cortes"    data-perfil="admin,gestor,estoque"><span class="tab-icon">🔪</span><span class="tab-label">Cortes</span></button>
+    <button class="pnav-tab" data-label="Validade" onclick="showTab('validade')"  data-tab="validade"  data-perfil="admin,gestor,estoque,caixa"><span class="tab-icon">🗓</span><span class="tab-label">Validade</span></button>
+    <button class="pnav-tab" data-label="Compras" onclick="showTab('compras')"   data-tab="compras"   data-perfil="admin,gestor"><span class="tab-icon">🛒</span><span class="tab-label">Compras</span></button>
 
     <div class="pnav-section">🎯 Comercial</div>
-    <button class="pnav-tab" onclick="showTab('promocoes')" data-tab="promocoes" data-perfil="admin,gestor,estoque"><span class="tab-icon">🎯</span><span class="tab-label">Promoções</span></button>
-    <button class="pnav-tab" onclick="showTab('kits')"      data-tab="kits"      data-perfil="admin,gestor,estoque"><span class="tab-icon">🎁</span><span class="tab-label">Kits</span></button>
-    <button class="pnav-tab" onclick="showTab('metas')"     data-tab="metas"     data-perfil="admin,gestor"><span class="tab-icon">🏆</span><span class="tab-label">Metas</span></button>
-    <button class="pnav-tab" onclick="showTab('fornecedores')" data-tab="fornecedores" data-perfil="admin,gestor"><span class="tab-icon">🏭</span><span class="tab-label">Fornecedores</span></button>
+    <button class="pnav-tab" data-label="Promoções" onclick="showTab('promocoes')" data-tab="promocoes" data-perfil="admin,gestor,estoque"><span class="tab-icon">🎯</span><span class="tab-label">Promoções</span></button>
+    <button class="pnav-tab" data-label="Kits" onclick="showTab('kits')"      data-tab="kits"      data-perfil="admin,gestor,estoque"><span class="tab-icon">🎁</span><span class="tab-label">Kits</span></button>
+    <button class="pnav-tab" data-label="Metas" onclick="showTab('metas')"     data-tab="metas"     data-perfil="admin,gestor"><span class="tab-icon">🏆</span><span class="tab-label">Metas</span></button>
+    <button class="pnav-tab" data-label="Fornecedores" onclick="showTab('fornecedores')" data-tab="fornecedores" data-perfil="admin,gestor"><span class="tab-icon">🏭</span><span class="tab-label">Fornecedores</span></button>
 
     <div class="pnav-section">👥 RH & Pessoal</div>
-    <button class="pnav-tab" onclick="showTab('rh')"          data-tab="rh"          data-perfil="admin,gestor,operador,caixa,estoque,financeiro,contabil"><span class="tab-icon">🧑‍💼</span><span class="tab-label">RH</span></button>
-    <button class="pnav-tab" onclick="showTab('ponto')"       data-tab="ponto"       data-perfil="admin,gestor,operador,caixa"><span class="tab-icon">⏱️</span><span class="tab-label">Ponto</span></button>
-    <button class="pnav-tab" onclick="showTab('minha-conta')" data-tab="minha-conta" data-perfil="operador,caixa"><span class="tab-icon">💼</span><span class="tab-label">Minha Conta</span></button>
+    <button class="pnav-tab" data-label="RH" onclick="showTab('rh')"          data-tab="rh"          data-perfil="admin,gestor,operador,caixa,estoque,financeiro,contabil"><span class="tab-icon">🧑‍💼</span><span class="tab-label">RH</span></button>
+    <button class="pnav-tab" data-label="Ponto" onclick="showTab('ponto')"       data-tab="ponto"       data-perfil="admin,gestor,operador,caixa"><span class="tab-icon">⏱️</span><span class="tab-label">Ponto</span></button>
+    <button class="pnav-tab" data-label="Minha Conta" onclick="showTab('minha-conta')" data-tab="minha-conta" data-perfil="operador,caixa"><span class="tab-icon">💼</span><span class="tab-label">Minha Conta</span></button>
 
     <div class="pnav-section">⚡ Operacional</div>
-    <button class="pnav-tab" onclick="showTab('retiradas')" data-tab="retiradas" data-perfil="admin,gestor,caixa"><span class="tab-icon">💸</span><span class="tab-label">Retiradas</span></button>
-    <button class="pnav-tab" onclick="showTab('fiado')"     data-tab="fiado"     data-perfil="admin,gestor,caixa"><span class="tab-icon">💳</span><span class="tab-label">Fiado</span><span id="nav-badge-fiado" style="display:none;background:#dc2626;color:#fff;border-radius:9px;padding:0 5px;font-size:10px;margin-left:3px;font-weight:700">0</span></button>
+    <button class="pnav-tab" data-label="Retiradas" onclick="showTab('retiradas')" data-tab="retiradas" data-perfil="admin,gestor,caixa"><span class="tab-icon">💸</span><span class="tab-label">Retiradas</span></button>
+    <button class="pnav-tab" data-label="Fiado" onclick="showTab('fiado')"     data-tab="fiado"     data-perfil="admin,gestor,caixa"><span class="tab-icon">💳</span><span class="tab-label">Fiado</span><span id="nav-badge-fiado" style="display:none;background:#dc2626;color:#fff;border-radius:9px;padding:0 5px;font-size:10px;margin-left:3px;font-weight:700">0</span></button>
 
     <div class="pnav-section">⚙️ Configurações</div>
-    <button class="pnav-tab" onclick="showTab('config')"    data-tab="config"    data-perfil="admin,gestor"><span class="tab-icon">⚙️</span><span class="tab-label">Config</span></button>
-    <button class="pnav-tab" onclick="showTab('auditoria')" data-tab="auditoria" data-perfil="admin"><span class="tab-icon">🔍</span><span class="tab-label">Auditoria</span></button>
+    <button class="pnav-tab" data-label="Config" onclick="showTab('config')"    data-tab="config"    data-perfil="admin,gestor"><span class="tab-icon">⚙️</span><span class="tab-label">Config</span></button>
+    <button class="pnav-tab" data-label="Auditoria" onclick="showTab('auditoria')" data-tab="auditoria" data-perfil="admin"><span class="tab-icon">🔍</span><span class="tab-label">Auditoria</span></button>
 
+    <!-- Botão de fixar (pin) no rodapé da nav -->
+    <button class="nav-pin-btn" id="nav-pin-btn" onclick="pinPnav()" title="Fixar menu aberto">
+      <span style="font-size:13px">📌</span>
+      <span>Fixar menu</span>
+    </button>
   </nav>
   <div class="portal-content">
 
@@ -999,6 +1042,56 @@ function fecharMobMenu() {
   document.getElementById('mob-drawer').classList.remove('open');
   document.getElementById('mob-overlay').classList.remove('open');
 }
+
+// ── NAV COLAPSÁVEL ──────────────────────────────────────────────────────────
+(function initPnav() {
+  const KEY_COL = 'pnav_collapsed';
+  const KEY_PIN = 'pnav_pinned';
+
+  function applyState() {
+    const pnav    = document.getElementById('pnav');
+    const btn     = document.getElementById('nav-toggle-btn');
+    const pinBtn  = document.getElementById('nav-pin-btn');
+    if (!pnav) return;
+    const collapsed = localStorage.getItem(KEY_COL) === '1';
+    const pinned    = localStorage.getItem(KEY_PIN) === '1';
+    pnav.classList.toggle('collapsed', collapsed);
+    if (btn) btn.textContent = collapsed ? '›' : '‹';
+    if (pinBtn) {
+      pinBtn.classList.toggle('pinned', pinned);
+      const pinLabel = pinBtn.querySelector('span:last-child');
+      if (pinLabel) pinLabel.textContent = pinned ? 'Menu fixado' : 'Fixar menu';
+      const pinIcon  = pinBtn.querySelector('span:first-child');
+      if (pinIcon)  pinIcon.textContent = pinned ? '📌' : '📍';
+    }
+  }
+
+  window.togglePnav = function() {
+    const collapsed = localStorage.getItem(KEY_COL) === '1';
+    localStorage.setItem(KEY_COL, collapsed ? '0' : '1');
+    applyState();
+  };
+
+  window.pinPnav = function() {
+    const pinned = localStorage.getItem(KEY_PIN) === '1';
+    if (pinned) {
+      // Desafixar = recolher ao sair do hover (comportamento padrão já existe via CSS collapsed)
+      localStorage.setItem(KEY_PIN, '0');
+    } else {
+      // Fixar = forçar aberto
+      localStorage.setItem(KEY_PIN, '1');
+      localStorage.setItem(KEY_COL, '0');
+    }
+    applyState();
+  };
+
+  // Aplicar estado salvo ao carregar
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', applyState);
+  } else {
+    applyState();
+  }
+})();
 
 function showTab(tab) {
   // Mostra spinner brevemente ao trocar de aba (só na primeira vez)
