@@ -538,6 +538,12 @@ async function carregarDashboard() {
   const fatMedio  = k.dias_com_venda > 0 ? parseFloat(k.fat_total)/parseInt(k.dias_com_venda) : 0;
   const topProd   = top[0];
 
+  // KPIs de desconto cruzando vendas × faturamento PDV
+  const temCruzamento = k.fat_liquido_pdv != null;
+  const descontoReal  = temCruzamento ? (k.desconto_pdv > 0 ? k.desconto_pdv : k.desconto_calc) : null;
+  const descontoPct   = temCruzamento && parseFloat(k.fat_total) > 0
+    ? (descontoReal / parseFloat(k.fat_total) * 100).toFixed(1) : null;
+
   document.getElementById('kpi-grid').innerHTML = `
     <div class="kpi g"><div class="kpi-l">Faturamento Total</div><div class="kpi-v">${fmt.brl(k.fat_total)}</div><div class="kpi-s">${k.dias_com_venda} dias de venda</div></div>
     <div class="kpi b"><div class="kpi-l">Quantidade Total</div><div class="kpi-v">${fmt.n(k.qtd_total)}</div><div class="kpi-s">unidades/kg vendidos</div></div>
@@ -547,6 +553,22 @@ async function carregarDashboard() {
     <div class="kpi r"><div class="kpi-l">Pior Dia</div><div class="kpi-v">${fmt.brl(piorDia?.fat_dia)}</div><div class="kpi-s">${piorDia?.data_venda||'—'}</div></div>
     <div class="kpi b"><div class="kpi-l">Campeão Fat.</div><div class="kpi-v" style="font-size:13px">${topProd?.nome?.slice(0,20)||'—'}</div><div class="kpi-s">${fmt.brl(topProd?.fat_total)}</div></div>
     <div class="kpi o"><div class="kpi-l">Ticket Médio/Item</div><div class="kpi-v">${fmt.brl(k.ticket_medio_item)}</div><div class="kpi-s">por item vendido</div></div>
+    ${temCruzamento ? `
+    <div class="kpi g" style="border-left:4px solid #2563eb" title="Valor efetivamente faturado no PDV após descontos">
+      <div class="kpi-l">Faturado PDV</div>
+      <div class="kpi-v">${fmt.brl(k.fat_liquido_pdv)}</div>
+      <div class="kpi-s">líquido no caixa</div>
+    </div>
+    <div class="kpi r" style="border-left:4px solid #dc2626" title="Descontos concedidos = Faturamento Total (vendas) − Faturado PDV">
+      <div class="kpi-l">Descontos Concedidos</div>
+      <div class="kpi-v">${fmt.brl(descontoReal)}</div>
+      <div class="kpi-s">${descontoPct}% do faturamento bruto</div>
+    </div>` : `
+    <div class="kpi" style="opacity:.5;border:1px dashed var(--border)">
+      <div class="kpi-l">Descontos Concedidos</div>
+      <div class="kpi-v" style="font-size:13px;color:var(--muted)">—</div>
+      <div class="kpi-s">importe dados de faturamento</div>
+    </div>`}
   `;
 
   // Gráfico faturamento por dia — normaliza datas (pode vir como ISO timestamp)

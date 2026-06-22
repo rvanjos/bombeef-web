@@ -175,7 +175,34 @@ module.exports = (pool, app) => {
         FROM vendas_produto ${where}
         GROUP BY codigo, nome ORDER BY fat_total DESC LIMIT 10
       `);
-      res.json({ ok: true, kpis: rows[0], dias, top10: top });
+
+      // ── Cruzamento com faturamento_periodos para calcular desconto real ──
+      let fat_liquido_pdv = null, desconto_pdv = null;
+      try {
+        const fatWhere = ini && fim
+          ? `WHERE tipo_periodo='dia' AND data_inicio BETWEEN '${ini}' AND '${fim}'`
+          : `WHERE tipo_periodo='dia'`;
+        const { rows: fatRows } = await pool.query(`
+          SELECT COALESCE(SUM(fat_liquido),0) AS fat_liq,
+                 COALESCE(SUM(descontos),0)   AS descontos
+          FROM faturamento_periodos ${fatWhere}
+        `);
+        if (fatRows.length) {
+          fat_liquido_pdv = parseFloat(fatRows[0].fat_liq);
+          desconto_pdv    = parseFloat(fatRows[0].descontos);
+        }
+      } catch(e) { /* faturamento_periodos pode não existir — ignora */ }
+
+      const kpis = {
+        ...rows[0],
+        fat_liquido_pdv,
+        desconto_pdv,
+        desconto_calc: fat_liquido_pdv != null
+          ? Math.max(0, parseFloat(rows[0].fat_total) - fat_liquido_pdv)
+          : null,
+      };
+
+      res.json({ ok: true, kpis, dias, top10: top });
     } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
