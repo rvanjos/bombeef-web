@@ -288,10 +288,11 @@ module.exports = function (pool) {
           if (p.rows.length) prodId = p.rows[0].id;
         }
         await client.query(`
-          INSERT INTO kit_itens (kit_id, produto_id, codigo_produto, descricao_produto, quantidade, preco_custo_unitario)
-          VALUES ($1,$2,$3,$4,$5,$6)
+          INSERT INTO kit_itens (kit_id, produto_id, codigo_produto, descricao_produto, quantidade, preco_custo_unitario, ignorar_margem, custo_kit)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
         `, [kitId, prodId, item.codigo||null, item.descricao||null,
-            parseFloat(item.quantidade||1), parseFloat(item.precoCusto||0)]);
+            parseFloat(item.quantidade||1), parseFloat(item.precoCusto||0),
+            !!item.ignorarMargem, item.custoKit!=null?parseFloat(item.custoKit):null]);
       }
 
       const custo = await calcCusto(kitId, client);
@@ -349,10 +350,11 @@ module.exports = function (pool) {
             if (p.rows.length) prodId = p.rows[0].id;
           }
           await client.query(`
-            INSERT INTO kit_itens (kit_id, produto_id, codigo_produto, descricao_produto, quantidade, preco_custo_unitario)
-            VALUES ($1,$2,$3,$4,$5,$6)
+            INSERT INTO kit_itens (kit_id, produto_id, codigo_produto, descricao_produto, quantidade, preco_custo_unitario, ignorar_margem, custo_kit)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
           `, [kitId, prodId, item.codigo||null, item.descricao||null,
-              parseFloat(item.quantidade||1), parseFloat(item.precoCusto||0)]);
+              parseFloat(item.quantidade||1), parseFloat(item.precoCusto||0),
+              !!item.ignorarMargem, item.custoKit!=null?parseFloat(item.custoKit):null]);
         }
       }
       await client.query('COMMIT');
