@@ -173,6 +173,8 @@ module.exports = function (pool) {
       ] = await Promise.all([
         // Faturamento acumulado do mês + dias importados
         r1(`SELECT COALESCE(SUM(fat_bruto),0) AS fat, COUNT(*) AS dias,
+                   COALESCE(SUM(fat_liquido),0) AS fat_liq,
+                   COALESCE(SUM(descontos),0) AS descontos,
                    COALESCE(SUM(total_pessoas),0) AS pessoas,
                    COALESCE(ROUND(AVG(NULLIF(ticket_medio,0)),2),0) AS ticket
             FROM faturamento_periodos
@@ -264,6 +266,8 @@ module.exports = function (pool) {
           pessoas_mes:  parseInt(fatMes.pessoas||0),
           ticket_medio: parseFloat(fatMes.ticket||0),
           fat_mes_ant:  parseFloat(fatMesAnt.fat||0),
+          fat_liquido:  parseFloat(fatMes.fat_liq||0),
+          descontos:    parseFloat(fatMes.descontos||0),
           grafico_30d:  fat30d,
         },
         dre: {

@@ -1549,6 +1549,12 @@ async function carregarGerencial(mes) {
       {lbl:'Meta', val: metaOk ? brl(f.meta) : '—', sub: metaOk ? '' : 'Definir em Gestão→Metas', cor:'var(--blue)'},
       {lbl:'Vs mês anterior', val: varSinal + '%', sub: `Mês ant: ${brl(f.fat_mes_ant)}`, cor: f.var_mes_ant >= 0 ? 'var(--green)' : 'var(--red-l)'},
       {lbl:'Ticket médio', val: brl(f.ticket_medio), sub: `${f.pessoas_mes} atendimentos`, cor:'var(--text)'},
+      ...(f.fat_liquido > 0 ? [{
+        lbl:'Descontos Concedidos',
+        val: brl(f.descontos > 0 ? f.descontos : Math.max(0, f.realizado - f.fat_liquido)),
+        sub: f.realizado > 0 ? `${(((f.descontos > 0 ? f.descontos : Math.max(0, f.realizado - f.fat_liquido)) / f.realizado) * 100).toFixed(1)}% do faturamento bruto` : 'vs faturado PDV',
+        cor:'var(--red-l)',
+      }] : []),
     ].map(c => `
       <div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px 14px;box-shadow:0 2px 6px rgba(0,0,0,.05);border-left:3px solid ${c.cor}">
         <div style="font-size:9px;text-transform:uppercase;letter-spacing:.6px;font-weight:700;color:var(--muted)">${c.lbl}</div>

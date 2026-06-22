@@ -85,6 +85,8 @@ module.exports = function(pool) {
 
         // F2-01: faturamento acumulado do mês (dias já importados)
         q(`SELECT COALESCE(SUM(fat_bruto),0) AS fat,
+                  COALESCE(SUM(fat_liquido),0) AS fat_liq,
+                  COALESCE(SUM(descontos),0) AS descontos,
                   COUNT(*) AS dias_importados,
                   COALESCE(SUM(total_pessoas),0) AS pessoas,
                   COALESCE(ROUND(CASE WHEN SUM(total_pessoas)>0
@@ -163,6 +165,8 @@ module.exports = function(pool) {
       const fatHoje     = n(vendaHoje.rows[0]?.fat);
       const fatSemAnt   = n(vendaSemAnt.rows[0]?.fat);
       const fatMes      = n(vendaMes.rows[0]?.fat);
+      const fatLiqMes   = n(vendaMes.rows[0]?.fat_liq);
+      const descontosMes= n(vendaMes.rows[0]?.descontos);
       const fatMesAnt   = n(vendaMesAnt.rows[0]?.fat);
       const diasImp     = i(vendaMes.rows[0]?.dias_importados);
       const pessoasHoje = i(vendaHoje.rows[0]?.pessoas);
@@ -246,6 +250,8 @@ module.exports = function(pool) {
           var_sem_r:      varSemR,
           var_sem_pct:    varSemPct,
           fat_mes:        fatMes,
+          fat_liq_mes:    fatLiqMes,
+          descontos_mes:  descontosMes,
           fat_mes_ant:    fatMesAnt,
           var_mes_r:      varMesR,
           var_mes_pct:    varMesPct,

@@ -297,6 +297,17 @@ function render(d) {
         ${v.pessoas_mes > 0 ? `<div class="v-sub">${v.pessoas_mes} atendimentos · ticket ${brl(v.ticket_mes)}</div>` : ''}
         ${v.fat_mes > 0 && v.fat_mes_ant > 0 && v.var_mes_pct != null ? compTag(v.var_mes_pct,
           `${Math.abs(v.var_mes_pct||0).toFixed(1)}% vs ${d.mes.replace(/(\d+)\/(\d+)/,'$1 mês ant.')}`) : ''}
+        ${v.fat_liq_mes > 0 ? `<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;padding:7px 10px;background:#f8fafc;border-radius:8px;border:1px solid var(--border)">
+          <div style="font-size:11px">
+            <span style="color:var(--muted)">Líquido PDV</span>
+            <span style="font-family:'DM Mono',monospace;font-weight:700;margin-left:6px">${brl(v.fat_liq_mes)}</span>
+          </div>
+          <div style="font-size:11px;margin-left:auto">
+            <span style="color:var(--muted)">Descontos</span>
+            <span style="font-family:'DM Mono',monospace;font-weight:700;color:#dc2626;margin-left:6px">${brl(v.descontos_mes > 0 ? v.descontos_mes : Math.max(0, v.fat_mes - v.fat_liq_mes))}</span>
+            ${v.fat_mes > 0 ? `<span style="font-size:10px;color:var(--muted);margin-left:3px">(${((v.descontos_mes > 0 ? v.descontos_mes : Math.max(0, v.fat_mes - v.fat_liq_mes))/v.fat_mes*100).toFixed(1)}%)</span>` : ''}
+          </div>
+        </div>` : ''}
         ${v.meta_mes > 0 ? `
         <div class="meta-wrap">
           <div class="meta-row">
