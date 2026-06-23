@@ -1,627 +1,1018 @@
 /**
- * routes/validade.js
- * Controle de validades — desktop + PWA mobile
+ * AR Boutique de Carnes LTDA — CNPJ 46.237.080/0001-02
+ * Sistema de Gestão Interna Bom Beef Valinhos
+ * Uso exclusivo. Reprodução, cópia ou redistribuição proibidas.
+ * © 2024-2025 AR Boutique de Carnes LTDA
+ */
+/**
+ * routes/validade.js — M4: Controle de Validades
  *
- * CORREÇÕES APLICADAS (2026-06-23):
- *   1. Import do middleware corrigido: { requireAuth } → autenticar()
- *   2. req.user.id → req.usuario.id em 4 locais (linhas de baixa, lote, sincronizar-lote)
- *   3. Rota /config-bulk movida ANTES de /config/:chave (evita captura indevida pelo param)
+ * Rotas:
+ *   GET    /api/validade              → lista itens
+ *   POST   /api/validade              → cadastra item
+ *   PUT    /api/validade/:id          → atualiza (conferência, ação, código)
+ *   DELETE /api/validade/:id          → remove
+ *   POST   /api/validade/import       → importa planilha XLSX
+ *   POST   /api/validade/:id/vincular → vincula produto_id pelo código
+ *   GET    /api/validade/kpis         → KPIs de validade
  */
 
-const express = require('express');
-const autenticar = require('../middleware/auth'); // ← CORRIGIDO (era: const { requireAuth })
+const express  = require('express');
+const multer   = require('multer');
+const XLSX     = require('xlsx');
+const autenticar = require('../middleware/auth');
 
-module.exports = function (pool) {
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: (parseInt(process.env.UPLOAD_MAX_MB) || 15) * 1024 * 1024 },
+});
+
+const events = require('../lib/events');
+
+module.exports = function (pool, app) {
   const r = express.Router();
-  r.use(autenticar()); // ← CORRIGIDO (era: r.use(requireAuth))
+  r.use(autenticar());
 
-  // ══════════════════════════════════════════════════════════════════════
-  // INIT — cria tabelas se não existirem
-  // ══════════════════════════════════════════════════════════════════════
-  async function initTables() {
+  // ── Init tabela ────────────────────────────────────────────────────────────
+  async function initTable() {
     await pool.query(`
-      CREATE TABLE IF NOT EXISTS vld_estoque (
-        id            TEXT PRIMARY KEY,
-        cod_produto   TEXT,
-        nome_produto  TEXT NOT NULL,
-        data_validade DATE,
-        qtd_atual     NUMERIC(12,3) DEFAULT 0,
-        unidade       TEXT DEFAULT 'UN',
-        local         TEXT,
-        data_entrada  DATE,
-        valor_unit    NUMERIC(10,2) DEFAULT 0,
-        acao_vencer   TEXT,
-        conferencia   TEXT,
-        resultado     TEXT,
-        custom_dias   JSONB,
-        ativo         BOOLEAN DEFAULT true,
-        criado_em     TIMESTAMPTZ DEFAULT NOW(),
-        atualizado_em TIMESTAMPTZ DEFAULT NOW()
+      CREATE TABLE IF NOT EXISTS validade_items (
+        id                  SERIAL PRIMARY KEY,
+        produto_id          INTEGER,
+        codigo              TEXT,
+        descricao           TEXT NOT NULL,
+        data_validade       DATE,
+        lote                TEXT,
+        acao_antes_vencer   TEXT,
+        ultima_conferencia  DATE,
+        responsavel         TEXT,
+        qtd_unidades        INTEGER DEFAULT 0,
+        peso_total_kg       NUMERIC(8,3),
+        preco_custo         NUMERIC(10,4) DEFAULT 0,
+        status              TEXT DEFAULT 'ok',
+        dias_alerta         INTEGER DEFAULT 7,
+        localizacao         TEXT,
+        observacao          TEXT,
+        criado_em           TIMESTAMPTZ DEFAULT NOW(),
+        atualizado_em       TIMESTAMPTZ DEFAULT NOW()
       )
-    `);
+    `).catch(() => {});
+
+    // Garante colunas novas
+    const needed = [
+      ['preco_custo',   'NUMERIC(10,4) DEFAULT 0'],
+      ['localizacao',   'TEXT'],
+      ['qtd_unidades',  'INTEGER DEFAULT 0'],
+      ['dias_alerta',   'INTEGER DEFAULT 7'],
+      ['atualizado_em',  'TIMESTAMPTZ DEFAULT NOW()'],
+      ['resolucao',      'TEXT'],
+      ['dt_resolucao',   'DATE'],
+      ['obs_resolucao',  'TEXT'],
+      ['encerrado_por',  'TEXT'],
+      ['status',         "TEXT DEFAULT 'ativo'"],
+      ['desc_original',  'TEXT'],
+      ['peso_total_kg',  'NUMERIC(8,3)'],
+      ['data_recebimento','DATE'],
+    ];
+    for (const [col, def] of needed) {
+      await pool.query(`ALTER TABLE validade_items ADD COLUMN IF NOT EXISTS ${col} ${def}`).catch(() => {});
+    }
+
+    // Remove constraint de status que pode conflitar
+    await pool.query(`ALTER TABLE validade_items DROP CONSTRAINT IF EXISTS validade_items_status_check`).catch(() => {});
+
+    // Tabela de confirmações de validade
     await pool.query(`
-      CREATE TABLE IF NOT EXISTS vld_faturamento (
-        mes_ref  TEXT PRIMARY KEY,  -- formato MM/YYYY
-        real     NUMERIC(14,2),
-        previsto NUMERIC(14,2),
-        manual   NUMERIC(14,2),
-        criado_em     TIMESTAMPTZ DEFAULT NOW(),
-        atualizado_em TIMESTAMPTZ DEFAULT NOW()
+      CREATE TABLE IF NOT EXISTS validade_confirmacoes (
+        id              SERIAL PRIMARY KEY,
+        item_id         INTEGER NOT NULL,
+        usuario_id      INTEGER,
+        usuario_nome    TEXT,
+        acao_hash       TEXT,
+        confirmado_em   TIMESTAMPTZ DEFAULT NOW()
       )
-    `);
+    `).catch(() => {});
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_val_conf_item ON validade_confirmacoes(item_id)`).catch(() => {});
+
     await pool.query(`
-      CREATE TABLE IF NOT EXISTS vld_retiradas (
-        id           TEXT PRIMARY KEY,
-        func_id      TEXT,
-        func_nome    TEXT NOT NULL,
-        data         DATE NOT NULL,
-        produto      TEXT NOT NULL,
-        qtd          NUMERIC(12,3) NOT NULL,
-        unidade      TEXT DEFAULT 'KG',
-        preco_custo  NUMERIC(10,2),
-        preco_venda  NUMERIC(10,2),
-        total_custo  NUMERIC(12,2),
-        total_venda  NUMERIC(12,2),
-        observacao   TEXT,
-        criado_em    TIMESTAMPTZ DEFAULT NOW()
-      )
-    `);
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS vld_config (
-        chave       TEXT PRIMARY KEY,
-        valor_json  JSONB NOT NULL,
-        atualizado_em TIMESTAMPTZ DEFAULT NOW()
-      )
-    `);
+      CREATE INDEX IF NOT EXISTS idx_val_codigo    ON validade_items(codigo);
+      CREATE INDEX IF NOT EXISTS idx_val_validade  ON validade_items(data_validade);
+      CREATE INDEX IF NOT EXISTS idx_val_status    ON validade_items(status);
+    `).catch(() => {});
   }
-  initTables().catch(e => console.error('[validade] initTables:', e.message));
+  initTable().catch(e => console.error('[validade] initTable:', e.message));
 
-  // ── helpers ────────────────────────────────────────────────────────────
-  function calcStatus(dv) {
-    if (!dv) return 'sem-data';
-    const hoje = new Date(); hoje.setHours(0,0,0,0);
-    const val  = new Date(dv); val.setHours(0,0,0,0);
-    const d    = Math.round((val - hoje) / 86400000);
-    if (d < 0)   return 'vencido';
-    if (d <= 7)  return 'critico';
-    if (d <= 15) return 'urgente';
-    if (d <= 30) return 'atencao';
-    return 'ok';
+  // ── Helper: atualiza status baseado na data ────────────────────────────────
+  async function atualizarStatus() {
+    const res = await pool.query(`
+      UPDATE validade_items SET
+        status = CASE
+          WHEN data_validade < CURRENT_DATE THEN 'vencido'
+          WHEN data_validade <= CURRENT_DATE + (COALESCE(dias_alerta, 7) || ' days')::INTERVAL THEN 'alerta'
+          ELSE 'ok'
+        END,
+        atualizado_em = NOW()
+      WHERE status NOT IN ('descartado','vendido')
+        AND data_validade IS NOT NULL
+      RETURNING id, status
+    `);
+    const vendidosSobrescritos = res.rows.filter(r => r.status === 'vendido');
+    if (vendidosSobrescritos.length) {
+      console.error('[atualizarStatus] ⚠️ SOBRESCREVEU vendidos:', vendidosSobrescritos);
+    }
+    console.log(`[atualizarStatus] atualizou ${res.rowCount} itens. statuses: ${JSON.stringify(res.rows.map(r=>r.status).reduce((a,s)=>{a[s]=(a[s]||0)+1;return a},{}))}` );
   }
-  function calcDias(dv) {
-    if (!dv) return null;
-    const hoje = new Date(); hoje.setHours(0,0,0,0);
-    const val  = new Date(dv); val.setHours(0,0,0,0);
-    return Math.round((val - hoje) / 86400000);
-  }
 
-  // ══════════════════════════════════════════════════════════════════════
-  // CONFIG (metas, prazos, locais, bonus)
-  // ATENÇÃO: /config-bulk DEVE vir ANTES de /config/:chave
-  // para evitar que Express capture 'bulk' como valor do param :chave
-  // ══════════════════════════════════════════════════════════════════════
-
-  // GET /config-bulk?chaves=meta,locais,bonus,...  ← MOVIDO PARA ANTES DE /config/:chave
-  r.get('/config-bulk', async (req, res) => {
+  // ── GET /kpis ──────────────────────────────────────────────────────────────
+  r.get('/kpis', async (req, res) => {
     try {
-      const chaves = (req.query.chaves || '').split(',').filter(Boolean);
-      if (!chaves.length) return res.json({ ok: true, data: {} });
-      const { rows } = await pool.query(
-        `SELECT chave, valor_json FROM vld_config WHERE chave = ANY($1)`, [chaves]
-      );
-      const data = {};
-      rows.forEach(r => { data[r.chave] = r.valor_json; });
-      res.json({ ok: true, data });
+      await atualizarStatus();
+      const { rows } = await pool.query(`
+        SELECT
+          COUNT(*) FILTER (WHERE status = 'ok')        AS ok,
+          COUNT(*) FILTER (WHERE status = 'alerta')    AS alerta,
+          COUNT(*) FILTER (WHERE status = 'vencido')   AS vencidos,
+          COUNT(*) FILTER (WHERE status = 'descartado' AND data_validade >= DATE_TRUNC('month', NOW())) AS descartados_mes,
+          COUNT(*) FILTER (WHERE codigo IS NULL OR codigo = '') AS sem_codigo
+        FROM validade_items
+        WHERE status NOT IN ('descartado','vendido') OR data_validade >= DATE_TRUNC('month', NOW())
+      `);
+      res.json({ ok: true, data: {
+        ok:            parseInt(rows[0].ok),
+        alerta:        parseInt(rows[0].alerta),
+        vencidos:      parseInt(rows[0].vencidos),
+        descartadosMes: parseInt(rows[0].descartados_mes),
+        semCodigo:     parseInt(rows[0].sem_codigo),
+      }});
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
-  // GET /config/:chave
-  r.get('/config/:chave', async (req, res) => {
+  // ── GET /dedup — remove duplicatas (temporário) ──────────────────────────────
+  r.post('/dedup', async (req, res) => {
     try {
-      const { rows } = await pool.query(
-        `SELECT valor_json FROM vld_config WHERE chave = $1`, [req.params.chave]
-      );
-      res.json({ ok: true, data: rows[0]?.valor_json ?? null });
-    } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
+      // Encontra e remove duplicatas mantendo o registro mais antigo (menor id)
+      const { rows: dups } = await pool.query(`
+        SELECT codigo, descricao, data_validade, array_agg(id ORDER BY id ASC) AS ids
+        FROM validade_items
+        WHERE status NOT IN ('descartado','vendido')
+        GROUP BY codigo, descricao, data_validade
+        HAVING COUNT(*) > 1
+      `);
+
+      let removidos = 0;
+      for (const dup of dups) {
+        // Manter o primeiro (menor id), remover os demais
+        const idsRemover = dup.ids.slice(1);
+        if (idsRemover.length) {
+          await pool.query(`DELETE FROM validade_items WHERE id = ANY($1::int[])`, [idsRemover]);
+          removidos += idsRemover.length;
+        }
+      }
+      res.json({ ok: true, duplicatas: dups.length, removidos });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
-  // POST /config/:chave  { valor: <any> }
-  r.post('/config/:chave', async (req, res) => {
-    try {
-      await pool.query(`
-        INSERT INTO vld_config (chave, valor_json, atualizado_em)
-        VALUES ($1, $2, NOW())
-        ON CONFLICT (chave) DO UPDATE
-          SET valor_json = $2, atualizado_em = NOW()
-      `, [req.params.chave, JSON.stringify(req.body.valor)]);
-      res.json({ ok: true });
-    } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
-  });
-
-  // ══════════════════════════════════════════════════════════════════════
-  // ESTOQUE DESKTOP (vld_estoque)
-  // ══════════════════════════════════════════════════════════════════════
-
-  // GET /estoque-desktop
-  r.get('/estoque-desktop', async (req, res) => {
+  // ── GET /dedup-check — conta duplicatas ────────────────────────────────────
+  r.get('/dedup-check', async (req, res) => {
     try {
       const { rows } = await pool.query(`
-        SELECT * FROM vld_estoque WHERE ativo = true ORDER BY data_validade ASC NULLS LAST, nome_produto ASC
+        SELECT codigo, descricao, data_validade, COUNT(*) as qtd, array_agg(id ORDER BY id) as ids
+        FROM validade_items
+        WHERE status NOT IN ('descartado','vendido')
+        GROUP BY codigo, descricao, data_validade
+        HAVING COUNT(*) > 1
+        ORDER BY qtd DESC LIMIT 20
       `);
-      const data = rows.map(x => ({
-        id:           x.id,
-        cProd:        x.cod_produto,
-        xProd:        x.nome_produto,
-        dVal:         x.data_validade ? x.data_validade.toISOString().slice(0,10) : null,
-        qAtual:       parseFloat(x.qtd_atual) || 0,
-        uCom:         x.unidade,
-        local:        x.local,
-        entrada:      x.data_entrada ? x.data_entrada.toISOString().slice(0,10) : null,
-        valorUnit:    parseFloat(x.valor_unit) || 0,
-        acaoAnteVencer: x.acao_vencer,
-        conferencia:  x.conferencia,
-        resultado:    x.resultado,
-        customDias:   x.custom_dias,
-        status:       calcStatus(x.data_validade),
-        dias:         calcDias(x.data_validade),
+      res.json({ ok: true, data: rows, total: rows.length });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ── GET / ──────────────────────────────────────────────────────────────────
+  r.get('/', async (req, res) => {
+    try {
+      await atualizarStatus();
+      const { status, busca, semCodigo } = req.query;
+      const conds = [], params = [];
+
+      if (semCodigo === 'true') conds.push(`(codigo IS NULL OR codigo = '')`);
+      if (status && status !== 'todos') { params.push(status); conds.push(`status = $${params.length}`); }
+      if (busca) {
+        params.push(`%${busca}%`);
+        conds.push(`(descricao ILIKE $${params.length} OR codigo ILIKE $${params.length} OR lote ILIKE $${params.length})`);
+      }
+      conds.push(`status NOT IN ('descartado','vendido')`);
+
+      const where = conds.length ? 'WHERE ' + conds.join(' AND ') : '';
+      const { rows } = await pool.query(
+        `SELECT vi.*, p.descricao AS prod_descricao, p.preco_custo
+         FROM validade_items vi
+         LEFT JOIN produtos p ON p.id = vi.produto_id
+         ${where} ORDER BY vi.data_validade ASC NULLS LAST, vi.descricao ASC`,
+        params
+      );
+      // Serializa datas como strings YYYY-MM-DD para o frontend
+      const data = rows.map(r => ({
+        ...r,
+        data_recebimento: r.data_recebimento instanceof Date
+          ? r.data_recebimento.toISOString().slice(0, 10)
+          : r.data_recebimento ? String(r.data_recebimento).slice(0, 10) : null,
+        data_validade: r.data_validade instanceof Date
+          ? r.data_validade.toISOString().slice(0, 10)
+          : r.data_validade ? String(r.data_validade).slice(0, 10) : null,
+        ultima_conferencia: r.ultima_conferencia instanceof Date
+          ? r.ultima_conferencia.toISOString().slice(0, 10)
+          : r.ultima_conferencia ? String(r.ultima_conferencia).slice(0, 10) : null,
       }));
-      res.json({ ok: true, data });
+      res.json({ ok: true, data, total: data.length });
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
-  // POST /estoque-desktop/bulk  { produtos: [...] }  — upsert em lote (import planilha)
-  r.post('/estoque-desktop/bulk', async (req, res) => {
-    const { produtos = [], modo = 'merge' } = req.body;
-    const client = await pool.connect();
+  // ── PUT /:id/reativar ────────────────────────────────────────────────────────
+  r.put('/:id/reativar', async (req, res) => {
+    const id = parseInt(req.params.id);
     try {
-      await client.query('BEGIN');
-      if (modo === 'sub') {
-        await client.query(`UPDATE vld_estoque SET ativo = false`);
-      }
-      for (const p of produtos) {
-        await client.query(`
-          INSERT INTO vld_estoque
-            (id, cod_produto, nome_produto, data_validade, qtd_atual, unidade,
-             local, data_entrada, valor_unit, acao_vencer, conferencia, resultado,
-             custom_dias, ativo, atualizado_em)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,true,NOW())
-          ON CONFLICT (id) DO UPDATE SET
-            cod_produto   = EXCLUDED.cod_produto,
-            nome_produto  = EXCLUDED.nome_produto,
-            data_validade = EXCLUDED.data_validade,
-            qtd_atual     = EXCLUDED.qtd_atual,
-            unidade       = EXCLUDED.unidade,
-            local         = EXCLUDED.local,
-            data_entrada  = EXCLUDED.data_entrada,
-            valor_unit    = EXCLUDED.valor_unit,
-            acao_vencer   = EXCLUDED.acao_vencer,
-            conferencia   = EXCLUDED.conferencia,
-            resultado     = EXCLUDED.resultado,
-            custom_dias   = EXCLUDED.custom_dias,
-            ativo         = true,
+      const { rows } = await pool.query(`
+        UPDATE validade_items
+        SET status = 'ok',
+            resolucao = NULL,
+            obs_resolucao = NULL,
+            dt_resolucao = NULL,
+            encerrado_por = NULL,
             atualizado_em = NOW()
-        `, [
-          p.id, p.cProd||null, p.xProd, p.dVal||null,
-          p.qAtual||0, p.uCom||'UN', p.local||null,
-          p.entrada||null, p.valorUnit||0, p.acaoAnteVencer||null,
-          p.conferencia||null, p.resultado||null,
-          p.customDias ? JSON.stringify(p.customDias) : null
-        ]);
-      }
-      await client.query('COMMIT');
-      res.json({ ok: true, count: produtos.length });
-    } catch (e) {
-      await client.query('ROLLBACK');
-      res.status(500).json({ ok: false, erro: e.message });
-    } finally { client.release(); }
+        WHERE id = $1
+        RETURNING id, descricao, status
+      `, [id]);
+      if (!rows.length) return res.status(404).json({ ok: false, erro: 'Item não encontrado' });
+      res.json({ ok: true, data: rows[0] });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
-  // PUT /estoque-desktop/:id  — edita produto
-  r.put('/estoque-desktop/:id', async (req, res) => {
-    const p = req.body;
+  // ── GET /alertas-confirmacao — produtos ≤7 dias com ação não confirmada ──────
+  r.get('/alertas-confirmacao', async (req, res) => {
     try {
-      await pool.query(`
-        UPDATE vld_estoque SET
-          cod_produto=$1, nome_produto=$2, data_validade=$3, qtd_atual=$4,
-          unidade=$5, local=$6, data_entrada=$7, valor_unit=$8,
-          acao_vencer=$9, conferencia=$10, resultado=$11, custom_dias=$12,
-          atualizado_em=NOW()
-        WHERE id=$13
+      const usuario_id = req.user?.id || req.usuario?.id || 0;
+      const { rows } = await pool.query(`
+        SELECT
+          v.id, v.descricao, v.lote, v.qtd_unidades,
+          TO_CHAR(v.data_validade, 'YYYY-MM-DD') AS data_validade,
+          v.localizacao AS local_estoque, v.acao_antes_vencer,
+          v.peso_total_kg,
+          (v.data_validade::date - CURRENT_DATE) AS dias_restantes,
+          MD5(v.acao_antes_vencer) AS acao_hash
+        FROM validade_items v
+        WHERE v.status NOT IN ('descartado','vendido')
+          AND v.acao_antes_vencer IS NOT NULL AND v.acao_antes_vencer != ''
+          AND v.data_validade IS NOT NULL
+          AND v.data_validade::date <= CURRENT_DATE + INTERVAL '7 days'
+          AND NOT EXISTS (
+            SELECT 1 FROM validade_confirmacoes vc
+            WHERE vc.item_id = v.id
+              AND vc.usuario_id = $1
+              AND vc.acao_hash = MD5(v.acao_antes_vencer)
+          )
+        ORDER BY v.data_validade ASC
+      `, [usuario_id || 0]);
+      res.json({ ok: true, data: rows });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ── POST /confirmar-acoes — registra confirmação do usuário ──────────────────
+  r.post('/confirmar-acoes', async (req, res) => {
+    const { ids, usuario_nome } = req.body;
+    const usuario_id = req.usuario?.id;
+    if (!ids?.length) return res.json({ ok: true });
+    try {
+      // Busca hash atual de cada item
+      const { rows: itens } = await pool.query(
+        `SELECT id, MD5(acao_antes_vencer) AS acao_hash FROM validade_items WHERE id = ANY($1::int[])`,
+        [ids]
+      );
+      for (const item of itens) {
+        await pool.query(
+          `INSERT INTO validade_confirmacoes (item_id, usuario_id, usuario_nome, acao_hash)
+           VALUES ($1, $2, $3, $4)`,
+          [item.id, usuario_id || null, usuario_nome || null, item.acao_hash]
+        );
+      }
+      res.json({ ok: true, confirmados: itens.length });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ── GET /confirmacoes — histórico de confirmações (admin) ────────────────────
+  r.get('/confirmacoes', async (req, res) => {
+    try {
+      const { rows } = await pool.query(`
+        SELECT vc.*, vi.descricao, vi.data_validade, vi.acao_antes_vencer
+        FROM validade_confirmacoes vc
+        LEFT JOIN validade_items vi ON vi.id = vc.item_id
+        ORDER BY vc.confirmado_em DESC
+        LIMIT 200
+      `);
+      res.json({ ok: true, data: rows });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ── GET /alertas-dashboard ─────────────────────────────────────────────────
+  // Retorna produtos com ação cadastrada E próximos do vencimento (até 7 dias)
+  r.get('/alertas-dashboard', async (req, res) => {
+    try {
+      await atualizarStatus();
+      const diasAlerta = parseInt(req.query.dias || '7');
+      const { rows } = await pool.query(`
+        SELECT
+          id, codigo, descricao, lote,
+          qtd_unidades,
+          TO_CHAR(data_validade, 'YYYY-MM-DD') AS data_validade,
+          status, localizacao AS local_estoque, acao_antes_vencer,
+          peso_total_kg,
+          (CURRENT_DATE - data_validade::date) AS dias_vencido,
+          (data_validade::date - CURRENT_DATE) AS dias_restantes
+        FROM validade_items
+        WHERE status NOT IN ('descartado','vendido')
+          AND acao_antes_vencer IS NOT NULL
+          AND acao_antes_vencer != ''
+          AND data_validade IS NOT NULL
+          AND data_validade::date <= CURRENT_DATE + ($1 || ' days')::INTERVAL
+        ORDER BY data_validade ASC, descricao ASC
+      `, [diasAlerta]);
+      res.json({ ok: true, data: rows, total: rows.length });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ── POST / ─────────────────────────────────────────────────────────────────
+  r.post('/', async (req, res) => {
+    const v = req.body;
+    if (!v.descricao) return res.status(400).json({ ok: false, erro: 'descricao obrigatória' });
+    try {
+      // Tenta vincular produto pelo código
+      let prodId = null;
+      if (v.codigo) {
+        const p = await pool.query(`SELECT id FROM produtos WHERE codigo = $1`, [v.codigo.trim()]);
+        if (p.rows.length) prodId = p.rows[0].id;
+      }
+      const { rows } = await pool.query(`
+        INSERT INTO validade_items
+          (produto_id, codigo, descricao, data_validade, lote, acao_antes_vencer,
+           ultima_conferencia, responsavel, qtd_unidades, dias_alerta, localizacao, observacao, peso_total_kg, data_recebimento)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+        RETURNING *
       `, [
-        p.cProd||null, p.xProd, p.dVal||null, p.qAtual||0,
-        p.uCom||'UN', p.local||null, p.entrada||null, p.valorUnit||0,
-        p.acaoAnteVencer||null, p.conferencia||null, p.resultado||null,
-        p.customDias ? JSON.stringify(p.customDias) : null,
-        req.params.id
+        prodId, v.codigo?.trim() || null, v.descricao.trim(),
+        v.dataValidade || null, v.lote || null, v.acaoAntesVencer || null,
+        v.ultimaConferencia || null, v.responsavel || null,
+        parseInt(v.qtdUnidades || 0), parseInt(v.diasAlerta || 7),
+        v.localizacao || null, v.observacao || null,
+        v.pesoTotalKg ? parseFloat(v.pesoTotalKg) : null,
+        v.dataRecebimento || null,
+      ]);
+      res.json({ ok: true, data: rows[0] });
+    } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ── PUT /:id ───────────────────────────────────────────────────────────────
+  r.put('/:id', async (req, res) => {
+    const v = req.body;
+    try {
+      // Se tem código, busca produto para obter nome oficial e produto_id
+      let prodId = v.produtoId || null;
+      let descFinal = v.descricao || null;
+      let descOriginal = null;
+      if (v.codigo) {
+        const p = await pool.query(
+          `SELECT id, descricao FROM produtos WHERE codigo = $1 AND ativo = true LIMIT 1`,
+          [v.codigo.trim()]
+        );
+        if (p.rows.length) {
+          prodId = p.rows[0].id;
+          // Salva nome original antes de sobrescrever (só se ainda não foi salvo)
+          const cur = await pool.query(`SELECT descricao, desc_original FROM validade_items WHERE id=$1`, [parseInt(req.params.id)]);
+          if (cur.rows.length && !cur.rows[0].desc_original) {
+            descOriginal = cur.rows[0].descricao; // nome atual vira original
+          }
+          descFinal = p.rows[0].descricao; // sempre usa nome do cadastro
+        }
+      }
+
+      await pool.query(`
+        UPDATE validade_items SET
+          produto_id          = COALESCE($1, produto_id),
+          codigo              = COALESCE($2, codigo),
+          descricao           = COALESCE($3, descricao),
+          desc_original       = COALESCE(desc_original, $15),
+          data_validade       = COALESCE($4, data_validade),
+          lote                = COALESCE($5, lote),
+          acao_antes_vencer   = COALESCE($6, acao_antes_vencer),
+          ultima_conferencia  = COALESCE($7, ultima_conferencia),
+          responsavel         = COALESCE($8, responsavel),
+          qtd_unidades        = COALESCE($9, qtd_unidades),
+          peso_total_kg       = $10,
+          dias_alerta         = COALESCE($11, dias_alerta),
+          localizacao         = COALESCE($12, localizacao),
+          observacao          = COALESCE($13, observacao),
+          data_recebimento    = COALESCE($16, data_recebimento),
+          atualizado_em       = NOW()
+        WHERE id = $14
+      `, [
+        prodId, v.codigo?.trim() || null, descFinal,
+        v.dataValidade || null, v.lote || null, v.acaoAntesVencer || null,
+        v.ultimaConferencia || null, v.responsavel || null,
+        v.qtdUnidades !== undefined ? parseInt(v.qtdUnidades) : null,
+        v.pesoTotalKg ? parseFloat(v.pesoTotalKg) : null,
+        v.diasAlerta !== undefined ? parseInt(v.diasAlerta) : null,
+        v.localizacao || null, v.observacao || null,
+        parseInt(req.params.id), descOriginal,
+        v.dataRecebimento || null,
       ]);
       res.json({ ok: true });
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
-  // DELETE /estoque-desktop/:id  — desativa produto
-  r.delete('/estoque-desktop/:id', async (req, res) => {
+  // ── POST /:id/vincular ─────────────────────────────────────────────────────
+  r.post('/:id/vincular', async (req, res) => {
+    const { codigo } = req.body;
+    if (!codigo) return res.status(400).json({ ok: false, erro: 'codigo obrigatório' });
     try {
-      await pool.query(`UPDATE vld_estoque SET ativo=false, atualizado_em=NOW() WHERE id=$1`, [req.params.id]);
-      res.json({ ok: true });
-    } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
-  });
-
-  // DELETE /estoque-desktop/bulk  { ids: [...] }
-  r.post('/estoque-desktop/bulk-delete', async (req, res) => {
-    const { ids = [] } = req.body;
-    try {
-      await pool.query(`UPDATE vld_estoque SET ativo=false, atualizado_em=NOW() WHERE id = ANY($1)`, [ids]);
-      res.json({ ok: true });
-    } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
-  });
-
-  // POST /estoque-desktop/:id/baixa  — registra baixa/saída
-  r.post('/estoque-desktop/:id/baixa', async (req, res) => {
-    const { qtd, tipo, resp, obs } = req.body;
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-      const { rows } = await client.query(
-        `SELECT * FROM vld_estoque WHERE id=$1 AND ativo=true FOR UPDATE`, [req.params.id]
+      const { rows: prod } = await pool.query(
+        `SELECT id, descricao, preco_custo, preco_venda FROM produtos WHERE codigo = $1`, [codigo.trim()]
       );
-      if (!rows.length) throw new Error('Produto não encontrado');
-      const x = rows[0];
-      const semEstoque = parseFloat(x.qtd_atual) <= 0;
+      if (!prod.length) return res.status(404).json({ ok: false, erro: 'Produto não encontrado com este código' });
 
-      if (!semEstoque) {
-        const nova = Math.max(0, parseFloat(x.qtd_atual) - (parseFloat(qtd)||0));
-        if (nova <= 0 || tipo === 'venda') {
-          await client.query(`UPDATE vld_estoque SET ativo=false, qtd_atual=0, atualizado_em=NOW() WHERE id=$1`, [req.params.id]);
+      // Busca descrição atual para salvar como original (auditoria)
+      const { rows: cur } = await pool.query(
+        `SELECT descricao FROM validade_items WHERE id=$1`, [parseInt(req.params.id)]
+      );
+      const descAtual = cur[0]?.descricao || null;
+
+      await pool.query(`
+        UPDATE validade_items
+        SET produto_id    = $1,
+            codigo        = $2,
+            descricao     = $3,
+            desc_original = COALESCE(desc_original, $4),
+            preco_custo   = $5,
+            atualizado_em = NOW()
+        WHERE id = $6
+      `, [prod[0].id, codigo.trim(), prod[0].descricao,
+          descAtual, parseFloat(prod[0].preco_custo||0), parseInt(req.params.id)]);
+
+      res.json({ ok: true, produto: { ...prod[0], codigo: codigo.trim(), desc_original: descAtual } });
+    } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ── POST /auto-vincular — vincula itens sem código por nome ────────────────
+  // Tenta casar cada item sem código com um produto do catálogo pelo nome
+  r.post('/auto-vincular', async (req, res) => {
+    try {
+      // Busca todos os itens sem código
+      const { rows: semCod } = await pool.query(
+        `SELECT id, descricao FROM validade_items
+         WHERE (codigo IS NULL OR codigo = '') AND status NOT IN ('descartado','vendido')`
+      );
+      if (!semCod.length) return res.json({ ok: true, vinculados: 0, nao_encontrados: 0, detalhes: [] });
+
+      // Busca todos os produtos ativos para casar
+      const { rows: prods } = await pool.query(
+        `SELECT id, codigo, descricao, preco_custo FROM produtos WHERE ativo = true`
+      );
+
+      // Função de normalização para comparação
+      const norm = s => s.toUpperCase()
+        .normalize('NFD').replace(/[̀-ͯ]/g, '') // remove acentos
+        .replace(/[^A-Z0-9 ]/g, ' ')
+        .replace(/\s+/g, ' ').trim();
+
+      // Índice de produtos pelo nome normalizado
+      const prodIdx = {};
+      for (const p of prods) {
+        prodIdx[norm(p.descricao)] = p;
+      }
+
+      let vinculados = 0;
+      const detalhes = [];
+
+      for (const item of semCod) {
+        const nItem = norm(item.descricao);
+        // 1. Match exato
+        let prod = prodIdx[nItem];
+        // 2. Se não achou, tenta match parcial: produto cujo nome está contido no item ou vice-versa
+        if (!prod) {
+          for (const [nProd, p] of Object.entries(prodIdx)) {
+            if (nItem.includes(nProd) || nProd.includes(nItem)) {
+              // Prefere o match mais longo (mais específico)
+              if (!prod || nProd.length > norm(prod.descricao).length) prod = p;
+            }
+          }
+        }
+        if (prod) {
+          await pool.query(
+            `UPDATE validade_items SET
+               produto_id    = $1, codigo = $2,
+               desc_original = COALESCE(desc_original, descricao),
+               descricao     = $3, preco_custo = $4,
+               atualizado_em = NOW()
+             WHERE id = $5`,
+            [prod.id, prod.codigo, prod.descricao, parseFloat(prod.preco_custo||0), item.id]
+          );
+          vinculados++;
+          detalhes.push({ id: item.id, item: item.descricao, produto: prod.descricao, codigo: prod.codigo });
         } else {
-          await client.query(`UPDATE vld_estoque SET qtd_atual=$1, atualizado_em=NOW() WHERE id=$2`, [nova, req.params.id]);
+          detalhes.push({ id: item.id, item: item.descricao, produto: null, codigo: null });
         }
-        if (['descarte','perda','vencimento'].includes(tipo)) {
-          const p4 = await client.query(`SELECT valor_json FROM vld_config WHERE chave='metas'`);
-          const fator = (p4.rows[0]?.valor_json?.fator || 50) / 100;
-          const vc = parseFloat(x.valor_unit) || 0;
-          await client.query(`
-            INSERT INTO perdas (codigo_produto, data_perda, quantidade, motivo, tipo_motivo,
-              funcionario_responsavel, usuario_lancamento, observacao)
-            VALUES ($1, CURRENT_DATE, $2, $3, $4, $5, $6, $7)
-          `, [
-            x.cod_produto||x.nome_produto,
-            qtd, tipo==='vencimento'?'Produto vencido':tipo==='descarte'?'Descarte':'Perda operacional',
-            tipo, resp||null, req.usuario.id, obs||null  // ← CORRIGIDO: req.usuario.id
-          ]);
-        }
-      } else {
-        await client.query(`UPDATE vld_estoque SET ativo=false, atualizado_em=NOW() WHERE id=$1`, [req.params.id]);
       }
-      await client.query('COMMIT');
-      res.json({ ok: true });
-    } catch (e) {
-      await client.query('ROLLBACK');
-      res.status(400).json({ ok: false, erro: e.message });
-    } finally { client.release(); }
-  });
 
-  // ══════════════════════════════════════════════════════════════════════
-  // FATURAMENTO HISTÓRICO (vld_faturamento)
-  // ══════════════════════════════════════════════════════════════════════
-
-  r.get('/faturamento', async (req, res) => {
-    try {
-      const { rows } = await pool.query(`SELECT * FROM vld_faturamento ORDER BY mes_ref DESC`);
-      const data = {};
-      rows.forEach(r => {
-        data[r.mes_ref] = {
-          real:    r.real    ? parseFloat(r.real)    : null,
-          previsto:r.previsto? parseFloat(r.previsto): null,
-          manual:  r.manual  ? parseFloat(r.manual)  : null,
-        };
-      });
-      res.json({ ok: true, data });
+      res.json({ ok: true, vinculados, nao_encontrados: semCod.length - vinculados, detalhes });
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
-  r.post('/faturamento', async (req, res) => {
-    const { mes_ref, real, previsto } = req.body;
-    if (!mes_ref) return res.status(400).json({ ok: false, erro: 'mes_ref obrigatório' });
+  // ── POST /vincular-multiplos — vincula lista de ids com mesmo código ────────
+  r.post('/vincular-multiplos', async (req, res) => {
+    const { ids, codigo } = req.body;
+    if (!ids?.length || !codigo) return res.status(400).json({ ok: false, erro: 'ids e codigo obrigatórios' });
     try {
-      await pool.query(`
-        INSERT INTO vld_faturamento (mes_ref, real, previsto, manual, atualizado_em)
-        VALUES ($1, $2, $3, $2, NOW())
-        ON CONFLICT (mes_ref) DO UPDATE SET
-          real      = COALESCE($2, vld_faturamento.real),
-          previsto  = COALESCE($3, vld_faturamento.previsto),
-          manual    = COALESCE($2, vld_faturamento.manual),
-          atualizado_em = NOW()
-      `, [mes_ref, real||null, previsto||null]);
-      res.json({ ok: true });
-    } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
-  });
-
-  r.delete('/faturamento/:mes', async (req, res) => {
-    try {
-      await pool.query(`DELETE FROM vld_faturamento WHERE mes_ref = $1`, [req.params.mes]);
-      res.json({ ok: true });
-    } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
-  });
-
-  // ══════════════════════════════════════════════════════════════════════
-  // RETIRADAS DE FUNCIONÁRIAS (vld_retiradas)
-  // ══════════════════════════════════════════════════════════════════════
-
-  r.get('/retiradas', async (req, res) => {
-    try {
-      const { mes } = req.query;
-      let where = '';
-      const params = [];
-      if (mes) {
-        const [mm, yyyy] = mes.split('/');
-        where = `WHERE EXTRACT(MONTH FROM data)=$1 AND EXTRACT(YEAR FROM data)=$2`;
-        params.push(parseInt(mm), parseInt(yyyy));
-      }
-      const { rows } = await pool.query(
-        `SELECT * FROM vld_retiradas ${where} ORDER BY data DESC, criado_em DESC`, params
+      const { rows: prod } = await pool.query(
+        `SELECT id, descricao, preco_custo FROM produtos WHERE codigo = $1 AND ativo = true LIMIT 1`,
+        [codigo.trim()]
       );
-      const data = rows.map(r => ({
-        id:          r.id,
-        func_id:     r.func_id,
-        func_nome:   r.func_nome,
-        data:        r.data.toISOString().slice(0,10),
-        produto:     r.produto,
-        qtd:         parseFloat(r.qtd),
-        un:          r.unidade,
-        pc:          parseFloat(r.preco_custo)||0,
-        pv:          r.preco_venda ? parseFloat(r.preco_venda) : null,
-        totalCusto:  parseFloat(r.total_custo)||0,
-        totalVenda:  r.total_venda ? parseFloat(r.total_venda) : null,
-        obs:         r.observacao,
-      }));
-      res.json({ ok: true, data });
+      if (!prod.length) return res.status(404).json({ ok: false, erro: 'Produto não encontrado' });
+      const p = prod[0];
+      let count = 0;
+      for (const id of ids) {
+        await pool.query(
+          `UPDATE validade_items SET
+             produto_id    = $1, codigo = $2,
+             desc_original = COALESCE(desc_original, descricao),
+             descricao     = $3, preco_custo = $4,
+             atualizado_em = NOW()
+           WHERE id = $5`,
+          [p.id, codigo.trim(), p.descricao, parseFloat(p.preco_custo||0), parseInt(id)]
+        );
+        count++;
+      }
+      res.json({ ok: true, vinculados: count, produto: p.descricao });
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
-  r.post('/retiradas', async (req, res) => {
-    const { id, func_id, func_nome, data, produto, qtd, un, pc, pv, totalCusto, totalVenda, obs } = req.body;
-    if (!func_nome || !data || !produto || !qtd || !pc)
-      return res.status(400).json({ ok: false, erro: 'Campos obrigatórios: func_nome, data, produto, qtd, pc' });
+  // ── POST /encerrar-multiplos — marca vários como vendido/descartado/vencido ──
+  r.post('/encerrar-multiplos', async (req, res) => {
+    const { ids, resolucao } = req.body;
+    if (!ids?.length) return res.status(400).json({ ok: false, erro: 'Informe os IDs' });
+    const idsNum = ids.map(Number).filter(n => !isNaN(n) && n > 0);
+    if (!idsNum.length) return res.status(400).json({ ok: false, erro: 'IDs inválidos' });
+    const motivo = resolucao || 'vendido';
+    // Para resolucao='vencimento', o status vira 'descartado' para entrar no histórico
+    const novoStatus = motivo === 'vencimento' ? 'descartado' : motivo;
     try {
-      await pool.query(`
-        INSERT INTO vld_retiradas
-          (id, func_id, func_nome, data, produto, qtd, unidade,
-           preco_custo, preco_venda, total_custo, total_venda, observacao)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
-      `, [id||require('crypto').randomUUID(), func_id||null, func_nome, data, produto,
-          qtd, un||'KG', pc, pv||null, totalCusto||0, totalVenda||null, obs||null]);
+      const result = await pool.query(`
+        UPDATE validade_items
+        SET status=$1, resolucao=$2, dt_resolucao=CURRENT_DATE, atualizado_em=NOW()
+        WHERE id=ANY($3::int[])
+        RETURNING id, status, resolucao, atualizado_em
+      `, [novoStatus, motivo, idsNum]);
+      console.log(`[validade] encerrar-multiplos: ids=${idsNum} motivo=${motivo} status=${novoStatus} rowCount=${result.rowCount}`);
+      if (result.rowCount === 0)
+        return res.status(404).json({ ok: false, erro: 'Nenhum item encontrado com esses IDs' });
+      res.json({ ok: true, atualizados: result.rowCount, motivo });
+
+      // ── F1-07: se foi descarte por vencimento → gera perdas automaticamente
+      // try/catch isolado — falha não afeta o encerramento já confirmado
+      if (novoStatus === 'descartado') {
+        try {
+          // Busca dados dos itens encerrados para gerar as perdas
+          const { rows: itensDesc } = await pool.query(`
+            SELECT vi.id, vi.descricao, vi.codigo, vi.qtd_unidades,
+                   vi.produto_id, vi.lote,
+                   p.preco_custo
+            FROM validade_items vi
+            LEFT JOIN produtos p ON p.id = vi.produto_id
+            WHERE vi.id = ANY($1::int[])
+          `, [idsNum]);
+
+          for (const item of itensDesc) {
+            const dtHoje = new Date().toISOString().slice(0, 10);
+            const mes    = dtHoje.slice(5, 7) + '/' + dtHoje.slice(0, 4);
+            const qtd    = Math.abs(parseInt(item.qtd_unidades || 0));
+            const valor  = parseFloat(item.preco_custo || 0) * qtd;
+
+            // Cria registro em perdas (sem duplicar se já existir)
+            const jaExiste = await pool.query(
+              `SELECT id FROM perdas WHERE validade_item_id = $1 LIMIT 1`,
+              [item.id]
+            );
+            if (!jaExiste.rows.length) {
+              await pool.query(`
+                INSERT INTO perdas
+                  (validade_item_id, produto_id, descricao, motivo,
+                   qtd_unidades, valor_perda, dt_perda, mes, usuario_id)
+                VALUES ($1,$2,$3,'vencimento',$4,$5,$6,$7,$8)
+              `, [item.id, item.produto_id || null,
+                  item.descricao || item.codigo || 'Item vencido',
+                  qtd, valor, dtHoje, mes, req.user?.id || null]);
+            }
+
+            // Registra movimento de estoque
+            if (item.produto_id && qtd > 0) {
+              await pool.query(`
+                INSERT INTO movimentos_estoque
+                  (produto_id, produto_codigo, tipo_movimento, origem, origem_id,
+                   quantidade, estoque_anterior, estoque_posterior, usuario_id, observacao)
+                SELECT p.id, p.codigo, 'VALIDADE', 'validade', $1,
+                       -$2::numeric,
+                       p.estoque,
+                       GREATEST(0, p.estoque - $2::numeric),
+                       $3, $4
+                FROM produtos p WHERE p.id = $5
+              `, [item.id, qtd, req.user?.id || null,
+                  'Vencimento: ' + (item.descricao || item.codigo), item.produto_id]);
+
+              await pool.query(`
+                UPDATE produtos
+                SET estoque = GREATEST(0, estoque - $1), atualizado_em = NOW()
+                WHERE id = $2
+              `, [qtd, item.produto_id]);
+            }
+          }
+
+          // Emite evento de atualização de estoque
+          events.emit(app, 'VALIDADE_DESCARTADA', {
+            ids:      idsNum,
+            motivo,
+            total:    itensDesc.length,
+          });
+
+        } catch (eMov) {
+          console.warn('[validade] F1-07 movimento falhou (não crítico):', eMov.message);
+        }
+      }
+
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ── DELETE /multiplos — exclui vários itens de uma vez ──────────────────────
+  r.delete('/multiplos', async (req, res) => {
+    const idsRaw = req.body?.ids;
+    if (!idsRaw?.length) return res.status(400).json({ ok: false, erro: 'Informe os IDs' });
+    const ids = idsRaw.map(Number).filter(n => !isNaN(n) && n > 0);
+    if (!ids.length) return res.status(400).json({ ok: false, erro: 'IDs inválidos' });
+    try {
+      await pool.query(`UPDATE perdas SET validade_item_id=NULL WHERE validade_item_id=ANY($1::int[])`, [ids]);
+      const r = await pool.query(`DELETE FROM validade_items WHERE id=ANY($1::int[])`, [ids]);
+      res.json({ ok: true, removidos: r.rowCount });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ── DELETE /limpar-tudo — admin apaga todos os itens de validade ────────────
+  r.delete('/limpar-tudo', async (req, res) => {
+    if (req.user?.perfil !== 'admin')
+      return res.status(403).json({ ok: false, erro: 'Acesso restrito ao administrador' });
+    try {
+      await pool.query(`UPDATE perdas SET validade_item_id=NULL WHERE validade_item_id IS NOT NULL`);
+      const r = await pool.query(`DELETE FROM validade_items`);
+      res.json({ ok: true, removidos: r.rowCount });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ── DELETE /:id — encerra com motivo ──────────────────────────────────────
+  r.delete('/:id', async (req, res) => {
+    const { resolucao, obs_resolucao, encerrado_por, dt_resolucao } = req.body || {};
+    // Usa o resolucao como status se for vendido/descartado, senão descartado
+    const novoStatus = ['vendido','descartado'].includes(resolucao) ? resolucao : 'descartado';
+    try {
+      await pool.query(
+        `UPDATE validade_items SET
+           status=$1, resolucao=$2, obs_resolucao=$3,
+           encerrado_por=$4, dt_resolucao=COALESCE($5::date,CURRENT_DATE),
+           atualizado_em=NOW()
+         WHERE id=$6`,
+        [novoStatus, resolucao||'outro', obs_resolucao||null, encerrado_por||null,
+         dt_resolucao||null, parseInt(req.params.id)]
+      );
       res.json({ ok: true });
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
-  r.delete('/retiradas/:id', async (req, res) => {
+  // ── GET /historico ─────────────────────────────────────────────────────────
+  // ── GET /analise-financeira — valor em risco + ranking (F2.5) ────────────
+  r.get('/analise-financeira', async (req, res) => {
     try {
-      await pool.query(`DELETE FROM vld_retiradas WHERE id=$1`, [req.params.id]);
-      res.json({ ok: true });
-    } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
-  });
+      await atualizarStatus();
 
-  // ══════════════════════════════════════════════════════════════════════
-  // ROTAS EXISTENTES DO MOBILE (mantidas intactas)
-  // ══════════════════════════════════════════════════════════════════════
+      const [risco, ranking, perdas_mes, perdas_12m] = await Promise.all([
+        // Valor financeiro em risco por faixa de vencimento
+        pool.query(`
+          SELECT
+            SUM(CASE WHEN data_validade < CURRENT_DATE
+              THEN COALESCE(peso_total_kg, qtd_unidades * 0.001) * COALESCE(preco_custo, 0) ELSE 0 END) AS valor_vencido,
+            SUM(CASE WHEN data_validade BETWEEN CURRENT_DATE AND CURRENT_DATE+3
+              THEN COALESCE(peso_total_kg, qtd_unidades * 0.001) * COALESCE(preco_custo, 0) ELSE 0 END) AS valor_critico_3d,
+            SUM(CASE WHEN data_validade BETWEEN CURRENT_DATE+4 AND CURRENT_DATE+7
+              THEN COALESCE(peso_total_kg, qtd_unidades * 0.001) * COALESCE(preco_custo, 0) ELSE 0 END) AS valor_alerta_7d,
+            SUM(CASE WHEN data_validade BETWEEN CURRENT_DATE+8 AND CURRENT_DATE+15
+              THEN COALESCE(peso_total_kg, qtd_unidades * 0.001) * COALESCE(preco_custo, 0) ELSE 0 END) AS valor_atencao_15d,
+            COUNT(*) FILTER (WHERE data_validade < CURRENT_DATE) AS qtd_vencidos,
+            COUNT(*) FILTER (WHERE data_validade BETWEEN CURRENT_DATE AND CURRENT_DATE+3) AS qtd_criticos,
+            COUNT(*) FILTER (WHERE data_validade BETWEEN CURRENT_DATE+4 AND CURRENT_DATE+7) AS qtd_alertas,
+            COUNT(*) FILTER (WHERE data_validade BETWEEN CURRENT_DATE+8 AND CURRENT_DATE+15) AS qtd_atencao
+          FROM validade_items
+          WHERE status NOT IN ('descartado','vendido')
+        `),
+        // Ranking de produtos com maior valor em risco (próximos 15 dias)
+        pool.query(`
+          SELECT
+            descricao,
+            codigo,
+            data_validade,
+            status,
+            COALESCE(peso_total_kg, qtd_unidades * 0.001) AS qtd,
+            COALESCE(preco_custo, 0) AS preco_custo,
+            ROUND(COALESCE(peso_total_kg, qtd_unidades * 0.001) * COALESCE(preco_custo, 0), 2) AS valor_risco,
+            (data_validade::date - CURRENT_DATE) AS dias_restantes,
+            acao_antes_vencer,
+            localizacao
+          FROM validade_items
+          WHERE status NOT IN ('descartado','vendido')
+            AND data_validade <= CURRENT_DATE + 15
+            AND COALESCE(preco_custo, 0) > 0
+          ORDER BY valor_risco DESC
+          LIMIT 20
+        `),
+        // Perdas do mês atual (vinculadas a movimentos_estoque)
+        pool.query(`
+          SELECT
+            COALESCE(SUM(valor_perda),0) AS total_mes,
+            COUNT(*) AS qtd_mes
+          FROM perdas
+          WHERE mes = TO_CHAR(NOW(),'MM/YYYY')
+        `),
+        // Perdas dos últimos 12 meses (para tendência)
+        pool.query(`
+          SELECT
+            mes,
+            COALESCE(SUM(valor_perda),0) AS total,
+            COUNT(*) AS qtd
+          FROM perdas
+          GROUP BY mes
+          ORDER BY
+            SPLIT_PART(mes,'/',2)::int DESC,
+            SPLIT_PART(mes,'/',1)::int DESC
+          LIMIT 12
+        `),
+      ]);
 
-  r.get('/estoque', async (req, res) => {
-    try {
-      const { status } = req.query;
-      const { rows } = await pool.query(`
-        SELECT l.id, l.codigo_produto, pm.descricao_produto AS nome,
-          pm.descricao_reduzida AS nome_curto, pm.categoria, pm.unidade,
-          l.lote, l.data_validade, l.quantidade_atual,
-          l.local_armazenamento AS local, l.custo_unitario, l.observacao, l.criado_em
-        FROM lotes_estoque l
-        JOIN produtos_mestre pm ON pm.codigo_produto = l.codigo_produto
-        WHERE l.ativo = true AND l.quantidade_atual > 0
-          AND COALESCE(pm.controla_validade, true) = true
-        ORDER BY l.data_validade ASC NULLS LAST, pm.descricao_produto ASC
-      `);
-      const result = rows
-        .map(row => ({
-          ...row,
-          status:           calcStatus(row.data_validade),
-          dias:             calcDias(row.data_validade),
-          quantidade_atual: parseFloat(row.quantidade_atual) || 0,
-          custo_unitario:   parseFloat(row.custo_unitario)   || 0,
-        }))
-        .filter(row => !status || row.status === status);
-      res.json({ ok: true, data: result });
-    } catch (e) {
-      console.error('[validade/estoque]', e.message);
+      const r = risco.rows[0];
+      const valorVencido  = parseFloat(r.valor_vencido || 0);
+      const valorCritico  = parseFloat(r.valor_critico_3d || 0);
+      const valorAlerta   = parseFloat(r.valor_alerta_7d || 0);
+      const valorAtencao  = parseFloat(r.valor_atencao_15d || 0);
+      const totalRisco    = valorVencido + valorCritico + valorAlerta;
+
+      // Sugestões operacionais para os itens críticos
+      const sugestoes = ranking.rows.map(item => {
+        const dias = parseInt(item.dias_restantes || 0);
+        let sugestao = null;
+        const qtdNum = parseFloat(item.qtd || 0);
+
+        if (dias < 0)       sugestao = 'Descartar imediatamente — produto vencido';
+        else if (dias <= 2) sugestao = 'Exposição prioritária urgente ou descarte hoje';
+        else if (dias <= 5) sugestao = qtdNum > 5 ? 'Estoque elevado — sugerir promoção ou exposição prioritária' : 'Monitorar — considerar promoção';
+        else if (dias <= 7) sugestao = 'Programar promoção ou uso antecipado';
+        else                sugestao = 'Planejar uso ou promoção nos próximos dias';
+
+        return { ...item, sugestao };
+      });
+
+      res.json({ ok: true, data: {
+        valor_em_risco: {
+          vencido:      valorVencido,
+          critico_3d:   valorCritico,
+          alerta_7d:    valorAlerta,
+          atencao_15d:  valorAtencao,
+          total_urgente: totalRisco,
+          qtd_vencidos:  parseInt(r.qtd_vencidos || 0),
+          qtd_criticos:  parseInt(r.qtd_criticos || 0),
+          qtd_alertas:   parseInt(r.qtd_alertas || 0),
+          qtd_atencao:   parseInt(r.qtd_atencao || 0),
+        },
+        ranking_risco: sugestoes,
+        perdas: {
+          total_mes:   parseFloat(perdas_mes.rows[0]?.total_mes || 0),
+          qtd_mes:     parseInt(perdas_mes.rows[0]?.qtd_mes || 0),
+          evolucao_12m: perdas_12m.rows,
+        },
+      }});
+    } catch(e) {
+      console.error('[validade/analise-financeira]', e.message);
       res.status(500).json({ ok: false, erro: e.message });
     }
   });
 
-  r.get('/alertas', async (req, res) => {
+  r.get('/historico', async (req, res) => {
     try {
-      const { rows } = await pool.query(`
-        SELECT l.id, l.codigo_produto, pm.descricao_produto AS nome, pm.unidade,
-          l.lote, l.data_validade, l.quantidade_atual,
-          l.local_armazenamento AS local, l.custo_unitario
-        FROM lotes_estoque l
-        JOIN produtos_mestre pm ON pm.codigo_produto = l.codigo_produto
-        WHERE l.ativo = true AND l.quantidade_atual > 0
-          AND COALESCE(pm.controla_validade, true) = true
-          AND (l.data_validade IS NULL OR l.data_validade <= CURRENT_DATE + INTERVAL '15 days')
-        ORDER BY l.data_validade ASC NULLS FIRST
-      `);
-      res.json({ ok: true, data: rows.map(row => ({
-        ...row,
-        status: calcStatus(row.data_validade),
-        dias:   calcDias(row.data_validade),
-        quantidade_atual: parseFloat(row.quantidade_atual) || 0,
-        custo_unitario:   parseFloat(row.custo_unitario)   || 0,
-      }))});
-    } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
-  });
-
-  r.get('/kpis', async (req, res) => {
-    try {
-      const { rows } = await pool.query(`
-        SELECT
-          COUNT(*) FILTER (WHERE data_validade < CURRENT_DATE)                                                    AS vencidos,
-          COUNT(*) FILTER (WHERE data_validade BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days')         AS criticos,
-          COUNT(*) FILTER (WHERE data_validade BETWEEN CURRENT_DATE + INTERVAL '8 days'  AND CURRENT_DATE + INTERVAL '15 days') AS urgentes,
-          COUNT(*) FILTER (WHERE data_validade BETWEEN CURRENT_DATE + INTERVAL '16 days' AND CURRENT_DATE + INTERVAL '30 days') AS atencao,
-          COUNT(*) FILTER (WHERE data_validade > CURRENT_DATE + INTERVAL '30 days')                               AS ok,
-          COUNT(*) FILTER (WHERE data_validade IS NULL)                                                           AS sem_data,
-          COUNT(*)                                                                                                 AS total
-        FROM lotes_estoque l
-        JOIN produtos_mestre pm ON pm.codigo_produto = l.codigo_produto
-        WHERE l.ativo = true AND l.quantidade_atual > 0
-          AND COALESCE(pm.controla_validade, true) = true
-      `);
-      const { rows: perdas } = await pool.query(`
-        SELECT COUNT(*) AS qtd_perdas, COALESCE(SUM(valor_estimado),0) AS valor_perdas
-        FROM perdas
-        WHERE DATE_TRUNC('month', data_perda) = DATE_TRUNC('month', NOW())
-      `);
-      res.json({ ok: true, data: {
-        ...rows[0],
-        qtd_perdas_mes:   parseInt(perdas[0].qtd_perdas),
-        valor_perdas_mes: parseFloat(perdas[0].valor_perdas),
-      }});
-    } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
-  });
-
-  r.post('/lote', async (req, res) => {
-    const { codigo_produto, lote, data_validade, quantidade, custo_unitario, local_armazenamento, observacao } = req.body;
-    if (!codigo_produto || !quantidade) return res.status(400).json({ ok: false, erro: 'codigo_produto e quantidade obrigatórios' });
-    try {
-      const { rows } = await pool.query(`
-        INSERT INTO lotes_estoque
-          (codigo_produto, lote, data_validade, quantidade, quantidade_atual,
-           custo_unitario, local_armazenamento, usuario_lancamento, observacao)
-        VALUES ($1,$2,$3,$4,$4,$5,$6,$7,$8) RETURNING *
-      `, [codigo_produto, lote||null, data_validade||null, quantidade,
-          custo_unitario||null, local_armazenamento||null, req.usuario.id, observacao||null]); // ← CORRIGIDO
-      res.json({ ok: true, data: rows[0] });
-    } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
-  });
-
-  r.post('/baixa/:loteId', async (req, res) => {
-    const { loteId } = req.params;
-    const { quantidade, tipo, funcionario_responsavel, observacao } = req.body;
-    if (!quantidade || quantidade <= 0) return res.status(400).json({ ok: false, erro: 'Quantidade inválida' });
-    if (!tipo) return res.status(400).json({ ok: false, erro: 'Tipo obrigatório' });
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-      const { rows: lr } = await client.query(
-        `SELECT * FROM lotes_estoque WHERE id=$1 AND ativo=true FOR UPDATE`, [loteId]
+      const { resolucao, de, ate, busca } = req.query;
+      // Histórico = encerrados (descartado/vendido) + vencidos ainda ativos
+      const conds = [`(status IN ('descartado','vendido') OR status = 'vencido')`], params = [];
+      if (resolucao && resolucao !== 'todos') {
+        if (resolucao === 'vencimento') {
+          // Filtra por resolucao='vencimento' OU status='vencido' (não encerrado ainda)
+          params.push('%'); // dummy para manter índice
+          conds.push(`(resolucao='vencimento' OR status='vencido')`);
+        } else {
+          params.push(resolucao); conds.push(`resolucao=$${params.length}`);
+        }
+      }
+      if (de)  { params.push(de);  conds.push(`COALESCE(dt_resolucao, data_validade)>=$${params.length}::date`); }
+      if (ate) { params.push(ate); conds.push(`COALESCE(dt_resolucao, data_validade)<=$${params.length}::date`); }
+      if (busca) {
+        params.push(`%${busca}%`);
+        conds.push(`(descricao ILIKE $${params.length} OR COALESCE(codigo,'') ILIKE $${params.length})`);
+      }
+      // Remove o dummy param se foi adicionado para vencimento
+      const cleanParams = params.filter(p => p !== '%');
+      const cleanConds  = conds.map(c => c.replace('$'+(params.indexOf('%')+1), "'vencimento'")).filter(c => !c.includes('$NaN'));
+      // Monta query mais simples sem o dummy
+      const conds2 = [`(status IN ('descartado','vendido') OR status = 'vencido')`], params2 = [];
+      if (resolucao && resolucao !== 'todos') {
+        if (resolucao === 'vencimento') {
+          conds2.push(`(resolucao='vencimento' OR status='vencido')`);
+        } else {
+          params2.push(resolucao); conds2.push(`resolucao=$${params2.length}`);
+        }
+      }
+      if (de)  { params2.push(de);  conds2.push(`COALESCE(dt_resolucao, data_validade)>=$${params2.length}::date`); }
+      if (ate) { params2.push(ate); conds2.push(`COALESCE(dt_resolucao, data_validade)<=$${params2.length}::date`); }
+      if (busca) {
+        params2.push(`%${busca}%`);
+        conds2.push(`(descricao ILIKE $${params2.length} OR COALESCE(codigo,'') ILIKE $${params2.length})`);
+      }
+      const { rows } = await pool.query(
+        `SELECT * FROM validade_items WHERE ${conds2.join(' AND ')}
+         ORDER BY COALESCE(dt_resolucao, data_validade) DESC NULLS LAST, atualizado_em DESC`, params2
       );
-      if (!lr.length) throw new Error('Lote não encontrado');
-      const lote = lr[0];
-      if (quantidade > lote.quantidade_atual) throw new Error(`Quantidade excede estoque (${lote.quantidade_atual})`);
-      const nova = parseFloat(lote.quantidade_atual) - parseFloat(quantidade);
-      if (nova <= 0) {
-        await client.query(`UPDATE lotes_estoque SET quantidade_atual=0, ativo=false, atualizado_em=NOW() WHERE id=$1`, [loteId]);
-      } else {
-        await client.query(`UPDATE lotes_estoque SET quantidade_atual=$1, atualizado_em=NOW() WHERE id=$2`, [nova, loteId]);
-      }
-      let perdaId = null;
-      if (['perda','descarte','vencimento'].includes(tipo)) {
-        const motivo = tipo==='vencimento'?'Produto vencido':tipo==='descarte'?'Descarte':'Perda operacional';
-        const { rows: pr } = await client.query(`
-          INSERT INTO perdas
-            (codigo_produto, lote_id, data_perda, quantidade, motivo, tipo_motivo,
-             funcionario_responsavel, usuario_lancamento, observacao)
-          VALUES ($1,$2,CURRENT_DATE,$3,$4,$5,$6,$7,$8) RETURNING id
-        `, [lote.codigo_produto, loteId, quantidade, motivo, tipo,
-            funcionario_responsavel||null, req.usuario.id, observacao||null]); // ← CORRIGIDO
-        perdaId = pr[0].id;
-      }
-      await client.query('COMMIT');
-      res.json({ ok: true, novaQuantidade: nova, loteDesativado: nova <= 0, perdaId });
-    } catch (e) {
-      await client.query('ROLLBACK');
-      res.status(400).json({ ok: false, erro: e.message });
-    } finally { client.release(); }
-  });
-
-  r.get('/perdas', async (req, res) => {
-    try {
-      const { mes } = req.query;
-      let where = '', params = [];
-      if (mes) { where = `WHERE DATE_TRUNC('month', p.data_perda) = $1::date`; params.push(mes+'-01'); }
-      const { rows } = await pool.query(`
-        SELECT p.*,
-          COALESCE(pm.descricao_produto, p.codigo_produto) AS nome_produto,
-          pm.categoria, pm.unidade
-        FROM perdas p
-        LEFT JOIN produtos_mestre pm ON pm.codigo_produto = p.codigo_produto
-        ${where}
-        ORDER BY p.data_perda DESC, p.id DESC LIMIT 200
-      `, params);
-      res.json({ ok: true, data: rows });
+      const fmt = v => v instanceof Date ? v.toISOString().slice(0,10) : v ? String(v).slice(0,10) : null;
+      const data = rows.map(r => ({
+        ...r,
+        data_validade: fmt(r.data_validade),
+        dt_resolucao:  fmt(r.dt_resolucao),
+        ultima_conferencia: fmt(r.ultima_conferencia),
+      }));
+      res.json({ ok: true, data, total: data.length });
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
-  r.get('/funcionarios', async (req, res) => {
+  // ── PUT /historico/:id — editar item do histórico ──────────────────────────
+  r.put('/historico/:id', async (req, res) => {
+    const { descricao, codigo, data_validade, dt_resolucao, resolucao, obs_resolucao, qtd_unidades, peso_total_kg, preco_custo, lote } = req.body;
     try {
-      const { rows } = await pool.query(`SELECT id, nome FROM usuarios WHERE ativo = true ORDER BY nome ASC`);
-      res.json({ ok: true, data: rows });
-    } catch (e) { res.json({ ok: true, data: [] }); }
-  });
-
-  r.get('/produtos-search', async (req, res) => {
-    try {
-      const { q = '' } = req.query;
-      const { rows } = await pool.query(`
-        SELECT codigo_produto, descricao_produto, descricao_reduzida, unidade, preco_custo
-        FROM produtos_mestre
-        WHERE ativo = true AND COALESCE(controla_validade, true) = true
-          AND (descricao_produto ILIKE $1 OR codigo_produto ILIKE $1)
-        ORDER BY descricao_produto ASC LIMIT 20
-      `, [`%${q}%`]);
-      res.json({ ok: true, data: rows });
-    } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
-  });
-
-  r.post('/sincronizar-lote', async (req, res) => {
-    const { codigo_produto, nome_produto, data_validade, quantidade_atual, custo_unitario, local_armazenamento, unidade } = req.body;
-    if (!codigo_produto) return res.status(400).json({ ok: false, erro: 'codigo_produto obrigatório' });
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-      await client.query(`
-        INSERT INTO produtos_mestre (codigo_produto, descricao_produto, unidade, controla_validade, ativo)
-        VALUES ($1,$2,$3,true,true)
-        ON CONFLICT (codigo_produto) DO UPDATE SET
-          descricao_produto = COALESCE(EXCLUDED.descricao_produto, produtos_mestre.descricao_produto),
-          controla_validade = true
-      `, [codigo_produto, nome_produto||codigo_produto, unidade||'KG']);
-      const { rows: ex } = await client.query(`
-        SELECT id FROM lotes_estoque
-        WHERE codigo_produto=$1 AND ativo=true
-          AND ((data_validade=$2::date) OR (data_validade IS NULL AND $2 IS NULL))
-        LIMIT 1
-      `, [codigo_produto, data_validade||null]);
-      if (ex.length) {
-        await client.query(`
-          UPDATE lotes_estoque SET quantidade_atual=$1,
-            custo_unitario=COALESCE($2,custo_unitario),
-            local_armazenamento=COALESCE($3,local_armazenamento),
-            atualizado_em=NOW() WHERE id=$4
-        `, [quantidade_atual||0, custo_unitario||null, local_armazenamento||null, ex[0].id]);
-      } else {
-        await client.query(`
-          INSERT INTO lotes_estoque
-            (codigo_produto, data_validade, quantidade, quantidade_atual,
-             custo_unitario, local_armazenamento, usuario_lancamento)
-          VALUES ($1,$2,$3,$3,$4,$5,$6)
-        `, [codigo_produto, data_validade||null, quantidade_atual||0,
-            custo_unitario||null, local_armazenamento||null, req.usuario.id]); // ← CORRIGIDO
-      }
-      await client.query('COMMIT');
+      await pool.query(`
+        UPDATE validade_items SET
+          descricao       = COALESCE($1, descricao),
+          codigo          = $2,
+          data_validade   = COALESCE($3::date, data_validade),
+          dt_resolucao    = COALESCE($4::date, dt_resolucao),
+          resolucao       = COALESCE($5, resolucao),
+          obs_resolucao   = $6,
+          qtd_unidades    = COALESCE($7, qtd_unidades),
+          peso_total_kg   = COALESCE($8, peso_total_kg),
+          preco_custo     = COALESCE($9, preco_custo),
+          lote            = $10,
+          atualizado_em   = NOW()
+        WHERE id = $11
+      `, [descricao||null, codigo||null, data_validade||null, dt_resolucao||null,
+          resolucao||null, obs_resolucao||null, qtd_unidades||null, peso_total_kg||null,
+          preco_custo||null, lote||null, parseInt(req.params.id)]);
       res.json({ ok: true });
+    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ── POST /import ───────────────────────────────────────────────────────────
+  r.post('/import', upload.single('arquivo'), async (req, res) => {
+    if (!req.file) return res.status(400).json({ ok: false, erro: 'Arquivo não enviado' });
+    try {
+      const wb = XLSX.read(req.file.buffer, { type: 'buffer', cellDates: true });
+
+      // Escolhe a aba: preferência para 'Pereciveis', 'Perecíveis', 'Validade', senão a primeira
+      const abaPref = ['Pereciveis','Perecíveis','Perecivel','Perecível','Validade','Ativos'];
+      let sheetName = wb.SheetNames[0];
+      for (const pref of abaPref) {
+        const found = wb.SheetNames.find(n => n.toLowerCase().includes(pref.toLowerCase()));
+        if (found) { sheetName = found; break; }
+      }
+      const sheet = wb.Sheets[sheetName];
+      const rows  = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+
+      if (rows.length < 2) return res.status(422).json({ ok: false, erro: 'Planilha vazia' });
+
+      const header = rows[0].map(c => String(c).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\n/g,' ').trim());
+      const col = (nomes) => {
+        for (const n of nomes) {
+          const i = header.findIndex(h => h.includes(n.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'')));
+          if (i >= 0) return i;
+        }
+        return -1;
+      };
+
+      // Colunas — compatível com formato Bom Beef (DATA VALIDADE, Produto, CÓDIGO, etc.)
+      const colVal     = col(['data validade','validade','vencimento','vence','exp']);
+      const colDesc    = col(['produto','descrição','descricao','item','nome']);
+      const colCod     = col(['código','codigo','cod','sku']);
+      const colQtdPec  = col(['quantidade de peças','qtd peças','quantidade de pecas','peças (no estoque)','peças']);
+      const colQtdKg   = col(['quantidade estoque (em kg)','quantidade\nestoque','em kg','kg']);
+      const colLocal   = col(['local','localização','localizacao','posição']);
+      const colAcao    = col(['ação antes','acao antes','ação','acao','action']);
+      const colConf    = col(['última conferência','ultima conferencia','conferência','conferencia','ultima conf']);
+      const colLote    = col(['lote','batch']);
+      const colResp    = col(['responsável','responsavel','resp']);
+      // Qtd: usa peças se tiver, senão kg
+      const colQtd     = colQtdPec >= 0 ? colQtdPec : col(['qtd','quantidade','qty','unid']);
+
+      if (colDesc < 0) {
+        return res.status(422).json({ ok: false, erro: 'Coluna de descrição/produto não encontrada', cabecalho: header, aba: sheetName });
+      }
+      if (colVal < 0) {
+        return res.status(422).json({ ok: false, erro: 'Coluna de data de validade não encontrada', cabecalho: header, aba: sheetName });
+      }
+
+      const client = await pool.connect();
+      let inseridos = 0, erros = 0, duplicatas = 0;
+      const detalheErros = [];
+
+      try {
+        await client.query('BEGIN');
+        for (let i = 1; i < rows.length; i++) {
+          const row  = rows[i];
+          const desc = String(row[colDesc] ?? '').trim();
+          if (!desc) continue;
+
+          const cod   = colCod  >= 0 ? String(row[colCod]  ?? '').trim() || null : null;
+          const qtdRaw = colQtd >= 0 ? row[colQtd] : 0;
+          const qtdNum = typeof qtdRaw === 'number' ? qtdRaw
+                       : parseFloat(String(qtdRaw||'0').replace(',','.'));
+          const qtd = isNaN(qtdNum) ? 0 : Math.round(qtdNum);
+          const resp  = colResp >= 0 ? String(row[colResp]  ?? '').trim() || null : null;
+          const acao  = colAcao >= 0 ? String(row[colAcao]  ?? '').trim() || null : null;
+          const lote  = colLote >= 0 ? String(row[colLote]  ?? '').trim() || null : null;
+          const local = colLocal>= 0 ? String(row[colLocal] ?? '').trim() || null : null;
+
+          const parseDate = (v) => {
+            if (!v) return null;
+            if (v instanceof Date && !isNaN(v)) return v.toISOString().slice(0, 10);
+            const s = String(v).trim();
+            if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+            if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) return s.split('/').reverse().join('-');
+            if (/^\d{2}\/\d{4}$/.test(s)) {
+              const [mm, yyyy] = s.split('/');
+              return `${yyyy}-${mm}-${String(new Date(parseInt(yyyy), parseInt(mm), 0).getDate()).padStart(2,'0')}`;
+            }
+            // Excel serial date number
+            if (/^\d{5}$/.test(s)) {
+              const d = new Date((parseInt(s) - 25569) * 86400 * 1000);
+              return d.toISOString().slice(0,10);
+            }
+            return null;
+          };
+
+          const dataVal  = colVal  >= 0 ? parseDate(row[colVal])  : null;
+          const dataConf = colConf >= 0 ? parseDate(row[colConf]) : null;
+
+          // Tenta vincular produto
+          let prodId = null;
+          if (cod) {
+            const p = await client.query(`SELECT id FROM produtos WHERE codigo = $1`, [cod]);
+            if (p.rows.length) prodId = p.rows[0].id;
+          }
+
+          // Verifica duplicata: mesmo produto (desc ou codigo) + mesma data de validade
+          // Ignora itens vendidos/descartados — eles podem ser re-cadastrados
+          const dupCheck = await client.query(`
+            SELECT id FROM validade_items
+            WHERE data_validade=$1::date
+              AND (descricao=$2 OR ($3::text IS NOT NULL AND codigo=$3))
+              AND status NOT IN ('vendido','descartado')
+            LIMIT 1
+          `, [dataVal, desc, cod||null]);
+          if(dupCheck.rows.length){ duplicatas++; continue; }
+
+          try {
+            await client.query(`
+              INSERT INTO validade_items
+                (produto_id, codigo, descricao, data_validade, lote, acao_antes_vencer,
+                 ultima_conferencia, responsavel, qtd_unidades, localizacao)
+              VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+            `, [prodId, cod, desc, dataVal, lote, acao, dataConf, resp, qtd, local]);
+            inseridos++;
+          } catch (e) {
+            erros++;
+            detalheErros.push({ linha: i + 1, descricao: desc, erro: e.message });
+          }
+        }
+        await client.query('COMMIT');
+      } catch (e) {
+        await client.query('ROLLBACK'); throw e;
+      } finally { client.release(); }
+
+      res.json({ ok: true, inseridos, erros, detalheErros });
     } catch (e) {
-      await client.query('ROLLBACK');
-      res.status(500).json({ ok: false, erro: e.message });
-    } finally { client.release(); }
+      res.status(500).json({ ok: false, erro: 'Erro ao processar planilha: ' + e.message });
+    }
   });
 
   return r;
