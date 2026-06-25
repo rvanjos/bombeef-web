@@ -1009,28 +1009,110 @@ async function salvar(){
     dtNota:     document.getElementById('f-dtnota').value,
     vencimento: document.getElementById('f-venc').value,
     valor:      parseFloat(document.getElementById('f-val').value)||0,
-    parcela:        document.getElementById('f-parc').value,
+    parcela:        parseInt(document.getElementById('f-parc').value)||1,
     totalParcelas:  parseInt(document.getElementById('f-total-parcelas').value)||1,
     plano:          document.getElementById('f-plano').value,
     obs:            document.getElementById('f-obs').value,
     cartaoCredito:  document.getElementById('f-cartao').value,
   };
   if(!body.fornecedor||!body.valor){ toast('Fornecedor e valor são obrigatórios'); return; }
-  // Aviso discreto quando editando boleto que pode estar no DRE
   if (dbId) {
     const b = boletos.find(x => String(x.dbId) === String(dbId));
     const alterou = b && (b.vencimento !== body.vencimento || b.valor !== body.valor);
-    if (alterou) {
-      // Apenas notifica — não bloqueia; o usuário já clicou em Salvar conscientemente
-      setTimeout(() => toast('ℹ️ Vencimento/valor alterado — atualize "Boletos DB" no DRE.'), 300);
-    }
+    if (alterou) setTimeout(() => toast('ℹ️ Vencimento/valor alterado — atualize "Boletos DB" no DRE.'), 300);
   }
   const d = dbId
     ? await api.put(`/api/boletos/${dbId}`, body)
     : await api.post('/api/boletos', body);
   if(!d.ok){ toast('Erro: '+d.erro); return; }
   toast(dbId ? '✅ Boleto atualizado!' : '✅ Boleto criado!');
+
+  // ── Parcelas extras: se novo boleto com totalParcelas > 1 ────────────────
+  if (!dbId && body.totalParcelas > 1 && body.parcela === 1) {
+    fecharModal();
+    await _abrirModalParcelas(body);
+    carregar(); carregarKPIs();
+    return;
+  }
+
   fecharModal(); carregar(); carregarKPIs();
+}
+
+// Modal para preencher vencimentos das parcelas 2..N
+async function _abrirModalParcelas(base) {
+  const total = base.totalParcelas;
+  const brl = v => 'R$ ' + parseFloat(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+
+  // Estimar vencimentos seguintes (+30 dias cada)
+  const vencInputs = [];
+  for (let p = 2; p <= total; p++) {
+    const dt = new Date(base.vencimento + 'T12:00:00');
+    dt.setDate(dt.getDate() + 30 * (p - 1));
+    vencInputs.push(dt.toISOString().slice(0,10));
+  }
+
+  // Criar modal temporário
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:900;display:flex;align-items:center;justify-content:center';
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:14px;padding:24px;width:min(480px,95vw);max-height:90vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.2)">
+      <div style="font-size:16px;font-weight:700;color:#8B0000;margin-bottom:4px">📋 Parcelas restantes</div>
+      <div style="font-size:12px;color:#666;margin-bottom:16px">
+        <strong>${base.fornecedor}</strong> · ${total} parcelas · ${brl(base.valor)} cada
+        ${base.nf ? ` · NF ${base.nf}` : ''}
+      </div>
+      <div id="_parc-rows"></div>
+      <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end">
+        <button id="_parc-pular" style="padding:8px 16px;border:1px solid #ddd;border-radius:8px;background:#f9f9f9;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:13px">Pular — cadastrar depois</button>
+        <button id="_parc-salvar" style="padding:8px 20px;background:#8B0000;color:#fff;border:none;border-radius:8px;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600">💾 Salvar todas</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  // Renderizar linhas das parcelas
+  const rows = document.getElementById('_parc-rows');
+  for (let p = 2; p <= total; p++) {
+    const idx = p - 2;
+    rows.innerHTML += `
+      <div style="display:grid;grid-template-columns:auto 1fr 1fr;gap:8px;align-items:center;margin-bottom:10px;padding:10px;background:#fafafa;border-radius:8px;border:1px solid #eee">
+        <span style="font-size:12px;font-weight:700;color:#8B0000;white-space:nowrap">Parcela ${p}/${total}</span>
+        <div>
+          <label style="font-size:10px;color:#888;display:block;margin-bottom:2px">VENCIMENTO</label>
+          <input type="date" id="_parc-venc-${idx}" value="${vencInputs[idx]}"
+            style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:13px;font-family:'DM Sans',sans-serif">
+        </div>
+        <div>
+          <label style="font-size:10px;color:#888;display:block;margin-bottom:2px">VALOR (R$)</label>
+          <input type="number" id="_parc-val-${idx}" value="${base.valor}" step="0.01" min="0"
+            style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:13px;font-family:'DM Sans',sans-serif">
+        </div>
+      </div>`;
+  }
+
+  // Botão pular
+  document.getElementById('_parc-pular').onclick = () => {
+    document.body.removeChild(overlay);
+    toast(`⏭ Parcela 1/${total} salva. Restantes não cadastradas.`);
+  };
+
+  // Botão salvar todas
+  document.getElementById('_parc-salvar').onclick = async () => {
+    const btn = document.getElementById('_parc-salvar');
+    btn.disabled = true; btn.textContent = '⏳ Salvando...';
+    let ok = 0, erros = 0;
+    for (let p = 2; p <= total; p++) {
+      const idx = p - 2;
+      const venc = document.getElementById(`_parc-venc-${idx}`)?.value;
+      const val  = parseFloat(document.getElementById(`_parc-val-${idx}`)?.value) || base.valor;
+      if (!venc) { erros++; continue; }
+      const res = await api.post('/api/boletos', { ...base, parcela: p, vencimento: venc, valor: val });
+      res.ok ? ok++ : erros++;
+    }
+    document.body.removeChild(overlay);
+    toast(erros === 0
+      ? `✅ ${ok} parcela(s) criada(s)!`
+      : `✅ ${ok} criada(s) · ⚠️ ${erros} com erro`);
+  };
 }
 
 async function excluir(dbId){
