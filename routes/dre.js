@@ -1447,15 +1447,15 @@ module.exports = function (pool, app) {
 
   // PATCH /api/dre/cartao-faturas/sincronizar-categorias — sincroniza classificações DRE → cartao_fatura_itens
   r.patch('/cartao-faturas/sincronizar-categorias', autenticar(), async (req, res) => {
-    const { itens } = req.body; // [{ faturaCC, hash_item, categoria }]
+    const { itens } = req.body; // [{ faturaCC, hash_item, categoria, fatura_id? }]
     if (!Array.isArray(itens) || !itens.length) return res.json({ ok: true, atualizados: 0 });
     try {
       let atualizados = 0;
       for (const it of itens) {
         if (!it.hash_item || !it.categoria) continue;
-        // Localizar cartao_faturas pelo faturaCC (ex: CC_05_2026_Caixa)
-        let faturaId = null;
-        if (it.faturaCC) {
+        // Fix 6.7-J: aceitar fatura_id direta (mais preciso que busca por faturaCC)
+        let faturaId = it.fatura_id ? parseInt(it.fatura_id) : null;
+        if (it.faturaCC && !faturaId) {
           const mMatch = it.faturaCC.match(/CC_(\d{2})_(\d{4})(?:_(.+))?/);
           if (mMatch) {
             const comp = `${mMatch[1]}/${mMatch[2]}`;
@@ -1477,6 +1477,19 @@ module.exports = function (pool, app) {
           [it.categoria, faturaId, it.hash_item]
         );
         atualizados += upd.rowCount;
+        // Recalcular status da fatura após atualizar categoria
+        const { rows: cnt } = await pool.query(`
+          SELECT COUNT(*) FILTER (WHERE categoria_dre IS NOT NULL AND categoria_dre <> '') AS cls,
+                 COUNT(*) AS tot
+          FROM cartao_fatura_itens WHERE fatura_id=$1 AND removido=false`, [faturaId]);
+        if (cnt.length) {
+          const cls2 = parseInt(cnt[0].cls), tot2 = parseInt(cnt[0].tot);
+          const newStatus = tot2 === 0 ? 'IMPORTADA' : cls2 >= tot2 ? 'CLASSIFICADA' : 'CLASSIFICANDO';
+          await pool.query(
+            `UPDATE cartao_faturas SET status=$1 WHERE id=$2 AND status != 'PAGA'`,
+            [newStatus, faturaId]
+          ).catch(()=>{});
+        }
       }
       res.json({ ok: true, atualizados });
     } catch(e) {
