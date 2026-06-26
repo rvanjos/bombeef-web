@@ -4109,10 +4109,10 @@ function _buildGradeCartoes(faturas, elId) {
   // Cabeçalho de meses
   const thMeses = meses.map(m => {
     const cur = m === mesAtual;
-    return `<th style="padding:6px 8px;text-align:center;font-size:10px;font-weight:700;
-      color:${cur?'var(--red)':'var(--muted)'};white-space:nowrap;background:#fff;
-      border-bottom:2px solid var(--border);${cur?'text-decoration:underline':''}">${m}</th>`;
+    return `<th style="padding:6px 10px;text-align:center;font-size:10px;font-weight:700;color:${cur?'var(--red)':'var(--muted)'};white-space:nowrap;background:${cur?'#fff5f5':'#fff'};border-bottom:${cur?'3px solid var(--red)':'2px solid var(--border)'}">${m}${cur?' ◀':''}</th>`;
   }).join('');
+
+
 
   // Linhas por cartão
   const trs = carts.map(c => {
@@ -4130,18 +4130,30 @@ function _buildGradeCartoes(faturas, elId) {
       const vencBadge = vencida ? `<div style="font-size:9px;color:#dc2626;font-weight:700;margin-top:2px">⚠️ Vencida</div>` : '';
       const onclick = f ? `onclick="cfFiltrarCartaoMes('${(f.cartao||f.bandeira||'').replace(/'/g,"\'")}','${m}')" style="cursor:pointer"` : '';
       const title = f ? `title="${brl(f.valor_total)} · ${f.qtd_itens||0} itens · ${f.arquivo_nome||'sem arquivo'}"` : 'title="Não importada ainda"';
-      return `<td ${title} ${onclick} style="padding:4px 6px;text-align:center;min-width:110px">
-        <div style="background:${st.bg};border:1px solid ${st.bd};border-radius:8px;padding:6px 8px;
-          ${vencida?'outline:2px solid #dc2626;outline-offset:-1px':''}">
-          <div style="font-size:13px;line-height:1">${st.ic}</div>
-          <div style="font-size:10px;font-weight:700;color:${st.tx};margin-top:2px">${st.lb}</div>
+      const isCur = m === mesAtual;
+      return `<td ${title} ${onclick} style="padding:4px 6px;text-align:center;min-width:100px;
+        background:${isCur?'#fff9f9':''}">
+        <div style="background:${st.bg};border:1px solid ${st.bd};border-radius:8px;padding:5px 8px;
+          ${vencida?'outline:2px solid #dc2626;outline-offset:-1px':''}
+          ${isCur&&f?'box-shadow:0 0 0 2px rgba(139,0,0,.15)':''}">
+          <div style="font-size:12px;line-height:1">${st.ic}</div>
+          <div style="font-size:10px;font-weight:700;color:${st.tx};margin-top:2px;white-space:nowrap">${st.lb}</div>
           ${valTxt}${vencBadge}${bar}
         </div>
       </td>`;
     }).join('');
-    return `<tr>
+    // Resumo: qual é o pior status do cartão nos últimos 6 meses?
+    const fatsMes = meses.map(m => idx[c.id+'|'+m]).filter(Boolean);
+    const temVenc = fatsMes.some(f => f.vencimento && f.vencimento < hojeStr && f.status !== 'PAGA');
+    const temPend = fatsMes.some(f => f.status === 'IMPORTADA' || f.status === 'CLASSIFICANDO');
+    const rowBg = temVenc ? '#fff5f5' : '';
+    return `<tr style="background:${rowBg}">
       <td style="padding:6px 12px 6px 4px;white-space:nowrap;font-size:12px;font-weight:700;
-        color:var(--text);border-right:1px solid var(--border);vertical-align:middle">${c.label}</td>
+        color:var(--text);border-right:1px solid var(--border);vertical-align:middle">
+        ${c.label}
+        ${temVenc ? '<div style="font-size:9px;color:#dc2626;font-weight:700">⚠️ vencida</div>' :
+          temPend ? '<div style="font-size:9px;color:#92400e">⏳ pendente</div>' : ''}
+      </td>
       ${tds}
     </tr>`;
   }).join('');
@@ -5127,7 +5139,7 @@ function _buildDRE(el, full) {
   }
 
   // ── Cabeçalho da tabela ───────────────────────────────────────────────────
-  let h='<div><table style="width:100%;border-collapse:separate;border-spacing:0;font-size:12px">'
+  let h='<table style="width:100%;border-collapse:separate;border-spacing:0;font-size:12px">'
     +'<thead><tr>'
     +'<th style="'+THL+';'+FZH+'">Grupo / Categoria</th>'
     +meses.map(m=>'<th style="'+TH+';position:sticky;top:0;z-index:50">'+fmtMes(m)+'</th>').join('')
@@ -5395,7 +5407,7 @@ function _buildDRE(el, full) {
     }
   }
 
-  h+='</tbody></table></div>';
+  h+='</tbody></table>';
 
   document.getElementById('dre-mes-label').textContent=meses.map(fmtMes).join(' · ');
   el.innerHTML=h;
