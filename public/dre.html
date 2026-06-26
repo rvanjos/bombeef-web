@@ -4310,7 +4310,7 @@ async function renderStatusCartoesGrade() {
   try {
     const res = await api.get('/api/dre/cartao-faturas');
     if (!res.ok) throw new Error(res.erro || 'Erro');
-    const faturas = res.data || [];
+    const faturas = (res.data || []).filter(f => f && typeof f === 'object');
     const kpis = res.kpis || {};
     const brl = v => 'R$ ' + parseFloat(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
     const kpiHtml = `<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px;font-size:11px;align-items:center">
@@ -4340,73 +4340,7 @@ function toggleStatusCartoes() {
 
 // Sprint 6.7-G: renderStatusCartoes — fonte única = banco (GET /api/dre/cartao-faturas)
 async function renderStatusCartoes() { return renderStatusCartoesGrade(); }
-async function renderStatusCartoes_LEGACY_() {
-  const grid = document.getElementById('cartoes-grid');
-  if (!grid) return;
-  grid.innerHTML = '<div style="font-size:11px;color:var(--muted);padding:8px">⏳ Carregando faturas…</div>';
-  try {
-    const res = await api.get('/api/dre/cartao-faturas');
-    if (!res.ok) throw new Error(res.erro || 'Erro ao carregar');
-    const faturas = res.data || [];
-    const kpis    = res.kpis  || {};
-
-    if (!faturas.length) {
-      grid.innerHTML = `<div style="font-size:12px;color:var(--muted);padding:8px">
-        Nenhuma fatura registrada no banco.
-        <button onclick="reconstruirFaturasAntigas()" style="margin-left:10px;padding:4px 12px;background:var(--primary);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:11px;font-family:'DM Sans',sans-serif">
-          🔄 Reconstruir faturas antigas
-        </button>
-      </div>`;
-      return;
-    }
-
-    // KPIs inline no painel
-    const kpiHtml = `<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px;font-size:11px">
-      <span>📋 <strong>${kpis.total||0}</strong> faturas</span>
-      <span>⏳ <strong>${kpis.classificando||0}</strong> classificando</span>
-      <span>✅ <strong>${kpis.classif||0}</strong> classificadas</span>
-      <span>💳 <strong>${kpis.pagas||0}</strong> pagas</span>
-      ${kpis.vencidas>0?`<span style="color:#dc2626;font-weight:700">⚠️ ${kpis.vencidas} vencidas</span>`:''}
-      <span style="margin-left:auto"><button onclick="abrirControleFaturas()" style="padding:3px 10px;background:var(--primary);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:11px;font-family:'DM Sans',sans-serif">📋 Ver todas</button></span>
-    </div>`;
-
-    // Agrupar por cartao/bandeira para exibição visual
-    const porCartao = {};
-    faturas.forEach(f => {
-      const key = f.cartao || f.bandeira || 'Cartão';
-      if (!porCartao[key]) porCartao[key] = [];
-      porCartao[key].push(f);
-    });
-
-    const hoje = new Date().toISOString().slice(0,10);
-    const brl  = v => 'R$ ' + parseFloat(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
-
-    const cards = Object.entries(porCartao).map(([nome, fats]) => {
-      const rows = fats.slice().sort((a,b)=>(b.competencia||'').localeCompare(a.competencia||'')).map(f => {
-        const vencida = f.vencimento && f.vencimento < hoje && f.status !== 'PAGA';
-        const statusIcon = f.status === 'PAGA' ? '✅' : f.status === 'CLASSIFICADA' ? '🟢' : f.status === 'CLASSIFICANDO' ? '⏳' : '📥';
-        return `<div style="font-size:10px;padding:4px 6px;background:#fff;border-radius:5px;border:1px solid var(--border);margin-bottom:3px;${vencida?'border-color:#fca5a5':f.status==='PAGA'?'opacity:.7':''}">
-          <div style="display:flex;justify-content:space-between;align-items:center">
-            <span style="font-weight:700">${f.competencia||'—'}</span>
-            <span>${statusIcon}</span>
-          </div>
-          <div style="color:var(--muted)">${brl(f.valor_total)} · ${f.qtd_itens||0} itens</div>
-          ${vencida?'<div style="color:#dc2626;font-size:9px;font-weight:700">⚠️ Vencida</div>':''}
-        </div>`;
-      }).join('');
-      const total = fats.reduce((s,f)=>s+parseFloat(f.valor_total||0),0);
-      return `<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px;min-width:150px;max-width:220px">
-        <div style="font-size:11px;font-weight:700;color:var(--text);margin-bottom:6px">💳 ${nome}</div>
-        ${rows}
-        <div style="font-size:10px;color:var(--muted);margin-top:4px;font-weight:600">Total: ${brl(total)}</div>
-      </div>`;
-    }).join('');
-
-    grid.innerHTML = kpiHtml + `<div style="display:flex;flex-wrap:wrap;gap:10px">${cards}</div>`;
-  } catch(e) {
-    grid.innerHTML = `<div style="font-size:11px;color:#dc2626;padding:8px">❌ ${e.message}</div>`;
-  }
-}
+// renderStatusCartoes_LEGACY_ removida sprint 6.7-K
 
 // Sprint 6.7-H: reconstruir cartao_faturas a partir dos lançamentos CC salvos nas sessões DRE
 async function reconstruirFaturasAntigas() {
