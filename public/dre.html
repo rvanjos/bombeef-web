@@ -5024,7 +5024,7 @@ function _buildDRE(el, full) {
   const W   = (full?'260':'200')+'px'; // largura da col fixa
   const FZL = 'position:sticky;left:0;z-index:20;min-width:'+W+';max-width:'+W+';'; // freeze esq
   const FZH = 'position:sticky;left:0;top:0;z-index:80;min-width:'+W+';max-width:'+W+';'; // canto
-  const STK = 'position:sticky;top:34px;z-index:40;'; // sticky grupos abaixo do header
+  const STK = 'position:sticky;top:34px;z-index:40;'; // sticky grupos abaixo do header — top ajustado via JS após render
 
   // ── renderGrupo: linhas detalhadas de um grupo ────────────────────────────
   function renderGrupo(gk) {
@@ -5035,11 +5035,11 @@ function _buildDRE(el, full) {
     const gid='dreg-'+(full?'f':'s')+'-'+gk;
     let rows='';
     rows+='<tr onclick="toggleDREGrupo(\''+gid+'\')" style="cursor:pointer">'
-         +'<td style="'+STK+FZL+'padding:6px 14px;background:'+ghBg+';color:#fff;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.5px">'
+         +'<td data-dre-stk="1" style="'+STK+FZL+'padding:6px 14px;background:'+ghBg+';color:#fff;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.5px">'
          +'<span id="'+gid+'-ico">▼</span> '+(g?g.l:gk)
          +'<span style="float:right;font-size:10px;font-weight:400;opacity:.5">CLIQUE PARA RECOLHER</span>'
          +'</td>'
-         +'<td colspan="'+(cols-1)+'" style="'+STK+'background:'+ghBg+'"></td>'
+         +'<td data-dre-stk="1" colspan="'+(cols-1)+'" style="'+STK+'background:'+ghBg+'"></td>'
          +'</tr>';
     for (const [cat,mD] of Object.entries(data[gk])) {
       const totC=Object.values(mD).reduce((s,v)=>s+v,0);
@@ -5086,7 +5086,7 @@ function _buildDRE(el, full) {
 
   // ── renderSecLabel: cabeçalho de seção ────────────────────────────────────
   function renderSecLabel(label) {
-    return '<tr><td style="'+STK+FZL+'padding:8px 14px 4px;background:#f0ece6;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#7a6a58;border-top:2px solid #e8e0d8">'+label+'</td><td colspan="'+(cols-1)+'" style="'+STK+'background:#f0ece6;border-top:2px solid #e8e0d8"></td></tr>';
+    return '<tr><td data-dre-stk="1" style="'+STK+FZL+'padding:8px 14px 4px;background:#f0ece6;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#7a6a58;border-top:2px solid #e8e0d8">'+label+'</td><td colspan="'+(cols-1)+'" style="'+STK+'background:#f0ece6;border-top:2px solid #e8e0d8"></td></tr>';
   }
 
   // ── Cabeçalho da tabela ───────────────────────────────────────────────────
@@ -5362,6 +5362,18 @@ function _buildDRE(el, full) {
 
   document.getElementById('dre-mes-label').textContent=meses.map(fmtMes).join(' · ');
   el.innerHTML=h;
+
+  // Fix sticky: medir altura real do thead e ajustar top de todos os STK elements
+  requestAnimationFrame(() => {
+    const thead = el.querySelector('thead');
+    if (!thead) return;
+    const theadH = thead.getBoundingClientRect().height;
+    if (!theadH) return;
+    const topPx = Math.ceil(theadH) + 'px';
+    el.querySelectorAll('[data-dre-stk="1"]').forEach(td => {
+      td.style.top = topPx;
+    });
+  });
 }
 
 // Calcula resultado do DRE para um mês específico — mesma lógica do _buildDRE
