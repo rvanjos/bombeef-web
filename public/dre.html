@@ -3560,7 +3560,11 @@ function ccrRenderGrupos() {
     <div style="border:1px solid var(--border);border-radius:8px;border-left:3px solid ${bordaCor};background:#fff${isPagFat?';opacity:.6':''}" id="ccrg-${gi}">
       <!-- Header do grupo: clica para expandir/colapsar itens -->
       <div style="background:${bgHeader};padding:9px 14px;display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:12px;cursor:pointer;border-radius:8px 8px 0 0" onclick="ccrToggleGrupo(${gi})">
-        <span style="font-size:13px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${g.nomeRef}${badge}</span>
+        <div style="overflow:hidden">
+          <span style="font-size:13px;font-weight:600;color:var(--text)">${g.nomeRef}${badge}</span>
+          ${g.itens.length===1 && g.itens[0].data ? `<span style="font-size:10px;color:var(--muted);margin-left:8px">${fmt.date(g.itens[0].data)}</span>` : ''}
+          ${g.itens.length===1 && g.itens[0].portador ? `<span style="font-size:10px;color:var(--muted);margin-left:6px;background:#f3f4f6;padding:1px 5px;border-radius:3px">${g.itens[0].portador}</span>` : ''}
+        </div>
         <span style="font-size:11px;color:var(--muted);white-space:nowrap">${g.itens.length}x · ${isCredito?'+':''}${fmt.brl(totalGrupo)}</span>
         <span id="ccrg-arr-${gi}" style="font-size:12px;color:var(--muted)">▼</span>
       </div>
@@ -3576,15 +3580,33 @@ function ccrRenderGrupos() {
       </div>
       <!-- Itens individuais (colapsáveis) -->
       <div id="ccrg-itens-${gi}" style="display:none">
-        ${g.itens.map((item) => `
-        <div style="padding:6px 14px;border-bottom:1px solid #f0ece6;display:grid;grid-template-columns:80px 1fr 180px 80px;gap:8px;align-items:center;font-size:12px">
-          <span style="color:var(--muted);font-family:'DM Mono',monospace;white-space:nowrap">${item.data ? fmt.date(item.data) : '—'}</span>
-          <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)" title="${item.lancamento||''}">${item.lancamento||'—'}</span>
-          ${ccrCatInput('ccri-'+item.id, item.categoria, "ccrSetItem('"+item.id+"', this.value)", 'width:100%;font-size:11px;')}
-          <span style="text-align:right;font-family:'DM Mono',monospace;font-weight:600;white-space:nowrap;color:${parseFloat(item.valor||0)>0?'var(--green)':'var(--red-l)'}">
-            ${parseFloat(item.valor||0)>0?'+':''}${fmt.brl(Math.abs(parseFloat(item.valor||0)))}
-          </span>
-        </div>`).join('')}
+        ${g.itens.map((item) => {
+          const parcInfo = item.lancamento && /parcela/i.test(item.lancamento)
+            ? item.lancamento.match(/parcela\s+(\d+\/\d+)/i)?.[1] : null;
+          const mesItem  = item.mes || item.mesCaixa || '';
+          const isPos    = parseFloat(item.valor||0) > 0;
+          return `
+        <div style="padding:6px 14px;border-bottom:1px solid #f0ece6;font-size:12px">
+          <div style="display:grid;grid-template-columns:90px 1fr 200px 90px;gap:8px;align-items:center">
+            <div>
+              <div style="color:var(--muted);font-family:'DM Mono',monospace;white-space:nowrap;font-size:11px">${item.data ? fmt.date(item.data) : '—'}</div>
+              ${mesItem ? `<div style="font-size:9px;color:var(--muted)">${mesItem}</div>` : ''}
+            </div>
+            <div style="overflow:hidden">
+              <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)" title="${item.lancamento||''}">${item.lancamento||'—'}</div>
+              <div style="display:flex;gap:6px;margin-top:2px;flex-wrap:wrap">
+                ${item.portador ? `<span style="font-size:9px;background:#f3f4f6;color:#374151;padding:1px 5px;border-radius:3px;white-space:nowrap">👤 ${item.portador}</span>` : ''}
+                ${parcInfo ? `<span style="font-size:9px;background:#fef3c7;color:#92400e;padding:1px 5px;border-radius:3px;white-space:nowrap">📋 Parc. ${parcInfo}</span>` : ''}
+                ${item.mesCaixa && item.mesCaixa !== item.mes ? `<span style="font-size:9px;background:#ede9fe;color:#5b21b6;padding:1px 5px;border-radius:3px;white-space:nowrap">💳 pag. ${item.mesCaixa}</span>` : ''}
+              </div>
+            </div>
+            ${ccrCatInput('ccri-'+item.id, item.categoria, "ccrSetItem('"+item.id+"', this.value)", 'width:100%;font-size:11px;')}
+            <span style="text-align:right;font-family:'DM Mono',monospace;font-weight:600;white-space:nowrap;color:${isPos?'var(--green)':'var(--red-l)'}">
+              ${isPos?'+':''}${fmt.brl(Math.abs(parseFloat(item.valor||0)))}
+            </span>
+          </div>
+        </div>`;
+        }).join('')}
       </div>
     </div>`;
   }).join('');
