@@ -146,6 +146,7 @@ tbody tr.ign{opacity:.4;}
 tbody tr.cc-row{background:#f0f5fb!important;}
 tbody tr.boleto-row{background:#f5fff5!important;}
 tbody tr.boleto-review{background:#fff8e1!important;border-left:3px solid #f59e0b!important;}
+tbody tr.boleto-vinc{background:#edf7ee!important;border-left:3px solid #16a34a!important;}
 .needs-review-badge{display:inline-block;background:#f59e0b;color:#fff;border-radius:4px;padding:1px 6px;font-size:9px;font-weight:700;letter-spacing:.5px;vertical-align:middle;margin-left:4px;}
 td{padding:5px 9px;vertical-align:middle;}
 .badge{display:inline-block;padding:1px 6px;border-radius:8px;font-weight:600;font-size:10px;}
@@ -683,6 +684,17 @@ thead th{padding:6px 9px;}
             <datalist id="cats-dl"></datalist>
           </table>
           <div id="footer-note" style="padding:6px 14px;font-size:11px;color:var(--muted);text-align:right"></div>
+          <!-- Legenda de cores -->
+          <div style="display:flex;flex-wrap:wrap;gap:8px;padding:8px 14px 10px;border-top:1px solid var(--border);font-size:10px;color:var(--muted);align-items:center">
+            <span style="font-weight:700;font-size:10px;color:var(--text);margin-right:2px">LEGENDA:</span>
+            <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:12px;height:12px;background:#edf7ee;border-left:3px solid #16a34a;display:inline-block;border-radius:2px"></span>Extrato com boleto vinculado</span>
+            <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:12px;height:12px;background:#f5fff5;display:inline-block;border-radius:2px;border:1px solid #d1fae5"></span>Boleto do sistema (importado)</span>
+            <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:12px;height:12px;background:#f0f5fb;display:inline-block;border-radius:2px;border:1px solid #bfdbfe"></span>Cartão de crédito (CC)</span>
+            <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:12px;height:12px;background:#fff8e6;display:inline-block;border-radius:2px;border:1px solid #fde68a"></span>Sem categoria — classificar</span>
+            <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:12px;height:12px;background:#fff8e1;border-left:3px solid #f59e0b;display:inline-block;border-radius:2px"></span>Revisão necessária (categoria sugerida)</span>
+            <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:12px;height:12px;background:#fff;display:inline-block;border-radius:2px;border:1px solid #e5e7eb"></span>Extrato classificado</span>
+            <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:12px;height:12px;background:#fff;display:inline-block;border-radius:2px;border:1px solid #e5e7eb;opacity:.4"></span>Ignorado</span>
+          </div>
         </div>
       </div>
 
@@ -2643,6 +2655,7 @@ function addLancs(novos, fileName) {
         // Extrato já está presente — apenas transfere boletoId e vinculadoA para o extrato
         if (!extratoExiste.boletoId) extratoExiste.boletoId = l.boletoId;
         if (!extratoExiste.vinculadoA) extratoExiste.vinculadoA = l.lancamento;
+        if (!extratoExiste.boletoFornecedor) extratoExiste.boletoFornecedor = l.fornecedor || (l.lancamento||'').replace(/BOLETO PAGO[^-]*-\s*/i,'').replace(/\s*\(NF[^)]*\)/gi,'').replace(/\s*Parc\..*$/i,'').trim();
         if (!extratoExiste.categoria && l.categoria) extratoExiste.categoria = l.categoria;
         atualiz++;
         continue;
@@ -2834,7 +2847,8 @@ function render() {
     const v   = parseFloat(t.valor||0);
     const isCat = !!t.categoria;
     const isReview = !t.ignorar && t.needsReview;
-    const rowCls= t.ignorar?'ign':!isCat?(isReview?'boleto-review uncat':'uncat'):t.fonte==='CC'?'cc-row':isReview?'boleto-review':t.fonte?.startsWith('BOLETO')?'boleto-row':'';
+    const isBoletoVinc = (t.fonte==='EXTRATO'||t.fonte==='OFX') && !!t.boletoId;
+    const rowCls= t.ignorar?'ign':!isCat?(isReview?'boleto-review uncat':'uncat'):t.fonte==='CC'?'cc-row':isBoletoVinc?'boleto-vinc':isReview?'boleto-review':t.fonte?.startsWith('BOLETO')?'boleto-row':'';
     const badge = bads[t.fonte]||`<span class="badge bman">${t.fonte||'?'}</span>`;
     return `<tr class="${rowCls}" id="tr-${t.id}">
       <td style="text-align:center"><input type="checkbox" class="chk tcb" data-id="${t.id}" ${selIds.has(String(t.id))?'checked':''} onchange="togSel('${t.id}',this.checked)"></td>
@@ -2844,14 +2858,14 @@ function render() {
       <td>${badge}</td>
       <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500" title="${esc(t.lancamento)}">
         ${t.lancamento}${isReview?needsReviewBadge:''}${ccrBadgeVinculo(t)}
-        ${t.boletoId && t.fonte==='EXTRATO' ? `
-          <br><span style="display:inline-flex;align-items:center;gap:3px;font-size:9px;background:#dbeafe;color:#1e40af;padding:1px 5px;border-radius:3px;margin-top:2px">
-            <span style="cursor:pointer" onclick="verVinculoDRE('${t.id}')" title="Ver boleto vinculado">🔗 boleto vinculado</span>
-            <span style="cursor:pointer;color:#dc2626;font-weight:700;margin-left:2px" onclick="desvinculardoBoleto('${t.id}')" title="Desvincular deste boleto">✕</span>
+        ${isBoletoVinc ? `
+          <br><span style="display:inline-flex;align-items:center;gap:3px;font-size:9px;background:#dcfce7;color:#166534;padding:1px 5px;border-radius:3px;margin-top:2px">
+            <span style="cursor:pointer" onclick="verVinculoDRE('${t.id}')" title="Ver boleto vinculado">✅ vinculado ao boleto</span>
+            <span style="cursor:pointer;color:#dc2626;font-weight:700;margin-left:4px" onclick="desvinculardoBoleto('${t.id}')" title="Desvincular">✕</span>
           </span>` : ''}
         ${t.boletoId && t.fonte?.startsWith('BOLETO') && t.vinculadoA ? `<br><span style="font-size:9px;background:#dcfce7;color:#166534;padding:1px 5px;border-radius:3px;cursor:pointer" onclick="verVinculoDRE('${t.id}')" title="${esc(t.vinculadoA)}">✅ ${esc((t.vinculadoA||'').slice(0,28))}${(t.vinculadoA||'').length>28?'…':''}</span>` : ''}
       </td>
-      <td style="font-size:11px;color:var(--muted);max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.razaoSocial||t.portador||'—'}</td>
+      <td style="font-size:11px;color:var(--muted);max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${isBoletoVinc && t.boletoFornecedor ? `<strong style="color:var(--text)">${esc(t.boletoFornecedor)}</strong>` : (t.razaoSocial||t.portador||'—')}</td>
       <td>
         <input class="csel${isCat?'':' u'}" list="cats-dl" 
           value="${esc(t.categoria||'')}" 
@@ -5834,9 +5848,10 @@ async function vincularExtratoABoleto(extId) {
     }
     // Usa o primeiro match
     const b = matchB[0];
-    ext.boletoId   = b.boletoId;
-    ext.categoria  = ext.categoria || b.categoria;
-    ext.vinculadoA = b.lancamento;
+    ext.boletoId        = b.boletoId;
+    ext.categoria       = ext.categoria || b.categoria;
+    ext.vinculadoA      = b.lancamento;
+    ext.boletoFornecedor = b.fornecedor || (b.lancamento||'').replace(/BOLETO PAGO.*?- /i,'').replace(/\(NF.*\)/i,'').replace(/Parc\..*$/i,'').trim();
     render(); updStats(); renderDRE(); autoSv();
     toast(`✅ Extrato vinculado a: ${b.lancamento}`);
     return;
@@ -5845,9 +5860,10 @@ async function vincularExtratoABoleto(extId) {
   if (boletos.length === 1) {
     // Match único — vincula direto
     const b = boletos[0];
-    ext.boletoId   = b.boletoId;
-    ext.categoria  = ext.categoria || b.categoria;
-    ext.vinculadoA = b.lancamento;
+    ext.boletoId        = b.boletoId;
+    ext.categoria       = ext.categoria || b.categoria;
+    ext.vinculadoA      = b.lancamento;
+    ext.boletoFornecedor = b.fornecedor || (b.lancamento||'').replace(/BOLETO PAGO.*?- /i,'').replace(/\(NF.*\)/i,'').replace(/Parc\..*$/i,'').trim();
     // Marca o boleto como pago se for PREV
     if (b.fonte === 'BOLETO_PREV' && b.boletoId) {
       const dtPag = ext.data || new Date().toISOString().slice(0,10);
