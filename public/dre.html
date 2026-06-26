@@ -964,7 +964,7 @@ thead th{padding:6px 9px;}
       </div>
     </div>
     <div style="overflow:auto;flex:1;min-height:0" id="dre-modal-scroll">
-      <div id="dre-full-body" style="padding:16px;min-width:max-content"></div>
+      <div id="dre-full-body" style="padding:16px"></div>
     </div>
     <!-- Barra de scroll espelho — fixada na base do modal, sempre visível -->
     <div id="dre-scroll-top" style="position:sticky;bottom:0;z-index:20;background:var(--bg);border-top:1px solid var(--border)">
@@ -5063,8 +5063,8 @@ function _buildDRE(el, full) {
     return '<span style="font-family:\'DM Mono\',monospace;white-space:nowrap;color:'+col+'">'+sign+fmt.brl(Math.abs(v))+'</span>';
   };
 
-  const TH ='padding:8px 10px;text-align:right;font-size:10px;color:#fff;font-weight:700;text-transform:uppercase;background:#5a0000;white-space:nowrap;border-right:1px solid rgba(255,255,255,.15);letter-spacing:.4px';
-  const THL='padding:8px 14px;text-align:left;font-size:10px;color:#fff;font-weight:700;text-transform:uppercase;background:#3d0000;letter-spacing:.4px';
+  const TH ='padding:8px 10px;text-align:right;font-size:10px;color:#fff;font-weight:700;text-transform:uppercase;background:#5a0000;white-space:nowrap;border-right:1px solid rgba(255,255,255,.15);letter-spacing:.4px;position:sticky;top:0;z-index:50';
+  const THL='padding:8px 14px;text-align:left;font-size:10px;color:#fff;font-weight:700;text-transform:uppercase;background:#3d0000;letter-spacing:.4px;position:sticky;top:0;left:0;z-index:80';
   const TD ='padding:5px 10px;text-align:right;font-size:12px;border-bottom:1px solid #f5efe8;border-right:1px solid #f5efe8;transition:background .15s';
   const TDL='padding:5px '+(full?'14':'10')+'px;text-align:left;font-size:12px;border-bottom:1px solid #f5efe8';
   const cols=meses.length+(showTot?2:1);
@@ -5072,7 +5072,7 @@ function _buildDRE(el, full) {
   // ── Constantes de sticky/freeze ─────────────────────────────────────────
   const W   = (full?'260':'200')+'px'; // largura da col fixa
   const FZL = 'position:sticky;left:0;z-index:20;min-width:'+W+';max-width:'+W+';'; // freeze esq
-  const FZH = 'position:sticky;left:0;top:0;z-index:80;min-width:'+W+';max-width:'+W+';'; // canto
+  const FZH = 'position:sticky;left:0;top:0;z-index:80;min-width:'+W+';max-width:'+W+';padding:8px 14px;text-align:left;font-size:10px;color:#fff;font-weight:700;text-transform:uppercase;background:#3d0000;letter-spacing:.4px;'; // canto
   const STK = 'position:sticky;top:34px;z-index:40;'; // sticky grupos abaixo do header — top ajustado via JS após render
 
   // ── renderGrupo: linhas detalhadas de um grupo ────────────────────────────
@@ -5139,11 +5139,11 @@ function _buildDRE(el, full) {
   }
 
   // ── Cabeçalho da tabela ───────────────────────────────────────────────────
-  let h='<table style="width:100%;border-collapse:separate;border-spacing:0;font-size:12px">'
+  let h='<table style="width:max-content;min-width:100%;border-collapse:separate;border-spacing:0;font-size:12px">'
     +'<thead><tr>'
-    +'<th style="'+THL+';'+FZH+'">Grupo / Categoria</th>'
-    +meses.map(m=>'<th style="'+TH+';position:sticky;top:0;z-index:50">'+fmtMes(m)+'</th>').join('')
-    +(showTot?'<th style="'+TH+';background:#5a2020;position:sticky;top:0;z-index:50">TOTAL</th>':'')
+    +'<th style="'+FZH+'">Grupo / Categoria</th>'
+    +meses.map(m=>'<th style="'+TH+'">'+fmtMes(m)+'</th>').join('')
+    +(showTot?'<th style="'+TH+';background:#5a2020">TOTAL</th>':'')
     +'</tr></thead><tbody>';
 
   // ── Acumuladores por estágio ──────────────────────────────────────────────
