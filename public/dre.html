@@ -7311,7 +7311,78 @@ async function carregarCartaoFaturas() {
 }
 
 function cfRenderGrade(faturas) {
-  _buildGradeCartoes(faturas, 'cf-grade');
+  const el = document.getElementById('cf-grade');
+  if (!el) return;
+  const brl = v => 'R$ ' + parseFloat(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+
+  // Últimos 6 meses
+  const meses = [];
+  const hoje = new Date();
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
+    meses.push(String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear());
+  }
+
+  // Indexar por cartaoId × competencia
+  const idx = {};
+  faturas.forEach(f => {
+    const cid = CARTOES_MONITORADOS.find(c => c.match.test(f.cartao||f.bandeira||''))?.id || ('x_'+(f.cartao||f.bandeira||'?'));
+    const key = cid+'|'+(f.competencia||'');
+    if (!idx[key] || (f.importado_em||'') > (idx[key].importado_em||'')) idx[key] = f;
+  });
+
+  // Cartões dinâmicos
+  const cards = [...CARTOES_MONITORADOS];
+  faturas.forEach(f => {
+    const nome = f.cartao||f.bandeira||'';
+    if (!nome || CARTOES_MONITORADOS.some(c=>c.match.test(nome))) return;
+    if (!cards.some(c=>c.id==='x_'+nome)) cards.push({id:'x_'+nome,label:'💳 '+nome,match:/.*/});
+  });
+
+  const stCfg = {
+    PAGA:         {bg:'#dcfce7',border:'#16a34a',txt:'#166534',icon:'✅',label:'Paga'},
+    CLASSIFICADA: {bg:'#dbeafe',border:'#2563eb',txt:'#1e40af',icon:'🔵',label:'Classificada'},
+    CLASSIFICANDO:{bg:'#fef3c7',border:'#d97706',txt:'#92400e',icon:'⏳',label:'Classif.'},
+    IMPORTADA:    {bg:'#f9fafb',border:'#9ca3af',txt:'#374151',icon:'📥',label:'Importada'},
+    AGUARDANDO:   {bg:'#f3f4f6',border:'#d1d5db',txt:'#9ca3af',icon:'⬜',label:'Aguardando'},
+  };
+
+  const mesHdrs = meses.map(m => {
+    const isAtual = m === (String(hoje.getMonth()+1).padStart(2,'0')+'/'+hoje.getFullYear());
+    return `<div style="text-align:center;font-size:10px;font-weight:700;color:${isAtual?'var(--red)':'var(--muted)'};padding:0 4px;white-space:nowrap${isAtual?';text-decoration:underline':''}">${m}${isAtual?' ◀':''}</div>`;
+  }).join('');
+
+  const rows = cards.map(c => {
+    const cells = meses.map(m => {
+      const f = idx[c.id+'|'+m];
+      const cfg = f ? (stCfg[f.status]||stCfg.IMPORTADA) : stCfg.AGUARDANDO;
+      const pct = f?.pct_classificado||0;
+      const onclick = f ? `onclick="cfFiltrarCartaoMes('${(f.cartao||f.bandeira||'').replace(/'/g,"\'")}','${m}')"` : '';
+      const title = f ? `title="${brl(f.valor_total)} · ${f.arquivo_nome||'sem arquivo'} · ${f.qtd_itens||0} itens"` : 'title="Não importada"';
+      const bar = (f && f.status==='CLASSIFICANDO' && pct>0)
+        ? `<div style="margin-top:3px;height:3px;background:rgba(0,0,0,.1);border-radius:2px"><div style="height:3px;background:${cfg.border};width:${pct}%;border-radius:2px"></div></div><div style="font-size:9px;color:${cfg.txt};margin-top:1px">${pct}%</div>`
+        : '';
+      const vencida = f && f.vencimento && f.vencimento < hoje.toISOString().slice(0,10) && f.status!=='PAGA';
+      return `<div style="padding:6px 4px;min-width:100px;cursor:${f?'pointer':'default'}" ${onclick} ${title}>
+        <div style="background:${cfg.bg};border:1px solid ${cfg.border};border-radius:8px;padding:6px 8px;text-align:center;${vencida?'outline:2px solid #dc2626;':''}">
+          <div style="font-size:14px;line-height:1">${cfg.icon}</div>
+          <div style="font-size:10px;font-weight:700;color:${cfg.txt};margin-top:2px">${cfg.label}</div>
+          ${f?`<div style="font-size:9px;color:${cfg.txt};opacity:.8;margin-top:1px">${brl(f.valor_total)}</div>`:''}
+          ${vencida?'<div style="font-size:9px;color:#dc2626;font-weight:700">⚠️ Vencida</div>':''}
+          ${bar}
+        </div>
+      </div>`;
+    }).join('');
+    return `<div style="display:flex;align-items:flex-start;gap:0;margin-bottom:6px">
+      <div style="min-width:110px;padding:6px 10px 6px 0;font-size:12px;font-weight:700;color:var(--text);white-space:nowrap;padding-top:14px">${c.label}</div>
+      <div style="display:grid;grid-template-columns:repeat(${meses.length},1fr);gap:4px;flex:1">${cells}</div>
+    </div>`;
+  }).join('');
+
+  el.innerHTML = `<div style="display:flex;margin-bottom:6px">
+    <div style="min-width:110px"></div>
+    <div style="display:grid;grid-template-columns:repeat(${meses.length},1fr);gap:4px;flex:1">${mesHdrs}</div>
+  </div>${rows}`;
 }
 
 function cfFiltrarCartaoMes(cartao, mes) {
