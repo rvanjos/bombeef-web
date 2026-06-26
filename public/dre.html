@@ -4310,10 +4310,12 @@ async function renderStatusCartoesGrade() {
   try {
     const res = await api.get('/api/dre/cartao-faturas');
     if (!res.ok) throw new Error(res.erro || 'Erro');
-    const faturas = (res.data || []).filter(f => f && typeof f === 'object');
-    const kpis = res.kpis || {};
+    const faturas = res.data || [];
+    const kpis    = res.kpis  || {};
     const brl = v => 'R$ ' + parseFloat(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
-    const kpiHtml = `<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px;font-size:11px;align-items:center">
+
+    // KPIs topo
+    const kpiHtml = `<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;font-size:11px;align-items:center">
       <span>📋 <strong>${kpis.total||0}</strong> faturas</span>
       <span style="color:#92400e">⏳ <strong>${kpis.classificando||0}</strong> classif.</span>
       <span style="color:#1e40af">🔵 <strong>${kpis.classif||0}</strong> prontas</span>
@@ -4321,8 +4323,73 @@ async function renderStatusCartoesGrade() {
       ${kpis.vencidas>0?`<span style="color:#dc2626;font-weight:700">⚠️ ${kpis.vencidas} vencidas</span>`:''}
       <button onclick="abrirControleFaturas()" style="margin-left:auto;padding:3px 10px;background:var(--primary);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:11px;font-family:'DM Sans',sans-serif">📋 Detalhes</button>
     </div>`;
-    grid.innerHTML = kpiHtml + '<div id="cartoes-grade-inner"></div>';
-    _buildGradeCartoes(faturas, 'cartoes-grade-inner');
+
+    // Últimos 6 meses
+    const meses = [];
+    const hoje = new Date();
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
+      const mm = String(d.getMonth()+1).padStart(2,'0');
+      meses.push(`${mm}/${d.getFullYear()}`);
+    }
+
+    // Indexar faturas por cartaoId × competencia (mais recente vence)
+    const idx = {};
+    faturas.forEach(f => {
+      const cid = CARTOES_MONITORADOS.find(c => c.match.test(f.cartao||f.bandeira||''))?.id || ('outro_'+(f.cartao||f.bandeira||'?'));
+      const key = cid + '|' + (f.competencia||'');
+      if (!idx[key] || (f.importado_em||'') > (idx[key].importado_em||'')) idx[key] = f;
+    });
+
+    // Cartões base + extras detectados no banco
+    const cartoesDinamicos = [...CARTOES_MONITORADOS];
+    faturas.forEach(f => {
+      const nome = f.cartao || f.bandeira || '';
+      if (!nome) return;
+      const jaExiste = CARTOES_MONITORADOS.some(c => c.match.test(nome));
+      if (!jaExiste && !cartoesDinamicos.some(c => c.id === 'outro_'+nome)) {
+        cartoesDinamicos.push({ id: 'outro_'+nome, label: '💳 '+nome, match: new RegExp(nome.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i') });
+      }
+    });
+
+    const stStyle = {
+      'PAGA':         'background:#dcfce7;color:#16a34a',
+      'CLASSIFICADA': 'background:#dbeafe;color:#1e40af',
+      'CLASSIFICANDO':'background:#fef3c7;color:#92400e',
+      'IMPORTADA':    'background:#f3f4f6;color:#374151',
+      'AGUARDANDO':   'background:#f9fafb;color:#9ca3af;border:1px dashed #d1d5db',
+    };
+    const stLabel = {
+      'PAGA':'✅ Paga','CLASSIFICADA':'🔵 Classificada',
+      'CLASSIFICANDO':'⏳ Classif.','IMPORTADA':'📥 Importada','AGUARDANDO':'⬜ Aguardando',
+    };
+
+    const thMeses = meses.map(m => `<th style="padding:6px 10px;font-size:10px;font-weight:600;color:var(--muted);white-space:nowrap;text-align:center">${m}</th>`).join('');
+    const rows = cartoesDinamicos.map(c => {
+      const cells = meses.map(m => {
+        const f = idx[c.id+'|'+m];
+        if (!f) return `<td style="padding:4px 6px;text-align:center"><span style="font-size:10px;padding:2px 7px;border-radius:5px;${stStyle.AGUARDANDO}">${stLabel.AGUARDANDO}</span></td>`;
+        const st = f.status || 'IMPORTADA';
+        const pct = f.pct_classificado || 0;
+        const bar = pct > 0 && st === 'CLASSIFICANDO'
+          ? `<div style="height:2px;background:#e5e7eb;border-radius:2px;margin-top:3px"><div style="height:2px;background:#d97706;width:${pct}%"></div></div><div style="font-size:9px;color:var(--muted)">${pct}%</div>`
+          : '';
+        return `<td style="padding:4px 6px;text-align:center;cursor:pointer" onclick="abrirControleFaturas()" title="${brl(f.valor_total)}">
+          <span style="font-size:10px;padding:2px 7px;border-radius:5px;${stStyle[st]||stStyle.IMPORTADA}">${stLabel[st]||st}</span>${bar}
+        </td>`;
+      }).join('');
+      return `<tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:6px 10px;font-size:11px;font-weight:700;white-space:nowrap;border-right:1px solid var(--border)">${c.label}</td>
+        ${cells}
+      </tr>`;
+    }).join('');
+
+    grid.innerHTML = kpiHtml + `<div style="overflow-x:auto"><table style="border-collapse:collapse;width:100%">
+      <thead><tr style="border-bottom:2px solid var(--border)">
+        <th style="padding:6px 10px;font-size:10px;font-weight:600;color:var(--muted);text-align:left">CARTÃO</th>${thMeses}
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div>`;
   } catch(e) {
     grid.innerHTML = `<div style="font-size:11px;color:#dc2626;padding:8px">❌ ${e.message}</div>`;
   }
