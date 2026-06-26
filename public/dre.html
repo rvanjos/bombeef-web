@@ -7109,9 +7109,95 @@ async function carregarCartaoFaturas() {
     setText('cf-kpi-vencidas', k.vencidas);
 
     cfRenderTabela(_cfDadosRaw);
+    cfRenderGrade(_cfDadosRaw);
   } catch(e) {
     tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:24px;color:#dc2626">❌ ${e.message}</td></tr>`;
   }
+}
+
+function cfRenderGrade(faturas) {
+  const el = document.getElementById('cf-grade');
+  if (!el) return;
+  const brl = v => 'R$ ' + parseFloat(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+
+  // Últimos 6 meses
+  const meses = [];
+  const hoje = new Date();
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
+    meses.push(String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear());
+  }
+
+  // Indexar por cartaoId × competencia
+  const idx = {};
+  faturas.forEach(f => {
+    const cid = CARTOES_MONITORADOS.find(c => c.match.test(f.cartao||f.bandeira||''))?.id || ('x_'+(f.cartao||f.bandeira||'?'));
+    const key = cid+'|'+(f.competencia||'');
+    if (!idx[key] || (f.importado_em||'') > (idx[key].importado_em||'')) idx[key] = f;
+  });
+
+  // Cartões dinâmicos
+  const cards = [...CARTOES_MONITORADOS];
+  faturas.forEach(f => {
+    const nome = f.cartao||f.bandeira||'';
+    if (!nome || CARTOES_MONITORADOS.some(c=>c.match.test(nome))) return;
+    if (!cards.some(c=>c.id==='x_'+nome)) cards.push({id:'x_'+nome,label:'💳 '+nome,match:/.*/});
+  });
+
+  const stCfg = {
+    PAGA:         {bg:'#dcfce7',border:'#16a34a',txt:'#166534',icon:'✅',label:'Paga'},
+    CLASSIFICADA: {bg:'#dbeafe',border:'#2563eb',txt:'#1e40af',icon:'🔵',label:'Classificada'},
+    CLASSIFICANDO:{bg:'#fef3c7',border:'#d97706',txt:'#92400e',icon:'⏳',label:'Classif.'},
+    IMPORTADA:    {bg:'#f9fafb',border:'#9ca3af',txt:'#374151',icon:'📥',label:'Importada'},
+    AGUARDANDO:   {bg:'#f3f4f6',border:'#d1d5db',txt:'#9ca3af',icon:'⬜',label:'Aguardando'},
+  };
+
+  const mesHdrs = meses.map(m => {
+    const isAtual = m === (String(hoje.getMonth()+1).padStart(2,'0')+'/'+hoje.getFullYear());
+    return `<div style="text-align:center;font-size:10px;font-weight:700;color:${isAtual?'var(--red)':'var(--muted)'};padding:0 4px;white-space:nowrap${isAtual?';text-decoration:underline':''}">${m}${isAtual?' ◀':''}</div>`;
+  }).join('');
+
+  const rows = cards.map(c => {
+    const cells = meses.map(m => {
+      const f = idx[c.id+'|'+m];
+      const cfg = f ? (stCfg[f.status]||stCfg.IMPORTADA) : stCfg.AGUARDANDO;
+      const pct = f?.pct_classificado||0;
+      const onclick = f ? `onclick="cfFiltrarCartaoMes('${(f.cartao||f.bandeira||'').replace(/'/g,"\'")}','${m}')"` : '';
+      const title = f ? `title="${brl(f.valor_total)} · ${f.arquivo_nome||'sem arquivo'} · ${f.qtd_itens||0} itens"` : 'title="Não importada"';
+      const bar = (f && f.status==='CLASSIFICANDO' && pct>0)
+        ? `<div style="margin-top:3px;height:3px;background:rgba(0,0,0,.1);border-radius:2px"><div style="height:3px;background:${cfg.border};width:${pct}%;border-radius:2px"></div></div><div style="font-size:9px;color:${cfg.txt};margin-top:1px">${pct}%</div>`
+        : '';
+      const vencida = f && f.vencimento && f.vencimento < hoje.toISOString().slice(0,10) && f.status!=='PAGA';
+      return `<div style="padding:6px 4px;min-width:100px;cursor:${f?'pointer':'default'}" ${onclick} ${title}>
+        <div style="background:${cfg.bg};border:1px solid ${cfg.border};border-radius:8px;padding:6px 8px;text-align:center;${vencida?'outline:2px solid #dc2626;':''}">
+          <div style="font-size:14px;line-height:1">${cfg.icon}</div>
+          <div style="font-size:10px;font-weight:700;color:${cfg.txt};margin-top:2px">${cfg.label}</div>
+          ${f?`<div style="font-size:9px;color:${cfg.txt};opacity:.8;margin-top:1px">${brl(f.valor_total)}</div>`:''}
+          ${vencida?'<div style="font-size:9px;color:#dc2626;font-weight:700">⚠️ Vencida</div>':''}
+          ${bar}
+        </div>
+      </div>`;
+    }).join('');
+    return `<div style="display:flex;align-items:flex-start;gap:0;margin-bottom:6px">
+      <div style="min-width:110px;padding:6px 10px 6px 0;font-size:12px;font-weight:700;color:var(--text);white-space:nowrap;padding-top:14px">${c.label}</div>
+      <div style="display:grid;grid-template-columns:repeat(${meses.length},1fr);gap:4px;flex:1">${cells}</div>
+    </div>`;
+  }).join('');
+
+  el.innerHTML = `<div style="display:flex;margin-bottom:6px">
+    <div style="min-width:110px"></div>
+    <div style="display:grid;grid-template-columns:repeat(${meses.length},1fr);gap:4px;flex:1">${mesHdrs}</div>
+  </div>${rows}`;
+}
+
+function cfFiltrarCartaoMes(cartao, mes) {
+  // Filtrar tabela por cartão e mês específico
+  const filtrado = _cfDadosRaw.filter(f =>
+    (f.cartao||f.bandeira||'') === cartao && f.competencia === mes
+  );
+  cfRenderTabela(filtrado.length ? filtrado : _cfDadosRaw);
+  // Destacar filtro visual
+  document.querySelectorAll('.cf-filtro-btn').forEach(b=>b.classList.remove('active'));
 }
 
 function cfFiltrar(status, btn) {
@@ -7595,54 +7681,61 @@ async function _sincronizarCategoriesCC(lancs, faturaIdRef) {
      SPRINT 6.7-D — PAINEL OPERACIONAL DE FATURAS DE CARTÃO
 ═══════════════════════════════════════════════════════════════ -->
 <div class="modal-overlay" id="m-cartao-faturas" onclick="if(event.target===this)fecharControleFaturas()" style="z-index:600">
-  <div style="background:#fff;border-radius:16px;width:100%;max-width:1100px;max-height:92vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+  <div style="background:#fff;border-radius:16px;width:100%;max-width:1140px;max-height:94vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.3)">
 
     <!-- Header -->
     <div style="background:var(--red);padding:14px 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
       <div>
-        <div style="color:#fff;font-size:15px;font-weight:700">💳 Controle de Faturas</div>
-        <div style="color:rgba(255,255,255,.7);font-size:11px;margin-top:1px">Gestão operacional das faturas de cartão</div>
+        <div style="color:#fff;font-size:15px;font-weight:700">💳 Status das Faturas de Cartão</div>
+        <div style="color:rgba(255,255,255,.7);font-size:11px;margin-top:1px">Visão geral por cartão e mês · clique em qualquer célula para detalhes</div>
       </div>
-      <button onclick="fecharControleFaturas()" style="background:none;border:none;color:rgba(255,255,255,.8);font-size:22px;cursor:pointer;line-height:1">×</button>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button onclick="carregarCartaoFaturas()" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;padding:4px 12px;border-radius:6px;font-size:11px;cursor:pointer;font-family:'DM Sans',sans-serif">🔄 Atualizar</button>
+        <button onclick="fecharControleFaturas()" style="background:none;border:none;color:rgba(255,255,255,.8);font-size:22px;cursor:pointer;line-height:1">×</button>
+      </div>
     </div>
 
-    <!-- KPIs -->
-    <div style="display:flex;gap:10px;padding:12px 16px;background:var(--bg);border-bottom:1px solid var(--border);flex-wrap:wrap;flex-shrink:0">
-      <div class="cf-kpi-box"><div class="cf-kpi-l">Total</div><div class="cf-kpi-v" id="cf-kpi-total">—</div></div>
-      <div class="cf-kpi-box"><div class="cf-kpi-l">📥 Importadas</div><div class="cf-kpi-v" id="cf-kpi-importadas" style="color:#6b7280">—</div></div>
-      <div class="cf-kpi-box"><div class="cf-kpi-l">🟡 Classificando</div><div class="cf-kpi-v" id="cf-kpi-classificando" style="color:#d97706">—</div></div>
-      <div class="cf-kpi-box"><div class="cf-kpi-l">🔵 Classificadas</div><div class="cf-kpi-v" id="cf-kpi-classif" style="color:#2563eb">—</div></div>
-      <div class="cf-kpi-box"><div class="cf-kpi-l">✅ Pagas</div><div class="cf-kpi-v" id="cf-kpi-pagas" style="color:#16a34a">—</div></div>
-      <div class="cf-kpi-box" style="flex:1.5;min-width:140px"><div class="cf-kpi-l">💰 Valor Aberto</div><div class="cf-kpi-v" id="cf-kpi-valor" style="color:#dc2626">—</div></div>
-      <div class="cf-kpi-box" style="flex:1.5;min-width:140px"><div class="cf-kpi-l">✅ Valor Pago</div><div class="cf-kpi-v" id="cf-kpi-pago" style="color:#16a34a">—</div></div>
-      <div class="cf-kpi-box" id="cf-kpi-venc-box" style="display:none"><div class="cf-kpi-l">⚠️ Vencidas</div><div class="cf-kpi-v" id="cf-kpi-vencidas" style="color:#dc2626">—</div></div>
+    <!-- Grade mês × cartão -->
+    <div id="cf-grade-wrap" style="padding:14px 16px;background:var(--bg);border-bottom:2px solid var(--border);flex-shrink:0;overflow-x:auto">
+      <div id="cf-grade">⏳ Carregando…</div>
     </div>
 
-    <!-- Filtros rápidos -->
-    <div style="display:flex;gap:6px;padding:10px 16px;border-bottom:1px solid var(--border);flex-wrap:wrap;flex-shrink:0;background:#fff">
+    <!-- KPIs resumo + filtros numa linha -->
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 16px;border-bottom:1px solid var(--border);flex-wrap:wrap;flex-shrink:0;background:#fff">
+      <span style="font-size:11px;color:var(--muted)">Filtrar:</span>
       <button class="cf-filtro-btn active" onclick="cfFiltrar('',this)">Todas</button>
       <button class="cf-filtro-btn" onclick="cfFiltrar('IMPORTADA',this)">📥 Importadas</button>
-      <button class="cf-filtro-btn" onclick="cfFiltrar('CLASSIFICANDO',this)">🟡 Classificando</button>
-      <button class="cf-filtro-btn" onclick="cfFiltrar('CLASSIFICADA',this)">🔵 Classificadas</button>
+      <button class="cf-filtro-btn" onclick="cfFiltrar('CLASSIFICANDO',this)">⏳ Classif.</button>
+      <button class="cf-filtro-btn" onclick="cfFiltrar('CLASSIFICADA',this)">🔵 Prontas</button>
       <button class="cf-filtro-btn" onclick="cfFiltrar('PAGA',this)">✅ Pagas</button>
-      <button class="cf-filtro-btn" onclick="cfFiltrar('DUP',this)">⚠️ Duplicadas/Reprocessadas</button>
-      <button onclick="corrigirMesesCC()" style="margin-left:4px;padding:4px 10px;background:#fef3c7;border:1px solid #fde68a;border-radius:6px;font-size:11px;cursor:pointer;font-family:'DM Sans',sans-serif;color:#92400e" title="Corrigir meses das faturas CC já importadas">🔧 Corrigir meses</button>
-        <button onclick="carregarCartaoFaturas()" style="margin-left:auto;padding:4px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:11px;cursor:pointer;font-family:'DM Sans',sans-serif">🔄</button>
+      <button class="cf-filtro-btn" onclick="cfFiltrar('DUP',this)">⚠️ Duplic.</button>
+      <div style="margin-left:auto;display:flex;gap:6px;align-items:center">
+        <span id="cf-kpi-venc-box" style="display:none;font-size:11px;font-weight:700;color:#dc2626;background:#fee2e2;padding:3px 8px;border-radius:5px">⚠️ <span id="cf-kpi-vencidas">0</span> vencida(s)</span>
+        <span style="font-size:11px;color:var(--muted)">Aberto: <strong id="cf-kpi-valor" style="color:#dc2626">—</strong></span>
+        <span style="font-size:11px;color:var(--muted)">Pago: <strong id="cf-kpi-pago" style="color:#16a34a">—</strong></span>
+        <button onclick="corrigirMesesCC()" style="padding:3px 9px;background:#fef3c7;border:1px solid #fde68a;border-radius:5px;font-size:10px;cursor:pointer;color:#92400e;font-family:'DM Sans',sans-serif">🔧 Corrigir meses</button>
+      </div>
+      <!-- KPIs ocultos mantidos para compatibilidade -->
+      <span id="cf-kpi-total" style="display:none"></span>
+      <span id="cf-kpi-importadas" style="display:none"></span>
+      <span id="cf-kpi-classificando" style="display:none"></span>
+      <span id="cf-kpi-classif" style="display:none"></span>
+      <span id="cf-kpi-pagas" style="display:none"></span>
     </div>
 
-    <!-- Tabela -->
+    <!-- Tabela detalhada -->
     <div style="overflow-y:auto;flex:1;min-height:0">
-      <table class="tbl" style="width:100%;min-width:900px">
+      <table class="tbl" style="width:100%;min-width:820px">
         <thead>
           <tr>
-            <th>Cartão</th>
-            <th>Competência</th>
-            <th>Vencimento</th>
-            <th style="text-align:right">Valor</th>
-            <th style="text-align:right">Itens</th>
-            <th style="text-align:center">Status</th>
-            <th style="text-align:center">Situação</th>
-            <th style="text-align:center">Ações</th>
+            <th style="width:140px">Cartão</th>
+            <th style="width:90px">Competência</th>
+            <th style="width:100px">Vencimento</th>
+            <th style="text-align:right;width:110px">Valor Total</th>
+            <th style="text-align:center;width:80px">Classif.</th>
+            <th style="text-align:center;width:130px">Status</th>
+            <th style="text-align:center;width:130px">Situação</th>
+            <th style="text-align:center;width:120px">Ações</th>
           </tr>
         </thead>
         <tbody id="cf-tbody">
@@ -7651,9 +7744,17 @@ async function _sincronizarCategoriesCC(lancs, faturaIdRef) {
       </table>
     </div>
 
-    <!-- Footer -->
-    <div style="padding:10px 16px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;flex-shrink:0">
-      <button onclick="fecharControleFaturas()" style="padding:7px 18px;background:var(--bg);border:1px solid var(--border);border-radius:7px;font-size:13px;cursor:pointer;font-family:'DM Sans',sans-serif">Fechar</button>
+    <!-- Footer legenda -->
+    <div style="padding:8px 16px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-shrink:0;background:var(--bg)">
+      <div style="display:flex;gap:10px;flex-wrap:wrap;font-size:10px;color:var(--muted);align-items:center">
+        <span style="font-weight:700;color:var(--text)">Legenda:</span>
+        <span><span style="display:inline-block;width:10px;height:10px;background:#f3f4f6;border-radius:2px;border:1px solid #d1d5db;margin-right:3px"></span>Aguardando importação</span>
+        <span><span style="display:inline-block;width:10px;height:10px;background:#fef9c3;border-radius:2px;border:1px solid #fde68a;margin-right:3px"></span>Importada, pendente classificação</span>
+        <span><span style="display:inline-block;width:10px;height:10px;background:#fef3c7;border-radius:2px;border-left:3px solid #d97706;margin-right:3px"></span>Classificando</span>
+        <span><span style="display:inline-block;width:10px;height:10px;background:#dbeafe;border-radius:2px;border-left:3px solid #2563eb;margin-right:3px"></span>Classificada</span>
+        <span><span style="display:inline-block;width:10px;height:10px;background:#dcfce7;border-radius:2px;border-left:3px solid #16a34a;margin-right:3px"></span>Paga</span>
+      </div>
+      <button onclick="fecharControleFaturas()" style="padding:5px 16px;background:var(--bg);border:1px solid var(--border);border-radius:7px;font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif">Fechar</button>
     </div>
   </div>
 </div>
