@@ -3773,7 +3773,12 @@ async function _ccrExecutarEnvioNovo(faturaId, cartaoNome, valorTotal, itensPayl
       qtd_itens: _ccrLancs.length, arquivo_nome: _ccrFileName || null,
       hash_fatura: hashFatura, fatura_id_ref: faturaId, itens: itensPayload,
     });
-    if (reg?.ok && typeof carregarCartaoFaturas === 'function') carregarCartaoFaturas();
+    if (reg?.ok) {
+      if (typeof carregarCartaoFaturas === 'function') carregarCartaoFaturas();
+      // Atualizar painel inline se estiver aberto
+      const painel = document.getElementById('painel-cartoes');
+      if (painel && painel.style.display !== 'none') renderStatusCartoes();
+    }
   } catch(e) {}
 
   _sincronizarCategoriesCC(_ccrLancs, faturaId);
@@ -4144,9 +4149,14 @@ function _buildGradeCartoes(faturas, elId) {
   const mesAtual = String(hoje.getMonth()+1).padStart(2,'0') + '/' + hoje.getFullYear();
 
   // Indexar por cartaoId × competencia
+  const _normCartao = s => (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+  const _getCartaoId = nome => {
+    const norm = _normCartao(nome);
+    return CARTOES_MONITORADOS.find(c => c.match.test(nome) || c.match.test(norm))?.id || ('x_'+nome);
+  };
   const idx = {};
   faturas.forEach(f => {
-    const cid = CARTOES_MONITORADOS.find(c => c.match.test(f.cartao||f.bandeira||''))?.id || ('x_'+(f.cartao||f.bandeira||'?'));
+    const cid = _getCartaoId(f.cartao||f.bandeira||'');
     const key = cid + '|' + (f.competencia||'');
     if (!idx[key] || (f.importado_em||'') > (idx[key].importado_em||'')) idx[key] = f;
   });
@@ -4155,7 +4165,7 @@ function _buildGradeCartoes(faturas, elId) {
   const carts = [...CARTOES_MONITORADOS];
   faturas.forEach(f => {
     const nome = f.cartao||f.bandeira||'';
-    if (!nome || CARTOES_MONITORADOS.some(c => c.match.test(nome))) return;
+    if (!nome || CARTOES_MONITORADOS.some(c => c.match.test(nome) || c.match.test(_normCartao(nome)))) return;
     if (!carts.some(c => c.id === 'x_'+nome))
       carts.push({ id:'x_'+nome, label:'💳 '+nome, match:/.*/ });
   });
@@ -4190,7 +4200,8 @@ function _buildGradeCartoes(faturas, elId) {
            <div style="font-size:9px;color:${st.tx};margin-top:2px">${pct}%</div>` : '';
       const valTxt = f ? `<div style="font-size:9px;color:${st.tx};margin-top:2px;font-family:'DM Mono',monospace">${brl(f.valor_total)}</div>` : '';
       const vencBadge = vencida ? `<div style="font-size:9px;color:#dc2626;font-weight:700;margin-top:2px">⚠️ Vencida</div>` : '';
-      const onclick = f ? `onclick="cfFiltrarCartaoMes('${(f.cartao||f.bandeira||'').replace(/'/g,"\'")}','${m}')" style="cursor:pointer"` : '';
+      const cNome = (f.cartao||f.bandeira||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');
+      const onclick = f ? `onclick="cfFiltrarCartaoMes('${cNome}','${m}')" style="cursor:pointer"` : '';
       const title = f ? `title="${brl(f.valor_total)} · ${f.qtd_itens||0} itens · ${f.arquivo_nome||'sem arquivo'}"` : 'title="Não importada ainda"';
       const isCur = m === mesAtual;
       return `<td ${title} ${onclick} style="padding:4px 6px;text-align:center;min-width:100px;
