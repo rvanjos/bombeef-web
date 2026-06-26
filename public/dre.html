@@ -2315,7 +2315,12 @@ function parseCCItauEmpresasCSV(rows) {
     let v = parseFloat(String(row[cValor] ?? '0').replace(/[^\d.,\-]/g, '').replace(',', '.')) || 0;
     if (!v) continue;
     const cd = String(row[cCD] ?? '').trim().toUpperCase();
-    // D = débito (saída = negativo no DRE), C = crédito (entrada/estorno = positivo)
+
+    // Ignorar pagamentos de fatura e demonstrativos (C/D = C + texto de pagamento)
+    const isPagFatura = cd === 'C' && /pagamento|pag\s+fat|debito\s+aut|deb\s+aut|pgto|pagt/i.test(descRaw);
+    if (isPagFatura) continue;
+
+    // D = débito (compra = negativo no DRE), C = crédito (estorno/cashback = positivo)
     v = cd === 'C' ? Math.abs(v) : -Math.abs(v);
 
     // Data DD/MM/YYYY → YYYY-MM-DD
@@ -3540,22 +3545,34 @@ function ccrRenderGrupos() {
     // Verifica se todos os itens do grupo têm a mesma categoria
     const catUniforme = g.itens.every(i => i.categoria === catGrupo);
 
-    const bordaCor = todasCat ? 'var(--green)' : 'var(--orange)';
-    const bgHeader = todasCat ? '#f0fdf4' : '#fffbeb';
+    // Detectar se grupo é pagamento de fatura ou crédito/estorno
+    const isPagFat  = /pagamento|pag\s*fat|debito\s*aut|deb\s*aut|pgto/i.test(g.nomeRef);
+    const isCredito = g.itens.every(i => parseFloat(i.valor||0) > 0);
+    const bordaCor  = isPagFat ? '#9ca3af' : isCredito ? '#2563eb' : todasCat ? 'var(--green)' : 'var(--orange)';
+    const bgHeader  = isPagFat ? '#f3f4f6' : isCredito ? '#eff6ff' : todasCat ? '#f0fdf4' : '#fffbeb';
+    const badge     = isPagFat
+      ? `<span style="font-size:9px;background:#f3f4f6;color:#6b7280;padding:2px 6px;border-radius:4px;font-weight:700;margin-left:4px">⚠️ PAG.FATURA — não enviar</span>`
+      : isCredito
+      ? `<span style="font-size:9px;background:#dbeafe;color:#1e40af;padding:2px 6px;border-radius:4px;font-weight:700;margin-left:4px">✅ CRÉDITO/ESTORNO</span>`
+      : '';
 
     return `
-    <div style="border:1px solid var(--border);border-radius:8px;border-left:3px solid ${bordaCor};background:#fff" id="ccrg-${gi}">
+    <div style="border:1px solid var(--border);border-radius:8px;border-left:3px solid ${bordaCor};background:#fff${isPagFat?';opacity:.6':''}" id="ccrg-${gi}">
       <!-- Header do grupo: clica para expandir/colapsar itens -->
       <div style="background:${bgHeader};padding:9px 14px;display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:12px;cursor:pointer;border-radius:8px 8px 0 0" onclick="ccrToggleGrupo(${gi})">
-        <span style="font-size:13px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${g.nomeRef}</span>
-        <span style="font-size:11px;color:var(--muted);white-space:nowrap">${g.itens.length}x · ${fmt.brl(totalGrupo)}</span>
+        <span style="font-size:13px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${g.nomeRef}${badge}</span>
+        <span style="font-size:11px;color:var(--muted);white-space:nowrap">${g.itens.length}x · ${isCredito?'+':''}${fmt.brl(totalGrupo)}</span>
         <span id="ccrg-arr-${gi}" style="font-size:12px;color:var(--muted)">▼</span>
       </div>
       <!-- Dropdown de categoria para o grupo inteiro -->
       <div style="padding:6px 14px;background:#fafaf8;border-top:1px solid var(--border);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px">
-        <span style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);white-space:nowrap;flex-shrink:0">Categoria:</span>
-        ${ccrCatInput('ccrg-input-'+gi, catUniforme ? catGrupo : '', 'ccrSetGrupo('+gi+', this.value)', '')}
-        ${!catUniforme && g.itens.length > 1 ? '<span style="font-size:10px;color:var(--orange);white-space:nowrap;flex-shrink:0">⚠ variadas</span>' : ''}
+        ${isPagFat
+          ? `<span style="font-size:11px;color:#6b7280;flex:1">Pagamento de fatura — não deve entrar no DRE</span>
+             <button onclick="ccrRemoverGrupo(${gi})" style="padding:2px 10px;background:#fee2e2;border:1px solid #fca5a5;color:#dc2626;border-radius:5px;cursor:pointer;font-size:11px;font-weight:700;font-family:'DM Sans',sans-serif">🗑 Remover</button>`
+          : `<span style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);white-space:nowrap;flex-shrink:0">Categoria:</span>
+             ${ccrCatInput('ccrg-input-'+gi, catUniforme ? catGrupo : '', 'ccrSetGrupo('+gi+', this.value)', '')}
+             ${!catUniforme && g.itens.length > 1 ? '<span style="font-size:10px;color:var(--orange);white-space:nowrap;flex-shrink:0">⚠ variadas</span>' : ''}`
+        }
       </div>
       <!-- Itens individuais (colapsáveis) -->
       <div id="ccrg-itens-${gi}" style="display:none">
@@ -3564,7 +3581,9 @@ function ccrRenderGrupos() {
           <span style="color:var(--muted);font-family:'DM Mono',monospace;white-space:nowrap">${item.data ? fmt.date(item.data) : '—'}</span>
           <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)" title="${item.lancamento||''}">${item.lancamento||'—'}</span>
           ${ccrCatInput('ccri-'+item.id, item.categoria, "ccrSetItem('"+item.id+"', this.value)", 'width:100%;font-size:11px;')}
-          <span style="text-align:right;font-family:'DM Mono',monospace;font-weight:600;color:var(--red-l);white-space:nowrap">${fmt.brl(Math.abs(parseFloat(item.valor||0)))}</span>
+          <span style="text-align:right;font-family:'DM Mono',monospace;font-weight:600;white-space:nowrap;color:${parseFloat(item.valor||0)>0?'var(--green)':'var(--red-l)'}">
+            ${parseFloat(item.valor||0)>0?'+':''}${fmt.brl(Math.abs(parseFloat(item.valor||0)))}
+          </span>
         </div>`).join('')}
       </div>
     </div>`;
@@ -3630,6 +3649,16 @@ function ccrBulkClassificar() {
   _ccrLancs.forEach(l => { l.categoria = cat; });
   ccrRenderGrupos();
   toast(`✅ Todos classificados como "${cat}"`);
+}
+
+function ccrRemoverGrupo(gi) {
+  const g = _ccrGrupos[gi];
+  if (!g) return;
+  // Remover todos os itens do grupo de _ccrLancs
+  const ids = new Set(g.itens.map(i => i.id));
+  _ccrLancs = _ccrLancs.filter(l => !ids.has(l.id));
+  ccrRenderGrupos();
+  toast(`🗑 ${g.nomeRef} removido (${g.itens.length} item(ns))`);
 }
 
 function ccrFiltrar(tipo) {
