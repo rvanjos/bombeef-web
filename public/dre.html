@@ -744,14 +744,24 @@ thead th{padding:6px 9px;}
   <div class="md" style="max-width:420px">
     <div class="mdh"><h3>💳 Importar Fatura CC</h3><button class="mdx" onclick="fecharModal('m-cc-mes')">×</button></div>
     <div class="mdb">
-      <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Informe o mês de pagamento desta fatura. Os lançamentos serão exibidos para classificação antes de entrar no DRE.</p>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Selecione o cartão e o mês de vencimento da fatura. Compras parceladas de meses anteriores entrarão neste mês como competência.</p>
       <div class="fg">
-        <label>Mês de Pagamento da Fatura *</label>
-        <input type="month" id="cc-mes-input" style="width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:8px;font-size:14px">
+        <label>Cartão *</label>
+        <select id="cc-cartao-select" onchange="ccOnSelectCartao()" style="width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:8px;font-size:14px;background:#fff">
+          <option value="">— Selecione o cartão —</option>
+          <option value="Caixa">🏦 Caixa</option>
+          <option value="C6">🟠 C6 Bank</option>
+          <option value="Itaú Novo">🔵 Itaú Novo</option>
+          <option value="Itaú Antigo">⚫ Itaú Antigo</option>
+          <option value="Itaú Empresas">🔵 Itaú Empresas</option>
+          <option value="__outro__">✏️ Outro (digitar)</option>
+        </select>
+        <input type="text" id="cc-bandeira-input" placeholder="Nome do cartão..." style="width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:8px;font-size:14px;display:none;margin-top:6px">
       </div>
-      <div class="fg" style="margin-top:10px">
-        <label>Bandeira / Cartão (opcional)</label>
-        <input type="text" id="cc-bandeira-input" placeholder="ex: Visa, Master, Caixa..." style="width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:8px;font-size:14px">
+      <div class="fg" style="margin-top:12px">
+        <label>Mês de Vencimento da Fatura *</label>
+        <input type="month" id="cc-mes-input" style="width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:8px;font-size:14px">
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">⚠️ Use o mês que você vai <strong>pagar</strong> a fatura, não o mês das compras.</div>
       </div>
     </div>
     <div class="mdf" style="gap:10px">
@@ -1589,9 +1599,35 @@ async function procCC(file) {
   else if (/inter/.test(fn))      bandeiraAuto = 'Banco Inter';
   else if (/bradesco/.test(fn))   bandeiraAuto = 'Bradesco';
   else if (/santander/.test(fn))  bandeiraAuto = 'Santander';
-  if (bandeiraAuto) document.getElementById('cc-bandeira-input').value = bandeiraAuto;
+  if (bandeiraAuto) {
+    document.getElementById('cc-bandeira-input').value = bandeiraAuto;
+    // Tentar pré-selecionar no select
+    const sel = document.getElementById('cc-cartao-select');
+    if (sel) {
+      const opt = [...sel.options].find(o => o.value && o.value !== '__outro__' &&
+        bandeiraAuto.toLowerCase().includes(o.value.toLowerCase().replace('itaú','itau')));
+      if (opt) { sel.value = opt.value; }
+      else if (bandeiraAuto) {
+        sel.value = '__outro__';
+        document.getElementById('cc-bandeira-input').style.display = '';
+      }
+    }
+  }
 
   document.getElementById('m-cc-mes').classList.add('open');
+}
+
+async function ccOnSelectCartao() {
+  const sel   = document.getElementById('cc-cartao-select');
+  const input = document.getElementById('cc-bandeira-input');
+  if (!sel || !input) return;
+  if (sel.value === '__outro__') {
+    input.style.display = '';
+    input.focus();
+  } else {
+    input.style.display = 'none';
+    input.value = sel.value;
+  }
 }
 
 async function confirmarImportCC() {
@@ -1601,6 +1637,16 @@ async function confirmarImportCC() {
   if (!file) return;
 
   // Mês confirmado pelo usuário
+  // Resolver bandeira do select ou input manual
+  const sel = document.getElementById('cc-cartao-select');
+  const bandeiraResolvida = sel && sel.value && sel.value !== '__outro__'
+    ? sel.value
+    : (document.getElementById('cc-bandeira-input')?.value || '').trim();
+  if (!bandeiraResolvida) { toast('⚠️ Selecione o cartão'); return; }
+  // Sobrescrever o valor do input de bandeira para que o restante do fluxo funcione igual
+  const bInput = document.getElementById('cc-bandeira-input');
+  if (bInput) bInput.value = bandeiraResolvida;
+
   const ymVal = document.getElementById('cc-mes-input').value;
   const [yyyy, mm] = ymVal.split('-');
   const mesCC = `${mm}/${yyyy}`; // ex: "02/2026"
@@ -4136,6 +4182,8 @@ const CARTOES_MONITORADOS = [
 function _buildGradeCartoes(faturas, elId) {
   const el = document.getElementById(elId);
   if (!el) return;
+  if (!Array.isArray(faturas)) { el.innerHTML = '<div style="color:#dc2626;font-size:11px;padding:8px">Erro ao carregar faturas.</div>'; return; }
+  faturas = faturas.filter(Boolean); // remover undefined/null
   const brl = v => 'R$ ' + parseFloat(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
   const hoje = new Date();
   const hojeStr = hoje.toISOString().slice(0,10);
