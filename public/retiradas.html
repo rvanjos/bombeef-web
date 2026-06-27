@@ -145,7 +145,7 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
   <!-- Tabela -->
   <div class="card">
     <div style="overflow-x:auto"><table class="tbl tbl-desktop">
-      <thead><tr><th>Data</th><th>Funcionário</th><th>Produto / Descrição</th><th>Qtd</th><th>Preço Unit.</th><th>Total</th><th style="text-align:center">Status</th><th>Ações</th></tr></thead>
+      <thead><tr><th>Data</th><th>Funcionário</th><th>Produto / Descrição</th><th>Qtd</th><th>Preço Unit.</th><th>Total</th><th style="text-align:center">Pgto</th><th style="text-align:center">PDV</th><th>Ações</th></tr></thead>
       <tbody id="tbody"></tbody>
       <tfoot id="tfoot-total" style="display:none">
         <tr style="background:#f7f4f0;border-top:2px solid var(--border)">
@@ -410,6 +410,12 @@ function renderizar(lista){
         ${semCusto?'<span style="color:#d97706">Pendente</span>':fmt.brl(r.valor_total)}
       </td>
       <td style="text-align:center">${statusBadge}</td>
+      <td style="text-align:center">
+        ${r.baixa_pdv
+          ? `<span style="background:#dbeafe;color:#1e40af;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:700;cursor:pointer" onclick="toggleBaixaPDV(${r.id},true)" title="Clique para desfazer">✅ PDV${r.dt_baixa_pdv?' '+fmt.date(r.dt_baixa_pdv):''}</span>`
+          : `<button class="act-btn" onclick="toggleBaixaPDV(${r.id},false)" title="Marcar que baixou no PDV" style="color:#2563eb;font-size:13px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:5px;padding:2px 7px">PDV?</button>`
+        }
+      </td>
       <td>${btnBaixa}${btnAtualizar}<button class="act-btn" onclick="editarPreco(${r.id},${_preco},${_qtd})" title="Editar preço" style="color:var(--purple)">✏️</button><button class="act-btn" onclick="excluir(${r.id})" style="color:var(--red-l)">🗑</button></td>
     </tr>`;
   }).join('');
@@ -926,6 +932,14 @@ async function confirmarPagamentoRet() {
   await carregarDados();
 }
 
+
+async function toggleBaixaPDV(id, desfazer) {
+  if (desfazer && !confirm('Desfazer marcação de baixa no PDV?')) return;
+  const d = await api.patch(`/api/retiradas/${id}/baixa-pdv`, { desfazer: !!desfazer });
+  if (!d.ok) { toast('❌ ' + (d.erro||'Erro')); return; }
+  toast(desfazer ? '↩ Baixa PDV desfeita' : '✅ Baixa no PDV marcada!');
+  await carregarDados();
+}
 
 async function reabrirRetirada(id) {
   if (!confirm('Reabrir retirada como pendente?')) return;

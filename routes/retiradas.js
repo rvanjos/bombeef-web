@@ -53,6 +53,8 @@ module.exports = function (pool, app) {
       ['status','TEXT DEFAULT \'pendente\''],
       ['dt_pagamento','DATE'],
       ['pago_por','INTEGER'],
+      ['baixa_pdv','BOOLEAN DEFAULT false'],
+      ['dt_baixa_pdv','DATE'],
     ];
     for(const[c,d]of needed) await pool.query(`ALTER TABLE retiradas ADD COLUMN IF NOT EXISTS ${c} ${d}`).catch(()=>{});
     await pool.query(`UPDATE retiradas SET mes=TO_CHAR(dt_retirada,'MM/YYYY') WHERE mes IS NULL AND dt_retirada IS NOT NULL`).catch(()=>{});
@@ -224,47 +226,9 @@ module.exports = function (pool, app) {
       ]);
       res.json({ ok: true, data: rows[0] });
 
-      // ── F2-05: registrar movimento de estoque (try/catch isolado) ─────────
-      // Falha aqui NÃO afeta a retirada já registrada acima
-      try {
-        const ret = rows[0];
-        if (ret.produto_id) {
-          await pool.query(`
-            INSERT INTO movimentos_estoque
-              (produto_id, produto_codigo, tipo_movimento, origem, origem_id,
-               quantidade, estoque_anterior, estoque_posterior, usuario_id, observacao)
-            SELECT
-              p.id, p.codigo, 'RETIRADA_FUNCIONARIO', 'retiradas', $1,
-              -$2::numeric,
-              p.estoque,
-              GREATEST(0, p.estoque - $2::numeric),
-              $3, $4
-            FROM produtos p WHERE p.id = $5
-          `, [
-            ret.id,
-            parseFloat(ret.qtd || 0),
-            ret.usuario_id || null,
-            `Retirada: ${ret.descricao}`,
-            ret.produto_id,
-          ]);
-          // Atualiza produtos.estoque
-          await pool.query(`
-            UPDATE produtos
-            SET estoque = GREATEST(0, estoque - $1), atualizado_em = NOW()
-            WHERE id = $2
-          `, [parseFloat(ret.qtd || 0), ret.produto_id]);
-          // Emite evento no barramento
-          events.emit(app, 'MOVIMENTO_ESTOQUE', {
-            origem:     'retiradas',
-            origem_id:  ret.id,
-            produto_id: ret.produto_id,
-            tipo:       'RETIRADA_FUNCIONARIO',
-            quantidade: ret.qtd,
-          });
-        }
-      } catch (eMov) {
-        console.warn('[retiradas] F2-05 movimento estoque falhou (não crítico):', eMov.message);
-      }
+      // F2-05 DESATIVADO: baixa de estoque não acontece mais ao criar retirada.
+      // A fonte de verdade é o PDV. Use o botão "Baixa no PDV" para marcar
+      // manualmente quando o item for lançado no caixa.
 
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
@@ -294,6 +258,29 @@ module.exports = function (pool, app) {
       ]);
       res.json({ ok: true });
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ── PATCH /:id/baixa-pdv — marca que a baixa foi feita no PDV ───────────────
+  r.patch('/:id/baixa-pdv', async (req, res) => {
+    if (!['admin','gestor','financeiro','operador'].includes(req.user?.perfil))
+      return res.status(403).json({ ok:false, erro:'Sem permissão' });
+    const { desfazer } = req.body;
+    try {
+      await pool.query(`ALTER TABLE retiradas ADD COLUMN IF NOT EXISTS baixa_pdv BOOLEAN DEFAULT false`).catch(()=>{});
+      await pool.query(`ALTER TABLE retiradas ADD COLUMN IF NOT EXISTS dt_baixa_pdv DATE`).catch(()=>{});
+      if (desfazer) {
+        await pool.query(
+          `UPDATE retiradas SET baixa_pdv=false, dt_baixa_pdv=NULL WHERE id=$1`,
+          [parseInt(req.params.id)]
+        );
+      } else {
+        await pool.query(
+          `UPDATE retiradas SET baixa_pdv=true, dt_baixa_pdv=CURRENT_DATE WHERE id=$1`,
+          [parseInt(req.params.id)]
+        );
+      }
+      res.json({ ok:true });
+    } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
   });
 
   // ── PATCH /:id/baixa — funcionário registra pagamento antecipado ────────────
