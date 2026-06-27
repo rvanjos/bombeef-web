@@ -299,9 +299,8 @@ module.exports = function (pool, app) {
   // ── PATCH /:id/baixa — funcionário registra pagamento antecipado ────────────
   r.patch('/:id/baixa', async (req, res) => {
     const id = parseInt(req.params.id);
-    const { dtPagamento, obs } = req.body;
+    const { dtPagamento, obs, marcarPago, valorPago } = req.body;
     try {
-      // Verificar se a retirada pertence ao próprio usuário logado (ou admin/gestor)
       const { rows } = await pool.query(
         `SELECT usuario_id, funcionario_id FROM retiradas WHERE id=$1`, [id]
       );
@@ -312,16 +311,19 @@ module.exports = function (pool, app) {
       if (!isAdminGestor && !isProprietario)
         return res.status(403).json({ ok:false, erro:'Você só pode dar baixa nas suas próprias retiradas' });
 
+      // marcarPago=false → apenas registra observação sem mudar status para pago
+      const novoStatus = marcarPago === false ? 'pendente' : 'pago';
+
       await pool.query(`
         UPDATE retiradas SET
-          status       = 'pago',
-          dt_pagamento = COALESCE($1::date, CURRENT_DATE),
-          pago_por     = $2,
-          observacao   = CASE WHEN $3 IS NOT NULL THEN COALESCE(observacao||' | ','') || $3 ELSE observacao END
-        WHERE id = $4
-      `, [dtPagamento||null, req.user?.id, obs||null, id]);
+          status       = $1,
+          dt_pagamento = CASE WHEN $1='pago' THEN COALESCE($2::date, CURRENT_DATE) ELSE dt_pagamento END,
+          pago_por     = CASE WHEN $1='pago' THEN $3 ELSE pago_por END,
+          observacao   = CASE WHEN $4 IS NOT NULL THEN COALESCE(observacao||' | ','') || $4 ELSE observacao END
+        WHERE id = $5
+      `, [novoStatus, dtPagamento||null, req.user?.id, obs||null, id]);
 
-      res.json({ ok:true, msg:'Retirada marcada como paga' });
+      res.json({ ok:true, msg: novoStatus === 'pago' ? 'Retirada marcada como paga' : 'Pagamento parcial registrado' });
     } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
   });
 

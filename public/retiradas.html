@@ -882,27 +882,37 @@ async function confirmarPagamentoRet() {
   const obs   = document.getElementById('pag-ret-obs').value;
 
   if (!valor || valor <= 0) { toast('⚠️ Informe o valor'); return; }
-  if (!_pagRetIds.length) { toast('⚠️ Selecione ao menos uma retirada'); return; }
+  if (!_pagRetIds.length)   { toast('⚠️ Selecione ao menos uma retirada'); return; }
 
-  // Dar baixa em cada retirada selecionada (marca como paga)
-  // Distribui o valor proporcionalmente se for parcial
-  const totalSel = retiradas.filter(r => _pagRetIds.includes(r.id)).reduce((s,r) => s+parseFloat(r.valor_total||0),0);
-  let erros = 0;
+  const totalSel = retiradas
+    .filter(r => _pagRetIds.includes(r.id))
+    .reduce((s,r) => s + parseFloat(r.valor_total||0), 0);
+
+  const obsCompleta = [forma, obs].filter(Boolean).join(': ');
+  let erros = 0, salvos = 0;
+
   for (const id of _pagRetIds) {
     const r = retiradas.find(x => x.id === id);
-    const proporcao = totalSel > 0 ? parseFloat(r.valor_total||0) / totalSel : 1;
-    const valorItem = valor >= totalSel ? null : parseFloat((valor * proporcao).toFixed(2));
-    const marcarPago = valor >= totalSel; // só marca pago se cobriu o valor total
-    if (marcarPago) {
-      const d = await api.patch(`/api/retiradas/${id}/baixa`, {
-        dtPagamento: data, obs: `${forma}${obs?': '+obs:''}`,
-      });
-      if (!d.ok) erros++;
-    }
+    if (!r) continue;
+    const valorItem = parseFloat(r.valor_total||0);
+    // Marcar como pago apenas se o valor pago cobre o item inteiro
+    const proporcao  = totalSel > 0 ? valorItem / totalSel : 1;
+    const valorPagoItem = Math.min(valor * proporcao, valorItem);
+    const cobreTotal = valorPagoItem >= valorItem - 0.01;
+
+    const d = await api.patch(`/api/retiradas/${id}/baixa`, {
+      dtPagamento: data || null,
+      obs: obsCompleta || null,
+      marcarPago: cobreTotal, // backend usará isso para decidir o status
+      valorPago: parseFloat(valorPagoItem.toFixed(2)),
+    });
+    if (d.ok) salvos++;
+    else { erros++; console.error('baixa erro', id, d.erro); }
   }
 
   fecharModal('modal-pag-ret');
-  if (erros) toast(`⚠️ ${erros} erro(s) ao registrar`);
+  if (erros && !salvos) toast(`❌ Erro ao registrar pagamento`);
+  else if (erros) toast(`⚠️ ${salvos} salvo(s), ${erros} erro(s)`);
   else toast(`✅ Pagamento de ${fmt.brl(valor)} registrado!`);
   await carregarDados();
 }
