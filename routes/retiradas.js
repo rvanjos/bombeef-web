@@ -298,21 +298,28 @@ module.exports = function (pool, app) {
 
   // ── PATCH /:id/baixa — funcionário registra pagamento antecipado ────────────
   r.patch('/:id/baixa', async (req, res) => {
-    const id = parseInt(req.params.id);
-    const { dtPagamento, obs, marcarPago, valorPago } = req.body;
+    const { dtPagamento, obs, valorPago } = req.body;
+    // marcarPago pode vir como boolean ou string
+    const marcarPago = req.body.marcarPago !== false && req.body.marcarPago !== 'false';
     try {
       const { rows } = await pool.query(
         `SELECT usuario_id, funcionario_id FROM retiradas WHERE id=$1`, [id]
       );
       if (!rows.length) return res.status(404).json({ ok:false, erro:'Retirada não encontrada' });
 
-      const isAdminGestor = ['admin','gestor','financeiro'].includes(req.user?.perfil);
-      const isProprietario = rows[0].usuario_id === req.user?.id;
+      const isAdminGestor = ['admin','gestor','financeiro','operador'].includes(req.user?.perfil);
+      const isProprietario = rows[0].usuario_id === req.user?.id || rows[0].usuario_id == null;
       if (!isAdminGestor && !isProprietario)
         return res.status(403).json({ ok:false, erro:'Você só pode dar baixa nas suas próprias retiradas' });
 
-      // marcarPago=false → apenas registra observação sem mudar status para pago
-      const novoStatus = marcarPago === false ? 'pendente' : 'pago';
+      // Garantir colunas existem (idempotente)
+      await Promise.all([
+        pool.query(`ALTER TABLE retiradas ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'pendente'`).catch(()=>{}),
+        pool.query(`ALTER TABLE retiradas ADD COLUMN IF NOT EXISTS dt_pagamento DATE`).catch(()=>{}),
+        pool.query(`ALTER TABLE retiradas ADD COLUMN IF NOT EXISTS pago_por INTEGER`).catch(()=>{}),
+      ]);
+
+      const novoStatus = marcarPago ? 'pago' : 'pendente';
 
       await pool.query(`
         UPDATE retiradas SET
