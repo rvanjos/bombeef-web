@@ -50,6 +50,9 @@ module.exports = function (pool, app) {
       ['desconto_pct','NUMERIC(5,2) DEFAULT 0'],
       ['qtd','NUMERIC(10,3) DEFAULT 1'],
       ['preco_unitario','NUMERIC(10,4) DEFAULT 0'],
+      ['status','TEXT DEFAULT \'pendente\''],
+      ['dt_pagamento','DATE'],
+      ['pago_por','INTEGER'],
     ];
     for(const[c,d]of needed) await pool.query(`ALTER TABLE retiradas ADD COLUMN IF NOT EXISTS ${c} ${d}`).catch(()=>{});
     await pool.query(`UPDATE retiradas SET mes=TO_CHAR(dt_retirada,'MM/YYYY') WHERE mes IS NULL AND dt_retirada IS NOT NULL`).catch(()=>{});
@@ -291,6 +294,48 @@ module.exports = function (pool, app) {
       ]);
       res.json({ ok: true });
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ── PATCH /:id/baixa — funcionário registra pagamento antecipado ────────────
+  r.patch('/:id/baixa', async (req, res) => {
+    const id = parseInt(req.params.id);
+    const { dtPagamento, obs } = req.body;
+    try {
+      // Verificar se a retirada pertence ao próprio usuário logado (ou admin/gestor)
+      const { rows } = await pool.query(
+        `SELECT usuario_id, funcionario_id FROM retiradas WHERE id=$1`, [id]
+      );
+      if (!rows.length) return res.status(404).json({ ok:false, erro:'Retirada não encontrada' });
+
+      const isAdminGestor = ['admin','gestor','financeiro'].includes(req.user?.perfil);
+      const isProprietario = rows[0].usuario_id === req.user?.id;
+      if (!isAdminGestor && !isProprietario)
+        return res.status(403).json({ ok:false, erro:'Você só pode dar baixa nas suas próprias retiradas' });
+
+      await pool.query(`
+        UPDATE retiradas SET
+          status       = 'pago',
+          dt_pagamento = COALESCE($1::date, CURRENT_DATE),
+          pago_por     = $2,
+          observacao   = CASE WHEN $3 IS NOT NULL THEN COALESCE(observacao||' | ','') || $3 ELSE observacao END
+        WHERE id = $4
+      `, [dtPagamento||null, req.user?.id, obs||null, id]);
+
+      res.json({ ok:true, msg:'Retirada marcada como paga' });
+    } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
+  });
+
+  // ── PATCH /:id/reabrir — admin/gestor reabre retirada paga ─────────────────
+  r.patch('/:id/reabrir', async (req, res) => {
+    if (!['admin','gestor'].includes(req.user?.perfil))
+      return res.status(403).json({ ok:false, erro:'Acesso restrito a admin/gestor' });
+    try {
+      await pool.query(
+        `UPDATE retiradas SET status='pendente', dt_pagamento=NULL, pago_por=NULL WHERE id=$1`,
+        [parseInt(req.params.id)]
+      );
+      res.json({ ok:true });
+    } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
   });
 
   // ── DELETE /:id ────────────────────────────────────────────────────────────

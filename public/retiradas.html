@@ -145,7 +145,7 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
   <!-- Tabela -->
   <div class="card">
     <div style="overflow-x:auto"><table class="tbl tbl-desktop">
-      <thead><tr><th>Data</th><th>Funcionário</th><th>Produto / Descrição</th><th>Qtd</th><th>Preço Unit.</th><th>Total</th><th>Ações</th></tr></thead>
+      <thead><tr><th>Data</th><th>Funcionário</th><th>Produto / Descrição</th><th>Qtd</th><th>Preço Unit.</th><th>Total</th><th style="text-align:center">Status</th><th>Ações</th></tr></thead>
       <tbody id="tbody"></tbody>
       <tfoot id="tfoot-total" style="display:none">
         <tr style="background:#f7f4f0;border-top:2px solid var(--border)">
@@ -330,7 +330,14 @@ function renderizar(lista){
     const celulaPreco = semCusto
       ? `<span id="preco-txt-${r.id}" style="color:#d97706">—</span>`
       : `<span id="preco-txt-${r.id}">${fmt.brl(_preco)}</span>`;
-    return `<tr${semCusto?' style="background:#fffbeb"':''}>
+    const isPago = r.status === 'pago';
+    const statusBadge = isPago
+      ? `<span style="background:#dcfce7;color:#166534;padding:2px 8px;border-radius:5px;font-size:10px;font-weight:700">✅ Pago${r.dt_pagamento?' · '+fmt.date(r.dt_pagamento):''}</span>`
+      : `<span style="background:#f3f4f6;color:#6b7280;padding:2px 8px;border-radius:5px;font-size:10px;font-weight:700">⏳ Pendente</span>`;
+    const btnBaixa = isPago
+      ? `<button class="act-btn" onclick="reabrirRetirada(${r.id})" title="Reabrir" style="color:#d97706">↩</button>`
+      : `<button class="act-btn" onclick="darBaixaRetirada(${r.id})" title="Registrar pagamento antecipado" style="color:#16a34a;font-size:14px">💸</button>`;
+    return `<tr${semCusto?' style="background:#fffbeb"':isPago?' style="opacity:.8;background:#f0fdf4"':''}>
       <td>${fmt.date(r.dt_retirada)}</td>
       <td><b>${r.funcionario_nome}</b></td>
       <td>${r.descricao}${badgeCusto}${r.prod_descricao&&r.prod_descricao!==r.descricao?`<br><small style="color:var(--muted)">${r.prod_descricao}</small>`:''}</td>
@@ -339,7 +346,8 @@ function renderizar(lista){
       <td id="total-cel-${r.id}" style="font-family:'DM Mono',monospace;font-weight:700;color:${semCusto?'#d97706':'var(--purple)'}">
         ${semCusto?'<span style="color:#d97706">Pendente</span>':fmt.brl(r.valor_total)}
       </td>
-      <td>${btnAtualizar}<button class="act-btn" onclick="editarPreco(${r.id},${_preco},${_qtd})" title="Editar preço de custo" style="color:var(--purple)">✏️</button><button class="act-btn" onclick="excluir(${r.id})" style="color:var(--red-l)">🗑</button></td>
+      <td style="text-align:center">${statusBadge}</td>
+      <td>${btnBaixa}${btnAtualizar}<button class="act-btn" onclick="editarPreco(${r.id},${_preco},${_qtd})" title="Editar preço" style="color:var(--purple)">✏️</button><button class="act-btn" onclick="excluir(${r.id})" style="color:var(--red-l)">🗑</button></td>
     </tr>`;
   }).join('');
 
@@ -749,6 +757,27 @@ async function salvar(){
   if (erros) toast(`⚠️ ${erros} item(s) com erro ao salvar`);
   else toast(`✅ ${itens.length} item(s) registrado(s)!`);
   fecharModal(); carregar(); carregarLimites();
+}
+
+async function darBaixaRetirada(id) {
+  const dt = prompt('Data do pagamento (deixe em branco para hoje):\nFormato: AAAA-MM-DD');
+  if (dt === null) return; // Cancelou
+  const obs = prompt('Observação (opcional):') || null;
+  const d = await api.patch(`/api/retiradas/${id}/baixa`, {
+    dtPagamento: dt || null,
+    obs,
+  });
+  if (!d.ok) { toast('❌ ' + (d.erro || 'Erro ao registrar baixa')); return; }
+  toast('✅ Pagamento registrado!');
+  await carregarDados();
+}
+
+async function reabrirRetirada(id) {
+  if (!confirm('Reabrir retirada como pendente?')) return;
+  const d = await api.patch(`/api/retiradas/${id}/reabrir`, {});
+  if (!d.ok) { toast('❌ ' + (d.erro || 'Sem permissão')); return; }
+  toast('↩ Retirada reaberta');
+  await carregarDados();
 }
 
 async function excluir(id){
