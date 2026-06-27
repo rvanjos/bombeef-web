@@ -163,38 +163,42 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
 
 <!-- Modal Pagamento de Retirada -->
 <div class="modal-bg" id="modal-pag-ret">
-  <div class="md" style="max-width:520px">
-    <div class="mdh">
-      <h3>💸 Registrar Pagamento</h3>
-      <button class="mdx" onclick="fecharModal('modal-pag-ret')">×</button>
+  <div style="background:#fff;border-radius:14px;width:100%;max-width:500px;max-height:92vh;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,.2);overflow:hidden">
+    <!-- Header -->
+    <div style="background:var(--red);padding:14px 18px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+      <div style="color:#fff;font-size:15px;font-weight:700">💸 Registrar Pagamento</div>
+      <button onclick="fecharModal('modal-pag-ret')" style="background:none;border:none;color:rgba(255,255,255,.8);font-size:22px;cursor:pointer;line-height:1">×</button>
     </div>
-    <div class="mdb">
-      <!-- Saldo em aberto do funcionário -->
-      <div id="pag-ret-saldo-box" style="background:#faf7f4;border:1px solid var(--border);border-radius:9px;padding:10px 14px;margin-bottom:14px;display:flex;gap:20px;flex-wrap:wrap">
+    <!-- KPI funcionário -->
+    <div style="padding:12px 16px 0;flex-shrink:0;background:#faf7f4;border-bottom:1px solid var(--border)">
+      <div style="display:flex;gap:20px;flex-wrap:wrap;padding-bottom:12px">
         <div style="font-size:11px;color:var(--muted)">Funcionário<strong id="pag-ret-nome" style="font-size:13px;display:block;color:var(--text)">—</strong></div>
-        <div style="font-size:11px;color:var(--muted)">Total em Aberto<strong id="pag-ret-total" style="font-size:14px;display:block;color:#dc2626;font-family:'DM Mono',monospace">—</strong></div>
+        <div style="font-size:11px;color:var(--muted)">Total em Aberto<strong id="pag-ret-total" style="font-size:15px;display:block;color:#dc2626;font-family:'DM Mono',monospace">—</strong></div>
       </div>
-
-      <!-- Retiradas selecionáveis -->
-      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Selecione as retiradas a pagar</div>
-      <div id="pag-ret-lista" style="max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;margin-bottom:14px"></div>
-
-      <!-- Valor e forma -->
-      <div class="fg-row">
-        <div class="fg">
-          <label>Valor a Pagar *</label>
+    </div>
+    <!-- Lista rolável -->
+    <div style="flex-shrink:0;padding:10px 16px 4px">
+      <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Selecione as retiradas a pagar</div>
+    </div>
+    <div id="pag-ret-lista" style="overflow-y:auto;max-height:220px;border-top:1px solid var(--border);border-bottom:1px solid var(--border)"></div>
+    <!-- Campos fixos -->
+    <div style="padding:14px 16px;overflow-y:auto;flex-shrink:0">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+        <div>
+          <label style="font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px">VALOR A PAGAR *</label>
           <input type="number" id="pag-ret-valor" step="0.01" min="0.01" placeholder="0,00"
             oninput="atualizarPreviewPagRet()"
-            style="font-family:'DM Mono',monospace;font-size:15px;font-weight:700">
+            style="width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:8px;font-family:'DM Mono',monospace;font-size:15px;font-weight:700;box-sizing:border-box">
         </div>
-        <div class="fg">
-          <label>Data do Pagamento</label>
-          <input type="date" id="pag-ret-data">
+        <div>
+          <label style="font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px">DATA DO PAGAMENTO</label>
+          <input type="date" id="pag-ret-data"
+            style="width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box">
         </div>
       </div>
-      <div class="fg">
-        <label>Forma de Pagamento</label>
-        <select id="pag-ret-forma">
+      <div style="margin-bottom:10px">
+        <label style="font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px">FORMA DE PAGAMENTO</label>
+        <select id="pag-ret-forma" style="width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:#fff">
           <option value="dinheiro">💵 Dinheiro</option>
           <option value="pix">📱 Pix</option>
           <option value="debito">💳 Cartão Débito</option>
@@ -203,12 +207,17 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
           <option value="outro">📌 Outro</option>
         </select>
       </div>
-      <div class="fg"><label>Observações</label><input id="pag-ret-obs" placeholder="Opcional"></div>
-      <div id="pag-ret-preview" style="display:none;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:10px 12px;font-size:12px;margin-top:4px">
+      <div style="margin-bottom:10px">
+        <label style="font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px">OBSERVAÇÕES</label>
+        <input id="pag-ret-obs" placeholder="Opcional"
+          style="width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box">
+      </div>
+      <div id="pag-ret-preview" style="display:none;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:10px 12px;font-size:12px">
         <strong>💡 Prévia:</strong> <span id="pag-ret-preview-txt"></span>
       </div>
     </div>
-    <div class="mdf">
+    <!-- Footer -->
+    <div style="padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end;flex-shrink:0">
       <button class="btn btn-gray" onclick="fecharModal('modal-pag-ret')">Cancelar</button>
       <button class="btn btn-green" onclick="confirmarPagamentoRet()">✅ Confirmar Pagamento</button>
     </div>
