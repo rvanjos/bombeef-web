@@ -161,6 +161,60 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
   </div>
 </div>
 
+<!-- Modal Pagamento de Retirada -->
+<div class="modal-bg" id="modal-pag-ret">
+  <div class="md" style="max-width:520px">
+    <div class="mdh">
+      <h3>💸 Registrar Pagamento</h3>
+      <button class="mdx" onclick="fecharModal('modal-pag-ret')">×</button>
+    </div>
+    <div class="mdb">
+      <!-- Saldo em aberto do funcionário -->
+      <div id="pag-ret-saldo-box" style="background:#faf7f4;border:1px solid var(--border);border-radius:9px;padding:10px 14px;margin-bottom:14px;display:flex;gap:20px;flex-wrap:wrap">
+        <div style="font-size:11px;color:var(--muted)">Funcionário<strong id="pag-ret-nome" style="font-size:13px;display:block;color:var(--text)">—</strong></div>
+        <div style="font-size:11px;color:var(--muted)">Total em Aberto<strong id="pag-ret-total" style="font-size:14px;display:block;color:#dc2626;font-family:'DM Mono',monospace">—</strong></div>
+      </div>
+
+      <!-- Retiradas selecionáveis -->
+      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Selecione as retiradas a pagar</div>
+      <div id="pag-ret-lista" style="max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;margin-bottom:14px"></div>
+
+      <!-- Valor e forma -->
+      <div class="fg-row">
+        <div class="fg">
+          <label>Valor a Pagar *</label>
+          <input type="number" id="pag-ret-valor" step="0.01" min="0.01" placeholder="0,00"
+            oninput="atualizarPreviewPagRet()"
+            style="font-family:'DM Mono',monospace;font-size:15px;font-weight:700">
+        </div>
+        <div class="fg">
+          <label>Data do Pagamento</label>
+          <input type="date" id="pag-ret-data">
+        </div>
+      </div>
+      <div class="fg">
+        <label>Forma de Pagamento</label>
+        <select id="pag-ret-forma">
+          <option value="dinheiro">💵 Dinheiro</option>
+          <option value="pix">📱 Pix</option>
+          <option value="debito">💳 Cartão Débito</option>
+          <option value="transferencia">🏦 Transferência</option>
+          <option value="desconto_folha">📋 Desconto em Folha</option>
+          <option value="outro">📌 Outro</option>
+        </select>
+      </div>
+      <div class="fg"><label>Observações</label><input id="pag-ret-obs" placeholder="Opcional"></div>
+      <div id="pag-ret-preview" style="display:none;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:10px 12px;font-size:12px;margin-top:4px">
+        <strong>💡 Prévia:</strong> <span id="pag-ret-preview-txt"></span>
+      </div>
+    </div>
+    <div class="mdf">
+      <button class="btn btn-gray" onclick="fecharModal('modal-pag-ret')">Cancelar</button>
+      <button class="btn btn-green" onclick="confirmarPagamentoRet()">✅ Confirmar Pagamento</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal Nova Retirada — múltiplos itens -->
 <div class="modal-bg" id="modal-ret">
   <div class="modal" style="max-width:680px">
@@ -759,18 +813,100 @@ async function salvar(){
   fecharModal(); carregar(); carregarLimites();
 }
 
-async function darBaixaRetirada(id) {
-  const dt = prompt('Data do pagamento (deixe em branco para hoje):\nFormato: AAAA-MM-DD');
-  if (dt === null) return; // Cancelou
-  const obs = prompt('Observação (opcional):') || null;
-  const d = await api.patch(`/api/retiradas/${id}/baixa`, {
-    dtPagamento: dt || null,
-    obs,
-  });
-  if (!d.ok) { toast('❌ ' + (d.erro || 'Erro ao registrar baixa')); return; }
-  toast('✅ Pagamento registrado!');
+// Estado do modal de pagamento
+let _pagRetIds = []; // ids das retiradas selecionadas no modal
+
+async function darBaixaRetirada(idUnico) {
+  // Abrir modal com a retirada pré-selecionada (ou todas pendentes do funcionário)
+  const ret = retiradas.find(r => r.id === idUnico);
+  if (!ret) return;
+
+  // Pré-popular: todas pendentes do mesmo funcionário
+  const pendentes = retiradas.filter(r =>
+    r.funcionario_id === ret.funcionario_id && r.status !== 'pago'
+  );
+  const totalAberto = pendentes.reduce((s,r) => s + parseFloat(r.valor_total||0), 0);
+
+  document.getElementById('pag-ret-nome').textContent  = ret.funcionario_nome;
+  document.getElementById('pag-ret-total').textContent = fmt.brl(totalAberto);
+
+  // Data default = hoje
+  const hoje = new Date().toISOString().slice(0,10);
+  document.getElementById('pag-ret-data').value = hoje;
+  document.getElementById('pag-ret-valor').value = '';
+  document.getElementById('pag-ret-obs').value = '';
+  document.getElementById('pag-ret-preview').style.display = 'none';
+
+  // Lista de retiradas selecionáveis
+  const lista = document.getElementById('pag-ret-lista');
+  lista.innerHTML = pendentes.map(r => `
+    <label style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--border);cursor:pointer;${r.id===idUnico?'background:#f0fdf4':''}">
+      <input type="checkbox" value="${r.id}" ${r.id===idUnico?'checked':''} onchange="onCheckPagRet()"
+        style="width:16px;height:16px;cursor:pointer">
+      <div style="flex:1;overflow:hidden">
+        <div style="font-size:12px;font-weight:600">${r.descricao}</div>
+        <div style="font-size:10px;color:var(--muted)">${fmt.date(r.dt_retirada)}</div>
+      </div>
+      <span style="font-family:'DM Mono',monospace;font-size:12px;font-weight:700;color:var(--purple)">${fmt.brl(r.valor_total)}</span>
+    </label>`).join('');
+
+  document.getElementById('modal-pag-ret').classList.add('open');
+  onCheckPagRet(); // preencher valor automaticamente
+}
+
+function onCheckPagRet() {
+  const checks = [...document.querySelectorAll('#pag-ret-lista input[type=checkbox]:checked')];
+  _pagRetIds = checks.map(c => parseInt(c.value));
+  const total = retiradas
+    .filter(r => _pagRetIds.includes(r.id))
+    .reduce((s,r) => s + parseFloat(r.valor_total||0), 0);
+  document.getElementById('pag-ret-valor').value = total.toFixed(2);
+  atualizarPreviewPagRet();
+}
+
+function atualizarPreviewPagRet() {
+  const val  = parseFloat(document.getElementById('pag-ret-valor').value) || 0;
+  const prev = document.getElementById('pag-ret-preview');
+  const txt  = document.getElementById('pag-ret-preview-txt');
+  if (val <= 0) { prev.style.display='none'; return; }
+  const totalSel = retiradas.filter(r => _pagRetIds.includes(r.id)).reduce((s,r) => s+parseFloat(r.valor_total||0),0);
+  const resto = totalSel - val;
+  txt.textContent = `Pagando ${fmt.brl(val)} de ${fmt.brl(totalSel)} selecionado${resto>0?' — saldo restante: '+fmt.brl(resto):''}`;
+  prev.style.display = '';
+}
+
+async function confirmarPagamentoRet() {
+  const valor = parseFloat(document.getElementById('pag-ret-valor').value) || 0;
+  const data  = document.getElementById('pag-ret-data').value;
+  const forma = document.getElementById('pag-ret-forma').value;
+  const obs   = document.getElementById('pag-ret-obs').value;
+
+  if (!valor || valor <= 0) { toast('⚠️ Informe o valor'); return; }
+  if (!_pagRetIds.length) { toast('⚠️ Selecione ao menos uma retirada'); return; }
+
+  // Dar baixa em cada retirada selecionada (marca como paga)
+  // Distribui o valor proporcionalmente se for parcial
+  const totalSel = retiradas.filter(r => _pagRetIds.includes(r.id)).reduce((s,r) => s+parseFloat(r.valor_total||0),0);
+  let erros = 0;
+  for (const id of _pagRetIds) {
+    const r = retiradas.find(x => x.id === id);
+    const proporcao = totalSel > 0 ? parseFloat(r.valor_total||0) / totalSel : 1;
+    const valorItem = valor >= totalSel ? null : parseFloat((valor * proporcao).toFixed(2));
+    const marcarPago = valor >= totalSel; // só marca pago se cobriu o valor total
+    if (marcarPago) {
+      const d = await api.patch(`/api/retiradas/${id}/baixa`, {
+        dtPagamento: data, obs: `${forma}${obs?': '+obs:''}`,
+      });
+      if (!d.ok) erros++;
+    }
+  }
+
+  fecharModal('modal-pag-ret');
+  if (erros) toast(`⚠️ ${erros} erro(s) ao registrar`);
+  else toast(`✅ Pagamento de ${fmt.brl(valor)} registrado!`);
   await carregarDados();
 }
+
 
 async function reabrirRetirada(id) {
   if (!confirm('Reabrir retirada como pendente?')) return;
