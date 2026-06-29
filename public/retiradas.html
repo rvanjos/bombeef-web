@@ -903,7 +903,7 @@ async function confirmarPagamentoRet() {
     .filter(r => _pagRetIds.includes(r.id))
     .reduce((s,r) => s + parseFloat(r.valor_total||0), 0);
 
-  const obsCompleta = [forma, obs].filter(Boolean).join(': ');
+  const obsCompleta = [forma, obs].filter(Boolean).join(': ') || null;
   let erros = 0, salvos = 0;
 
   for (const id of _pagRetIds) {
@@ -929,7 +929,7 @@ async function confirmarPagamentoRet() {
   if (erros && !salvos) toast(`❌ Erro ao registrar pagamento`);
   else if (erros) toast(`⚠️ ${salvos} salvo(s), ${erros} erro(s)`);
   else toast(`✅ Pagamento de ${fmt.brl(valor)} registrado!`);
-  await carregarDados();
+  await carregar();
 }
 
 
@@ -938,7 +938,7 @@ async function toggleBaixaPDV(id, desfazer) {
   const d = await api.patch(`/api/retiradas/${id}/baixa-pdv`, { desfazer: !!desfazer });
   if (!d.ok) { toast('❌ ' + (d.erro||'Erro')); return; }
   toast(desfazer ? '↩ Baixa PDV desfeita' : '✅ Baixa no PDV marcada!');
-  await carregarDados();
+  await carregar();
 }
 
 async function reabrirRetirada(id) {
@@ -946,7 +946,7 @@ async function reabrirRetirada(id) {
   const d = await api.patch(`/api/retiradas/${id}/reabrir`, {});
   if (!d.ok) { toast('❌ ' + (d.erro || 'Sem permissão')); return; }
   toast('↩ Retirada reaberta');
-  await carregarDados();
+  await carregar();
 }
 
 async function excluir(id){

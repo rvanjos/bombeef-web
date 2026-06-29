@@ -305,6 +305,8 @@ module.exports = function (pool, app) {
         pool.query(`ALTER TABLE retiradas ADD COLUMN IF NOT EXISTS dt_pagamento DATE`).catch(()=>{}),
         pool.query(`ALTER TABLE retiradas ADD COLUMN IF NOT EXISTS pago_por INTEGER`).catch(()=>{}),
       ]);
+      // Garantir que obs nunca é undefined (causa 'could not determine data type of parameter $4')
+      if (obs === undefined) obs = null;
 
       const novoStatus = marcarPago ? 'pago' : 'pendente';
 
