@@ -310,14 +310,15 @@ module.exports = function (pool, app) {
 
       const novoStatus = marcarPago ? 'pago' : 'pendente';
 
+      const obsVal = (obs != null && obs !== '') ? String(obs) : null;
       await pool.query(`
         UPDATE retiradas SET
           status       = $1,
           dt_pagamento = CASE WHEN $1='pago' THEN COALESCE($2::date, CURRENT_DATE) ELSE dt_pagamento END,
           pago_por     = CASE WHEN $1='pago' THEN $3 ELSE pago_por END,
-          observacao   = CASE WHEN $4 IS NOT NULL THEN COALESCE(observacao||' | ','') || $4 ELSE observacao END
+          observacao   = CASE WHEN $4::text IS NOT NULL THEN COALESCE(observacao||' | ','') || $4::text ELSE observacao END
         WHERE id = $5
-      `, [novoStatus, dtPagamento||null, req.user?.id, obs||null, id]);
+      `, [novoStatus, dtPagamento||null, req.user?.id, obsVal, id]);
 
       res.json({ ok:true, msg: novoStatus === 'pago' ? 'Retirada marcada como paga' : 'Pagamento parcial registrado' });
     } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
