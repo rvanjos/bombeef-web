@@ -285,8 +285,8 @@ module.exports = function (pool, app) {
 
   // ── PATCH /:id/baixa — funcionário registra pagamento antecipado ────────────
   r.patch('/:id/baixa', async (req, res) => {
+    const id = parseInt(req.params.id);
     const { dtPagamento, obs, valorPago } = req.body;
-    // marcarPago pode vir como boolean ou string
     const marcarPago = req.body.marcarPago !== false && req.body.marcarPago !== 'false';
     try {
       const { rows } = await pool.query(
