@@ -169,6 +169,15 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
 
 /* ── MOBILE ────────────────────────────────────────────────────── */
 @media(max-width:768px){
+  /* Pílulas de filtro de validade — visíveis apenas em mobile */
+  .val-pills{display:flex !important;}
+  .val-pill{
+    flex-shrink:0;padding:7px 16px;border-radius:20px;border:none;
+    background:#1a1a1a;color:#fff;font-size:12px;font-weight:700;
+    cursor:pointer;white-space:nowrap;transition:.15s;font-family:'DM Sans',sans-serif;
+  }
+  .val-pill.active{background:var(--red-l);color:#fff;}
+  .val-pill:not(.active):hover{background:#333;}
   /* Tabela de validade — ocultar colunas menos importantes */
   .tbl th:nth-child(4), .tbl td:nth-child(4),  /* LOTE */
   .tbl th:nth-child(7), .tbl td:nth-child(7),  /* AÇÃO PREVISTA */
@@ -387,6 +396,13 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
       </select>
       <button class="btn btn-s" id="btn-semcod" onclick="filtrarSemCod()" style="display:none">⚠️ Sem código</button>
 
+    </div>
+    <!-- Pílulas de filtro — mobile only -->
+    <div class="val-pills" style="display:none;gap:8px;padding:4px 2px 12px;overflow-x:auto;-webkit-overflow-scrolling:touch">
+      <button class="val-pill active" data-val="todos" onclick="valSetPill(this,'todos')">Todos</button>
+      <button class="val-pill" data-val="vencido" onclick="valSetPill(this,'vencido')">Vencidos</button>
+      <button class="val-pill" data-val="alerta" onclick="valSetPill(this,'alerta')">Próximos</button>
+      <button class="val-pill" data-val="ok" onclick="valSetPill(this,'ok')">Não vencidos</button>
     </div>
     <!-- Barra de seleção múltipla -->
     <div class="sel-bar" id="sel-bar">
@@ -1157,6 +1173,13 @@ async function carregar(){
 
 let _filtroSemCod = false; // estado do filtro sem código
 
+function valSetPill(btn, val){
+  document.querySelectorAll('.val-pill').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  const sel = document.getElementById('flt-status');
+  if (sel) { sel.value = val; carregar(); }
+}
+
 function filtrarVal(){
   const q = document.getElementById('busca-val').value.toLowerCase();
   let lista = _filtroSemCod ? itens.filter(i=>!i.codigo) : itens;
@@ -1448,8 +1471,9 @@ function renderVal(lista){
     tb.innerHTML = sorted.map(v=>{
       const dias = calcDias(v.data_validade);
       const urg  = v.status==='descartado'?'descartado':getUrgencia(dias, v.dias_alerta||7);
-      const urgColors={vencido:'#ffd6d6',critico:'#ffe4e1',alerta:'#fff8e6',ok:'#f0fff4',descartado:'#f5f5f5'};
-      const urgBorderColors={vencido:'#c0392b',critico:'#e74c3c',alerta:'#c76b00',ok:'#1a7a4a',descartado:'#aaa'};
+      const urgColors={vencido:'#e74c3c',critico:'#f39c12',alerta:'#f1c40f',ok:'#27ae60',descartado:'#bdc3c7'};
+      const urgBorderColors={vencido:'#a93226',critico:'#ca6f1e',alerta:'#b7950b',ok:'#1e8449',descartado:'#909497'};
+      const urgTextColor={vencido:'#fff',critico:'#fff',alerta:'#1a1a1a',ok:'#fff',descartado:'#333'};
 
       let diasTxt='';
       if(dias!==null){
@@ -1459,35 +1483,35 @@ function renderVal(lista){
       }
 
       return `<tr><td colspan="11" style="padding:0;border:none">
-        <div style="background:${urgColors[urg]};border-left:4px solid ${urgBorderColors[urg]};
-          border-radius:10px;margin:4px 6px;padding:10px 12px;position:relative">
+        <div style="background:${urgColors[urg]};border-left:5px solid ${urgBorderColors[urg]};
+          border-radius:12px;margin:6px 6px;padding:12px 14px;position:relative;box-shadow:0 2px 6px rgba(0,0,0,.12)">
           <!-- Linha 1: checkbox + código + badge dias -->
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
             <input type="checkbox" class="row-sel val-item-sel item-sel" value="${v.id}"
               onchange="valAtualizarSelBar(); atualizarSelBar();" style="width:18px;height:18px">
             ${v.codigo
-              ? `<span style="font-family:'DM Mono',monospace;font-size:13px;font-weight:700;color:#333">${v.codigo}</span>`
-              : `<span class="sem-cod">Sem código</span>`}
-            <span style="margin-left:auto">${diasTxt}</span>
+              ? `<span style="font-family:'DM Mono',monospace;font-size:12px;font-weight:700;color:${urgTextColor[urg]};opacity:.85">${v.codigo}</span>`
+              : `<span style="font-size:11px;color:${urgTextColor[urg]};opacity:.7">Sem código</span>`}
+            <span style="margin-left:auto;background:rgba(255,255,255,.3);padding:2px 9px;border-radius:20px;font-size:11px;font-weight:800;color:${urgTextColor[urg]}">${diasTxt.replace(/<[^>]+>/g,'').trim()||'—'}</span>
           </div>
           <!-- Linha 2: nome do produto -->
-          <div style="font-size:14px;font-weight:700;color:#1a1a1a;margin-bottom:4px;line-height:1.3">${v.descricao}</div>
+          <div style="font-size:15px;font-weight:800;color:${urgTextColor[urg]};margin-bottom:4px;line-height:1.3">${v.descricao}</div>
           ${v.desc_original && v.desc_original !== v.descricao
-            ? `<div style="font-size:10px;color:var(--orange)">📎 ${v.desc_original}</div>`:''}
+            ? `<div style="font-size:10px;color:${urgTextColor[urg]};opacity:.75">📎 ${v.desc_original}</div>`:''}
           <!-- Linha 3: infos -->
-          <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:#555;margin-bottom:8px">
+          <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:${urgTextColor[urg]};opacity:.9;margin-bottom:10px">
             <span>📅 ${fmt.date(v.data_validade)||'—'}</span>
             ${v.qtd_unidades?`<span>📦 ${v.qtd_unidades} un.</span>`:''}
-            ${v.peso_total_kg?`<span style="color:#1a5c8a;font-weight:700">⚖️ ${parseFloat(v.peso_total_kg).toFixed(3)} kg</span>`:''}
-            ${v.peso_total_kg && v.preco_custo?`<span style="color:var(--green);font-weight:700">💰 R$ ${(parseFloat(v.peso_total_kg)*parseFloat(v.preco_custo)).toFixed(2)}</span>`:''}
+            ${v.peso_total_kg?`<span style="font-weight:700">⚖️ ${parseFloat(v.peso_total_kg).toFixed(3)} kg</span>`:''}
+            ${v.peso_total_kg && v.preco_custo?`<span style="font-weight:700">💰 R$ ${(parseFloat(v.peso_total_kg)*parseFloat(v.preco_custo)).toFixed(2)}</span>`:''}
             ${v.localizacao?`<span>📍 ${v.localizacao}</span>`:''}
             ${v.responsavel?`<span>👤 ${v.responsavel}</span>`:''}
           </div>
           <!-- Linha 4: ações -->
           <div style="display:flex;gap:8px">
-            <button onclick="abrirModal(${v.id})" style="flex:1;padding:7px;background:#fff;border:1px solid #ddd;border-radius:7px;font-size:13px;cursor:pointer">✏️ Editar</button>
-            ${!v.codigo?`<button onclick="abrirVincular(${v.id})" style="flex:1;padding:7px;background:#fff3e0;border:1px solid #f5d87a;border-radius:7px;font-size:13px;cursor:pointer">🔗 Vincular</button>`:''}
-            ${v.status!=='descartado'?`<button onclick="perdaRapida(${v.id})" style="padding:7px 10px;background:#fff0f0;border:1px solid #f5c6c6;border-radius:7px;font-size:13px;cursor:pointer;color:var(--red-l)">📉</button>`:''}
+            <button onclick="abrirModal(${v.id})" style="flex:1;padding:8px;background:rgba(255,255,255,.92);border:none;border-radius:8px;font-size:13px;cursor:pointer;font-weight:600">✏️ Editar</button>
+            ${!v.codigo?`<button onclick="abrirVincular(${v.id})" style="flex:1;padding:8px;background:rgba(255,255,255,.75);border:none;border-radius:8px;font-size:13px;cursor:pointer;font-weight:600">🔗 Vincular</button>`:''}
+            ${v.status!=='descartado'?`<button onclick="perdaRapida(${v.id})" style="padding:8px 12px;background:rgba(255,255,255,.75);border:none;border-radius:8px;font-size:13px;cursor:pointer">📉</button>`:''}
           </div>
         </div>
       </td></tr>`;
