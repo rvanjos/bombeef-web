@@ -530,11 +530,12 @@ function abrirModal(){
   document.getElementById('modal-ret').classList.add('open');
   addItemRet(); // primeiro item automático
 }
-function fecharModal(){
 window.fecharModal = function fecharModal(id){
-  if (id) { const el=document.getElementById(id); if(el) el.classList.remove('open'); return; }
+  if(id){const el=document.getElementById(id);if(el)el.classList.remove('open');return;}
+  document.getElementById('modal-ret').classList.remove('open');
+  document.getElementById('ret-itens').innerHTML='';
   _retItemIdx=0;
-}
+};
 
 let _buscarTimer = null;
 let _sugestaoIdx = -1;
