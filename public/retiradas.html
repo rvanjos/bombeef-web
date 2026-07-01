@@ -297,16 +297,7 @@ const {api,fmt,toast} = BB;
 let retiradas=[], funcionarios=[], mesAtual='';
 
 let _initDone = false;
-let _carregarPendente = false;
-window.onBBReady = () => {
-  if(!_initDone){ _initDone=true; init(); }
-  if(_carregarPendente){ _carregarPendente=false; carregar(); }
-};
-// Garantir que onchange="typeof carregar==='function'&&carregar()" funcione antes do init completar
-document.addEventListener('change', e => {
-  if((e.target.id==='flt-func'||e.target.id==='flt-mes') && !_initDone)
-    _carregarPendente = true;
-});
+window.onBBReady = () => { if(!_initDone){ _initDone=true; init(); } };
 
 async function init(){
   const hoje = new Date();
@@ -357,7 +348,7 @@ async function carregarLimites(){
   }
 }
 
-async function carregar(){
+window.carregar = async function carregar(){
   const funcId = document.getElementById('flt-func').value;
   const mesVal = document.getElementById('flt-mes').value;
   let url = '/api/retiradas?';
@@ -487,7 +478,7 @@ async function atualizarCusto(retId, prodId, qtd) {
 }
 
 // ── Editar preço de custo inline ───────────────────────────────────────────
-function editarPreco(id, precoAtual, qtd) {
+window.editarPreco = function editarPreco(id, precoAtual, qtd) {
   const cel = document.getElementById('preco-cel-' + id);
   if (!cel) return;
   // Já está em modo edição?
@@ -540,7 +531,7 @@ function abrirModal(){
   addItemRet(); // primeiro item automático
 }
 function fecharModal(){
-function fecharModal(id){
+window.fecharModal = function fecharModal(id){
   if (id) { const el=document.getElementById(id); if(el) el.classList.remove('open'); return; }
   _retItemIdx=0;
 }
@@ -840,7 +831,7 @@ async function salvar(){
 // Estado do modal de pagamento
 let _pagRetIds = []; // ids das retiradas selecionadas no modal
 
-async function darBaixaRetirada(idUnico) {
+window.darBaixaRetirada = async function darBaixaRetirada(idUnico) {
   // Abrir modal com a retirada pré-selecionada (ou todas pendentes do funcionário)
   const ret = retiradas.find(r => r.id === idUnico);
   if (!ret) return;
@@ -878,7 +869,7 @@ async function darBaixaRetirada(idUnico) {
   onCheckPagRet(); // preencher valor automaticamente
 }
 
-function onCheckPagRet() {
+window.onCheckPagRet = function onCheckPagRet() {
   const checks = [...document.querySelectorAll('#pag-ret-lista input[type=checkbox]:checked')];
   _pagRetIds = checks.map(c => parseInt(c.value));
   const total = retiradas
@@ -888,7 +879,7 @@ function onCheckPagRet() {
   atualizarPreviewPagRet();
 }
 
-function atualizarPreviewPagRet() {
+window.atualizarPreviewPagRet = function atualizarPreviewPagRet() {
   const val  = parseFloat(document.getElementById('pag-ret-valor').value) || 0;
   const prev = document.getElementById('pag-ret-preview');
   const txt  = document.getElementById('pag-ret-preview-txt');
@@ -899,7 +890,7 @@ function atualizarPreviewPagRet() {
   prev.style.display = '';
 }
 
-async function confirmarPagamentoRet() {
+window.confirmarPagamentoRet = async function confirmarPagamentoRet() {
   const valor = parseFloat(document.getElementById('pag-ret-valor').value) || 0;
   const data  = document.getElementById('pag-ret-data').value;
   const forma = document.getElementById('pag-ret-forma').value;
@@ -942,7 +933,7 @@ async function confirmarPagamentoRet() {
 }
 
 
-async function toggleBaixaPDV(id, desfazer) {
+window.toggleBaixaPDV = async function toggleBaixaPDV(id, desfazer) {
   if (desfazer && !confirm('Desfazer marcação de baixa no PDV?')) return;
   const d = await api.patch(`/api/retiradas/${id}/baixa-pdv`, { desfazer: !!desfazer });
   if (!d.ok) { toast('❌ ' + (d.erro||'Erro')); return; }
@@ -950,7 +941,7 @@ async function toggleBaixaPDV(id, desfazer) {
   await carregar();
 }
 
-async function reabrirRetirada(id) {
+window.reabrirRetirada = async function reabrirRetirada(id) {
   if (!confirm('Reabrir retirada como pendente?')) return;
   const d = await api.patch(`/api/retiradas/${id}/reabrir`, {});
   if (!d.ok) { toast('❌ ' + (d.erro || 'Sem permissão')); return; }
@@ -958,7 +949,7 @@ async function reabrirRetirada(id) {
   await carregar();
 }
 
-async function excluir(id){
+window.excluir = async function excluir(id){
   if(!confirm('Remover esta retirada?')) return;
   const d = await api.delete(`/api/retiradas/${id}`);
   if(d.ok){ toast('Removido'); carregar(); carregarLimites(); }
@@ -966,7 +957,7 @@ async function excluir(id){
 }
 
 // ── Relatório ──────────────────────────────────────────────────────────────
-async function abrirRelatorio(){
+window.abrirRelatorio = async function abrirRelatorio(){
   document.getElementById('modal-rel').classList.add('open');
   const mesVal = document.getElementById('flt-mes').value;
   let mes = mesAtual;
@@ -988,7 +979,7 @@ async function abrirRelatorio(){
     </table>`;
 }
 
-function imprimirRetiradas() {
+window.imprimirRetiradas = function imprimirRetiradas() {
   const mes  = document.getElementById('flt-mes')?.value || '';
   const [ano, m] = mes ? mes.split('-') : ['',''];
   const nomes = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
