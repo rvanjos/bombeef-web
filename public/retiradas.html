@@ -980,29 +980,119 @@ async function abrirRelatorio(){
 }
 
 function imprimirRetiradas() {
-  const mes = document.getElementById('flt-mes')?.value || '';
+  const mes  = document.getElementById('flt-mes')?.value || '';
   const [ano, m] = mes ? mes.split('-') : ['',''];
   const nomes = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
-  const mesLabel = mes ? nomes[parseInt(m)-1]+'/'+ano : 'Todos';
-  const func = document.getElementById('flt-func')?.options[document.getElementById('flt-func')?.selectedIndex]?.text || 'Todos';
-  const corpo = document.querySelector('.body')?.innerHTML || '';
-  const win = window.open('','_blank');
-  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+  const mesLabel = mes ? nomes[parseInt(m)-1]+'/'+ano : 'Todos os meses';
+  const funcSel = document.getElementById('flt-func');
+  const func = funcSel?.options[funcSel.selectedIndex]?.text || 'Todos';
+
+  const brl = v => 'R$ ' + parseFloat(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const fmtDate = s => s ? s.split('T')[0].split('-').reverse().join('/') : '—';
+  const fmtQtd  = v => parseFloat(v||0).toLocaleString('pt-BR',{minimumFractionDigits:3,maximumFractionDigits:3});
+
+  // Filtrar retiradas exibidas atualmente
+  const lista = retiradas; // variável global já filtrada
+  const total = lista.reduce((s,r) => s + parseFloat(r.valor_total||0), 0);
+
+  // Agrupar por funcionário
+  const porFunc = {};
+  lista.forEach(r => {
+    const k = r.funcionario_nome || '—';
+    if (!porFunc[k]) porFunc[k] = [];
+    porFunc[k].push(r);
+  });
+
+  // Gerar linhas da tabela
+  const linhas = lista.map(r => {
+    const pgto   = r.status === 'pago' ? `✅ Pago${r.dt_pagamento ? ' · '+fmtDate(r.dt_pagamento) : ''}` : '⏳ Pendente';
+    const pdv    = r.baixa_pdv ? `✅ PDV${r.dt_baixa_pdv ? ' '+fmtDate(r.dt_baixa_pdv) : ''}` : '—';
+    return `<tr>
+      <td>${fmtDate(r.dt_retirada)}</td>
+      <td><b>${r.funcionario_nome}</b></td>
+      <td>${r.descricao}</td>
+      <td style="text-align:right">${fmtQtd(r.qtd)}</td>
+      <td style="text-align:right">${r.preco_custo ? brl(r.preco_custo) : '—'}</td>
+      <td style="text-align:right;font-weight:700">${brl(r.valor_total)}</td>
+      <td style="text-align:center;font-size:10px">${pgto}</td>
+      <td style="text-align:center;font-size:10px">${pdv}</td>
+    </tr>`;
+  }).join('');
+
+  // Resumo por funcionário
+  const resumo = Object.entries(porFunc).map(([nome, itens]) => {
+    const t = itens.reduce((s,r) => s + parseFloat(r.valor_total||0), 0);
+    const pagos = itens.filter(r => r.status === 'pago').reduce((s,r) => s+parseFloat(r.valor_total||0), 0);
+    const pdvOk = itens.filter(r => r.baixa_pdv).length;
+    return `<tr>
+      <td><b>${nome}</b></td>
+      <td style="text-align:center">${itens.length}</td>
+      <td style="text-align:right">${brl(t)}</td>
+      <td style="text-align:right;color:#16a34a">${brl(pagos)}</td>
+      <td style="text-align:right;color:#dc2626">${brl(t - pagos)}</td>
+      <td style="text-align:center">${pdvOk}/${itens.length}</td>
+    </tr>`;
+  }).join('');
+
+  const html = `<!DOCTYPE html><html lang="pt-BR"><head>
+    <meta charset="UTF-8">
     <title>Retiradas — ${mesLabel}</title>
-    <style>body{font-family:'DM Sans',Arial,sans-serif;padding:20px;font-size:12px;color:#1a1a1a}
-table{width:100%;border-collapse:collapse;margin-bottom:12px}
-th{background:#f5f0eb;padding:7px 10px;text-align:left;font-size:10px;font-weight:700;
-   text-transform:uppercase;letter-spacing:.5px;border-bottom:2px solid #e8e0d8}
-td{padding:7px 10px;border-bottom:1px solid #f0ebe4;font-size:12px}
-h1,h2{color:#8B0000;margin-bottom:4px}
-.no-print,button,.btn,.toolbar{display:none!important}</style>
-    </head><body>
-    <h2>💸 Retiradas de Funcionários — Bom Beef Valinhos</h2>
-    <p style="font-size:11px;color:#666;margin-bottom:14px">Mês: ${mesLabel} · Funcionário: ${func} · Impresso em ${new Date().toLocaleString('pt-BR')}</p>
-    ${corpo}
-    </body></html>`);
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body { font-family: Arial, sans-serif; font-size: 11px; color: #1a1a1a; padding: 20px; }
+      .header { border-bottom: 3px solid #8B0000; padding-bottom: 10px; margin-bottom: 16px; }
+      .header h1 { font-size: 16px; color: #8B0000; }
+      .header p  { font-size: 10px; color: #666; margin-top: 3px; }
+      h2 { font-size: 12px; color: #8B0000; margin: 16px 0 6px; text-transform: uppercase; letter-spacing: .5px; }
+      table { width: 100%; border-collapse: collapse; margin-bottom: 8px; font-size: 10.5px; }
+      th { background: #8B0000; color: #fff; padding: 6px 8px; text-align: left; font-size: 9px; text-transform: uppercase; letter-spacing: .4px; }
+      td { padding: 5px 8px; border-bottom: 1px solid #e8e0d8; vertical-align: middle; }
+      tr:nth-child(even) td { background: #faf7f4; }
+      .total-row td { background: #f5f0eb; font-weight: 700; border-top: 2px solid #8B0000; }
+      .footer { margin-top: 20px; padding-top: 8px; border-top: 1px solid #ddd; font-size: 9px; color: #999; text-align: center; }
+      @media print {
+        @page { margin: 1.5cm; size: A4 landscape; }
+        body { padding: 0; }
+      }
+    </style>
+  </head><body>
+    <div class="header">
+      <h1>🥩 Bom Beef Valinhos — Retiradas de Funcionários</h1>
+      <p>Mês: <b>${mesLabel}</b> &nbsp;·&nbsp; Funcionário: <b>${func}</b> &nbsp;·&nbsp; Total de itens: <b>${lista.length}</b> &nbsp;·&nbsp; Impresso em ${new Date().toLocaleString('pt-BR')}</p>
+    </div>
+
+    <h2>📋 Detalhamento das Retiradas</h2>
+    <table>
+      <thead><tr>
+        <th>Data</th><th>Funcionário</th><th>Produto / Descrição</th>
+        <th style="text-align:right">Qtd</th><th style="text-align:right">Preço Unit.</th>
+        <th style="text-align:right">Total</th><th style="text-align:center">Pgto</th><th style="text-align:center">PDV</th>
+      </tr></thead>
+      <tbody>${linhas}</tbody>
+      <tfoot><tr class="total-row">
+        <td colspan="5">TOTAL DO PERÍODO</td>
+        <td style="text-align:right">${brl(total)}</td>
+        <td colspan="2"></td>
+      </tr></tfoot>
+    </table>
+
+    <h2>👥 Resumo por Funcionário</h2>
+    <table style="max-width:600px">
+      <thead><tr>
+        <th>Funcionário</th><th style="text-align:center">Itens</th>
+        <th style="text-align:right">Total</th><th style="text-align:right">Pago</th>
+        <th style="text-align:right">Em Aberto</th><th style="text-align:center">PDV Marcado</th>
+      </tr></thead>
+      <tbody>${resumo}</tbody>
+    </table>
+
+    <div class="footer">AR Boutique de Carnes LTDA · CNPJ 46.237.080/0001-02 · Bom Beef Valinhos</div>
+  </body></html>`;
+
+  const win = window.open('', '_blank');
+  win.document.write(html);
   win.document.close();
-  win.onload = () => win.print();
+  win.onload = () => { win.focus(); win.print(); };
 }
 </script>
 
