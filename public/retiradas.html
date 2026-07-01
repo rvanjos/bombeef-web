@@ -135,10 +135,10 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
   <div class="toolbar">
     <button class="btn btn-p" onclick="abrirModal()">＋ Nova Retirada</button>
     <button class="btn btn-s" onclick="abrirRelatorio()">📊 Relatório</button>
-    <select class="flt" id="flt-func" onchange="carregar()">
+    <select class="flt" id="flt-func" onchange="typeof carregar==='function'&&carregar()">
       <option value="">Todos os funcionários</option>
     </select>
-    <input type="month" id="flt-mes" class="flt" style="padding:7px 10px" onchange="carregar()">
+    <input type="month" id="flt-mes" class="flt" style="padding:7px 10px" onchange="typeof carregar==='function'&&carregar()">
       <button class="btn btn-s" onclick="imprimirRetiradas()">🖨️ Imprimir</button>
   </div>
 
@@ -297,7 +297,16 @@ const {api,fmt,toast} = BB;
 let retiradas=[], funcionarios=[], mesAtual='';
 
 let _initDone = false;
-window.onBBReady = () => { if(!_initDone){ _initDone=true; init(); } };
+let _carregarPendente = false;
+window.onBBReady = () => {
+  if(!_initDone){ _initDone=true; init(); }
+  if(_carregarPendente){ _carregarPendente=false; carregar(); }
+};
+// Garantir que onchange="typeof carregar==='function'&&carregar()" funcione antes do init completar
+document.addEventListener('change', e => {
+  if((e.target.id==='flt-func'||e.target.id==='flt-mes') && !_initDone)
+    _carregarPendente = true;
+});
 
 async function init(){
   const hoje = new Date();
