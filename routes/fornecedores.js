@@ -114,8 +114,12 @@ module.exports = (pool) => {
 
       let novosForn = 0, novosProds = 0;
 
+      // Helper: normaliza CNPJ para 14 dígitos sem máscara
+      const normCnpj = c => (c||'').replace(/\D/g,'').padStart(14,'0').slice(-14);
+
       for (const f of fornRows) {
-        if (!f.cnpj || f.cnpj.length < 11) continue;
+        if (!f.cnpj || f.cnpj.replace(/\D/g,'').length < 11) continue;
+        const cnpjNorm = normCnpj(f.cnpj);
         const r = await pool.query(`
           INSERT INTO fornecedores (cnpj_fornecedor, razao_social)
           VALUES ($1, $2)
@@ -126,7 +130,7 @@ module.exports = (pool) => {
               ELSE fornecedores.razao_social
             END,
             atualizado_em = NOW()
-        `, [f.cnpj, f.nome || f.cnpj]);
+        `, [cnpjNorm, f.nome || cnpjNorm]);
         if (r.rowCount) novosForn++;
       }
 
@@ -407,6 +411,56 @@ module.exports = (pool) => {
 
 
 
+
+  // ── POST /dedup — remove fornecedores duplicados por CNPJ ──────────────────
+  router.post('/dedup', autenticar(['admin','gestor']), async (req, res) => {
+    try {
+      // 1. Normalizar todos os CNPJs para apenas dígitos
+      await pool.query(`
+        UPDATE fornecedores
+        SET cnpj_fornecedor = REGEXP_REPLACE(cnpj_fornecedor, '\\D', '', 'g')
+        WHERE cnpj_fornecedor ~ '[^0-9]'
+      `);
+
+      // 2. Para cada CNPJ duplicado, manter o de maior id (mais completo) e deletar os outros
+      const { rows: dups } = await pool.query(`
+        SELECT cnpj_fornecedor, COUNT(*) as qtd
+        FROM fornecedores
+        WHERE cnpj_fornecedor IS NOT NULL AND cnpj_fornecedor <> ''
+        GROUP BY cnpj_fornecedor
+        HAVING COUNT(*) > 1
+      `);
+
+      let removidos = 0;
+      for (const d of dups) {
+        const { rows: ids } = await pool.query(`
+          SELECT id FROM fornecedores
+          WHERE cnpj_fornecedor = $1
+          ORDER BY
+            (categoria_dre IS NOT NULL) DESC,
+            (contato IS NOT NULL) DESC,
+            id DESC
+        `, [d.cnpj_fornecedor]);
+
+        const manter = ids[0].id;
+        const excluir = ids.slice(1).map(r => r.id);
+
+        // Reatribuir referências de fornecedor_produtos
+        for (const eid of excluir) {
+          await pool.query(
+            `UPDATE fornecedor_produtos SET fornecedor_id=$1 WHERE fornecedor_id=$2`,
+            [manter, eid]
+          ).catch(() => {});
+          await pool.query(`DELETE FROM fornecedores WHERE id=$1`, [eid]);
+          removidos++;
+        }
+      }
+
+      res.json({ ok: true, removidos, msg: `${removidos} duplicata(s) removida(s)` });
+    } catch(e) {
+      res.status(500).json({ ok: false, erro: e.message });
+    }
+  });
 
   return router;
 };

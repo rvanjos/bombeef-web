@@ -107,6 +107,7 @@ tbody td{padding:10px 12px;font-size:13px;vertical-align:middle;}
     <input type="checkbox" id="chk-inativos" onchange="buscar()"> Mostrar inativos
   </label>
   <button class="btn btn-p" onclick="abrirNovo()">+ Novo Fornecedor</button>
+  <button class="btn btn-s" onclick="dedupFornecedores()" style="background:#fff3cd;border-color:#ffc107;color:#856404" title="Remove fornecedores duplicados pelo mesmo CNPJ">🧹 Remover duplicatas</button>
   <span class="count-label" id="count-label"></span>
 </div>
 
@@ -696,6 +697,18 @@ function colapsarTodosForn() {
   });
 }
 
+
+async function dedupFornecedores() {
+  if (!confirm('Remover fornecedores duplicados (mesmo CNPJ)?\n\nO sistema manterá o registro mais completo de cada CNPJ.')) return;
+  const btn = event.target;
+  btn.disabled = true; btn.textContent = '⏳ Removendo...';
+  try {
+    const d = await api.post('/api/fornecedores/dedup', {});
+    if (d.ok) { alert(`✅ ${d.msg}`); location.reload(); }
+    else alert('❌ ' + (d.erro || 'Erro ao remover duplicatas'));
+  } catch(e) { alert('❌ Erro: ' + e.message); }
+  btn.disabled = false; btn.textContent = '🧹 Remover duplicatas';
+}
 
 async function sincronizarHistorico() {
   const btn = document.getElementById('btn-sinc-hist');
