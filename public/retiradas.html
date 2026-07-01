@@ -531,8 +531,8 @@ function abrirModal(){
   addItemRet(); // primeiro item automático
 }
 function fecharModal(){
-  document.getElementById('modal-ret').classList.remove('open');
-  document.getElementById('ret-itens').innerHTML='';
+function fecharModal(id){
+  if (id) { const el=document.getElementById(id); if(el) el.classList.remove('open'); return; }
   _retItemIdx=0;
 }
 
