@@ -666,9 +666,10 @@ function renderProdutos(rows) {
     // Nulos vão pro fim
     if (va === null || va === undefined) return 1;
     if (vb === null || vb === undefined) return -1;
-    // String (nome, abc)
-    if (typeof va === 'string') va = va.toLowerCase(), vb = String(vb).toLowerCase();
-    else { va = parseFloat(va)||0; vb = parseFloat(vb)||0; }
+    // Tenta numérico primeiro (mesmo que venha como string)
+    const na = parseFloat(va), nb = parseFloat(vb);
+    if (!isNaN(na) && !isNaN(nb)) { va = na; vb = nb; }
+    else { va = String(va).toLowerCase(); vb = String(vb).toLowerCase(); }
     const cmp = va < vb ? -1 : va > vb ? 1 : 0;
     return _sortAsc ? cmp : -cmp;
   });
