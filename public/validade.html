@@ -1245,7 +1245,8 @@ function valLimparSel(){
 
 // Encerra itens selecionados na aba Validade (sel-bar)
 async function encerrarSelecionadosVal(resolucao) {
-  const ids = [...document.querySelectorAll('#tbl-val .row-sel:checked')].map(cb => parseInt(cb.dataset.id)).filter(Boolean);
+  const ids = [...document.querySelectorAll('#tbl-val .row-sel:checked')]
+    .map(cb => parseInt(cb.value)).filter(n => !isNaN(n) && n > 0);
   if (!ids.length) { toast('⚠️ Selecione ao menos um item'); return; }
   const label = resolucao === 'vendido' ? 'vendido' : 'descartado';
   if (!confirm(`Marcar ${ids.length} item(s) como ${label}?`)) return;
