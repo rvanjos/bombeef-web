@@ -1576,14 +1576,16 @@ function _cssRel() {
   return `
     <style>
       * { margin:0; padding:0; box-sizing:border-box; }
+      html, body { max-width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch; }
       body { font-family: Arial, Helvetica, sans-serif; font-size:12px; color:#1a1a1a; padding:20px; }
-      .header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:18px; padding-bottom:12px; border-bottom:2px solid #8B0000; }
+      .header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:18px; padding-bottom:12px; border-bottom:2px solid #8B0000; flex-wrap:wrap; gap:8px; }
       .logo { font-size:20px; font-weight:800; color:#8B0000; }
       .logo small { display:block; font-size:11px; color:#666; font-weight:400; }
       .meta { text-align:right; font-size:11px; color:#666; }
       h2 { font-size:15px; font-weight:700; margin-bottom:12px; color:#1a1a1a; }
-      table { width:100%; border-collapse:collapse; margin-bottom:16px; }
-      th { background:#8B0000; color:#fff; padding:7px 8px; text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.4px; }
+      .tbl-scroll { width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch; }
+      table { width:100%; min-width:720px; border-collapse:collapse; margin-bottom:16px; }
+      th { background:#8B0000; color:#fff; padding:7px 8px; text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.4px; white-space:nowrap; }
       td { padding:6px 8px; border-bottom:1px solid #e8e0d8; font-size:12px; vertical-align:top; }
       tr:nth-child(even) td { background:#faf7f4; }
       .badge { display:inline-block; padding:2px 7px; border-radius:4px; font-size:10px; font-weight:700; white-space:nowrap; }
@@ -1594,12 +1596,21 @@ function _cssRel() {
       .section { background:#f0f0f0; padding:5px 8px; font-weight:700; font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:#555; margin-top:8px; }
       .total-row { background:#f8f4f0; font-weight:700; }
       .total-row td { border-top:2px solid #8B0000; padding:8px; }
-      .assinatura { margin-top:40px; display:flex; gap:60px; }
-      .assinatura div { flex:1; border-top:1px solid #666; padding-top:6px; font-size:11px; color:#666; text-align:center; }
+      .assinatura { margin-top:40px; display:flex; gap:60px; flex-wrap:wrap; }
+      .assinatura div { flex:1; min-width:140px; border-top:1px solid #666; padding-top:6px; font-size:11px; color:#666; text-align:center; }
+      .scroll-hint { display:none; }
+      @media (max-width:768px) {
+        body { padding:10px; font-size:11px; }
+        .header { flex-direction:column; }
+        .meta { text-align:left; }
+        .scroll-hint { display:block; font-size:11px; color:#8B0000; background:#fef2f2; border:1px solid #fecaca; border-radius:6px; padding:8px 10px; margin-bottom:10px; text-align:center; }
+      }
       @media print {
         @page { margin:15mm; }
-        body { padding:0; }
-        .no-print { display:none !important; }
+        body { padding:0; overflow-x:visible; }
+        .tbl-scroll { overflow-x:visible; }
+        table { min-width:0; }
+        .no-print, .scroll-hint { display:none !important; }
       }
     </style>`;
 }
@@ -1824,8 +1835,11 @@ function imprimirVencimento(diasIni=-999, diasFim=30) {
   }
 
   const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Relatório de Vencimentos — Bom Beef</title>${_cssRel()}</head><body>
     ${_headerRel('Relatório de Itens a Vencer', `${totalItens} produto(s) monitorados`)}
+    <div class="scroll-hint">👉 Arraste a tabela para o lado para ver todas as colunas</div>
+    <div class="tbl-scroll">
     <table>
       <thead><tr>
         <th>Código</th><th>Produto / Lote</th><th>Qtd</th><th>Peso</th>
@@ -1838,6 +1852,7 @@ function imprimirVencimento(diasIni=-999, diasFim=30) {
         <td></td>
       </tr></tfoot>` : ''}
     </table>
+    </div>
     <div class="assinatura">
       <div>Responsável pela conferência</div>
       <div>Data / Hora</div>
@@ -1883,8 +1898,11 @@ function imprimirPerdas(mesIni, mesFim) {
   </tr>`).join('');
 
   const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Relatório de Perdas — Bom Beef</title>${_cssRel()}</head><body>
     ${_headerRel('Relatório de Perdas', mesLabel)}
+    <div class="scroll-hint">👉 Arraste a tabela para o lado para ver todas as colunas</div>
+    <div class="tbl-scroll">
     <table>
       <thead><tr>
         <th>Data</th><th>Produto / Lote</th><th>Motivo</th>
@@ -1899,6 +1917,7 @@ function imprimirPerdas(mesIni, mesFim) {
         <td>—</td>
       </tr></tfoot>
     </table>
+    </div>
     <div class="assinatura">
       <div>Responsável pelo levantamento</div>
       <div>Data / Hora</div>
