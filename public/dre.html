@@ -4846,7 +4846,15 @@ function aplicarFiltroRapido(tipo) {
   render();
 }
 
-function getModo(){return document.getElementById('dre-modo')?.value||'caixa';}
+function getModo(){
+  // Prioriza o select do modal fullscreen se estiver aberto (fonte mais recente que o usuário viu)
+  const modalAberto = document.getElementById('m-dre')?.classList.contains('open');
+  if (modalAberto) {
+    const full = document.getElementById('dre-modo-full');
+    if (full) return full.value || 'comp';
+  }
+  return document.getElementById('dre-modo')?.value||'caixa';
+}
 window.sincModo = function sincModo(){
   const v=document.getElementById('dre-modo-full')?.value||'comp';
   const el=document.getElementById('dre-modo'); if(el) el.value=v;
