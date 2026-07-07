@@ -5137,7 +5137,13 @@ function _buildDRE(el, full) {
     el.innerHTML='<div style="padding:20px;text-align:center;color:var(--muted);font-size:12px">Classifique os lançamentos para ver o DRE</div>';
     return;
   }
-  const mesesSet=new Set(at.map(t=>getMesTx(t)));
+  const REGEX_MES_VALIDO = /^(0[1-9]|1[0-2])\/\d{4}$/;
+  const _invalidosDRE = at.filter(t => !REGEX_MES_VALIDO.test(getMesTx(t)));
+  if (_invalidosDRE.length) {
+    console.warn(`[DRE] ${_invalidosDRE.length} lançamento(s) com mês inválido (ignorados no DRE):`,
+      _invalidosDRE.map(t => ({ id: t.id, lancamento: t.lancamento, mes: t.mes, mesCaixa: t.mesCaixa, valor: t.valor })));
+  }
+  const mesesSet=new Set(at.map(t=>getMesTx(t)).filter(m => REGEX_MES_VALIDO.test(m)));
   // Modo Competência: inclui meses com faturamento mesmo sem lançamentos de despesa
   if (getModo() === 'comp') {
     try {
@@ -6394,7 +6400,8 @@ function exportXLS(){
   if(!TXS.length){toast('Sem dados');return;}
   // ── Excel com SheetJS + estilos XML ─────────────────────────────────────────
   const at = TXS.filter(t=>!t.ignorar && t.categoria);
-  const mesesSet = new Set(at.map(t=>getMesTx(t)));
+  const REGEX_MES_VALIDO = /^(0[1-9]|1[0-2])\/\d{4}$/;
+  const mesesSet = new Set(at.map(t=>getMesTx(t)).filter(m => REGEX_MES_VALIDO.test(m)));
   const meses = [...mesesSet].sort((a,b)=>{
     const p=s=>{const[mm,yy]=s.split('/');return(+yy)*12+(+mm);}; return p(a)-p(b);
   });
