@@ -6399,7 +6399,7 @@ function drillEditarCat(id) {
 function exportXLS(){
   if(!TXS.length){toast('Sem dados');return;}
   // ── Excel com SheetJS + estilos XML ─────────────────────────────────────────
-  const at = TXS.filter(t=>!t.ignorar && t.categoria);
+  const at = _txsSemDuplicatas(TXS).filter(t=>t.categoria);
   const REGEX_MES_VALIDO = /^(0[1-9]|1[0-2])\/\d{4}$/;
   const mesesSet = new Set(at.map(t=>getMesTx(t)).filter(m => REGEX_MES_VALIDO.test(m)));
   const meses = [...mesesSet].sort((a,b)=>{
