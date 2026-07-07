@@ -578,7 +578,7 @@ thead th{padding:6px 9px;}
 
         <!-- Grupo: Ações -->
         <button class="btn bg" style="padding:5px 11px;font-size:11px" onclick="salvarTodos()" title="Salvar todos os lançamentos">💾 Salvar</button>
-        <button class="btn bs bb-desktop-only" style="padding:5px 10px;font-size:11px" onclick="exportarExcel()" title="Exportar para Excel">📊 Excel</button>
+        <button class="btn bs bb-desktop-only" style="padding:5px 10px;font-size:11px" onclick="exportXLS()" title="Exportar para Excel">📊 Excel</button>
         <button class="btn bs bb-desktop-only" style="padding:5px 10px;font-size:11px" onclick="abrirSessoes()" title="Histórico de sessões">🗂 Sessões</button>
 
 
@@ -647,7 +647,7 @@ thead th{padding:6px 9px;}
 
           <div class="fsb-actions">
             <button class="fsb-btn primary" onclick="salvarTodos()" style="background:var(--green)">💾 Salvar</button>
-            <button class="fsb-btn secondary bb-desktop-only" onclick="exportarExcel()">📊 Exportar Excel</button>
+            <button class="fsb-btn secondary bb-desktop-only" onclick="exportXLS()">📊 Exportar Excel</button>
             <button class="fsb-btn secondary bb-desktop-only" onclick="abrirSessoes()">🗂 Sessões</button>
 
             <button class="fsb-btn danger bb-desktop-only" onclick="limparTudo()">🗑 Limpar tudo</button>
@@ -966,7 +966,7 @@ thead th{padding:6px 9px;}
           <option value="comp"  style="background:#fff;color:#1a1a1a">Competência (faturamento XMenu)</option>
         </select>
         <button id="btn-pct-full" style="padding:3px 10px;border:1px solid rgba(255,255,255,.3);border-radius:6px;font-size:12px;background:rgba(255,255,255,.15);color:#fff;cursor:pointer;font-weight:600" onclick="togglePct()" title="Mostrar % de cada categoria sobre a receita total">% Custos</button>
-        <button onclick="gerarExcelDRE()" style="padding:3px 10px;border:1px solid rgba(255,255,255,.3);border-radius:6px;font-size:12px;background:rgba(255,255,255,.15);color:#fff;cursor:pointer;font-weight:600" title="Exportar Excel com formatação">📤 Excel</button>
+        <button onclick="exportXLS()" style="padding:3px 10px;border:1px solid rgba(255,255,255,.3);border-radius:6px;font-size:12px;background:rgba(255,255,255,.15);color:#fff;cursor:pointer;font-weight:600" title="Exportar Excel com formatação">📤 Excel</button>
       </div>
       <div style="display:flex;align-items:center;gap:6px">
         <button onclick="toggleDREFullscreen()" id="btn-dre-fs" title="Tela cheia" style="background:none;border:1px solid rgba(255,255,255,.3);border-radius:6px;color:rgba(255,255,255,.9);font-size:16px;cursor:pointer;padding:2px 8px;line-height:1">⛶</button>
@@ -6454,23 +6454,6 @@ function exportXLS(){
     /* Cabeçalho */
     .h-titulo { background:#8B0000; color:#fff; font-weight:bold; font-size:14pt; padding:10px 12px; }
     .h-col { background:#8B0000; color:#fff; font-weight:bold; text-align:center; }
-  /* Freeze primeira coluna do DRE renderizado */
-  .dre-freeze    { position:sticky !important; left:0 !important; z-index:3; }
-  .dre-freeze-hd { position:sticky !important; left:0 !important; z-index:4; background:#8B0000 !important; }
-  #dre-full-body table { border-collapse:separate !important; border-spacing:0 !important; }
-  /* Backgrounds explícitos por classe — sem eles o td fica transparente ao rolar */
-  .g-receitas.dre-freeze { background:#1a5c2a !important; }
-  .g-cmv.dre-freeze      { background:#5a2020 !important; }
-  .g-oper.dre-freeze     { background:#374151 !important; }
-  .cat-row.dre-freeze    { background:#fafaf8 !important; }
-  .sec-label.dre-freeze  { background:#f7f4f0 !important; }
-  .st-receitas.dre-freeze{ background:#e8f7ef !important; }
-  .st-cmv.dre-freeze     { background:#fff0f0 !important; }
-  .st-oper.dre-freeze    { background:#f5f0eb !important; }
-  .res-bruto.dre-freeze  { background:#e8f7ef !important; }
-  .res-op.dre-freeze     { background:#eff6ff !important; }
-  .res-ant.dre-freeze    { background:#fffbeb !important; }
-  .res-fin.dre-freeze    { background:#1a1a1a !important; }
     .h-col-tot { background:#5a2020; color:#fff; font-weight:bold; text-align:center; }
     /* Seção */
     .sec-label { background:#f7f4f0; color:#888; font-weight:bold; font-size:8pt; text-transform:uppercase; letter-spacing:1px; }
@@ -6496,26 +6479,6 @@ function exportXLS(){
     .res-fin-neg { background:#2d2d2d; color:#e74c3c; font-weight:bold; font-size:13pt; font-family:'Courier New'; text-align:right; }
     .sep { background:#e8e0d8; height:2px; }
 
-    /* ─── Freeze coluna GRUPO/CATEGORIA e linha de meses ─── */
-    .dre-freeze    { position: sticky; left: 0; z-index: 3; }
-    .dre-freeze-hd { position: sticky; left: 0; z-index: 5; }
-    .dre-hdr-row th { position: sticky; top: 0; z-index: 4; }
-    .dre-hdr-row th.dre-freeze-hd { z-index: 6; }
-    /* Backgrounds por classe para freeze funcionar */
-    .g-receitas.dre-freeze  { background: #1a5c2a; }
-    .g-cmv.dre-freeze       { background: #5a2020; }
-    .g-oper.dre-freeze      { background: #374151; }
-    .cat-row.dre-freeze     { background: #fafaf8; }
-    .sec-label.dre-freeze   { background: #f7f4f0; }
-    .st-receitas.dre-freeze { background: #e8f7ef; }
-    .st-cmv.dre-freeze      { background: #fff0f0; }
-    .st-oper.dre-freeze     { background: #f5f0eb; }
-    .res-bruto.dre-freeze   { background: #e8f7ef; }
-    .res-op.dre-freeze      { background: #eff6ff; }
-    .res-ant.dre-freeze     { background: #fffbeb; }
-    .res-fin.dre-freeze     { background: #1a1a1a; }
-    .h-col.dre-freeze-hd   { background: #8B0000; }
-    .h-col-tot.dre-freeze-hd { background: #5a2020; }
     </style></head><body><table>`;
 
   // Título
@@ -6523,8 +6486,8 @@ function exportXLS(){
   // Espaço
   html += `<tr><td colspan="${lastCol}" style="background:#fff5f5;height:4px"></td></tr>`;
   // Header colunas
-  html += `<tr class="dre-hdr-row"><th class="h-col dre-freeze-hd" style="text-align:left;min-width:260px;max-width:260px">GRUPO / CATEGORIA</th>`;
-  meses.forEach(m => { html += `<th class="h-col" style="position:sticky;top:0;z-index:4;background:#8B0000">${nomeMes(m)}</th>`; });
+  html += `<tr class="dre-hdr-row"><th class="h-col" style="text-align:left;min-width:260px;max-width:260px;background:#8B0000;color:#fff">GRUPO / CATEGORIA</th>`;
+  meses.forEach(m => { html += `<th class="h-col" style="background:#8B0000;color:#fff">${nomeMes(m)}</th>`; });
   if(showTot) html += `<th class="h-col-tot">TOTAL</th>`;
   html += `</tr>`;
 
@@ -6540,12 +6503,12 @@ function exportXLS(){
     const isDesp=gk!=='RECEITAS';
     const ghCls=gk==='RECEITAS'?'g-receitas':gk==='CMV'?'g-cmv':'g-oper';
     // Header grupo
-    html += `<tr><td class="${ghCls} dre-freeze" style="min-width:260px;max-width:260px">&nbsp; ${label}</td>${Array(lastCol-1).fill("<td class=\"" + ghCls + "\"></td>").join("")}</tr>`;
+    html += `<tr><td class="${ghCls}" style="min-width:260px;max-width:260px">&nbsp; ${label}</td>${Array(lastCol-1).fill("<td class=\"" + ghCls + "\"></td>").join("")}</tr>`;
     // Categorias
     for (const [cat,mD] of Object.entries(dataD[gk])) {
       const totC=Object.values(mD).reduce((s,v)=>s+v,0);
       html += `<tr>`;
-      html += `<td class="cat-row left dre-freeze" style="min-width:260px;max-width:260px">&nbsp;&nbsp;&nbsp;&nbsp;· ${cat}</td>`;
+      html += `<td class="cat-row left" style="min-width:260px;max-width:260px">&nbsp;&nbsp;&nbsp;&nbsp;· ${cat}</td>`;
       meses.forEach(m => {
         const v=mD[m]||0; const disp=isDesp?-Math.abs(v):v;
         const cls=v===0?'val-zero':disp>=0?'val-pos':'val-neg';
@@ -6560,7 +6523,7 @@ function exportXLS(){
     // Subtotal
     const totG=sgt(gk);
     html += `<tr>`;
-    html += `<td class="${stCls} left bold dre-freeze" style="min-width:260px;max-width:260px">▶ SUBTOTAL ${label}</td>`;
+    html += `<td class="${stCls} left bold" style="min-width:260px;max-width:260px">▶ SUBTOTAL ${label}</td>`;
     meses.forEach(m => {
       const v=sg(gk,m); const disp=isDesp?-Math.abs(v):v;
       html += `<td class="${stCls} mono">${v===0?'—':brl2(disp)}</td>`;
@@ -6575,13 +6538,13 @@ function exportXLS(){
   }
 
   function addSecLabelXLS(label) {
-    html += `<tr><td colspan="${lastCol}" class="sec-label dre-freeze" style="min-width:260px;max-width:260px">&nbsp;${label}</td></tr>`;
+    html += `<tr><td colspan="${lastCol}" class="sec-label" style="min-width:260px;max-width:260px">&nbsp;${label}</td></tr>`;
   }
 
   function addResultadoXLS(label, emoji, acumMes, cls, clsVal) {
     const tot=meses.reduce((s,m)=>s+(acumMes[m]||0),0);
     html += `<tr>`;
-    html += `<td class="${cls} left dre-freeze" style="min-width:260px;max-width:260px">${emoji} ${label}</td>`;
+    html += `<td class="${cls} left" style="min-width:260px;max-width:260px">${emoji} ${label}</td>`;
     meses.forEach(m => {
       const v=acumMes[m]||0;
       const vc = cls==='res-fin' ? (v>=0?'res-fin-val':'res-fin-neg') : cls;
