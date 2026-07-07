@@ -4739,7 +4739,7 @@ function filtrarPendentes() {
 }
 
 // ── Sprint 3.1-C: aviso de modo + persistência ──────────────────────────────
-function atualizarAvisoModo() {
+window.atualizarAvisoModo = function atualizarAvisoModo() {
   const modo  = getModo();
   const el    = document.getElementById('aviso-modo-dre');
   const texto = document.getElementById('aviso-modo-texto');
@@ -4847,16 +4847,16 @@ function aplicarFiltroRapido(tipo) {
 }
 
 function getModo(){return document.getElementById('dre-modo')?.value||'caixa';}
-function sincModo(){
+window.sincModo = function sincModo(){
   const v=document.getElementById('dre-modo-full')?.value||'comp';
   const el=document.getElementById('dre-modo'); if(el) el.value=v;
   renderDRE(); renderDREFull();
   atualizarAvisoModo();
-}
+};
 function getMesTx(t){return getModo()==='caixa'?(t.mesCaixa||t.mes||mesRef):(t.mes||mesRef);}
 
 let _showPct = false;
-function togglePct() {
+window.togglePct = function togglePct() {
   _showPct = !_showPct;
   // Atualiza visual dos botões
   ['btn-pct','btn-pct-full'].forEach(id => {
@@ -4869,7 +4869,7 @@ function togglePct() {
   renderDRE();
   if (document.getElementById('m-dre')?.classList.contains('open')) renderDREFull();
 }
-function renderDRE(){
+window.renderDRE = function renderDRE(){
   setTimeout(()=>{
     const inner=document.getElementById('dre-scroll-top-inner');
     const scroll=document.getElementById('dre-modal-scroll');
@@ -4877,7 +4877,7 @@ function renderDRE(){
   },50);
   _garantirFatPorMes().then(() => _buildDRE(document.getElementById('dre-body'),false));
 }
-function renderDREFull(){
+window.renderDREFull = function renderDREFull(){
   _garantirFatPorMes().then(() => _buildDRE(document.getElementById('dre-full-body'),true));
 }
 
