@@ -1373,11 +1373,23 @@ function renderExtrato(clienteId) {
   // ── Aplicar filtro ────────────────────────────────────
   let filtroInfo = '';
   if (tipoFiltro === 'mes' && mesFiltro) {
-    vendasCli = vendasCli.filter(v => v.data_compra && v.data_compra.startsWith(mesFiltro));
-    pagsCli   = pagsCli.filter(p => p.data_pagamento && p.data_pagamento.startsWith(mesFiltro));
+    const vendasDoMes = vendasCli.filter(v => v.data_compra && v.data_compra.startsWith(mesFiltro));
+    const pagsDoMes    = pagsCli.filter(p => p.data_pagamento && p.data_pagamento.startsWith(mesFiltro));
+
+    // Incluir compras de OUTROS meses que foram quitadas por pagamentos deste mês
+    // (rastreabilidade: sem isso, o pagamento "sumia" da conferência de quem olhava o mês da compra)
+    const idsVendasAbatidasForaDoMes = new Set();
+    pagsDoMes.forEach(p => (p.vendas_abatidas||[]).forEach(a => idsVendasAbatidasForaDoMes.add(a.venda_id)));
+    const vendasContexto = vendasCli.filter(v =>
+      idsVendasAbatidasForaDoMes.has(v.id) && !v.data_compra.startsWith(mesFiltro)
+    );
+
+    vendasCli = [...vendasDoMes, ...vendasContexto].sort((a,b)=> a.data_compra < b.data_compra ? -1 : 1);
+    pagsCli   = pagsDoMes;
     const [ano, mes] = mesFiltro.split('-');
     const nomes = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
     filtroInfo = `${nomes[parseInt(mes)-1]}/${ano}`;
+    if (vendasContexto.length) filtroInfo += ` · +${vendasContexto.length} compra(s) de mês anterior quitada(s) neste período`;
   } else if (tipoFiltro === 'pedido' && pedidoFiltro) {
     vendasCli = vendasCli.filter(v => String(v.id) === String(pedidoFiltro));
     // Manter pagamentos do mês do pedido selecionado para contexto correto de saldo
@@ -1408,20 +1420,25 @@ function renderExtrato(clienteId) {
 
   let saldoAcum = 0;
   const FORMA = {dinheiro:'💵 Dinheiro',pix:'📱 Pix',debito:'💳 Débito',credito:'💳 Crédito',transferencia:'🏦 Transf.',outro:'📌 Outro'};
+  const mesFiltroAtivo = tipoFiltro === 'mes' && mesFiltro;
 
   const linhas = eventos.map(ev => {
     if (ev.tipo === 'venda') {
       const v = ev.obj;
+      const foraDoMes = mesFiltroAtivo && !v.data_compra.startsWith(mesFiltro);
       const itens = v.itens||[];
       saldoAcum += parseFloat(v.total_final||0);
       const badge = v.status==='aguardando'
         ? `<span style="background:#ede9fe;color:#5b21b6;padding:1px 6px;border-radius:4px;font-size:10px">⏳ Aguardando</span>`
         : v.status==='pago' ? `<span style="background:#dcfce7;color:#166534;padding:1px 6px;border-radius:4px;font-size:10px">✅ Pago</span>` : '';
+      const badgeContexto = foraDoMes
+        ? `<span style="background:#f3f4f6;color:#6b7280;padding:1px 6px;border-radius:4px;font-size:10px" title="Compra de outro mês, exibida aqui porque foi quitada por um pagamento deste período">📎 outro mês</span>`
+        : '';
       return `
         <!-- Cabeçalho da venda -->
-        <tr style="background:#fff8f0;border-top:2px solid #f5e6d0">
-          <td style="padding:8px 12px;font-weight:700;font-size:12px;color:#5c1a1a">
-            📦 Compra — ${fmtDtBr(v.data_compra)} ${badge}
+        <tr style="background:${foraDoMes?'#f9fafb':'#fff8f0'};border-top:2px solid ${foraDoMes?'#e5e7eb':'#f5e6d0'};${foraDoMes?'opacity:.75':''}">
+          <td style="padding:8px 12px;font-weight:700;font-size:12px;color:${foraDoMes?'#6b7280':'#5c1a1a'}">
+            📦 Compra — ${fmtDtBr(v.data_compra)} ${badge} ${badgeContexto}
           </td>
           <td colspan="3" style="padding:8px 12px;text-align:right;font-size:11px;color:var(--muted)">
             por ${v.usuario_resp||'—'}
@@ -1461,24 +1478,44 @@ function renderExtrato(clienteId) {
       // Pagamento
       const p = ev.obj;
       saldoAcum -= parseFloat(p.valor_pago||0);
+
+      // Detalhamento: quais compras esse pagamento abateu (rastreabilidade FIFO)
+      const abatidas = p.vendas_abatidas || [];
+      let detalheAbatimento = '';
+      if (abatidas.length) {
+        const linhasAbat = abatidas.map(a => {
+          const vOrig = _vendas.find(v => v.id === a.venda_id);
+          const mesPag = (p.data_pagamento||'').slice(0,7);
+          const mesCompra = (vOrig?.data_compra||'').slice(0,7);
+          const mesDiferente = vOrig && mesPag !== mesCompra;
+          return `<div style="display:flex;justify-content:space-between;gap:8px;padding:2px 0">
+            <span>↳ Compra de ${vOrig ? fmtDtBr(vOrig.data_compra) : '#'+a.venda_id}${mesDiferente?' <b style="color:#92400e">(mês anterior)</b>':''}</span>
+            <span style="font-family:'DM Mono',monospace">${fmt.brl(parseFloat(a.valor_abatido||0))}</span>
+          </div>`;
+        }).join('');
+        detalheAbatimento = `<div style="margin-top:4px;padding:6px 10px;background:rgba(255,255,255,.6);border-radius:6px;font-size:10px;color:#374151">${linhasAbat}</div>`;
+      }
+
       return `
         <tr style="background:#f0fdf4;border-top:2px solid #86efac">
           <td style="padding:8px 12px;font-weight:700;font-size:12px;color:#166534">
             💵 Pagamento — ${fmtDtBr(p.data_pagamento)}
+            ${detalheAbatimento}
           </td>
-          <td colspan="2" style="padding:8px 12px;font-size:11px;color:var(--muted)">${FORMA[p.forma_pagamento]||p.forma_pagamento}</td>
-          <td style="padding:8px 12px;font-size:11px;color:var(--muted)">${p.observacoes||''}</td>
-          <td style="padding:8px 12px;text-align:right;font-size:13px;font-weight:700;font-family:'DM Mono',monospace;color:var(--green)">
+          <td colspan="2" style="padding:8px 12px;font-size:11px;color:var(--muted);vertical-align:top">${FORMA[p.forma_pagamento]||p.forma_pagamento}</td>
+          <td style="padding:8px 12px;font-size:11px;color:var(--muted);vertical-align:top">${p.observacoes||''}</td>
+          <td style="padding:8px 12px;text-align:right;font-size:13px;font-weight:700;font-family:'DM Mono',monospace;color:var(--green);vertical-align:top">
             -${fmt.brl(parseFloat(p.valor_pago||0))}
           </td>
-          <td style="padding:8px 12px;text-align:right;font-size:12px;font-weight:700;font-family:'DM Mono',monospace;color:${saldoAcum>0.005?'var(--red-l)':'var(--green)'}">
+          <td style="padding:8px 12px;text-align:right;font-size:12px;font-weight:700;font-family:'DM Mono',monospace;color:${saldoAcum>0.005?'var(--red-l)':'var(--green)'};vertical-align:top">
             ${fmt.brl(Math.max(0,saldoAcum))}
           </td>
         </tr>`;
     }
   }).join('');
 
-  const totalComprado = vendasCli.reduce((s,v)=>s+parseFloat(v.total_final||0),0);
+  const vendasDoperiodo = mesFiltroAtivo ? vendasCli.filter(v => v.data_compra.startsWith(mesFiltro)) : vendasCli;
+  const totalComprado = vendasDoperiodo.reduce((s,v)=>s+parseFloat(v.total_final||0),0);
   const totalPago     = pagsCli.reduce((s,p)=>s+parseFloat(p.valor_pago||0),0);
   const saldoFinal    = totalComprado - totalPago;
 
