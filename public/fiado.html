@@ -1848,18 +1848,19 @@ async function gerarRelatorio() {
     const c = _clientes.find(x=>x.id===v.cliente_id);
     return (!cli || v.cliente_id===parseInt(cli))
       && (!tipo || c?.tipo_cliente===tipo)
-      && (!st   || v.status===st)
+      && (st ? v.status===st : !['cancelado','reprovado'].includes(v.status))
       && (!ini  || v.data_compra>=ini)
       && (!fim  || v.data_compra<=fim);
   });
   const totalAberto = lista.filter(v=>v.status==='aberto'||v.status==='parcial').reduce((s,v)=>s+parseFloat(v.saldo_restante||0),0);
   const totalVendido= lista.reduce((s,v)=>s+parseFloat(v.total_final||0),0);
   document.getElementById('rel-resultado').innerHTML = `
-    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px">
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:8px">
       <div class="kc g"><div class="kc-l">Vendas</div><div class="kc-v">${lista.length}</div></div>
       <div class="kc r"><div class="kc-l">Total Vendido</div><div class="kc-v mono">${fmt.brl(totalVendido)}</div></div>
       <div class="kc o"><div class="kc-l">Em Aberto</div><div class="kc-v mono">${fmt.brl(totalAberto)}</div></div>
     </div>
+    ${!st ? `<div style="font-size:11px;color:var(--muted);margin-bottom:10px">ℹ️ Vendas canceladas/reprovadas não entram neste total. Selecione o status para incluí-las.</div>` : ''}
     <div style="overflow-x:auto"><table class="tbl">
       <thead><tr><th>Cliente</th><th>Tipo</th><th>Data</th><th style="text-align:right">Total</th><th style="text-align:right">Saldo</th><th>Status</th></tr></thead>
       <tbody>${lista.map(v=>{const c=_clientes.find(x=>x.id===v.cliente_id);return`<tr><td>${c?.nome||'—'}</td><td>${c?.tipo_cliente||'—'}</td><td>${v.data_compra?.slice(0,10).split('-').reverse().join('/')}</td><td class="mono" style="text-align:right">${fmt.brl(parseFloat(v.total_final||0))}</td><td class="mono" style="text-align:right">${fmt.brl(parseFloat(v.saldo_restante||0))}</td><td><span class="badge ${STATUS_CLASS[v.status]||''}">${STATUS_LABEL[v.status]||v.status}</span></td></tr>`}).join('')}</tbody>
