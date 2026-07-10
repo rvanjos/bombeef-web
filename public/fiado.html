@@ -760,6 +760,14 @@ function renderListaClientes() {
 const STATUS_LABEL = {aberto:'Em Aberto',parcial:'Parcial',pago:'Pago',aguardando:'Aguardando',reprovado:'Reprovado',cancelado:'Cancelado'};
 const STATUS_CLASS = {aberto:'s-aberto',parcial:'s-parcial',pago:'s-pago',aguardando:'s-aguardando',reprovado:'s-reprovado',cancelado:'s-cancelado'};
 
+window.toggleBaixaPdvFiado = async function toggleBaixaPdvFiado(id, desfazer) {
+  if (desfazer && !confirm('Desfazer marcação de baixa no PDV?')) return;
+  const d = await api.patch(`/api/fiado/vendas/${id}/baixa-pdv`, { desfazer: !!desfazer });
+  if (!d.ok) { toast('❌ ' + (d.erro||'Erro')); return; }
+  toast(desfazer ? '↩ Baixa PDV desfeita' : '✅ Baixa no PDV marcada!');
+  await carregarTudo();
+};
+
 function renderVendas() {
   const q = (document.getElementById('busca-venda').value||'').toLowerCase();
   const st= document.getElementById('flt-status-venda').value;
@@ -775,6 +783,11 @@ function renderVendas() {
           <div style="font-size:11px;color:var(--muted);margin-top:2px">${v.data_compra?.slice(0,10).split('-').reverse().join('/')} · ${(v.itens||[]).length} iten(s) · por ${v.usuario_resp||'—'}</div>
           ${v.status==='aguardando'?'<div style="font-size:10px;background:#ede9fe;color:#5b21b6;padding:2px 7px;border-radius:4px;display:inline-block;margin-top:3px">⏳ Aguardando aprovação do admin</div>':''}
           ${v.status==='reprovado'?`<div style="font-size:10px;color:var(--red-l);margin-top:2px">❌ ${v.motivo_reprovacao||''}</div>`:''}
+          <div style="margin-top:5px">
+            ${v.baixa_pdv
+              ? `<span onclick="toggleBaixaPdvFiado(${v.id},true)" style="cursor:pointer;background:#dbeafe;color:#1e40af;padding:2px 8px;border-radius:5px;font-size:10px;font-weight:700" title="Clique para desfazer">✅ PDV${v.dt_baixa_pdv?' '+v.dt_baixa_pdv.slice(0,10).split('-').reverse().join('/'):''}</span>`
+              : `<button onclick="toggleBaixaPdvFiado(${v.id},false)" title="Marcar que baixou no PDV" style="color:#2563eb;font-size:10px;font-weight:700;background:#eff6ff;border:1px solid #bfdbfe;border-radius:5px;padding:2px 8px;cursor:pointer">PDV?</button>`}
+          </div>
         </div>
         <div style="text-align:right">
           <div style="font-size:10px;color:var(--muted)">Total / Saldo</div>
@@ -1933,6 +1946,7 @@ window.imprimirRelatorioFiado = function imprimirRelatorioFiado() {
   const linhas = lista.map(v => {
     const c = _clientes.find(x=>x.id===v.cliente_id);
     const statusMap = { aberto:'⏳ Aberto', parcial:'🔶 Parcial', pago:'✅ Pago', aguardando:'⏳ Aguardando', cancelado:'❌ Cancelado', reprovado:'❌ Reprovado' };
+    const pdv = v.baixa_pdv ? '✅' : '—';
     return `<tr>
       <td>${fmtDtBrLocal((v.data_compra||'').slice(0,10))}</td>
       <td><b>${c?.nome||'—'}</b></td>
@@ -1940,6 +1954,7 @@ window.imprimirRelatorioFiado = function imprimirRelatorioFiado() {
       <td style="text-align:right;font-weight:700">${brl(v.total_final)}</td>
       <td style="text-align:right;color:${parseFloat(v.saldo_restante||0)>0?'#dc2626':'#16a34a'}">${brl(v.saldo_restante)}</td>
       <td style="text-align:center;font-size:10px">${statusMap[v.status]||v.status}</td>
+      <td style="text-align:center;font-size:11px">${pdv}</td>
     </tr>`;
   }).join('');
 
@@ -1998,12 +2013,13 @@ window.imprimirRelatorioFiado = function imprimirRelatorioFiado() {
     <div class="scroll-hint">👉 Arraste a tabela para o lado para ver todas as colunas</div>
     <div class="tbl-scroll">
     <table>
-      <thead><tr><th>Data</th><th>Cliente</th><th>Tipo</th><th style="text-align:right">Total</th><th style="text-align:right">Saldo</th><th style="text-align:center">Status</th></tr></thead>
+      <thead><tr><th>Data</th><th>Cliente</th><th>Tipo</th><th style="text-align:right">Total</th><th style="text-align:right">Saldo</th><th style="text-align:center">Status</th><th style="text-align:center">PDV</th></tr></thead>
       <tbody>${linhas}</tbody>
       <tfoot><tr class="total-row">
         <td colspan="3">TOTAL DO PERÍODO</td>
         <td style="text-align:right">${brl(totalVendido)}</td>
         <td style="text-align:right">${brl(totalAberto)}</td>
+        <td></td>
         <td></td>
       </tr></tfoot>
     </table>

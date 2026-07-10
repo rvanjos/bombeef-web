@@ -42,6 +42,8 @@ module.exports = function(pool) {
         motivo_reprovacao TEXT,
         observacoes       TEXT,
         usuario_resp      TEXT,
+        baixa_pdv         BOOLEAN DEFAULT FALSE,
+        dt_baixa_pdv      DATE,
         created_at        TIMESTAMPTZ DEFAULT NOW(),
         updated_at        TIMESTAMPTZ DEFAULT NOW()
       )`).catch(()=>{});
@@ -575,6 +577,29 @@ module.exports = function(pool) {
       res.json({ ok:true, data:pag, vendas_abatidas:vendasAbatidas, credito_gerado:credito });
     } catch(e) { await client.query('ROLLBACK'); res.status(500).json({ ok:false, erro:e.message }); }
     finally { client.release(); }
+  });
+
+  // ── PATCH /vendas/:id/baixa-pdv — marca que a venda foi lançada no PDV ──────
+  r.patch('/vendas/:id/baixa-pdv', async (req, res) => {
+    if (!['admin','gestor','financeiro','operador'].includes(req.user?.perfil))
+      return res.status(403).json({ ok:false, erro:'Sem permissão' });
+    const { desfazer } = req.body;
+    try {
+      await pool.query(`ALTER TABLE vendas_fiado ADD COLUMN IF NOT EXISTS baixa_pdv BOOLEAN DEFAULT false`).catch(()=>{});
+      await pool.query(`ALTER TABLE vendas_fiado ADD COLUMN IF NOT EXISTS dt_baixa_pdv DATE`).catch(()=>{});
+      if (desfazer) {
+        await pool.query(
+          `UPDATE vendas_fiado SET baixa_pdv=false, dt_baixa_pdv=NULL WHERE id=$1`,
+          [parseInt(req.params.id)]
+        );
+      } else {
+        await pool.query(
+          `UPDATE vendas_fiado SET baixa_pdv=true, dt_baixa_pdv=CURRENT_DATE WHERE id=$1`,
+          [parseInt(req.params.id)]
+        );
+      }
+      res.json({ ok:true });
+    } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
   });
 
   r.get('/pagamentos', async (req, res) => {
