@@ -263,12 +263,16 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
       </div>
     </div>
     <div class="fg-row" style="margin-bottom:16px">
+      <div class="fg"><label>Mês (atalho)</label>
+        <input type="month" id="rel-mes" class="flt" style="width:100%" onchange="aplicarMesRelatorio()">
+      </div>
       <div class="fg"><label>Data Início</label><input type="date" id="rel-ini" class="flt" style="width:100%"></div>
       <div class="fg"><label>Data Fim</label><input type="date" id="rel-fim" class="flt" style="width:100%"></div>
     </div>
     <div style="display:flex;gap:8px">
       <button class="btn btn-red" onclick="gerarRelatorio()">📋 Gerar Relatório</button>
       <button class="btn btn-gray" onclick="exportarRelatorio()">📤 Exportar CSV</button>
+      <button class="btn btn-gray" onclick="imprimirRelatorioFiado()" style="background:#fef3c7;border-color:#fde68a;color:#92400e">🖨️ Imprimir / PDF</button>
     </div>
     <div id="rel-resultado" style="margin-top:16px"></div>
   </div>
@@ -1875,6 +1879,153 @@ async function verItensVenda(id) {
 }
 
 // ── Relatórios ───────────────────────────────────────────────────────────────
+window.aplicarMesRelatorio = function aplicarMesRelatorio() {
+  const mes = document.getElementById('rel-mes').value; // "2026-06"
+  if (!mes) return;
+  const [ano, m] = mes.split('-');
+  const ultimoDia = new Date(parseInt(ano), parseInt(m), 0).getDate();
+  document.getElementById('rel-ini').value = `${ano}-${m}-01`;
+  document.getElementById('rel-fim').value = `${ano}-${m}-${String(ultimoDia).padStart(2,'0')}`;
+  gerarRelatorio();
+}
+
+window.imprimirRelatorioFiado = function imprimirRelatorioFiado() {
+  const cli   = document.getElementById('rel-cliente').value;
+  const tipo  = document.getElementById('rel-tipo').value;
+  const st    = document.getElementById('rel-status').value;
+  const ini   = document.getElementById('rel-ini').value;
+  const fim   = document.getElementById('rel-fim').value;
+
+  const clienteSel = document.getElementById('rel-cliente');
+  const clienteLabel = clienteSel?.options[clienteSel.selectedIndex]?.text || 'Todos';
+  const statusLabel  = { '':'Todos', aberto:'Em aberto', parcial:'Parcial', pago:'Pago' }[st] || st;
+  const tipoLabel    = { '':'Todos', normal:'Normal', especial:'Especial', socio:'Sócio' }[tipo] || tipo;
+
+  const fmtDtBrLocal = s => s ? s.split('-').reverse().join('/') : '';
+  let periodoLabel = 'Todo o período';
+  if (ini && fim) periodoLabel = `${fmtDtBrLocal(ini)} a ${fmtDtBrLocal(fim)}`;
+  else if (ini) periodoLabel = `A partir de ${fmtDtBrLocal(ini)}`;
+  else if (fim) periodoLabel = `Até ${fmtDtBrLocal(fim)}`;
+
+  let lista = _vendas.filter(v => {
+    const c = _clientes.find(x=>x.id===v.cliente_id);
+    return (!cli || v.cliente_id===parseInt(cli))
+      && (!tipo || c?.tipo_cliente===tipo)
+      && (st ? v.status===st : !['cancelado','reprovado'].includes(v.status))
+      && (!ini  || v.data_compra>=ini)
+      && (!fim  || v.data_compra<=fim+'T23:59:59');
+  }).sort((a,b)=> a.data_compra < b.data_compra ? -1 : 1);
+
+  const brl = v => 'R$ ' + parseFloat(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const totalVendido = lista.reduce((s,v)=>s+parseFloat(v.total_final||0),0);
+  const totalAberto  = lista.filter(v=>v.status==='aberto'||v.status==='parcial').reduce((s,v)=>s+parseFloat(v.saldo_restante||0),0);
+  const totalPago     = totalVendido - totalAberto;
+
+  // Agrupar por cliente
+  const porCliente = {};
+  lista.forEach(v => {
+    const c = _clientes.find(x=>x.id===v.cliente_id);
+    const nome = c?.nome || '—';
+    if (!porCliente[nome]) porCliente[nome] = [];
+    porCliente[nome].push(v);
+  });
+
+  const linhas = lista.map(v => {
+    const c = _clientes.find(x=>x.id===v.cliente_id);
+    const statusMap = { aberto:'⏳ Aberto', parcial:'🔶 Parcial', pago:'✅ Pago', aguardando:'⏳ Aguardando', cancelado:'❌ Cancelado', reprovado:'❌ Reprovado' };
+    return `<tr>
+      <td>${fmtDtBrLocal((v.data_compra||'').slice(0,10))}</td>
+      <td><b>${c?.nome||'—'}</b></td>
+      <td style="font-size:10px">${c?.tipo_cliente||'—'}</td>
+      <td style="text-align:right;font-weight:700">${brl(v.total_final)}</td>
+      <td style="text-align:right;color:${parseFloat(v.saldo_restante||0)>0?'#dc2626':'#16a34a'}">${brl(v.saldo_restante)}</td>
+      <td style="text-align:center;font-size:10px">${statusMap[v.status]||v.status}</td>
+    </tr>`;
+  }).join('');
+
+  const resumoCliente = Object.entries(porCliente).map(([nome, vendas]) => {
+    const t = vendas.reduce((s,v)=>s+parseFloat(v.total_final||0),0);
+    const aberto = vendas.filter(v=>v.status==='aberto'||v.status==='parcial').reduce((s,v)=>s+parseFloat(v.saldo_restante||0),0);
+    return `<tr>
+      <td><b>${nome}</b></td>
+      <td style="text-align:center">${vendas.length}</td>
+      <td style="text-align:right">${brl(t)}</td>
+      <td style="text-align:right;color:${aberto>0?'#dc2626':'#16a34a'}">${brl(aberto)}</td>
+    </tr>`;
+  }).join('');
+
+  const html = `<!DOCTYPE html><html lang="pt-BR"><head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Relatório Fiado — ${periodoLabel}</title>
+    <style>
+      * { box-sizing:border-box; margin:0; padding:0; }
+      html, body { max-width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch; }
+      body { font-family:Arial,sans-serif; font-size:11px; color:#1a1a1a; padding:20px; }
+      .header { border-bottom:3px solid #8B0000; padding-bottom:10px; margin-bottom:16px; }
+      .header h1 { font-size:16px; color:#8B0000; }
+      .header p  { font-size:10px; color:#666; margin-top:3px; }
+      h2 { font-size:12px; color:#8B0000; margin:16px 0 6px; text-transform:uppercase; letter-spacing:.5px; }
+      .tbl-scroll { width:100%; overflow-x:auto; }
+      table { width:100%; min-width:600px; border-collapse:collapse; margin-bottom:16px; }
+      th { background:#8B0000; color:#fff; padding:6px 8px; text-align:left; font-size:9px; text-transform:uppercase; letter-spacing:.4px; white-space:nowrap; }
+      td { padding:5px 8px; border-bottom:1px solid #e8e0d8; font-size:10.5px; vertical-align:middle; }
+      tr:nth-child(even) td { background:#faf7f4; }
+      .total-row td { background:#f5f0eb; font-weight:700; border-top:2px solid #8B0000; }
+      .kpis { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
+      .kpi { flex:1; min-width:140px; border:1px solid #e8e0d8; border-radius:6px; padding:10px 12px; }
+      .kpi .l { font-size:9px; text-transform:uppercase; letter-spacing:.5px; color:#666; }
+      .kpi .v { font-size:16px; font-weight:700; margin-top:2px; }
+      .footer { margin-top:20px; padding-top:8px; border-top:1px solid #ddd; font-size:9px; color:#999; text-align:center; }
+      .scroll-hint { display:none; }
+      @media(max-width:768px){ .scroll-hint{ display:block; font-size:11px; color:#8B0000; background:#fef2f2; border:1px solid #fecaca; border-radius:6px; padding:8px 10px; margin-bottom:10px; text-align:center; } }
+      @media print { @page{margin:15mm;} body{padding:0;overflow-x:visible;} .tbl-scroll{overflow-x:visible;} table{min-width:0;} .no-print,.scroll-hint{display:none !important;} }
+    </style>
+  </head><body>
+    <div class="header">
+      <h1>💰 Bom Beef Valinhos — Relatório de Fiado</h1>
+      <p>Período: <b>${periodoLabel}</b> &nbsp;·&nbsp; Cliente: <b>${clienteLabel}</b> &nbsp;·&nbsp; Tipo: <b>${tipoLabel}</b> &nbsp;·&nbsp; Status: <b>${statusLabel}</b> &nbsp;·&nbsp; Impresso em ${new Date().toLocaleString('pt-BR')}</p>
+    </div>
+
+    <div class="kpis">
+      <div class="kpi"><div class="l">Vendas</div><div class="v">${lista.length}</div></div>
+      <div class="kpi"><div class="l">Total Vendido</div><div class="v" style="color:#8B0000">${brl(totalVendido)}</div></div>
+      <div class="kpi"><div class="l">Total Pago</div><div class="v" style="color:#16a34a">${brl(totalPago)}</div></div>
+      <div class="kpi"><div class="l">Em Aberto</div><div class="v" style="color:#dc2626">${brl(totalAberto)}</div></div>
+    </div>
+
+    <h2>📋 Detalhamento das Vendas</h2>
+    <div class="scroll-hint">👉 Arraste a tabela para o lado para ver todas as colunas</div>
+    <div class="tbl-scroll">
+    <table>
+      <thead><tr><th>Data</th><th>Cliente</th><th>Tipo</th><th style="text-align:right">Total</th><th style="text-align:right">Saldo</th><th style="text-align:center">Status</th></tr></thead>
+      <tbody>${linhas}</tbody>
+      <tfoot><tr class="total-row">
+        <td colspan="3">TOTAL DO PERÍODO</td>
+        <td style="text-align:right">${brl(totalVendido)}</td>
+        <td style="text-align:right">${brl(totalAberto)}</td>
+        <td></td>
+      </tr></tfoot>
+    </table>
+    </div>
+
+    <h2>👥 Resumo por Cliente</h2>
+    <div class="tbl-scroll">
+    <table style="min-width:400px">
+      <thead><tr><th>Cliente</th><th style="text-align:center">Vendas</th><th style="text-align:right">Total</th><th style="text-align:right">Em Aberto</th></tr></thead>
+      <tbody>${resumoCliente}</tbody>
+    </table>
+    </div>
+
+    <div class="footer">AR Boutique de Carnes LTDA · CNPJ 46.237.080/0001-02 · Bom Beef Valinhos</div>
+  </body></html>`;
+
+  const win = window.open('', '_blank');
+  win.document.write(html);
+  win.document.close();
+  win.onload = () => { win.focus(); win.print(); };
+};
+
 async function gerarRelatorio() {
   const cli   = document.getElementById('rel-cliente').value;
   const tipo  = document.getElementById('rel-tipo').value;
