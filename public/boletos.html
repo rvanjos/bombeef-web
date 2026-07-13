@@ -751,41 +751,40 @@ function calSemana(idx){
   document.getElementById('cal-side-list').scrollTop = 0;
 }
 
-function calDia(dtStr){
+async function calDia(dtStr){
   window._calDiaAtual = dtStr; // guarda para poder re-renderizar após ações
   window._calSemanaIdxAtual = null; // limpa modo semana
   const mesStr=String(calMesN+1).padStart(2,'0')+'/'+calAno;
-  api.get('/api/boletos?status=todos&mes='+mesStr).then(d=>{
-    const todos=d.ok?d.data:[];
-    const bsDia=todos.filter(b=>b.vencimento?.slice(0,10)===dtStr);
-    const [y,m,dia]=dtStr.split('-');
-    const totDia=bsDia.filter(b=>b.status!=='pago').reduce((s,b)=>s+parseFloat(b.valor||0),0);
-    document.getElementById('cal-side-title').textContent=
-      dia+'/'+m+'/'+y+' — '+bsDia.length+' boleto(s)'+(totDia>0?' — '+fmt.brl(totDia)+' em aberto':'');
-    if(!bsDia.length){
-      document.getElementById('cal-side-list').innerHTML=
-        '<div style="text-align:center;padding:24px;color:var(--muted)">Sem boletos neste dia</div>';
-      return;
-    }
-    document.getElementById('cal-side-list').innerHTML=bsDia
-      .sort((a,b)=>parseFloat(b.valor)-parseFloat(a.valor))
-      .map(b=>{
-        const cl=b.status==='pago'?'pill-p':b.status==='vencido'?'pill-r':b.dt_programado?'pill-prog':'pill-v';
-        const st=b.status==='pago'?'Pago':b.status==='vencido'?'Vencido':b.dt_programado?'📅 Programado':'A Vencer';
-        return '<div class="side-item">'
-          +'<div class="si-forn">'+b.fornecedor+'</div>'
-          +(b.produto?'<div style="font-size:11px;color:var(--muted)">'+b.produto+'</div>':'')
-          +(b.nf?'<div style="font-size:10px;color:var(--blue)">NF-e '+b.nf+'</div>':'')
-          +(b.dt_programado?'<div style="font-size:10px;color:#5b21b6">📅 '+fmt.date(b.dt_programado)+'</div>':'')
-          +'<div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">'
-          +'<span class="pill '+cl+'">'+st+'</span>'
-          +'<span class="si-val">'+fmt.brl(b.valor)+'</span>'
-          +'</div>'
-          +(b.status!=='pago'&&!b.dt_programado?'<button onclick="programarBoleto('+b.dbId+')" style="margin-top:5px;width:100%;padding:4px;background:#7c3aed;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:10px;font-weight:600">📅 Programar Pgto</button>':'')
-          +(b.dt_programado&&b.status!=='pago'?'<button onclick="desprogramarBoleto('+b.dbId+')" style="margin-top:5px;width:100%;padding:4px;background:#f3f0ff;color:#5b21b6;border:1px solid #c4b5fd;border-radius:5px;cursor:pointer;font-size:10px;font-weight:600">↩ Desfazer programação</button>':'')
-          +'</div>';
-      }).join('');
-  });
+  const d = await api.get('/api/boletos?status=todos&mes='+mesStr);
+  const todos=d.ok?d.data:[];
+  const bsDia=todos.filter(b=>b.vencimento?.slice(0,10)===dtStr);
+  const [y,m,dia]=dtStr.split('-');
+  const totDia=bsDia.filter(b=>b.status!=='pago').reduce((s,b)=>s+parseFloat(b.valor||0),0);
+  document.getElementById('cal-side-title').textContent=
+    dia+'/'+m+'/'+y+' — '+bsDia.length+' boleto(s)'+(totDia>0?' — '+fmt.brl(totDia)+' em aberto':'');
+  if(!bsDia.length){
+    document.getElementById('cal-side-list').innerHTML=
+      '<div style="text-align:center;padding:24px;color:var(--muted)">Sem boletos neste dia</div>';
+    return;
+  }
+  document.getElementById('cal-side-list').innerHTML=bsDia
+    .sort((a,b)=>parseFloat(b.valor)-parseFloat(a.valor))
+    .map(b=>{
+      const cl=b.status==='pago'?'pill-p':b.status==='vencido'?'pill-r':b.dt_programado?'pill-prog':'pill-v';
+      const st=b.status==='pago'?'Pago':b.status==='vencido'?'Vencido':b.dt_programado?'📅 Programado':'A Vencer';
+      return '<div class="side-item">'
+        +'<div class="si-forn">'+b.fornecedor+'</div>'
+        +(b.produto?'<div style="font-size:11px;color:var(--muted)">'+b.produto+'</div>':'')
+        +(b.nf?'<div style="font-size:10px;color:var(--blue)">NF-e '+b.nf+'</div>':'')
+        +(b.dt_programado?'<div style="font-size:10px;color:#5b21b6">📅 '+fmt.date(b.dt_programado)+'</div>':'')
+        +'<div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">'
+        +'<span class="pill '+cl+'">'+st+'</span>'
+        +'<span class="si-val">'+fmt.brl(b.valor)+'</span>'
+        +'</div>'
+        +(b.status!=='pago'&&!b.dt_programado?'<button onclick="programarBoleto('+b.dbId+')" style="margin-top:5px;width:100%;padding:4px;background:#7c3aed;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:10px;font-weight:600">📅 Programar Pgto</button>':'')
+        +(b.dt_programado&&b.status!=='pago'?'<button onclick="desprogramarBoleto('+b.dbId+')" style="margin-top:5px;width:100%;padding:4px;background:#f3f0ff;color:#5b21b6;border:1px solid #c4b5fd;border-radius:5px;cursor:pointer;font-size:10px;font-weight:600">↩ Desfazer programação</button>':'')
+        +'</div>';
+    }).join('');
 }
 
 // Mês atual no filtro
@@ -1135,7 +1134,7 @@ async function programarBoleto(dbId) {
   if (!d.ok) { toast('Erro: ' + d.erro); return; }
   toast('📅 Pagamento programado!');
   await renderCalendario();
-  _reabrirPainelLateral();
+  await _reabrirPainelLateral();
 }
 
 async function desprogramarBoleto(dbId) {
@@ -1144,14 +1143,14 @@ async function desprogramarBoleto(dbId) {
   if (!d.ok) { toast('Erro: ' + d.erro); return; }
   toast('↩ Programação removida');
   await renderCalendario();
-  _reabrirPainelLateral();
+  await _reabrirPainelLateral();
 }
 
 // Re-renderiza o painel lateral (dia ou semana) com dados atualizados,
 // mantendo o usuário no mesmo dia/semana que estava vendo
-function _reabrirPainelLateral() {
+async function _reabrirPainelLateral() {
   if (window._calDiaAtual) {
-    calDia(window._calDiaAtual);
+    await calDia(window._calDiaAtual);
   } else if (window._calSemanaIdxAtual !== null && window._calSemanaIdxAtual !== undefined) {
     calSemana(window._calSemanaIdxAtual);
   }
@@ -1173,7 +1172,7 @@ async function confirmarBaixa(){
   });
   if(d.ok){
     toast('✅ Pagamento registrado!'); fecharBaixa(); carregar(); carregarKPIs();
-    if (typeof renderCalendario === 'function') { await renderCalendario(); _reabrirPainelLateral(); }
+    if (typeof renderCalendario === 'function') { await renderCalendario(); await _reabrirPainelLateral(); }
   }
   else toast('Erro: '+d.erro);
 }
