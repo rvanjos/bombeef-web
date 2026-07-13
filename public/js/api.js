@@ -145,7 +145,10 @@
     pct: v => parseFloat(v || 0).toFixed(1) + '%',
     date: iso => {
       if (!iso) return '—';
-      const [y, m, d] = String(iso).slice(0, 10).split('-');
+      const s = String(iso).slice(0, 10);
+      // Proteção: se não tem o formato de data ISO (YYYY-MM-DD), é dado corrompido
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return '⚠️ data inválida';
+      const [y, m, d] = s.split('-');
       return `${d}/${m}/${y}`;
     },
     dateInput: iso => iso ? String(iso).slice(0, 10) : '',

@@ -476,6 +476,7 @@ thead th{padding:6px 9px;}
       <button id="frq-prevvenc" onclick="aplicarFiltroRapido('prevvenc')" class="frq-btn">🔴 PREV vencidos</button>
       <button id="frq-ccpend"   onclick="aplicarFiltroRapido('ccpend')"   class="frq-btn">💳 Pag. Cartão</button>
       <button id="frq-naooper"  onclick="aplicarFiltroRapido('naooper')"  class="frq-btn">🚫 Não operacionais</button>
+      <button id="frq-datainvalida" onclick="aplicarFiltroRapido('datainvalida')" class="frq-btn" style="color:#dc2626" title="Lançamentos com data corrompida (ex: número serial do Excel)">⚠️ Data inválida</button>
       <button id="frq-altos"    onclick="aplicarFiltroRapido('altos')"    class="frq-btn">💰 Valores altos</button>
       <button id="frq-manual"   onclick="aplicarFiltroRapido('manual')"   class="frq-btn">✏️ Manual</button>
     </div>
@@ -1529,7 +1530,7 @@ async function trocarMes() {
   const v = document.getElementById('f-mesref').value; if (!v) return;
   // Sprint 3.1-F: resetar filtro rápido ao trocar de mês
   _filtroRapido = 'todos';
-  ['todos','semcat','prevvenc','ccpend','naooper','altos','manual'].forEach(id => {
+  ['todos','semcat','prevvenc','ccpend','naooper','altos','manual','datainvalida'].forEach(id => {
     const btn = document.getElementById('frq-' + id);
     if (btn) btn.className = 'frq-btn' + (id === 'todos' ? ' frq-ativo' : '');
   });
@@ -2868,6 +2869,10 @@ function render() {
       if (Math.abs(parseFloat(t.valor||0)) < limiar) return false;
     }
     if (_filtroRapido === 'manual')   { if (t.fonte !== 'MANUAL') return false; }
+    if (_filtroRapido === 'datainvalida') {
+      const s = String(t.data||'').slice(0,10);
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return false; // data válida → não mostra
+    }
     return true;
   }).sort((a,b) => (b.data||'').localeCompare(a.data||'')); // mais recente primeiro
 
@@ -4834,7 +4839,7 @@ function atualizarPainelPendencias() {
 function aplicarFiltroRapido(tipo) {
   _filtroRapido = tipo;
   // Atualizar botões ativos
-  ['todos','semcat','prevvenc','ccpend','naooper','altos','manual'].forEach(id => {
+  ['todos','semcat','prevvenc','ccpend','naooper','altos','manual','datainvalida'].forEach(id => {
     const btn = document.getElementById('frq-' + id);
     if (btn) btn.className = 'frq-btn' + (id === tipo ? ' frq-ativo' : '');
   });
