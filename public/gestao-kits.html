@@ -1727,6 +1727,30 @@ async function carregarRelatorio() {
         </tr>`).join('')}
       </table>`:'<div class="empty" style="padding:20px">Sem dados</div>'}
     </div>
+    <div class="card" style="margin-top:14px">
+      <div class="card-title">👥 Clientes — Volume e Frequência</div>
+      ${r.por_cliente && r.por_cliente.length?`<table>
+        <tr>
+          <th>Cliente</th><th>Telefone</th><th>Pedidos</th><th>Kits/Itens</th>
+          <th>1ª Compra</th><th>Última Compra</th><th>Frequência Média</th>
+        </tr>
+        ${r.por_cliente.map(c=>{
+          const freq = c.media_dias_entre_pedidos
+            ? `${parseFloat(c.media_dias_entre_pedidos).toFixed(0)} dias`
+            : (c.total_pedidos==1 ? 'única compra' : '—');
+          const fmtDataBr = s => s ? s.split('-').reverse().join('/') : '—';
+          return `<tr>
+            <td><strong>${c.cliente_nome||'—'}</strong></td>
+            <td>${c.cliente_tel||'—'}</td>
+            <td><strong>${c.total_pedidos}</strong> ${c.cancelados>0?`<span class="badge b-vermelho" style="font-size:10px" title="Cancelados">${c.cancelados} canc.</span>`:''}</td>
+            <td>${parseFloat(c.total_itens||0).toFixed(0)}</td>
+            <td>${fmtDataBr(c.primeira_compra)}</td>
+            <td>${fmtDataBr(c.ultima_compra)}</td>
+            <td>${freq}</td>
+          </tr>`;
+        }).join('')}
+      </table>`:'<div class="empty" style="padding:20px">Sem dados</div>'}
+    </div>
   `;
 }
 

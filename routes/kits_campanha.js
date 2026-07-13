@@ -1014,8 +1014,9 @@ module.exports = function (pool, app) {
     if (data_ini) { params.push(data_ini); conds.push(`p.criado_em::date>=$${params.length}`); }
     if (data_fim) { params.push(data_fim); conds.push(`p.criado_em::date<=$${params.length}`); }
     const where = conds.length ? 'WHERE '+conds.join(' AND ') : '';
+    const whereCliente = 'WHERE ' + [...conds, "p.cliente_nome IS NOT NULL", "p.cliente_nome <> ''"].join(' AND ');
     try {
-      const [porKit, porCanal, porItem] = await Promise.all([
+      const [porKit, porCanal, porItem, porCliente] = await Promise.all([
         pool.query(`SELECT p.campanha_nome, COUNT(*) AS total,
           COUNT(*) FILTER (WHERE p.status='entregue') AS entregues,
           COUNT(*) FILTER (WHERE p.status='cancelado') AS cancelados
@@ -1029,11 +1030,35 @@ module.exports = function (pool, app) {
           JOIN kit_pedidos p ON p.id=i.pedido_id
           ${where} GROUP BY i.slot_nome,i.produto_nome
           ORDER BY i.slot_nome, vezes DESC`, params),
+        // Agrupa por telefone (identificador mais confiável) — cai para nome se tel vazio
+        pool.query(`SELECT
+            COALESCE(NULLIF(p.cliente_tel,''), 'sem-tel:'||p.cliente_nome) AS chave_cliente,
+            MAX(p.cliente_nome) AS cliente_nome,
+            MAX(p.cliente_tel)  AS cliente_tel,
+            COUNT(*) AS total_pedidos,
+            COUNT(*) FILTER (WHERE p.status='entregue')  AS entregues,
+            COUNT(*) FILTER (WHERE p.status='cancelado') AS cancelados,
+            COALESCE(SUM(
+              (SELECT SUM(i.quantidade) FROM kit_pedido_itens i WHERE i.pedido_id=p.id)
+            ),0) AS total_itens,
+            MIN(p.criado_em)::date AS primeira_compra,
+            MAX(p.criado_em)::date AS ultima_compra,
+            CASE WHEN COUNT(*) > 1
+              THEN ROUND(
+                (MAX(p.criado_em)::date - MIN(p.criado_em)::date)::numeric / (COUNT(*)-1), 1
+              )
+              ELSE NULL
+            END AS media_dias_entre_pedidos
+          FROM kit_pedidos p
+          ${whereCliente}
+          GROUP BY chave_cliente
+          ORDER BY total_pedidos DESC, ultima_compra DESC`, params),
       ]);
       res.json({ ok: true, data: {
         por_kit: porKit.rows,
         por_canal: porCanal.rows,
         itens_mais_escolhidos: porItem.rows,
+        por_cliente: porCliente.rows,
       }});
     } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
