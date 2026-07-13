@@ -1320,6 +1320,50 @@ module.exports = function (pool, app) {
   // ══════════════════════════════════════════════════════════════════════════
 
   // GET /api/dre/cartao-faturas — lista todas as faturas com KPIs
+  // ── DELETE /cartao-faturas/:id — remove fatura + lançamentos vinculados no DRE
+  r.delete('/cartao-faturas/:id', autenticar(['admin','gestor']), async (req, res) => {
+    const faturaId = parseInt(req.params.id);
+    try {
+      const { rows } = await pool.query(
+        `SELECT * FROM cartao_faturas WHERE id=$1`, [faturaId]
+      );
+      if (!rows.length) return res.status(404).json({ ok:false, erro:'Fatura não encontrada' });
+      const fatura = rows[0];
+      const faturaCC = fatura.fatura_id_ref; // ex: "CC_04_2026_ItauNovo"
+
+      let txsRemovidas = 0;
+      let sessoesAlteradas = 0;
+
+      if (faturaCC) {
+        // Varrer todas as sessões DRE removendo transações desta fatura
+        const { rows: sessoes } = await pool.query(
+          `SELECT id, dados_json FROM dre_sessoes`
+        );
+        for (const s of sessoes) {
+          const txs = s.dados_json?.transactions || [];
+          const filtradas = txs.filter(t => t.faturaCC !== faturaCC);
+          if (filtradas.length !== txs.length) {
+            txsRemovidas += (txs.length - filtradas.length);
+            sessoesAlteradas++;
+            await pool.query(
+              `UPDATE dre_sessoes SET dados_json = $1, atualizado_em = NOW() WHERE id = $2`,
+              [JSON.stringify({ ...s.dados_json, transactions: filtradas }), s.id]
+            );
+          }
+        }
+      }
+
+      // Deleta a fatura (cartao_fatura_itens cai em cascata via FK)
+      await pool.query(`DELETE FROM cartao_faturas WHERE id=$1`, [faturaId]);
+
+      res.json({
+        ok: true,
+        msg: `Fatura excluída. ${txsRemovidas} lançamento(s) removido(s) em ${sessoesAlteradas} sessão(ões).`,
+        txsRemovidas, sessoesAlteradas,
+      });
+    } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
+  });
+
   r.get('/cartao-faturas', autenticar(), async (req, res) => {
     try {
       const { rows } = await pool.query(`

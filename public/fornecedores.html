@@ -297,7 +297,20 @@ function renderLista() {
     return;
   }
 
-  wrap.innerHTML = `
+  // Detectar CNPJs duplicados para alertar o usuário a rodar a limpeza
+  const cnpjCount = {};
+  _fornecedores.forEach(f => {
+    const c = (f.cnpj_fornecedor||'').replace(/\D/g,'');
+    if (c) cnpjCount[c] = (cnpjCount[c]||0) + 1;
+  });
+  const qtdDuplicados = Object.values(cnpjCount).filter(n => n > 1).length;
+  const avisoDedup = qtdDuplicados > 0 ? `
+    <div style="background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span style="font-size:13px;color:#856404">⚠️ <strong>${qtdDuplicados} CNPJ(s)</strong> aparecem duplicados na lista abaixo.</span>
+      <button onclick="dedupFornecedores()" style="margin-left:auto;padding:5px 14px;background:#ffc107;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;color:#856404">🧹 Limpar agora</button>
+    </div>` : '';
+
+  wrap.innerHTML = avisoDedup + `
     <div class="tbl-wrap">
       <table>
         <thead><tr>

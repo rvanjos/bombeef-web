@@ -162,10 +162,12 @@ module.exports = function (pool, app) {
 
       const where = conds.length ? 'WHERE ' + conds.join(' AND ') : '';
       const { rows } = await pool.query(`
-        SELECT ret.*, f.nome AS funcionario_nome, p.descricao AS prod_descricao
+        SELECT ret.*, f.nome AS funcionario_nome, p.descricao AS prod_descricao,
+          u_pdv.nome AS baixa_pdv_por_nome
         FROM retiradas ret
         LEFT JOIN funcionarios f ON f.id = ret.funcionario_id
         LEFT JOIN produtos p ON p.id = ret.produto_id
+        LEFT JOIN usuarios u_pdv ON u_pdv.id = ret.baixa_pdv_por
         ${where}
         ORDER BY ret.dt_retirada DESC, ret.id DESC
       `, params);
@@ -268,15 +270,16 @@ module.exports = function (pool, app) {
     try {
       await pool.query(`ALTER TABLE retiradas ADD COLUMN IF NOT EXISTS baixa_pdv BOOLEAN DEFAULT false`).catch(()=>{});
       await pool.query(`ALTER TABLE retiradas ADD COLUMN IF NOT EXISTS dt_baixa_pdv DATE`).catch(()=>{});
+      await pool.query(`ALTER TABLE retiradas ADD COLUMN IF NOT EXISTS baixa_pdv_por INTEGER`).catch(()=>{});
       if (desfazer) {
         await pool.query(
-          `UPDATE retiradas SET baixa_pdv=false, dt_baixa_pdv=NULL WHERE id=$1`,
+          `UPDATE retiradas SET baixa_pdv=false, dt_baixa_pdv=NULL, baixa_pdv_por=NULL WHERE id=$1`,
           [parseInt(req.params.id)]
         );
       } else {
         await pool.query(
-          `UPDATE retiradas SET baixa_pdv=true, dt_baixa_pdv=CURRENT_DATE WHERE id=$1`,
-          [parseInt(req.params.id)]
+          `UPDATE retiradas SET baixa_pdv=true, dt_baixa_pdv=CURRENT_DATE, baixa_pdv_por=$2 WHERE id=$1`,
+          [parseInt(req.params.id), req.user?.id || null]
         );
       }
       res.json({ ok:true });

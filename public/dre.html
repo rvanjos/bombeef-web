@@ -7474,7 +7474,26 @@ async function cfReabrir(id) {
   } catch(e) { toast('❌ '+e.message); }
 }
 
+window.excluirFaturaCC = async function excluirFaturaCC() {
+  if (!_cfItensFaturaIdAtual) return;
+  if (!confirm('Excluir esta fatura e TODOS os lançamentos vinculados no DRE?\n\nEsta ação não pode ser desfeita. Você poderá reimportar a fatura depois com a competência correta.')) return;
+  try {
+    const res = await api.delete(`/api/dre/cartao-faturas/${_cfItensFaturaIdAtual}`);
+    if (!res.ok) { toast('❌ ' + (res.erro || 'Erro ao excluir fatura')); return; }
+    toast('✅ ' + res.msg);
+    document.getElementById('m-cf-itens').style.display = 'none';
+    // Recarregar dados do DRE e da grade de cartões
+    if (typeof carregarSessao === 'function') await carregarSessao();
+    if (typeof carregarCartaoFaturas === 'function') carregarCartaoFaturas();
+    if (typeof renderDRE === 'function') renderDRE();
+    if (typeof renderDREFull === 'function') renderDREFull();
+  } catch(e) { toast('❌ Erro: ' + e.message); }
+};
+
+let _cfItensFaturaIdAtual = null;
+
 async function verItensFatura(faturaId, titulo) {
+  _cfItensFaturaIdAtual = faturaId;
   document.getElementById('cf-itens-titulo').textContent = '📋 ' + titulo;
   document.getElementById('m-cf-itens').style.display = 'flex';
   const tbody = document.getElementById('cf-itens-tbody');
@@ -7952,7 +7971,8 @@ async function _sincronizarCategoriesCC(lancs, faturaIdRef) {
         </tbody>
       </table>
     </div>
-    <div style="padding:10px 16px;border-top:1px solid var(--border);text-align:right;flex-shrink:0">
+    <div style="padding:10px 16px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
+      <button onclick="excluirFaturaCC()" style="padding:7px 14px;background:#fee2e2;border:1px solid #fca5a5;color:#dc2626;border-radius:7px;font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif;font-weight:600">🗑 Excluir Fatura</button>
       <button onclick="document.getElementById('m-cf-itens').style.display='none'" style="padding:7px 18px;background:var(--bg);border:1px solid var(--border);border-radius:7px;font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif">Fechar</button>
     </div>
   </div>
