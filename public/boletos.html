@@ -672,6 +672,8 @@ async function renderCalendario(){
 }
 
 function calSemana(idx){
+  window._calSemanaIdxAtual = idx; // guarda para poder re-renderizar após ações
+  window._calDiaAtual = null; // limpa modo dia
   const sem = window._calSemanas && window._calSemanas[idx];
   if(!sem || !sem.boletos.length) return;
 
@@ -750,6 +752,8 @@ function calSemana(idx){
 }
 
 function calDia(dtStr){
+  window._calDiaAtual = dtStr; // guarda para poder re-renderizar após ações
+  window._calSemanaIdxAtual = null; // limpa modo semana
   const mesStr=String(calMesN+1).padStart(2,'0')+'/'+calAno;
   api.get('/api/boletos?status=todos&mes='+mesStr).then(d=>{
     const todos=d.ok?d.data:[];
@@ -1130,7 +1134,8 @@ async function programarBoleto(dbId) {
   const d = await api.patch(`/api/boletos/${dbId}/programar`, { dtProgramado: dt });
   if (!d.ok) { toast('Erro: ' + d.erro); return; }
   toast('📅 Pagamento programado!');
-  renderCalendario();
+  await renderCalendario();
+  _reabrirPainelLateral();
 }
 
 async function desprogramarBoleto(dbId) {
@@ -1138,7 +1143,18 @@ async function desprogramarBoleto(dbId) {
   const d = await api.patch(`/api/boletos/${dbId}/programar`, { dtProgramado: null });
   if (!d.ok) { toast('Erro: ' + d.erro); return; }
   toast('↩ Programação removida');
-  renderCalendario();
+  await renderCalendario();
+  _reabrirPainelLateral();
+}
+
+// Re-renderiza o painel lateral (dia ou semana) com dados atualizados,
+// mantendo o usuário no mesmo dia/semana que estava vendo
+function _reabrirPainelLateral() {
+  if (window._calDiaAtual) {
+    calDia(window._calDiaAtual);
+  } else if (window._calSemanaIdxAtual !== null && window._calSemanaIdxAtual !== undefined) {
+    calSemana(window._calSemanaIdxAtual);
+  }
 }
 
 // ── Baixa ──────────────────────────────────────────────────────────────────
@@ -1155,7 +1171,10 @@ async function confirmarBaixa(){
     dtPagamento: document.getElementById('baixa-dt').value,
     obs: document.getElementById('baixa-obs').value,
   });
-  if(d.ok){ toast('✅ Pagamento registrado!'); fecharBaixa(); carregar(); carregarKPIs(); }
+  if(d.ok){
+    toast('✅ Pagamento registrado!'); fecharBaixa(); carregar(); carregarKPIs();
+    if (typeof renderCalendario === 'function') { await renderCalendario(); _reabrirPainelLateral(); }
+  }
   else toast('Erro: '+d.erro);
 }
 
