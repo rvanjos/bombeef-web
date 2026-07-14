@@ -2908,7 +2908,7 @@ function render() {
     const badge = bads[t.fonte]||`<span class="badge bman">${t.fonte||'?'}</span>`;
     return `<tr class="${rowCls}" id="tr-${t.id}">
       <td style="text-align:center"><input type="checkbox" class="chk tcb" data-id="${t.id}" ${selIds.has(String(t.id))?'checked':''} onchange="togSel('${t.id}',this.checked)"></td>
-      <td style="font-size:11px;color:var(--muted);white-space:nowrap">${t.data?fmt.date(t.data):'—'}</td>
+      <td style="font-size:11px;white-space:nowrap;cursor:pointer;text-decoration:underline dotted;color:${/^\d{4}-\d{2}-\d{2}$/.test(String(t.data||'').slice(0,10))?'var(--muted)':'#dc2626;font-weight:700'}" onclick="editData('${t.id}',this)" title="Clique para editar a data">${/^\d{4}-\d{2}-\d{2}$/.test(String(t.data||'').slice(0,10))?fmt.date(t.data):'⚠️ corrigir data'}</td>
       <td style="font-size:11px;white-space:nowrap;cursor:pointer;color:var(--blue);text-decoration:underline dotted" onclick="editMes('${t.id}','mes',this)">${fmtMes(t.mes)}</td>
       <td style="font-size:11px;white-space:nowrap;cursor:pointer;color:var(--muted);text-decoration:underline dotted" onclick="editMes('${t.id}','mesCaixa',this)">${fmtMes(t.mesCaixa||t.mes)}</td>
       <td>${badge}</td>
@@ -3364,6 +3364,40 @@ function toggleExpandido() {
   if (btn) btn.textContent = expandido ? '⤡ Compactar' : '⤢ Expandir';
   // Persiste preferência
   try { localStorage.setItem('dre_expandido', expandido ? '1' : '0'); } catch(_) {}
+}
+
+function applyData(id, val) {
+  const t = TXS.find(x => x.id === id);
+  if (!t || !val) return;
+  // Validar formato ISO (o input type=date já garante, mas confere por segurança)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(val)) { toast('⚠️ Data inválida'); render(); return; }
+  t.data = val;
+  render(); updStats(); renderDRE(); autoSv();
+  toast('✅ Data corrigida para ' + fmt.date(val));
+}
+
+function editData(id, td) {
+  const t = TXS.find(x => x.id === id);
+  if (!t) return;
+
+  const curValida = /^\d{4}-\d{2}-\d{2}$/.test(String(t.data||'').slice(0,10));
+  const curVal = curValida ? String(t.data).slice(0,10) : '';
+
+  td.innerHTML = `<input type="date" id="inp-data-temp" value="${curVal}"
+    style="font-size:11px;padding:2px 5px;border-radius:4px;border:1px solid var(--purple);width:120px">`;
+
+  const inp = td.querySelector('#inp-data-temp');
+  inp.focus();
+
+  inp.addEventListener('change', function () { applyData(id, this.value); });
+  inp.addEventListener('blur', function () {
+    // Se saiu sem escolher nada e a data já era inválida, mantém o modo edição visível
+    if (!this.value) render();
+  });
+  inp.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') applyData(id, this.value);
+    if (e.key === 'Escape') render();
+  });
 }
 
 function applyMes(id, field, val) {
