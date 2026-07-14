@@ -798,9 +798,14 @@ const hoje = new Date();
 document.getElementById('flt-mes').value = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
 
 // ── KPIs ───────────────────────────────────────────────────────────────────
-async function carregarKPIs(){
+async function carregarKPIs(tentativa){
+  tentativa = tentativa || 1;
   const d = await api.get('/api/boletos/kpis');
-  if(!d.ok) return;
+  if(!d.ok) {
+    console.warn('[carregarKPIs] falhou, tentativa', tentativa, d.erro);
+    if (tentativa < 3) { setTimeout(() => carregarKPIs(tentativa+1), 1500 * tentativa); }
+    return;
+  }
   const k=d.data;
   document.getElementById('k-avencer').textContent = fmt.n(k.avencer);
   document.getElementById('k-vencidos').textContent = fmt.n(k.vencidos);

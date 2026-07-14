@@ -562,13 +562,21 @@ module.exports = function (pool, app) {
   // ── PATCH /:id/programar — marcar/desmarcar programação de pagamento ────────
   r.patch('/:id/programar', async (req, res) => {
     const { dtProgramado } = req.body; // null para desmarcar
+    const idNum = parseInt(req.params.id);
     try {
-      await pool.query(
-        `UPDATE boletos SET dt_programado=$1, atualizado_em=NOW() WHERE id=$2`,
-        [dtProgramado || null, req.params.id]
+      const { rows, rowCount } = await pool.query(
+        `UPDATE boletos SET dt_programado=$1, atualizado_em=NOW() WHERE id=$2 RETURNING id, dt_programado`,
+        [dtProgramado || null, idNum]
       );
-      res.json({ ok: true, dt_programado: dtProgramado || null });
-    } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
+      console.log(`[boletos/programar] id=${idNum} dtProgramado=${dtProgramado} rowCount=${rowCount}`, rows[0] || '(nenhuma linha afetada)');
+      if (rowCount === 0) {
+        return res.status(404).json({ ok: false, erro: `Boleto id=${idNum} não encontrado — nenhuma linha atualizada` });
+      }
+      res.json({ ok: true, dt_programado: rows[0].dt_programado });
+    } catch (e) {
+      console.error('[boletos/programar] erro:', e.message);
+      res.status(500).json({ ok: false, erro: e.message });
+    }
   });
 
   // ── DELETE /:id ────────────────────────────────────────────────────────────
