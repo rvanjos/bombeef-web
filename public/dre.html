@@ -3367,10 +3367,12 @@ function toggleExpandido() {
 }
 
 function applyData(id, val) {
+  console.log('[applyData] id=', id, 'val=', val, 'tipo val=', typeof val);
   const t = TXS.find(x => x.id === id);
-  if (!t || !val) return;
+  if (!t) { console.warn('[applyData] transação não encontrada para id', id); toast('⚠️ Erro: lançamento não encontrado'); return; }
+  if (!val) { console.warn('[applyData] valor vazio, mantendo edição aberta'); toast('⚠️ Escolha uma data'); return; }
   // Validar formato ISO (o input type=date já garante, mas confere por segurança)
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(val)) { toast('⚠️ Data inválida'); render(); return; }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(val)) { console.warn('[applyData] formato inválido:', val); toast('⚠️ Data inválida'); render(); return; }
   t.data = val;
   render(); updStats(); renderDRE(); autoSv();
   toast('✅ Data corrigida para ' + fmt.date(val));
@@ -3384,21 +3386,31 @@ function editData(id, td) {
   const curVal = curValida ? String(t.data).slice(0,10) : '';
 
   // IMPORTANTE: input type=date dispara 'change' a cada segmento preenchido
-  // (dia, mês, ano) — nunca salvar no 'change', só em blur/Enter/botão confirmar
+  // (dia, mês, ano) — nunca salvar no 'change', só em blur/Enter/botão confirmar.
+  // Usamos closure (variável 'inp' capturada) em vez de getElementById por id
+  // interpolado, para evitar qualquer risco de colisão/leitura tardia do DOM.
   td.innerHTML = `
     <div style="display:flex;gap:4px;align-items:center" onclick="event.stopPropagation()">
-      <input type="date" id="inp-data-temp-${id}" value="${curVal}"
+      <input type="date" class="inp-data-edit" value="${curVal}"
         style="font-size:11px;padding:2px 5px;border-radius:4px;border:1px solid var(--purple);width:120px">
-      <button type="button" onclick="applyData('${id}', document.getElementById('inp-data-temp-${id}').value)"
+      <button type="button" class="btn-confirma-data"
         style="background:var(--purple);color:#fff;border:none;border-radius:4px;padding:2px 7px;font-size:11px;cursor:pointer" title="Confirmar">✓</button>
     </div>`;
 
-  const inp = td.querySelector(`#inp-data-temp-${id}`);
+  const inp = td.querySelector('.inp-data-edit');
+  const btn = td.querySelector('.btn-confirma-data');
   inp.focus();
+
+  const confirmar = () => {
+    console.log('[editData] confirmando data:', inp.value, 'para tx', id);
+    applyData(id, inp.value);
+  };
+
+  btn.addEventListener('click', confirmar);
 
   // Enter confirma
   inp.addEventListener('keydown', function (e) {
-    if (e.key === 'Enter') { e.preventDefault(); applyData(id, this.value); }
+    if (e.key === 'Enter') { e.preventDefault(); confirmar(); }
     if (e.key === 'Escape') { e.preventDefault(); render(); }
   });
 }
