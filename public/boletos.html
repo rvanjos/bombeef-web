@@ -724,12 +724,15 @@ function calSemana(idx){
       const cl  = b.status==='pago'?'pill-p':b.status==='vencido'?'pill-r':b.dt_programado?'pill-prog':'pill-v';
       const st  = b.status==='pago'?'✅ Pago':b.status==='vencido'?'🔴 Vencido':b.dt_programado?'📅 Programado':'🟡 A Vencer';
       const parc= b.totalParcelas>1 ? ' <span style="font-size:10px;color:var(--muted)">'+b.parcela+'/'+b.totalParcelas+'</span>' : '';
-      html += '<div style="border:1px solid var(--border);border-top:none;padding:8px 10px;background:#fff">'
+      const bgProg = b.dt_programado && b.status!=='pago' ? 'background:#eff6ff;' : 'background:#fff;';
+      html += '<div style="border:1px solid '+(b.dt_programado&&b.status!=='pago'?'#bfdbfe':'var(--border)')+';border-top:none;padding:8px 10px;'+bgProg+'">'
         + '<div style="font-weight:600;font-size:13px">'+b.fornecedor+parc+'</div>'
         + (b.produto?'<div style="font-size:11px;color:var(--muted)">'+b.produto+'</div>':'')
-        + (b.nf?'<div style="font-size:10px;color:var(--blue)">NF-e '+b.nf+'</div>':'')
+        + '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:2px">'
+        + (b.nf?'<span style="font-size:10px;color:var(--blue)">NF-e '+b.nf+'</span>':'')
+        + (b.dt_programado?'<span style="font-size:10px;color:#1e40af;font-weight:700;background:#dbeafe;padding:1px 6px;border-radius:4px">📅 Programado '+fmt.date(b.dt_programado)+'</span>':'')
+        + '</div>'
         + (b.plano?'<div style="font-size:10px;color:var(--muted)">'+b.plano+'</div>':'')
-        + (b.dt_programado?'<div style="font-size:10px;color:#5b21b6;margin-top:2px">📅 Pgto programado em '+fmt.date(b.dt_programado)+'</div>':'')
         + '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:5px">'
         + '<span class="pill '+cl+'" style="font-size:10px">'+st+'</span>'
         + '<span style="font-weight:700;font-family:monospace;font-size:14px">'+fmt.brl(b.valor)+'</span>'
@@ -772,11 +775,14 @@ async function calDia(dtStr){
     .map(b=>{
       const cl=b.status==='pago'?'pill-p':b.status==='vencido'?'pill-r':b.dt_programado?'pill-prog':'pill-v';
       const st=b.status==='pago'?'Pago':b.status==='vencido'?'Vencido':b.dt_programado?'📅 Programado':'A Vencer';
-      return '<div class="side-item">'
+      const bgProg = b.dt_programado && b.status!=='pago' ? 'background:#eff6ff;border-color:#bfdbfe;' : '';
+      return '<div class="side-item" style="'+bgProg+'border-radius:8px;margin-bottom:6px">'
         +'<div class="si-forn">'+b.fornecedor+'</div>'
         +(b.produto?'<div style="font-size:11px;color:var(--muted)">'+b.produto+'</div>':'')
-        +(b.nf?'<div style="font-size:10px;color:var(--blue)">NF-e '+b.nf+'</div>':'')
-        +(b.dt_programado?'<div style="font-size:10px;color:#5b21b6">📅 '+fmt.date(b.dt_programado)+'</div>':'')
+        +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:2px">'
+        +(b.nf?'<span style="font-size:10px;color:var(--blue)">NF-e '+b.nf+'</span>':'')
+        +(b.dt_programado?'<span style="font-size:10px;color:#1e40af;font-weight:700;background:#dbeafe;padding:1px 6px;border-radius:4px">📅 Programado '+fmt.date(b.dt_programado)+'</span>':'')
+        +'</div>'
         +'<div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">'
         +'<span class="pill '+cl+'">'+st+'</span>'
         +'<span class="si-val">'+fmt.brl(b.valor)+'</span>'
