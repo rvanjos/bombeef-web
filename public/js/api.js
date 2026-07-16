@@ -69,7 +69,7 @@
     });
     let res;
     try {
-      res = await fetch(path, { ...opts, headers: makeHeaders() });
+      res = await fetch(path, { cache: 'no-store', ...opts, headers: makeHeaders() });
     } catch (_) {
       return { ok: false, erro: 'Sem conexão com o servidor' };
     }
@@ -80,7 +80,7 @@
         if (ref && ref.ok && ref.token) {
           setToken(ref.token);
           // Reexecuta com novo token
-          res = await fetch(path, { ...opts, headers: makeHeaders() });
+          res = await fetch(path, { cache: 'no-store', ...opts, headers: makeHeaders() });
           if (res.status !== 401) {
             try { return await res.json(); }
             catch(_) { return { ok: false, erro: 'Resposta inválida' }; }
