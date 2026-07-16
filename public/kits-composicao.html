@@ -674,7 +674,12 @@ async function carregarRankingProdutos() {
   if(p.length) url += '?'+p.join('&');
   const d = await api.get(url);
   const el = document.getElementById('ranking-produtos');
-  if (!d.ok || !d.data.length) {
+  if (!d.ok) {
+    el.innerHTML = `<div style="text-align:center;padding:24px;color:#dc2626">❌ Erro: ${d.erro||'desconhecido'}</div>`;
+    console.error('[carregarRankingProdutos] erro da API:', d.erro);
+    return;
+  }
+  if (!d.data.length) {
     el.innerHTML = '<div style="text-align:center;padding:24px;color:var(--muted)">Sem dados. Registre semanas de vendas primeiro.</div>';
     return;
   }

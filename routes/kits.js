@@ -395,7 +395,7 @@ module.exports = function (pool) {
           MAX(ki.descricao_produto) AS produto_nome,
           MAX(ki.codigo_produto)    AS codigo_produto,
           COUNT(DISTINCT ki.kit_id) AS qtd_kits,
-          ARRAY_AGG(DISTINCT k.nome) AS kits_nomes,
+          STRING_AGG(DISTINCT k.nome, ', ') AS kits_nomes,
           SUM(ki.quantidade) AS qtd_total_por_ocorrencia
         FROM kit_itens ki
         JOIN kits k ON k.id = ki.kit_id
@@ -403,6 +403,12 @@ module.exports = function (pool) {
         GROUP BY chave_produto
       `);
       console.log(`[relatorio-produtos] presenca.rows.length=${presenca.rows.length}`);
+      if (presenca.rows.length === 0) {
+        // Diagnóstico: contar quantos kit_itens e kits existem no total
+        const totKI = await pool.query(`SELECT COUNT(*) AS n FROM kit_itens`);
+        const totK  = await pool.query(`SELECT COUNT(*) AS n FROM kits WHERE COALESCE(ativo,true)=true`);
+        console.log(`[relatorio-produtos] diagnostico: kit_itens total=${totKI.rows[0].n}, kits ativos=${totK.rows[0].n}`);
+      }
 
       // 2. Para cada kit, volume vendido no período (via kit_semanas)
       const vendasPorKit = await pool.query(`
@@ -443,6 +449,7 @@ module.exports = function (pool) {
 
       res.json({ ok: true, data: resultado });
     } catch(e) {
+      console.error('[relatorio-produtos] ERRO:', e.message, e.stack);
       res.status(500).json({ ok: false, erro: e.message });
     }
   });
