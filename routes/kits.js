@@ -229,6 +229,82 @@ module.exports = function (pool) {
   });
 
   // GET /:id  ← deve ficar DEPOIS das rotas específicas
+  // ── GET /relatorio-produtos — quais produtos mais chamam atenção entre os kits ──
+  // Cruza a composição (kit_itens) com o histórico de vendas semanal (kit_semanas)
+  r.get('/relatorio-produtos', async (req, res) => {
+    const { data_ini, data_fim } = req.query;
+    const conds = [], params = [];
+    if (data_ini) { params.push(data_ini); conds.push(`ks.semana_ini >= $${params.length}`); }
+    if (data_fim) { params.push(data_fim); conds.push(`ks.semana_fim <= $${params.length}`); }
+    const where = conds.length ? 'WHERE ' + conds.join(' AND ') : '';
+
+    try {
+      // 1. Produto × quantos kits ativos ele aparece + em quais
+      const presenca = await pool.query(`
+        SELECT
+          COALESCE(ki.codigo_produto, 'sem-codigo:'||ki.descricao_produto) AS chave_produto,
+          MAX(ki.descricao_produto) AS produto_nome,
+          MAX(ki.codigo_produto)    AS codigo_produto,
+          COUNT(DISTINCT ki.kit_id) AS qtd_kits,
+          STRING_AGG(DISTINCT k.nome, ', ') AS kits_nomes,
+          SUM(ki.quantidade) AS qtd_total_por_ocorrencia
+        FROM kit_itens ki
+        JOIN kits k ON k.id = ki.kit_id
+        WHERE COALESCE(k.ativo, true) = true
+        GROUP BY chave_produto
+      `);
+      console.log(`[relatorio-produtos] presenca.rows.length=${presenca.rows.length}`);
+      if (presenca.rows.length === 0) {
+        // Diagnóstico: contar quantos kit_itens e kits existem no total
+        const totKI = await pool.query(`SELECT COUNT(*) AS n FROM kit_itens`);
+        const totK  = await pool.query(`SELECT COUNT(*) AS n FROM kits WHERE COALESCE(ativo,true)=true`);
+        console.log(`[relatorio-produtos] diagnostico: kit_itens total=${totKI.rows[0].n}, kits ativos=${totK.rows[0].n}`);
+      }
+
+      // 2. Para cada kit, volume vendido no período (via kit_semanas)
+      const vendasPorKit = await pool.query(`
+        SELECT ks.kit_id, COALESCE(SUM(ks.qtd_vendida),0) AS total_vendido
+        FROM kit_semanas ks
+        ${where}
+        GROUP BY ks.kit_id
+      `, params);
+      const vendaMap = {};
+      vendasPorKit.rows.forEach(v => { vendaMap[v.kit_id] = parseInt(v.total_vendido); });
+
+      // 3. Para cada produto, somar o volume vendido dos kits em que ele aparece
+      //    (proxy de "quanto esse produto circulou" através das vendas dos kits que o contém)
+      const composicaoPorProduto = await pool.query(`
+        SELECT
+          COALESCE(ki.codigo_produto, 'sem-codigo:'||ki.descricao_produto) AS chave_produto,
+          ki.kit_id, ki.quantidade
+        FROM kit_itens ki
+        JOIN kits k ON k.id = ki.kit_id
+        WHERE COALESCE(k.ativo, true) = true
+      `);
+
+      const impactoPorProduto = {};
+      composicaoPorProduto.rows.forEach(row => {
+        const vendidoNesseKit = vendaMap[row.kit_id] || 0;
+        const qtdUnidades = parseFloat(row.quantidade || 1) * vendidoNesseKit;
+        if (!impactoPorProduto[row.chave_produto]) impactoPorProduto[row.chave_produto] = 0;
+        impactoPorProduto[row.chave_produto] += qtdUnidades;
+      });
+
+      const resultado = presenca.rows.map(p => ({
+        produto_nome: p.produto_nome,
+        codigo_produto: p.codigo_produto,
+        qtd_kits: parseInt(p.qtd_kits),
+        kits_nomes: p.kits_nomes,
+        unidades_estimadas_vendidas: Math.round(impactoPorProduto[p.chave_produto] || 0),
+      })).sort((a,b) => b.unidades_estimadas_vendidas - a.unidades_estimadas_vendidas);
+
+      res.json({ ok: true, data: resultado });
+    } catch(e) {
+      console.error('[relatorio-produtos] ERRO:', e.message, e.stack);
+      res.status(500).json({ ok: false, erro: e.message });
+    }
+  });
+
   r.get('/:id', async (req, res) => {
     try {
       const numId = parseInt(req.params.id);
@@ -378,81 +454,6 @@ module.exports = function (pool) {
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
-  // ── GET /relatorio-produtos — quais produtos mais chamam atenção entre os kits ──
-  // Cruza a composição (kit_itens) com o histórico de vendas semanal (kit_semanas)
-  r.get('/relatorio-produtos', async (req, res) => {
-    const { data_ini, data_fim } = req.query;
-    const conds = [], params = [];
-    if (data_ini) { params.push(data_ini); conds.push(`ks.semana_ini >= $${params.length}`); }
-    if (data_fim) { params.push(data_fim); conds.push(`ks.semana_fim <= $${params.length}`); }
-    const where = conds.length ? 'WHERE ' + conds.join(' AND ') : '';
-
-    try {
-      // 1. Produto × quantos kits ativos ele aparece + em quais
-      const presenca = await pool.query(`
-        SELECT
-          COALESCE(ki.codigo_produto, 'sem-codigo:'||ki.descricao_produto) AS chave_produto,
-          MAX(ki.descricao_produto) AS produto_nome,
-          MAX(ki.codigo_produto)    AS codigo_produto,
-          COUNT(DISTINCT ki.kit_id) AS qtd_kits,
-          STRING_AGG(DISTINCT k.nome, ', ') AS kits_nomes,
-          SUM(ki.quantidade) AS qtd_total_por_ocorrencia
-        FROM kit_itens ki
-        JOIN kits k ON k.id = ki.kit_id
-        WHERE COALESCE(k.ativo, true) = true
-        GROUP BY chave_produto
-      `);
-      console.log(`[relatorio-produtos] presenca.rows.length=${presenca.rows.length}`);
-      if (presenca.rows.length === 0) {
-        // Diagnóstico: contar quantos kit_itens e kits existem no total
-        const totKI = await pool.query(`SELECT COUNT(*) AS n FROM kit_itens`);
-        const totK  = await pool.query(`SELECT COUNT(*) AS n FROM kits WHERE COALESCE(ativo,true)=true`);
-        console.log(`[relatorio-produtos] diagnostico: kit_itens total=${totKI.rows[0].n}, kits ativos=${totK.rows[0].n}`);
-      }
-
-      // 2. Para cada kit, volume vendido no período (via kit_semanas)
-      const vendasPorKit = await pool.query(`
-        SELECT ks.kit_id, COALESCE(SUM(ks.qtd_vendida),0) AS total_vendido
-        FROM kit_semanas ks
-        ${where}
-        GROUP BY ks.kit_id
-      `, params);
-      const vendaMap = {};
-      vendasPorKit.rows.forEach(v => { vendaMap[v.kit_id] = parseInt(v.total_vendido); });
-
-      // 3. Para cada produto, somar o volume vendido dos kits em que ele aparece
-      //    (proxy de "quanto esse produto circulou" através das vendas dos kits que o contém)
-      const composicaoPorProduto = await pool.query(`
-        SELECT
-          COALESCE(ki.codigo_produto, 'sem-codigo:'||ki.descricao_produto) AS chave_produto,
-          ki.kit_id, ki.quantidade
-        FROM kit_itens ki
-        JOIN kits k ON k.id = ki.kit_id
-        WHERE COALESCE(k.ativo, true) = true
-      `);
-
-      const impactoPorProduto = {};
-      composicaoPorProduto.rows.forEach(row => {
-        const vendidoNesseKit = vendaMap[row.kit_id] || 0;
-        const qtdUnidades = parseFloat(row.quantidade || 1) * vendidoNesseKit;
-        if (!impactoPorProduto[row.chave_produto]) impactoPorProduto[row.chave_produto] = 0;
-        impactoPorProduto[row.chave_produto] += qtdUnidades;
-      });
-
-      const resultado = presenca.rows.map(p => ({
-        produto_nome: p.produto_nome,
-        codigo_produto: p.codigo_produto,
-        qtd_kits: parseInt(p.qtd_kits),
-        kits_nomes: p.kits_nomes,
-        unidades_estimadas_vendidas: Math.round(impactoPorProduto[p.chave_produto] || 0),
-      })).sort((a,b) => b.unidades_estimadas_vendidas - a.unidades_estimadas_vendidas);
-
-      res.json({ ok: true, data: resultado });
-    } catch(e) {
-      console.error('[relatorio-produtos] ERRO:', e.message, e.stack);
-      res.status(500).json({ ok: false, erro: e.message });
-    }
-  });
 
   return r;
 };
