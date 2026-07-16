@@ -398,9 +398,11 @@ module.exports = function (pool) {
           ARRAY_AGG(DISTINCT k.nome) AS kits_nomes,
           SUM(ki.quantidade) AS qtd_total_por_ocorrencia
         FROM kit_itens ki
-        JOIN kits k ON k.id = ki.kit_id AND k.ativo = true
+        JOIN kits k ON k.id = ki.kit_id
+        WHERE COALESCE(k.ativo, true) = true
         GROUP BY chave_produto
       `);
+      console.log(`[relatorio-produtos] presenca.rows.length=${presenca.rows.length}`);
 
       // 2. Para cada kit, volume vendido no período (via kit_semanas)
       const vendasPorKit = await pool.query(`
@@ -419,7 +421,8 @@ module.exports = function (pool) {
           COALESCE(ki.codigo_produto, 'sem-codigo:'||ki.descricao_produto) AS chave_produto,
           ki.kit_id, ki.quantidade
         FROM kit_itens ki
-        JOIN kits k ON k.id = ki.kit_id AND k.ativo = true
+        JOIN kits k ON k.id = ki.kit_id
+        WHERE COALESCE(k.ativo, true) = true
       `);
 
       const impactoPorProduto = {};
