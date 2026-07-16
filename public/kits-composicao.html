@@ -243,6 +243,11 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
         <button class="btn btn-s btn-sm" onclick="document.getElementById('kr-de').value='';document.getElementById('kr-ate').value='';carregarRanking()">✕ Limpar</button>
       </div>
       <div id="ranking-kits"></div>
+      <div style="margin-top:20px">
+        <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:8px">🥩 Produtos que Mais Chamam Atenção nos Kits</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Cruza a composição dos kits ativos com o volume vendido no período — mostra quais produtos circulam mais através dos kits que os contêm.</div>
+        <div id="ranking-produtos"></div>
+      </div>
     </div>
 </div>
 
@@ -615,6 +620,7 @@ async function excluirSemana(id) {
 }
 
 async function carregarRanking() {
+  carregarRankingProdutos(); // dispara em paralelo, sem bloquear
   const de  = document.getElementById('kr-de')?.value||'';
   const ate = document.getElementById('kr-ate')?.value||'';
   let url = '/api/kits/semanas/ranking';
@@ -649,6 +655,48 @@ async function carregarRanking() {
               <td style="min-width:120px">
                 <div style="background:#f0ebe4;border-radius:4px;height:8px">
                   <div style="background:var(--green);width:${barW}%;height:100%;border-radius:4px;transition:.4s"></div>
+                </div>
+              </td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+async function carregarRankingProdutos() {
+  const de  = document.getElementById('kr-de')?.value||'';
+  const ate = document.getElementById('kr-ate')?.value||'';
+  let url = '/api/kits/relatorio-produtos';
+  const p = []; if(de) p.push('data_ini='+de); if(ate) p.push('data_fim='+ate);
+  if(p.length) url += '?'+p.join('&');
+  const d = await api.get(url);
+  const el = document.getElementById('ranking-produtos');
+  if (!d.ok || !d.data.length) {
+    el.innerHTML = '<div style="text-align:center;padding:24px;color:var(--muted)">Sem dados. Registre semanas de vendas primeiro.</div>';
+    return;
+  }
+  const rows = d.data;
+  const maxVend = rows.reduce((m,r)=>Math.max(m,r.unidades_estimadas_vendidas),0);
+  el.innerHTML = `
+    <div class="card" style="overflow-x:auto">
+      <table class="tbl">
+        <thead><tr>
+          <th>#</th><th>Produto</th><th class="r">Presente em</th>
+          <th class="r">Volume Estimado</th><th>Destaque</th>
+        </tr></thead>
+        <tbody>
+          ${rows.slice(0,20).map((r,i) => {
+            const barW = maxVend>0?Math.round(r.unidades_estimadas_vendidas/maxVend*100):0;
+            const top3 = i<3;
+            return `<tr style="${top3?'background:#fff8e1':''}">
+              <td style="font-weight:700;color:var(--muted);font-size:13px">${top3?'👑':''} ${i+1}</td>
+              <td style="font-weight:600">${r.produto_nome}${r.codigo_produto?` <span style="font-size:10px;color:var(--muted)">(${r.codigo_produto})</span>`:''}</td>
+              <td style="text-align:right;color:var(--muted)">${r.qtd_kits} kit(s)</td>
+              <td style="text-align:right;font-family:'DM Mono',monospace;font-weight:700;color:var(--green)">${r.unidades_estimadas_vendidas} un.</td>
+              <td style="min-width:120px">
+                <div style="background:#f0ebe4;border-radius:4px;height:8px">
+                  <div style="background:${top3?'#f59e0b':'var(--green)'};width:${barW}%;height:100%;border-radius:4px;transition:.4s"></div>
                 </div>
               </td>
             </tr>`;
