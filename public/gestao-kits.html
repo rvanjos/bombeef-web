@@ -1715,17 +1715,50 @@ async function carregarRelatorio() {
       </div>
     </div>
     <div class="card">
-      <div class="card-title">🥇 Itens Mais Escolhidos por Slot</div>
-      ${r.itens_mais_escolhidos.length?`<table>
-        <tr><th>Slot</th><th>Produto</th><th>Vezes escolhido</th><th>Qtd total</th></tr>
-        ${r.itens_mais_escolhidos.map(it=>`<tr>
-          <td><span class="badge b-azul">${it.slot_nome||'—'}</span></td>
-          <td>${it.produto_nome||'—'}</td>
-          <td><strong>${it.vezes}</strong></td>
-          <td>${parseFloat(it.qtd_total||0).toFixed(1)}</td>
-          <td>${parseFloat(it.peso_total||0)>0?'<strong>'+parseFloat(it.peso_total).toFixed(2)+' kg</strong>':'—'}</td>
-        </tr>`).join('')}
-      </table>`:'<div class="empty" style="padding:20px">Sem dados</div>'}
+      <div class="card-title">🥇 Produto Mais Escolhido por Slot</div>
+      ${(() => {
+        if (!r.itens_mais_escolhidos.length) return '<div class="empty" style="padding:20px">Sem dados</div>';
+
+        // Agrupar por slot
+        const porSlot = {};
+        r.itens_mais_escolhidos.forEach(it => {
+          const slot = it.slot_nome || '—';
+          if (!porSlot[slot]) porSlot[slot] = [];
+          porSlot[slot].push(it);
+        });
+
+        return Object.entries(porSlot).map(([slot, itens]) => {
+          const totalSlot = itens.reduce((s,i) => s + parseInt(i.vezes), 0);
+          const itensOrdenados = [...itens].sort((a,b) => b.vezes - a.vezes);
+          return `
+          <div style="margin-bottom:18px">
+            <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">
+              📦 ${slot} <span style="font-weight:400;text-transform:none">— ${totalSlot} pedido(s) no total</span>
+            </div>
+            <table>
+              <tr><th>Produto</th><th>Vezes</th><th>Participação</th><th>Qtd total</th><th>Peso</th></tr>
+              ${itensOrdenados.map((it, idx) => {
+                const pct = totalSlot > 0 ? (it.vezes / totalSlot * 100) : 0;
+                const isCampeao = idx === 0 && itensOrdenados.length > 1;
+                return `<tr style="${isCampeao?'background:#fff8e1':''}">
+                  <td>${isCampeao?'👑 ':''}${it.produto_nome||'—'}${isCampeao?' <span class="badge" style="background:#fef3c7;color:#92400e;font-size:10px">Preferido</span>':''}</td>
+                  <td><strong>${it.vezes}</strong></td>
+                  <td style="min-width:140px">
+                    <div style="display:flex;align-items:center;gap:6px">
+                      <div style="flex:1;background:#f0ece6;border-radius:4px;height:8px;overflow:hidden">
+                        <div style="width:${pct.toFixed(0)}%;height:100%;background:${isCampeao?'#f59e0b':'#94a3b8'}"></div>
+                      </div>
+                      <span style="font-size:11px;color:var(--muted);min-width:34px">${pct.toFixed(0)}%</span>
+                    </div>
+                  </td>
+                  <td>${parseFloat(it.qtd_total||0).toFixed(1)}</td>
+                  <td>${parseFloat(it.peso_total||0)>0?parseFloat(it.peso_total).toFixed(2)+' kg':'—'}</td>
+                </tr>`;
+              }).join('')}
+            </table>
+          </div>`;
+        }).join('');
+      })()}
     </div>
     <div class="card" style="margin-top:14px">
       <div class="card-title">👥 Clientes — Volume e Frequência</div>
