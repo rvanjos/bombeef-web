@@ -49,6 +49,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
 .md{background:var(--white);border-radius:13px;width:100%;max-width:600px;max-height:92vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3);}
 .md-lg{max-width:1050px;max-height:95vh;}
 @media(max-width:700px){
+  html, body { overflow: visible !important; height: auto !important; }
+  .body { overflow-y: auto !important; -webkit-overflow-scrolling: touch; height: auto !important; }
   .md,.md-lg{max-width:100%;max-height:96vh;border-radius:16px 16px 0 0;margin-top:auto;}
   .mbg{align-items:flex-end;padding:0;}
   .md-lg .mdb{padding:12px;}
