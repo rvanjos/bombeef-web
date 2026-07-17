@@ -231,26 +231,6 @@ module.exports = function (pool) {
   // GET /:id  ← deve ficar DEPOIS das rotas específicas
   // ── GET /relatorio-produtos — quais produtos mais chamam atenção entre os kits ──
   // Cruza a composição (kit_itens) com o histórico de vendas semanal (kit_semanas)
-  // ── GET /debug-itens — diagnóstico bruto, remover depois ────────────────────
-  r.get('/debug-itens', async (req, res) => {
-    try {
-      const kits = await pool.query(`SELECT id, codigo, nome, ativo FROM kits ORDER BY id LIMIT 30`);
-      const itens = await pool.query(`SELECT id, kit_id, codigo_produto, descricao_produto, quantidade FROM kit_itens ORDER BY kit_id LIMIT 50`);
-      const semanas = await pool.query(`SELECT id, kit_id, semana_ini, semana_fim, qtd_vendida FROM kit_semanas ORDER BY id DESC LIMIT 20`);
-      res.json({
-        ok: true,
-        total_kits: kits.rows.length,
-        kits: kits.rows,
-        total_itens: itens.rows.length,
-        itens: itens.rows,
-        total_semanas: semanas.rows.length,
-        semanas: semanas.rows,
-      });
-    } catch(e) {
-      res.status(500).json({ ok: false, erro: e.message, stack: e.stack });
-    }
-  });
-
   r.get('/relatorio-produtos', async (req, res) => {
     const { data_ini, data_fim } = req.query;
     const conds = [], params = [];
@@ -273,13 +253,6 @@ module.exports = function (pool) {
         WHERE COALESCE(k.ativo, true) = true
         GROUP BY chave_produto
       `);
-      console.log(`[relatorio-produtos] presenca.rows.length=${presenca.rows.length}`);
-      if (presenca.rows.length === 0) {
-        // Diagnóstico: contar quantos kit_itens e kits existem no total
-        const totKI = await pool.query(`SELECT COUNT(*) AS n FROM kit_itens`);
-        const totK  = await pool.query(`SELECT COUNT(*) AS n FROM kits WHERE COALESCE(ativo,true)=true`);
-        console.log(`[relatorio-produtos] diagnostico: kit_itens total=${totKI.rows[0].n}, kits ativos=${totK.rows[0].n}`);
-      }
 
       // 2. Para cada kit, volume vendido no período (via kit_semanas)
       const vendasPorKit = await pool.query(`
