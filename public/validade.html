@@ -422,6 +422,7 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
       <button class="btn btn-p" style="padding:5px 12px" onclick="vincularSelecionados()">🔗 Vincular selecionados</button>
       <span style="color:var(--muted)">|</span>
       <button class="btn" style="padding:5px 12px;background:#dcfce7;color:#166534;border:1px solid #86efac" onclick="encerrarSelecionadosVal('vendido')">✅ Marcar vendido</button>
+      <button class="btn" style="padding:5px 12px;background:#dbeafe;color:#1e40af;border:1px solid #93c5fd" onclick="encerrarSelecionadosVal('devolucao')">↩️ Devolução</button>
       <button class="btn" style="padding:5px 12px;background:#f1f5f9;color:#475569;border:1px solid #cbd5e1" onclick="encerrarSelecionadosVal('descartado')">🗑 Marcar descartado</button>
     </div>
     <div class="card">
@@ -430,6 +431,7 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
         <button class="btn btn-s" style="padding:4px 10px;font-size:11px" onclick="valSelecionarTodos()">Todos da página</button>
         <button class="btn btn-s" style="padding:4px 10px;font-size:11px" onclick="valLimparSel()">✕ Limpar</button>
         <button class="btn btn-g" style="padding:4px 10px;font-size:11px" onclick="encerrarSelecionados('vendido')">✅ Marcar vendido</button>
+        <button class="btn" style="padding:4px 10px;font-size:11px;background:#dbeafe;color:#1e40af;border:1px solid #93c5fd" onclick="encerrarSelecionados('devolucao')">↩️ Devolução</button>
         <button class="btn btn-s" style="padding:4px 10px;font-size:11px" onclick="encerrarSelecionados('descartado')">🗑️ Marcar descartado</button>
         <button class="btn btn-r" style="padding:4px 10px;font-size:11px" onclick="excluirSelecionadosVal()">✕ Excluir</button>
       </div>
@@ -586,6 +588,7 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
     <select id="flt-resolucao" class="flt" onchange="carregarHistorico()" style="padding:6px 9px;border:1px solid var(--border);border-radius:7px;font-size:12px">
       <option value="todos">Todos os motivos</option>
       <option value="vendido">✅ Vendido</option>
+      <option value="devolucao">↩️ Devolução</option>
       <option value="vencimento">💀 Vencido/Descarte</option>
       <option value="acao">📋 Ação realizada</option>
       <option value="outro">Outro</option>
@@ -1147,7 +1150,7 @@ async function carregar(){
   });
 
   // Separa ativos (não vendido/descartado) dos encerrados
-  const ativos = todos.filter(v => v.status !== 'vendido' && v.status !== 'descartado');
+  const ativos = todos.filter(v => v.status !== 'vendido' && v.status !== 'descartado' && v.status !== 'devolucao');
   itens = ativos;
 
   // Se o filtro sem código estava ativo, mantém — senão aplica filtro de status
@@ -1248,7 +1251,7 @@ async function encerrarSelecionadosVal(resolucao) {
   const ids = [...document.querySelectorAll('#tbl-val .row-sel:checked')]
     .map(cb => parseInt(cb.value)).filter(n => !isNaN(n) && n > 0);
   if (!ids.length) { toast('⚠️ Selecione ao menos um item'); return; }
-  const label = resolucao === 'vendido' ? 'vendido' : 'descartado';
+  const label = resolucao === 'vendido' ? 'vendido' : resolucao === 'devolucao' ? 'devolução' : 'descartado';
   if (!confirm(`Marcar ${ids.length} item(s) como ${label}?`)) return;
   const d = await api.post('/api/validade/encerrar-multiplos', { ids, resolucao });
   if (!d.ok) { toast('❌ ' + d.erro); return; }
@@ -1260,7 +1263,7 @@ async function encerrarSelecionadosVal(resolucao) {
 async function encerrarSelecionados(resolucao){
   const ids = [...valSelecionados].map(Number).filter(n => !isNaN(n) && n > 0);
   if(!ids.length){ toast('Selecione ao menos um item'); return; }
-  const label = resolucao === 'vendido' ? 'vendido' : 'descartado';
+  const label = resolucao === 'vendido' ? 'vendido' : resolucao === 'devolucao' ? 'devolução' : 'descartado';
   if(!confirm(`Marcar ${ids.length} item(s) como ${label}?`)) return;
   try {
     const d = await api.post('/api/validade/encerrar-multiplos', { ids, resolucao });
@@ -1471,10 +1474,10 @@ function renderVal(lista){
 
     tb.innerHTML = sorted.map(v=>{
       const dias = calcDias(v.data_validade);
-      const urg  = v.status==='descartado'?'descartado':getUrgencia(dias, v.dias_alerta||7);
-      const urgColors={vencido:'#e74c3c',critico:'#f39c12',alerta:'#f1c40f',ok:'#27ae60',descartado:'#bdc3c7'};
-      const urgBorderColors={vencido:'#a93226',critico:'#ca6f1e',alerta:'#b7950b',ok:'#1e8449',descartado:'#909497'};
-      const urgTextColor={vencido:'#fff',critico:'#fff',alerta:'#1a1a1a',ok:'#fff',descartado:'#333'};
+      const urg  = v.status==='descartado'?'descartado':v.status==='devolucao'?'devolucao':getUrgencia(dias, v.dias_alerta||7);
+      const urgColors={vencido:'#e74c3c',critico:'#f39c12',alerta:'#f1c40f',ok:'#27ae60',descartado:'#bdc3c7',devolucao:'#3b82f6'};
+      const urgBorderColors={vencido:'#a93226',critico:'#ca6f1e',alerta:'#b7950b',ok:'#1e8449',descartado:'#909497',devolucao:'#1e40af'};
+      const urgTextColor={vencido:'#fff',critico:'#fff',alerta:'#1a1a1a',ok:'#fff',descartado:'#333',devolucao:'#fff'};
 
       let diasTxt='';
       if(dias!==null){
@@ -1795,7 +1798,7 @@ function imprimirVencimento(diasIni=-999, diasFim=30) {
     breve:   { label: '📅 ATENÇÃO — Vence em até 30 dias',    items: [], cls: 'ok'      },
   };
 
-  itens.filter(v => v.status !== 'descartado' && v.status !== 'vendido').forEach(v => {
+  itens.filter(v => v.status !== 'descartado' && v.status !== 'vendido' && v.status !== 'devolucao').forEach(v => {
     const dias = calcDias(v.data_validade);
     if (dias === null) return;
     if (dias < diasIni || dias > diasFim) return; // filtro de período
