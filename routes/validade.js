@@ -112,7 +112,7 @@ module.exports = function (pool, app) {
           ELSE 'ok'
         END,
         atualizado_em = NOW()
-      WHERE status NOT IN ('descartado','vendido')
+      WHERE status NOT IN ('descartado','vendido','devolucao')
         AND data_validade IS NOT NULL
       RETURNING id, status
     `);
@@ -135,7 +135,7 @@ module.exports = function (pool, app) {
           COUNT(*) FILTER (WHERE status = 'descartado' AND data_validade >= DATE_TRUNC('month', NOW())) AS descartados_mes,
           COUNT(*) FILTER (WHERE codigo IS NULL OR codigo = '') AS sem_codigo
         FROM validade_items
-        WHERE status NOT IN ('descartado','vendido') OR data_validade >= DATE_TRUNC('month', NOW())
+        WHERE status NOT IN ('descartado','vendido','devolucao') OR data_validade >= DATE_TRUNC('month', NOW())
       `);
       res.json({ ok: true, data: {
         ok:            parseInt(rows[0].ok),
@@ -154,7 +154,7 @@ module.exports = function (pool, app) {
       const { rows: dups } = await pool.query(`
         SELECT codigo, descricao, data_validade, array_agg(id ORDER BY id ASC) AS ids
         FROM validade_items
-        WHERE status NOT IN ('descartado','vendido')
+        WHERE status NOT IN ('descartado','vendido','devolucao')
         GROUP BY codigo, descricao, data_validade
         HAVING COUNT(*) > 1
       `);
@@ -178,7 +178,7 @@ module.exports = function (pool, app) {
       const { rows } = await pool.query(`
         SELECT codigo, descricao, data_validade, COUNT(*) as qtd, array_agg(id ORDER BY id) as ids
         FROM validade_items
-        WHERE status NOT IN ('descartado','vendido')
+        WHERE status NOT IN ('descartado','vendido','devolucao')
         GROUP BY codigo, descricao, data_validade
         HAVING COUNT(*) > 1
         ORDER BY qtd DESC LIMIT 20
@@ -200,7 +200,7 @@ module.exports = function (pool, app) {
         params.push(`%${busca}%`);
         conds.push(`(descricao ILIKE $${params.length} OR codigo ILIKE $${params.length} OR lote ILIKE $${params.length})`);
       }
-      conds.push(`status NOT IN ('descartado','vendido')`);
+      conds.push(`status NOT IN ('descartado','vendido','devolucao')`);
 
       const where = conds.length ? 'WHERE ' + conds.join(' AND ') : '';
       const { rows } = await pool.query(
@@ -260,7 +260,7 @@ module.exports = function (pool, app) {
           (v.data_validade::date - CURRENT_DATE) AS dias_restantes,
           MD5(v.acao_antes_vencer) AS acao_hash
         FROM validade_items v
-        WHERE v.status NOT IN ('descartado','vendido')
+        WHERE v.status NOT IN ('descartado','vendido','devolucao')
           AND v.acao_antes_vencer IS NOT NULL AND v.acao_antes_vencer != ''
           AND v.data_validade IS NOT NULL
           AND v.data_validade::date <= CURRENT_DATE + INTERVAL '7 days'
@@ -328,7 +328,7 @@ module.exports = function (pool, app) {
           (CURRENT_DATE - data_validade::date) AS dias_vencido,
           (data_validade::date - CURRENT_DATE) AS dias_restantes
         FROM validade_items
-        WHERE status NOT IN ('descartado','vendido')
+        WHERE status NOT IN ('descartado','vendido','devolucao')
           AND acao_antes_vencer IS NOT NULL
           AND acao_antes_vencer != ''
           AND data_validade IS NOT NULL
@@ -466,7 +466,7 @@ module.exports = function (pool, app) {
       // Busca todos os itens sem código
       const { rows: semCod } = await pool.query(
         `SELECT id, descricao FROM validade_items
-         WHERE (codigo IS NULL OR codigo = '') AND status NOT IN ('descartado','vendido')`
+         WHERE (codigo IS NULL OR codigo = '') AND status NOT IN ('descartado','vendido','devolucao')`
       );
       if (!semCod.length) return res.json({ ok: true, vinculados: 0, nao_encontrados: 0, detalhes: [] });
 
@@ -713,7 +713,7 @@ module.exports = function (pool, app) {
             COUNT(*) FILTER (WHERE data_validade BETWEEN CURRENT_DATE+4 AND CURRENT_DATE+7) AS qtd_alertas,
             COUNT(*) FILTER (WHERE data_validade BETWEEN CURRENT_DATE+8 AND CURRENT_DATE+15) AS qtd_atencao
           FROM validade_items
-          WHERE status NOT IN ('descartado','vendido')
+          WHERE status NOT IN ('descartado','vendido','devolucao')
         `),
         // Ranking de produtos com maior valor em risco (próximos 15 dias)
         pool.query(`
@@ -729,7 +729,7 @@ module.exports = function (pool, app) {
             acao_antes_vencer,
             localizacao
           FROM validade_items
-          WHERE status NOT IN ('descartado','vendido')
+          WHERE status NOT IN ('descartado','vendido','devolucao')
             AND data_validade <= CURRENT_DATE + 15
             AND COALESCE(preco_custo, 0) > 0
           ORDER BY valor_risco DESC
@@ -808,8 +808,8 @@ module.exports = function (pool, app) {
   r.get('/historico', async (req, res) => {
     try {
       const { resolucao, de, ate, busca } = req.query;
-      // Histórico = encerrados (descartado/vendido) + vencidos ainda ativos
-      const conds = [`(status IN ('descartado','vendido') OR status = 'vencido')`], params = [];
+      // Histórico = encerrados (descartado/vendido/devolucao) + vencidos ainda ativos
+      const conds = [`(status IN ('descartado','vendido','devolucao') OR status = 'vencido')`], params = [];
       if (resolucao && resolucao !== 'todos') {
         if (resolucao === 'vencimento') {
           // Filtra por resolucao='vencimento' OU status='vencido' (não encerrado ainda)
@@ -829,7 +829,7 @@ module.exports = function (pool, app) {
       const cleanParams = params.filter(p => p !== '%');
       const cleanConds  = conds.map(c => c.replace('$'+(params.indexOf('%')+1), "'vencimento'")).filter(c => !c.includes('$NaN'));
       // Monta query mais simples sem o dummy
-      const conds2 = [`(status IN ('descartado','vendido') OR status = 'vencido')`], params2 = [];
+      const conds2 = [`(status IN ('descartado','vendido','devolucao') OR status = 'vencido')`], params2 = [];
       if (resolucao && resolucao !== 'todos') {
         if (resolucao === 'vencimento') {
           conds2.push(`(resolucao='vencimento' OR status='vencido')`);
@@ -986,7 +986,7 @@ module.exports = function (pool, app) {
             SELECT id FROM validade_items
             WHERE data_validade=$1::date
               AND (descricao=$2 OR ($3::text IS NOT NULL AND codigo=$3))
-              AND status NOT IN ('vendido','descartado')
+              AND status NOT IN ('vendido','descartado','devolucao')
             LIMIT 1
           `, [dataVal, desc, cod||null]);
           if(dupCheck.rows.length){ duplicatas++; continue; }
