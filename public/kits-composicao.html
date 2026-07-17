@@ -248,6 +248,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
       <div style="margin-top:20px">
         <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:8px">🥩 Produtos que Mais Chamam Atenção nos Kits</div>
         <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Cruza a composição dos kits ativos com o volume vendido no período — mostra quais produtos circulam mais através dos kits que os contêm.</div>
+        <button onclick="rodarDiagnosticoKits()" style="margin-bottom:10px;padding:6px 14px;background:#fef3c7;border:1px solid #fbbf24;border-radius:6px;font-size:11px;cursor:pointer;color:#92400e">🔍 Diagnóstico (temporário)</button>
+        <div id="diag-kits-resultado" style="font-family:monospace;font-size:10px;white-space:pre-wrap;background:#1a1a1a;color:#0f0;padding:10px;border-radius:6px;max-height:400px;overflow:auto;display:none;margin-bottom:10px"></div>
         <div id="ranking-produtos"></div>
       </div>
     </div>
@@ -665,6 +667,14 @@ async function carregarRanking() {
       </table>
     </div>`;
 }
+
+window.rodarDiagnosticoKits = async function rodarDiagnosticoKits() {
+  const el = document.getElementById('diag-kits-resultado');
+  el.style.display = 'block';
+  el.textContent = 'Carregando...';
+  const d = await api.get('/api/kits/debug-itens');
+  el.textContent = JSON.stringify(d, null, 2);
+};
 
 async function carregarRankingProdutos() {
   const de  = document.getElementById('kr-de')?.value||'';
