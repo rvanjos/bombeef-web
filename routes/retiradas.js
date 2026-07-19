@@ -55,6 +55,7 @@ module.exports = function (pool, app) {
       ['pago_por','INTEGER'],
       ['baixa_pdv','BOOLEAN DEFAULT false'],
       ['dt_baixa_pdv','DATE'],
+      ['baixa_pdv_por','INTEGER'],
     ];
     for(const[c,d]of needed) await pool.query(`ALTER TABLE retiradas ADD COLUMN IF NOT EXISTS ${c} ${d}`).catch(()=>{});
     await pool.query(`UPDATE retiradas SET mes=TO_CHAR(dt_retirada,'MM/YYYY') WHERE mes IS NULL AND dt_retirada IS NOT NULL`).catch(()=>{});
