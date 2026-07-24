@@ -438,16 +438,16 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
       <div style="overflow-x:auto;width:100%"><table class="tbl" id="tbl-val">
         <thead><tr>
           <th style="min-width:24px;width:24px"><input type="checkbox" class="row-sel" id="val-sel-all" id2="sel-all" onchange="valToggleSelAll(this); toggleSelAll(this);" title="Selecionar todos"></th>
-          <th style="min-width:55px">Cód.</th>
-          <th style="min-width:160px">Descrição</th>
-          <th style="min-width:60px">Lote</th>
-          <th style="min-width:82px">Validade</th>
-          <th style="min-width:42px">Dias</th>
-          <th style="min-width:90px">Ação Prev.</th>
-          <th style="min-width:82px">Últ. Conf.</th>
-          <th style="min-width:90px">Responsável</th>
-          <th style="min-width:72px">Status</th>
-          <th style="min-width:60px">Ações</th>
+          <th style="min-width:50px">Cód.</th>
+          <th style="min-width:140px">Descrição</th>
+          <th style="min-width:50px">Lote</th>
+          <th style="min-width:78px">Validade</th>
+          <th style="min-width:38px">Dias</th>
+          <th style="min-width:80px">Ação Prev.</th>
+          <th style="min-width:78px">Últ. Conf.</th>
+          <th style="min-width:80px">Responsável</th>
+          <th style="min-width:68px">Status</th>
+          <th style="min-width:170px">Ações</th>
         </tr></thead>
         <tbody id="tbody-val"></tbody>
       </table></div>
@@ -1561,12 +1561,12 @@ function renderVal(lista){
         <td style="font-size:11px">${fmt.date(v.ultima_conferencia)||'—'}</td>
         <td style="font-size:12px;font-weight:600">${v.responsavel||'—'}</td>
         <td>${urgBadge}</td>
-        <td style="white-space:nowrap">
-          <button class="act-btn" onclick="abrirModal(${v.id})" title="Editar">✏️</button>
-          ${!v.codigo?`<button class="act-btn" onclick="abrirVincular(${v.id})" title="Vincular código">🔗</button>`:''}
+        <td style="white-space:nowrap;padding:4px 6px">
+          <button class="act-btn" onclick="abrirModal(${v.id})" title="Editar" style="padding:3px 6px">✏️</button>
+          ${!v.codigo?`<button class="act-btn" onclick="abrirVincular(${v.id})" title="Vincular código" style="padding:3px 6px">🔗</button>`:''}
           <button class="act-btn" onclick="marcarVendidoRapido(${v.id})" style="background:#dcfce7;color:#166534;border:1px solid #86efac;padding:3px 6px;border-radius:5px;font-size:13px" title="Marcar como vendido — não entra como perda">✅</button>
-          ${v.status!=='descartado'?`<button class="act-btn" onclick="perdaRapida(${v.id})" style="color:var(--red-l)" title="Registrar como perda/descarte">📉</button>`:''}
-          <button class="act-btn" onclick="excluirItem(${v.id})" style="color:var(--muted);font-size:13px" title="Excluir">×</button>
+          ${v.status!=='descartado'?`<button class="act-btn" onclick="perdaRapida(${v.id})" style="color:var(--red-l);padding:3px 6px" title="Registrar como perda/descarte">📉</button>`:''}
+          <button class="act-btn" onclick="excluirItem(${v.id})" style="color:var(--muted);font-size:13px;padding:3px 6px" title="Excluir">×</button>
         </td>
       </tr>`;
     }).join('');
