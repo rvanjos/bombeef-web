@@ -960,7 +960,7 @@ function _mkDashRow(v) {
   const acao = v.acao_antes_vencer?`<span style="font-size:10px;color:var(--muted);margin-left:8px">📋 ${v.acao_antes_vencer}</span>`:'';
   const loc  = v.localizacao?`<span style="font-size:10px;color:var(--blue);margin-left:8px">📍 ${v.localizacao}</span>`:'';
   const qtd  = v.qtd_unidades?`<span style="font-size:11px;color:var(--muted)">${v.qtd_unidades} un.</span>`:'';
-  return `<tr style="background:${bgRow};border-bottom:1px solid #f0e8e0;cursor:pointer;touch-action:pan-y" onclick="abrirModal(${v.id})">
+  return `<tr style="background:${bgRow};border-bottom:1px solid #f0e8e0;cursor:pointer;touch-action:pan-y" ondblclick="abrirModal(${v.id})" title="Clique duas vezes para editar">
     <td style="padding:7px 12px;font-family:'DM Mono',monospace;font-size:11px;color:var(--muted)">${v.codigo||'—'}</td>
     <td style="padding:7px 12px;font-weight:600;font-size:13px">${v.descricao}${acao}${loc}</td>
     <td style="padding:7px 12px;font-size:11px;text-align:center">${qtd}</td>
@@ -1561,7 +1561,7 @@ function renderVal(lista){
         <td style="font-size:11px">${fmt.date(v.ultima_conferencia)||'—'}</td>
         <td style="font-size:12px;font-weight:600">${v.responsavel||'—'}</td>
         <td>${urgBadge}</td>
-        <td style="white-space:nowrap;padding:4px 6px">
+        <td style="white-space:nowrap;padding:4px 6px" onclick="event.stopPropagation()" ondblclick="event.stopPropagation()">
           <button class="act-btn" onclick="abrirModal(${v.id})" title="Editar" style="padding:3px 6px">✏️</button>
           ${!v.codigo?`<button class="act-btn" onclick="abrirVincular(${v.id})" title="Vincular código" style="padding:3px 6px">🔗</button>`:''}
           <button class="act-btn" onclick="marcarVendidoRapido(${v.id})" style="background:#dcfce7;color:#166534;border:1px solid #86efac;padding:3px 6px;border-radius:5px;font-size:13px" title="Marcar como vendido — não entra como perda">✅</button>
