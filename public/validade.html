@@ -39,6 +39,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
 
 /* ── TABS ── */
 .tabs{display:flex;gap:0;padding:0 4px;background:var(--white);border-bottom:2px solid var(--border);overflow-x:auto;scrollbar-width:none;;flex-shrink:0;}
+/* Abas fixas no topo da área rolável — não somem ao descer listas longas */
+.body > .tabs{position:sticky;top:0;z-index:20;margin:0 -18px 12px;padding:0 22px;box-shadow:0 2px 8px rgba(0,0,0,.06);}
 .tab,.tab-btn{
   padding:10px 16px;font-size:12px;font-weight:600;cursor:pointer;
   border:none;background:none;color:var(--muted);
@@ -63,8 +65,8 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
 .card{background:var(--white);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);}
 tr[onclick]{touch-action:pan-y;-webkit-tap-highlight-color:rgba(0,0,0,0.05);}
 *{-webkit-overflow-scrolling:touch;}
-.tbl{width:100%;border-collapse:collapse;}
-.tbl th{background:#fdf6ee;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700;padding:9px 12px;text-align:left;border-bottom:2px solid var(--border);}
+.tbl{width:100%;border-collapse:separate;border-spacing:0;}
+.tbl th{background:#fdf6ee;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700;padding:9px 12px;text-align:left;border-bottom:2px solid var(--border);position:sticky;top:40px;z-index:5;}
 .tbl td{padding:6px 8px;font-size:12px;border-bottom:1px solid #f5efe8;vertical-align:middle;}
   #tbl-val{table-layout:auto;width:max-content;min-width:100%;}
   #tbl-val th,#tbl-val td{padding:4px 6px;font-size:11px;white-space:nowrap;}
@@ -435,7 +437,7 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
         <button class="btn btn-s" style="padding:4px 10px;font-size:11px" onclick="encerrarSelecionados('descartado')">🗑️ Marcar descartado</button>
         <button class="btn btn-r" style="padding:4px 10px;font-size:11px" onclick="excluirSelecionadosVal()">✕ Excluir</button>
       </div>
-      <div style="overflow-x:auto;width:100%"><table class="tbl" id="tbl-val">
+      <div style="width:100%"><table class="tbl" id="tbl-val">
         <thead><tr>
           <th style="min-width:24px;width:24px"><input type="checkbox" class="row-sel" id="val-sel-all" id2="sel-all" onchange="valToggleSelAll(this); toggleSelAll(this);" title="Selecionar todos"></th>
           <th style="min-width:50px">Cód.</th>
@@ -466,7 +468,7 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
       <button class="btn btn-s" onclick="abrirRelPerdas()" style="background:#fff0f0;color:#991b1b;border-color:#fca5a5" title="Relatório de perdas">🖨️ Rel. Perdas</button>
       <div style="margin-left:auto;font-size:13px" id="meta-perdas-info"></div>
     </div>
-    <div style="overflow-x:auto">
+    <div style="width:100%">
       <table class="tbl">
         <thead><tr><th>Data</th><th>Produto</th><th>Motivo</th><th>Qtd</th><th>Valor Perda</th><th>Funcionário</th><th>Ações</th></tr></thead>
         <tbody id="tbody-perdas"></tbody>
@@ -602,7 +604,7 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
     <button class="btn btn-s bb-desktop-only" onclick="exportarHistXLS()" title="Exportar para Excel formatado" style="background:#217346;color:#fff;border-color:#217346">📊 Excel</button>
     <span id="hist-count" style="font-size:11px;color:var(--muted);margin-left:4px"></span>
   </div>
-  <div style="overflow-x:auto">
+  <div style="width:100%">
     <table class="tbl" id="tbl-hist">
       <thead><tr>
         <th>Código</th><th>Produto</th><th>Validade</th>
