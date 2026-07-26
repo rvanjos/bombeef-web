@@ -647,7 +647,7 @@ async function carregarRanking() {
             const pct = parseFloat(r.pct_medio||0);
             const pctCor = pct>=90?'var(--green)':pct>=60?'var(--orange)':'var(--red-l)';
             const barW = maxVend>0?Math.round(parseInt(r.total_vendido)/maxVend*100):0;
-            return `<tr>
+            return `<tr onclick="abrirKit(${r.id})" style="cursor:pointer" title="Ver produtos do kit">
               <td style="font-weight:700;color:var(--muted);font-size:13px">${i+1}</td>
               <td style="font-weight:600">${r.codigo?r.codigo+' — ':''}${r.nome}</td>
               <td style="text-align:right;font-family:'DM Mono',monospace">${r.total_produzido}</td>

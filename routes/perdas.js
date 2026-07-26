@@ -87,13 +87,21 @@ module.exports = function (pool, app) {
       );
       const totalPerdas = parseFloat(perdas[0].total);
 
-      // Meta do mês
+      // Meta do mês (percentual configurado em Gestão de Metas)
       const { rows: metas } = await pool.query(
-        `SELECT faturamento_real, meta_perda_pct FROM metas WHERE mes = $1 LIMIT 1`, [mes]
+        `SELECT meta_perda_pct FROM metas WHERE mes = $1 LIMIT 1`, [mes]
       );
       const meta = metas[0] || {};
-      const faturamento  = parseFloat(meta.faturamento_real || 0);
-      const metaPct      = parseFloat(meta.meta_perda_pct || 0);
+
+      // Faturamento real sempre vem de faturamento_periodos (mesma fonte de verdade
+      // usada pelo módulo de Faturamento) — não do campo estático metas.faturamento_real
+      const { rows: fatRows } = await pool.query(
+        `SELECT COALESCE(SUM(fat_bruto), 0) AS total
+         FROM faturamento_periodos
+         WHERE TO_CHAR(data_inicio,'MM/YYYY') = $1`, [mes]
+      );
+      const faturamento  = parseFloat(fatRows[0].total || 0);
+      const metaPct      = parseFloat(meta.meta_perda_pct || 2);
       const metaValor    = faturamento > 0 ? (faturamento * metaPct / 100) : 0;
       const perdaPct     = faturamento > 0 ? (totalPerdas / faturamento * 100) : 0;
 
