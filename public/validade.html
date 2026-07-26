@@ -477,6 +477,39 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
     </div>
   </div>
 
+<!-- ── HISTÓRICO ── -->
+<div id="sec-historico" style="display:none">
+  <div class="toolbar" style="flex-wrap:wrap;gap:6px">
+    <div class="search-w"><input type="text" id="busca-hist" placeholder="Código, produto..." oninput="carregarHistorico()"></div>
+    <select id="flt-resolucao" class="flt" onchange="carregarHistorico()" style="padding:6px 9px;border:1px solid var(--border);border-radius:7px;font-size:12px">
+      <option value="todos">Todos os motivos</option>
+      <option value="vendido">✅ Vendido</option>
+      <option value="devolucao">↩️ Devolução</option>
+      <option value="vencimento">💀 Vencido/Descarte</option>
+      <option value="acao">📋 Ação realizada</option>
+      <option value="outro">Outro</option>
+    </select>
+    <span style="font-size:11px;color:var(--muted)">De:</span>
+    <input type="date" id="flt-hist-de" class="flt" style="padding:6px 9px;border:1px solid var(--border);border-radius:7px;font-size:12px" onchange="carregarHistorico()">
+    <span style="font-size:11px;color:var(--muted)">até:</span>
+    <input type="date" id="flt-hist-ate" class="flt" style="padding:6px 9px;border:1px solid var(--border);border-radius:7px;font-size:12px" onchange="carregarHistorico()">
+    <button class="btn btn-s" onclick="limparFiltrosHist()">✕ Limpar</button>
+    <button class="btn btn-s" id="hist-expand-btn" onclick="toggleHistExpand()" title="Expandir / compactar visualização">⤢ Expandir</button>
+    <button class="btn btn-s bb-desktop-only" onclick="exportarHistXLS()" title="Exportar para Excel formatado" style="background:#217346;color:#fff;border-color:#217346">📊 Excel</button>
+    <span id="hist-count" style="font-size:11px;color:var(--muted);margin-left:4px"></span>
+  </div>
+  <div style="width:100%">
+    <table class="tbl" id="tbl-hist">
+      <thead><tr>
+        <th>Código</th><th>Produto</th><th>Validade</th>
+        <th>Encerrado em</th><th>Motivo</th><th>Ação Prev.</th><th>Observação</th><th>Responsável</th>
+        <th style="text-align:center">Ações</th>
+      </tr></thead>
+      <tbody id="tbody-hist"></tbody>
+    </table>
+  </div>
+  <div class="empty" id="empty-hist" style="display:none"><p>Nenhum item no histórico.</p></div>
+</div>
 </div>
 
 <!-- Modal Validade -->
@@ -583,39 +616,6 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
   </div>
 </div>
 
-<!-- ── HISTÓRICO ── -->
-<div id="sec-historico" style="display:none">
-  <div class="toolbar" style="flex-wrap:wrap;gap:6px">
-    <div class="search-w"><input type="text" id="busca-hist" placeholder="Código, produto..." oninput="carregarHistorico()"></div>
-    <select id="flt-resolucao" class="flt" onchange="carregarHistorico()" style="padding:6px 9px;border:1px solid var(--border);border-radius:7px;font-size:12px">
-      <option value="todos">Todos os motivos</option>
-      <option value="vendido">✅ Vendido</option>
-      <option value="devolucao">↩️ Devolução</option>
-      <option value="vencimento">💀 Vencido/Descarte</option>
-      <option value="acao">📋 Ação realizada</option>
-      <option value="outro">Outro</option>
-    </select>
-    <span style="font-size:11px;color:var(--muted)">De:</span>
-    <input type="date" id="flt-hist-de" class="flt" style="padding:6px 9px;border:1px solid var(--border);border-radius:7px;font-size:12px" onchange="carregarHistorico()">
-    <span style="font-size:11px;color:var(--muted)">até:</span>
-    <input type="date" id="flt-hist-ate" class="flt" style="padding:6px 9px;border:1px solid var(--border);border-radius:7px;font-size:12px" onchange="carregarHistorico()">
-    <button class="btn btn-s" onclick="limparFiltrosHist()">✕ Limpar</button>
-    <button class="btn btn-s" id="hist-expand-btn" onclick="toggleHistExpand()" title="Expandir / compactar visualização">⤢ Expandir</button>
-    <button class="btn btn-s bb-desktop-only" onclick="exportarHistXLS()" title="Exportar para Excel formatado" style="background:#217346;color:#fff;border-color:#217346">📊 Excel</button>
-    <span id="hist-count" style="font-size:11px;color:var(--muted);margin-left:4px"></span>
-  </div>
-  <div style="width:100%">
-    <table class="tbl" id="tbl-hist">
-      <thead><tr>
-        <th>Código</th><th>Produto</th><th>Validade</th>
-        <th>Encerrado em</th><th>Motivo</th><th>Ação Prev.</th><th>Observação</th><th>Responsável</th>
-        <th style="text-align:center">Ações</th>
-      </tr></thead>
-      <tbody id="tbody-hist"></tbody>
-    </table>
-  </div>
-  <div class="empty" id="empty-hist" style="display:none"><p>Nenhum item no histórico.</p></div>
-</div>
 
 <!-- Modal Editar Histórico -->
 <div class="modal-bg" id="modal-edit-hist">
