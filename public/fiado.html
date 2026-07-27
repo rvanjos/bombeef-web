@@ -1947,10 +1947,12 @@ window.imprimirRelatorioFiado = function imprimirRelatorioFiado() {
     const c = _clientes.find(x=>x.id===v.cliente_id);
     const statusMap = { aberto:'⏳ Aberto', parcial:'🔶 Parcial', pago:'✅ Pago', aguardando:'⏳ Aguardando', cancelado:'❌ Cancelado', reprovado:'❌ Reprovado' };
     const pdv = v.baixa_pdv ? '✅' : '—';
+    const produtos = (v.itens||[]).map(i => `${i.nome_produto}${i.quantidade?' ×'+i.quantidade:''}`).join(', ') || '—';
     return `<tr>
       <td>${fmtDtBrLocal((v.data_compra||'').slice(0,10))}</td>
       <td><b>${c?.nome||'—'}</b></td>
       <td style="font-size:10px">${c?.tipo_cliente||'—'}</td>
+      <td style="font-size:10px">${produtos}</td>
       <td style="text-align:right;font-weight:700">${brl(v.total_final)}</td>
       <td style="text-align:right;color:${parseFloat(v.saldo_restante||0)>0?'#dc2626':'#16a34a'}">${brl(v.saldo_restante)}</td>
       <td style="text-align:center;font-size:10px">${statusMap[v.status]||v.status}</td>
@@ -2013,10 +2015,10 @@ window.imprimirRelatorioFiado = function imprimirRelatorioFiado() {
     <div class="scroll-hint">👉 Arraste a tabela para o lado para ver todas as colunas</div>
     <div class="tbl-scroll">
     <table>
-      <thead><tr><th>Data</th><th>Cliente</th><th>Tipo</th><th style="text-align:right">Total</th><th style="text-align:right">Saldo</th><th style="text-align:center">Status</th><th style="text-align:center">PDV</th></tr></thead>
+      <thead><tr><th>Data</th><th>Cliente</th><th>Tipo</th><th>Produtos</th><th style="text-align:right">Total</th><th style="text-align:right">Saldo</th><th style="text-align:center">Status</th><th style="text-align:center">PDV</th></tr></thead>
       <tbody>${linhas}</tbody>
       <tfoot><tr class="total-row">
-        <td colspan="3">TOTAL DO PERÍODO</td>
+        <td colspan="4">TOTAL DO PERÍODO</td>
         <td style="text-align:right">${brl(totalVendido)}</td>
         <td style="text-align:right">${brl(totalAberto)}</td>
         <td></td>
@@ -2066,16 +2068,17 @@ async function gerarRelatorio() {
     </div>
     ${!st ? `<div style="font-size:11px;color:var(--muted);margin-bottom:10px">ℹ️ Vendas canceladas/reprovadas não entram neste total. Selecione o status para incluí-las.</div>` : ''}
     <div style="overflow-x:auto"><table class="tbl">
-      <thead><tr><th>Cliente</th><th>Tipo</th><th>Data</th><th style="text-align:right">Total</th><th style="text-align:right">Saldo</th><th>Status</th></tr></thead>
-      <tbody>${lista.map(v=>{const c=_clientes.find(x=>x.id===v.cliente_id);return`<tr><td>${c?.nome||'—'}</td><td>${c?.tipo_cliente||'—'}</td><td>${v.data_compra?.slice(0,10).split('-').reverse().join('/')}</td><td class="mono" style="text-align:right">${fmt.brl(parseFloat(v.total_final||0))}</td><td class="mono" style="text-align:right">${fmt.brl(parseFloat(v.saldo_restante||0))}</td><td><span class="badge ${STATUS_CLASS[v.status]||''}">${STATUS_LABEL[v.status]||v.status}</span></td></tr>`}).join('')}</tbody>
+      <thead><tr><th>Cliente</th><th>Tipo</th><th>Data</th><th>Produtos</th><th style="text-align:right">Total</th><th style="text-align:right">Saldo</th><th>Status</th></tr></thead>
+      <tbody>${lista.map(v=>{const c=_clientes.find(x=>x.id===v.cliente_id);const prods=(v.itens||[]).map(i=>`${i.nome_produto}${i.quantidade?' ×'+i.quantidade:''}`).join(', ')||'—';return`<tr><td>${c?.nome||'—'}</td><td>${c?.tipo_cliente||'—'}</td><td>${v.data_compra?.slice(0,10).split('-').reverse().join('/')}</td><td style="font-size:11px;color:var(--muted);max-width:220px">${prods}</td><td class="mono" style="text-align:right">${fmt.brl(parseFloat(v.total_final||0))}</td><td class="mono" style="text-align:right">${fmt.brl(parseFloat(v.saldo_restante||0))}</td><td><span class="badge ${STATUS_CLASS[v.status]||''}">${STATUS_LABEL[v.status]||v.status}</span></td></tr>`}).join('')}</tbody>
     </table></div>`;
 }
 
 function exportarRelatorio() {
-  const linhas = [['Cliente','Tipo','Data','Total','Saldo','Status']];
+  const linhas = [['Cliente','Tipo','Data','Produtos','Total','Saldo','Status']];
   _vendas.forEach(v => {
     const c=_clientes.find(x=>x.id===v.cliente_id);
-    linhas.push([c?.nome||'',c?.tipo_cliente||'',v.data_compra?.slice(0,10)||'',parseFloat(v.total_final||0).toFixed(2),parseFloat(v.saldo_restante||0).toFixed(2),v.status]);
+    const produtos = (v.itens||[]).map(i=>`${i.nome_produto}${i.quantidade?' x'+i.quantidade:''}`).join(' | ');
+    linhas.push([c?.nome||'',c?.tipo_cliente||'',v.data_compra?.slice(0,10)||'',produtos,parseFloat(v.total_final||0).toFixed(2),parseFloat(v.saldo_restante||0).toFixed(2),v.status]);
   });
   const csv = linhas.map(l=>l.join(';')).join('\n');
   const a=document.createElement('a');
