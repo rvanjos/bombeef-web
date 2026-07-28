@@ -265,6 +265,14 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
   .body > .tabs { position: static !important; margin: 0 0 12px !important; padding: 0 4px !important; box-shadow: none !important; }
   .tbl th { position: static !important; }
 }
+
+/* Popover do seletor de colunas */
+.bb-cols-pop{position:fixed;z-index:9999;background:var(--white);border:1px solid var(--border);
+  border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.18);padding:12px;min-width:210px;
+  max-height:280px;overflow-y:auto;font-family:'DM Sans',sans-serif;}
+.bb-cols-btn{padding:6px 11px;border:1px solid var(--border);background:var(--white);border-radius:7px;
+  font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;color:var(--text);white-space:nowrap;}
+.bb-cols-btn:hover{background:#faf7f4;}
 </style>
 </head>
 <body>
@@ -422,6 +430,7 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
       <button class="val-pill" data-val="vencido" onclick="valSetPill(this,'vencido')">Vencidos</button>
       <button class="val-pill" data-val="alerta" onclick="valSetPill(this,'alerta')">Próximos</button>
       <button class="val-pill" data-val="ok" onclick="valSetPill(this,'ok')">Não vencidos</button>
+      <button class="bb-cols-btn" data-cols-btn="tbl-val" onclick="bbColunas.abrir('tbl-val')" title="Escolher quais colunas aparecem">⚙️ Colunas</button>
     </div>
     <!-- Barra de seleção múltipla -->
     <div class="sel-bar" id="sel-bar">
@@ -483,10 +492,11 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
       <button class="btn btn-r" onclick="abrirPerda()">＋ Registrar Perda</button>
       <input type="month" id="flt-mes-perdas" class="flt" style="padding:7px 10px" onchange="carregarPerdas()">
       <button class="btn btn-s" onclick="abrirRelPerdas()" style="background:#fff0f0;color:#991b1b;border-color:#fca5a5" title="Relatório de perdas">🖨️ Rel. Perdas</button>
+      <button class="bb-cols-btn" data-cols-btn="tbl-perdas" onclick="bbColunas.abrir('tbl-perdas')" title="Escolher quais colunas aparecem">⚙️ Colunas</button>
       <div style="margin-left:auto;font-size:13px" id="meta-perdas-info"></div>
     </div>
     <div class="bb-tbl-scroll" style="width:100%">
-      <table class="tbl">
+      <table class="tbl" id="tbl-perdas">
         <thead><tr><th>Data</th><th>Produto</th><th>Motivo</th><th>Qtd</th><th>Valor Perda</th><th>Funcionário</th><th>Ações</th></tr></thead>
         <tbody id="tbody-perdas"></tbody>
       </table>
@@ -512,6 +522,7 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
     <input type="date" id="flt-hist-ate" class="flt" style="padding:6px 9px;border:1px solid var(--border);border-radius:7px;font-size:12px" onchange="carregarHistorico()">
     <button class="btn btn-s" onclick="limparFiltrosHist()">✕ Limpar</button>
     <button class="btn btn-s" id="hist-expand-btn" onclick="toggleHistExpand()" title="Expandir / compactar visualização">⤢ Expandir</button>
+    <button class="bb-cols-btn" data-cols-btn="tbl-hist" onclick="bbColunas.abrir('tbl-hist')" title="Escolher quais colunas aparecem">⚙️ Colunas</button>
     <button class="btn btn-s bb-desktop-only" onclick="exportarHistXLS()" title="Exportar para Excel formatado" style="background:#217346;color:#fff;border-color:#217346">📊 Excel</button>
     <span id="hist-count" style="font-size:11px;color:var(--muted);margin-left:4px"></span>
   </div>
@@ -851,6 +862,7 @@ BB.modulo({
     fmt   = BB.fmt;
     toast = BB.toast;
     init();
+    bbColunas.aplicarTodas();   // reaplica as colunas que o usuario escondeu
   },
   // Recarrega dados sem resetar os filtros de mês que o usuário tiver aberto
   reload: () => { carregar(); carregarKPIs(); },
@@ -1002,8 +1014,8 @@ function _mkDashRow(v) {
 
 function _mkDashTable(lista) {
   if(!lista.length) return '';
-  return `<div style="background:var(--white);border-radius:0 0 9px 9px;box-shadow:var(--shadow);overflow-x:auto;-webkit-overflow-scrolling:touch">
-    <table style="width:100%;border-collapse:collapse;font-size:12px">
+  return `<div class="bb-tbl-scroll" style="max-width:100%;background:var(--white);border-radius:0 0 9px 9px;box-shadow:var(--shadow);overflow-x:auto;-webkit-overflow-scrolling:touch">
+    <table class="tbl-dash" style="width:100%;border-collapse:collapse;font-size:12px">
       <thead><tr style="background:#f8f4f0">
         <th style="padding:6px 12px;font-size:10px;text-transform:uppercase;color:var(--muted);text-align:left;border-bottom:1px solid var(--border)">Código</th>
         <th style="padding:6px 12px;font-size:10px;text-transform:uppercase;color:var(--muted);text-align:left;border-bottom:1px solid var(--border)">Produto</th>
@@ -1511,8 +1523,9 @@ function renderVal(lista){
         diasTxt=`<span class="dias-badge ${cls}">${txt}</span>`;
       }
 
-      return `<tr><td colspan="11" style="padding:0;border:none">
+      return `<tr class="bb-card-row"><td colspan="11" style="padding:0;border:none">
         <div style="background:${urgColors[urg]};border-left:5px solid ${urgBorderColors[urg]};
+          box-sizing:border-box;max-width:100%;
           border-radius:12px;margin:6px 6px;padding:12px 14px;position:relative;box-shadow:0 2px 6px rgba(0,0,0,.12)">
           <!-- Linha 1: checkbox + código + badge dias -->
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
@@ -2883,6 +2896,95 @@ function toggleBannerAcoes() {
   body.style.display = hidden ? '' : 'none';
   if (btn) btn.textContent = hidden ? '▾ ocultar' : '▸ mostrar';
 }
+
+// ── Seletor de colunas ────────────────────────────────────────────────────────
+// Esconde/mostra colunas de qualquer tabela. Usa nth-child, entao NAO exige
+// alterar o codigo que monta as linhas. Linhas .bb-card-row (modo cartao do
+// mobile, que usam colspan) ficam de fora — senao esconder a coluna 1 sumiria
+// com o cartao inteiro. Preferencia guardada por tabela no localStorage.
+window.bbColunas = (function(){
+  const chave = id => 'bb_cols_' + id;
+
+  function ocultas(id){
+    try { return JSON.parse(localStorage.getItem(chave(id))) || []; }
+    catch(_) { return []; }
+  }
+
+  function aplicar(id){
+    const tab = document.getElementById(id);
+    if(!tab) return;
+    let st = document.getElementById('bb-cols-style-' + id);
+    if(!st){
+      st = document.createElement('style');
+      st.id = 'bb-cols-style-' + id;
+      document.head.appendChild(st);
+    }
+    st.textContent = ocultas(id).map(n =>
+      `#${id} thead th:nth-child(${n}),` +
+      `#${id} tbody tr:not(.bb-card-row) td:nth-child(${n}){display:none}`
+    ).join('');
+    const btn = document.querySelector(`[data-cols-btn="${id}"]`);
+    if(btn){
+      const n = ocultas(id).length;
+      btn.textContent = n ? `⚙️ Colunas (${n} oculta${n>1?'s':''})` : '⚙️ Colunas';
+    }
+  }
+
+  function alternar(id, n){
+    const atual = ocultas(id);
+    const i = atual.indexOf(n);
+    if(i >= 0) atual.splice(i,1); else atual.push(n);
+    try { localStorage.setItem(chave(id), JSON.stringify(atual)); } catch(_){}
+    aplicar(id);
+  }
+
+  function mostrarTodas(id){
+    try { localStorage.removeItem(chave(id)); } catch(_){}
+    aplicar(id);
+    abrir(id);
+  }
+
+  function abrir(id){
+    document.querySelectorAll('.bb-cols-pop').forEach(e => e.remove());
+    const tab = document.getElementById(id);
+    const btn = document.querySelector(`[data-cols-btn="${id}"]`);
+    if(!tab || !btn) return;
+    const ths = Array.from(tab.querySelectorAll('thead th'));
+    const off = ocultas(id);
+    const pop = document.createElement('div');
+    pop.className = 'bb-cols-pop';
+    pop.innerHTML =
+      '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:8px">Mostrar colunas</div>' +
+      ths.map((th,i) => {
+        const n = i+1;
+        const nome = (th.textContent || '').trim() || `Coluna ${n}`;
+        return `<label style="display:flex;align-items:center;gap:8px;padding:5px 2px;font-size:13px;cursor:pointer">
+          <input type="checkbox" ${off.indexOf(n)===-1?'checked':''}
+                 onchange="bbColunas.alternar('${id}',${n})" style="width:16px;height:16px;flex-shrink:0">
+          <span>${nome}</span></label>`;
+      }).join('') +
+      `<button onclick="bbColunas.mostrarTodas('${id}')"
+        style="margin-top:8px;width:100%;padding:7px;border:1px solid var(--border);background:var(--white);
+               border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif">
+        Mostrar todas</button>`;
+    document.body.appendChild(pop);
+    const r = btn.getBoundingClientRect();
+    pop.style.top  = Math.min(r.bottom + 6, window.innerHeight - 300) + 'px';
+    pop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 250)) + 'px';
+    setTimeout(() => {
+      document.addEventListener('click', function fecha(e){
+        if(pop.contains(e.target) || btn.contains(e.target)) return;
+        pop.remove(); document.removeEventListener('click', fecha);
+      });
+    }, 0);
+  }
+
+  // Reaplica depois que as linhas sao remontadas
+  function aplicarTodas(){ ['tbl-val','tbl-perdas','tbl-hist'].forEach(aplicar); }
+
+  return { abrir, alternar, mostrarTodas, aplicar, aplicarTodas };
+})();
+
 </script>
 
 <!-- ============================================================
