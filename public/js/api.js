@@ -179,6 +179,56 @@
     _toastTimer = setTimeout(() => { el.style.transform = 'translateX(-50%) translateY(60px)'; }, ms);
   }
 
+  // ── Contrato de módulo ─────────────────────────────────────────────────────
+  // Padrão único que toda tela segue. Substitui o par
+  // "window.onBBReady + bloco de listener SSE copiado em cada arquivo".
+  //
+  //   BB.modulo({
+  //     nome:    'validade',
+  //     init:    () => {...},                  // roda 1x, no boot
+  //     reload:  () => {...},                  // recarrega DADOS, sem resetar filtros
+  //     eventos: ['validade_atualizado'],      // SSE que disparam o reload
+  //   });
+  //
+  // Compatibilidade: quem ainda usa window.onBBReady continua funcionando.
+  const _mod = { nome: null, init: null, reload: null, eventos: [] };
+  let _initFeito = false;
+
+  function _rodarInit(usuario) {
+    if (_initFeito || typeof _mod.init !== 'function') return;
+    _initFeito = true;
+    try { _mod.init(usuario); }
+    catch (e) { console.error('[BB] init de "' + _mod.nome + '":', e); }
+  }
+
+  function modulo(cfg) {
+    if (!cfg || typeof cfg !== 'object') return;
+    _mod.nome    = cfg.nome    || 'modulo';
+    _mod.init    = cfg.init    || null;
+    _mod.reload  = cfg.reload  || null;
+    _mod.eventos = Array.isArray(cfg.eventos) ? cfg.eventos : [];
+    // Se o BB já ficou pronto antes deste registro, dispara agora.
+    if (_bbReady) _rodarInit(w.__bbUsuario);
+  }
+
+  // Recarga sob demanda — o módulo pode chamar BB.recarregar() a qualquer momento.
+  function recarregar() {
+    if (typeof _mod.reload !== 'function') return;
+    try { _mod.reload(); }
+    catch (e) { console.error('[BB] reload de "' + _mod.nome + '":', e); }
+  }
+
+  // Listener SSE único e centralizado (antes era copiado em cada tela).
+  let _tReload = null;
+  w.addEventListener('message', function (e) {
+    if (!e.data || e.data.type !== 'bb_data_changed') return;
+    if (!_mod.eventos.length || typeof _mod.reload !== 'function') return;
+    const tipo = e.data.evento && e.data.evento.type;
+    if (_mod.eventos.indexOf(tipo) === -1) return;
+    clearTimeout(_tReload);            // debounce: várias mutações seguidas = 1 recarga
+    _tReload = setTimeout(recarregar, 400);
+  });
+
   // ── Inicialização com token ────────────────────────────────────────────────
   let _bbReady = false;
 
@@ -188,6 +238,7 @@
     if (typeof w.onBBReady === 'function') {
       try { w.onBBReady(usuario); } catch(e) { console.error('[BB] onBBReady:', e); }
     }
+    _rodarInit(usuario);
   }
 
   // Escuta token enviado pelo portal pai
@@ -217,6 +268,6 @@
   }
 
   // ── Expõe globalmente ──────────────────────────────────────────────────────
-  w.BB = { api, fmt, toast };
+  w.BB = { api, fmt, toast, modulo, recarregar };
 
 })(window);

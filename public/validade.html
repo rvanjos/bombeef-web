@@ -835,12 +835,18 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
 let api, fmt, toast;
 let itens=[], perdas=[], funcionarios=[];
 
-window.onBBReady = () => {
-  api   = BB.api;
-  fmt   = BB.fmt;
-  toast = BB.toast;
-  init();
-};
+BB.modulo({
+  nome: 'validade',
+  init: () => {
+    api   = BB.api;
+    fmt   = BB.fmt;
+    toast = BB.toast;
+    init();
+  },
+  // Recarrega dados sem resetar os filtros de mês que o usuário tiver aberto
+  reload: () => { carregar(); carregarKPIs(); },
+  eventos: ['validade_atualizado', 'perdas_atualizado', 'faturamento_atualizado'],
+});
 
 async function carregarAcoesValidade(){
   const d = await api.get('/api/config/acoes-validade');
@@ -2880,25 +2886,5 @@ function toggleBannerAcoes() {
      © 2024-2025 AR Boutique de Carnes LTDA
      ============================================================ -->
 
-<script>
-/* BB-SSE-LISTENER — recarrega esta tela quando outro modulo altera dados relacionados.
-   O portal (index.html) recebe o evento SSE e repassa via postMessage. */
-(function(){
-  var EVENTOS = ['validade_atualizado', 'perdas_atualizado', 'faturamento_atualizado'];
-  var t = null;
-  window.addEventListener('message', function(e){
-    if (!e.data || e.data.type !== 'bb_data_changed') return;
-    var tipo = e.data.evento && e.data.evento.type;
-    if (EVENTOS.indexOf(tipo) === -1) return;
-    clearTimeout(t);                       // debounce: varias mutacoes seguidas = 1 recarga
-    t = setTimeout(function(){
-      try {
-          if (typeof carregar === 'function') carregar();
-          if (typeof carregarKPIs === 'function') carregarKPIs();
-      } catch(_) {}
-    }, 400);
-  });
-})();
-</script>
 </body>
 </html>
