@@ -2041,7 +2041,7 @@ window.addEventListener('message', e => {
     window._sseAtivo = true;
 
     // Abre um canal SSE por domínio de dados
-    const canais = ['estoque','produtos','boletos','faturamento','dre'];
+    const canais = ['estoque','produtos','boletos','faturamento','dre','validade','retiradas','fiado','compras','rh'];
     canais.forEach(canal => {
       function abrir() {
         const src = new EventSource('/api/events?canal=' + canal);

@@ -453,8 +453,8 @@ app.use('/api/produtos',     require('./routes/produtos')(pool, app));
 app.use('/api/kits',         require('./routes/kits')(pool));
 app.use('/api/kits-campanha',require('./routes/kits_campanha')(pool, app));
 app.use('/api/validade',     require('./routes/validade')(pool, app)); // F1-07
-app.use('/api/compras_pendentes', require('./routes/fiado')(pool));
-app.use('/api/fiado',        require('./routes/fiado')(pool)); // alias legado
+app.use('/api/compras_pendentes', require('./routes/fiado')(pool, app));
+app.use('/api/fiado',        require('./routes/fiado')(pool, app)); // alias legado
 app.use('/api/ponto',        require('./routes/ponto')(pool));
 
 // ── POST /api/dre/exportar-excel — gera XLSX formatado via Python/openpyxl ──
@@ -482,13 +482,13 @@ app.post('/api/dre/exportar-excel', require('./middleware/auth')(), async (req, 
 app.use('/api/perdas',       require('./routes/perdas')(pool, app)); // F1-06
 app.use('/api/retiradas',    require('./routes/retiradas')(pool, app)); // F2-05
 app.use('/api/config',       require('./routes/config')(pool));
-app.use('/api/rh',           require('./routes/rh')(pool));
+app.use('/api/rh',           require('./routes/rh')(pool, app));
 app.use('/api/dashboard',    require('./routes/dashboard')(pool));
 app.use('/api/fornecedores', require('./routes/fornecedores')(pool));
-app.use('/api/compras',      require('./routes/compras_produto')(pool));
+app.use('/api/compras',      require('./routes/compras_produto')(pool, app));
 app.use('/api/estoque',      require('./routes/movimentos')(pool, app)); // F1-03
 app.use('/api/hub',          require('./routes/hub')(pool));               // F1-09
-app.use('/api/cortes',       require('./routes/cortes')(pool));
+app.use('/api/cortes',       require('./routes/cortes')(pool, app));
 app.use('/api/vendas-produto', require('./routes/vendas_produto')(pool, app)); // F2-07
 // ── Rota seed CorteMaster (executa uma vez para popular dados iniciais) ─────
 app.get('/api/admin/seed-cortes', require('./middleware/auth')('admin'), async (req, res) => {

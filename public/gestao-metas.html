@@ -310,5 +310,24 @@ async function salvar() {
   carregarTudo();
 }
 </script>
+<script>
+/* BB-SSE-LISTENER — recarrega esta tela quando outro modulo altera dados relacionados.
+   O portal (index.html) recebe o evento SSE e repassa via postMessage. */
+(function(){
+  var EVENTOS = ['faturamento_atualizado', 'dre_atualizado'];
+  var t = null;
+  window.addEventListener('message', function(e){
+    if (!e.data || e.data.type !== 'bb_data_changed') return;
+    var tipo = e.data.evento && e.data.evento.type;
+    if (EVENTOS.indexOf(tipo) === -1) return;
+    clearTimeout(t);                       // debounce: varias mutacoes seguidas = 1 recarga
+    t = setTimeout(function(){
+      try {
+          if (typeof carregarTudo === 'function') carregarTudo();
+      } catch(_) {}
+    }, 400);
+  });
+})();
+</script>
 </body>
 </html>

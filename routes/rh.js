@@ -17,9 +17,23 @@ const express = require('express');
 const autenticar = require('../middleware/auth');
 const { requireNivel } = autenticar;
 
-module.exports = function (pool) {
+module.exports = function (pool, app) {
   const r = express.Router();
   r.use(autenticar());
+  // BB-SSE-AUTOPUBLISH — avisa os outros modulos quando algo muda aqui.
+  // Roda em todas as rotas, mas so publica em mutacao bem-sucedida.
+  const _pub = (c, d) => { try { app?.locals?.ssePublish?.(c, d); } catch(_) {} };
+  r.use((req, res, next) => {
+    const orig = res.json.bind(res);
+    res.json = (body) => {
+      if (body?.ok !== false && ['POST','PUT','DELETE','PATCH'].includes(req.method)) {
+        _pub('rh', { type: 'rh_atualizado' });
+      }
+      return orig(body);
+    };
+    next();
+  });
+
 
   // ── Rotas abertas para todos os perfis autenticados ──────────────────────────
   // (funcionários não-admin precisam acessar estas rotas)

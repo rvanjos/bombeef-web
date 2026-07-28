@@ -118,6 +118,14 @@ canvas{max-height:320px;}
 .card { border-radius: 10px; box-shadow: 0 2px 12px rgba(0,0,0,.08); background: var(--white); border: 1px solid var(--border); }
 .tbl th { background: #fdf9f5; font-size: 10px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); font-weight: 700; padding: 9px 12px; border-bottom: 2px solid var(--border); }
 .tbl td { padding: 9px 12px; border-bottom: 1px solid #f5efe8; }
+
+/* BB-MOBILE-SCROLL-FIX — destrava o scroll no celular.
+   No desktop o body usa height:100vh + overflow:hidden e quem rola e o container
+   interno; no mobile isso trava a tela, entao devolvemos o scroll ao documento. */
+@media(max-width:700px){
+  html, body { overflow: visible !important; height: auto !important; }
+  .body, .content { overflow-y: auto !important; -webkit-overflow-scrolling: touch; height: auto !important; max-height: none !important; }
+}
 </style>
 </head>
 <body>
@@ -1760,5 +1768,24 @@ canvas{max-width:100%;height:auto!important}
 </script>
 
 </div><!-- /content -->
+<script>
+/* BB-SSE-LISTENER — recarrega esta tela quando outro modulo altera dados relacionados.
+   O portal (index.html) recebe o evento SSE e repassa via postMessage. */
+(function(){
+  var EVENTOS = ['produtos_importados', 'faturamento_atualizado'];
+  var t = null;
+  window.addEventListener('message', function(e){
+    if (!e.data || e.data.type !== 'bb_data_changed') return;
+    var tipo = e.data.evento && e.data.evento.type;
+    if (EVENTOS.indexOf(tipo) === -1) return;
+    clearTimeout(t);                       // debounce: varias mutacoes seguidas = 1 recarga
+    t = setTimeout(function(){
+      try {
+          if (typeof aplicarFiltros === 'function') aplicarFiltros();
+      } catch(_) {}
+    }, 400);
+  });
+})();
+</script>
 </body>
 </html>

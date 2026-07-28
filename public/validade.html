@@ -248,6 +248,14 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
 .bb-footer { display: none !important; }
 /* ─────────────────────────────────────────────────────────────────────────── */
 
+
+/* BB-MOBILE-SCROLL-FIX — destrava o scroll no celular.
+   No desktop o body usa height:100vh + overflow:hidden e quem rola e o container
+   interno; no mobile isso trava a tela, entao devolvemos o scroll ao documento. */
+@media(max-width:700px){
+  html, body { overflow: visible !important; height: auto !important; }
+  .body { overflow-y: auto !important; -webkit-overflow-scrolling: touch; height: auto !important; max-height: none !important; }
+}
 </style>
 </head>
 <body>
@@ -2872,5 +2880,25 @@ function toggleBannerAcoes() {
      © 2024-2025 AR Boutique de Carnes LTDA
      ============================================================ -->
 
+<script>
+/* BB-SSE-LISTENER — recarrega esta tela quando outro modulo altera dados relacionados.
+   O portal (index.html) recebe o evento SSE e repassa via postMessage. */
+(function(){
+  var EVENTOS = ['validade_atualizado', 'perdas_atualizado', 'faturamento_atualizado'];
+  var t = null;
+  window.addEventListener('message', function(e){
+    if (!e.data || e.data.type !== 'bb_data_changed') return;
+    var tipo = e.data.evento && e.data.evento.type;
+    if (EVENTOS.indexOf(tipo) === -1) return;
+    clearTimeout(t);                       // debounce: varias mutacoes seguidas = 1 recarga
+    t = setTimeout(function(){
+      try {
+          if (typeof carregar === 'function') carregar();
+          if (typeof carregarKPIs === 'function') carregarKPIs();
+      } catch(_) {}
+    }, 400);
+  });
+})();
+</script>
 </body>
 </html>

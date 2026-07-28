@@ -1284,5 +1284,26 @@ function atualizarNomeKit() {
   nome.value = `Kit Dia Dia ${fmt(di)} até ${fmt(df)}`;
 }
 </script>
+<script>
+/* BB-SSE-LISTENER — recarrega esta tela quando outro modulo altera dados relacionados.
+   O portal (index.html) recebe o evento SSE e repassa via postMessage. */
+(function(){
+  var EVENTOS = ['kit_estoque_atualizado', 'produtos_importados', 'estoque_atualizado'];
+  var t = null;
+  window.addEventListener('message', function(e){
+    if (!e.data || e.data.type !== 'bb_data_changed') return;
+    var tipo = e.data.evento && e.data.evento.type;
+    if (EVENTOS.indexOf(tipo) === -1) return;
+    clearTimeout(t);                       // debounce: varias mutacoes seguidas = 1 recarga
+    t = setTimeout(function(){
+      try {
+          if (typeof carregarKits === 'function') carregarKits();
+          if (typeof carregarSemanas === 'function') carregarSemanas();
+          if (typeof carregarRanking === 'function') carregarRanking();
+      } catch(_) {}
+    }, 400);
+  });
+})();
+</script>
 </body>
 </html>

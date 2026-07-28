@@ -155,6 +155,14 @@ tr:hover td{background:#faf8f5;}
 .bb-footer { display: none !important; }
 /* ─────────────────────────────────────────────────────────────────────────── */
 
+
+/* BB-MOBILE-SCROLL-FIX — destrava o scroll no celular.
+   No desktop o body usa height:100vh + overflow:hidden e quem rola e o container
+   interno; no mobile isso trava a tela, entao devolvemos o scroll ao documento. */
+@media(max-width:700px){
+  html, body { overflow: visible !important; height: auto !important; }
+  .tab-content { overflow-y: auto !important; -webkit-overflow-scrolling: touch; height: auto !important; max-height: none !important; }
+}
 </style>
 <script>
 // Oculta o header quando carregado dentro do iframe do portal

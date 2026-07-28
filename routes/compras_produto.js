@@ -7,9 +7,23 @@ const autenticar = require('../middleware/auth');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
-module.exports = function(pool) {
+module.exports = function(pool, app) {
   const r = express.Router();
   r.use(autenticar(['admin','gestor']));
+  // BB-SSE-AUTOPUBLISH — avisa os outros modulos quando algo muda aqui.
+  // Roda em todas as rotas, mas so publica em mutacao bem-sucedida.
+  const _pub = (c, d) => { try { app?.locals?.ssePublish?.(c, d); } catch(_) {} };
+  r.use((req, res, next) => {
+    const orig = res.json.bind(res);
+    res.json = (body) => {
+      if (body?.ok !== false && ['POST','PUT','DELETE','PATCH'].includes(req.method)) {
+        _pub('compras', { type: 'compras_atualizado' });
+      }
+      return orig(body);
+    };
+    next();
+  });
+
 
   // ── AUTO-MIGRATE ──────────────────────────────────────────────────────────
   ;(async () => {
