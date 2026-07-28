@@ -249,12 +249,21 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
 /* ─────────────────────────────────────────────────────────────────────────── */
 
 
-/* BB-MOBILE-SCROLL-FIX — destrava o scroll no celular.
-   No desktop o body usa height:100vh + overflow:hidden e quem rola e o container
-   interno; no mobile isso trava a tela, entao devolvemos o scroll ao documento. */
+/* BB-MOBILE-SCROLL-FIX — destrava o scroll vertical no celular SEM deixar a
+   pagina inteira rolar de lado.
+   No desktop o body usa height:100vh + overflow:hidden e quem rola e a .body;
+   no mobile devolvemos o scroll vertical ao documento, mas a rolagem
+   HORIZONTAL tem que ficar presa dentro de cada tabela — senao a tabela larga
+   empurra o documento todo e arrasta cabecalho e abas junto. */
 @media(max-width:700px){
-  html, body { overflow: visible !important; height: auto !important; }
-  .body { overflow-y: auto !important; -webkit-overflow-scrolling: touch; height: auto !important; max-height: none !important; }
+  html, body { overflow-x: hidden !important; height: auto !important; }
+  .body { overflow-x: hidden !important; height: auto !important; max-height: none !important; }
+  /* cada tabela rola dentro do proprio card */
+  .bb-tbl-scroll { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
+  /* sticky + rolagem lateral = layout quebrado no celular; no telefone as abas
+     tambem comem altura demais presas no topo */
+  .body > .tabs { position: static !important; margin: 0 0 12px !important; padding: 0 4px !important; box-shadow: none !important; }
+  .tbl th { position: static !important; }
 }
 </style>
 </head>
@@ -445,7 +454,7 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
         <button class="btn btn-s" style="padding:4px 10px;font-size:11px" onclick="encerrarSelecionados('descartado')">🗑️ Marcar descartado</button>
         <button class="btn btn-r" style="padding:4px 10px;font-size:11px" onclick="excluirSelecionadosVal()">✕ Excluir</button>
       </div>
-      <div style="width:100%"><table class="tbl" id="tbl-val">
+      <div class="bb-tbl-scroll" style="width:100%"><table class="tbl" id="tbl-val">
         <thead><tr>
           <th style="min-width:24px;width:24px"><input type="checkbox" class="row-sel" id="val-sel-all" id2="sel-all" onchange="valToggleSelAll(this); toggleSelAll(this);" title="Selecionar todos"></th>
           <th style="min-width:50px">Cód.</th>
@@ -476,7 +485,7 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
       <button class="btn btn-s" onclick="abrirRelPerdas()" style="background:#fff0f0;color:#991b1b;border-color:#fca5a5" title="Relatório de perdas">🖨️ Rel. Perdas</button>
       <div style="margin-left:auto;font-size:13px" id="meta-perdas-info"></div>
     </div>
-    <div style="width:100%">
+    <div class="bb-tbl-scroll" style="width:100%">
       <table class="tbl">
         <thead><tr><th>Data</th><th>Produto</th><th>Motivo</th><th>Qtd</th><th>Valor Perda</th><th>Funcionário</th><th>Ações</th></tr></thead>
         <tbody id="tbody-perdas"></tbody>
@@ -506,7 +515,7 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
     <button class="btn btn-s bb-desktop-only" onclick="exportarHistXLS()" title="Exportar para Excel formatado" style="background:#217346;color:#fff;border-color:#217346">📊 Excel</button>
     <span id="hist-count" style="font-size:11px;color:var(--muted);margin-left:4px"></span>
   </div>
-  <div style="width:100%">
+  <div class="bb-tbl-scroll" style="width:100%">
     <table class="tbl" id="tbl-hist">
       <thead><tr>
         <th>Código</th><th>Produto</th><th>Validade</th>

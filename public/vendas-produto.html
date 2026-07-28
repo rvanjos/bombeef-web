@@ -123,8 +123,8 @@ canvas{max-height:320px;}
    No desktop o body usa height:100vh + overflow:hidden e quem rola e o container
    interno; no mobile isso trava a tela, entao devolvemos o scroll ao documento. */
 @media(max-width:700px){
-  html, body { overflow: visible !important; height: auto !important; }
-  .body, .content { overflow-y: auto !important; -webkit-overflow-scrolling: touch; height: auto !important; max-height: none !important; }
+  html, body { overflow-x: hidden !important; height: auto !important; }
+  .body, .content { overflow-x: hidden !important; overflow-y: auto !important; -webkit-overflow-scrolling: touch; height: auto !important; max-height: none !important; }
 }
 </style>
 </head>
