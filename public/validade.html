@@ -273,6 +273,48 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
 .bb-cols-btn{padding:6px 11px;border:1px solid var(--border);background:var(--white);border-radius:7px;
   font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;color:var(--text);white-space:nowrap;}
 .bb-cols-btn:hover{background:#faf7f4;}
+
+/* BB-MOBILE-TABELAS — no celular, tabela larga nao rola bem no toque.
+   Em vez de rolar de lado, as linhas viram blocos empilhados: nada fica
+   escondido e nao existe rolagem horizontal nenhuma.
+   Breakpoint 768px para casar com isMobile() do JS, que decide o modo cartao. */
+@media(max-width:768px){
+
+  /* --- Lista da aba Validade (modo cartao) ---------------------------------
+     O cartao e um <tr><td colspan="11">. Enquanto a tabela mantiver layout de
+     tabela, o <td> herda a largura das 11 colunas e o cartao estoura a tela.
+     Virando bloco, o cartao passa a respeitar a largura do celular. */
+  #tbl-val, #tbl-val > tbody,
+  #tbl-val > tbody > tr.bb-card-row,
+  #tbl-val > tbody > tr.bb-card-row > td{
+    display:block !important; width:100% !important; max-width:100% !important;
+    box-sizing:border-box !important;
+  }
+  #tbl-val > thead{ display:none !important; }
+  #tbl-val{ table-layout:auto !important; }
+
+  /* --- Tabelas do Dashboard (vencidos / critico / alerta) ------------------
+     Cada linha vira um blocao; as celulas empilham uma sob a outra. */
+  .tbl-dash{ display:block !important; width:100% !important; }
+  .tbl-dash thead{ display:none !important; }
+  .tbl-dash tbody{ display:block !important; width:100% !important; }
+  .tbl-dash tbody tr{
+    display:block !important; width:100% !important; box-sizing:border-box !important;
+    padding:10px 12px !important; border-bottom:1px solid var(--border) !important;
+  }
+  .tbl-dash tbody td{
+    display:block !important; width:100% !important; box-sizing:border-box !important;
+    text-align:left !important; padding:2px 0 !important; border:none !important;
+  }
+  /* a celula de botoes fica em linha, lado a lado */
+  .tbl-dash tbody td:last-child{
+    display:flex !important; flex-wrap:wrap; gap:6px; margin-top:8px;
+  }
+
+  /* Perdas e Historico continuam como tabela (com o seletor de colunas), entao
+     mantem o overflow-x:auto do bloco anterior. Nas duas empilhadas acima o
+     conteudo passa a caber em 100%, entao o auto simplesmente nao rola nada. */
+}
 </style>
 </head>
 <body>
