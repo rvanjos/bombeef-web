@@ -65,6 +65,51 @@ header{background:var(--red);color:#fff;padding:14px 16px 12px;display:flex;alig
 .leg-dot{width:10px;height:10px;border-radius:50%;}
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:#1a1a1a;color:#fff;padding:10px 22px;border-radius:24px;font-size:13px;z-index:9999;transition:transform .25s;pointer-events:none;white-space:nowrap;}
 .toast.show{transform:translateX(-50%) translateY(0);}
+
+/* ── Lançamento rápido ──────────────────────────────────────────────────────
+   Os 3 tipos que os funcionários realmente usam ganham botão grande.
+   Alvo de toque generoso: no balcão se usa o celular com pressa. */
+.quick-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:10px;}
+.quick-tile{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
+  padding:18px 6px;border:2px solid var(--border,#e6ddd3);border-radius:14px;background:#fff;
+  cursor:pointer;font-family:inherit;transition:.12s;min-height:92px;}
+.quick-tile:active{transform:scale(.97);}
+.qt-ico{font-size:28px;line-height:1;}
+.qt-lbl{font-size:12px;font-weight:700;color:#3d3730;text-align:center;line-height:1.2;}
+.qt-hora{border-color:#93c5fd;background:#eff6ff;}
+.qt-entrega{border-color:#fdba74;background:#fff7ed;}
+.qt-grelha{border-color:#fca5a5;background:#fef2f2;}
+.btn-outros{width:100%;padding:11px;border:1px dashed var(--border,#e6ddd3);background:transparent;
+  border-radius:10px;font-size:13px;color:#7a7068;cursor:pointer;font-family:inherit;margin-bottom:14px;}
+
+/* Folha (bottom sheet) — sobe de baixo, polegar alcança */
+.sheet-bg{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:2000;display:none;
+  align-items:flex-end;justify-content:center;}
+.sheet-bg.open{display:flex;}
+.sheet{background:#fff;width:100%;max-width:520px;border-radius:20px 20px 0 0;padding:18px 18px 26px;
+  max-height:92vh;overflow-y:auto;animation:sheetUp .18s ease-out;}
+@keyframes sheetUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.sheet-head{display:flex;align-items:center;gap:10px;margin-bottom:16px;}
+.sheet-head h3{margin:0;font-size:18px;flex:1;}
+.sheet-x{background:none;border:none;font-size:22px;cursor:pointer;color:#9a9088;padding:4px 8px;}
+.sheet-lbl{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;
+  color:#7a7068;margin:14px 0 7px;}
+/* chips (data e valores sugeridos) */
+.chips{display:flex;gap:7px;flex-wrap:wrap;}
+.chip{padding:9px 15px;border:1.5px solid var(--border,#e6ddd3);background:#fff;border-radius:20px;
+  font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;color:#3d3730;}
+.chip.on{background:#8B0000;border-color:#8B0000;color:#fff;}
+/* campo numérico grande */
+.big-num{width:100%;padding:16px;font-size:26px;font-weight:700;text-align:center;
+  border:2px solid var(--border,#e6ddd3);border-radius:12px;font-family:inherit;}
+.big-num:focus{outline:none;border-color:#8B0000;}
+.sheet-hint{font-size:13px;color:#7a7068;margin-top:8px;text-align:center;}
+.sheet-hint b{color:#166534;font-size:15px;}
+.sheet-send{width:100%;padding:16px;background:#8B0000;color:#fff;border:none;border-radius:12px;
+  font-size:16px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:20px;}
+.sheet-send:disabled{opacity:.6;}
+.opc-toggle{background:none;border:none;color:#8B0000;font-size:13px;font-weight:600;
+  cursor:pointer;padding:10px 0;font-family:inherit;}
 </style>
 </head>
 <body>
@@ -91,7 +136,13 @@ header{background:var(--red);color:#fff;padding:14px 16px 12px;display:flex;alig
       <input type="month" id="sel-mes" onchange="carregarLanc()">
       <button class="btn-nav" onclick="mesProximo()">▶</button>
     </div>
-    <button class="btn-primary" onclick="abrirModal()">＋ Novo Lançamento</button>
+    <!-- Lançamento rápido: os 3 tipos do dia a dia em botão grande -->
+    <div class="quick-grid">
+      <button class="quick-tile qt-hora"    onclick="abrirRapido('hora_extra')"><span class="qt-ico">⏱️</span><span class="qt-lbl">Hora Extra</span></button>
+      <button class="quick-tile qt-entrega" onclick="abrirRapido('entrega')"><span class="qt-ico">🚚</span><span class="qt-lbl">Entrega</span></button>
+      <button class="quick-tile qt-grelha"  onclick="abrirRapido('grelhado')"><span class="qt-ico">🥩</span><span class="qt-lbl">Grelhado</span></button>
+    </div>
+    <button class="btn-outros" onclick="abrirModal()">··· outro tipo de lançamento</button>
     <div id="lanc-container"><div class="loading-state">Carregando...</div></div>
   </div>
 </div>
@@ -221,6 +272,7 @@ const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Ag
 const TIPO_LABEL = {hora_extra:'⏱️ Hora Extra',adicional_noturno:'🌙 Ad. Noturno',falta:'❌ Falta',entrega:'🚚 Entrega',grelhado:'🥩 Grelhado',comissao:'💰 Comissão',bonus:'🎁 Bônus',desconto:'↘️ Desconto',outro:'📌 Outro'};
 
 let _token='', _funcId=null, _inited=false;
+let _lancs=[];   // lancamentos do mes — alimentam as sugestoes de valor
 let _escalaMes={ano:new Date().getFullYear(),mes:new Date().getMonth()};
 let _escalasConfig=[];
 
@@ -301,6 +353,7 @@ async function carregarLanc(){
   c.innerHTML='<div class="loading-state">Carregando...</div>';
   const d=await get(`/api/rh/meus-lancamentos?mes_ref=${encodeURIComponent(mes)}&funcionario_id=${_funcId}`);
   if(!d.ok){ c.innerHTML=`<div class="empty-state"><div class="e-icon">⚠️</div><p>${d.erro}</p></div>`; return; }
+  _lancs = d.data || [];
   if(!d.data?.length){ c.innerHTML=`<div class="empty-state"><div class="e-icon">📝</div><p>Nenhum lançamento em <strong>${mesLabel(ym)}</strong>.<br>Clique em <strong>+ Novo Lançamento</strong>.</p></div>`; return; }
   const pill={pendente:'<span class="pill pill-pend">⏳ Aguardando</span>',aprovado:'<span class="pill pill-aprov">✅ Aprovado</span>',rejeitado:'<span class="pill pill-rejei">❌ Rejeitado</span>'};
   c.innerHTML=d.data.map(a=>{
@@ -503,7 +556,177 @@ else{
   // Só exibe quando acessado diretamente (fora de iframe)
   if(window.self===window.top) f.style.display='block';
 })();
+
+/* ── Lançamento rápido ──────────────────────────────────────────────────────
+   Reduz o caminho de 8 passos (dropdown + data + 3 campos digitados) para
+   toque no tipo -> toque no valor sugerido -> enviar.
+   A taxa varia caso a caso, entao nao da pra fixar um valor: em vez disso
+   sugerimos os valores que ESTE funcionario ja usou nesse tipo. */
+let _srTipo = null, _srData = null;
+
+const SR_CFG = {
+  hora_extra: { ico:'⏱️', titulo:'Hora Extra', lblValor:'Quantas horas?',
+                sugestoes:[1,2,3,4], sufixo:'h', passo:0.5 },
+  entrega:    { ico:'🚚', titulo:'Entrega',    lblValor:'Taxa da entrega (R$)',
+                sugestoes:[], sufixo:'', passo:0.5 },
+  grelhado:   { ico:'🥩', titulo:'Grelhado',   lblValor:'Taxa cobrada (R$)',
+                sugestoes:[], sufixo:'', passo:0.5 },
+};
+
+// Valores que o funcionario ja usou nesse tipo, do mais recente pro mais antigo
+function srValoresRecentes(tipo){
+  const vistos = [];
+  (_lancs || []).forEach(a => {
+    if(a.tipo !== tipo) return;
+    const v = parseFloat(tipo==='hora_extra' ? a.quantidade : a.valor_unitario) || 0;
+    if(v > 0 && vistos.indexOf(v) === -1) vistos.push(v);
+  });
+  return vistos.slice(0, 4);
+}
+
+function abrirRapido(tipo){
+  if(!_funcId){ toast('⚠️ Sem vínculo com funcionário'); return; }
+  _srTipo = tipo;
+  const cfg = SR_CFG[tipo];
+  document.getElementById('sr-ico').textContent    = cfg.ico;
+  document.getElementById('sr-titulo').textContent = cfg.titulo;
+  document.getElementById('sr-lbl-valor').textContent = cfg.lblValor;
+
+  const inp = document.getElementById('sr-valor');
+  inp.value = ''; inp.step = cfg.passo;
+  document.getElementById('sr-obs').value = '';
+  document.getElementById('sr-obs-area').style.display = 'none';
+  document.getElementById('sr-data-custom').style.display = 'none';
+
+  // Datas: hoje por padrao, ontem a um toque
+  const hoje = new Date(), ontem = new Date(Date.now() - 86400000);
+  const iso = d => d.toISOString().slice(0,10);
+  _srData = iso(hoje);
+  document.getElementById('sr-datas').innerHTML =
+    `<button class="chip on" onclick="srSetData('${iso(hoje)}',this)">Hoje</button>
+     <button class="chip"    onclick="srSetData('${iso(ontem)}',this)">Ontem</button>
+     <button class="chip"    onclick="srOutraData(this)">Outra data</button>`;
+
+  // Sugestoes: as do config + as que o funcionario ja usou
+  const recentes = srValoresRecentes(tipo);
+  const lista = (cfg.sugestoes.length ? cfg.sugestoes : recentes).slice(0,4);
+  const sug = document.getElementById('sr-sugestoes');
+  sug.innerHTML = lista.length
+    ? lista.map(v => `<button class="chip" onclick="srSetValor(${v},this)">${
+        tipo==='hora_extra' ? v+'h' : 'R$ '+v.toFixed(2).replace('.',',')}</button>`).join('')
+    : '';
+
+  srAtualiza();
+  document.getElementById('sheet-bg').classList.add('open');
+}
+
+function fecharRapido(){ document.getElementById('sheet-bg').classList.remove('open'); }
+
+function srSetData(iso, el){
+  _srData = iso;
+  document.querySelectorAll('#sr-datas .chip').forEach(c => c.classList.remove('on'));
+  if(el) el.classList.add('on');
+  document.getElementById('sr-data-custom').style.display = 'none';
+}
+
+function srOutraData(el){
+  document.querySelectorAll('#sr-datas .chip').forEach(c => c.classList.remove('on'));
+  if(el) el.classList.add('on');
+  const c = document.getElementById('sr-data-custom');
+  c.style.display = 'block';
+  c.value = _srData;
+  c.onchange = () => { if(c.value) _srData = c.value; };
+}
+
+function srSetValor(v, el){
+  document.getElementById('sr-valor').value = v;
+  document.querySelectorAll('#sr-sugestoes .chip').forEach(c => c.classList.remove('on'));
+  if(el) el.classList.add('on');
+  srAtualiza();
+}
+
+function srToggleObs(){
+  const a = document.getElementById('sr-obs-area');
+  a.style.display = a.style.display === 'none' ? 'block' : 'none';
+}
+
+// Grelhado paga 35% da taxa — mostra o que a pessoa vai receber, sem ela ter que calcular
+function srAtualiza(){
+  const v = parseFloat(document.getElementById('sr-valor').value) || 0;
+  const hint = document.getElementById('sr-hint');
+  if(!v){ hint.innerHTML = ''; return; }
+  if(_srTipo === 'grelhado')      hint.innerHTML = `Você recebe <b>R$ ${(v*0.35).toFixed(2).replace('.',',')}</b> (35% da taxa)`;
+  else if(_srTipo === 'entrega')  hint.innerHTML = `Você recebe <b>R$ ${v.toFixed(2).replace('.',',')}</b>`;
+  else                            hint.innerHTML = `<b>${v}h</b> de hora extra`;
+}
+
+async function enviarRapido(){
+  if(!_funcId){ toast('⚠️ Sem vínculo com funcionário'); return; }
+  const v = parseFloat(document.getElementById('sr-valor').value) || 0;
+  if(!v){ toast('⚠️ Informe o valor'); return; }
+  const obs = document.getElementById('sr-obs').value.trim();
+  const btn = document.getElementById('sr-enviar');
+
+  const payload = {
+    funcionario_id: _funcId,
+    mes_ref: ymToMes(document.getElementById('sel-mes').value),
+    tipo: _srTipo,
+    data_ref: _srData,
+  };
+
+  if(_srTipo === 'hora_extra'){
+    payload.quantidade     = v;
+    payload.valor_unitario = 0;   // o gestor define a taxa na aprovacao
+    payload.descricao      = obs || `Hora extra ${_srData.split('-').reverse().join('/')}`;
+  } else {
+    payload.quantidade     = 1;
+    payload.valor_unitario = v;
+    payload.descricao      = obs || (_srTipo === 'grelhado' ? 'Grelhado' : 'Entrega');
+    if(_srTipo === 'grelhado') payload.obs = `Taxa cobrada: R$ ${v.toFixed(2)} | A receber (35%): R$ ${(v*0.35).toFixed(2)}`;
+    else if(obs)               payload.obs = obs;
+  }
+
+  btn.disabled = true; btn.textContent = 'Enviando...';
+  const d = await post('/api/rh/lancamento', payload);
+  btn.disabled = false; btn.textContent = 'Enviar para aprovação';
+  if(!d.ok){ toast('❌ ' + d.erro); return; }
+  toast('✅ Enviado para aprovação!');
+  fecharRapido();
+  carregarLanc();
+}
+
 </script>
 
+
+<!-- Folha de lançamento rápido -->
+<div class="sheet-bg" id="sheet-bg" onclick="if(event.target===this)fecharRapido()">
+  <div class="sheet">
+    <div class="sheet-head">
+      <span id="sr-ico" style="font-size:26px"></span>
+      <h3 id="sr-titulo">Lançamento</h3>
+      <button class="sheet-x" onclick="fecharRapido()">✕</button>
+    </div>
+
+    <div class="sheet-lbl">Quando</div>
+    <div class="chips" id="sr-datas"></div>
+    <input type="date" id="sr-data-custom" style="display:none;width:100%;padding:12px;margin-top:8px;
+      border:1.5px solid var(--border,#e6ddd3);border-radius:10px;font-family:inherit;font-size:15px">
+
+    <div class="sheet-lbl" id="sr-lbl-valor">Valor</div>
+    <div class="chips" id="sr-sugestoes" style="margin-bottom:9px"></div>
+    <input type="number" id="sr-valor" class="big-num" inputmode="decimal" step="0.5" min="0"
+      placeholder="0" oninput="srAtualiza()">
+    <div class="sheet-hint" id="sr-hint"></div>
+
+    <button class="opc-toggle" onclick="srToggleObs()">+ adicionar observação (opcional)</button>
+    <div id="sr-obs-area" style="display:none">
+      <input type="text" id="sr-obs" placeholder="Ex: cliente, cupom, motivo..."
+        style="width:100%;padding:12px;border:1.5px solid var(--border,#e6ddd3);border-radius:10px;
+font-family:inherit;font-size:15px">
+    </div>
+
+    <button class="sheet-send" id="sr-enviar" onclick="enviarRapido()">Enviar para aprovação</button>
+  </div>
+</div>
 </body>
 </html>
