@@ -946,7 +946,7 @@ module.exports = function (pool, app) {
       }
 
       const client = await pool.connect();
-      let inseridos = 0, erros = 0, duplicatas = 0;
+      let inseridos = 0, erros = 0, duplicatas = 0, jaResolvidos = 0;
       const detalheErros = [];
 
       try {
@@ -994,16 +994,24 @@ module.exports = function (pool, app) {
             if (p.rows.length) prodId = p.rows[0].id;
           }
 
-          // Verifica duplicata: mesmo produto (desc ou codigo) + mesma data de validade
-          // Ignora itens vendidos/descartados — eles podem ser re-cadastrados
+          // Verifica duplicata: mesmo produto (desc ou codigo) + mesma data de validade.
+          // IMPORTANTE: considera TAMBEM os itens ja resolvidos (vendido/devolucao/
+          // descartado). Antes eles eram ignorados aqui, entao reimportar a mesma
+          // planilha ressuscitava como novo um item que o usuario tinha acabado de
+          // baixar — ele "voltava" sozinho. Se um lote novo de verdade chegar com a
+          // mesma validade, o caminho e o botao Reativar no Historico.
           const dupCheck = await client.query(`
-            SELECT id FROM validade_items
+            SELECT id, status FROM validade_items
             WHERE data_validade=$1::date
               AND (descricao=$2 OR ($3::text IS NOT NULL AND codigo=$3))
-              AND status NOT IN ('vendido','descartado','devolucao')
+            ORDER BY (status IN ('vendido','descartado','devolucao')) ASC
             LIMIT 1
           `, [dataVal, desc, cod||null]);
-          if(dupCheck.rows.length){ duplicatas++; continue; }
+          if(dupCheck.rows.length){
+            if(['vendido','descartado','devolucao'].includes(dupCheck.rows[0].status)) jaResolvidos++;
+            else duplicatas++;
+            continue;
+          }
 
           try {
             await client.query(`
@@ -1023,7 +1031,7 @@ module.exports = function (pool, app) {
         await client.query('ROLLBACK'); throw e;
       } finally { client.release(); }
 
-      res.json({ ok: true, inseridos, erros, detalheErros });
+      res.json({ ok: true, inseridos, erros, duplicatas, jaResolvidos, detalheErros });
     } catch (e) {
       res.status(500).json({ ok: false, erro: 'Erro ao processar planilha: ' + e.message });
     }
