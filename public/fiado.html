@@ -1943,21 +1943,64 @@ window.imprimirRelatorioFiado = function imprimirRelatorioFiado() {
     porCliente[nome].push(v);
   });
 
-  const linhas = lista.map(v => {
-    const c = _clientes.find(x=>x.id===v.cliente_id);
-    const statusMap = { aberto:'⏳ Aberto', parcial:'🔶 Parcial', pago:'✅ Pago', aguardando:'⏳ Aguardando', cancelado:'❌ Cancelado', reprovado:'❌ Reprovado' };
-    const pdv = v.baixa_pdv ? '✅' : '—';
-    const produtos = (v.itens||[]).map(i => `${i.nome_produto}${i.quantidade?' ×'+i.quantidade:''}`).join(', ') || '—';
-    return `<tr>
-      <td>${fmtDtBrLocal((v.data_compra||'').slice(0,10))}</td>
-      <td><b>${c?.nome||'—'}</b></td>
-      <td style="font-size:10px">${c?.tipo_cliente||'—'}</td>
-      <td style="font-size:10px">${produtos}</td>
-      <td style="text-align:right;font-weight:700">${brl(v.total_final)}</td>
-      <td style="text-align:right;color:${parseFloat(v.saldo_restante||0)>0?'#dc2626':'#16a34a'}">${brl(v.saldo_restante)}</td>
-      <td style="text-align:center;font-size:10px">${statusMap[v.status]||v.status}</td>
-      <td style="text-align:center;font-size:11px">${pdv}</td>
-    </tr>`;
+  // Detalhamento: agrupado por CLIENTE -> DIA -> um item por linha
+  const statusMap = { aberto:'⏳ Aberto', parcial:'🔶 Parcial', pago:'✅ Pago',
+                      aguardando:'⏳ Aguardando', cancelado:'❌ Cancelado', reprovado:'❌ Reprovado' };
+  // quantidade pode ser peso (0.318) ou unidade (2) — tira zeros à toa
+  const fmtQtd = q => {
+    const n = parseFloat(q||0);
+    return Number.isInteger(n) ? String(n) : n.toFixed(3).replace(/0+$/,'').replace(/\.$/,'').replace('.',',');
+  };
+
+  const linhas = Object.entries(porCliente).map(([nome, vendas]) => {
+    const c = _clientes.find(x => x.nome === nome);
+
+    // agrupa as vendas do cliente por dia
+    const porDia = {};
+    vendas.forEach(v => {
+      const d = (v.data_compra||'').slice(0,10);
+      (porDia[d] = porDia[d] || []).push(v);
+    });
+
+    const totalCli  = vendas.reduce((s,v)=>s+parseFloat(v.total_final||0),0);
+    const abertoCli = vendas.filter(v=>v.status==='aberto'||v.status==='parcial')
+                            .reduce((s,v)=>s+parseFloat(v.saldo_restante||0),0);
+
+    const blocosDia = Object.keys(porDia).sort().map(dia => {
+      const vendasDia = porDia[dia];
+      const totalDia  = vendasDia.reduce((s,v)=>s+parseFloat(v.total_final||0),0);
+      const sts = [...new Set(vendasDia.map(v => statusMap[v.status]||v.status))].join(' · ');
+      const pdv = vendasDia.every(v=>v.baixa_pdv) ? '✅' : vendasDia.some(v=>v.baixa_pdv) ? '◐' : '—';
+
+      // uma linha por item comprado naquele dia
+      const itens = vendasDia.flatMap(v => (v.itens||[]).length
+        ? v.itens.map(it => `<tr>
+            <td class="ind">${it.nome_produto||'—'}</td>
+            <td style="text-align:center">${fmtQtd(it.quantidade)}</td>
+            <td style="text-align:right">${it.valor_unit_venda ? brl(it.valor_unit_venda) : '—'}</td>
+            <td style="text-align:right">${it.valor_final_item ? brl(it.valor_final_item) : '—'}</td>
+          </tr>`)
+        // venda sem itens detalhados (lançamento antigo): mostra o total
+        : [`<tr><td class="ind" style="color:#888">(sem detalhamento de itens)</td>
+            <td></td><td></td>
+            <td style="text-align:right">${brl(v.total_final)}</td></tr>`]
+      ).join('');
+
+      return `<tr class="dia-row">
+          <td colspan="2"><b>${fmtDtBrLocal(dia)}</b></td>
+          <td style="text-align:center;font-size:10px">${sts} · PDV ${pdv}</td>
+          <td style="text-align:right"><b>${brl(totalDia)}</b></td>
+        </tr>${itens}`;
+    }).join('');
+
+    return `<tr class="cli-row">
+        <td colspan="3">👤 <b>${nome}</b>${c?.tipo_cliente?` <span style="font-weight:400;font-size:10px">(${c.tipo_cliente})</span>`:''}</td>
+        <td style="text-align:right">Em aberto: <b>${brl(abertoCli)}</b></td>
+      </tr>${blocosDia}
+      <tr class="cli-total">
+        <td colspan="3" style="text-align:right">Total de ${nome}</td>
+        <td style="text-align:right">${brl(totalCli)}</td>
+      </tr>`;
   }).join('');
 
   const resumoCliente = Object.entries(porCliente).map(([nome, vendas]) => {
@@ -1988,6 +2031,12 @@ window.imprimirRelatorioFiado = function imprimirRelatorioFiado() {
       th { background:#8B0000; color:#fff; padding:6px 8px; text-align:left; font-size:9px; text-transform:uppercase; letter-spacing:.4px; white-space:nowrap; }
       td { padding:5px 8px; border-bottom:1px solid #e8e0d8; font-size:10.5px; vertical-align:middle; }
       tr:nth-child(even) td { background:#faf7f4; }
+      /* Agrupamento: cliente > dia > itens */
+      .cli-row td { background:#8B0000; color:#fff; font-size:12px; padding:7px 8px; border:none; }
+      .dia-row td { background:#f3ece4; font-size:11px; padding:5px 8px; border-top:1px solid #d9cec1; }
+      .cli-total td { background:#faf7f4; font-weight:700; font-size:11px; padding:6px 8px;
+                      border-top:1px solid #8B0000; border-bottom:2px solid #8B0000; }
+      td.ind { padding-left:22px; }
       .total-row td { background:#f5f0eb; font-weight:700; border-top:2px solid #8B0000; }
       .kpis { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
       .kpi { flex:1; min-width:140px; border:1px solid #e8e0d8; border-radius:6px; padding:10px 12px; }
@@ -2012,17 +2061,18 @@ window.imprimirRelatorioFiado = function imprimirRelatorioFiado() {
     </div>
 
     <h2>📋 Detalhamento das Vendas</h2>
-    <div class="scroll-hint">👉 Arraste a tabela para o lado para ver todas as colunas</div>
     <div class="tbl-scroll">
     <table>
-      <thead><tr><th>Data</th><th>Cliente</th><th>Tipo</th><th>Produtos</th><th style="text-align:right">Total</th><th style="text-align:right">Saldo</th><th style="text-align:center">Status</th><th style="text-align:center">PDV</th></tr></thead>
+      <thead><tr>
+        <th>Produto</th>
+        <th style="text-align:center;width:70px">Qtd</th>
+        <th style="text-align:right;width:100px">Vl. Unit.</th>
+        <th style="text-align:right;width:110px">Total</th>
+      </tr></thead>
       <tbody>${linhas}</tbody>
       <tfoot><tr class="total-row">
-        <td colspan="4">TOTAL DO PERÍODO</td>
+        <td colspan="3">TOTAL DO PERÍODO</td>
         <td style="text-align:right">${brl(totalVendido)}</td>
-        <td style="text-align:right">${brl(totalAberto)}</td>
-        <td></td>
-        <td></td>
       </tr></tfoot>
     </table>
     </div>
