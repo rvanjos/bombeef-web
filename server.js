@@ -481,7 +481,7 @@ app.post('/api/dre/exportar-excel', require('./middleware/auth')(), async (req, 
 });
 app.use('/api/perdas',       require('./routes/perdas')(pool, app)); // F1-06
 app.use('/api/retiradas',    require('./routes/retiradas')(pool, app)); // F2-05
-app.use('/api/config',       require('./routes/config')(pool));
+app.use('/api/config',       require('./routes/config')(pool, app));
 app.use('/api/rh',           require('./routes/rh')(pool, app));
 app.use('/api/dashboard',    require('./routes/dashboard')(pool));
 app.use('/api/fornecedores', require('./routes/fornecedores')(pool));

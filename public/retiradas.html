@@ -1111,7 +1111,7 @@ window.imprimirRetiradas = function imprimirRetiradas() {
 /* BB-SSE-LISTENER — recarrega esta tela quando outro modulo altera dados relacionados.
    O portal (index.html) recebe o evento SSE e repassa via postMessage. */
 (function(){
-  var EVENTOS = ['retiradas_atualizado'];
+  var EVENTOS = ['retiradas_atualizado','cadastro_atualizado'];
   var t = null;
   window.addEventListener('message', function(e){
     if (!e.data || e.data.type !== 'bb_data_changed') return;
@@ -1120,8 +1120,15 @@ window.imprimirRetiradas = function imprimirRetiradas() {
     clearTimeout(t);                       // debounce: varias mutacoes seguidas = 1 recarga
     t = setTimeout(function(){
       try {
-          if (typeof carregar === 'function') carregar();
-          if (typeof carregarLimites === 'function') carregarLimites();
+          // cadastro mudou (funcionario novo/editado/inativado) -> recarrega a
+          // lista de funcionarios, que alimenta os cards e os selects.
+          // carregarFuncionarios() ja chama carregarLimites() no fim.
+          if (tipo === 'cadastro_atualizado') {
+            if (typeof carregarFuncionarios === 'function') carregarFuncionarios();
+          } else {
+            if (typeof carregar === 'function') carregar();
+            if (typeof carregarLimites === 'function') carregarLimites();
+          }
       } catch(_) {}
     }, 400);
   });

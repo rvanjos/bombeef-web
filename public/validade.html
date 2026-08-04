@@ -907,8 +907,8 @@ BB.modulo({
     bbColunas.aplicarTodas();   // reaplica as colunas que o usuario escondeu
   },
   // Recarrega dados sem resetar os filtros de mês que o usuário tiver aberto
-  reload: () => { carregar(); carregarKPIs(); },
-  eventos: ['validade_atualizado', 'perdas_atualizado', 'faturamento_atualizado'],
+  reload: () => { carregar(); carregarKPIs(); carregarFuncionarios(); },
+  eventos: ['validade_atualizado', 'perdas_atualizado', 'faturamento_atualizado', 'cadastro_atualizado'],
 });
 
 async function carregarAcoesValidade(){
