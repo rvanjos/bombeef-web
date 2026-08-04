@@ -185,7 +185,14 @@ module.exports = function(pool, app) {
       if (migradas > 0) console.log(`[fiado] ${migradas} retirada(s) migrada(s) para Compras Pendentes`);
     } catch(e) { console.error('[migrarRetiradas]', e.message); }
   }
-  setTimeout(migrarRetiradas, 3000); // executa 3s após start
+  // DESATIVADO (ago/2026): funcionarios agora vivem so no modulo Retiradas.
+  // Isto rodava 3s depois de CADA start do servidor — e como fiado.js e montado
+  // duas vezes (/api/fiado e /api/compras_pendentes), rodava 2x por deploy.
+  // O ON CONFLICT nao protegia porque o indice unico e parcial
+  // (WHERE funcionario_id IS NOT NULL) e as linhas criadas ficavam com esse
+  // campo nulo — resultado: ~770 cadastros repetidos em clientes_fiado.
+  // A funcao fica no codigo para consulta/reuso, mas nao roda mais sozinha.
+  // setTimeout(migrarRetiradas, 3000);
 
   // ── CLIENTES ───────────────────────────────────────────────────────────────
   // Sincroniza funcionários como clientes tipo 'funcionario'

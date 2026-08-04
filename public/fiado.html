@@ -128,7 +128,6 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
 <!-- Abas -->
 <div class="tabs-bar">
   <button class="tab-btn active" onclick="showTab('painel',this)">📊 Painel</button>
-  <button class="tab-btn" onclick="showTab('funcionarios',this)">👷 Funcionários</button>
   <button class="tab-btn" onclick="showTab('clientes',this)">👥 Clientes Externos</button>
   <button class="tab-btn" onclick="showTab('vendas',this)">🛍 Vendas</button>
   <button class="tab-btn" onclick="showTab('pagamentos',this)">💵 Pagamentos</button>
@@ -665,7 +664,7 @@ async function carregarTudo() {
   popularSelects();
   const nFuncs = _clientes.filter(c=>c.tipo_cliente==='funcionario').length;
   const nExterno = _clientes.filter(c=>c.tipo_cliente!=='funcionario').length;
-  document.getElementById('ph-sub').textContent = `${nFuncs} funcionário(s) · ${nExterno} clientes · ${_vendas.filter(v=>v.status==='aberto'||v.status==='parcial').length} em aberto`;
+  document.getElementById('ph-sub').textContent = `${nExterno} cliente(s) · ${_vendas.filter(v=>v.status==='aberto'||v.status==='parcial').length} em aberto`;
 }
 
 function renderKPIs(k) {
