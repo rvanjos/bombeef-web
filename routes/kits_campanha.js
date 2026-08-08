@@ -200,13 +200,22 @@ module.exports = function (pool, app) {
   // ── HELPERS ─────────────────────────────────────────────────────────────────
 
   /** Gera número de pedido sequencial: KIT-AAAAMM-NNNN */
-  async function gerarNumeroPedido() {
-    const { rows } = await pool.query(
-      `SELECT COUNT(*)+1 AS seq FROM kit_pedidos WHERE DATE_TRUNC('month', criado_em) = DATE_TRUNC('month', NOW())`
-    );
+  // Numero do pedido: KIT-AAAAMM-0001
+  // Usa MAX do sufixo ja gravado, NAO COUNT(*). Com COUNT, excluir qualquer
+  // pedido do mes fazia a contagem cair e o proximo numero colidir com um que
+  // ja existia -> "duplicate key ... kit_pedidos_numero_key".
+  // `tentativa` desempata corridas (dois pedidos confirmados ao mesmo tempo).
+  async function gerarNumeroPedido(tentativa = 0) {
     const d = new Date();
     const ym = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}`;
-    return `KIT-${ym}-${String(rows[0].seq).padStart(4,'0')}`;
+    const prefixo = `KIT-${ym}-`;
+    const { rows } = await pool.query(
+      `SELECT COALESCE(MAX(NULLIF(SUBSTRING(numero FROM '[0-9]+$'), '')::int), 0) AS ult
+         FROM kit_pedidos WHERE numero LIKE $1`,
+      [prefixo + '%']
+    );
+    const seq = parseInt(rows[0].ult || 0) + 1 + tentativa;
+    return `${prefixo}${String(seq).padStart(4, '0')}`;
   }
 
   /**
@@ -469,7 +478,7 @@ module.exports = function (pool, app) {
       }
 
       const { rows: camp } = await pool.query(`SELECT nome FROM kit_campanhas WHERE id=$1`, [campanha_id]);
-      const numero = await gerarNumeroPedido();
+      let numero = await gerarNumeroPedido();
       const status = reqStatus || 'reservado';
       const nomeOp = req.usuario?.nome || req.usuario?.email || 'Sistema';
 
@@ -487,7 +496,14 @@ module.exports = function (pool, app) {
         await client.query('BEGIN');
 
         const pagoAgora = pago === true || pago === 'true';
-      const { rows: pedRows } = await client.query(`
+      // Se dois pedidos forem confirmados ao mesmo tempo, os dois podem calcular
+      // o mesmo numero. O SAVEPOINT permite retentar so o INSERT sem abortar a
+      // transacao inteira (no Postgres, erro em statement invalida a tx toda).
+      let pedRows;
+      for (let tentativa = 0; ; tentativa++) {
+        await client.query('SAVEPOINT sp_numero');
+        try {
+          ({ rows: pedRows } = await client.query(`
           INSERT INTO kit_pedidos
             (numero,campanha_id,campanha_nome,canal,cliente_nome,cliente_tel,
              status,observacao,valor_total,qtd_kits,
@@ -495,7 +511,7 @@ module.exports = function (pool, app) {
              endereco_rua,endereco_num,endereco_bairro,endereco_cidade,endereco_ref,
              criado_por,criado_por_nome)
           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22) RETURNING id`,
-          [numero, campanha_id, camp[0]?.nome||'', canal||'balcao',
+            [numero, campanha_id, camp[0]?.nome||'', canal||'balcao',
            cliente_nome||null, cliente_tel||null, status, observacao||null,
            valorTotal, parseInt(qtd_kits)||1,
            pagoAgora, pagoAgora?new Date():null,
@@ -503,7 +519,15 @@ module.exports = function (pool, app) {
            endereco_rua||null, endereco_num||null, endereco_bairro||null,
            endereco_cidade||null, endereco_ref||null,
            req.usuario?.id||null, nomeOp]
-        );
+          ));
+          await client.query('RELEASE SAVEPOINT sp_numero');
+          break;                                   // inseriu, segue o fluxo
+        } catch (eIns) {
+          if (eIns.code !== '23505' || tentativa >= 5) throw eIns;
+          await client.query('ROLLBACK TO SAVEPOINT sp_numero');
+          numero = await gerarNumeroPedido(tentativa + 1);   // tenta o proximo
+        }
+      }
         const pedId = pedRows[0].id;
 
         // Inserir itens
