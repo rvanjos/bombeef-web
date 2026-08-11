@@ -1040,5 +1040,19 @@ module.exports = function (pool, app) {
     }
   });
 
+  // ── GET /:id — um item avulso ──────────────────────────────────────────────
+  // Declarada por ULTIMO de proposito: rotas especificas (/kpis, /historico,
+  // /analise-financeira...) precisam casar antes, senao o Express trataria o
+  // nome delas como id.
+  r.get('/:id(\\d+)', async (req, res) => {
+    try {
+      const { rows } = await pool.query(
+        `SELECT * FROM validade_items WHERE id = $1`, [parseInt(req.params.id)]
+      );
+      if (!rows.length) return res.status(404).json({ ok: false, erro: 'Item não encontrado' });
+      res.json({ ok: true, data: rows[0] });
+    } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
   return r;
 };

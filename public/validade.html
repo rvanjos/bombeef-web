@@ -2017,8 +2017,22 @@ function imprimirPerdas(mesIni, mesFim) {
   w.document.close();
   setTimeout(() => w.print(), 800);
 }
-function abrirModal(id){
-  const v = id ? itens.find(x=>x.id===id) : null;
+// Guarda o id que a tela pediu para editar. NAO depender do input escondido:
+// se o item nao estivesse no array carregado, o campo ficava vazio, o modal
+// abria em branco como "Novo Item" e ao salvar CRIAVA UM ITEM NOVO — era assim
+// que um item ja encerrado "voltava" para a lista de vencimentos.
+let _editandoId = null;
+
+async function abrirModal(id){
+  _editandoId = id || null;
+  let v = id ? itens.find(x=>x.id===id) : null;
+  // Nao esta na lista carregada (veio do dashboard, de um filtro diferente ou
+  // ja foi encerrado): busca no servidor em vez de abrir formulario vazio.
+  if (id && !v) {
+    const d = await api.get(`/api/validade/${id}`);
+    if (d.ok && d.data) v = d.data;
+    else { toast('Não foi possível carregar este item'); _editandoId = null; return; }
+  }
   document.getElementById('val-title').textContent = v?'Editar Item':'Novo Item de Validade';
   document.getElementById('v-id').value    = v?.id||'';
   document.getElementById('v-cod').value   = v?.codigo||'';
@@ -2184,7 +2198,7 @@ async function salvarVal(){
   // Proteção anti-duplo-clique
   const btnSalvar = document.querySelector('#modal-val .btn-p');
   if (btnSalvar) { if (btnSalvar.disabled) return; btnSalvar.disabled = true; btnSalvar.textContent = '⏳ Salvando...'; }
-  const id = document.getElementById('v-id').value;
+  const id = _editandoId || document.getElementById('v-id').value || null;
   try {
   // Calcular total kg da calculadora — inclui pesos individuais
   const pesosValidos = _pesagens.map(p => parseFloat(p.kg)||0).filter(v => v > 0);
@@ -2216,6 +2230,7 @@ async function salvarVal(){
   const d = id ? await api.put(`/api/validade/${id}`,body) : await api.post('/api/validade',body);
   if(!d.ok){ toast('Erro: '+d.erro); return; }
   toast(id?'✅ Item atualizado!':'✅ Item criado!');
+  _editandoId = null;
   fecharModal('modal-val'); carregar(); carregarKPIs();
   try { window.parent.postMessage({type:'bb_refresh_kpis'},'*'); } catch(_) {}
   } finally {
