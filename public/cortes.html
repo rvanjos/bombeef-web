@@ -139,6 +139,14 @@ tr:hover td{background:#fdf8f5;}
   html, body { overflow-x: hidden !important; height: auto !important; }
   .body { overflow-x: hidden !important; overflow-y: auto !important; -webkit-overflow-scrolling: touch; height: auto !important; max-height: none !important; }
 }
+
+.dash-filtro{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:14px;
+  background:var(--white);border:1px solid var(--border);border-radius:10px;padding:10px 13px;}
+.dash-filtro label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);}
+.dash-filtro select{padding:7px 11px;border:1px solid var(--border);border-radius:8px;
+  font-size:13px;font-family:inherit;background:var(--white);cursor:pointer;min-width:190px;}
+#dash-mes-info{font-size:12px;color:var(--muted);}
+@media(max-width:768px){ .dash-filtro select{flex:1;min-width:0;} }
 </style>
 </head>
 <body>
@@ -163,6 +171,14 @@ tr:hover td{background:#fdf8f5;}
 
 <!-- ── DASHBOARD ─────────────────────────────────────────────────────── -->
 <div id="tab-dashboard">
+  <!-- Filtro de período do dashboard -->
+  <div class="dash-filtro">
+    <label for="dash-mes">Período:</label>
+    <select id="dash-mes" onchange="carregarDashboard()">
+      <option value="">Todos os meses (acumulado)</option>
+    </select>
+    <span id="dash-mes-info"></span>
+  </div>
   <div class="kpi-grid" id="dash-kpis">
     <div class="kpi k-b"><div class="kpi-v" id="d-investido">—</div><div class="kpi-l">Total Investido</div><div class="kpi-s" id="d-investido-s"></div></div>
     <div class="kpi k-r"><div class="kpi-v" id="d-valor-perda">—</div><div class="kpi-l">Total Perdido R$</div><div class="kpi-s" id="d-perda-kg-s"></div></div>
@@ -652,10 +668,38 @@ function abrirOverlay(id) {
 }
 
 // ── DASHBOARD ─────────────────────────────────────────────────────────────
+
+// 08/2026 -> "agosto de 2026"
+function rotuloMes(mmyyyy){
+  const [m, y] = (mmyyyy||'').split('/');
+  const nomes = ['janeiro','fevereiro','março','abril','maio','junho',
+                 'julho','agosto','setembro','outubro','novembro','dezembro'];
+  const nome = nomes[parseInt(m,10)-1];
+  return nome ? `${nome} de ${y}` : mmyyyy;
+}
+
 async function carregarDashboard() {
-  const d = await api.get('/api/cortes/dashboard');
+  const sel = document.getElementById('dash-mes');
+  const mes = sel ? sel.value : '';
+  const d = await api.get('/api/cortes/dashboard' + (mes ? `?mes=${encodeURIComponent(mes)}` : ''));
   if(!d.ok) return;
   const v = d.data;
+
+  // Preenche o seletor com os meses que tem registro (só na 1a carga, para não
+  // perder a escolha do usuário a cada recarga)
+  if (sel && sel.options.length <= 1 && Array.isArray(v.meses)) {
+    v.meses.forEach(m => {
+      const o = document.createElement('option');
+      o.value = m;
+      o.textContent = rotuloMes(m);
+      sel.appendChild(o);
+    });
+    if (mes) sel.value = mes;
+  }
+  const info = document.getElementById('dash-mes-info');
+  if (info) info.textContent = v.registros
+    ? `${v.registros} registro(s) no período`
+    : 'Nenhum registro neste período';
   const perdaPct = parseFloat(v.perda_media||0)*100;
   const meta = parseFloat(v.meta_perda||0.15)*100;
   const corBadge = perdaPct > meta*1.2 ? 'var(--red-l)' : perdaPct > meta ? 'var(--orange)' : 'var(--green)';

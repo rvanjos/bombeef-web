@@ -116,10 +116,19 @@ module.exports = function(pool, app) {
   // ── GET /dashboard — KPIs ────────────────────────────────────────────────
   r.get('/dashboard', async (req, res) => {
     try {
-      const { rows: reg }    = await pool.query(`SELECT * FROM cortes_registros ORDER BY data DESC LIMIT 200`);
+      // ?mes=MM/YYYY filtra o periodo (mesma convencao de /registros e /relatorio).
+      // Sem o parametro, mostra o acumulado de tudo.
+      const { mes } = req.query;
+      const filtro = mes ? `WHERE TO_CHAR(data,'MM/YYYY')=$1` : '';
+      const par    = mes ? [mes] : [];
+
+      // Sem LIMIT: os KPIs somam o periodo inteiro. O LIMIT 200 anterior truncava
+      // silenciosamente o calculo assim que passasse de 200 registros.
+      const { rows: reg }    = await pool.query(`SELECT * FROM cortes_registros ${filtro} ORDER BY data DESC`, par);
       const { rows: ins }    = await pool.query(`SELECT COUNT(*) AS total FROM cortes_insumos`);
       const { rows: fichas } = await pool.query(`SELECT COUNT(*) AS total FROM cortes_fichas`);
-      const { rows: vendas } = await pool.query(`SELECT COUNT(*) AS total, COALESCE(SUM(total),0) AS faturamento FROM cortes_vendas`);
+      const { rows: vendas } = await pool.query(
+        `SELECT COUNT(*) AS total, COALESCE(SUM(total),0) AS faturamento FROM cortes_vendas ${filtro}`, par);
       const { rows: cfg }    = await pool.query(`SELECT valor FROM cortes_config WHERE chave='meta_perda'`);
 
       const metaPerda = toNum(cfg[0]?.valor, 0.15);
@@ -179,7 +188,15 @@ module.exports = function(pool, app) {
         .filter(([, v]) => v.bruto > 0 && (v.bruto - v.limpo) / v.bruto > metaPerda)
         .map(([corte, v]) => ({ corte, perda_pct: (v.bruto-v.limpo)/v.bruto }));
 
+      // Meses que realmente tem registro — alimenta o seletor da tela
+      const { rows: meses } = await pool.query(
+        `SELECT DISTINCT TO_CHAR(data,'MM/YYYY') AS mes, DATE_TRUNC('month', data) AS ord
+           FROM cortes_registros WHERE data IS NOT NULL
+          ORDER BY ord DESC`);
+
       res.json({ ok: true, data: {
+        mes:          mes || null,
+        meses:        meses.map(m => m.mes),
         registros:    reg.length,
         insumos:      toNum(ins[0]?.total),
         fichas:       toNum(fichas[0]?.total),
