@@ -1608,7 +1608,7 @@ module.exports = function (pool, app) {
                 INSERT INTO cartao_fatura_itens
                   (fatura_id, data_compra, descricao, valor, categoria_dre, portador, hash_item)
                 VALUES ($1,$2,$3,$4,$5,$6,$7)
-                ON CONFLICT (fatura_id, hash_item) DO UPDATE
+                ON CONFLICT (fatura_id, hash_item) WHERE hash_item IS NOT NULL DO UPDATE
                   SET removido = false,
                       categoria_dre = COALESCE(cartao_fatura_itens.categoria_dre, EXCLUDED.categoria_dre)
               `, [faturaId, it.data || null,
@@ -1669,7 +1669,7 @@ module.exports = function (pool, app) {
             INSERT INTO cartao_fatura_itens
               (fatura_id, data_compra, descricao, valor, categoria_dre, portador, hash_item)
             VALUES ($1,$2,$3,$4,$5,$6,$7)
-            ON CONFLICT (fatura_id, hash_item) DO NOTHING
+            ON CONFLICT (fatura_id, hash_item) WHERE hash_item IS NOT NULL DO NOTHING
           `, [faturaDbId, it.data || null,
               it.descricao || it.lancamento || null,
               parseFloat(it.valor || 0),
@@ -1879,7 +1879,7 @@ module.exports = function (pool, app) {
             INSERT INTO cartao_fatura_itens
               (fatura_id, data_compra, descricao, valor, categoria_dre, portador, hash_item)
             VALUES ($1,$2,$3,$4,$5,$6,$7)
-            ON CONFLICT (fatura_id, hash_item) DO NOTHING
+            ON CONFLICT (fatura_id, hash_item) WHERE hash_item IS NOT NULL DO NOTHING
           `, [faturaDbId, it.data, it.descricao, parseFloat(it.valor || 0),
               it.categoria || null, it.portador || null, h]);
           itensCriados++;
