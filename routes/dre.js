@@ -1745,6 +1745,35 @@ module.exports = function (pool, app) {
     }
   });
 
+  // PATCH /api/dre/cartao-faturas/marcar-paga-por-ref — usado pelo vínculo
+  // automático (extrato x fatura), que só tem o faturaCC (fatura_id_ref) em
+  // mãos, não o id numérico. Best-effort: se não achar a fatura, não é erro
+  // (pode ser uma fatura que nunca foi registrada em cartao_faturas).
+  r.patch('/cartao-faturas/marcar-paga-por-ref', autenticar(), async (req, res) => {
+    const uid = req.user?.id || null;
+    const { fatura_id_ref, data_pagamento, origem } = req.body || {};
+    if (!fatura_id_ref) return res.status(400).json({ ok: false, erro: 'fatura_id_ref é obrigatório' });
+    try {
+      const { rows } = await pool.query(
+        `SELECT id, status, log_json FROM cartao_faturas WHERE fatura_id_ref=$1 LIMIT 1`, [fatura_id_ref]
+      );
+      if (!rows.length) return res.json({ ok: true, encontrada: false });
+      if (rows[0].status === 'PAGA') return res.json({ ok: true, encontrada: true, jaEstava: true });
+      const log = [...(rows[0].log_json||[]),
+                   { acao:'PAGA_AUTO', em: new Date().toISOString(), usuario_id: uid, origem: origem||'vinculo_automatico' }];
+      await pool.query(`
+        UPDATE cartao_faturas SET
+          status='PAGA', data_pagamento=COALESCE($1::date, NOW()::DATE),
+          usuario_pagamento=$2, log_json=$3, atualizado_em=NOW()
+        WHERE id=$4
+      `, [data_pagamento||null, uid, JSON.stringify(log), rows[0].id]);
+      res.json({ ok: true, encontrada: true });
+    } catch(e) {
+      console.error('[cf/marcar-paga-por-ref]', e.message);
+      res.status(500).json({ ok: false, erro: e.message });
+    }
+  });
+
   // PATCH /api/dre/cartao-faturas/:id/pagar — marca como paga
   r.patch('/cartao-faturas/:id/pagar', autenticar(), async (req, res) => {
     const uid = req.user?.id || null;

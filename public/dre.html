@@ -1472,6 +1472,12 @@ async function carregarSessao() {
 
     // Gera provisões de royalties automaticamente para meses com faturamento disponível
     await gerarRoyaltiesAutomatico().catch(e => console.warn('[royalties]', e));
+
+    // Antes só rodava logo após confirmar uma fatura nova. Se o extrato do
+    // pagamento foi importado em outro momento (o caso comum — fatura de um
+    // dia, extrato só no fechamento do mês), o vínculo nunca era refeito e o
+    // Rafael tinha que marcar cada fatura como paga na mão.
+    _revinculateCC();
   } catch(e) {
     console.error('[carregarSessao]', e);
     // Mesmo com erro, se já tem dados em memória, mostra a tabela
@@ -3113,6 +3119,16 @@ function tentarVincularFaturaAuto(tx) {
     tx.categoria = 'Pagamento de Fatura CC';
   }
   console.log(`[auto-vinc] ✅ score=${melhor.score} → ${tx.lancamento} → ${melhor.fatura.faturaId}`);
+
+  // Vínculo automático com confiança alta (score ≥80, sem ambiguidade) é
+  // equivalente a clicar "Marcar Paga" à mão — antes esse passo nunca
+  // acontecia sozinho e o Rafael tinha que marcar fatura por fatura, mesmo
+  // quando o pagamento já estava certinho no extrato.
+  api.patch('/api/dre/cartao-faturas/marcar-paga-por-ref', {
+    fatura_id_ref: melhor.fatura.faturaId,
+    data_pagamento: tx.data || null,
+    origem: 'auto_vinc_extrato',
+  }).catch(() => {}); // best-effort: se a fatura nem estiver rastreada, tanto faz
 }
 
 // Rodar para todos os lançamentos EXTRATO não vinculados (retroativo)
@@ -7482,6 +7498,8 @@ function setText(id, v) { const e = document.getElementById(id); if(e) e.textCon
 
 async function abrirControleFaturas() {
   document.getElementById('m-cartao-faturas').style.display = 'flex';
+  _revinculateCC(); // reconfere vínculos antes de mostrar o status
+  await new Promise(r => setTimeout(r, 400)); // dá tempo do PATCH assíncrono chegar no banco
   await carregarCartaoFaturas();
 }
 function fecharControleFaturas() {
