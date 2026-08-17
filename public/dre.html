@@ -2329,6 +2329,7 @@ function parseCCRowsChatGPT(rows) {
       categoria: autoClassificar(descFinal, estab),
       fonte: 'CC',
       portador,
+      parcela: (pA > 0 && pT > 0) ? `${pA}/${pT}` : null,
     });
   }
   return result;
@@ -2584,7 +2585,8 @@ function parseCCRows(rows) {
     const parc = cP>=0 ? String(row[cP]||'') : '';
     // mesCaixa = mesRef como placeholder; será sobrescrito para mesCC (mês do pagamento da fatura)
     result.push({id:'cc_'+Date.now()+'_'+i, lancamento:parc?`${nome} (${parc})`:nome,
-      valor:v, data:dt, mes, mesCaixa:mesRef, categoria:autoClassificar(nome,''), fonte:'CC', razaoSocial:nome});
+      valor:v, data:dt, mes, mesCaixa:mesRef, categoria:autoClassificar(nome,''), fonte:'CC', razaoSocial:nome,
+      parcela: /^\d+\/\d+$/.test(parc) ? parc : null});
   }
   return result;
 }
@@ -5218,6 +5220,72 @@ function _txsSemDuplicatas(txs) {
   });
 }
 
+// ── Valor de compra parcelada no cartão: cheio na competência, parcela no caixa ──
+// Regra definida pelo Rafael: uma compra de R$1.000 em 10x entra no DRE
+// (Competência) por R$1.000 inteiro no mês da COMPRA; no Caixa, entra R$100
+// em cada mês em que a parcela aparece na fatura.
+//
+// Como as parcelas de uma mesma compra chegam em faturas (sessões) diferentes,
+// nao dá para simplesmente somar t.valor de cada linha — isso já é o valor da
+// parcela, e contá-lo no mês da compra a cada parcela importada multiplicaria
+// o gasto por N. Em vez disso, agrupamos as parcelas da MESMA compra (mesmo
+// mês de competência + descrição + valor da parcela + total de parcelas) e
+// atribuímos o valor cheio UMA ÚNICA VEZ, na parcela de menor número presente
+// no sistema — as demais entram com 0 na competência (já contabilizadas).
+//
+// Retroativo limitado: só aplica o valor cheio se o mês da compra estiver
+// dentro dos últimos MESES_RETROATIVOS meses corridos. Compras mais antigas
+// (parceladas iniciadas antes da adoção da regra, com meses já fechados)
+// mantêm o comportamento anterior — cada parcela pelo seu próprio valor no
+// seu próprio mês — para não reabrir fechamento passado.
+const MESES_RETROATIVOS = 2;
+
+function _mesDentroJanelaRetroativa(mesStr) {
+  const m = String(mesStr||'').match(/^(\d{2})\/(\d{4})$/);
+  if (!m) return false;
+  const idxMes  = parseInt(m[2])*12 + (parseInt(m[1])-1);
+  const hoje    = new Date();
+  const idxHoje = hoje.getFullYear()*12 + hoje.getMonth();
+  const diff    = idxHoje - idxMes;
+  return diff >= 0 && diff <= MESES_RETROATIVOS;
+}
+
+function _chaveGrupoParcela(t, M) {
+  const desc = (t.razaoSocial || t.lancamento || '').trim().toLowerCase().replace(/\s*\(parc\.?.*\)\s*$/i, '');
+  const centavos = Math.round(Math.abs(parseFloat(t.valor||0)) * 100);
+  return `${t.mes}|${desc}|${centavos}|${M}`;
+}
+
+// Varre as transações e decide, por grupo de parcelamento, qual linha (a de
+// menor número de parcela presente) é a "representante" que leva o valor cheio.
+function _mapaGruposParcela(at) {
+  const grupos = {};
+  at.forEach(t => {
+    if (t.fonte !== 'CC' || !t.parcela) return;
+    const m = String(t.parcela).match(/^(\d+)\/(\d+)$/);
+    if (!m) return;
+    const n = parseInt(m[1]), M = parseInt(m[2]);
+    if (!_mesDentroJanelaRetroativa(t.mes)) return; // fora da janela: não agrupa
+    const chave = _chaveGrupoParcela(t, M);
+    if (!grupos[chave] || n < grupos[chave].n) grupos[chave] = { n, M, repId: t.id };
+  });
+  return grupos;
+}
+
+function _valorParaDRE(t, grupos) {
+  const vBase = parseFloat(t.valor || 0);
+  if (getModo() !== 'comp') return vBase;              // Caixa: valor da parcela, sempre
+  if (t.fonte !== 'CC' || !t.parcela) return vBase;     // à vista, ou não é fatura de cartão
+  const m = String(t.parcela).match(/^(\d+)\/(\d+)$/);
+  if (!m) return vBase;
+  const M = parseInt(m[2]);
+  if (!_mesDentroJanelaRetroativa(t.mes)) return vBase; // fora da janela: mantém valor da parcela
+  const chave = grupos && _chaveGrupoParcela(t, M);
+  const grupo = grupos && grupos[chave];
+  if (!grupo || grupo.repId !== t.id) return 0;         // não é a linha representante do grupo
+  return vBase * M;                                     // representante leva o valor cheio
+}
+
 function _buildDRE(el, full) {
   if (!el) return;
   const at = _txsSemDuplicatas(TXS).filter(t => t.categoria);
@@ -5242,19 +5310,26 @@ function _buildDRE(el, full) {
   const meses=[...mesesSet].sort((a,b)=>{const p=s=>{const[m,y]=s.split('/');return(+y)*12+(+m);};return p(a)-p(b);});
   const showTot=meses.length>1||full;
 
+  // ── Regra do Rafael: compra parcelada entra no DRE (Competência) pelo VALOR
+  // CHEIO no mês da compra; no Caixa, entra o valor de cada parcela no mês em
+  // que ela vem na fatura. Retroativo limitado aos últimos MESES_RETROATIVOS
+  // meses — meses mais antigos que isso já fechados não são tocados.
+  const _gruposParcela = _mapaGruposParcela(at);
+  const _v = t => _valorParaDRE(t, _gruposParcela);
+
   const data={};
   const dataNaoOper={}; // categorias que aparecem mas NÃO impactam resultado
   for (const t of at) {
     // Categorias não-operacionais: mostrar em bloco próprio, fora dos cálculos
     if (CATS_NAO_OPERACIONAIS.has(t.categoria)) {
-      const m=getMesTx(t); const v=parseFloat(t.valor||0);
+      const m=getMesTx(t); const v=_v(t);
       if(!dataNaoOper[t.categoria])dataNaoOper[t.categoria]={};
       dataNaoOper[t.categoria][m]=(dataNaoOper[t.categoria][m]||0)+v;
       continue;
     }
     const g=catGrupo(t.categoria)||'OUTROS';
     const m=getMesTx(t);
-    const v=parseFloat(t.valor||0);
+    const v=_v(t);
     if(!data[g])data[g]={};
     if(!data[g][t.categoria])data[g][t.categoria]={};
     data[g][t.categoria][m]=(data[g][t.categoria][m]||0)+v;
