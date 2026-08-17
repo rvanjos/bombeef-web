@@ -8082,14 +8082,14 @@ async function _sincronizarCategoriesCC(lancs, faturaIdRef) {
   <div style="background:#fff;border-radius:16px;width:100%;max-width:1140px;max-height:94vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.3)">
 
     <!-- Header -->
-    <div style="background:var(--red);padding:14px 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+    <div style="background:var(--red);padding:14px 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;flex-wrap:wrap;gap:8px">
       <div>
         <div style="color:#fff;font-size:15px;font-weight:700">💳 Status das Faturas de Cartão</div>
         <div style="color:rgba(255,255,255,.7);font-size:11px;margin-top:1px">Visão geral por cartão e mês · clique em qualquer célula para detalhes</div>
       </div>
-      <div style="display:flex;gap:8px;align-items:center">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <button onclick="carregarCartaoFaturas()" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;padding:4px 12px;border-radius:6px;font-size:11px;cursor:pointer;font-family:'DM Sans',sans-serif">🔄 Atualizar</button>
-        <button onclick="reconstruirFaturasAntigas()" title="Cria o registro de fatura para lançamentos de cartão que já estão no DRE mas nunca passaram pela tela de importação de fatura — é por isso que eles não aparecem marcados aqui" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;padding:4px 12px;border-radius:6px;font-size:11px;cursor:pointer;font-family:'DM Sans',sans-serif">🧩 Reconhecer lançamentos antigos</button>
+        <button onclick="reconstruirFaturasAntigas()" title="Cria o registro de fatura para lançamentos de cartão que já estão no DRE mas nunca passaram pela tela de importação de fatura — é por isso que eles não aparecem marcados aqui" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;padding:4px 12px;border-radius:6px;font-size:11px;cursor:pointer;font-family:'DM Sans',sans-serif;white-space:nowrap">🧩 Reconhecer antigos</button>
         <button onclick="fecharControleFaturas()" style="background:none;border:none;color:rgba(255,255,255,.8);font-size:22px;cursor:pointer;line-height:1">×</button>
       </div>
     </div>
