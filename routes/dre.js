@@ -1801,6 +1801,37 @@ module.exports = function (pool, app) {
         }
       }
 
+      // 2b) Órfãos: lançamentos CC que NUNCA passaram pela tela de revisão de
+      // fatura (abrirRevisaoCC → confirmar), então nunca ganharam faturaCC.
+      // São exatamente os que "Status Cartões" não reconhece como enviados,
+      // mesmo já estando no DRE — a grade só lê cartao_faturas, nunca TXS.
+      // Agrupa por cartão normalizado (banco + 4 últimos dígitos) + mês da
+      // fatura, com chave estável (idempotente: rodar de novo não duplica).
+      for (const s of sessoes) {
+        const txs = s.dados_json?.transactions || [];
+        for (const t of txs) {
+          if (t.fonte !== 'CC' || t.faturaCC) continue; // só órfãos
+          const { banco, final, chave } = _normalizarCartao(t.portador || t.bandeira || '');
+          const comp = t.mesCaixa || t.mes || s.mes_ref;
+          if (!comp) continue;
+          const fid = `ORFAO_${chave}_${comp.replace('/', '_')}`;
+          if (!grupos[fid]) {
+            grupos[fid] = {
+              faturaCC:    fid,
+              cartao:      `${banco} final ${final}`,
+              bandeira:    banco,
+              competencia: comp,
+              itens: [],
+              _orfao: true,
+            };
+          }
+          grupos[fid].itens.push({
+            data: t.data || null, descricao: t.lancamento || t.razaoSocial || '',
+            valor: t.valor, categoria: t.categoria || null, portador: t.portador || null,
+          });
+        }
+      }
+
       const agora = new Date().toISOString();
       let faturasCriadas = 0, faturasIgnoradas = 0, itensCriados = 0, itensIgnorados = 0;
 
@@ -1865,6 +1896,23 @@ module.exports = function (pool, app) {
       res.status(500).json({ ok: false, erro: e.message });
     }
   });
+
+  // ── Helper: normaliza o texto de portador/bandeira em (banco, últimos 4
+  // dígitos) — o mesmo cartão físico chega com grafia diferente conforme o
+  // caminho de importação usado ("C6 (Final 7090)" vs "C6 RAFAEL ANJOS
+  // (Final 7090)"), o que fragmentava o agrupamento por cartão.
+  function _normalizarCartao(portadorRaw) {
+    const p  = String(portadorRaw || '').replace(/\s+/g, ' ').trim();
+    const up = p.toUpperCase();
+    const m4 = p.match(/(\d{4})(?!.*\d{4})/); // último grupo de 4 dígitos na string
+    const final = m4 ? m4[1] : 'SN';
+    let banco = 'Outro';
+    if (up.includes('C6')) banco = 'C6';
+    else if (up.includes('CAIXA')) banco = 'Caixa';
+    else if (up.includes('ITA')) banco = 'Itaú';
+    else if (/XXXX\.XXXX\.\d{4}/.test(p)) banco = 'Itaú'; // formato mascarado do Itaú Empresas
+    return { banco, final, chave: `${banco}_${final}` };
+  }
 
   // ── Helper: hash de item de fatura ──────────────────────────────────────────
   function _hashItem(it) {

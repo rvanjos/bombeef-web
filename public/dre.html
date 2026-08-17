@@ -4486,8 +4486,13 @@ async function reconstruirFaturasAntigas() {
         ⏭ Já existiam: <strong>${res.itensIgnorados}</strong>
       </div>`;
     }
-    // Recarregar painel após 1s
-    setTimeout(renderStatusCartoes, 1000);
+    // Recarrega onde quer que a função tenha sido chamada: o painel inline
+    // (renderStatusCartoes → #cartoes-grid) e/ou o modal de detalhes
+    // (carregarCartaoFaturas → #cf-tbody) — cada um só existe se estiver aberto.
+    setTimeout(() => {
+      renderStatusCartoes();
+      if (typeof carregarCartaoFaturas === 'function') carregarCartaoFaturas();
+    }, 1000);
   } catch(e) {
     toast('❌ ' + e.message);
     if (grid) grid.innerHTML = `<div style="font-size:11px;color:#dc2626;padding:8px">❌ ${e.message}</div>`;
@@ -8084,6 +8089,7 @@ async function _sincronizarCategoriesCC(lancs, faturaIdRef) {
       </div>
       <div style="display:flex;gap:8px;align-items:center">
         <button onclick="carregarCartaoFaturas()" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;padding:4px 12px;border-radius:6px;font-size:11px;cursor:pointer;font-family:'DM Sans',sans-serif">🔄 Atualizar</button>
+        <button onclick="reconstruirFaturasAntigas()" title="Cria o registro de fatura para lançamentos de cartão que já estão no DRE mas nunca passaram pela tela de importação de fatura — é por isso que eles não aparecem marcados aqui" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;padding:4px 12px;border-radius:6px;font-size:11px;cursor:pointer;font-family:'DM Sans',sans-serif">🧩 Reconhecer lançamentos antigos</button>
         <button onclick="fecharControleFaturas()" style="background:none;border:none;color:rgba(255,255,255,.8);font-size:22px;cursor:pointer;line-height:1">×</button>
       </div>
     </div>
