@@ -580,6 +580,7 @@ thead th{padding:6px 9px;}
         <!-- Grupo: Ações -->
         <button class="btn bg" style="padding:5px 11px;font-size:11px" onclick="salvarTodos()" title="Salvar todos os lançamentos">💾 Salvar</button>
         <button class="btn bs bb-desktop-only" style="padding:5px 10px;font-size:11px" onclick="exportXLS()" title="Exportar para Excel">📊 Excel</button>
+        <button class="btn bs bb-desktop-only" style="padding:5px 10px;font-size:11px" onclick="exportarLancamentosRaw()" title="Exporta cada lançamento em sua própria linha (não agrupado) — útil para conferir quais cartões/faturas já entraram">📋 Lançamentos</button>
         <button class="btn bs bb-desktop-only" style="padding:5px 10px;font-size:11px" onclick="abrirSessoes()" title="Histórico de sessões">🗂 Sessões</button>
 
 
@@ -6557,6 +6558,49 @@ function drillEditarCat(id) {
   cel.innerHTML = '';
   cel.appendChild(sel);
   sel.focus();
+}
+
+// ── Exporta cada lançamento em sua própria linha (SEM agrupar por categoria) ──
+// Diferente de exportXLS()/gerarExcelDRE(), que somam tudo por categoria×mês
+// para montar o relatório DRE. Aqui o objetivo é outro: uma planilha crua,
+// linha por lançamento, para o Rafael conferir manualmente (ou trazer para o
+// Claude analisar) quais faturas de cartão já foram importadas e classificadas.
+function exportarLancamentosRaw() {
+  if (!TXS.length) { toast('Sem dados para exportar'); return; }
+  const at = _txsSemDuplicatas(TXS);
+
+  const linhas = at.map(t => ({
+    'Data':               t.data || '',
+    'Mês Competência':    t.mes || '',
+    'Mês Caixa (fatura)': t.mesCaixa || t.mes || '',
+    'Fonte':              t.fonte || '',
+    'Cartão/Portador':    t.portador || t.bandeira || '',
+    'Lançamento':         t.lancamento || '',
+    'Fornecedor':         t.razaoSocial || '',
+    'Parcela':            t.parcela || (t.fonte === 'CC' ? 'Única' : ''),
+    'Categoria DRE':      t.categoria || '(sem categoria)',
+    'Classificado':       t.categoria ? 'Sim' : 'Não',
+    'Valor':              parseFloat(t.valor || 0),
+  }));
+
+  // Ordena por cartão e depois por data — facilita ver, cartão a cartão, quais
+  // meses de fatura já aparecem e quais faltam.
+  linhas.sort((a, b) => {
+    const p = (a['Cartão/Portador']||'').localeCompare(b['Cartão/Portador']||'');
+    if (p) return p;
+    return (a['Data']||'').localeCompare(b['Data']||'');
+  });
+
+  const ws = XLSX.utils.json_to_sheet(linhas);
+  ws['!cols'] = [
+    {wch:11},{wch:14},{wch:16},{wch:8},{wch:20},{wch:32},{wch:24},{wch:9},{wch:22},{wch:11},{wch:12}
+  ];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Lançamentos');
+
+  const hoje = new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb, `lancamentos_dre_${hoje}.xlsx`);
+  toast(`✅ ${linhas.length} lançamento(s) exportado(s)`);
 }
 
 function exportXLS(){
