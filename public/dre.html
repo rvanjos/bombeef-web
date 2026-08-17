@@ -4602,19 +4602,33 @@ function toggleColsPicker(e) {
 }
 
 function aplicarCols() {
+  // Antes isto escondia cada <td> com style inline, no momento do clique. Como a
+  // tabela e reconstruida a cada render, as celulas novas nasciam visiveis e so o
+  // cabecalho (que e fixo) continuava escondido — os titulos ficavam desalinhados
+  // dos dados. Agora a regra vive num <style> e vale para qualquer linha futura.
   const cols = ['data','mesdre','mescaixa','fonte','lancamento','fornecedor','categoria','valor'];
+  const regras = [];
+
   cols.forEach(col => {
     const chk = document.getElementById('col-' + col);
     const th  = document.getElementById('th-' + col);
     const vis = chk ? chk.checked : true;
     _colsState[col] = vis;
-    if (th) th.style.display = vis ? '' : 'none';
-    // Esconde as tds da coluna correspondente
-    const idx = th ? Array.from(th.parentElement.children).indexOf(th) + 1 : -1;
-    if (idx > 0) {
-      document.querySelectorAll(`#tbl-main tbody tr td:nth-child(${idx})`).forEach(td => td.style.display = vis ? '' : 'none');
+    if (!th) return;
+    // indice calculado ANTES de esconder, para nao depender da ordem das chamadas
+    const idx = Array.from(th.parentElement.children).indexOf(th) + 1;
+    if (idx > 0 && !vis) {
+      regras.push(`#tbl-main thead th:nth-child(${idx}),#tbl-main tbody tr td:nth-child(${idx}){display:none}`);
     }
   });
+
+  let st = document.getElementById('dre-cols-style');
+  if (!st) { st = document.createElement('style'); st.id = 'dre-cols-style'; document.head.appendChild(st); }
+  st.textContent = regras.join('');
+
+  // limpa qualquer inline antigo deixado pela versao anterior
+  document.querySelectorAll('#tbl-main thead th[style*="display: none"]').forEach(th => th.style.display = '');
+
   localStorage.setItem('dre_cols', JSON.stringify(_colsState));
 }
 
