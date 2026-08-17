@@ -5141,6 +5141,18 @@ function _txsSemDuplicatas(txs) {
   // Quando o mesmo pagamento aparece duas vezes no extrato importado
   const extratoVistos = new Set();
 
+  // Registro de tudo que a dedup suprimiu, para nada sumir em silêncio.
+  // Inspecionável no console com: _dedupLog()
+  const _suprimidos = [];
+  const _drop = (t, motivo) => { _suprimidos.push({ motivo, lancamento: t.lancamento,
+    fornecedor: t.razaoSocial||'', valor: t.valor, data: t.data, fonte: t.fonte, id: t.id }); return false; };
+  window._dedupLog = () => {
+    if (!_suprimidos.length) { console.log('[DRE] nenhum lançamento suprimido pela dedup'); return []; }
+    console.table(_suprimidos);
+    return _suprimidos;
+  };
+  window._dedupCount = () => _suprimidos.length;
+
   return txs.filter(t => {
     if (t.ignorar) return false;
 
@@ -5154,16 +5166,21 @@ function _txsSemDuplicatas(txs) {
 
     // BOLETO_PREV: oculta se extrato já tem o boletoId ou se tem vinculadoA
     if (t.fonte === 'BOLETO_PREV') {
-      if (t.boletoId && extratoPorBoletoId.has(String(t.boletoId))) return false;
-      if (boletosComVinculo.has(t.id)) return false;
+      if (t.boletoId && extratoPorBoletoId.has(String(t.boletoId))) return _drop(t,'boletoId já no extrato');
+      if (boletosComVinculo.has(t.id)) return _drop(t,'boleto tem vinculadoA');
       // Oculta se existe extrato com mesmo valor+data
       if (t.data) {
         const hd = `${Math.round(Math.abs(parseFloat(t.valor||0))*100)}|${t.data}`;
-        if (extratoHashVlrData.has(hd)) return false;
+        if (extratoHashVlrData.has(hd)) return _drop(t,'extrato com mesmo valor+data');
+      } else {
+        // Fallback valor+mês — SÓ quando o boleto não tem data (era a intenção
+        // original, mas rodava sempre). Rodando sempre, uma NF com data que NÃO
+        // casou com nenhum extrato ainda era apagada do DRE só porque o valor
+        // coincidia com algum débito qualquer do mesmo mês — caso típico de NF
+        // paga no cartão, que some antes de ser vinculada à fatura.
+        const hm = `${Math.round(Math.abs(parseFloat(t.valor||0))*100)}|${t.mesCaixa||t.mes}`;
+        if (extratoHashVlrMes.has(hm)) return _drop(t,'sem data — extrato com mesmo valor+mês');
       }
-      // Fallback: valor+mês
-      const hm = `${Math.round(Math.abs(parseFloat(t.valor||0))*100)}|${t.mesCaixa||t.mes}`;
-      if (extratoHashVlrMes.has(hm)) return false;
     }
 
     // BOLETO pago: oculta se extrato já cobre
@@ -5175,8 +5192,9 @@ function _txsSemDuplicatas(txs) {
         const hd = `${Math.round(Math.abs(parseFloat(t.valor||0))*100)}|${t.data}`;
         if (extratoHashVlrData.has(hd)) return false;
       }
-      // vinculadoA + mesmo valor+mês → duplicata
-      if (t.vinculadoA) {
+      // valor+mês só vale como duplicata quando há vínculo explícito E o boleto
+      // não tem data própria para conferir — senão apaga NF legítima por acaso
+      if (t.vinculadoA && !t.data) {
         const hm = `${Math.round(Math.abs(parseFloat(t.valor||0))*100)}|${t.mesCaixa||t.mes}`;
         if (extratoHashVlrMes.has(hm)) return false;
       }
