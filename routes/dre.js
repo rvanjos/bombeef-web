@@ -478,6 +478,21 @@ module.exports = function (pool, app) {
     await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_cf_hash ON cartao_faturas(hash_fatura) WHERE hash_fatura IS NOT NULL`).catch(()=>{});
     await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_cfi_hash ON cartao_fatura_itens(fatura_id, hash_item) WHERE hash_item IS NOT NULL`).catch(()=>{});
 
+    // Agrupamento manual de cartão: cartões adicionais (corporativo — cada
+    // pessoa tem o próprio número, mas cai numa fatura única com vencimento
+    // único) aparecem como "cartão" separado na grade até o usuário apontar a
+    // qual cartão principal eles pertencem. "chave" é o texto bruto de
+    // cartao_faturas.cartao/bandeira daquele grupo (identifica sem precisar
+    // adivinhar padrão), "grupo_id" é o destino (ex: 'itau_novo').
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS cartao_apelido_mapa (
+        chave           TEXT PRIMARY KEY,
+        grupo_id        TEXT NOT NULL,
+        grupo_label     TEXT,
+        atualizado_em   TIMESTAMPTZ DEFAULT NOW()
+      )
+    `).catch(()=>{});
+
 
     // Limpa duplicatas de categorias NAO_OPER que foram inseridas em deploys anteriores
     await pool.query(`
@@ -1362,6 +1377,36 @@ module.exports = function (pool, app) {
         txsRemovidas, sessoesAlteradas,
       });
     } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
+  });
+
+  // ── Agrupamento manual de cartão (cartões adicionais/corporativos) ────────
+  r.get('/cartao-apelidos', autenticar(), async (req, res) => {
+    try {
+      const { rows } = await pool.query(`SELECT chave, grupo_id, grupo_label FROM cartao_apelido_mapa`);
+      const mapa = {};
+      rows.forEach(r => { mapa[r.chave] = { grupo_id: r.grupo_id, grupo_label: r.grupo_label }; });
+      res.json({ ok: true, data: mapa });
+    } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  r.post('/cartao-apelidos', autenticar(), async (req, res) => {
+    try {
+      const { chave, grupo_id, grupo_label } = req.body || {};
+      if (!chave || !grupo_id) return res.status(400).json({ ok: false, erro: 'chave e grupo_id são obrigatórios' });
+      await pool.query(`
+        INSERT INTO cartao_apelido_mapa (chave, grupo_id, grupo_label, atualizado_em)
+        VALUES ($1,$2,$3,NOW())
+        ON CONFLICT (chave) DO UPDATE SET grupo_id=$2, grupo_label=$3, atualizado_em=NOW()
+      `, [chave, grupo_id, grupo_label || null]);
+      res.json({ ok: true });
+    } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  r.delete('/cartao-apelidos/:chave', autenticar(), async (req, res) => {
+    try {
+      await pool.query(`DELETE FROM cartao_apelido_mapa WHERE chave=$1`, [req.params.chave]);
+      res.json({ ok: true });
+    } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
   r.get('/cartao-faturas', autenticar(), async (req, res) => {

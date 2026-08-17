@@ -4379,6 +4379,8 @@ async function renderStatusCartoesGrade() {
     if (!res.ok) throw new Error(res.erro || 'Erro');
     const faturas = res.data || [];
     const kpis    = res.kpis  || {};
+    const apRes   = await api.get('/api/dre/cartao-apelidos');
+    const apelidos = (apRes && apRes.ok) ? (apRes.data || {}) : {};
     const brl = v => 'R$ ' + parseFloat(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
 
     // KPIs topo
@@ -4400,10 +4402,15 @@ async function renderStatusCartoesGrade() {
       meses.push(`${mm}/${d.getFullYear()}`);
     }
 
-    // Indexar faturas por cartaoId × competencia (mais recente vence)
+    // Indexar faturas por cartaoId × competencia (mais recente vence).
+    // Agrupamento manual (apelidos) tem prioridade sobre o padrão automático.
+    const cidDePainel = nome => apelidos[nome]?.grupo_id
+      || CARTOES_MONITORADOS.find(c => c.match.test(nome||''))?.id
+      || ('outro_'+(nome||'?'));
     const idx = {};
     faturas.forEach(f => {
-      const cid = CARTOES_MONITORADOS.find(c => c.match.test(f.cartao||f.bandeira||''))?.id || ('outro_'+(f.cartao||f.bandeira||'?'));
+      const nome = f.cartao||f.bandeira||'';
+      const cid = cidDePainel(nome);
       const key = cid + '|' + (f.competencia||'');
       if (!idx[key] || (f.importado_em||'') > (idx[key].importado_em||'')) idx[key] = f;
     });
@@ -4413,9 +4420,10 @@ async function renderStatusCartoesGrade() {
     faturas.forEach(f => {
       const nome = f.cartao || f.bandeira || '';
       if (!nome) return;
-      const jaExiste = CARTOES_MONITORADOS.some(c => c.match.test(nome));
-      if (!jaExiste && !cartoesDinamicos.some(c => c.id === 'outro_'+nome)) {
-        cartoesDinamicos.push({ id: 'outro_'+nome, label: '💳 '+nome, match: new RegExp(nome.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i') });
+      const jaExiste = CARTOES_MONITORADOS.some(c => c.match.test(nome)) || apelidos[nome];
+      const cid = cidDePainel(nome);
+      if (!jaExiste && !cartoesDinamicos.some(c => c.id === cid)) {
+        cartoesDinamicos.push({ id: cid, label: '💳 '+nome, match: new RegExp(nome.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i') });
       }
     });
 
@@ -7468,6 +7476,7 @@ const _cfStatusBadge = s => ({
 
 let _cfFiltroAtivo = '';
 let _cfDadosRaw    = [];
+let _cfApelidos    = {};   // chave (texto bruto do cartao) -> {grupo_id, grupo_label} — agrupamento manual
 
 function setText(id, v) { const e = document.getElementById(id); if(e) e.textContent = v; }
 
@@ -7484,9 +7493,13 @@ async function carregarCartaoFaturas() {
   if(!tbody) return;
   tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--muted)">⏳ Carregando…</td></tr>';
   try {
-    const res = await api.get('/api/dre/cartao-faturas');
+    const [res, apRes] = await Promise.all([
+      api.get('/api/dre/cartao-faturas'),
+      api.get('/api/dre/cartao-apelidos'),
+    ]);
     if(!res.ok) throw new Error(res.erro||'Erro');
     _cfDadosRaw = res.data || [];
+    _cfApelidos = (apRes && apRes.ok) ? (apRes.data || {}) : {};
 
     // KPIs
     const k = res.kpis;
@@ -7521,20 +7534,33 @@ function cfRenderGrade(faturas) {
     meses.push(String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear());
   }
 
-  // Indexar por cartaoId × competencia
+  // Indexar por cartaoId × competencia — agrupamento manual (apelidos) tem
+  // prioridade sobre o reconhecimento automático por padrão.
+  const cidDe = nome => {
+    const ap = _cfApelidos[nome];
+    if (ap) return ap.grupo_id;
+    return CARTOES_MONITORADOS.find(c => c.match.test(nome||''))?.id || ('x_'+(nome||'?'));
+  };
   const idx = {};
   faturas.forEach(f => {
-    const cid = CARTOES_MONITORADOS.find(c => c.match.test(f.cartao||f.bandeira||''))?.id || ('x_'+(f.cartao||f.bandeira||'?'));
+    const nome = f.cartao||f.bandeira||'';
+    const cid = cidDe(nome);
     const key = cid+'|'+(f.competencia||'');
     if (!idx[key] || (f.importado_em||'') > (idx[key].importado_em||'')) idx[key] = f;
   });
 
-  // Cartões dinâmicos
+  // Cartões dinâmicos — não cria linha própria para quem já foi agrupado
+  // manualmente em um dos 4 cartões monitorados.
   const cards = [...CARTOES_MONITORADOS];
   faturas.forEach(f => {
     const nome = f.cartao||f.bandeira||'';
     if (!nome || CARTOES_MONITORADOS.some(c=>c.match.test(nome))) return;
-    if (!cards.some(c=>c.id==='x_'+nome)) cards.push({id:'x_'+nome,label:'💳 '+nome,match:/.*/});
+    const ap = _cfApelidos[nome];
+    if (ap && CARTOES_MONITORADOS.some(c=>c.id===ap.grupo_id)) return; // já cai numa linha fixa
+    const cid = cidDe(nome);
+    if (!cards.some(c=>c.id===cid)) {
+      cards.push({ id:cid, label:(ap?'🔗 ':'💳 ')+(ap?.grupo_label||nome), match:/.*/, _nomeOriginal:nome, _semApelido:!ap });
+    }
   });
 
   const stCfg = {
@@ -7572,7 +7598,13 @@ function cfRenderGrade(faturas) {
       </div>`;
     }).join('');
     return `<div style="display:flex;align-items:flex-start;gap:0;margin-bottom:6px">
-      <div style="min-width:110px;padding:6px 10px 6px 0;font-size:12px;font-weight:700;color:var(--text);white-space:nowrap;padding-top:14px">${c.label}</div>
+      <div style="min-width:110px;padding:6px 10px 6px 0;font-size:12px;font-weight:700;color:var(--text);white-space:nowrap;padding-top:14px">
+        ${c.label}
+        ${c._semApelido ? `<select onchange="cfAtribuirCartao('${c._nomeOriginal.replace(/'/g,"\\'")}', this.value, this)" style="display:block;margin-top:3px;font-size:9px;font-weight:400;padding:1px 3px;border:1px solid var(--border);border-radius:4px;color:var(--muted);max-width:110px" title="Este é um cartão adicional? Aponte a qual cartão principal ele pertence">
+          <option value="">↳ pertence a...</option>
+          ${CARTOES_MONITORADOS.map(m=>`<option value="${m.id}">${m.label}</option>`).join('')}
+        </select>` : ''}
+      </div>
       <div style="display:grid;grid-template-columns:repeat(${meses.length},1fr);gap:4px;flex:1">${cells}</div>
     </div>`;
   }).join('');
@@ -7581,6 +7613,26 @@ function cfRenderGrade(faturas) {
     <div style="min-width:110px"></div>
     <div style="display:grid;grid-template-columns:repeat(${meses.length},1fr);gap:4px;flex:1">${mesHdrs}</div>
   </div>${rows}`;
+}
+
+// Aponta que um "cartão" dinâmico (ex: cartão adicional/corporativo, cada
+// pessoa com o próprio número mas na mesma fatura) pertence a um dos 4
+// cartões monitorados. Fica salvo — próximas cargas já vêm agrupadas.
+async function cfAtribuirCartao(nomeOriginal, grupoId, selectEl) {
+  if (!grupoId) return;
+  const grupo = CARTOES_MONITORADOS.find(c => c.id === grupoId);
+  if (selectEl) { selectEl.disabled = true; }
+  try {
+    const res = await api.post('/api/dre/cartao-apelidos', {
+      chave: nomeOriginal, grupo_id: grupoId, grupo_label: grupo?.label || grupoId,
+    });
+    if (!res.ok) throw new Error(res.erro || 'Erro ao salvar');
+    toast(`✅ Agrupado em ${grupo?.label || grupoId}`);
+    await carregarCartaoFaturas();
+  } catch (e) {
+    toast('❌ ' + e.message);
+    if (selectEl) selectEl.disabled = false;
+  }
 }
 
 function cfFiltrarCartaoMes(cartao, mes) {
@@ -8103,7 +8155,7 @@ async function _sincronizarCategoriesCC(lancs, faturaIdRef) {
     </div>
 
     <!-- Grade mês × cartão -->
-    <div id="cf-grade-wrap" style="padding:14px 16px;background:var(--bg);border-bottom:2px solid var(--border);flex-shrink:0;overflow-x:auto">
+    <div id="cf-grade-wrap" style="padding:14px 16px;background:var(--bg);border-bottom:2px solid var(--border);flex-shrink:0;overflow-x:auto;overflow-y:auto;max-height:36vh">
       <div id="cf-grade">⏳ Carregando…</div>
     </div>
 
