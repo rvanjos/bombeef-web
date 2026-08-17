@@ -1756,9 +1756,6 @@ async function confirmarImportCC() {
 
   if (!lancs.length) { toast('⚠️ Nenhum lançamento encontrado na fatura'); return; }
 
-  // Detecta meses distintos no arquivo
-  const mesesNoArquivo = [...new Set(lancs.map(l => l.mes).filter(Boolean))];
-
   lancs.forEach(l => {
     // mes = mês da COMPRA (competência, vem do parser pela data real)
     if (!l.mes) l.mes = mesCC;
@@ -1766,11 +1763,15 @@ async function confirmarImportCC() {
     l.mesCaixa = mesCC;
   });
 
-  const tituloFatura = mesesNoArquivo.length > 1
-    ? mesesNoArquivo.join(' + ')
-    : mesCC;
-
-  abrirRevisaoCC(lancs, tituloFatura, bandeira, file.name);
+  // ATENÇÃO: abrirRevisaoCC recebe o mês da FATURA (mesCC, sempre único — é
+  // o que o usuário confirmou ao importar), NUNCA o texto de exibição. Já foi
+  // passado "tituloFatura" (ex: "04/2026 + 05/2026 + 06/2026") aqui por engano
+  // quando o arquivo tinha compras de meses diferentes (comum: parcelas cuja
+  // competência é a data de compra original, não o mês da fatura). Isso
+  // corrompia cartao_faturas.competencia com um texto composto em vez de um
+  // mês — quebrando a grade de Status Cartões (que indexa por mês único) e
+  // fazendo o botão "Excluir Fatura" nunca achar os itens certos.
+  abrirRevisaoCC(lancs, mesCC, bandeira, file.name);
 }
 
 // ─── PARSER PDF FATURAS ───────────────────────────────────────────────────────
@@ -3591,7 +3592,14 @@ function abrirRevisaoCC(lancs, mesCC, bandeira, fileName) {
 
   const label = bandeira ? `${bandeira} · ${mesCC}` : mesCC;
   document.getElementById('ccr-titulo').textContent = label;
-  document.getElementById('ccr-subtitulo').textContent = `${lancs.length} lançamentos · arquivo: ${fileName}`;
+  // Nota de exibição: se o arquivo mistura competências (comum com parcelas —
+  // a competência é a data de compra original, não o mês da fatura), mostra
+  // aqui só como informação. NUNCA usar isso como o mês da fatura em si —
+  // esse é sempre mesCC, único, confirmado pelo usuário no import.
+  const mesesDistintos = [...new Set(lancs.map(l => l.mes).filter(Boolean))];
+  const notaMeses = mesesDistintos.length > 1
+    ? ` · competências: ${mesesDistintos.sort().join(', ')}` : '';
+  document.getElementById('ccr-subtitulo').textContent = `${lancs.length} lançamentos · arquivo: ${fileName}${notaMeses}`;
 
   // Popula select de classificação em massa com as categorias disponíveis
   const sel = document.getElementById('ccr-bulk-cat');
