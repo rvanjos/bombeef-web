@@ -566,6 +566,44 @@ module.exports = function(pool, app) {
   });
 
   // ── GET /historico ─────────────────────────────────────────────────────────
+  // ── GET /produtos-busca?q= — autocomplete de produtos ─────────────────────
+  // Devolve PRODUTOS DISTINTOS, nao linhas de compra. O autocomplete antes
+  // usava /historico com limit=20 e agrupava depois: como cada produto tem
+  // varias entradas de compra, um so produto podia consumir as 20 linhas e os
+  // demais nem apareciam.
+  // Busca por qualquer parte do nome e em QUALQUER ORDEM: "bassi" acha
+  // "PICANHA BASSI", e "picanha bassi" acha "PICANHA MAT BASSI" (cada palavra
+  // vira uma condicao AND).
+  r.get('/produtos-busca', async (req, res) => {
+    try {
+      const q = (req.query.q || '').trim();
+      const limit = Math.min(parseInt(req.query.limit) || 60, 200);
+      if (q.length < 2) return res.json({ ok: true, data: [] });
+
+      const termos = q.split(/\s+/).filter(Boolean);
+      const params = [], conds = [];
+      termos.forEach(t => {
+        params.push(`%${t}%`);
+        conds.push(`(cp.produto_nome ILIKE $${params.length} OR cp.produto_codigo ILIKE $${params.length})`);
+      });
+      params.push(limit);
+
+      const { rows } = await pool.query(`
+        SELECT cp.produto_codigo,
+               MAX(cp.produto_nome)                     AS produto_nome,
+               COUNT(*)                                 AS compras,
+               TO_CHAR(MAX(cp.data_entrada),'DD/MM/YYYY') AS ultima_compra
+          FROM compras_produto cp
+         WHERE ${conds.join(' AND ')}
+         GROUP BY cp.produto_codigo
+         ORDER BY MAX(cp.data_entrada) DESC NULLS LAST
+         LIMIT $${params.length}
+      `, params);
+
+      res.json({ ok: true, data: rows, total: rows.length });
+    } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
   r.get('/historico', async (req, res) => {
     try {
       const { produto, fornecedor, grupo, ini, fim, limit = 200 } = req.query;

@@ -617,21 +617,32 @@ async function onBuscaInput() {
   clearTimeout(_buscaTimer);
   _buscaTimer = setTimeout(async () => {
     const q = $id('a-busca').value.trim();
-    if (!q || q.length < 2) { $id('a-autocomplete').innerHTML=''; return; }
-    // Busca simples usando historico (primeiros 20)
-    const res = await (_api||BB.api).get('/api/compras/historico?produto='+encodeURIComponent(q)+'&limit=20');
-    if (!res.ok || !res.data?.length) { $id('a-autocomplete').innerHTML=''; return; }
-    const vistos = new Set();
-    const itens = res.data.filter(r => {
-      if (vistos.has(r.produto_codigo)) return false;
-      vistos.add(r.produto_codigo); return true;
-    }).slice(0,8);
-    $id('a-autocomplete').innerHTML = `<div style="position:absolute;background:#fff;border:1px solid var(--border);border-radius:8px;width:100%;max-height:220px;overflow-y:auto;box-shadow:0 4px 16px rgba(0,0,0,.1);z-index:99">` +
+    const box = $id('a-autocomplete');
+    if (!q || q.length < 2) { box.innerHTML=''; return; }
+
+    // Busca produtos DISTINTOS (aceita palavra solta e em qualquer ordem)
+    const res = await (_api||BB.api).get('/api/compras/produtos-busca?q='+encodeURIComponent(q));
+    if (!res.ok) { box.innerHTML=''; return; }
+    const itens = res.data || [];
+    if (!itens.length) {
+      box.innerHTML = `<div style="position:absolute;background:#fff;border:1px solid var(--border);
+        border-radius:8px;width:100%;padding:12px 14px;font-size:13px;color:var(--muted);
+        box-shadow:0 4px 16px rgba(0,0,0,.1);z-index:99">Nenhum produto encontrado</div>`;
+      return;
+    }
+
+    box.innerHTML = `<div style="position:absolute;background:#fff;border:1px solid var(--border);
+      border-radius:8px;width:100%;max-height:340px;overflow-y:auto;box-shadow:0 4px 16px rgba(0,0,0,.1);z-index:99">
+      <div style="padding:6px 14px;font-size:11px;color:var(--muted);border-bottom:1px solid var(--border);
+        background:#faf7f4;position:sticky;top:0">${itens.length} produto(s) encontrado(s)</div>` +
       itens.map(it => `<div onclick="selecionarProduto('${it.produto_codigo}','${(it.produto_nome||'').replace(/'/g,"\\'")}');document.getElementById('a-autocomplete').innerHTML=''"
         style="padding:9px 14px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--border)"
         onmouseover="this.style.background='#fafafa'" onmouseout="this.style.background=''">
         <strong>${it.produto_nome||it.produto_codigo}</strong>
         <span style="font-size:11px;color:var(--muted);margin-left:6px">${it.produto_codigo}</span>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">
+          ${it.compras} compra(s)${it.ultima_compra ? ' · última em '+it.ultima_compra : ''}
+        </div>
       </div>`).join('') + `</div>`;
   }, 300);
 }
