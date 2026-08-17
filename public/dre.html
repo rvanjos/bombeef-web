@@ -4239,7 +4239,7 @@ function ccrBadgeVinculo(tx) {
 // ── STATUS DE IMPORTAÇÃO DE CARTÕES ──────────────────────────────────────────
 const CARTOES_MONITORADOS = [
   { id: 'caixa',      label: '🏦 Caixa',       match: /caixa/i },
-  { id: 'c6',         label: '🟠 C6',           match: /c6|banco c6/i },
+  { id: 'c6',         label: '🟠 C6',           match: /\bc6\b|banco c6/i },
   { id: 'itau_novo',  label: '🔵 Itaú Novo',   match: /itau.novo|itaú.novo|novo.*itau|cc.*itau(?!.*antigo)/i },
   { id: 'itau_antigo',label: '⚫ Itaú Antigo', match: /itau.antigo|itaú.antigo|antigo.*itau/i },
 ];
@@ -7523,12 +7523,9 @@ function cfRenderTabela(data) {
 async function cfMarcarPaga(id, label) {
   if(!confirm(`Marcar como PAGA:\n${label}\n\nConfirmar?`)) return;
   try {
-    const tkn = BB?.api?.token || sessionStorage.getItem('bb_token') || '';
-    const res = await fetch(`/api/dre/cartao-faturas/${id}/pagar`,{
-      method:'PATCH',
-      headers:{'Content-Type':'application/json','Authorization':'Bearer '+tkn},
-      body:'{}'
-    }).then(r=>r.json());
+    // Usa a camada compartilhada: BB.api.token NAO existe (era sempre undefined),
+    // entao o header ia com 'Bearer ' vazio. api.patch monta o token certo.
+    const res = await api.patch(`/api/dre/cartao-faturas/${id}/pagar`, {});
     if(res.ok) { toast('✅ Fatura marcada como paga'); await carregarCartaoFaturas(); }
     else toast('❌ '+(res.erro||'Erro'));
   } catch(e) { toast('❌ '+e.message); }
@@ -7537,12 +7534,7 @@ async function cfMarcarPaga(id, label) {
 async function cfReabrir(id) {
   if(!confirm('Reabrir esta fatura?\nO status voltará para Classificada.')) return;
   try {
-    const tkn = BB?.api?.token || sessionStorage.getItem('bb_token') || '';
-    const res = await fetch(`/api/dre/cartao-faturas/${id}/reabrir`,{
-      method:'PATCH',
-      headers:{'Content-Type':'application/json','Authorization':'Bearer '+tkn},
-      body:'{}'
-    }).then(r=>r.json());
+    const res = await api.patch(`/api/dre/cartao-faturas/${id}/reabrir`, {});
     if(res.ok) { toast('↩ Fatura reaberta'); await carregarCartaoFaturas(); }
     else toast('❌ '+(res.erro||'Erro'));
   } catch(e) { toast('❌ '+e.message); }
