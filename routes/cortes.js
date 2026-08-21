@@ -111,7 +111,14 @@ module.exports = function(pool, app) {
   initTables().catch(e => console.error('[cortes] initTables:', e.message));
 
   // ── Helpers ───────────────────────────────────────────────────────────────
-  const toNum = (v, def=0) => { const n = parseFloat(v); return isNaN(n) ? def : n; };
+  // Aceita "0,550" (pt-BR) ou "0.550" — parseFloat sozinho corta no "," e
+  // devolve 0, o que zerava o total de uma ficha técnica inteira assim que
+  // um ingrediente tivesse vírgula na quantidade ou no preço.
+  const toNum = (v, def=0) => {
+    if (v === null || v === undefined || v === '') return def;
+    const n = parseFloat(String(v).trim().replace(',', '.'));
+    return isNaN(n) ? def : n;
+  };
 
   // ── GET /dashboard — KPIs ────────────────────────────────────────────────
   r.get('/dashboard', async (req, res) => {
@@ -337,11 +344,14 @@ module.exports = function(pool, app) {
     const { produto, rendimento, kg_utilizado, multiplicador, itens, produto_id } = req.body;
     if (!produto) return res.status(400).json({ ok:false, erro:'produto obrigatório' });
     try {
+      const itensNorm = (Array.isArray(itens) ? itens : []).map(it => ({
+        ...it, qty: toNum(it.qty), price: toNum(it.price),
+      }));
       const { rows } = await pool.query(`
         INSERT INTO cortes_fichas (produto, rendimento, kg_utilizado, multiplicador, itens, produto_id)
         VALUES ($1,$2,$3,$4,$5,$6) RETURNING *
       `, [produto, toNum(rendimento,1), kg_utilizado?toNum(kg_utilizado):null,
-          toNum(multiplicador,2.5), JSON.stringify(itens||[]), produto_id||null]);
+          toNum(multiplicador,2.5), JSON.stringify(itensNorm), produto_id||null]);
       res.json({ ok:true, data:rows[0] });
     } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
   });
@@ -349,12 +359,15 @@ module.exports = function(pool, app) {
   r.put('/fichas/:id', async (req, res) => {
     const { produto, rendimento, kg_utilizado, multiplicador, itens, produto_id } = req.body;
     try {
+      const itensNorm = (Array.isArray(itens) ? itens : []).map(it => ({
+        ...it, qty: toNum(it.qty), price: toNum(it.price),
+      }));
       const { rows } = await pool.query(`
         UPDATE cortes_fichas SET produto=$1, rendimento=$2, kg_utilizado=$3,
           multiplicador=$4, itens=$5, produto_id=$6, atualizado_em=NOW()
         WHERE id=$7 RETURNING *
       `, [produto, toNum(rendimento,1), kg_utilizado?toNum(kg_utilizado):null,
-          toNum(multiplicador,2.5), JSON.stringify(itens||[]), produto_id||null, req.params.id]);
+          toNum(multiplicador,2.5), JSON.stringify(itensNorm), produto_id||null, req.params.id]);
       res.json({ ok:true, data:rows[0] });
     } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
   });

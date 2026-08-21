@@ -1190,10 +1190,23 @@ function abrirModalFicha(id) {
   document.getElementById('m-fic-kg').value = f?.kg_utilizado||'';
   document.getElementById('m-fic-mult').value = f?.multiplicador||2.5;
   _fichaItens = f ? (typeof f.itens==='string'?JSON.parse(f.itens||'[]'):(f.itens||[])) : [];
+  // Auto-corrige fichas salvas antes deste conserto (qty/price gravados com
+  // vírgula na hora de somar) — normaliza ao abrir, sem precisar redigitar.
+  _fichaItens.forEach(it => { it.qty = numBR(it.qty); it.price = numBR(it.price); });
   renderFichaItens();
   abrirOverlay('m-ficha');
 }
 function editarFicha(id){ abrirModalFicha(id); }
+
+// Aceita "0,550" ou "0.550" — parseFloat sozinho corta no "," e devolve 0
+// (ex: parseFloat("0,550")===0), o que zerava o total da ficha técnica
+// inteira assim que UM ingrediente tivesse vírgula na quantidade ou no preço.
+function numBR(v) {
+  if (v === null || v === undefined || v === '') return 0;
+  const s = String(v).trim().replace(',', '.');
+  const n = parseFloat(s);
+  return isNaN(n) ? 0 : n;
+}
 
 function addItemFicha() {
   _fichaItens.push({ nome:'', qty:0, unit:'kg', price:0 });
@@ -1228,14 +1241,17 @@ function autoFillInsumo(idx, nome) {
   const ins = _insumos.find(i=>i.nome===nome);
   if(ins){ _fichaItens[idx].price=parseFloat(ins.preco_unit||0); _fichaItens[idx].unit=ins.unidade||'kg'; renderFichaItens(); }
 }
-function updateFichaItem(idx,field,val){ _fichaItens[idx][field]=val; atualizarCalcFicha(); }
+function updateFichaItem(idx,field,val){
+  _fichaItens[idx][field] = (field==='qty'||field==='price') ? numBR(val) : val;
+  atualizarCalcFicha();
+}
 function remFichaItem(idx){ _fichaItens.splice(idx,1); renderFichaItens(); }
 
 function atualizarCalcFicha() {
-  const rend = parseFloat(document.getElementById('m-fic-rend').value)||1;
-  const mult = parseFloat(document.getElementById('m-fic-mult').value)||2.5;
+  const rend = numBR(document.getElementById('m-fic-rend').value)||1;
+  const mult = numBR(document.getElementById('m-fic-mult').value)||2.5;
   let total = 0;
-  _fichaItens.forEach(it=>{ total+=(parseFloat(it.qty)||0)*(parseFloat(it.price)||0); });
+  _fichaItens.forEach(it=>{ total+=numBR(it.qty)*numBR(it.price); });
   const un = rend>0?total/rend:total;
   document.getElementById('fic-calc-total').textContent = brl(total);
   document.getElementById('fic-calc-un').textContent    = brl(un);
