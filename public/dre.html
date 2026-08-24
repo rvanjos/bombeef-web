@@ -5978,42 +5978,59 @@ async function gerarRoyaltiesAutomatico() {
     if (mv > 12) { mv = 1; av++; }
     const mesVenc = String(mv).padStart(2,'0') + '/' + av;
 
-    // Verifica se royalties já foram pagos (lançamento real, não provisão)
-    // Usa lançamentos de extrato/OFX com categoria Royalties no mês do vencimento
-    const pagamentosReais = TXS.filter(t =>
-      t.categoria === CAT &&
-      (t.mes === mesVenc || t.mesCaixa === mesVenc) &&
-      t.fonte !== 'ROYALTIES' &&
-      parseFloat(t.valor||0) < 0
-    );
-    const totalPago = pagamentosReais.reduce((s,t) => s + Math.abs(parseFloat(t.valor||0)), 0);
-    const totalEsperado = parseFloat(mesFat && fatPorMes[mesFat] ? fatPorMes[mesFat] : 0) * TAXA;
-
-    if (totalPago > totalEsperado * 0.8) {
-      // Pagamento real cobre ≥80% — remove provisão e pula
-      TXS = TXS.filter(t => !(t.fonte === 'ROYALTIES' && t.mes === mesVenc));
-      continue;
-    }
-
-    // Remove provisões existentes deste mês (para evitar duplicatas com valores errados)
-    const provisoesExist = TXS.filter(t => t.fonte === 'ROYALTIES' && t.mes === mesVenc);
-    if (provisoesExist.length > 0) {
-      // Se já existe provisão com valor correto (~igual ao calculado), pula
-      const valorEsperado = parseFloat(fat || 0) * TAXA / 2;  // cada provisão = metade
-      const jaOk = provisoesExist.some(p => Math.abs(Math.abs(parseFloat(p.valor||0)) - valorEsperado) < valorEsperado * 0.05);
-      if (jaOk) continue;
-      // Remove as provisões erradas
-      TXS = TXS.filter(t => !(t.fonte === 'ROYALTIES' && t.mes === mesVenc));
-    }
-
     const totalRoyalties = parseFloat(fat) * TAXA;  // total = fat × 4,88%
     const parcela = totalRoyalties / 2;             // cada parcela = metade
+
+    // Concilia pagamentos reais individualmente. Cada pagamento de royalties
+    // substitui UMA previsão, em vez de manter as duas até 80% do total mensal.
+    // Antes de contar, elimina a duplicidade BOLETO + EXTRATO do mesmo pagamento.
+    const reaisCandidatos = TXS.filter(t =>
+      String(t.categoria||'').trim().toLowerCase() === CAT.toLowerCase() &&
+      (t.mes === mesVenc || t.mesCaixa === mesVenc) &&
+      t.fonte !== 'ROYALTIES' &&
+      !t.ignorar &&
+      parseFloat(t.valor||0) < 0
+    );
+    const pagamentosReais = [];
+    const pagamentosVistos = new Set();
+    for (const t of reaisCandidatos) {
+      const valorCentavos = Math.round(Math.abs(parseFloat(t.valor||0)) * 100);
+      // boletoId é a chave mais segura. Sem ele, usa valor+data+descrição curta.
+      const chave = t.boletoId
+        ? `boleto:${t.boletoId}`
+        : `tx:${valorCentavos}|${t.data||''}|${(t.lancamento||t.razaoSocial||'').slice(0,18).toUpperCase()}`;
+      if (pagamentosVistos.has(chave)) continue;
+      pagamentosVistos.add(chave);
+      pagamentosReais.push(t);
+    }
+
+    const totalPago = pagamentosReais.reduce((s,t) => s + Math.abs(parseFloat(t.valor||0)), 0);
+    let parcelasRealizadas = 0;
+    if (totalPago >= totalRoyalties * 0.8) {
+      // Um pagamento único pode quitar o royalty mensal completo.
+      parcelasRealizadas = 2;
+    } else {
+      // Aceita diferença entre previsão e boleto real, mas evita que pequenos
+      // ajustes classificados como royalties eliminem uma parcela inteira.
+      parcelasRealizadas = Math.min(2, pagamentosReais.filter(t => {
+        const valor = Math.abs(parseFloat(t.valor||0));
+        return valor >= parcela * 0.5 && valor <= parcela * 1.5;
+      }).length);
+    }
+
+    // Provisões são derivadas do faturamento: sempre recalcula e mantém apenas
+    // parcelas ainda não realizadas. O pagamento real permanece como histórico.
+    TXS = TXS.filter(t => !(t.fonte === 'ROYALTIES' && t.mes === mesVenc));
+
+    if (parcelasRealizadas >= 2) continue;
+
     const ultimoDia = new Date(av, mv, 0).getDate();
     const dt1 = `${av}-${String(mv).padStart(2,'0')}-15`;
     const dt2 = `${av}-${String(mv).padStart(2,'0')}-${ultimoDia}`;
     const desc = `Royalties ${(TAXA*100).toFixed(2)}% s/ fat ${mesFat}`;
 
     [dt1, dt2].forEach((dt, idx) => {
+      if (idx < parcelasRealizadas) return;
       TXS.push({
         id:          `roy_auto_${mesFat.replace('/','_')}_${idx}`,
         lancamento:  desc + ` P${idx+1}/2`,
@@ -6026,10 +6043,10 @@ async function gerarRoyaltiesAutomatico() {
         razaoSocial: 'Royalties / Franquia',
       });
     });
-    gerados++;
+    gerados += 2 - parcelasRealizadas;
   }
   if (gerados > 0) {
-    console.log(`[Royalties] ${gerados} mês(es) com provisão gerada automaticamente`);
+    console.log(`[Royalties] ${gerados} parcela(s) ainda prevista(s)`);
     renderDRE();
   }
 }
