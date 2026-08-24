@@ -414,51 +414,76 @@ module.exports = (pool) => {
 
   // ── POST /dedup — remove fornecedores duplicados por CNPJ ──────────────────
   router.post('/dedup', autenticar(['admin','gestor']), async (req, res) => {
+    const client = await pool.connect();
     try {
-      // 1. Normalizar todos os CNPJs para apenas dígitos
-      await pool.query(`
-        UPDATE fornecedores
-        SET cnpj_fornecedor = REGEXP_REPLACE(cnpj_fornecedor, '\\D', '', 'g')
-        WHERE cnpj_fornecedor ~ '[^0-9]'
-      `);
-
-      // 2. Para cada CNPJ duplicado, manter o de maior id (mais completo) e deletar os outros
-      const { rows: dups } = await pool.query(`
-        SELECT cnpj_fornecedor, COUNT(*) as qtd
+      await client.query('BEGIN');
+      const { rows: dups } = await client.query(`
+        SELECT REGEXP_REPLACE(cnpj_fornecedor, '[^0-9]', '', 'g') AS cnpj_norm
         FROM fornecedores
         WHERE cnpj_fornecedor IS NOT NULL AND cnpj_fornecedor <> ''
-        GROUP BY cnpj_fornecedor
+        GROUP BY REGEXP_REPLACE(cnpj_fornecedor, '[^0-9]', '', 'g')
         HAVING COUNT(*) > 1
       `);
 
       let removidos = 0;
       for (const d of dups) {
-        const { rows: ids } = await pool.query(`
-          SELECT id FROM fornecedores
-          WHERE cnpj_fornecedor = $1
+        const { rows: registros } = await client.query(`
+          SELECT * FROM fornecedores
+          WHERE REGEXP_REPLACE(cnpj_fornecedor, '[^0-9]', '', 'g') = $1
           ORDER BY
-            (categoria_dre IS NOT NULL) DESC,
-            (contato IS NOT NULL) DESC,
+            ((razao_social IS NOT NULL)::int + (nome_fantasia IS NOT NULL)::int +
+             (contato IS NOT NULL)::int + (telefone IS NOT NULL)::int +
+             (email IS NOT NULL)::int + (endereco IS NOT NULL)::int +
+             (categoria_padrao IS NOT NULL)::int + (observacao IS NOT NULL)::int) DESC,
             id DESC
-        `, [d.cnpj_fornecedor]);
+        `, [d.cnpj_norm]);
 
-        const manter = ids[0].id;
-        const excluir = ids.slice(1).map(r => r.id);
-
-        // Reatribuir referências de fornecedor_produtos
-        for (const eid of excluir) {
-          await pool.query(
-            `UPDATE fornecedor_produtos SET fornecedor_id=$1 WHERE fornecedor_id=$2`,
-            [manter, eid]
-          ).catch(() => {});
-          await pool.query(`DELETE FROM fornecedores WHERE id=$1`, [eid]);
-          removidos++;
+        const principal = registros[0];
+        const excluir = registros.slice(1);
+        const campos = ['razao_social','nome_fantasia','contato','telefone','email',
+          'endereco','categoria_padrao','observacao'];
+        const consolidado = { ...principal };
+        for (const registro of excluir) {
+          for (const campo of campos) {
+            if (!consolidado[campo] && registro[campo]) consolidado[campo] = registro[campo];
+          }
         }
+
+        await client.query(`DELETE FROM fornecedores WHERE id = ANY($1::int[])`,
+          [excluir.map(r => r.id)]);
+        removidos += excluir.length;
+        await client.query(`
+          UPDATE fornecedores SET cnpj_fornecedor=$1, razao_social=$2, nome_fantasia=$3,
+            contato=$4, telefone=$5, email=$6, endereco=$7, categoria_padrao=$8,
+            observacao=$9, atualizado_em=NOW() WHERE id=$10
+        `, [d.cnpj_norm, consolidado.razao_social, consolidado.nome_fantasia,
+          consolidado.contato, consolidado.telefone, consolidado.email,
+          consolidado.endereco, consolidado.categoria_padrao, consolidado.observacao,
+          principal.id]);
       }
+
+      await client.query(`
+        DELETE FROM fornecedor_produtos fp1 USING fornecedor_produtos fp2
+        WHERE fp1.id > fp2.id
+          AND REGEXP_REPLACE(fp1.cnpj_fornecedor, '[^0-9]', '', 'g') =
+              REGEXP_REPLACE(fp2.cnpj_fornecedor, '[^0-9]', '', 'g')
+          AND fp1.produto_codigo = fp2.produto_codigo
+      `);
+      await client.query(`UPDATE fornecedor_produtos
+        SET cnpj_fornecedor=REGEXP_REPLACE(cnpj_fornecedor,'[^0-9]','','g')
+        WHERE cnpj_fornecedor ~ '[^0-9]'`);
+      await client.query(`UPDATE fornecedores
+        SET cnpj_fornecedor=REGEXP_REPLACE(cnpj_fornecedor,'[^0-9]','','g')
+        WHERE cnpj_fornecedor ~ '[^0-9]'`);
+      await client.query('COMMIT');
 
       res.json({ ok: true, removidos, msg: `${removidos} duplicata(s) removida(s)` });
     } catch(e) {
-      res.status(500).json({ ok: false, erro: e.message });
+      await client.query('ROLLBACK').catch(() => {});
+      console.error('[fornecedores/dedup]', e.message);
+      res.status(500).json({ ok: false, erro: 'Não foi possível consolidar os fornecedores. Nenhum cadastro foi alterado.' });
+    } finally {
+      client.release();
     }
   });
 
