@@ -358,7 +358,9 @@ app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 // ── Arquivos estáticos — sem cache para garantir versão mais recente ──────────
 app.use((req, res, next) => {
   const p = req.path;
-  const isNoCache = p === '/' || p.endsWith('.html') || p.endsWith('.js') || !p.includes('.');
+  // O frontend ainda não usa nomes de assets com hash. CSS precisa revalidar
+  // em cada deploy para não combinar HTML novo com tema antigo em cache.
+  const isNoCache = p === '/' || p.endsWith('.html') || p.endsWith('.js') || p.endsWith('.css') || !p.includes('.');
   if (isNoCache) {
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     res.setHeader('Pragma', 'no-cache');
