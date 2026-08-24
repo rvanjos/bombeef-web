@@ -7,111 +7,87 @@
 <link rel="stylesheet" href="/css/bb-theme.css">
 <script src="/js/api.js"></script>
 <style>
-:root{--red:#8B0000;--red-l:#C0392B;--bg:#f7f4f0;--white:#fff;--text:#1a1a1a;--muted:#7a7068;--border:#e8e0d8;--shadow:0 2px 12px rgba(0,0,0,.08);}
-*{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --red:var(--bb-red);--red-l:var(--bb-red-l);--bg:var(--bb-bg);
+  --white:var(--bb-white);--text:var(--bb-text);--muted:var(--bb-muted);
+  --border:var(--bb-border);--shadow:var(--bb-shadow);
+}
 html,body{width:100%;height:100%;}
-body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);display:flex;flex-direction:column;}
-.ph{background:var(--red);padding:11px 20px;display:flex;align-items:center;gap:10px;box-shadow:0 2px 12px rgba(139,0,0,.3);flex-shrink:0;}
-.ph h2{font-family:'Playfair Display',serif;font-size:16px;color:#fff;font-weight:700;}
-.ph-sub{font-size:11px;color:rgba(255,255,255,.65);margin-left:auto;}
-.toolbar{background:var(--white);border-bottom:1px solid var(--border);padding:10px 18px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex-shrink:0;}
-.search-box{flex:1;min-width:200px;max-width:340px;position:relative;}
-.search-box input{width:100%;padding:7px 32px 7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:'DM Sans',sans-serif;background:var(--white);}
-.search-box input:focus{outline:none;border-color:var(--red);}
-.search-ico{position:absolute;right:9px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:14px;pointer-events:none;}
-.btn{padding:7px 14px;border-radius:8px;border:none;cursor:pointer;font-size:12px;font-weight:600;font-family:'DM Sans',sans-serif;transition:all .15s;display:inline-flex;align-items:center;gap:5px;}
-.btn-p{background:var(--red);color:#fff;} .btn-p:hover{background:var(--red-l);}
-.btn-s{background:var(--white);color:var(--text);border:1px solid var(--border);} .btn-s:hover{border-color:var(--red);color:var(--red);}
-.btn-danger{background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;} .btn-danger:hover{background:#fca5a5;}
-.filtro-ativo{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);}
-.filtro-ativo input{width:14px;height:14px;accent-color:var(--red);}
-.content{padding:18px;overflow-y:auto;overflow-x:auto;flex:1;}
-.empty{text-align:center;padding:48px 0;color:var(--muted);}
-.empty-ico{font-size:40px;margin-bottom:10px;}
-.count-label{font-size:11px;color:var(--muted);margin-left:auto;}
+body{margin:0;}
+.ph{background:var(--bb-red);padding:13px 22px;box-shadow:0 2px 12px rgba(139,0,0,.28);flex-shrink:0;}
+.forn-toolbar{background:var(--bb-white);border-bottom:1px solid var(--bb-border);padding:10px 22px;margin:0;flex-shrink:0;}
+.forn-content{padding:18px 22px;overflow-y:auto;overflow-x:hidden;flex:1;}
+.forn-dedup{background:var(--bb-amber-bg)!important;border-color:var(--bb-amber-bd)!important;color:#92400e!important;}
 
 /* Tabela */
-.tbl-wrap{background:var(--white);border:1px solid var(--border);border-radius:10px;overflow:hidden;box-shadow:var(--shadow);}
+.tbl-wrap{box-shadow:var(--bb-shadow-sm);}
 table{width:100%;border-collapse:collapse;}
-thead th{background:#fdf9f5;font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:700;padding:9px 12px;text-align:left;border-bottom:2px solid var(--border);white-space:nowrap;}
-tbody tr{border-bottom:1px solid var(--border);transition:background .1s;cursor:pointer;}
+tbody tr{cursor:pointer;}
 tbody tr:last-child{border-bottom:none;}
-tbody tr:hover{background:#fdf9f5;}
-tbody td{padding:10px 12px;font-size:13px;vertical-align:middle;}
 .td-nome{font-weight:600;}
-.td-fantasia{font-size:11px;color:var(--muted);}
-.td-cnpj{font-family:'DM Mono',monospace;font-size:12px;color:var(--muted);}
-.badge-ativo{display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;background:#dcfce7;color:#166534;}
-.badge-inativo{display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;background:#fee2e2;color:#991b1b;}
+.td-fantasia{font-size:11px;color:var(--bb-muted);}
+.td-cnpj{font-family:var(--bb-mono);font-size:12px;color:var(--bb-muted);}
 .td-acoes{text-align:right;white-space:nowrap;}
-.td-acoes button{padding:4px 10px;font-size:11px;border-radius:6px;border:1px solid var(--border);background:var(--white);cursor:pointer;font-family:'DM Sans',sans-serif;font-weight:600;color:var(--text);margin-left:4px;}
-.td-acoes button:hover{border-color:var(--red);color:var(--red);}
+.td-acoes button{margin-left:4px;}
 
 /* Modal */
-.mbg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;align-items:center;justify-content:center;}
-.mbg.open{display:flex;}
-.md{background:var(--white);border-radius:14px;width:100%;max-width:820px;max-height:90vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.18);margin:16px;}
-.md-head{padding:16px 20px 0;display:flex;align-items:center;justify-content:space-between;}
-.md-head h3{font-family:'Playfair Display',serif;font-size:16px;color:var(--red);}
-.md-head button{background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);line-height:1;}
-.md-body{padding:16px 20px;}
-.md-foot{padding:12px 20px 16px;display:flex;gap:8px;justify-content:flex-end;border-top:1px solid var(--border);}
 .fg{margin-bottom:12px;}
-.fg label{display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);margin-bottom:5px;}
-.fg input,.fg select,.fg textarea{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:'DM Sans',sans-serif;background:var(--white);}
-.fg input:focus,.fg select:focus,.fg textarea:focus{outline:none;border-color:var(--red);}
+.fg label{display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--bb-muted);margin-bottom:5px;}
+.fg input,.fg select,.fg textarea{width:100%;min-height:38px;padding:8px 10px;border:1px solid var(--bb-border);border-radius:7px;font-size:13px;font-family:var(--bb-sans);background:var(--bb-white);}
+.fg input:focus,.fg select:focus,.fg textarea:focus{outline:none;border-color:var(--bb-red);box-shadow:0 0 0 3px rgba(139,0,0,.09);}
 .fg-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
 .fg-row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
-.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%) translateY(60px);background:#1a1a1a;color:#fff;padding:8px 20px;border-radius:9px;font-size:13px;z-index:9999;transition:transform .3s;pointer-events:none;font-family:'DM Sans',sans-serif;white-space:nowrap;}
+.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%) translateY(60px);background:#1a1a1a;color:#fff;padding:8px 20px;border-radius:9px;font-size:13px;z-index:9999;transition:transform .3s;pointer-events:none;font-family:var(--bb-sans);white-space:nowrap;}
 .toast.show{transform:translateX(-50%) translateY(0);}
 
-/* ── Abas de navegação ────────────────────────────────────── */
-.nav-tabs{display:flex;gap:2px;border-bottom:2px solid var(--border);margin-bottom:14px;}
-.nav-tab{padding:8px 18px;background:none;border:none;border-bottom:3px solid transparent;
-  margin-bottom:-2px;cursor:pointer;font-size:13px;font-weight:600;color:var(--muted);
-  font-family:'DM Sans',sans-serif;transition:.15s}
-.nav-tab:hover{color:var(--text)}
-.nav-tab.active{color:var(--red);border-bottom-color:var(--red)}
-
 /* ── Catálogo ─────────────────────────────────────────────── */
-.cat-forn-card{background:var(--white);border:1px solid var(--border);border-radius:12px;
-  box-shadow:var(--shadow);margin-bottom:12px;overflow:hidden}
+.cat-forn-card{background:var(--bb-white);border:1px solid var(--bb-border);border-radius:12px;
+  box-shadow:var(--bb-shadow-sm);margin-bottom:12px;overflow:hidden}
 .cat-forn-head{padding:12px 16px;cursor:pointer;display:flex;align-items:center;gap:10px;
-  background:var(--bg);border-bottom:1px solid var(--border)}
+  background:#fafafa;border-bottom:1px solid var(--bb-border)}
 .cat-forn-head:hover{background:#f0ebe4}
 .cat-forn-nome{font-size:13px;font-weight:700;flex:1}
-.cat-forn-meta{font-size:11px;color:var(--muted)}
+.cat-forn-meta{font-size:11px;color:var(--bb-muted)}
 .cat-forn-body{display:none}
 .cat-forn-body.open{display:block}
-.cat-forn-search{padding:8px 12px;background:#faf9f7;border-bottom:1px solid var(--border)}
+.cat-forn-search{padding:8px 12px;background:#faf9f7;border-bottom:1px solid var(--bb-border)}
+@media(max-width:768px){
+  .forn-toolbar,.forn-content{padding-left:12px;padding-right:12px}
+  .forn-toolbar .bb-btn{flex:1;justify-content:center}
+  .fg-row,.fg-row3{grid-template-columns:1fr}
+  .cat-forn-head{align-items:flex-start;flex-wrap:wrap}
+  .cat-forn-meta{width:100%;padding-left:0}
+}
 </style>
 </head>
-<body>
+<body class="bb-page-shell">
 
 <div class="ph">
-  <span style="font-size:20px">🏭</span>
-  <h2>Fornecedores</h2>
+  <div class="ph-identity">
+    <span class="ph-icon" aria-hidden="true">🏭</span>
+    <div><h1 class="ph-title">Fornecedores</h1><p class="ph-sub">Cadastro e catálogo de parceiros comerciais</p></div>
+  </div>
   <span class="ph-sub" id="ph-perfil"></span>
 </div>
 
-<div class="nav-tabs">
-  <button class="nav-tab active" onclick="mudarAba('fornecedores', this)">🏭 Fornecedores</button>
-  <button class="nav-tab" onclick="mudarAba('catalogo', this)">📦 Catálogo de Produtos</button>
+<div class="bb-tabs" role="tablist" aria-label="Áreas de fornecedores">
+  <button class="bb-tab nav-tab active" role="tab" aria-selected="true" onclick="mudarAba('fornecedores', this)">Fornecedores</button>
+  <button class="bb-tab nav-tab" role="tab" aria-selected="false" onclick="mudarAba('catalogo', this)">Catálogo de Produtos</button>
 </div>
-<div class="toolbar">
-  <div class="search-box">
-    <input type="text" id="inp-busca" placeholder="Buscar por nome, fantasia ou CNPJ..." oninput="buscar()">
-    <span class="search-ico">🔍</span>
+<div class="bb-toolbar forn-toolbar toolbar">
+  <div class="bb-search search-box">
+    <input class="bb-input" type="search" id="inp-busca" placeholder="Buscar por nome, fantasia ou CNPJ..." aria-label="Buscar fornecedores" oninput="buscar()">
+    <span class="bb-search-icon search-ico" aria-hidden="true">⌕</span>
   </div>
-  <label class="filtro-ativo">
+  <label class="bb-check filtro-ativo">
     <input type="checkbox" id="chk-inativos" onchange="buscar()"> Mostrar inativos
   </label>
-  <button class="btn btn-p" onclick="abrirNovo()">+ Novo Fornecedor</button>
-  <button class="btn btn-s" onclick="dedupFornecedores()" style="background:#fff3cd;border-color:#ffc107;color:#856404" title="Remove fornecedores duplicados pelo mesmo CNPJ">🧹 Remover duplicatas</button>
-  <span class="count-label" id="count-label"></span>
+  <button class="bb-btn bb-btn-primary btn-p" onclick="abrirNovo()">+ Novo fornecedor</button>
+  <button class="bb-btn bb-btn-secondary forn-dedup" onclick="dedupFornecedores(event)" title="Remove fornecedores duplicados pelo mesmo CNPJ">Remover duplicatas</button>
+  <span class="bb-count count-label" id="count-label"></span>
 </div>
 
-<div class="content">
+<main class="forn-content">
     <!-- ABA: Fornecedores -->
     <div id="sec-fornecedores">
       <div id="lista-wrap"></div>
@@ -120,18 +96,17 @@ tbody td{padding:10px 12px;font-size:13px;vertical-align:middle;}
     <!-- ABA: Catálogo de Produtos -->
     <div id="sec-catalogo" style="display:none">
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
-        <div class="search-box" style="flex:1;min-width:200px">
-          <input type="text" id="cat-busca" placeholder="Buscar fornecedor…"
-            oninput="filtrarCatalogo()" style="width:100%">
-          <span class="search-ico">🔍</span>
+        <div class="bb-search search-box">
+          <input class="bb-input" type="search" id="cat-busca" placeholder="Buscar fornecedor…"
+            aria-label="Buscar fornecedor no catálogo" oninput="filtrarCatalogo()">
+          <span class="bb-search-icon search-ico" aria-hidden="true">⌕</span>
         </div>
-        <input type="text" id="cat-busca-prod" placeholder="Filtrar por produto…"
-          oninput="filtrarCatalogo()"
-          style="padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:'DM Sans',sans-serif;width:180px">
-        <button onclick="carregarCatalogo()" class="btn btn-s" style="height:36px">🔄 Atualizar</button>
-        <button onclick="sincronizarHistorico()" class="btn btn-p" style="height:36px;padding:0 14px" id="btn-sinc-hist">⚡ Sincronizar histórico</button>
-        <button onclick="expandirTodosForn()" class="btn btn-s" style="height:36px;padding:0 10px;font-size:11px">▼ Expandir todos</button>
-        <button onclick="colapsarTodosForn()" class="btn btn-s" style="height:36px;padding:0 10px;font-size:11px">▶ Colapsar todos</button>
+        <input class="bb-input" type="search" id="cat-busca-prod" placeholder="Filtrar por produto…"
+          aria-label="Filtrar catálogo por produto" oninput="filtrarCatalogo()" style="width:210px">
+        <button onclick="carregarCatalogo()" class="bb-btn bb-btn-secondary">Atualizar</button>
+        <button onclick="sincronizarHistorico()" class="bb-btn bb-btn-primary" id="btn-sinc-hist">Sincronizar histórico</button>
+        <button onclick="expandirTodosForn()" class="bb-btn bb-btn-tertiary bb-btn-sm">Expandir todos</button>
+        <button onclick="colapsarTodosForn()" class="bb-btn bb-btn-tertiary bb-btn-sm">Recolher todos</button>
         <span id="cat-resumo" style="font-size:12px;color:var(--muted)"></span>
       </div>
       <div id="cat-wrap">
@@ -140,16 +115,16 @@ tbody td{padding:10px 12px;font-size:13px;vertical-align:middle;}
         </div>
       </div>
     </div>
-  </div>
+  </main>
 
 <!-- Modal Fornecedor -->
-<div class="mbg" id="m-forn" onclick="if(event.target===this)fechar()">
-  <div class="md">
-    <div class="md-head">
-      <h3 id="m-titulo">Novo Fornecedor</h3>
-      <button onclick="fechar()">×</button>
+<div class="bb-modal-backdrop mbg" id="m-forn" onclick="if(event.target===this)fechar()">
+  <div class="bb-modal md" role="dialog" aria-modal="true" aria-labelledby="m-titulo">
+    <div class="bb-modal-header md-head">
+      <h3 class="bb-modal-title" id="m-titulo">Novo Fornecedor</h3>
+      <button class="bb-modal-close" onclick="fechar()" aria-label="Fechar">×</button>
     </div>
-    <div class="md-body">
+    <div class="bb-modal-body md-body">
       <div class="fg-row">
         <div class="fg">
           <label>CNPJ *</label>
@@ -227,9 +202,9 @@ tbody td{padding:10px 12px;font-size:13px;vertical-align:middle;}
         </table>
       </div>
     </div>
-    <div class="md-foot">
-      <button class="btn btn-s" onclick="fechar()">Cancelar</button>
-      <button class="btn btn-p" onclick="salvar()">💾 Salvar</button>
+    <div class="bb-modal-footer md-foot">
+      <button class="bb-btn bb-btn-tertiary" onclick="fechar()">Cancelar</button>
+      <button class="bb-btn bb-btn-primary btn-p" onclick="salvar()">Salvar fornecedor</button>
     </div>
   </div>
 </div>
@@ -307,12 +282,12 @@ function renderLista() {
   const avisoDedup = qtdDuplicados > 0 ? `
     <div style="background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       <span style="font-size:13px;color:#856404">⚠️ <strong>${qtdDuplicados} CNPJ(s)</strong> aparecem duplicados na lista abaixo.</span>
-      <button onclick="dedupFornecedores()" style="margin-left:auto;padding:5px 14px;background:#ffc107;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;color:#856404">🧹 Limpar agora</button>
+      <button class="bb-btn bb-btn-secondary forn-dedup bb-btn-sm" onclick="dedupFornecedores(event)" style="margin-left:auto">Limpar agora</button>
     </div>` : '';
 
   wrap.innerHTML = avisoDedup + `
-    <div class="tbl-wrap">
-      <table>
+    <div class="bb-table-wrap tbl-wrap">
+      <table class="bb-table">
         <thead><tr>
           <th>Fornecedor</th>
           <th>CNPJ</th>
@@ -334,9 +309,9 @@ function renderLista() {
                 ${f.telefone ? `<div style="color:var(--muted)">${f.telefone}</div>` : ''}
               </td>
               <td style="font-size:12px;color:var(--muted)">${f.categoria_padrao || '—'}</td>
-              <td><span class="${f.ativo ? 'badge-ativo' : 'badge-inativo'}">${f.ativo ? 'Ativo' : 'Inativo'}</span></td>
+              <td><span class="bb-badge ${f.ativo ? 'bb-badge-green' : 'bb-badge-red'}">${f.ativo ? 'Ativo' : 'Inativo'}</span></td>
               <td class="td-acoes" onclick="event.stopPropagation()">
-                <button onclick="abrirEditar('${f.cnpj_fornecedor}')">✏️ Editar</button>
+                <button class="bb-btn bb-btn-ghost bb-btn-sm" onclick="abrirEditar('${f.cnpj_fornecedor}')">Editar</button>
               </td>
             </tr>
           `).join('')}
@@ -421,15 +396,15 @@ async function salvar() {
   if (_editandoCnpj) {
     d = await (_api||BB.api).put(`/api/fornecedores/${_editandoCnpj}`, body);
     // PUT retorna {ok:true} — qualquer resposta sem erro é sucesso
-    if (d.erro) { toast('❌ ' + d.erro); btn.disabled=false; btn.textContent='💾 Salvar'; return; }
+    if (d.erro) { toast('❌ ' + d.erro); btn.disabled=false; btn.textContent='Salvar fornecedor'; return; }
     toast('✅ Fornecedor atualizado!');
   } else {
     d = await (_api||BB.api).post('/api/fornecedores', body);
-    if (d.erro) { toast('❌ ' + d.erro); btn.disabled=false; btn.textContent='💾 Salvar'; return; }
+    if (d.erro) { toast('❌ ' + d.erro); btn.disabled=false; btn.textContent='Salvar fornecedor'; return; }
     toast('✅ Fornecedor cadastrado!');
   }
 
-  btn.disabled=false; btn.textContent='💾 Salvar';
+  btn.disabled=false; btn.textContent='Salvar fornecedor';
   fechar();
   await _buscarExec();
 }
@@ -711,21 +686,22 @@ function colapsarTodosForn() {
 }
 
 
-async function dedupFornecedores() {
+async function dedupFornecedores(evt) {
   if (!confirm('Remover fornecedores duplicados (mesmo CNPJ)?\n\nO sistema manterá o registro mais completo de cada CNPJ.')) return;
-  const btn = event.target;
+  const btn = evt?.currentTarget;
+  if (!btn) return;
   btn.disabled = true; btn.textContent = '⏳ Removendo...';
   try {
-    const d = await api.post('/api/fornecedores/dedup', {});
+    const d = await (_api||BB.api).post('/api/fornecedores/dedup', {});
     if (d.ok) { alert(`✅ ${d.msg}`); location.reload(); }
     else alert('❌ ' + (d.erro || 'Erro ao remover duplicatas'));
   } catch(e) { alert('❌ Erro: ' + e.message); }
-  btn.disabled = false; btn.textContent = '🧹 Remover duplicatas';
+  btn.disabled = false; btn.textContent = 'Remover duplicatas';
 }
 
 async function sincronizarHistorico() {
   const btn = document.getElementById('btn-sinc-hist');
-  if(btn){ btn.disabled = true; btn.textContent = '⏳ Sincronizando…'; }
+  if(btn){ btn.disabled = true; btn.textContent = 'Sincronizando…'; }
   try {
     const apiFn = _api || window.BB?.api;
     const res = await apiFn.post ? 
@@ -744,7 +720,7 @@ async function sincronizarHistorico() {
   } catch(e) {
     toast('❌ ' + e.message);
   } finally {
-    if(btn){ btn.disabled = false; btn.textContent = '⚡ Sincronizar histórico'; }
+    if(btn){ btn.disabled = false; btn.textContent = 'Sincronizar histórico'; }
   }
 }
 
