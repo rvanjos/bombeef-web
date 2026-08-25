@@ -4,7 +4,7 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Compras — Bom Beef</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/css/bb-theme.css">
+<link rel="stylesheet" href="/css/bb-theme.css?v=7.0.3">
 <script src="/js/api.js"></script>
 <style>
 :root{--red:#8B0000;--red-l:#C0392B;--bg:#f7f4f0;--white:#fff;--text:#111827;--muted:#6b7280;
@@ -14,26 +14,26 @@
   --orange:#9a3412;--orange-bg:#fff7ed;--orange-bdr:#fdba74;
   --purple:#4c1d95;--purple-bg:#f5f3ff;--purple-bdr:#c4b5fd;}
 *{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);font-size:14px;display:flex;flex-direction:column;height:100vh;overflow:hidden}
-.ph{background:var(--red);color:#fff;padding:10px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0;}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);font-size:14px;display:flex;flex-direction:column;height:100vh;min-height:0;overflow:hidden}
+.ph{background:var(--red);color:#fff;padding:12px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0;}
 .ph h1{font-size:16px;font-weight:700;}
-.tabs{background:#fff;border-bottom:2px solid var(--border);display:flex;gap:0;flex-shrink:0;}
-.tab{padding:9px 18px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;background:none;border:none;border-bottom:3px solid transparent;font-family:'DM Sans',sans-serif;}
+.tabs{background:#fff;border-bottom:2px solid var(--border);display:flex;gap:2px;padding:0 16px;flex-shrink:0;overflow-x:auto;scrollbar-width:thin;}
+.tab{min-height:42px;padding:9px 14px;font-size:12px;font-weight:600;color:var(--muted);cursor:pointer;background:none;border:none;border-bottom:3px solid transparent;white-space:nowrap;font-family:'DM Sans',sans-serif;}
 .tab.active{color:var(--red);border-bottom-color:var(--red);}
 .tab:hover:not(.active){background:#fafafa;}
-.sec{display:none;padding:16px;overflow-y:auto;height:calc(100vh - 95px);;background:var(--bg);}
+.sec{display:none;flex:1;min-height:0;padding:16px;overflow-y:auto;background:var(--bg);}
 .sec.active{display:block;}
-.card{background:#fff;border-radius:12px;border:1px solid var(--border);padding:16px;margin-bottom:12px;box-shadow:0 2px 8px rgba(0,0,0,.10);}
+.card{background:#fff;border-radius:10px;border:1px solid var(--border);padding:16px;margin-bottom:12px;box-shadow:0 1px 4px rgba(17,24,39,.06);}
 .card-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-bottom:12px;}
-.btn{background:var(--red);color:#fff;border:none;border-radius:7px;padding:7px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;}
+.btn{min-height:36px;background:var(--red);color:#fff;border:none;border-radius:7px;padding:7px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;}
 .btn:hover{background:var(--red-l);}
 .btn-g{background:#16a34a;}
 .btn-g:hover{background:#15803d;}
 .btn-s{background:#f3f4f6;color:var(--text);border:1px solid var(--border);}
 .btn-s:hover{background:#e5e7eb;}
 .tbl{width:100%;border-collapse:collapse;font-size:13px;}
-.tbl th{background:#f9fafb;padding:8px 10px;text-align:left;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);border-bottom:1px solid var(--border);}
-.tbl td{padding:8px 10px;border-bottom:1px solid #f3f4f6;vertical-align:middle;}
+.tbl th{background:#faf9f7;padding:10px 12px;text-align:left;font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.55px;color:var(--muted);border-bottom:1px solid var(--border);white-space:nowrap;}
+.tbl td{padding:10px 12px;border-bottom:1px solid #f0ede9;vertical-align:middle;}
 .tbl tr:hover td{background:#fafafa;}
 .badge{display:inline-block;border-radius:5px;padding:2px 8px;font-size:11px;font-weight:700;}
 .bg-green{background:var(--green-bg);color:var(--green);}
@@ -42,17 +42,17 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);fon
 .bg-orange{background:var(--orange-bg);color:var(--orange);}
 .bg-blue{background:var(--blue-bg);color:var(--blue);}
 .bg-gray{background:#f3f4f6;color:var(--muted);}
-.drop{border:2px dashed var(--border);border-radius:12px;padding:28px;text-align:center;color:var(--muted);cursor:pointer;transition:all .2s;background:rgba(139,0,0,.02);;box-shadow:0 1px 4px rgba(0,0,0,.06);}
+.drop{border:1.5px dashed #d5cec6;border-radius:10px;padding:34px 28px;text-align:center;color:var(--muted);cursor:pointer;transition:all .2s;background:#fcfbfa;}
 .drop:hover,.drop.drag{border-color:var(--red);background:#fff5f5;color:var(--red);}
 .drop input{display:none;}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
 .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
 .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
-.kpi-box{background:#fff;border:1px solid var(--border);border-radius:12px;padding:14px 16px;box-shadow:0 1px 4px rgba(0,0,0,.06);;border-left:3px solid var(--red);min-height:70px;}
+.kpi-box{background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px 16px;box-shadow:0 1px 4px rgba(17,24,39,.05);border-left:3px solid var(--red);min-height:70px;}
 .kpi-box .kv{font-size:20px;font-weight:800;font-family:'DM Mono',monospace;margin-top:4px;;line-height:1.2;overflow-wrap:anywhere;}
 .kpi-box .kl{font-size:10px;text-transform:uppercase;letter-spacing:.5px;font-weight:700;color:var(--muted);}
-.inp{border:1px solid var(--border);border-radius:7px;padding:7px 10px;font-size:13px;font-family:'DM Sans',sans-serif;width:100%;}
-.inp:focus{outline:none;border-color:var(--red);}
+.inp{min-height:36px;border:1px solid var(--border);border-radius:7px;padding:7px 10px;font-size:13px;font-family:'DM Sans',sans-serif;width:100%;background:#fff;}
+.inp:focus{outline:none;border-color:var(--red);box-shadow:0 0 0 2px rgba(139,0,0,.08);}
 .fg{display:flex;flex-direction:column;gap:4px;}
 .fg label{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;}
 .fg-row{display:grid;gap:10px;}
@@ -76,6 +76,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);fon
 /* Gráfico SVG simples */
 .evo-bar{display:flex;align-items:flex-end;gap:4px;height:60px;margin-top:8px;}
 .evo-bar-col{flex:1;background:var(--red);border-radius:3px 3px 0 0;opacity:.8;min-width:8px;}
+.import-card{max-width:920px;margin:0 auto 16px;}
+.import-card .sec-header{margin-bottom:14px;}
 
 /* ── Lista de Compra ────────────────────────────────────────────────────── */
 .pl-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:3px}
@@ -91,6 +93,10 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);fon
 @media(max-width:700px){
   html, body { overflow: visible !important; height: auto !important; }
   .sec { overflow-y: auto !important; -webkit-overflow-scrolling: touch; height: auto !important; max-height: none !important; }
+  .tabs{padding:0 8px}
+  .sec{padding:12px}
+  .grid2,.grid3,.grid4,.fg-row{grid-template-columns:1fr!important}
+  .import-card{max-width:none}
 }
 </style>
 </head>
@@ -117,13 +123,13 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);fon
 <!-- ── ABA 1: IMPORTAÇÃO ─────────────────────────────────────────────────── -->
 <div id="sec-importacao" class="sec active">
 
-  <div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px;">
-      <div class="sec-header" style="margin-bottom:14px">
+  <div class="card import-card">
+      <div class="sec-header">
     <div style="font-size:13px;font-weight:700;color:var(--text)">📥 Importar Planilha de Vendas</div>
     <div style="font-size:12px;color:var(--muted);margin-top:2px">Arraste ou selecione a planilha exportada do PDV (.xlsx, .xls, .csv)</div>
   </div>
   <div class="drop" id="drop"
-    ondragover="ev.preventDefault();this.classList.add('drag')"
+    ondragover="event.preventDefault();this.classList.add('drag')"
     ondragleave="this.classList.remove('drag')"
     ondrop="this.classList.remove('drag');onDrop(event)"
     onclick="document.getElementById('inp-file').click()">
@@ -132,7 +138,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);fon
     <div style="font-weight:700;margin-bottom:4px">Arraste a planilha do PDV aqui</div>
     <div style="font-size:12px">ou clique para selecionar · .xlsx, .xls, .csv</div>
   </div>
-    </div>
+  </div>
 
   <div id="imp-status" style="display:none"></div>
 
@@ -141,6 +147,15 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);fon
     <div id="imp-hist-body"><div style="color:var(--muted);font-size:13px">Carregando...</div></div>
   </div>
 </div>
+
+<script>
+if (window.self !== window.top) {
+  document.addEventListener('DOMContentLoaded', () => {
+    const header = document.querySelector('.ph');
+    if (header) header.style.display = 'none';
+  });
+}
+</script>
 
 <!-- ── ABA 2: HISTÓRICO ──────────────────────────────────────────────────── -->
 <div id="sec-historico" class="sec">
