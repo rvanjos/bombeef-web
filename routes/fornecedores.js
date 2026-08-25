@@ -415,17 +415,18 @@ module.exports = (pool) => {
   // ── POST /dedup — remove fornecedores duplicados por CNPJ ──────────────────
   router.post('/dedup', autenticar(['admin','gestor']), async (req, res) => {
     try {
-      // Uma única instrução atômica, compatível com tabelas legadas.
-      // Mantém o registro com mais campos preenchidos; em empate, o mais recente.
+      // A tabela de produção é legada: o CNPJ é a PK e pode não existir coluna id.
+      // Usa ctid somente dentro desta instrução atômica para identificar cada linha.
+      // Mantém o registro com mais campos preenchidos; em empate, o último registro físico.
       const result = await pool.query(`
         WITH classificados AS (
-          SELECT f.id,
+          SELECT f.ctid AS linha,
                  ROW_NUMBER() OVER (
                    PARTITION BY REGEXP_REPLACE(f.cnpj_fornecedor, '[^0-9]', '', 'g')
                    ORDER BY (
                      SELECT COUNT(*)
                      FROM jsonb_object_keys(jsonb_strip_nulls(to_jsonb(f)))
-                   ) DESC, f.id DESC
+                   ) DESC, f.ctid DESC
                  ) AS posicao
           FROM fornecedores f
           WHERE f.cnpj_fornecedor IS NOT NULL
@@ -433,11 +434,26 @@ module.exports = (pool) => {
         )
         DELETE FROM fornecedores f
         USING classificados c
-        WHERE f.id = c.id AND c.posicao > 1
+        WHERE f.ctid = c.linha AND c.posicao > 1
       `);
       const removidos = result.rowCount || 0;
 
-      res.json({ ok: true, removidos, msg: `${removidos} duplicata(s) removida(s)` });
+      // Bloqueia definitivamente novas versões mascaradas/não mascaradas do mesmo CNPJ.
+      let protecaoAtiva = true;
+      try {
+        await pool.query(`
+          CREATE UNIQUE INDEX IF NOT EXISTS uq_fornecedores_cnpj_normalizado
+          ON fornecedores ((REGEXP_REPLACE(cnpj_fornecedor, '[^0-9]', '', 'g')))
+          WHERE cnpj_fornecedor IS NOT NULL
+            AND REGEXP_REPLACE(cnpj_fornecedor, '[^0-9]', '', 'g') <> ''
+        `);
+      } catch (indexErr) {
+        protecaoAtiva = false;
+        console.error('[fornecedores/dedup] índice preventivo:', indexErr.message);
+      }
+
+      res.json({ ok: true, removidos, protecaoAtiva,
+        msg: `${removidos} duplicata(s) removida(s)` });
     } catch(e) {
       console.error('[fornecedores/dedup]', e.message);
       res.status(500).json({ ok: false, erro: 'Não foi possível consolidar os fornecedores. Nenhum cadastro foi alterado.' });
