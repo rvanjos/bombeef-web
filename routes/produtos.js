@@ -436,7 +436,7 @@ module.exports = function (pool, app) {
             atualizado_em = NOW()
           RETURNING id, codigo, (xmax <> 0) AS foi_update,
             preco_custo AS novo_custo
-        `, [bCod, bDesc, bForn, bCusto, bVenda, bUnit, bCat, bEstoque.map(e => e ?? 0)]);
+        `, [bCod, bDesc, bForn, bCusto, bVenda, bUnit, bCat, bEstoque]);
 
         for (const row of result.rows) {
           if (row.foi_update) atualizados++;
@@ -457,6 +457,30 @@ module.exports = function (pool, app) {
               AND p.id = ANY($1::int[])
               AND p.preco_custo > 0
           `, [prodsCusto]);
+        }
+
+        // O Importar Completo passa a ser o caminho oficial e também atualiza
+        // o saldo dos ingredientes usados nos kits, antes exclusivo do sync-estoque.
+        if (colEstoque >= 0) {
+          await client.query(`
+            UPDATE kit_estoque_interno kei
+            SET saldo = COALESCE(p.estoque, 0), atualizado_em = NOW()
+            FROM produtos p
+            WHERE kei.produto_id = p.id AND p.estoque IS NOT NULL
+          `);
+          await client.query(`
+            INSERT INTO kit_estoque_interno
+              (produto_id, produto_codigo, produto_nome, saldo, atualizado_em)
+            SELECT DISTINCT p.id, p.codigo, p.descricao, COALESCE(p.estoque,0), NOW()
+            FROM kit_itens ki
+            JOIN produtos p ON p.id = ki.produto_id
+            WHERE p.estoque IS NOT NULL
+              AND NOT EXISTS (
+                SELECT 1 FROM kit_estoque_interno kei WHERE kei.produto_id = p.id
+              )
+            ON CONFLICT (produto_id) DO UPDATE
+              SET saldo = EXCLUDED.saldo, atualizado_em = NOW()
+          `);
         }
 
         await client.query('COMMIT');
