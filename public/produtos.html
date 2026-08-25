@@ -4,8 +4,16 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Produtos & Kits — Bom Beef</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/css/bb-theme.css">
+<link rel="stylesheet" href="/css/bb-theme.css?v=7.0.2">
 <script src="/js/api.js"></script>
+<script>
+if (window.self !== window.top) {
+  document.addEventListener('DOMContentLoaded', () => {
+    const header = document.querySelector('.ph');
+    if (header) header.style.display = 'none';
+  });
+}
+</script>
 <style>
 :root{--red:#8B0000;--red-l:#C0392B;--green:#1a7a4a;--orange:#c76b00;--blue:#1a5c8a;--purple:#6c3483;
   --bg:#f7f4f0;--white:#fff;--text:#1a1a1a;--muted:#7a7068;--border:#e8e0d8;--shadow:0 2px 12px rgba(0,0,0,.08);}
@@ -14,8 +22,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
 .ph{background:var(--red);padding:12px 22px;display:flex;align-items:center;gap:10px;box-shadow:0 2px 12px rgba(139,0,0,.3);}
 .ph h2{font-family:'Playfair Display',serif;font-size:17px;color:#fff;font-weight:700;}
 .ph-sub{font-size:11px;color:rgba(255,255,255,.6);margin-left:auto;}
-.body{padding:20px;flex:1;overflow-y:auto;overflow-x:auto;;background:var(--bg);}
-.tabs{display:flex;gap:0;padding:0 4px;background:var(--white);border-bottom:2px solid var(--border);overflow-x:auto;scrollbar-width:none;;flex-shrink:0;}
+.body{padding:16px;flex:1;overflow-y:auto;overflow-x:auto;background:var(--bg);}
+.tabs{display:flex;gap:2px;padding:0 16px;background:var(--white);border-bottom:2px solid var(--border);overflow-x:auto;scrollbar-width:none;flex-shrink:0;}
 .tab,.tab-btn{
   padding:10px 16px;font-size:12px;font-weight:600;cursor:pointer;
   border:none;background:none;color:var(--muted);
@@ -25,12 +33,14 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
 .tab:hover,.tab-btn:hover{color:var(--red);}
 .tab.active,.tab.a,.tab-btn.active{color:var(--red);border-bottom-color:var(--red);}
 .kpi-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-bottom:16px;}
-.kc{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:12px;border-left:3px solid var(--green);box-shadow:var(--shadow);;min-height:70px;display:flex;flex-direction:column;justify-content:center;}
+.kc{background:var(--white);border:1px solid var(--border);border-radius:10px;padding:12px;border-left:3px solid var(--blue);box-shadow:var(--shadow);min-height:70px;display:flex;flex-direction:column;justify-content:center;}
+.kc:nth-child(2){border-left-color:var(--green)}
+.kc:nth-child(3){border-left-color:var(--orange)}
 .kc-l{font-size:9px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);font-weight:600;margin-bottom:3px;}
 .kc-v{font-size:18px;font-weight:700;font-family:'DM Mono',monospace;;line-height:1.2;overflow-wrap:anywhere;}
-.toolbar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;align-items:center;;background:var(--bg);padding:10px 12px;border-radius:10px;}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;align-items:center;background:transparent;padding:0;}
 .btn{padding:7px 14px;border-radius:7px;border:none;cursor:pointer;font-size:12px;font-weight:600;font-family:'DM Sans',sans-serif;transition:all .15s;display:inline-flex;align-items:center;gap:5px;}
-.btn-g{background:var(--green);color:#fff;}.btn-g:hover{filter:brightness(1.1);}
+.btn-g{background:var(--red);color:#fff;}.btn-g:hover{background:var(--red-l);}
 .btn-s{background:var(--white);color:var(--text);border:1px solid var(--border);}.btn-s:hover{border-color:var(--green);}
 .search-w{flex:1;min-width:160px;position:relative;}
 .search-w input{width:100%;padding:7px 10px 7px 30px;border:1px solid var(--border);border-radius:7px;font-size:12px;background:var(--white);}
@@ -59,15 +69,15 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
   .kit-item-custo,.kit-item-venda,.kit-item-subtotal{display:none;}
   .kit-item-row .ki-nome{grid-column:1;}
 }
-.mdh{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
-.mdh h3{font-family:'Playfair Display',serif;font-size:15px;color:var(--green);}
-.mdx{background:none;border:none;font-size:19px;cursor:pointer;color:var(--muted);}
+.mdh{padding:16px 20px;border-bottom:0;background:var(--red);display:flex;align-items:center;justify-content:space-between;}
+.mdh h3{font-family:'DM Sans',sans-serif;font-size:14px;color:#fff;}
+.mdx{background:none;border:none;font-size:19px;cursor:pointer;color:rgba(255,255,255,.82);}
 .mdb{padding:18px 20px;}
 .mdf{padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;}
 .fg{margin-bottom:11px;}
 .fg label{display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-bottom:4px;}
 .fg input,.fg select,.fg textarea{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:'DM Sans',sans-serif;}
-.fg input:focus,.fg select:focus{outline:none;border-color:var(--green);}
+.fg input:focus,.fg select:focus{outline:none;border-color:var(--red);box-shadow:0 0 0 3px rgba(164,0,0,.08);}
 .fgr{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
 .fgr3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px;}
 /* KIT PRECIFICAÇÃO */
@@ -137,8 +147,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
 .btn-s { background: var(--white); color: var(--text); border: 1px solid var(--border); padding: 8px 16px; border-radius: 7px; font-size: 12px; font-weight: 600; }
 .btn-s:hover { border-color: var(--red); color: var(--red); }
 /* Botão verde */
-.btn-g { background: var(--green); color: #fff; padding: 8px 16px; border-radius: 7px; font-size: 12px; font-weight: 600; border: none; }
-.btn-g:hover { filter: brightness(1.1); }
+.btn-g { background: var(--red); color: #fff; padding: 8px 16px; border-radius: 7px; font-size: 12px; font-weight: 600; border: none; }
+.btn-g:hover { background: var(--red-l); }
 /* Botão azul */
 .btn-b, .btn-blue { background: var(--blue); color: #fff; padding: 8px 16px; border-radius: 7px; font-size: 12px; font-weight: 600; border: none; }
 /* Botão laranja */
@@ -166,6 +176,10 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
 </head>
 <body>
 <div class="ph"><span style="font-size:20px">📦</span><h2>Produtos & Kits</h2><div class="ph-sub" id="ph-sub">—</div></div>
+<div class="tabs bb-tabs" role="tablist" aria-label="Áreas de produtos">
+  <button class="tab bb-tab a" role="tab" aria-selected="true" onclick="showSec('prod',this)">📦 Produtos</button>
+  <button class="tab bb-tab" role="tab" aria-selected="false" onclick="showSec('cfg',this)">⚙️ Parâmetros</button>
+</div>
 <div class="body">
   <div style="margin-bottom:14px;">
       <div class="kpi-row">
@@ -174,10 +188,6 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
     <div class="kc"><div class="kc-l">Preço Médio</div><div class="kc-v" id="k-pm">—</div></div>
   </div>
     </div>
-  <div class="tabs">
-    <button class="tab a" onclick="showSec('prod',this)">📦 Produtos</button>
-    <button class="tab" onclick="showSec('cfg',this)">⚙️ Parâmetros</button>
-  </div>
 
   <!-- PRODUTOS -->
   <div id="sec-prod">
@@ -483,8 +493,12 @@ window.addEventListener('message', e => {
 function showSec(s, btn) {
   ['sec-prod','sec-kits','sec-cfg'].forEach(id=>document.getElementById(id).style.display='none');
   document.getElementById('sec-'+s).style.display='';
-  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('a'));
+  document.querySelectorAll('.tab').forEach(t=>{
+    t.classList.remove('a');
+    t.setAttribute('aria-selected','false');
+  });
   btn.classList.add('a');
+  btn.setAttribute('aria-selected','true');
 }
 
 // ── KPIs ───────────────────────────────────────────────────────────────────
