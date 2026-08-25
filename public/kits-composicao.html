@@ -14,7 +14,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
 .ph{background:var(--red);padding:12px 22px;display:flex;align-items:center;gap:10px;box-shadow:0 2px 12px rgba(139,0,0,.3);}
 .ph h2{font-family:'Playfair Display',serif;font-size:17px;color:#fff;font-weight:700;}
 .ph-sub{font-size:11px;color:rgba(255,255,255,.6);margin-left:auto;}
-.body{padding:20px;max-width:1400px;margin:0 auto;;flex:1;overflow-y:auto;overflow-x:auto;;background:var(--bg);}
+.body{width:100%;min-width:0;padding:20px;max-width:1400px;margin:0 auto;flex:1;overflow-y:auto;overflow-x:hidden;background:var(--bg);}
 .tabs{display:flex;gap:0;padding:0 4px;background:var(--white);border-bottom:2px solid var(--border);overflow-x:auto;scrollbar-width:none;}
 .tab,.tab-btn{
   padding:10px 16px;font-size:12px;font-weight:600;cursor:pointer;
@@ -95,6 +95,10 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
 .cost-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px;}
 .cost-row:last-child{border-bottom:none;}
 .cost-row input[type=number]{width:70px;padding:4px 6px;border:1px solid var(--border);border-radius:5px;font-size:12px;font-family:'DM Mono',monospace;text-align:right;}
+.params-card{width:100%;max-width:1100px;margin:0 auto;padding:20px!important;overflow:visible!important;}
+.params-grid{display:grid;grid-template-columns:minmax(300px,1fr) minmax(360px,1fr);gap:28px;align-items:start;}
+.params-section-title{font-size:12px;font-weight:700;color:var(--text);margin-bottom:8px;}
+@media(max-width:850px){.params-grid{grid-template-columns:1fr}.params-card{max-width:680px}.body{overflow-x:hidden}}
 .result-box{border-radius:9px;padding:12px;margin-top:10px;}
 .result-box.ok{background:#f0faf4;border:1px solid #a8d5bc;}
 .result-box.warn{background:#fff8e6;border:1px solid #f5c842;}
@@ -255,22 +259,25 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
 
     <!-- Parâmetros de precificação dos Kits -->
     <div id="ksec-parametros" style="display:none">
-      <div class="card" style="padding:20px;max-width:680px">
+      <div class="card params-card">
         <div style="font-size:16px;font-weight:700;color:var(--red);margin-bottom:6px">⚙️ Parâmetros de Precificação</div>
-        <div style="font-size:12px;color:var(--muted);margin-bottom:14px">Valores usados exclusivamente no cálculo automático dos kits.</div>
-        <div class="cost-row"><span>💳 Taxa Cartão (%)</span><input type="number" id="cfg-cartao" value="3" step="0.1" min="0" oninput="salvarCfg()"></div>
-        <div class="cost-row"><span>🏷️ Royalties / Franquia (%)</span><input type="number" id="cfg-royalties" value="4.875" step="0.125" min="0" oninput="salvarCfg()"></div>
-        <div class="cost-row"><span>🗑️ Desperdício (%)</span><input type="number" id="cfg-desperdicio" value="5" step="0.5" min="0" oninput="salvarCfg()"></div>
-        <div class="cost-row"><span>📋 Impostos (%)</span><input type="number" id="cfg-imposto" value="6" step="0.5" min="0" oninput="salvarCfg()"></div>
-        <div class="cost-row"><span>🏭 Custos Fixos (%)</span><input type="number" id="cfg-fixos" value="25" step="1" min="0" oninput="salvarCfg()"></div>
-        <div class="cost-row"><span>🎯 Lucro Alvo (%)</span><input type="number" id="cfg-lucro" value="15" step="1" min="0" oninput="salvarCfg()"></div>
-        <div style="margin-top:14px;padding:12px;background:#f0faf4;border-radius:8px;font-size:13px">
-          <div style="font-weight:600;margin-bottom:6px">Totais calculados:</div>
-          <div id="cfg-totais"></div>
-        </div>
-        <div style="margin-top:16px">
-          <div style="font-weight:600;font-size:13px;margin-bottom:10px">Margens mínimas por categoria:</div>
-          <div id="cfg-margens"></div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:18px">Valores usados exclusivamente no cálculo automático dos kits.</div>
+        <div class="params-grid">
+          <div>
+            <div class="params-section-title">Custos e objetivo</div>
+            <div class="cost-row"><span>💳 Taxa Cartão (%)</span><input type="number" id="cfg-cartao" value="3" step="0.1" min="0" oninput="salvarCfg()"></div>
+            <div class="cost-row"><span>🏷️ Royalties / Franquia (%)</span><input type="number" id="cfg-royalties" value="4.875" step="0.125" min="0" oninput="salvarCfg()"></div>
+            <div class="cost-row"><span>🗑️ Desperdício (%)</span><input type="number" id="cfg-desperdicio" value="5" step="0.5" min="0" oninput="salvarCfg()"></div>
+            <div class="cost-row"><span>📋 Impostos (%)</span><input type="number" id="cfg-imposto" value="6" step="0.5" min="0" oninput="salvarCfg()"></div>
+            <div class="cost-row"><span>🏭 Custos Fixos (%)</span><input type="number" id="cfg-fixos" value="25" step="1" min="0" oninput="salvarCfg()"></div>
+            <div class="cost-row"><span>🎯 Lucro Alvo (%)</span><input type="number" id="cfg-lucro" value="15" step="1" min="0" oninput="salvarCfg()"></div>
+          </div>
+          <div>
+            <div class="params-section-title">Resultado da precificação</div>
+            <div style="padding:12px;background:#f0faf4;border-radius:8px;font-size:13px;margin-bottom:16px"><div id="cfg-totais"></div></div>
+            <div class="params-section-title">Margens mínimas por categoria</div>
+            <div id="cfg-margens"></div>
+          </div>
         </div>
       </div>
     </div>
