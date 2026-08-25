@@ -175,6 +175,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
   <button class="tab active" id="ktab-lista"    onclick="showKTab('lista',this)">🎁 Kits Cadastrados</button>
   <button class="tab"        id="ktab-semanas"  onclick="showKTab('semanas',this)">📊 Histórico Semanal</button>
   <button class="tab"        id="ktab-ranking"  onclick="showKTab('ranking',this)">🏆 Ranking</button>
+  <button class="tab"        id="ktab-parametros" onclick="showKTab('parametros',this)">⚙️ Parâmetros</button>
 </div>
 
 <!-- KPI bar do módulo Kits -->
@@ -249,6 +250,28 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
         <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:8px">🥩 Produtos que Mais Chamam Atenção nos Kits</div>
         <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Cruza a composição dos kits ativos com o volume vendido no período — mostra quais produtos circulam mais através dos kits que os contêm.</div>
         <div id="ranking-produtos"></div>
+      </div>
+    </div>
+
+    <!-- Parâmetros de precificação dos Kits -->
+    <div id="ksec-parametros" style="display:none">
+      <div class="card" style="padding:20px;max-width:680px">
+        <div style="font-size:16px;font-weight:700;color:var(--red);margin-bottom:6px">⚙️ Parâmetros de Precificação</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:14px">Valores usados exclusivamente no cálculo automático dos kits.</div>
+        <div class="cost-row"><span>💳 Taxa Cartão (%)</span><input type="number" id="cfg-cartao" value="3" step="0.1" min="0" oninput="salvarCfg()"></div>
+        <div class="cost-row"><span>🏷️ Royalties / Franquia (%)</span><input type="number" id="cfg-royalties" value="4.875" step="0.125" min="0" oninput="salvarCfg()"></div>
+        <div class="cost-row"><span>🗑️ Desperdício (%)</span><input type="number" id="cfg-desperdicio" value="5" step="0.5" min="0" oninput="salvarCfg()"></div>
+        <div class="cost-row"><span>📋 Impostos (%)</span><input type="number" id="cfg-imposto" value="6" step="0.5" min="0" oninput="salvarCfg()"></div>
+        <div class="cost-row"><span>🏭 Custos Fixos (%)</span><input type="number" id="cfg-fixos" value="25" step="1" min="0" oninput="salvarCfg()"></div>
+        <div class="cost-row"><span>🎯 Lucro Alvo (%)</span><input type="number" id="cfg-lucro" value="15" step="1" min="0" oninput="salvarCfg()"></div>
+        <div style="margin-top:14px;padding:12px;background:#f0faf4;border-radius:8px;font-size:13px">
+          <div style="font-weight:600;margin-bottom:6px">Totais calculados:</div>
+          <div id="cfg-totais"></div>
+        </div>
+        <div style="margin-top:16px">
+          <div style="font-weight:600;font-size:13px;margin-bottom:10px">Margens mínimas por categoria:</div>
+          <div id="cfg-margens"></div>
+        </div>
       </div>
     </div>
 </div>
@@ -459,7 +482,7 @@ async function carregarKits(){
 
 // ── Subtabs da aba Kits ──────────────────────────────────────────────────────
 function showKTab(id, btn) {
-  ['lista','semanas','ranking'].forEach(t => {
+  ['lista','semanas','ranking','parametros'].forEach(t => {
     const el = document.getElementById('ksec-'+t);
     if (el) el.style.display = t === id ? '' : 'none';
   });
@@ -467,6 +490,48 @@ function showKTab(id, btn) {
   if (btn) btn.classList.add('active');
   if (id === 'semanas') carregarSemanas();
   if (id === 'ranking') carregarRanking();
+  if (id === 'parametros') carregarCfgUI();
+}
+
+function carregarCfgUI(){
+  ['cartao','royalties','desperdicio','imposto','fixos','lucro'].forEach(campo => {
+    const el=document.getElementById('cfg-'+campo);
+    if(el) el.value=CFG[campo];
+  });
+  atualizarCfgTotais();
+  renderCfgMargens();
+}
+
+function salvarCfg(){
+  ['cartao','royalties','desperdicio','imposto','fixos','lucro'].forEach(campo => {
+    const el=document.getElementById('cfg-'+campo);
+    if(el) CFG[campo]=parseFloat(el.value)||0;
+  });
+  localStorage.setItem('bb_kit_cfg',JSON.stringify(CFG));
+  atualizarCfgTotais();
+}
+
+function atualizarCfgTotais(){
+  const op=CFG.cartao+CFG.royalties+CFG.desperdicio+CFG.imposto+CFG.fixos;
+  const mkOp=op < 100 ? (1/(1-op/100)).toFixed(3) : '—';
+  const mkIdeal=(op+CFG.lucro) < 100 ? (1/(1-(op+CFG.lucro)/100)).toFixed(3) : '—';
+  const el=document.getElementById('cfg-totais');
+  if(!el) return;
+  el.innerHTML=`<div style="display:flex;gap:20px;flex-wrap:wrap">
+    <div><div style="font-size:10px;color:var(--muted)">Custos operacionais</div><div style="font-size:16px;font-weight:700;font-family:'DM Mono',monospace;color:var(--red-l)">${op.toFixed(2)}%</div></div>
+    <div><div style="font-size:10px;color:var(--muted)">Markup mínimo</div><div style="font-size:16px;font-weight:700;font-family:'DM Mono',monospace;color:var(--orange)">${mkOp}×</div></div>
+    <div><div style="font-size:10px;color:var(--muted)">Markup ideal (${CFG.lucro}% lucro)</div><div style="font-size:16px;font-weight:700;font-family:'DM Mono',monospace;color:var(--green)">${mkIdeal}×</div></div>
+  </div>`;
+}
+
+function renderCfgMargens(){
+  const el=document.getElementById('cfg-margens');
+  if(!el) return;
+  el.innerHTML=Object.entries(CFG.margensMinimas).map(([cat,m])=>`
+    <div class="cost-row"><span>${cat}</span><div style="display:flex;align-items:center;gap:6px">
+      <input type="number" value="${m}" min="0" step="1"
+        oninput="CFG.margensMinimas['${cat}']=parseFloat(this.value)||0;localStorage.setItem('bb_kit_cfg',JSON.stringify(CFG))"> %
+    </div></div>`).join('');
 }
 
 const fmt2 = {
