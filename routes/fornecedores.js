@@ -414,74 +414,33 @@ module.exports = (pool) => {
 
   // ── POST /dedup — remove fornecedores duplicados por CNPJ ──────────────────
   router.post('/dedup', autenticar(['admin','gestor']), async (req, res) => {
-    const client = await pool.connect();
-    let etapa = 'iniciar transação';
     try {
-      await client.query('BEGIN');
-      etapa = 'localizar CNPJs duplicados';
-      const { rows: dups } = await client.query(`
-        SELECT REGEXP_REPLACE(cnpj_fornecedor, '[^0-9]', '', 'g') AS cnpj_norm
-        FROM fornecedores
-        WHERE cnpj_fornecedor IS NOT NULL AND cnpj_fornecedor <> ''
-        GROUP BY REGEXP_REPLACE(cnpj_fornecedor, '[^0-9]', '', 'g')
-        HAVING COUNT(*) > 1
+      // Uma única instrução atômica, compatível com tabelas legadas.
+      // Mantém o registro com mais campos preenchidos; em empate, o mais recente.
+      const result = await pool.query(`
+        WITH classificados AS (
+          SELECT f.id,
+                 ROW_NUMBER() OVER (
+                   PARTITION BY REGEXP_REPLACE(f.cnpj_fornecedor, '[^0-9]', '', 'g')
+                   ORDER BY (
+                     SELECT COUNT(*)
+                     FROM jsonb_object_keys(jsonb_strip_nulls(to_jsonb(f)))
+                   ) DESC, f.id DESC
+                 ) AS posicao
+          FROM fornecedores f
+          WHERE f.cnpj_fornecedor IS NOT NULL
+            AND REGEXP_REPLACE(f.cnpj_fornecedor, '[^0-9]', '', 'g') <> ''
+        )
+        DELETE FROM fornecedores f
+        USING classificados c
+        WHERE f.id = c.id AND c.posicao > 1
       `);
-
-      let removidos = 0;
-      for (const d of dups) {
-        etapa = `consolidar CNPJ ${d.cnpj_norm}`;
-        const { rows: registros } = await client.query(`
-          SELECT * FROM fornecedores
-          WHERE REGEXP_REPLACE(cnpj_fornecedor, '[^0-9]', '', 'g') = $1
-          ORDER BY
-            ((razao_social IS NOT NULL)::int + (nome_fantasia IS NOT NULL)::int +
-             (contato IS NOT NULL)::int + (telefone IS NOT NULL)::int +
-             (email IS NOT NULL)::int + (endereco IS NOT NULL)::int +
-             (categoria_padrao IS NOT NULL)::int + (observacao IS NOT NULL)::int) DESC,
-            id DESC
-        `, [d.cnpj_norm]);
-
-        const principal = registros[0];
-        const excluir = registros.slice(1);
-        const campos = ['razao_social','nome_fantasia','contato','telefone','email',
-          'endereco','categoria_padrao','observacao'];
-        const consolidado = { ...principal };
-        for (const registro of excluir) {
-          for (const campo of campos) {
-            if (!consolidado[campo] && registro[campo]) consolidado[campo] = registro[campo];
-          }
-        }
-
-        await client.query(`DELETE FROM fornecedores WHERE id = ANY($1::int[])`,
-          [excluir.map(r => r.id)]);
-        removidos += excluir.length;
-        await client.query(`
-          UPDATE fornecedores SET cnpj_fornecedor=$1, razao_social=$2, nome_fantasia=$3,
-            contato=$4, telefone=$5, email=$6, endereco=$7, categoria_padrao=$8,
-            observacao=$9, atualizado_em=NOW() WHERE id=$10
-        `, [d.cnpj_norm, consolidado.razao_social, consolidado.nome_fantasia,
-          consolidado.contato, consolidado.telefone, consolidado.email,
-          consolidado.endereco, consolidado.categoria_padrao, consolidado.observacao,
-          principal.id]);
-      }
-
-      // O catálogo se relaciona pelo texto do CNPJ e pode ter estrutura legada
-      // diferente entre ambientes. Ele já compara o CNPJ normalizado nas consultas,
-      // portanto não precisa ser regravado para consolidar o cadastro mestre.
-      etapa = 'normalizar cadastros consolidados';
-      await client.query(`UPDATE fornecedores
-        SET cnpj_fornecedor=REGEXP_REPLACE(cnpj_fornecedor,'[^0-9]','','g')
-        WHERE cnpj_fornecedor ~ '[^0-9]'`);
-      etapa = 'confirmar alterações';
-      await client.query('COMMIT');
+      const removidos = result.rowCount || 0;
 
       res.json({ ok: true, removidos, msg: `${removidos} duplicata(s) removida(s)` });
     } catch(e) {
-      await client.query('ROLLBACK').catch(() => {});
-      console.error(`[fornecedores/dedup] etapa=${etapa}:`, e.message);
+      console.error('[fornecedores/dedup]', e.message);
       res.status(500).json({ ok: false, erro: 'Não foi possível consolidar os fornecedores. Nenhum cadastro foi alterado.' });
-    } finally {
-      client.release();
     }
   });
 
