@@ -29,13 +29,6 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
 .kc-s{font-size:10px;color:var(--muted);margin-top:2px;}
 
 /* ── ALERTAS BANNER ── (idêntico ao sistema anterior) */
-.sb{border-radius:9px;padding:11px 16px;margin-bottom:10px;display:flex;align-items:center;gap:10px;font-size:13px;font-weight:600;border:1px solid;}
-.sb-danger{background:#fff0f0;border-color:#f5c6c6;color:var(--c-vencido);}
-.sb-warn{background:#fff8e6;border-color:#f5c842;color:var(--c-alerta);}
-.sb-ok{background:#f0faf4;border-color:#a8d5bc;color:var(--c-ok);}
-.sb-neutral{background:#f5f5f5;border-color:#ddd;color:var(--muted);}
-.sb-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
-.dot-danger{background:var(--c-vencido);} .dot-warn{background:var(--c-alerta);} .dot-ok{background:var(--c-ok);} .dot-neutral{background:#bbb;}
 
 /* ── TABS ── */
 .tabs{display:flex;gap:0;padding:0 4px;background:var(--white);border-bottom:2px solid var(--border);overflow-x:auto;scrollbar-width:none;;flex-shrink:0;}
@@ -158,7 +151,6 @@ tr[onclick]{touch-action:pan-y;-webkit-tap-highlight-color:rgba(0,0,0,0.05);}
 /* Modo expandido do histórico — ocupa tela toda */
 body.hist-expandido .ph,
 body.hist-expandido .kpi-row,
-body.hist-expandido #banners-area,
 body.hist-expandido .tabs { display:none !important; }
 body.hist-expandido .body { padding:0; }
 body.hist-expandido #sec-historico { padding:0; }
@@ -334,7 +326,6 @@ body{font-size:14px;color:#111827}
 .modal{border-radius:12px}
 .dash-kpi{box-shadow:0 1px 4px rgba(17,24,39,.06)}
 .kpi-row{display:none}
-#banners-area{margin-bottom:12px}
 #sec-perdas>.bb-tbl-scroll,#sec-historico>.bb-tbl-scroll{background:#fff;border:1px solid #e5e7eb;border-radius:10px;box-shadow:0 1px 4px rgba(17,24,39,.06)}
 #sec-perdas>.toolbar,#sec-historico>.toolbar,#sec-validade>.toolbar{margin-bottom:12px}
 #sec-perdas .tbl tr:last-child td,#sec-historico .tbl tr:last-child td{border-bottom:none}
@@ -386,8 +377,6 @@ body{font-size:14px;color:#111827}
   </div>
 
   <!-- Banners de alerta -->
-  <div id="banners-area"></div>
-
   <!-- ── DASHBOARD ── -->
   <div id="sec-dashboard">
     <div class="section-intro">
@@ -1057,8 +1046,6 @@ function showSection(s, btn){
     btn.classList.add('active');
     btn.setAttribute('aria-selected','true');
   }
-  const banners = document.getElementById('banners-area');
-  if(banners) banners.style.display = s==='dashboard' ? '' : 'none';
   if(s==='perdas') carregarPerdas();
   if(s==='dashboard') renderDashboard();
   if(s==='historico') carregarHistorico();
@@ -1232,20 +1219,6 @@ async function carregarKPIs(){
     document.getElementById('k-perdas-s').textContent= m.metaValor>0?(m.dentroMeta===false?'⚠️ Acima':'✅ OK'):fmt.n(0);
   }
 
-  // Banners de alerta
-  renderBanners(d.data || {});
-}
-
-function renderBanners(data){
-  const el = document.getElementById('banners-area');
-  let html = '';
-  if(data.vencidos>0)
-    html+=`<div class="sb sb-danger"><div class="sb-dot dot-danger"></div><strong>${data.vencidos} produto(s) VENCIDO(S)</strong> — retirar imediatamente. <button onclick="filtrarStatus('vencido')" style="margin-left:8px;padding:3px 10px;background:var(--c-vencido);color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:12px">Ver vencidos</button></div>`;
-  if(data.alerta>0)
-    html+=`<div class="sb sb-warn"><div class="sb-dot dot-warn"></div><strong>${data.alerta} produto(s) próximo(s) do vencimento</strong> — atenção necessária.</div>`;
-  if(!html && data.ok>=0)
-    html='';
-  el.innerHTML = html;
 }
 
 // ── Funcionários ──────────────────────────────────────────────────────────────
