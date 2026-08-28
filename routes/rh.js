@@ -543,8 +543,12 @@ module.exports = function (pool, app) {
   // ── GET /lancamentos-pendentes/count ─────────────────────────────────────
   r.get('/lancamentos-pendentes/count', async (req, res) => {
     try {
-      const { rows } = await pool.query(`SELECT COUNT(*) AS total FROM rh_apontamentos WHERE status='pendente'`);
-      res.json({ ok: true, total: parseInt(rows[0].total) });
+      const { rows } = await pool.query(`
+        SELECT
+          (SELECT COUNT(*) FROM rh_apontamentos WHERE status='pendente') +
+          (SELECT COUNT(*) FROM rh_pagamentos WHERE status='pendente') AS total
+      `);
+      res.json({ ok: true, total: parseInt(rows[0].total || 0) });
     } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
