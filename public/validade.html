@@ -64,6 +64,9 @@ tr[onclick]{touch-action:pan-y;-webkit-tap-highlight-color:rgba(0,0,0,0.05);}
   #tbl-val{table-layout:auto;width:max-content;min-width:100%;}
   #tbl-val th,#tbl-val td{padding:4px 6px;font-size:11px;white-space:nowrap;}
   #tbl-val th:nth-child(3),#tbl-val td:nth-child(3){white-space:normal;min-width:160px;max-width:280px;}
+#sec-validade .bb-tbl-scroll{overflow:auto;scrollbar-gutter:stable;max-height:calc(100vh - 300px);}
+#sec-validade .bb-tbl-scroll .tbl th{top:0;}
+.tbl-scroll-help{display:flex;align-items:center;gap:6px;margin:-4px 2px 7px;color:var(--muted);font-size:11px;}
 /* Linhas coloridas por urgência — igual ao sistema anterior */
 .tbl tr.row-vencido td{background:#fff0f0!important;}
 .tbl tr.row-vencido:hover td{background:#ffe8e8!important;}
@@ -256,6 +259,8 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
      tambem comem altura demais presas no topo */
   .body > .tabs { position: static !important; margin: 0 0 12px !important; padding: 0 4px !important; box-shadow: none !important; }
   .tbl th { position: static !important; }
+  #sec-validade .bb-tbl-scroll{max-height:none;overflow-x:auto;overflow-y:visible;}
+  .tbl-scroll-help{display:none;}
 }
 
 /* Popover do seletor de colunas */
@@ -271,6 +276,7 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
    escondido e nao existe rolagem horizontal nenhuma.
    Breakpoint 768px para casar com isMobile() do JS, que decide o modo cartao. */
 @media(max-width:768px){
+  .toolbar [data-cols-btn="tbl-val"]{display:none;}
 
   /* --- Lista da aba Validade (modo cartao) ---------------------------------
      O cartao e um <tr><td colspan="11">. Enquanto a tabela mantiver layout de
@@ -487,6 +493,7 @@ body{font-size:14px;color:#111827}
         <option value="ok">OK</option>
       </select>
       <button class="btn btn-s" id="btn-semcod" onclick="filtrarSemCod()" style="display:none">⚠️ Sem código</button>
+      <button class="bb-cols-btn" data-cols-btn="tbl-val" onclick="bbColunas.abrir('tbl-val')" title="Escolher quais colunas aparecem">⚙️ Colunas</button>
 
     </div>
     <!-- Pílulas de filtro — mobile only -->
@@ -495,7 +502,6 @@ body{font-size:14px;color:#111827}
       <button class="val-pill" data-val="vencido" onclick="valSetPill(this,'vencido')">Vencidos</button>
       <button class="val-pill" data-val="alerta" onclick="valSetPill(this,'alerta')">Próximos</button>
       <button class="val-pill" data-val="ok" onclick="valSetPill(this,'ok')">Não vencidos</button>
-      <button class="bb-cols-btn" data-cols-btn="tbl-val" onclick="bbColunas.abrir('tbl-val')" title="Escolher quais colunas aparecem">⚙️ Colunas</button>
     </div>
     <!-- Barra de seleção múltipla -->
     <div class="sel-bar" id="sel-bar">
@@ -528,6 +534,7 @@ body{font-size:14px;color:#111827}
         <button class="btn btn-s" style="padding:4px 10px;font-size:11px" onclick="encerrarSelecionados('descartado')">🗑️ Marcar descartado</button>
         <button class="btn btn-r" style="padding:4px 10px;font-size:11px" onclick="excluirSelecionadosVal()">✕ Excluir</button>
       </div>
+      <div class="tbl-scroll-help">↔ Role para os lados quando houver mais colunas do que o espaço disponível.</div>
       <div class="bb-tbl-scroll" style="width:100%"><table class="tbl" id="tbl-val">
         <thead><tr>
           <th style="min-width:24px;width:24px"><input type="checkbox" class="row-sel" id="val-sel-all" id2="sel-all" onchange="valToggleSelAll(this); toggleSelAll(this);" title="Selecionar todos"></th>
