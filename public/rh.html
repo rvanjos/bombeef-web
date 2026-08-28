@@ -204,9 +204,34 @@ main{padding:16px 24px;flex:1;overflow-y:auto;overflow-x:auto;width:100%;;backgr
   html, body { overflow-x: hidden !important; height: auto !important; }
   main { overflow-x: hidden !important; overflow-y: auto !important; -webkit-overflow-scrolling: touch; height: auto !important; max-height: none !important; }
 }
+
+/* Sprint 7 — padrão visual do portal */
+.is-embedded .ph{display:none!important}
+body{font-size:14px;color:#111827}
+main{padding:16px;background:#f8f6f3}
+.tabs{position:sticky;top:0;z-index:20;padding:0 12px;border-bottom:1px solid var(--border);box-shadow:0 1px 3px rgba(17,24,39,.04)}
+.tab,.tab-btn{padding:11px 14px}
+.toolbar{background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px;margin-bottom:12px;box-shadow:0 1px 4px rgba(17,24,39,.05)}
+.resumo-grid{grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
+.func-card,.rel-func,.escala-row{border:1px solid #e5e7eb;box-shadow:0 1px 4px rgba(17,24,39,.06);border-radius:10px}
+.func-card{padding:14px}
+.cal-grid{border:1px solid #e5e7eb;box-shadow:0 1px 4px rgba(17,24,39,.06)}
+.modal{border-radius:12px;border:1px solid #e5e7eb}
+.modal-head{padding:14px 18px}
+.modal-body{padding:18px;overflow-x:auto}
+.rh-table-scroll{overflow:auto;scrollbar-gutter:stable;max-height:calc(100vh - 335px)}
+.rh-table-scroll table{width:max-content!important;min-width:100%}
+.rh-table-scroll th{position:sticky;top:0;z-index:3;background:#f8f4f0}
+.rh-table-help{padding:6px 12px;border-top:1px solid #f1ede8;color:var(--muted);font-size:11px}
+.rh-cols-btn{padding:7px 11px;border:1px solid var(--border);background:#fff;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap}
+.rh-cols-pop{position:fixed;z-index:10000;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.18);padding:12px;min-width:220px;max-height:310px;overflow-y:auto}
+#pt-kpis>div{box-shadow:0 1px 3px rgba(17,24,39,.05)}
+@media(max-width:1000px){main{padding:12px}.resumo-grid{grid-template-columns:repeat(2,minmax(0,1fr))}#quick-extra-wrap>div[style*="grid-template-columns"]{grid-template-columns:1fr 1fr!important}.rh-table-scroll{max-height:calc(100vh - 300px)}}
+@media(max-width:700px){main{padding:10px}.tabs{position:static;padding:0 4px}.resumo-grid{grid-template-columns:1fr}#quick-extra-wrap>div[style*="grid-template-columns"]{grid-template-columns:1fr!important}.rh-table-scroll{max-height:none}.rh-table-help,.rh-cols-btn{display:none}.cal-day{min-height:64px}.toolbar{padding:9px}}
 </style>
 </head>
 <body>
+<script>if(window.self!==window.top)document.documentElement.classList.add('is-embedded');</script>
 <div class="ph">
   <div class="ph-identity">
     <span class="ph-icon">👥</span>
@@ -560,13 +585,14 @@ main{padding:16px 24px;flex:1;overflow-y:auto;overflow-x:auto;width:100%;;backgr
       <button class="btn-s btn" onclick="exportarPonto()" style="background:var(--green);color:#fff">📊 Exportar</button>
       <button class="btn-s btn" onclick="abrirAjustePonto(null)" style="background:var(--white);border:1px solid var(--border)">✏️ Ajuste Manual</button>
       <button class="btn-s btn" onclick="abrirConfJornada()" style="background:var(--white);border:1px solid var(--border)">⚙️ Jornadas</button>
+      <button class="rh-cols-btn" id="rh-cols-ponto-btn" onclick="rhColunas.abrir()">⚙️ Colunas</button>
     </div>
   </div>
 
   <div id="pt-kpis" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;margin-bottom:12px"></div>
 
   <div style="background:var(--white);border:1px solid var(--border);border-radius:10px;overflow:hidden;box-shadow:0 1px 6px rgba(0,0,0,.05)">
-  <div style="overflow-x:auto">
+  <div class="rh-table-scroll">
   <table style="width:100%;border-collapse:collapse" id="tbl-ponto">
     <thead><tr style="background:#f8f4f0;border-bottom:2px solid var(--border)">
       <th style="padding:9px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700">Data</th>
@@ -581,7 +607,9 @@ main{padding:16px 24px;flex:1;overflow-y:auto;overflow-x:auto;width:100%;;backgr
     </tr></thead>
     <tbody id="tbody-ponto"></tbody>
   </table>
-  </div></div>
+  </div>
+  <div class="rh-table-help">↔ Role para os lados ou use “Colunas” para recolher informações que não estiver usando.</div>
+  </div>
 </div>
 
 <!-- Modal ajuste manual ponto -->
@@ -2219,6 +2247,31 @@ function abrirConfJornada(){document.getElementById('m-jornada').classList.add('
 function carregarJornadaFunc(){const f=(window._pontoFuncionarios||[]).find(x=>x.id==document.getElementById('jor-func').value);if(f){document.getElementById('jor-entrada').value=(f.horario_entrada||'08:00').slice(0,5);document.getElementById('jor-saida').value=(f.horario_saida||'18:00').slice(0,5);document.getElementById('jor-intervalo').value=f.intervalo_min||60;document.getElementById('jor-horas').value=f.jornada_horas||8;document.getElementById('jor-tolerancia').value=f.tolerancia_min||10;}}
 async function salvarJornada(){const id=document.getElementById('jor-func').value;if(!id){toast('Selecione um funcionário');return;}const body={horario_entrada:document.getElementById('jor-entrada').value,horario_saida:document.getElementById('jor-saida').value,intervalo_min:parseInt(document.getElementById('jor-intervalo').value),jornada_horas:parseFloat(document.getElementById('jor-horas').value),tolerancia_min:parseInt(document.getElementById('jor-tolerancia').value)};const d=await put(`/api/ponto/jornada/${id}`,body);if(!d.ok){toast('❌ '+d.erro);return;}toast('✅ Jornada atualizada!');document.getElementById('m-jornada').classList.remove('open');const f=(window._pontoFuncionarios||[]).find(x=>x.id==id);if(f)Object.assign(f,body);}
 async function exportarPonto(){const mes=document.getElementById('pt-mes').value,ano=document.getElementById('pt-ano').value,d=await get(`/api/ponto/resumo-mensal?mes=${mes}&ano=${ano}`);if(!d.ok||!d.data?.length){toast('Sem dados');return;}const MN=['','Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'],li=[['Funcionário','Cargo','Data','Entrada','Saída Int.','Retorno','Saída','Horas Trab.','Jornada','Situação','Justificativa']];for(const f of d.data){for(const r of(f.registros||[])){const t=r.entrada&&r.saida?((new Date(r.saida)-new Date(r.entrada)-(r.saida_intervalo&&r.retorno_intervalo?new Date(r.retorno_intervalo)-new Date(r.saida_intervalo):(f.intervalo_min||60)*60000))/3600000):null,fT=ts=>ts?new Date(ts).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}):'',fH=h=>{if(h===null)return'';const hh=Math.floor(h),mm=Math.round((h%1)*60);return`${hh}:${String(mm).padStart(2,'0')}`},e=r.entrada?new Date(r.entrada):null,pv=new Date(`1970-01-01T${f.horario_entrada||'08:00'}:00`),atr=e?(e.getHours()*60+e.getMinutes())-(pv.getHours()*60+pv.getMinutes()):0,sit=!r.entrada?'FALTA':atr>(f.tolerancia_min||10)?`ATRASO ${atr}min`:t&&t>parseFloat(f.jornada_horas||8)+0.5?'HORA EXTRA':r.status==='ajustado'?'AJUSTADO':r.status==='justificado'?'JUSTIFICADO':'NORMAL';li.push([f.nome,f.cargo||'',r.data?.slice(0,10).split('-').reverse().join('/')||'',fT(r.entrada),fT(r.saida_intervalo),fT(r.retorno_intervalo),fT(r.saida),fH(t),fH(parseFloat(f.jornada_horas||8)),sit,r.justificativa||'']);}li.push([]);}const csv=li.map(l=>l.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(';')).join('\n'),a=document.createElement('a');a.href='data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv);a.download=`Ponto_${MN[parseInt(mes)]}_${ano}.csv`;a.click();toast(`✅ Relatório exportado — ${MN[parseInt(mes)]}/${ano}`);}
+</script>
+
+<script>
+window.rhColunas=(function(){
+  const chave='bb_rh_cols_ponto';
+  const ocultas=()=>{try{return JSON.parse(localStorage.getItem(chave))||[]}catch(_){return[]}};
+  function aplicar(){
+    let estilo=document.getElementById('rh-cols-style');
+    if(!estilo){estilo=document.createElement('style');estilo.id='rh-cols-style';document.head.appendChild(estilo)}
+    estilo.textContent=ocultas().map(n=>`#tbl-ponto th:nth-child(${n}),#tbl-ponto td:nth-child(${n}){display:none}`).join('');
+    const n=ocultas().length,btn=document.getElementById('rh-cols-ponto-btn');if(btn)btn.textContent=n?`⚙️ Colunas (${n} oculta${n>1?'s':''})`:'⚙️ Colunas';
+  }
+  function alternar(n){const lista=ocultas(),i=lista.indexOf(n);if(i>=0)lista.splice(i,1);else lista.push(n);try{localStorage.setItem(chave,JSON.stringify(lista))}catch(_){}aplicar()}
+  function todas(){try{localStorage.removeItem(chave)}catch(_){}aplicar();abrir()}
+  function abrir(){
+    document.querySelectorAll('.rh-cols-pop').forEach(e=>e.remove());
+    const btn=document.getElementById('rh-cols-ponto-btn'),ths=[...document.querySelectorAll('#tbl-ponto thead th')],off=ocultas();if(!btn)return;
+    const pop=document.createElement('div');pop.className='rh-cols-pop';
+    pop.innerHTML='<div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--muted);margin-bottom:8px">Mostrar colunas</div>'+ths.map((th,i)=>{const n=i+1,nome=(th.textContent||'').trim()||'Ações';return `<label style="display:flex;align-items:center;gap:8px;padding:5px 2px;font-size:13px;cursor:pointer"><input type="checkbox" ${off.includes(n)?'':'checked'} onchange="rhColunas.alternar(${n})" style="width:16px;height:16px"><span>${nome}</span></label>`}).join('')+'<button onclick="rhColunas.todas()" style="margin-top:8px;width:100%;padding:7px;border:1px solid var(--border);background:#fff;border-radius:7px;font-weight:600;cursor:pointer">Mostrar todas</button>';
+    document.body.appendChild(pop);const r=btn.getBoundingClientRect();pop.style.top=Math.min(r.bottom+6,window.innerHeight-320)+'px';pop.style.left=Math.max(8,Math.min(r.left,window.innerWidth-245))+'px';
+    setTimeout(()=>document.addEventListener('click',function fecha(e){if(pop.contains(e.target)||btn.contains(e.target))return;pop.remove();document.removeEventListener('click',fecha)}),0);
+  }
+  document.addEventListener('DOMContentLoaded',aplicar);
+  return{abrir,alternar,todas,aplicar};
+})();
 </script>
 
 <!-- ============================================================
