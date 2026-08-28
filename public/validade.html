@@ -4,7 +4,7 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Validade & Perdas — Bom Beef</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/css/bb-theme.css">
+<link rel="stylesheet" href="/css/bb-theme.css?v=7.0.3">
 <script src="/js/api.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
@@ -315,6 +315,26 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
      mantem o overflow-x:auto do bloco anterior. Nas duas empilhadas acima o
      conteudo passa a caber em 100%, entao o auto simplesmente nao rola nada. */
 }
+/* Sprint 7 — alinhamento ao padrão visual oficial */
+body{font-size:14px;color:#111827}
+.body{padding:16px;overflow-x:hidden}
+.body>.tabs{position:static;margin:-16px -16px 16px;padding:0 16px;box-shadow:none;min-height:42px}
+.tab,.tab-btn{min-height:42px;padding:9px 14px}
+.kpi-row{grid-template-columns:repeat(5,minmax(120px,1fr));gap:10px;margin-bottom:12px}
+.kc{min-height:70px;padding:12px 14px;border-radius:10px;border-left-width:3px;box-shadow:0 1px 4px rgba(17,24,39,.05)}
+.kc-v{font-size:20px}
+.toolbar{padding:12px;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:0 1px 4px rgba(17,24,39,.05)}
+.btn{min-height:36px;border-radius:7px;padding:7px 14px}
+.search-w input,select.flt,.flt{min-height:36px;border-color:#e5e7eb}
+.search-w input:focus,select.flt:focus,.flt:focus,.fg input:focus,.fg select:focus,.fg textarea:focus{outline:none;border-color:var(--red);box-shadow:0 0 0 2px rgba(139,0,0,.08)}
+.card{border-color:#e5e7eb;box-shadow:0 1px 4px rgba(17,24,39,.06)}
+.tbl th{background:#faf9f7;top:0}
+.tbl td{padding:9px 12px}
+.modal-head h3{font-family:'DM Sans',sans-serif;color:var(--red);font-weight:700}
+.modal{border-radius:12px}
+.dash-kpi{box-shadow:0 1px 4px rgba(17,24,39,.06)}
+@media(max-width:900px){.kpi-row{grid-template-columns:repeat(3,1fr)}.dash-kpi-grid{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:700px){.body{padding:12px}.body>.tabs{margin:-12px -12px 12px;padding:0 8px}.kpi-row,.dash-kpi-grid{grid-template-columns:1fr 1fr}.toolbar{padding:10px}.toolbar .search-w{order:2;flex-basis:100%}}
 </style>
 </head>
 <body>
@@ -341,6 +361,13 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
 <script>if(window.self!==window.top){var ph=document.querySelector('.ph');if(ph)ph.style.display='none';}</script>
 <div class="body">
 
+  <div class="tabs" role="tablist" aria-label="Áreas do módulo Validade">
+    <button class="tab active" id="tab-dash" role="tab" aria-selected="true" onclick="showSection('dashboard',this)">📊 Dashboard</button>
+    <button class="tab" role="tab" aria-selected="false" onclick="showSection('validade',this)">🗓 Validade</button>
+    <button class="tab" role="tab" aria-selected="false" onclick="showSection('perdas',this)">🗑️ Perdas</button>
+    <button class="tab" role="tab" aria-selected="false" onclick="showSection('historico',this)">📂 Histórico</button>
+  </div>
+
   <!-- KPIs -->
   <div class="kpi-row">
     <div class="kc g"><div class="kc-l">OK</div><div class="kc-v" id="k-ok">—</div></div>
@@ -352,13 +379,6 @@ body.hist-expandido #hist-expand-btn { background:var(--orange);color:#fff;borde
 
   <!-- Banners de alerta -->
   <div id="banners-area"></div>
-
-  <div class="tabs">
-    <button class="tab active" id="tab-dash" onclick="showSection('dashboard',this)">📊 Dashboard</button>
-    <button class="tab" onclick="showSection('validade',this)">🗓 Validade</button>
-    <button class="tab" onclick="showSection('perdas',this)">🗑️ Perdas</button>
-    <button class="tab" onclick="showSection('historico',this)">📂 Histórico</button>
-  </div>
 
   <!-- ── DASHBOARD ── -->
   <div id="sec-dashboard">
@@ -1009,8 +1029,14 @@ function showSection(s, btn){
   document.getElementById('sec-dashboard').style.display = s==='dashboard'?'':'none';
   document.getElementById('sec-validade').style.display  = s==='validade'?'':'none';
   document.getElementById('sec-perdas').style.display    = s==='perdas'?'':'none';
-  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
-  if(btn) btn.classList.add('active');
+  document.querySelectorAll('.tab').forEach(t=>{
+    t.classList.remove('active');
+    t.setAttribute('aria-selected','false');
+  });
+  if(btn){
+    btn.classList.add('active');
+    btn.setAttribute('aria-selected','true');
+  }
   if(s==='perdas') carregarPerdas();
   if(s==='dashboard') renderDashboard();
   if(s==='historico') carregarHistorico();
