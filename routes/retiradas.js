@@ -190,6 +190,20 @@ module.exports = function (pool, app) {
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
+  // ── GET /pendentes/count — resumo para o dashboard administrativo ─────────
+  r.get('/pendentes/count', async (req, res) => {
+    if (!['admin','gestor'].includes(req.user?.perfil))
+      return res.status(403).json({ ok:false, erro:'Acesso restrito a admin/gestor' });
+    try {
+      const { rows } = await pool.query(`
+        SELECT COUNT(*) AS total, COALESCE(SUM(valor_total),0) AS valor
+        FROM retiradas
+        WHERE COALESCE(status,'pendente') <> 'pago'
+      `);
+      res.json({ ok:true, total:parseInt(rows[0].total||0), valor:parseFloat(rows[0].valor||0) });
+    } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
+  });
+
   // ── POST / ─────────────────────────────────────────────────────────────────
   r.post('/', async (req, res) => {
     const ret = req.body;
