@@ -147,10 +147,37 @@ tr:hover td{background:#fdf8f5;}
   font-size:13px;font-family:inherit;background:var(--white);cursor:pointer;min-width:190px;}
 #dash-mes-info{font-size:12px;color:var(--muted);}
 @media(max-width:768px){ .dash-filtro select{flex:1;min-width:0;} }
+
+/* Sprint 7 — padrão visual do portal */
+.is-embedded .page-header{display:none!important}
+body{font-size:14px;color:#111827}
+.body{padding:16px;background:#f8f6f3}
+.tabs{position:sticky;top:0;z-index:20;padding:0 16px;border-bottom:1px solid var(--border);box-shadow:0 1px 3px rgba(17,24,39,.04)}
+.tab-btn{padding:11px 14px}
+.kpi-grid{grid-template-columns:repeat(4,minmax(150px,1fr));gap:10px;margin-bottom:14px}
+.kpi{border:1px solid #e5e7eb;border-left-width:4px;box-shadow:0 1px 4px rgba(17,24,39,.06);padding:13px 15px}
+.kpi-v{font-size:22px}
+.card{border:1px solid #e5e7eb;box-shadow:0 1px 4px rgba(17,24,39,.06);border-radius:10px}
+.card-head{padding:11px 13px;background:#fff}
+.card-title{font-size:14px}
+.tbl-wrap{overflow:auto;scrollbar-gutter:stable;max-height:calc(100vh - 260px)}
+.tbl-wrap table{width:max-content;min-width:100%}
+.tbl-wrap th{position:sticky;top:0;z-index:3}
+.table-help{padding:6px 13px;color:var(--muted);font-size:11px;border-top:1px solid #f1ede8;background:#fff}
+.cm-cols-btn{padding:7px 11px;border:1px solid var(--border);background:#fff;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap}
+.cm-cols-btn:hover{border-color:var(--red);color:var(--red)}
+.cm-cols-pop{position:fixed;z-index:9999;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.18);padding:12px;min-width:220px;max-height:310px;overflow-y:auto}
+.dashboard-panels{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+.modal{padding:0;border:1px solid #e5e7eb}
+.modal>h3{padding:15px 20px;margin:0 0 16px;border-bottom:1px solid var(--border);color:var(--red);background:#fff}
+.modal>.fg,.modal>.fg-row,.modal>.fg-row-3,.modal>.nota-custo,.modal>.toolbar,.modal>div:not(.modal-foot){margin-left:20px;margin-right:20px}
+.modal>.toolbar:last-child{padding:14px 0 18px;margin-top:4px}
+@media(max-width:900px){.kpi-grid{grid-template-columns:repeat(2,1fr)}.dashboard-panels{grid-template-columns:1fr}.body{padding:12px}.tabs{padding:0 8px}.tbl-wrap{max-height:calc(100vh - 230px)}}
+@media(max-width:700px){.tbl-wrap{max-height:none}.table-help,.cm-cols-btn{display:none}.body{padding:10px}.kpi-grid{grid-template-columns:1fr 1fr}}
 </style>
 </head>
 <body>
-<script>if(window.self!==window.top){var ph=document.querySelector('.page-header');if(ph)ph.style.display='none';}</script>
+<script>if(window.self!==window.top)document.documentElement.classList.add('is-embedded');</script>
 
 <div class="page-header">
   <span style="font-size:20px">🔪</span>
@@ -191,7 +218,7 @@ tr:hover td{background:#fdf8f5;}
 
 
 
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+  <div class="dashboard-panels">
     <div class="card">
       <div class="card-head"><div class="card-title">📊 Perda por Corte (R$)</div></div>
       <div style="padding:14px 16px" id="dash-ranking">
@@ -216,11 +243,12 @@ tr:hover td{background:#fdf8f5;}
         <input type="month" id="reg-mes" onchange="carregarRegistros()">
         <input type="text" id="reg-busca" placeholder="Buscar corte..." oninput="filtrarRegistros()" style="width:160px">
         <button class="btn btn-p" onclick="abrirModalRegistro()">+ Novo Corte</button>
-          <button class="btn btn-s" onclick="imprimirCortes()">🖨️ Imprimir</button>
+        <button class="btn btn-s" onclick="imprimirCortes()">🖨️ Imprimir</button>
+        <button class="cm-cols-btn" data-cm-cols="tbl-registros" onclick="cmColunas.abrir('tbl-registros')">⚙️ Colunas</button>
       </div>
     </div>
     <div class="tbl-wrap">
-      <table>
+      <table id="tbl-registros">
         <thead><tr>
           <th>Data</th><th>Corte</th><th>Fornecedor</th><th>Lote / NF</th>
           <th class="num">Bruto (kg)</th><th class="num">Limpo (kg)</th>
@@ -234,6 +262,7 @@ tr:hover td{background:#fdf8f5;}
         <div class="empty-icon">🥩</div><p>Nenhum registro. Clique em "+ Novo Corte".</p>
       </div>
     </div>
+    <div class="table-help">↔ Role para os lados ou use “Colunas” para recolher informações que não estiver usando.</div>
   </div>
 </div>
 
@@ -244,10 +273,11 @@ tr:hover td{background:#fdf8f5;}
       <div class="card-title">📈 Relatório Mensal</div>
       <div class="toolbar">
         <input type="month" id="rel-mes" onchange="carregarRelatorio()">
+        <button class="cm-cols-btn" data-cm-cols="tbl-relatorio" onclick="cmColunas.abrir('tbl-relatorio')">⚙️ Colunas</button>
       </div>
     </div>
     <div class="tbl-wrap">
-      <table>
+      <table id="tbl-relatorio">
         <thead><tr>
           <th>Corte</th><th class="num">Registros</th>
           <th class="num">Total Bruto (kg)</th><th class="num">Total Limpo (kg)</th>
@@ -260,6 +290,7 @@ tr:hover td{background:#fdf8f5;}
         <div class="empty-icon">📈</div><p>Nenhum dado para o período selecionado.</p>
       </div>
     </div>
+    <div class="table-help">↔ Role para os lados ou escolha somente as colunas necessárias.</div>
   </div>
 </div>
 
@@ -297,10 +328,11 @@ tr:hover td{background:#fdf8f5;}
       <div class="toolbar">
         <input type="text" id="cl-busca" placeholder="Buscar corte ou fornecedor..."
           oninput="filtrarCortesLimpos()" style="width:220px">
+        <button class="cm-cols-btn" data-cm-cols="tbl-cortes-limpos" onclick="cmColunas.abrir('tbl-cortes-limpos')">⚙️ Colunas</button>
       </div>
     </div>
     <div class="tbl-wrap">
-      <table>
+      <table id="tbl-cortes-limpos">
         <thead><tr>
           <th>Corte</th>
           <th>Fornecedor</th>
@@ -320,6 +352,7 @@ tr:hover td{background:#fdf8f5;}
         <p>Nenhum corte encontrado. Registre cortes na aba <strong>Registros</strong>.</p>
       </div>
     </div>
+    <div class="table-help">↔ Role para os lados ou escolha somente as colunas necessárias.</div>
   </div>
 </div>
 
@@ -353,10 +386,11 @@ tr:hover td{background:#fdf8f5;}
       <div class="toolbar">
         <input type="text" id="fic-busca" placeholder="Buscar produto..." oninput="filtrarFichas()" style="width:180px">
         <button class="btn btn-p" onclick="abrirModalFicha()">+ Nova Ficha</button>
+        <button class="cm-cols-btn" data-cm-cols="tbl-fichas" onclick="cmColunas.abrir('tbl-fichas')">⚙️ Colunas</button>
       </div>
     </div>
     <div class="tbl-wrap">
-      <table>
+      <table id="tbl-fichas">
         <thead><tr>
           <th>Produto</th><th class="num">Rendimento</th><th class="num">Kg Utilizado</th>
           <th class="num">Custo Total</th><th class="num">Custo/Un</th>
@@ -368,6 +402,7 @@ tr:hover td{background:#fdf8f5;}
         <div class="empty-icon">📋</div><p>Nenhuma ficha técnica cadastrada.</p>
       </div>
     </div>
+    <div class="table-help">↔ Role para os lados ou escolha somente as colunas necessárias.</div>
   </div>
 </div>
 
@@ -379,10 +414,11 @@ tr:hover td{background:#fdf8f5;}
       <div class="toolbar">
         <input type="month" id="ven-mes" onchange="carregarVendas()">
         <button class="btn btn-p" onclick="abrirModalVenda()">+ Registrar Venda</button>
+        <button class="cm-cols-btn" data-cm-cols="tbl-vendas" onclick="cmColunas.abrir('tbl-vendas')">⚙️ Colunas</button>
       </div>
     </div>
     <div class="tbl-wrap">
-      <table>
+      <table id="tbl-vendas">
         <thead><tr>
           <th>Data</th><th>Produto / Ficha</th>
           <th class="num">Qtd</th><th class="num">Preço Unit.</th>
@@ -395,6 +431,7 @@ tr:hover td{background:#fdf8f5;}
         <div class="empty-icon">💰</div><p>Nenhuma venda registrada.</p>
       </div>
     </div>
+    <div class="table-help">↔ Role para os lados ou escolha somente as colunas necessárias.</div>
   </div>
 </div>
 
@@ -1388,6 +1425,46 @@ document.addEventListener('click', e => {
   });
 });
 })(); // fim waitBB
+</script>
+
+<script>
+// Seletor compartilhado das tabelas largas. A preferência é local por tabela.
+window.cmColunas=(function(){
+  const chave=id=>'bb_cortes_cols_'+id;
+  const ocultas=id=>{try{return JSON.parse(localStorage.getItem(chave(id)))||[]}catch(_){return[]}};
+  function aplicar(id){
+    const tabela=document.getElementById(id); if(!tabela)return;
+    let estilo=document.getElementById('cm-cols-style-'+id);
+    if(!estilo){estilo=document.createElement('style');estilo.id='cm-cols-style-'+id;document.head.appendChild(estilo)}
+    estilo.textContent=ocultas(id).map(n=>`#${id} th:nth-child(${n}),#${id} td:nth-child(${n}){display:none}`).join('');
+    const btn=document.querySelector(`[data-cm-cols="${id}"]`);
+    if(btn){const n=ocultas(id).length;btn.textContent=n?`⚙️ Colunas (${n} oculta${n>1?'s':''})`:'⚙️ Colunas'}
+  }
+  function alternar(id,n){
+    const lista=ocultas(id),i=lista.indexOf(n);
+    if(i>=0)lista.splice(i,1);else lista.push(n);
+    try{localStorage.setItem(chave(id),JSON.stringify(lista))}catch(_){}
+    aplicar(id);
+  }
+  function mostrarTodas(id){try{localStorage.removeItem(chave(id))}catch(_){} aplicar(id);abrir(id)}
+  function abrir(id){
+    document.querySelectorAll('.cm-cols-pop').forEach(e=>e.remove());
+    const tabela=document.getElementById(id),btn=document.querySelector(`[data-cm-cols="${id}"]`);
+    if(!tabela||!btn)return;
+    const ths=[...tabela.querySelectorAll('thead th')],off=ocultas(id),pop=document.createElement('div');
+    pop.className='cm-cols-pop';
+    pop.innerHTML='<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:8px">Mostrar colunas</div>'+ths.map((th,i)=>{
+      const n=i+1,nome=(th.textContent||'').trim()||`Ações`;
+      return `<label style="display:flex;align-items:center;gap:8px;padding:5px 2px;font-size:13px;cursor:pointer"><input type="checkbox" ${off.includes(n)?'':'checked'} onchange="cmColunas.alternar('${id}',${n})" style="width:16px;height:16px"><span>${nome}</span></label>`
+    }).join('')+`<button onclick="cmColunas.mostrarTodas('${id}')" style="margin-top:8px;width:100%;padding:7px;border:1px solid var(--border);background:#fff;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer">Mostrar todas</button>`;
+    document.body.appendChild(pop);
+    const r=btn.getBoundingClientRect();pop.style.top=Math.min(r.bottom+6,window.innerHeight-320)+'px';pop.style.left=Math.max(8,Math.min(r.left,window.innerWidth-245))+'px';
+    setTimeout(()=>document.addEventListener('click',function fechar(e){if(pop.contains(e.target)||btn.contains(e.target))return;pop.remove();document.removeEventListener('click',fechar)}),0);
+  }
+  function aplicarTodas(){['tbl-registros','tbl-relatorio','tbl-cortes-limpos','tbl-fichas','tbl-vendas'].forEach(aplicar)}
+  document.addEventListener('DOMContentLoaded',aplicarTodas);
+  return{abrir,alternar,mostrarTodas,aplicar,aplicarTodas};
+})();
 </script>
 
 <!-- ============================================================
