@@ -68,7 +68,6 @@ main{padding:16px 24px;flex:1;overflow-y:auto;overflow-x:auto;width:100%;;backgr
 .cal-dn{font-size:11px;font-weight:700;margin-bottom:3px;display:inline-block;}
 .turno-tag{display:block;padding:2px 5px;border-radius:4px;font-size:10px;font-weight:600;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .turno-trabalho{background:#d4edda;color:#155724;}
-.turno-folga{background:#f8d7da;color:#721c24;}
 .cal-legend{display:flex;gap:12px;margin-top:10px;flex-wrap:wrap;}
 .leg-item{display:flex;align-items:center;gap:5px;font-size:11px;}
 .leg-dot{width:10px;height:10px;border-radius:50%;}
@@ -359,7 +358,6 @@ main{padding:16px;background:#f8f6f3}
     <div id="escala-cal-container"></div>
     <div class="cal-legend">
       <div class="leg-item"><div class="leg-dot" style="background:#155724"></div>Trabalha</div>
-      <div class="leg-item"><div class="leg-dot" style="background:#721c24"></div>Folga</div>
     </div>
   </div>
 
@@ -1822,13 +1820,13 @@ async function renderEscala() {
     const ehHoje = !fora && dtObj.getTime() === hoje.getTime();
     const dow    = new Date(ano, mes, diaN).getDay();
     const ehFds  = !fora && (dow === 0 || dow === 6);
-    const pessoas = ehFds ? (porDia[diaN] || []) : [];
+    const pessoas = ehFds ? (porDia[diaN] || []).filter(p => p.trabalha) : [];
 
     html += `<div class="cal-day ${fora?'outro-mes':''} ${ehHoje?'hoje':''}">
       <div class="cal-dn">${fora ? '' : diaN}</div>`;
     if (ehFds && !fora) {
       pessoas.forEach(p => {
-        html += `<span class="turno-tag ${p.trabalha?'turno-trabalho':'turno-folga'}">${p.nome}</span>`;
+        html += `<span class="turno-tag turno-trabalho">${p.nome}</span>`;
       });
       if (!pessoas.length && _escalasConfig.some(f => f.data_inicio && f.trabalha_fds !== 'nao')) {
         html += '<span style="font-size:9px;color:var(--muted)">sem escala</span>';
@@ -2272,6 +2270,11 @@ window.rhColunas=(function(){
   document.addEventListener('DOMContentLoaded',aplicar);
   return{abrir,alternar,todas,aplicar};
 })();
+
+window.addEventListener('message',e=>{
+  if(e.origin!==window.location.origin)return;
+  if(e.data?.type==='bb_open_rh_aprovacoes')showTab('aprovacoes');
+});
 </script>
 
 <!-- ============================================================
