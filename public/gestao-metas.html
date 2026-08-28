@@ -4,6 +4,7 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Metas — Bom Beef</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/bb-theme.css?v=7.0.3">
 <script src="/js/api.js"></script>
 <style>
 :root{
@@ -72,17 +73,47 @@ tr:hover td{background:#fdf9f7;}
 .future-type{background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:10px 12px;opacity:.6;}
 .future-type .ft-label{font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:700;}
 .future-type .ft-val{font-size:13px;color:var(--muted);margin-top:2px;font-style:italic;}
+
+/* Sprint 7 — padrão visual do portal */
+.is-embedded .ph{display:none!important}
+.content{padding:16px;background:#f8f6f3}
+.page-tools{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
+.page-tools h2{font-size:16px;font-weight:700;color:#111827}
+.page-tools p{font-size:12px;color:var(--muted);margin-top:2px}
+.kpi-row{grid-template-columns:repeat(4,minmax(150px,1fr));gap:10px;margin-bottom:14px}
+.kpi{padding:13px 15px;border-color:#e5e7eb;box-shadow:0 1px 4px rgba(17,24,39,.06)}
+.card{padding:0;border-color:#e5e7eb;box-shadow:0 1px 4px rgba(17,24,39,.06);border-radius:10px}
+.card-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 13px;border-bottom:1px solid var(--border)}
+.card-head .card-title{margin:0;font-size:13px;color:#111827}
+.tbl-wrap{overflow:auto;scrollbar-gutter:stable;max-height:calc(100vh - 300px)}
+.tbl-wrap table{width:max-content;min-width:100%}
+.tbl-wrap th{position:sticky;top:0;z-index:2}
+.table-help{padding:6px 13px;border-top:1px solid #f1ede8;color:var(--muted);font-size:11px}
+.meta-cols-btn{padding:7px 11px;border:1px solid var(--border);background:#fff;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap}
+.meta-cols-pop{position:fixed;z-index:10000;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.18);padding:12px;min-width:220px;max-height:310px;overflow-y:auto}
+.meta-overlay{position:fixed;inset:0;z-index:9000;background:rgba(17,24,39,.48);display:none;align-items:center;justify-content:center;padding:16px}
+.meta-overlay.open{display:flex}
+#form-card{width:min(760px,100%);max-height:92vh;overflow:auto;margin:0;padding:20px;border-top:4px solid var(--red)}
+#form-card .card-title{font-size:15px;text-transform:none;letter-spacing:0;color:var(--red);padding-bottom:12px;border-bottom:1px solid var(--border)}
+.info-banner{padding:9px 12px;margin-bottom:14px}
+@media(max-width:900px){.kpi-row{grid-template-columns:repeat(2,1fr)}.content{padding:12px}.form-grid{grid-template-columns:1fr 1fr}.tbl-wrap{max-height:calc(100vh - 270px)}}
+@media(max-width:650px){.page-tools{align-items:flex-start}.page-tools .btn{padding:8px 11px}.form-grid{grid-template-columns:1fr}.kpi-row{grid-template-columns:1fr 1fr}.content{padding:10px}.tbl-wrap{max-height:none}.table-help,.meta-cols-btn{display:none}}
 </style>
 </head>
 <body>
+<script>if(window.self!==window.top)document.documentElement.classList.add('is-embedded');</script>
 
 <div class="ph">
   <span style="font-size:18px">🎯</span>
   <h2>Gestão de Metas</h2>
-  <button class="btn btn-p" onclick="abrirForm()" style="padding:5px 14px;font-size:12px">+ Nova Meta</button>
 </div>
 
 <div class="content">
+
+  <div class="page-tools">
+    <div><h2>Metas mensais</h2><p>Planeje o resultado e acompanhe o realizado em uma única tela.</p></div>
+    <button class="btn btn-p" onclick="abrirForm()">+ Nova Meta</button>
+  </div>
 
   <!-- KPIs do mês atual -->
   <div class="kpi-row" id="kpis-mes"></div>
@@ -97,7 +128,8 @@ tr:hover td{background:#fdf9f7;}
   </div>
 
   <!-- Formulário -->
-  <div class="card" id="form-card" style="display:none">
+  <div class="meta-overlay" id="form-overlay" onclick="if(event.target===this)fecharForm()">
+  <div class="card" id="form-card">
     <div class="card-title" id="form-titulo">📝 Definir Meta do Mês</div>
     <div class="form-grid" style="margin-bottom:12px">
       <div class="fg">
@@ -132,22 +164,17 @@ tr:hover td{background:#fdf9f7;}
       </div>
     </div>
 
-    <!-- Tipos futuros (preview visual) -->
-    <div style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px">
-      <div style="font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:700;margin-bottom:8px">Metas Futuras — Estrutura prevista (não implementadas)</div>
-      <div class="future-types">
-        <div class="future-type"><div class="ft-label">🎫 Ticket Médio</div><div class="ft-val">Ex: R$ 250 por atendimento</div></div>
-        <div class="future-type"><div class="ft-label">👥 Clientes</div><div class="ft-val">Ex: 180 atendimentos/dia</div></div>
-        <div class="future-type"><div class="ft-label">📈 Crescimento</div><div class="ft-val">Ex: +5% vs mês anterior</div></div>
-      </div>
-    </div>
+  </div>
   </div>
 
   <!-- Histórico -->
   <div class="card">
-    <div class="card-title">📋 Histórico de Metas</div>
+    <div class="card-head">
+      <div class="card-title">📋 Histórico de Metas</div>
+      <button class="meta-cols-btn" id="meta-cols-btn" onclick="metaColunas.abrir()">⚙️ Colunas</button>
+    </div>
     <div class="tbl-wrap">
-      <table>
+      <table id="tbl-metas">
         <thead>
           <tr>
             <th>Mês</th>
@@ -166,6 +193,7 @@ tr:hover td{background:#fdf9f7;}
         </tbody>
       </table>
     </div>
+    <div class="table-help">↔ Role para os lados ou use “Colunas” para mostrar somente as informações necessárias.</div>
   </div>
 
 </div>
@@ -261,9 +289,8 @@ function abrirForm() {
   document.getElementById('f-retiradas').value = '';
   document.getElementById('f-obs').value = '';
   document.getElementById('form-titulo').textContent = '📝 Definir Meta do Mês';
-  document.getElementById('form-card').style.display = '';
+  document.getElementById('form-overlay').classList.add('open');
   document.getElementById('f-fat').focus();
-  document.getElementById('form-card').scrollIntoView({behavior:'smooth'});
 }
 
 function editarMeta(mes, fat, perda, retiradas, obs) {
@@ -274,13 +301,12 @@ function editarMeta(mes, fat, perda, retiradas, obs) {
   document.getElementById('f-retiradas').value = retiradas || '';
   document.getElementById('f-obs').value = obs || '';
   document.getElementById('form-titulo').textContent = `✏️ Editando meta de ${mes}`;
-  document.getElementById('form-card').style.display = '';
+  document.getElementById('form-overlay').classList.add('open');
   document.getElementById('f-fat').focus();
-  document.getElementById('form-card').scrollIntoView({behavior:'smooth'});
 }
 
 function fecharForm() {
-  document.getElementById('form-card').style.display = 'none';
+  document.getElementById('form-overlay').classList.remove('open');
 }
 
 async function salvar() {
@@ -309,6 +335,32 @@ async function salvar() {
   fecharForm();
   carregarTudo();
 }
+
+document.addEventListener('keydown',e=>{if(e.key==='Escape')fecharForm()});
+
+window.metaColunas=(function(){
+  const chave='bb_cols_tbl_metas';
+  const ocultas=()=>{try{return JSON.parse(localStorage.getItem(chave))||[]}catch(_){return[]}};
+  function aplicar(){
+    let estilo=document.getElementById('meta-cols-style');
+    if(!estilo){estilo=document.createElement('style');estilo.id='meta-cols-style';document.head.appendChild(estilo)}
+    estilo.textContent=ocultas().map(n=>`#tbl-metas th:nth-child(${n}),#tbl-metas td:nth-child(${n}){display:none}`).join('');
+    const n=ocultas().length,btn=document.getElementById('meta-cols-btn');
+    if(btn)btn.textContent=n?`⚙️ Colunas (${n} oculta${n>1?'s':''})`:'⚙️ Colunas';
+  }
+  function alternar(n){const lista=ocultas(),i=lista.indexOf(n);if(i>=0)lista.splice(i,1);else lista.push(n);try{localStorage.setItem(chave,JSON.stringify(lista))}catch(_){}aplicar()}
+  function todas(){try{localStorage.removeItem(chave)}catch(_){}aplicar();abrir()}
+  function abrir(){
+    document.querySelectorAll('.meta-cols-pop').forEach(e=>e.remove());
+    const btn=document.getElementById('meta-cols-btn'),ths=[...document.querySelectorAll('#tbl-metas thead th')],off=ocultas();if(!btn)return;
+    const pop=document.createElement('div');pop.className='meta-cols-pop';
+    pop.innerHTML='<div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--muted);margin-bottom:8px">Mostrar colunas</div>'+ths.map((th,i)=>{const n=i+1,nome=(th.textContent||'').trim()||'Ações';return `<label style="display:flex;align-items:center;gap:8px;padding:5px 2px;font-size:13px;cursor:pointer"><input type="checkbox" ${off.includes(n)?'':'checked'} onchange="metaColunas.alternar(${n})" style="width:16px;height:16px"><span>${nome}</span></label>`}).join('')+'<button onclick="metaColunas.todas()" style="margin-top:8px;width:100%;padding:7px;border:1px solid var(--border);background:#fff;border-radius:7px;font-weight:600;cursor:pointer">Mostrar todas</button>';
+    document.body.appendChild(pop);const r=btn.getBoundingClientRect();pop.style.top=Math.min(r.bottom+6,window.innerHeight-320)+'px';pop.style.left=Math.max(8,Math.min(r.left,window.innerWidth-245))+'px';
+    setTimeout(()=>document.addEventListener('click',function fecha(e){if(pop.contains(e.target)||btn.contains(e.target))return;pop.remove();document.removeEventListener('click',fecha)}),0);
+  }
+  document.addEventListener('DOMContentLoaded',aplicar);
+  return{abrir,alternar,todas,aplicar};
+})();
 </script>
 <script>
 /* BB-SSE-LISTENER — recarrega esta tela quando outro modulo altera dados relacionados.
