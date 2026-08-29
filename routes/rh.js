@@ -72,10 +72,14 @@ module.exports = function (pool, app) {
   // Lista de funcionários — para o módulo rh-funcionario.html identificar o próprio registro
   r.get('/funcionarios', async (req, res) => {
     try {
+      const camposFinanceiros = req.user?.perfil === 'admin'
+        ? ', f.salario_base, f.vale_alimentacao, f.limite_retirada'
+        : '';
       const { rows } = await pool.query(`
         SELECT f.id, f.nome, f.cargo, f.email, f.telefone,
-               f.salario_base, f.vale_alimentacao, f.limite_retirada, f.ativo,
+               f.ativo,
                f.usuario_id
+               ${camposFinanceiros}
         FROM funcionarios f
         WHERE f.ativo = true
         ORDER BY f.nome ASC
@@ -116,7 +120,17 @@ module.exports = function (pool, app) {
     }
     try {
       const { rows } = await pool.query(`
-        SELECT * FROM rh_apontamentos
+        SELECT * FROM (
+          SELECT id, funcionario_id, mes_ref, tipo, descricao, quantidade,
+                 valor_unitario, valor_total, data_ref, status, motivo_rejeicao,
+                 criado_em, atualizado_em, 'apontamento'::text AS origem
+          FROM rh_apontamentos
+          UNION ALL
+          SELECT id, funcionario_id, mes_ref, tipo, descricao, 1::numeric,
+                 valor, valor, data_ref, status, motivo_rejeicao,
+                 criado_em, atualizado_em, 'pagamento'::text AS origem
+          FROM rh_pagamentos
+        ) h
         WHERE funcionario_id = $1 AND mes_ref = $2
         ORDER BY criado_em DESC
       `, [parseInt(funcionario_id), mes_ref]);
@@ -129,6 +143,19 @@ module.exports = function (pool, app) {
     const { funcionario_id, mes_ref, tipo, descricao, quantidade, valor_unitario, data_ref, obs } = req.body;
     if (!funcionario_id || !mes_ref || !tipo) return res.status(400).json({ ok: false, erro: 'funcionario_id, mes_ref e tipo obrigatórios' });
     try {
+      const funcionarioId = parseInt(funcionario_id);
+      if (!Number.isInteger(funcionarioId)) {
+        return res.status(400).json({ ok: false, erro: 'Funcionário inválido' });
+      }
+      // Funcionários comuns só podem lançar para o cadastro vinculado ao próprio login.
+      // Admin e gestor podem registrar para integrantes da equipe.
+      if (!['admin', 'gestor'].includes(req.user?.perfil)) {
+        const { rows: vinculados } = await pool.query(
+          `SELECT id FROM funcionarios WHERE id=$1 AND usuario_id=$2 AND ativo=true LIMIT 1`,
+          [funcionarioId, req.user?.id]
+        );
+        if (!vinculados.length) return res.status(403).json({ ok: false, erro: 'Acesso negado para este funcionário' });
+      }
       const qtd   = parseFloat(quantidade   || 0);
       const vUnit = parseFloat(valor_unitario || 0);
       const solicitante_nome = req.user?.nome || req.user?.email || 'Usuário';
@@ -151,7 +178,7 @@ module.exports = function (pool, app) {
             (funcionario_id, mes_ref, tipo, descricao, valor, data_ref, status, solicitante_nome)
           VALUES ($1,$2,$3,$4,$5,$6,'pendente',$7)
           RETURNING id
-        `, [funcionario_id, mes_ref, tipo, descComObs, valorPagamento, data_ref || null, solicitante_nome]);
+        `, [funcionarioId, mes_ref, tipo, descComObs, valorPagamento, data_ref || null, solicitante_nome]);
         res.json({ ok: true, id: rows[0].id, tabela: 'rh_pagamentos', valor: valorPagamento });
 
       } else {
@@ -161,7 +188,7 @@ module.exports = function (pool, app) {
             (funcionario_id, mes_ref, tipo, descricao, quantidade, valor_unitario, valor_total, data_ref, status, solicitante_nome)
           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pendente',$9)
           RETURNING id
-        `, [funcionario_id, mes_ref, tipo, descricao || null, qtd, vUnit, qtd * vUnit, data_ref || null, solicitante_nome]);
+        `, [funcionarioId, mes_ref, tipo, descricao || null, qtd, vUnit, qtd * vUnit, data_ref || null, solicitante_nome]);
         res.json({ ok: true, id: rows[0].id, tabela: 'rh_apontamentos' });
       }
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
@@ -178,17 +205,29 @@ module.exports = function (pool, app) {
   r.get('/historico', async (req, res) => {
     const { mes_ref, status, funcionario_id } = req.query;
     const conds = [], params = [];
-    if (mes_ref)       { params.push(mes_ref);           conds.push(`a.mes_ref=$${params.length}`); }
-    if (status)        { params.push(status);            conds.push(`a.status=$${params.length}`); }
-    if (funcionario_id){ params.push(parseInt(funcionario_id)); conds.push(`a.funcionario_id=$${params.length}`); }
+    if (mes_ref)       { params.push(mes_ref);           conds.push(`h.mes_ref=$${params.length}`); }
+    if (status)        { params.push(status);            conds.push(`h.status=$${params.length}`); }
+    if (funcionario_id){ params.push(parseInt(funcionario_id)); conds.push(`h.funcionario_id=$${params.length}`); }
     const where = conds.length ? 'WHERE ' + conds.join(' AND ') : '';
     try {
       const { rows } = await pool.query(`
-        SELECT a.*, f.nome AS funcionario_nome, f.cargo
-        FROM rh_apontamentos a
-        JOIN funcionarios f ON f.id = a.funcionario_id
+        SELECT h.*, f.nome AS funcionario_nome, f.cargo
+        FROM (
+          SELECT id, funcionario_id, mes_ref, tipo, descricao, quantidade,
+                 valor_unitario, valor_total, data_ref, status, solicitante_nome,
+                 aprovador_id, motivo_rejeicao, criado_em, atualizado_em,
+                 'apontamento'::text AS origem
+          FROM rh_apontamentos
+          UNION ALL
+          SELECT id, funcionario_id, mes_ref, tipo, descricao, 1::numeric AS quantidade,
+                 valor AS valor_unitario, valor AS valor_total, data_ref, status,
+                 solicitante_nome, aprovador_id, motivo_rejeicao, criado_em,
+                 atualizado_em, 'pagamento'::text AS origem
+          FROM rh_pagamentos
+        ) h
+        JOIN funcionarios f ON f.id = h.funcionario_id
         ${where}
-        ORDER BY a.atualizado_em DESC
+        ORDER BY h.atualizado_em DESC
         LIMIT 500
       `, params);
       res.json({ ok: true, data: rows });
@@ -316,7 +355,7 @@ module.exports = function (pool, app) {
       // Apontamentos
       const { rows: apontamentos } = await pool.query(`
         SELECT * FROM rh_apontamentos
-        WHERE funcionario_id = $1 AND mes_ref = $2
+        WHERE funcionario_id = $1 AND mes_ref = $2 AND status = 'aprovado'
         ORDER BY data_ref ASC, id ASC
       `, [funcionario_id, mes]);
 
@@ -431,9 +470,10 @@ module.exports = function (pool, app) {
     if (!funcionario_id || !mes_ref || !tipo) return res.status(400).json({ ok: false, erro: 'funcionario_id, mes_ref e tipo obrigatórios' });
     try {
       const { rows } = await pool.query(`
-        INSERT INTO rh_pagamentos (funcionario_id, mes_ref, tipo, descricao, valor, data_ref)
-        VALUES ($1,$2,$3,$4,$5,$6) RETURNING *
-      `, [funcionario_id, mes_ref, tipo, descricao || null, parseFloat(valor || 0), data_ref || null]);
+        INSERT INTO rh_pagamentos
+          (funcionario_id, mes_ref, tipo, descricao, valor, data_ref, status, aprovador_id)
+        VALUES ($1,$2,$3,$4,$5,$6,'aprovado',$7) RETURNING *
+      `, [funcionario_id, mes_ref, tipo, descricao || null, parseFloat(valor || 0), data_ref || null, req.user?.id || null]);
       res.json({ ok: true, data: rows[0] });
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
@@ -466,7 +506,7 @@ module.exports = function (pool, app) {
                     WHERE funcionario_id=f.id AND mes_ref=$1 AND tipo IN ('falta','desconto')
                     AND status='aprovado'), 0)     AS total_descontos,
           COALESCE((SELECT SUM(valor)       FROM rh_pagamentos
-                    WHERE funcionario_id=f.id AND mes_ref=$1), 0)                                      AS total_extras,
+                    WHERE funcionario_id=f.id AND mes_ref=$1 AND status='aprovado'), 0)                 AS total_extras,
           COALESCE((SELECT SUM(valor_total) FROM retiradas
                     WHERE funcionario_id=f.id AND mes=$1), 0)                                          AS total_retiradas
         FROM funcionarios f
@@ -680,9 +720,11 @@ module.exports = function (pool, app) {
           COALESCE(fi.vale_alimentacao, 0) AS vale_alimentacao,
           COALESCE(fi.observacao, '')      AS observacao,
           COALESCE((SELECT SUM(valor_total) FROM rh_apontamentos
-                    WHERE funcionario_id=f.id AND mes_ref=$1 AND tipo NOT IN ('falta','desconto')), 0) AS total_acrescimos,
+                    WHERE funcionario_id=f.id AND mes_ref=$1 AND tipo NOT IN ('falta','desconto')
+                    AND status='aprovado'), 0) AS total_acrescimos,
           COALESCE((SELECT SUM(valor_total) FROM rh_apontamentos
-                    WHERE funcionario_id=f.id AND mes_ref=$1 AND tipo IN ('falta','desconto')), 0) AS total_descontos,
+                    WHERE funcionario_id=f.id AND mes_ref=$1 AND tipo IN ('falta','desconto')
+                    AND status='aprovado'), 0) AS total_descontos,
           COALESCE((SELECT SUM(valor) FROM rh_pagamentos
                     WHERE funcionario_id=f.id AND mes_ref=$1 AND status='aprovado'), 0) AS total_extras,
           COALESCE((SELECT SUM(valor_total) FROM retiradas
@@ -701,7 +743,7 @@ module.exports = function (pool, app) {
         SELECT *, rh_apontamentos.data_ref::text AS data_ref
         FROM rh_apontamentos
         WHERE funcionario_id = ANY($1::int[]) AND mes_ref = $2
-          AND status != 'rejeitado'
+          AND status = 'aprovado'
         ORDER BY funcionario_id, rh_apontamentos.data_ref ASC NULLS LAST, id ASC
       `, [funcIds, mes]);
 
