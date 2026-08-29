@@ -232,6 +232,7 @@ main{padding:16px;background:#f8f6f3}
 .rh-table-card{background:#fff;border:1px solid var(--border);border-radius:10px;overflow:hidden;box-shadow:0 1px 5px rgba(17,24,39,.05)}
 .rh-table-card table{border-collapse:collapse}.rh-table-card th{padding:9px 10px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.45px;color:var(--muted);font-weight:700}.rh-table-card td{padding:9px 10px}
 .hist-table{min-width:1050px;width:100%}.hist-table-wrap{overflow:auto;max-height:calc(100vh - 300px);background:#fff;border:1px solid var(--border);border-radius:10px}.hist-table thead th{position:sticky;top:0;z-index:2;background:#f8f4f0}
+.ponto-row-ocorrencia{background:#fffaf2}.ponto-row-incompleto{background:#fff4f4}.ponto-manual{display:inline-flex;margin-left:5px;color:#2563eb;font-size:9px}.ponto-hours{font-family:'DM Mono',monospace;font-weight:700;white-space:nowrap}.ponto-status{display:inline-flex;align-items:center;padding:3px 8px;border-radius:999px;font-size:10px;font-weight:700;white-space:nowrap}
 .tabs{scrollbar-width:thin}.tab{white-space:nowrap}.toolbar{box-shadow:0 1px 4px rgba(17,24,39,.04)}
 @media(max-width:1000px){main{padding:12px}.resumo-grid{grid-template-columns:repeat(2,minmax(0,1fr))}#quick-extra-wrap>div[style*="grid-template-columns"]{grid-template-columns:1fr 1fr!important}.rh-table-scroll{max-height:calc(100vh - 300px)}}
 @media(max-width:700px){main{padding:10px}.tabs{position:static;padding:0 4px}.resumo-grid{grid-template-columns:1fr}#quick-extra-wrap>div[style*="grid-template-columns"]{grid-template-columns:1fr!important}.rh-table-scroll{max-height:none}.rh-table-help{display:none}.cal-day{min-height:64px}.toolbar{padding:9px}.rh-section-toolbar{align-items:stretch}.rh-filter-group,.rh-action-group{width:100%}.rh-filter-group select{flex:1;min-width:120px}.rh-action-group .btn{flex:1}.field-row,.form-row{grid-template-columns:1fr!important}.modal-body{padding:14px}}
@@ -258,7 +259,7 @@ main{padding:16px;background:#f8f6f3}
     <button class="tab" id="tab-btn-meus" onclick="showTab('meus')" style="display:none">📝 Meus Lançamentos</button>
     <button class="tab" onclick="showTab('escala')">📅 Escala de Domingos</button>
     <button class="tab" onclick="showTab('relatorio')">📄 Relatório</button>
-    <button class="tab" onclick="showTab('ponto')">⏱️ Ponto</button>
+    <button class="tab" id="tab-btn-ponto" onclick="showTab('ponto')" style="display:none">⏱️ Ponto</button>
     <button class="tab" id="tab-btn-acessos" onclick="showTab('acessos')" style="display:none">🔐 Acessos</button>
   </div>
 
@@ -424,6 +425,15 @@ main{padding:16px;background:#f8f6f3}
         <select id="pt-func" onchange="carregarPonto()"><option value="">Todos os funcionários</option></select>
         <select id="pt-mes" onchange="carregarPonto()"></select>
         <select id="pt-ano" onchange="carregarPonto()"></select>
+        <select id="pt-status" onchange="renderTabelaPonto()">
+          <option value="">Todas as situações</option>
+          <option value="normal">Normais</option>
+          <option value="atraso">Atrasos</option>
+          <option value="extra">Horas extras</option>
+          <option value="incompleto">Incompletos</option>
+          <option value="sem_entrada">Sem entrada</option>
+          <option value="ajustado">Ajustados</option>
+        </select>
       </div>
       <div class="rh-action-group">
         <button class="btn btn-green" onclick="exportarPonto()">📊 Exportar</button>
@@ -1126,14 +1136,8 @@ function qeAtualizarCampos() {
 }
 
 async function qeEnviar() {
-  const isGestorQe = _perfil === 'gestor';
-  // Gestor usa o funcionário selecionado; funcionário usa o próprio ID
   let funcId = _meuFuncId;
-  if (isGestorQe) {
-    const sel = document.getElementById('qe-func-id');
-    funcId = sel ? sel.value : '';
-    if (!funcId) { toast('⚠️ Selecione o funcionário'); return; }
-  } else if (!funcId) {
+  if (!funcId) {
     toast('⚠️ Usuário não vinculado a funcionário. Fale com o admin.'); return;
   }
   const tipo      = document.getElementById('qe-tipo').value;
@@ -1174,11 +1178,11 @@ function abrirModalLanc() {
   const infoBox   = document.getElementById('lanc-info-box');
   const btnSalvar = document.getElementById('btn-salvar-lanc');
 
-  if (isAdmin || _perfil === 'gestor') {
-    // Admin / Gestor: mostra seletor de funcionários para apontar para qualquer um
+  if (isAdmin) {
+    // Somente admin pode lançar para integrantes da equipe.
     funcsWrap.style.display = '';
     infoBox.style.display = 'none';
-    btnSalvar.textContent = _perfil === 'gestor' ? '📤 Enviar para Aprovação' : '💾 Lançar';
+    btnSalvar.textContent = '💾 Lançar';
     const lista = document.getElementById('lanc-funcs-list');
     const funcs = window._todasFuncs || [];
     if (funcs.length) {
@@ -1209,7 +1213,6 @@ function toggleSelecionarTodosFuncs() {
 
 async function salvarLancamento() {
   const isAdmin = _perfil === 'admin';
-  const isGestor2 = _perfil === 'gestor';
   const tipo         = document.getElementById('lanc-tipo').value;
   const descricao    = document.getElementById('lanc-desc').value.trim();
   const data_ref     = document.getElementById('lanc-data').value;
@@ -1228,7 +1231,7 @@ async function salvarLancamento() {
   if (!semQtd && !somenteQtd && !quantidade)    { toast('⚠️ Informe a quantidade'); return; }
   if (!somenteQtd && !valor_unit)               { toast('⚠️ Informe o valor'); return; }
 
-  if (isAdmin || isGestor2) {
+  if (isAdmin) {
     const selecionados = [...document.querySelectorAll('#lanc-funcs-list .cb-func:checked')]
       .map(cb => parseInt(cb.value));
     if (!selecionados.length) { toast('⚠️ Selecione pelo menos um funcionário'); return; }
@@ -1468,8 +1471,7 @@ async function init() {
   const btnAprov  = document.getElementById('tab-btn-aprovacoes');
   const btnMeus   = document.getElementById('tab-btn-meus');
   const btnAcessos = document.getElementById('tab-btn-acessos');
-
-  const isGestor = _perfil === 'gestor';
+  const btnPonto = document.getElementById('tab-btn-ponto');
 
   if (isAdmin) {
     // Admin vê tudo
@@ -1479,6 +1481,7 @@ async function init() {
     if (btnAprov)  btnAprov.style.display  = '';
     if (btnMeus)   btnMeus.style.display   = '';
     if (btnAcessos) btnAcessos.style.display = '';
+    if (btnPonto) btnPonto.style.display = '';
     const hojeAcesso = new Date();
     const inicioAcesso = new Date(hojeAcesso); inicioAcesso.setDate(inicioAcesso.getDate() - 6);
     document.getElementById('acesso-de').value = inicioAcesso.toISOString().slice(0,10);
@@ -1495,38 +1498,10 @@ async function init() {
       if (d.ok) atualizarBadge(d.total);
     });
 
-  } else if (isGestor) {
-    if (btnAcessos) btnAcessos.style.display = 'none';
-    // Gestor: acessa apontamentos (pode lançar para qualquer funcionário)
-    // mas não vê folha, escala, relatório nem configurações
-    if (btnFolha)  btnFolha.style.display  = 'none';
-    if (btnEscala) btnEscala.style.display = 'none';
-    if (btnRel)    btnRel.style.display    = 'none';
-    if (btnAprov)  btnAprov.style.display  = 'none';
-    if (btnMeus)   btnMeus.style.display   = '';
-    const qeWrap = document.getElementById('quick-extra-wrap');
-    if (qeWrap) {
-      qeWrap.style.display = '';
-      const hoje = new Date().toISOString().slice(0,10);
-      const qeData = document.getElementById('qe-data');
-      if (qeData) qeData.value = hoje;
-      // Mostra seletor de funcionário para gestor
-      const qeFuncWrap = document.getElementById('qe-func-wrap');
-      if (qeFuncWrap) qeFuncWrap.style.display = '';
-    }
-    // Carrega lista de funcionários e popula o select
-    const df = await get('/api/rh/funcionarios?ativo=true');
-    if (df.ok && df.data?.length) {
-      window._todasFuncs = df.data;
-      const sel = document.getElementById('qe-func-id');
-      if (sel) sel.innerHTML = '<option value="">— selecione —</option>' +
-        df.data.map(f => `<option value="${f.id}">${f.nome}${f.cargo ? ' · '+f.cargo : ''}</option>`).join('');
-    }
-    showTab('meus');
-
   } else {
-    // Funcionário comum: apenas Meus Lançamentos
+    // Perfis não administrativos (inclusive gestor): somente dados próprios.
     if (btnAcessos) btnAcessos.style.display = 'none';
+    if (btnPonto) btnPonto.style.display = 'none';
     if (btnFolha)  btnFolha.style.display  = 'none';
     if (btnEscala) btnEscala.style.display = 'none';
     if (btnRel)    btnRel.style.display    = 'none';
@@ -1535,6 +1510,8 @@ async function init() {
     const qeWrap = document.getElementById('quick-extra-wrap');
     if (qeWrap) {
       qeWrap.style.display = '';
+      const qeFuncWrap = document.getElementById('qe-func-wrap');
+      if (qeFuncWrap) qeFuncWrap.style.display = 'none';
       const hoje = new Date().toISOString().slice(0,10);
       const qeData = document.getElementById('qe-data');
       if (qeData) qeData.value = hoje;
@@ -2306,17 +2283,36 @@ async function carregarPonto(){
   renderKPIsPonto();
 }
 function fmtHoraTs(ts){if(!ts)return'<span style="color:#ccc">—</span>';return`<span style="font-family:monospace;font-weight:600">${new Date(ts).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</span>`;}
-function calcHorasTrab(p){if(!p.entrada||!p.saida)return null;const ms=new Date(p.saida)-new Date(p.entrada),intMs=p.saida_intervalo&&p.retorno_intervalo?new Date(p.retorno_intervalo)-new Date(p.saida_intervalo):(p.intervalo_min||60)*60000;return Math.max(0,(ms-intMs)/3600000);}
+function calcHorasTrab(p){if(!p.entrada||!p.saida)return null;const ms=new Date(p.saida)-new Date(p.entrada),intMs=p.saida_intervalo&&p.retorno_intervalo?new Date(p.retorno_intervalo)-new Date(p.saida_intervalo):0;return Math.max(0,(ms-intMs)/3600000);}
 function fmtHorasPonto(h){if(h===null||h===undefined)return'—';return`${Math.floor(h)}h${String(Math.round((h%1)*60)).padStart(2,'0')}`;}
-function badgePonto(p){if(!p.entrada)return'<span style="background:#fee2e2;color:#991b1b;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:700">❌ Falta</span>';const t=calcHorasTrab(p),j=parseFloat(p.jornada_horas||8),tol=parseInt(p.tolerancia_min||10),e=new Date(p.entrada),ev=new Date(`1970-01-01T${p.horario_entrada||'08:00'}:00`),atr=(e.getHours()*60+e.getMinutes())-(ev.getHours()*60+ev.getMinutes());if(atr>tol)return`<span style="background:#fef3c7;color:#92400e;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:700">⚠️ Atraso ${atr}min</span>`;if(t!==null&&t>j+0.5)return`<span style="background:#dcfce7;color:#166534;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:700">⏫ Extra ${fmtHorasPonto(t-j)}</span>`;if(p.status==='ajustado')return'<span style="background:#dbeafe;color:#1e40af;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:700">✏️ Ajustado</span>';if(p.status==='justificado')return'<span style="background:#ede9fe;color:#5b21b6;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:700">📋 Justificado</span>';return'<span style="background:#f0fdf4;color:#166534;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:700">✅ Normal</span>';}
-function renderTabelaPonto(){const tb=document.getElementById('tbody-ponto');if(!tb)return;if(!_pontoRegistros.length){tb.innerHTML='<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--muted)">Nenhum registro encontrado</td></tr>';return;}tb.innerHTML=_pontoRegistros.map(p=>{const t=calcHorasTrab(p),dt=p.data_ref?p.data_ref.slice(0,10).split('-').reverse().join('/'):'—',man=(p.entrada_manual||p.saida_manual)?' <span style="font-size:9px;color:#3b82f6">✏️</span>':'';return`<tr style="border-bottom:1px solid #f5efe8"><td style="padding:8px 12px;font-size:12px;font-weight:600">${dt}</td><td style="padding:8px 12px;font-size:12px">${p.func_nome||'—'}${man}</td><td style="padding:8px 8px;text-align:center;font-size:11px">${fmtHoraTs(p.entrada)}</td><td style="padding:8px 8px;text-align:center;font-size:11px">${fmtHoraTs(p.saida_intervalo)}</td><td style="padding:8px 8px;text-align:center;font-size:11px">${fmtHoraTs(p.retorno_intervalo)}</td><td style="padding:8px 8px;text-align:center;font-size:11px">${fmtHoraTs(p.saida)}</td><td style="padding:8px 8px;text-align:center;font-size:12px;font-family:monospace;font-weight:700">${t!==null?fmtHorasPonto(t):'—'}</td><td style="padding:8px 8px;text-align:center">${badgePonto(p)}</td><td style="padding:8px 8px;text-align:center"><button onclick="abrirAjustePonto(${p.id})" style="background:none;border:1px solid var(--border);border-radius:5px;padding:3px 8px;cursor:pointer;font-size:11px">✏️</button></td></tr>`;}).join('');}
-function renderKPIsPonto(){const mes=parseInt(document.getElementById('pt-mes')?.value||0),ano=parseInt(document.getElementById('pt-ano')?.value||0),dn=new Date(ano,mes,0).getDate(),du=Array.from({length:dn},(_,i)=>new Date(ano,mes-1,i+1).getDay()).filter(d=>d!==0&&d!==6).length,ce=_pontoRegistros.filter(p=>p.entrada).length,fa=_pontoRegistros.filter(p=>!p.entrada).length,at=_pontoRegistros.filter(p=>{if(!p.entrada)return false;const e=new Date(p.entrada),pv=new Date(`1970-01-01T${p.horario_entrada||'08:00'}:00`);return(e.getHours()*60+e.getMinutes())-(pv.getHours()*60+pv.getMinutes())>(p.tolerancia_min||10);}).length,ex=_pontoRegistros.filter(p=>{const t=calcHorasTrab(p);return t!==null&&t>parseFloat(p.jornada_horas||8)+0.5;}).length,el=document.getElementById('pt-kpis');if(el)el.innerHTML=[{l:'Dias Registrados',v:ce,c:'#166534',b:'#dcfce7'},{l:'Faltas',v:fa,c:'#991b1b',b:'#fee2e2'},{l:'Atrasos',v:at,c:'#92400e',b:'#fef3c7'},{l:'Horas Extras',v:ex,c:'#1e40af',b:'#dbeafe'},{l:'Dias Úteis Mês',v:du,c:'var(--muted)',b:'var(--white)'}].map(k=>`<div style="background:${k.b};border:1px solid var(--border);border-radius:8px;padding:10px 12px"><div style="font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:${k.c};font-weight:700;margin-bottom:3px">${k.l}</div><div style="font-size:20px;font-weight:700;color:${k.c};font-family:monospace">${k.v}</div></div>`).join('');}
+function situacaoPonto(p){
+  if(!p.entrada)return{tipo:'sem_entrada',html:'<span class="ponto-status" style="background:#fee2e2;color:#991b1b">● Sem entrada</span>'};
+  if(!p.saida)return{tipo:'incompleto',html:'<span class="ponto-status" style="background:#fee2e2;color:#991b1b">⚠ Incompleto</span>'};
+  if(p.status==='justificado')return{tipo:'ajustado',html:'<span class="ponto-status" style="background:#ede9fe;color:#5b21b6">📋 Justificado</span>'};
+  if(p.status==='ajustado')return{tipo:'ajustado',html:'<span class="ponto-status" style="background:#dbeafe;color:#1e40af">✏ Ajustado</span>'};
+  const t=calcHorasTrab(p),j=parseFloat(p.jornada_horas||8),tol=parseInt(p.tolerancia_min||10),e=new Date(p.entrada),[hh,mm]=String(p.horario_entrada||'08:00').split(':').map(Number),atr=(e.getHours()*60+e.getMinutes())-(hh*60+mm);
+  if(atr>tol)return{tipo:'atraso',html:`<span class="ponto-status" style="background:#fef3c7;color:#92400e">⚠ Atraso ${atr}min</span>`};
+  if(t!==null&&t>j+0.1)return{tipo:'extra',html:`<span class="ponto-status" style="background:#dcfce7;color:#166534">⏫ Extra ${fmtHorasPonto(t-j)}</span>`};
+  return{tipo:'normal',html:'<span class="ponto-status" style="background:#f0fdf4;color:#166534">✓ Normal</span>'};
+}
+function badgePonto(p){return situacaoPonto(p).html;}
+function renderTabelaPonto(){
+  const tb=document.getElementById('tbody-ponto');if(!tb)return;
+  const filtro=document.getElementById('pt-status')?.value||'';
+  const dados=filtro?_pontoRegistros.filter(p=>situacaoPonto(p).tipo===filtro):_pontoRegistros;
+  if(!dados.length){tb.innerHTML='<tr><td colspan="9" style="text-align:center;padding:28px;color:var(--muted)">Nenhum registro encontrado para os filtros selecionados.</td></tr>';return;}
+  tb.innerHTML=dados.map(p=>{const t=calcHorasTrab(p),sit=situacaoPonto(p),dt=p.data_ref?p.data_ref.slice(0,10).split('-').reverse().join('/'):'—',man=(p.entrada_manual||p.saida_manual)?'<span class="ponto-manual" title="Registro ajustado manualmente">✏ manual</span>':'';const cls=sit.tipo==='incompleto'||sit.tipo==='sem_entrada'?'ponto-row-incompleto':(sit.tipo==='atraso'?'ponto-row-ocorrencia':'');return`<tr class="${cls}" style="border-bottom:1px solid #f1ede8"><td>${dt}</td><td><strong>${p.func_nome||'—'}</strong>${man}</td><td style="text-align:center">${fmtHoraTs(p.entrada)}</td><td style="text-align:center">${fmtHoraTs(p.saida_intervalo)}</td><td style="text-align:center">${fmtHoraTs(p.retorno_intervalo)}</td><td style="text-align:center">${fmtHoraTs(p.saida)}</td><td class="ponto-hours" style="text-align:center">${t!==null?fmtHorasPonto(t):'—'}</td><td style="text-align:center">${sit.html}</td><td style="text-align:center"><button class="btn btn-gray btn-sm" onclick="abrirAjustePonto(${p.id})" title="Revisar registro">✏️</button></td></tr>`;}).join('');
+}
+function renderKPIsPonto(){
+  const completos=_pontoRegistros.filter(p=>p.entrada&&p.saida),semEntrada=_pontoRegistros.filter(p=>!p.entrada).length,incompletos=_pontoRegistros.filter(p=>p.entrada&&!p.saida).length,atrasos=_pontoRegistros.filter(p=>situacaoPonto(p).tipo==='atraso').length,extras=_pontoRegistros.filter(p=>situacaoPonto(p).tipo==='extra').length,totalHoras=completos.reduce((s,p)=>s+(calcHorasTrab(p)||0),0),el=document.getElementById('pt-kpis');
+  if(el)el.innerHTML=[{l:'Jornadas completas',v:completos.length,c:'#166534',b:'#dcfce7'},{l:'Total trabalhado',v:fmtHorasPonto(totalHoras),c:'#1e40af',b:'#dbeafe'},{l:'Atrasos',v:atrasos,c:'#92400e',b:'#fef3c7'},{l:'Horas extras',v:extras,c:'#166534',b:'#f0fdf4'},{l:'Incompletos',v:incompletos,c:'#991b1b',b:'#fee2e2'},{l:'Sem entrada',v:semEntrada,c:'#991b1b',b:'#fff4f4'}].map(k=>`<div style="background:${k.b};border:1px solid var(--border);border-radius:9px;padding:11px 13px"><div style="font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:${k.c};font-weight:700;margin-bottom:4px">${k.l}</div><div style="font-size:20px;font-weight:700;color:${k.c};font-family:'DM Mono',monospace">${k.v}</div></div>`).join('');
+}
 function abrirAjustePonto(id){document.getElementById('aj-id').value=id||'';if(id){const p=_pontoRegistros.find(x=>x.id===id);if(p){document.getElementById('aj-func').value=p.funcionario_id;document.getElementById('aj-data').value=p.data_ref?.slice(0,10)||'';const fT=ts=>ts?new Date(ts).toTimeString().slice(0,5):'';document.getElementById('aj-entrada').value=fT(p.entrada);document.getElementById('aj-saidaint').value=fT(p.saida_intervalo);document.getElementById('aj-retorno').value=fT(p.retorno_intervalo);document.getElementById('aj-saida').value=fT(p.saida);document.getElementById('aj-just').value=p.justificativa||'';document.getElementById('aj-status').value=p.status||'ajustado';}}else{['aj-entrada','aj-saidaint','aj-retorno','aj-saida','aj-just'].forEach(i=>document.getElementById(i).value='');document.getElementById('aj-func').value='';document.getElementById('aj-status').value='ajustado';document.getElementById('aj-data').value=new Date().toISOString().slice(0,10);}document.getElementById('m-ponto-ajuste').classList.add('open');}
 async function salvarAjustePonto(){const id=document.getElementById('aj-id').value,fi=document.getElementById('aj-func').value,dt=document.getElementById('aj-data').value;if(!fi||!dt){toast('Selecione funcionário e data');return;}const tS=(t,d)=>t?`${d}T${t}:00`:null,body={funcionario_id:fi,data_ref:dt,entrada:tS(document.getElementById('aj-entrada').value,dt),saida_intervalo:tS(document.getElementById('aj-saidaint').value,dt),retorno_intervalo:tS(document.getElementById('aj-retorno').value,dt),saida:tS(document.getElementById('aj-saida').value,dt),justificativa:document.getElementById('aj-just').value,status:document.getElementById('aj-status').value};const d=id?await put(`/api/ponto/registros/${id}`,body):await post('/api/ponto/registros',body);if(!d.ok){toast('❌ '+d.erro);return;}toast('✅ Ponto ajustado!');document.getElementById('m-ponto-ajuste').classList.remove('open');carregarPonto();}
 function abrirConfJornada(){document.getElementById('m-jornada').classList.add('open');}
 function carregarJornadaFunc(){const f=(window._pontoFuncionarios||[]).find(x=>x.id==document.getElementById('jor-func').value);if(f){document.getElementById('jor-entrada').value=(f.horario_entrada||'08:00').slice(0,5);document.getElementById('jor-saida').value=(f.horario_saida||'18:00').slice(0,5);document.getElementById('jor-intervalo').value=f.intervalo_min||60;document.getElementById('jor-horas').value=f.jornada_horas||8;document.getElementById('jor-tolerancia').value=f.tolerancia_min||10;}}
 async function salvarJornada(){const id=document.getElementById('jor-func').value;if(!id){toast('Selecione um funcionário');return;}const body={horario_entrada:document.getElementById('jor-entrada').value,horario_saida:document.getElementById('jor-saida').value,intervalo_min:parseInt(document.getElementById('jor-intervalo').value),jornada_horas:parseFloat(document.getElementById('jor-horas').value),tolerancia_min:parseInt(document.getElementById('jor-tolerancia').value)};const d=await put(`/api/ponto/jornada/${id}`,body);if(!d.ok){toast('❌ '+d.erro);return;}toast('✅ Jornada atualizada!');document.getElementById('m-jornada').classList.remove('open');const f=(window._pontoFuncionarios||[]).find(x=>x.id==id);if(f)Object.assign(f,body);}
-async function exportarPonto(){const mes=document.getElementById('pt-mes').value,ano=document.getElementById('pt-ano').value,d=await get(`/api/ponto/resumo-mensal?mes=${mes}&ano=${ano}`);if(!d.ok||!d.data?.length){toast('Sem dados');return;}const MN=['','Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'],li=[['Funcionário','Cargo','Data','Entrada','Saída Int.','Retorno','Saída','Horas Trab.','Jornada','Situação','Justificativa']];for(const f of d.data){for(const r of(f.registros||[])){const t=r.entrada&&r.saida?((new Date(r.saida)-new Date(r.entrada)-(r.saida_intervalo&&r.retorno_intervalo?new Date(r.retorno_intervalo)-new Date(r.saida_intervalo):(f.intervalo_min||60)*60000))/3600000):null,fT=ts=>ts?new Date(ts).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}):'',fH=h=>{if(h===null)return'';const hh=Math.floor(h),mm=Math.round((h%1)*60);return`${hh}:${String(mm).padStart(2,'0')}`},e=r.entrada?new Date(r.entrada):null,pv=new Date(`1970-01-01T${f.horario_entrada||'08:00'}:00`),atr=e?(e.getHours()*60+e.getMinutes())-(pv.getHours()*60+pv.getMinutes()):0,sit=!r.entrada?'FALTA':atr>(f.tolerancia_min||10)?`ATRASO ${atr}min`:t&&t>parseFloat(f.jornada_horas||8)+0.5?'HORA EXTRA':r.status==='ajustado'?'AJUSTADO':r.status==='justificado'?'JUSTIFICADO':'NORMAL';li.push([f.nome,f.cargo||'',r.data?.slice(0,10).split('-').reverse().join('/')||'',fT(r.entrada),fT(r.saida_intervalo),fT(r.retorno_intervalo),fT(r.saida),fH(t),fH(parseFloat(f.jornada_horas||8)),sit,r.justificativa||'']);}li.push([]);}const csv=li.map(l=>l.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(';')).join('\n'),a=document.createElement('a');a.href='data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv);a.download=`Ponto_${MN[parseInt(mes)]}_${ano}.csv`;a.click();toast(`✅ Relatório exportado — ${MN[parseInt(mes)]}/${ano}`);}
+async function exportarPonto(){const mes=document.getElementById('pt-mes').value,ano=document.getElementById('pt-ano').value,d=await get(`/api/ponto/resumo-mensal?mes=${mes}&ano=${ano}`);if(!d.ok||!d.data?.length){toast('Sem dados');return;}const MN=['','Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'],li=[['Funcionário','Cargo','Data','Entrada','Saída Int.','Retorno','Saída','Horas Trab.','Jornada','Situação','Justificativa']];for(const f of d.data){for(const r of(f.registros||[])){const t=r.entrada&&r.saida?((new Date(r.saida)-new Date(r.entrada)-(r.saida_intervalo&&r.retorno_intervalo?new Date(r.retorno_intervalo)-new Date(r.saida_intervalo):0))/3600000):null,fT=ts=>ts?new Date(ts).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}):'',fH=h=>{if(h===null)return'';const hh=Math.floor(h),mm=Math.round((h%1)*60);return`${hh}:${String(mm).padStart(2,'0')}`},e=r.entrada?new Date(r.entrada):null,pv=new Date(`1970-01-01T${f.horario_entrada||'08:00'}:00`),atr=e?(e.getHours()*60+e.getMinutes())-(pv.getHours()*60+pv.getMinutes()):0,sit=!r.entrada?'SEM ENTRADA':!r.saida?'INCOMPLETO':atr>(f.tolerancia_min||10)?`ATRASO ${atr}min`:t&&t>parseFloat(f.jornada_horas||8)+0.1?'HORA EXTRA':r.status==='ajustado'?'AJUSTADO':r.status==='justificado'?'JUSTIFICADO':'NORMAL';li.push([f.nome,f.cargo||'',r.data?.slice(0,10).split('-').reverse().join('/')||'',fT(r.entrada),fT(r.saida_intervalo),fT(r.retorno_intervalo),fT(r.saida),fH(t),fH(parseFloat(f.jornada_horas||8)),sit,r.justificativa||'']);}li.push([]);}const csv=li.map(l=>l.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(';')).join('\n'),a=document.createElement('a');a.href='data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv);a.download=`Ponto_${MN[parseInt(mes)]}_${ano}.csv`;a.click();toast(`✅ Relatório exportado — ${MN[parseInt(mes)]}/${ano}`);}
 </script>
 
 <script>
