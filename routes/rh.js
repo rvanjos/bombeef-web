@@ -34,6 +34,37 @@ module.exports = function (pool, app) {
     next();
   });
 
+  // Histórico de acesso ao sistema — exclusivamente administrativo.
+  r.get('/sessoes-login', autenticar('admin'), async (req, res) => {
+    try {
+      const { de, ate, usuario_id, status = 'todos' } = req.query;
+      const params = [];
+      const conds = [];
+      if (de) { params.push(de); conds.push(`s.iniciado_em >= $${params.length}::date`); }
+      if (ate) { params.push(ate); conds.push(`s.iniciado_em < ($${params.length}::date + INTERVAL '1 day')`); }
+      if (usuario_id) { params.push(parseInt(usuario_id)); conds.push(`s.usuario_id = $${params.length}`); }
+      if (status === 'ativas') conds.push(`s.encerrado_em IS NULL AND s.ultima_atividade >= NOW() - INTERVAL '2 minutes'`);
+      if (status === 'encerradas') conds.push(`s.encerrado_em IS NOT NULL OR s.ultima_atividade < NOW() - INTERVAL '2 minutes'`);
+      const where = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
+
+      const { rows } = await pool.query(`
+        SELECT s.id, s.usuario_id, u.nome, u.email, u.perfil,
+               s.iniciado_em, s.ultima_atividade, s.encerrado_em, s.encerramento,
+               CASE WHEN s.encerrado_em IS NULL AND s.ultima_atividade >= NOW() - INTERVAL '2 minutes'
+                    THEN true ELSE false END AS ativa,
+               GREATEST(0, EXTRACT(EPOCH FROM (COALESCE(s.encerrado_em, s.ultima_atividade) - s.iniciado_em)))::bigint AS duracao_segundos
+        FROM login_sessoes s
+        JOIN usuarios u ON u.id = s.usuario_id
+        ${where}
+        ORDER BY s.iniciado_em DESC
+        LIMIT 1000
+      `, params);
+      res.json({ ok: true, data: rows });
+    } catch (e) {
+      res.status(500).json({ ok: false, erro: e.message });
+    }
+  });
+
 
   // ── Rotas abertas para todos os perfis autenticados ──────────────────────────
   // (funcionários não-admin precisam acessar estas rotas)

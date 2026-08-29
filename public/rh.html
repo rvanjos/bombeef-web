@@ -251,6 +251,7 @@ main{padding:16px;background:#f8f6f3}
     <button class="tab" onclick="showTab('escala')">📅 Escala de Domingos</button>
     <button class="tab" onclick="showTab('relatorio')">📄 Relatório</button>
     <button class="tab" onclick="showTab('ponto')">⏱️ Ponto</button>
+    <button class="tab" id="tab-btn-acessos" onclick="showTab('acessos')" style="display:none">🔐 Acessos</button>
   </div>
 
   <!-- ── TAB FOLHA ── -->
@@ -406,6 +407,32 @@ main{padding:16px;background:#f8f6f3}
     </div>
 
     <div id="rel-container"></div>
+  </div>
+
+  <!-- ── TAB ACESSOS (somente admin) ── -->
+  <div id="tab-acessos" class="tab-content">
+    <div class="toolbar" style="flex-wrap:wrap">
+      <label>DE:</label><input type="date" id="acesso-de">
+      <label>ATÉ:</label><input type="date" id="acesso-ate">
+      <label>USUÁRIO:</label>
+      <select id="acesso-usuario"><option value="">Todos</option></select>
+      <label>STATUS:</label>
+      <select id="acesso-status">
+        <option value="todos">Todos</option>
+        <option value="ativas">Conectados agora</option>
+        <option value="encerradas">Encerrados/inativos</option>
+      </select>
+      <button class="btn btn-red" onclick="carregarAcessos()">🔄 Atualizar</button>
+    </div>
+    <div id="acessos-kpis" class="bb-kpi-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-bottom:14px"></div>
+    <div style="background:#fff;border:1px solid var(--border);border-radius:10px;overflow:hidden">
+      <div style="overflow-x:auto">
+        <table style="min-width:900px;width:100%">
+          <thead><tr><th>USUÁRIO</th><th>PERFIL</th><th>ENTRADA</th><th>ÚLTIMA ATIVIDADE</th><th>SAÍDA</th><th>DURAÇÃO</th><th>STATUS</th></tr></thead>
+          <tbody id="acessos-tbody"><tr><td colspan="7" class="loading">Carregando...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
   </div>
 </main>
 
@@ -1361,6 +1388,46 @@ function showTab(t) {
   if (t === 'aprovacoes') carregarPendentes();
   if (t === 'meus')       carregarMeusLanc();
   if (t === 'historico')  carregarHistorico();
+  if (t === 'acessos')    carregarAcessos();
+}
+
+function fmtDuracaoSessao(segundos) {
+  const total = Math.max(0, parseInt(segundos || 0));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  return h ? `${h}h ${String(m).padStart(2,'0')}min` : `${m}min`;
+}
+
+function fmtDataHoraSessao(valor) {
+  return valor ? new Date(valor).toLocaleString('pt-BR', {dateStyle:'short', timeStyle:'short'}) : '—';
+}
+
+async function carregarAcessos() {
+  if (_perfil !== 'admin') return;
+  const qs = new URLSearchParams();
+  const de = document.getElementById('acesso-de').value;
+  const ate = document.getElementById('acesso-ate').value;
+  const uid = document.getElementById('acesso-usuario').value;
+  const status = document.getElementById('acesso-status').value;
+  if (de) qs.set('de', de); if (ate) qs.set('ate', ate); if (uid) qs.set('usuario_id', uid); qs.set('status', status);
+  const d = await get('/api/rh/sessoes-login?' + qs.toString());
+  const tbody = document.getElementById('acessos-tbody');
+  if (!d.ok) { tbody.innerHTML = `<tr><td colspan="7" style="padding:20px;color:var(--red)">${d.erro || 'Erro ao carregar acessos'}</td></tr>`; return; }
+  const dados = d.data || [];
+  const usuarios = new Set(dados.map(x => x.usuario_id));
+  const conectados = dados.filter(x => x.ativa).length;
+  const tempoTotal = dados.reduce((s,x) => s + Number(x.duracao_segundos || 0), 0);
+  document.getElementById('acessos-kpis').innerHTML = `
+    <div class="bb-card bb-kpi"><div class="bb-kpi-lbl">SESSÕES</div><div class="bb-kpi-val">${dados.length}</div></div>
+    <div class="bb-card bb-kpi bb-kpi-blue"><div class="bb-kpi-lbl">USUÁRIOS</div><div class="bb-kpi-val">${usuarios.size}</div></div>
+    <div class="bb-card bb-kpi bb-kpi-green"><div class="bb-kpi-lbl">CONECTADOS AGORA</div><div class="bb-kpi-val" style="color:var(--green)">${conectados}</div></div>
+    <div class="bb-card bb-kpi bb-kpi-amber"><div class="bb-kpi-lbl">TEMPO TOTAL</div><div class="bb-kpi-val">${fmtDuracaoSessao(tempoTotal)}</div></div>`;
+  tbody.innerHTML = dados.length ? dados.map(s => `<tr>
+    <td><strong>${s.nome || '—'}</strong><div style="font-size:10px;color:var(--muted)">${s.email || ''}</div></td>
+    <td>${s.perfil || '—'}</td><td>${fmtDataHoraSessao(s.iniciado_em)}</td><td>${fmtDataHoraSessao(s.ultima_atividade)}</td>
+    <td>${fmtDataHoraSessao(s.encerrado_em)}</td><td><strong>${fmtDuracaoSessao(s.duracao_segundos)}</strong></td>
+    <td><span class="badge" style="background:${s.ativa?'#dcfce7':'#f3f4f6'};color:${s.ativa?'#166534':'#6b7280'}">${s.ativa?'● Conectado':(s.encerrado_em?'Encerrado':'Inativo')}</span></td>
+  </tr>`).join('') : '<tr><td colspan="7" style="padding:24px;text-align:center;color:var(--muted)">Nenhum acesso no período.</td></tr>';
 }
 
 // ── Init ────────────────────────────────────────────────────────────────────
@@ -1403,6 +1470,7 @@ async function init() {
   const btnRel    = document.querySelector(".tab[onclick=\"showTab('relatorio')\"]");
   const btnAprov  = document.getElementById('tab-btn-aprovacoes');
   const btnMeus   = document.getElementById('tab-btn-meus');
+  const btnAcessos = document.getElementById('tab-btn-acessos');
 
   const isGestor = _perfil === 'gestor';
 
@@ -1413,6 +1481,14 @@ async function init() {
     if (btnRel)    btnRel.style.display    = '';
     if (btnAprov)  btnAprov.style.display  = '';
     if (btnMeus)   btnMeus.style.display   = '';
+    if (btnAcessos) btnAcessos.style.display = '';
+    const hojeAcesso = new Date();
+    const inicioAcesso = new Date(hojeAcesso); inicioAcesso.setDate(inicioAcesso.getDate() - 6);
+    document.getElementById('acesso-de').value = inicioAcesso.toISOString().slice(0,10);
+    document.getElementById('acesso-ate').value = hojeAcesso.toISOString().slice(0,10);
+    get('/auth/usuarios').then(d => {
+      if (d.ok) document.getElementById('acesso-usuario').innerHTML = '<option value="">Todos</option>' + d.data.map(u => `<option value="${u.id}">${u.nome}</option>`).join('');
+    });
     const qeWrap = document.getElementById('quick-extra-wrap');
     if (qeWrap) qeWrap.style.display = 'none';
     const btnHist = document.getElementById('tab-btn-historico');
@@ -1423,6 +1499,7 @@ async function init() {
     });
 
   } else if (isGestor) {
+    if (btnAcessos) btnAcessos.style.display = 'none';
     // Gestor: acessa apontamentos (pode lançar para qualquer funcionário)
     // mas não vê folha, escala, relatório nem configurações
     if (btnFolha)  btnFolha.style.display  = 'none';
@@ -1455,6 +1532,7 @@ async function init() {
 
   } else {
     // Funcionário comum: apenas Meus Lançamentos
+    if (btnAcessos) btnAcessos.style.display = 'none';
     if (btnFolha)  btnFolha.style.display  = 'none';
     if (btnEscala) btnEscala.style.display = 'none';
     if (btnRel)    btnRel.style.display    = 'none';

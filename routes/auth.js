@@ -5,6 +5,7 @@
  * Rotas:
  *   POST /auth/login              → autentica, retorna token
  *   POST /auth/logout             → invalida sessão (cliente apaga token)
+ *   POST /auth/heartbeat          → atualiza atividade da sessão
  *   GET  /auth/me                 → dados do usuário logado
  *   GET  /auth/usuarios           → lista usuários (admin)
  *   POST /auth/usuarios           → cria usuário (admin)
@@ -69,6 +70,21 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
       )
     `);
 
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS login_sessoes (
+        id               BIGSERIAL PRIMARY KEY,
+        usuario_id       INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+        iniciado_em      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        ultima_atividade TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        encerrado_em     TIMESTAMPTZ,
+        encerramento     TEXT,
+        ip               TEXT,
+        user_agent       TEXT
+      )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_login_sessoes_usuario ON login_sessoes(usuario_id, iniciado_em DESC)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_login_sessoes_atividade ON login_sessoes(ultima_atividade DESC)`);
+
     // Cria admin padrão se não existir
     const { rows } = await pool.query(`SELECT id FROM usuarios WHERE perfil='admin' LIMIT 1`);
     if (rows.length === 0) {
@@ -85,7 +101,27 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
       console.log('[auth] usuário admin criado:', process.env.ADMIN_EMAIL || 'admin@bombeef.com.br');
     }
   }
-  initTable().catch(e => console.error('[auth] initTable:', e.message));
+  let initPromise = null;
+  const garantirTabelas = () => {
+    if (!initPromise) {
+      initPromise = initTable().catch(e => {
+        initPromise = null;
+        console.error('[auth] initTable:', e.message);
+        throw e;
+      });
+    }
+    return initPromise;
+  };
+  garantirTabelas().catch(() => {});
+
+  const abrirSessao = async (usuarioId, req) => {
+    await garantirTabelas();
+    const { rows } = await pool.query(`
+      INSERT INTO login_sessoes (usuario_id, ip, user_agent)
+      VALUES ($1, $2, $3) RETURNING id
+    `, [usuarioId, req.ip || null, String(req.headers['user-agent'] || '').slice(0, 500) || null]);
+    return rows[0].id;
+  };
 
   // Atualiza constraint de perfil para incluir 'contabil' (bancos existentes)
   pool.query(`
@@ -108,8 +144,9 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
       // Verifica se usuário ainda existe e está ativo
       const { rows } = await pool.query('SELECT id,nome,email,perfil FROM usuarios WHERE id=$1 AND ativo=true', [payload.id]);
       if (!rows.length) return res.status(401).json({ ok: false, erro: 'Usuário inativo' });
+      const sessaoId = payload.sessaoId || await abrirSessao(rows[0].id, req);
       const newToken = jwt.sign(
-        { id: rows[0].id, nome: rows[0].nome, email: rows[0].email, perfil: rows[0].perfil },
+        { id: rows[0].id, nome: rows[0].nome, email: rows[0].email, perfil: rows[0].perfil, sessaoId },
         process.env.JWT_SECRET, { expiresIn: '7d' }
       );
       res.json({ ok: true, token: newToken, usuario: rows[0] });
@@ -126,6 +163,7 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
     }
 
     try {
+      await garantirTabelas();
       const { rows } = await queryComRetry(
         `SELECT * FROM usuarios WHERE email = $1 AND ativo = true`,
         [email.toLowerCase().trim()]
@@ -143,9 +181,10 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
 
       // Atualiza último login
       await pool.query(`UPDATE usuarios SET ultimo_login = NOW() WHERE id = $1`, [usuario.id]);
+      const sessaoId = await abrirSessao(usuario.id, req);
 
       const token = jwt.sign(
-        { id: usuario.id, nome: usuario.nome, email: usuario.email, perfil: usuario.perfil },
+        { id: usuario.id, nome: usuario.nome, email: usuario.email, perfil: usuario.perfil, sessaoId },
         process.env.JWT_SECRET,
         { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
       );
@@ -181,9 +220,42 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
   });
 
   // ── POST /logout ───────────────────────────────────────────────────────────
-  r.post('/logout', autenticar(), (req, res) => {
-    // Com JWT stateless, o logout é feito no cliente (apaga o token)
-    res.json({ ok: true });
+  r.post('/logout', autenticar(), async (req, res) => {
+    try {
+      if (req.user.sessaoId) {
+        await pool.query(`
+          UPDATE login_sessoes
+          SET ultima_atividade=NOW(), encerrado_em=NOW(), encerramento='logout'
+          WHERE id=$1 AND usuario_id=$2 AND encerrado_em IS NULL
+        `, [req.user.sessaoId, req.user.id]);
+      }
+      res.json({ ok: true });
+    } catch (e) {
+      res.status(500).json({ ok: false, erro: e.message });
+    }
+  });
+
+  r.post('/heartbeat', autenticar(), async (req, res) => {
+    try {
+      let sessaoId = req.user.sessaoId;
+      let newToken = null;
+      if (!sessaoId) {
+        sessaoId = await abrirSessao(req.user.id, req);
+        newToken = jwt.sign(
+          { id:req.user.id, nome:req.user.nome, email:req.user.email, perfil:req.user.perfil, sessaoId },
+          process.env.JWT_SECRET,
+          { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+        );
+      } else {
+        await pool.query(`
+          UPDATE login_sessoes SET ultima_atividade=NOW()
+          WHERE id=$1 AND usuario_id=$2 AND encerrado_em IS NULL
+        `, [sessaoId, req.user.id]);
+      }
+      res.json({ ok: true, token: newToken || undefined });
+    } catch (e) {
+      res.status(500).json({ ok: false, erro: e.message });
+    }
   });
 
   // ── GET /usuarios ──────────────────────────────────────────────────────────

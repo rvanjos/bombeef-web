@@ -828,6 +828,7 @@ body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var
 const API = '';
 let usuario = null;
 let kpiTimer = null;
+let sessaoHeartbeatTimer = null;
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
@@ -947,6 +948,7 @@ function entrarNoPortal() {
   // Atualiza KPIs a cada 90 segundos
   kpiTimer = setInterval(carregarKPIs, 90000);
   iniciarSSE(); // Eventos em tempo real
+  iniciarHeartbeatSessao();
 
   // Renova token quando PC acorda do sleep ou aba volta ao foco
   document.addEventListener('visibilitychange', () => {
@@ -984,7 +986,42 @@ function entrarNoPortal() {
   setTimeout(broadcastToken, 2500);
 }
 
-function fazerLogout() {
+async function enviarHeartbeatSessao() {
+  const tk = token();
+  if (!tk || !usuario) return;
+  try {
+    const res = await fetch('/auth/heartbeat', {
+      method:'POST', keepalive:true,
+      headers:{'Authorization':'Bearer '+tk, 'Content-Type':'application/json'},
+      body:'{}'
+    });
+    const data = await res.json().catch(() => null);
+    if (data?.token) {
+      sessionStorage.setItem('bb_token', data.token);
+      broadcastToken();
+    }
+  } catch(_) {}
+}
+
+function iniciarHeartbeatSessao() {
+  if (sessaoHeartbeatTimer) clearInterval(sessaoHeartbeatTimer);
+  enviarHeartbeatSessao();
+  sessaoHeartbeatTimer = setInterval(enviarHeartbeatSessao, 60000);
+}
+
+async function fazerLogout() {
+  const tk = token();
+  if (sessaoHeartbeatTimer) clearInterval(sessaoHeartbeatTimer);
+  sessaoHeartbeatTimer = null;
+  if (tk) {
+    try {
+      await fetch('/auth/logout', {
+        method:'POST', keepalive:true,
+        headers:{'Authorization':'Bearer '+tk, 'Content-Type':'application/json'},
+        body:'{}'
+      });
+    } catch(_) {}
+  }
   sessionStorage.removeItem('bb_token');
   usuario = null;
   if(kpiTimer) clearInterval(kpiTimer);
@@ -993,6 +1030,10 @@ function fazerLogout() {
   $('inp-senha').value = '';
   $('lw-err').textContent = '';
 }
+
+window.addEventListener('pagehide', () => {
+  if (token() && usuario) enviarHeartbeatSessao();
+});
 
 // ── Tabs ───────────────────────────────────────────────────────────────────
 function filtrarTabs() {

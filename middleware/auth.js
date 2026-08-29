@@ -36,6 +36,7 @@ function autenticar(perfisPermitidos = null) {
       nome:   payload.nome,
       email:  payload.email,
       perfil: payload.perfil,
+      sessaoId: payload.sessaoId || null,
     };
     req.usuario = req.user; // alias — algumas rotas usam req.usuario
 
