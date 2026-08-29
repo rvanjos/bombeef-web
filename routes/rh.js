@@ -110,7 +110,7 @@ module.exports = function (pool, app) {
     // Segurança: não-admin só pode ver seus próprios lançamentos
     const perfil = req.user?.perfil;
     const userId = req.user?.id;
-    if (perfil !== 'admin' && perfil !== 'gestor') {
+    if (perfil !== 'admin') {
       // Verifica se o funcionario_id solicitado corresponde ao usuário logado
       const { rows: check } = await pool.query(
         `SELECT id FROM funcionarios WHERE id=$1 AND usuario_id=$2 LIMIT 1`,
@@ -148,8 +148,9 @@ module.exports = function (pool, app) {
         return res.status(400).json({ ok: false, erro: 'Funcionário inválido' });
       }
       // Funcionários comuns só podem lançar para o cadastro vinculado ao próprio login.
-      // Admin e gestor podem registrar para integrantes da equipe.
-      if (!['admin', 'gestor'].includes(req.user?.perfil)) {
+      // Somente admin pode registrar para integrantes da equipe.
+      // O perfil gestor é usado pelos funcionários da operação e fica restrito ao próprio vínculo.
+      if (req.user?.perfil !== 'admin') {
         const { rows: vinculados } = await pool.query(
           `SELECT id FROM funcionarios WHERE id=$1 AND usuario_id=$2 AND ativo=true LIMIT 1`,
           [funcionarioId, req.user?.id]

@@ -127,6 +127,8 @@ module.exports = function(pool) {
   // Usa tabela funcionarios (unificada)
   r.get('/funcionarios', async (req, res) => {
     try {
+      const filtroUsuario = req.user?.perfil === 'admin' ? '' : 'AND usuario_id=$1';
+      const paramsUsuario = req.user?.perfil === 'admin' ? [] : [req.user?.id];
       let rows;
       try {
         const r = await pool.query(`
@@ -138,8 +140,8 @@ module.exports = function(pool) {
                  COALESCE(tolerancia_min,10)             AS tolerancia_min,
                  COALESCE(dias_folga,ARRAY[]::TEXT[])    AS dias_folga,
                  COALESCE(usa_ponto,true)                AS usa_ponto
-          FROM funcionarios WHERE ativo=true AND COALESCE(usa_ponto,true)=true ORDER BY nome
-        `);
+          FROM funcionarios WHERE ativo=true AND COALESCE(usa_ponto,true)=true ${filtroUsuario} ORDER BY nome
+        `, paramsUsuario);
         rows = r.rows;
       } catch(_) {
         // dias_folga ainda não existe — fallback
@@ -150,8 +152,8 @@ module.exports = function(pool) {
                  COALESCE(jornada_horas,8)               AS jornada_horas,
                  COALESCE(intervalo_min,60)              AS intervalo_min,
                  COALESCE(tolerancia_min,10)             AS tolerancia_min
-          FROM funcionarios WHERE ativo=true AND COALESCE(usa_ponto,true)=true ORDER BY nome
-        `);
+          FROM funcionarios WHERE ativo=true AND COALESCE(usa_ponto,true)=true ${filtroUsuario} ORDER BY nome
+        `, paramsUsuario);
         rows = r2.rows.map(r => ({ ...r, dias_folga:[] }));
       }
       res.json({ ok:true, data:rows });
@@ -182,6 +184,15 @@ module.exports = function(pool) {
     return 'ok';
   }
 
+  async function podeRegistrarPara(req, funcionarioId) {
+    if (req.user?.perfil === 'admin') return true;
+    const { rows } = await pool.query(
+      `SELECT id FROM funcionarios WHERE id=$1 AND usuario_id=$2 AND ativo=true LIMIT 1`,
+      [parseInt(funcionarioId), req.user?.id]
+    );
+    return rows.length > 0;
+  }
+
   // ── Bater ponto (funcionário) ──────────────────────────────────────────────
   r.post('/bater', async (req, res) => {
     const { funcionario_id, tipo } = req.body;
@@ -199,6 +210,9 @@ module.exports = function(pool) {
     const userAgent = req.headers['user-agent'] || '—';
 
     try {
+      if (!(await podeRegistrarPara(req, funcionario_id))) {
+        return res.status(403).json({ ok:false, erro:'Você só pode registrar o próprio ponto' });
+      }
       // Colunas extras de auditoria por tipo
       const colPor = tipo === 'entrada' ? 'entrada_por' : tipo === 'saida' ? 'saida_por' : null;
       const colEm  = tipo === 'entrada' ? 'entrada_em'  : tipo === 'saida' ? 'saida_em'  : null;
@@ -235,7 +249,7 @@ module.exports = function(pool) {
 
   // ── Bootstrap: força criação das tabelas (admin) ────────────────────────
   r.post('/init', async (req, res) => {
-    if (!['admin','gestor'].includes(req.user?.perfil)) return res.status(403).json({ ok:false });
+    if (req.user?.perfil !== 'admin') return res.status(403).json({ ok:false });
     try {
       await pool.query(`
         CREATE TABLE IF NOT EXISTS ponto_registros (
@@ -297,6 +311,9 @@ module.exports = function(pool) {
     const tsInformado = new Date(`${dataRef}T${horario_informado}:00`);
 
     try {
+      if (!(await podeRegistrarPara(req, funcionario_id))) {
+        return res.status(403).json({ ok:false, erro:'Você só pode registrar o próprio ponto' });
+      }
       const colPor = tipo==='entrada'?'entrada_por':tipo==='saida'?'saida_por':null;
       const colEm  = tipo==='entrada'?'entrada_em' :tipo==='saida'?'saida_em' :null;
       let extraSet = '';
@@ -335,6 +352,9 @@ module.exports = function(pool) {
   r.get('/hoje/:funcionario_id', async (req, res) => {
     const dataRef = new Date().toISOString().slice(0,10);
     try {
+      if (!(await podeRegistrarPara(req, req.params.funcionario_id))) {
+        return res.status(403).json({ ok:false, erro:'Você só pode consultar o próprio ponto' });
+      }
       const { rows } = await pool.query(
         `SELECT p.*, f.horario_entrada, f.horario_saida, f.jornada_horas, f.tolerancia_min, f.intervalo_min
          FROM ponto_registros p
@@ -348,7 +368,7 @@ module.exports = function(pool) {
 
   // ── Log de auditoria (admin/gestor) ──────────────────────────────────────
   r.get('/auditoria', async (req, res) => {
-    if (!['admin','gestor'].includes(req.user?.perfil)) return res.status(403).json({ ok:false, erro:'Sem permissão' });
+    if (req.user?.perfil !== 'admin') return res.status(403).json({ ok:false, erro:'Acesso restrito ao administrador' });
     const { funcionario_id, data_ini, data_fim, limite=100 } = req.query;
     try {
       const { rows } = await pool.query(`
@@ -367,6 +387,7 @@ module.exports = function(pool) {
 
   // ── Listar registros (admin/gestor) ───────────────────────────────────────
   r.get('/registros', async (req, res) => {
+    if (req.user?.perfil !== 'admin') return res.status(403).json({ ok:false, erro:'Acesso restrito ao administrador' });
     const { funcionario_id, mes, ano } = req.query;
     try {
       let where = `WHERE 1=1`;
@@ -392,7 +413,7 @@ module.exports = function(pool) {
 
   // ── Ajuste manual (admin) ─────────────────────────────────────────────────
   r.put('/registros/:id', async (req, res) => {
-    if (!['admin','gestor'].includes(req.user?.perfil)) return res.status(403).json({ ok:false, erro:'Sem permissão' });
+    if (req.user?.perfil !== 'admin') return res.status(403).json({ ok:false, erro:'Acesso restrito ao administrador' });
     const { entrada, saida_intervalo, retorno_intervalo, saida, justificativa, status } = req.body;
     try {
       const { rows } = await pool.query(`
@@ -409,22 +430,25 @@ module.exports = function(pool) {
 
   // ── Criar registro manual (falta justificada, folga etc.) ─────────────────
   r.post('/registros', async (req, res) => {
-    if (!['admin','gestor'].includes(req.user?.perfil)) return res.status(403).json({ ok:false, erro:'Sem permissão' });
-    const { funcionario_id, data_ref, entrada, saida, justificativa, status } = req.body;
+    if (req.user?.perfil !== 'admin') return res.status(403).json({ ok:false, erro:'Acesso restrito ao administrador' });
+    const { funcionario_id, data_ref, entrada, saida_intervalo, retorno_intervalo, saida, justificativa, status } = req.body;
     try {
       const { rows } = await pool.query(`
-        INSERT INTO ponto_registros(funcionario_id, data_ref, entrada, saida, justificativa, status, entrada_manual, saida_manual, criado_por)
-        VALUES($1,$2,$3,$4,$5,$6,true,true,$7)
+        INSERT INTO ponto_registros(funcionario_id, data_ref, entrada, saida_intervalo, retorno_intervalo, saida, justificativa, status, entrada_manual, saida_manual, criado_por)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,true,true,$9)
         ON CONFLICT(funcionario_id, data_ref) DO UPDATE
-          SET entrada=$3, saida=$4, justificativa=$5, status=$6, entrada_manual=true, saida_manual=true, atualizado_em=NOW()
+          SET entrada=$3, saida_intervalo=$4, retorno_intervalo=$5, saida=$6,
+              justificativa=$7, status=$8, entrada_manual=true, saida_manual=true, atualizado_em=NOW()
         RETURNING *
-      `, [funcionario_id, data_ref, entrada||null, saida||null, justificativa||null, status||'ajustado', req.user?.nome]);
+      `, [funcionario_id, data_ref, entrada||null, saida_intervalo||null, retorno_intervalo||null,
+          saida||null, justificativa||null, status||'ajustado', req.user?.nome]);
       res.json({ ok:true, data:rows[0] });
     } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
   });
 
   // ── Resumo mensal por funcionário (para relatório) ────────────────────────
   r.get('/resumo-mensal', async (req, res) => {
+    if (req.user?.perfil !== 'admin') return res.status(403).json({ ok:false, erro:'Acesso restrito ao administrador' });
     const { mes, ano } = req.query;
     if (!mes || !ano) return res.status(400).json({ ok:false, erro:'mes e ano obrigatórios' });
     try {
@@ -447,7 +471,7 @@ module.exports = function(pool) {
                 THEN EXTRACT(EPOCH FROM (p.saida - p.entrada))/3600 - COALESCE(
                   CASE WHEN p.saida_intervalo IS NOT NULL AND p.retorno_intervalo IS NOT NULL
                     THEN EXTRACT(EPOCH FROM (p.retorno_intervalo - p.saida_intervalo))/3600
-                    ELSE f.intervalo_min::float/60 END, 1)
+                    ELSE 0 END, 0)
                 ELSE 0 END
             ) ORDER BY p.data_ref
           ) FILTER (WHERE p.id IS NOT NULL) AS registros
