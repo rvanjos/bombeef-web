@@ -225,8 +225,16 @@ main{padding:16px;background:#f8f6f3}
 .rh-cols-btn{padding:7px 11px;border:1px solid var(--border);background:#fff;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap}
 .rh-cols-pop{position:fixed;z-index:10000;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.18);padding:12px;min-width:220px;max-height:310px;overflow-y:auto}
 #pt-kpis>div{box-shadow:0 1px 3px rgba(17,24,39,.05)}
+.rh-section-toolbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:12px}
+.rh-filter-group,.rh-action-group{display:flex;align-items:center;flex-wrap:wrap;gap:7px}
+.rh-filter-group select{min-height:35px;padding:7px 10px;border:1px solid var(--border);border-radius:7px;background:#fff;font:inherit;font-size:12px}
+.rh-kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:9px;margin-bottom:12px}
+.rh-table-card{background:#fff;border:1px solid var(--border);border-radius:10px;overflow:hidden;box-shadow:0 1px 5px rgba(17,24,39,.05)}
+.rh-table-card table{border-collapse:collapse}.rh-table-card th{padding:9px 10px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.45px;color:var(--muted);font-weight:700}.rh-table-card td{padding:9px 10px}
+.hist-table{min-width:1050px;width:100%}.hist-table-wrap{overflow:auto;max-height:calc(100vh - 300px);background:#fff;border:1px solid var(--border);border-radius:10px}.hist-table thead th{position:sticky;top:0;z-index:2;background:#f8f4f0}
+.tabs{scrollbar-width:thin}.tab{white-space:nowrap}.toolbar{box-shadow:0 1px 4px rgba(17,24,39,.04)}
 @media(max-width:1000px){main{padding:12px}.resumo-grid{grid-template-columns:repeat(2,minmax(0,1fr))}#quick-extra-wrap>div[style*="grid-template-columns"]{grid-template-columns:1fr 1fr!important}.rh-table-scroll{max-height:calc(100vh - 300px)}}
-@media(max-width:700px){main{padding:10px}.tabs{position:static;padding:0 4px}.resumo-grid{grid-template-columns:1fr}#quick-extra-wrap>div[style*="grid-template-columns"]{grid-template-columns:1fr!important}.rh-table-scroll{max-height:none}.rh-table-help,.rh-cols-btn{display:none}.cal-day{min-height:64px}.toolbar{padding:9px}}
+@media(max-width:700px){main{padding:10px}.tabs{position:static;padding:0 4px}.resumo-grid{grid-template-columns:1fr}#quick-extra-wrap>div[style*="grid-template-columns"]{grid-template-columns:1fr!important}.rh-table-scroll{max-height:none}.rh-table-help{display:none}.cal-day{min-height:64px}.toolbar{padding:9px}.rh-section-toolbar{align-items:stretch}.rh-filter-group,.rh-action-group{width:100%}.rh-filter-group select{flex:1;min-width:120px}.rh-action-group .btn{flex:1}.field-row,.form-row{grid-template-columns:1fr!important}.modal-body{padding:14px}}
 </style>
 </head>
 <body>
@@ -408,6 +416,33 @@ main{padding:16px;background:#f8f6f3}
 
     <div id="rel-container"></div>
   </div>
+
+  <!-- ── TAB PONTO ── -->
+  <div id="tab-ponto" class="tab-content"><div id="sec-ponto" style="padding:0 2px">
+    <div class="rh-section-toolbar">
+      <div class="rh-filter-group">
+        <select id="pt-func" onchange="carregarPonto()"><option value="">Todos os funcionários</option></select>
+        <select id="pt-mes" onchange="carregarPonto()"></select>
+        <select id="pt-ano" onchange="carregarPonto()"></select>
+      </div>
+      <div class="rh-action-group">
+        <button class="btn btn-green" onclick="exportarPonto()">📊 Exportar</button>
+        <button class="btn btn-gray" onclick="abrirAjustePonto(null)">✏️ Ajuste Manual</button>
+        <button class="btn btn-gray" onclick="abrirConfJornada()">⚙️ Jornadas</button>
+        <button class="rh-cols-btn" id="rh-cols-ponto-btn" onclick="rhColunas.abrir()">⚙️ Colunas</button>
+      </div>
+    </div>
+    <div id="pt-kpis" class="rh-kpi-grid"></div>
+    <div class="rh-table-card">
+      <div class="rh-table-scroll">
+        <table id="tbl-ponto">
+          <thead><tr><th>Data</th><th>Funcionário</th><th>Entrada</th><th>Saída Int.</th><th>Retorno</th><th>Saída</th><th>Horas</th><th>Situação</th><th>Ações</th></tr></thead>
+          <tbody id="tbody-ponto"></tbody>
+        </table>
+      </div>
+      <div class="rh-table-help">↔ Role para os lados ou use “Colunas” para recolher informações que não estiver usando.</div>
+    </div>
+  </div></div>
 
   <!-- ── TAB ACESSOS (somente admin) ── -->
   <div id="tab-acessos" class="tab-content">
@@ -593,52 +628,7 @@ main{padding:16px;background:#f8f6f3}
   </div>
 </div>
 
-<!-- Modal rejeitar -->
-<div class="modal-bg" id="modal-rejeitar">
-
-<!-- ══ SEÇÃO PONTO ══════════════════════════════════════════════════════════ -->
-<div id="tab-ponto" class="tab-content"><div id="sec-ponto" style="padding:0 2px">
-  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px">
-    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-      <select style="padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px" id="pt-func" onchange="carregarPonto()">
-        <option value="">Todos os funcionários</option>
-      </select>
-      <select style="padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px" id="pt-mes" onchange="carregarPonto()"></select>
-      <select style="padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px" id="pt-ano" onchange="carregarPonto()"></select>
-    </div>
-    <div style="display:flex;gap:6px">
-      <button class="btn-s btn" onclick="exportarPonto()" style="background:var(--green);color:#fff">📊 Exportar</button>
-      <button class="btn-s btn" onclick="abrirAjustePonto(null)" style="background:var(--white);border:1px solid var(--border)">✏️ Ajuste Manual</button>
-      <button class="btn-s btn" onclick="abrirConfJornada()" style="background:var(--white);border:1px solid var(--border)">⚙️ Jornadas</button>
-      <button class="rh-cols-btn" id="rh-cols-ponto-btn" onclick="rhColunas.abrir()">⚙️ Colunas</button>
-    </div>
-  </div>
-
-  <div id="pt-kpis" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;margin-bottom:12px"></div>
-
-  <div style="background:var(--white);border:1px solid var(--border);border-radius:10px;overflow:hidden;box-shadow:0 1px 6px rgba(0,0,0,.05)">
-  <div class="rh-table-scroll">
-  <table style="width:100%;border-collapse:collapse" id="tbl-ponto">
-    <thead><tr style="background:#f8f4f0;border-bottom:2px solid var(--border)">
-      <th style="padding:9px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700">Data</th>
-      <th style="padding:9px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700">Funcionário</th>
-      <th style="padding:9px 8px;text-align:center;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700">Entrada</th>
-      <th style="padding:9px 8px;text-align:center;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700">Saída Int.</th>
-      <th style="padding:9px 8px;text-align:center;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700">Retorno</th>
-      <th style="padding:9px 8px;text-align:center;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700">Saída</th>
-      <th style="padding:9px 8px;text-align:center;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700">Horas</th>
-      <th style="padding:9px 8px;text-align:center;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700">Situação</th>
-      <th style="padding:9px 8px;text-align:center;font-size:10px;color:var(--muted);font-weight:700">Ações</th>
-    </tr></thead>
-    <tbody id="tbody-ponto"></tbody>
-  </table>
-  </div>
-  <div class="rh-table-help">↔ Role para os lados ou use “Colunas” para recolher informações que não estiver usando.</div>
-  </div>
-</div>
-
 <!-- Modal ajuste manual ponto -->
-</div><!-- /tab-ponto -->
 <div class="modal-bg" id="m-ponto-ajuste">
   <div class="modal" style="max-width:480px">
     <div class="modal-head"><h3>✏️ Ajuste de Ponto</h3><button class="modal-close" onclick="document.getElementById('m-ponto-ajuste').classList.remove('open')">×</button></div>
@@ -752,6 +742,8 @@ main{padding:16px;background:#f8f6f3}
     </div>
   </div>
 </div>
+<!-- Modal rejeitar -->
+<div class="modal-bg" id="modal-rejeitar">
   <div class="modal-box" style="max-width:400px">
     <div class="modal-header" style="background:#dc2626">
       <h3>❌ Rejeitar Lançamento</h3>
@@ -840,7 +832,7 @@ window.addEventListener('message', e => {
 let _perfil = '';
 let _meuFuncId = null;
 
-// ── APROVAÇÕES (admin/gestor) ─────────────────────────────────────────────────
+// ── APROVAÇÕES (somente admin) ────────────────────────────────────────────────
 // ── Estado das aprovações ────────────────────────────────────────────────────
 let _pendentes = [];
 
@@ -895,14 +887,15 @@ function renderPendentes() {
         const neg = isNeg(a.tipo);
         const corVal = neg ? '#dc2626' : (TIPO_COR[a.tipo]||'#16a34a');
         const orig = a.origem||'apontamento';
+        const itemKey = `${orig}-${a.id}`;
         const quant = a.quantidade && parseFloat(a.quantidade) !== 1
           ? `<span style="font-size:10px;color:var(--muted)">${parseFloat(a.quantidade)} × ${brl(parseFloat(a.valor_unitario||0))}</span>`
           : '';
         return `
-        <div id="pend-item-${a.id}" style="padding:12px 16px;border-bottom:1px solid #f5efe8;display:grid;grid-template-columns:1fr auto;gap:12px;align-items:start">
+        <div id="pend-item-${itemKey}" style="padding:12px 16px;border-bottom:1px solid #f5efe8;display:grid;grid-template-columns:1fr auto;gap:12px;align-items:start">
           <div>
             <!-- Modo visualização -->
-            <div id="pend-view-${a.id}">
+            <div id="pend-view-${itemKey}">
               <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
                 <span style="font-size:12px;font-weight:700;color:${corVal}">${TIPO_LABEL[a.tipo]||a.tipo}</span>
                 <span style="font-size:11px;color:var(--muted)">· ${a.mes_ref}${a.data_ref?' · '+fmtData(a.data_ref):''}</span>
@@ -911,24 +904,24 @@ function renderPendentes() {
               <div style="font-size:10px;color:var(--muted)">📩 ${a.solicitante_nome||'—'} · ${new Date(a.criado_em).toLocaleString('pt-BR')}</div>
             </div>
             <!-- Modo edição -->
-            <div id="pend-edit-${a.id}" style="display:none">
+            <div id="pend-edit-${itemKey}" style="display:none">
               <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
                 <div>
                   <label style="font-size:10px;text-transform:uppercase;color:var(--muted);font-weight:700">Descrição</label>
-                  <input id="edit-desc-${a.id}" type="text" value="${(a.descricao||'').replace(/"/g,'&quot;')}" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;margin-top:2px;box-sizing:border-box">
+                  <input id="edit-desc-${itemKey}" type="text" value="${(a.descricao||'').replace(/"/g,'&quot;')}" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;margin-top:2px;box-sizing:border-box">
                 </div>
                 <div>
                   <label style="font-size:10px;text-transform:uppercase;color:var(--muted);font-weight:700">Data</label>
-                  <input id="edit-data-${a.id}" type="date" value="${a.data_ref ? a.data_ref.slice(0,10) : ''}" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;margin-top:2px;box-sizing:border-box">
+                  <input id="edit-data-${itemKey}" type="date" value="${a.data_ref ? a.data_ref.slice(0,10) : ''}" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;margin-top:2px;box-sizing:border-box">
                 </div>
                 <div>
                   <label style="font-size:10px;text-transform:uppercase;color:var(--muted);font-weight:700">Valor (R$)</label>
-                  <input id="edit-val-${a.id}" type="number" step="0.01" value="${val}" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;margin-top:2px;box-sizing:border-box">
+                  <input id="edit-val-${itemKey}" type="number" step="0.01" value="${val}" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;margin-top:2px;box-sizing:border-box">
                 </div>
               </div>
               <div style="display:flex;gap:6px">
                 <button onclick="salvarEdicaoPend(${a.id},'${orig}')" style="font-size:11px;padding:4px 10px;background:var(--purple);color:#fff;border:none;border-radius:6px;cursor:pointer">💾 Salvar e Aprovar</button>
-                <button onclick="cancelarEdicaoPend(${a.id})" style="font-size:11px;padding:4px 10px;background:#f0ebe4;color:#555;border:none;border-radius:6px;cursor:pointer">Cancelar</button>
+                <button onclick="cancelarEdicaoPend('${itemKey}')" style="font-size:11px;padding:4px 10px;background:#f0ebe4;color:#555;border:none;border-radius:6px;cursor:pointer">Cancelar</button>
               </div>
             </div>
           </div>
@@ -938,9 +931,9 @@ function renderPendentes() {
               <div style="font-size:16px;font-weight:700;color:${corVal};font-family:'DM Mono',monospace">${neg?'- ':'+ '}${brl(val)}</div>
               ${quant}
             </div>
-            <div style="display:flex;gap:4px" id="pend-btns-${a.id}">
+            <div style="display:flex;gap:4px" id="pend-btns-${itemKey}">
               <button onclick="aprovarLanc(${a.id},'${orig}')" style="padding:5px 10px;background:#16a34a;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">✅</button>
-              <button onclick="editarPend(${a.id})" style="padding:5px 10px;background:#ede9fe;color:#5b21b6;border:none;border-radius:6px;cursor:pointer;font-size:12px" title="Editar antes de aprovar">✏️</button>
+              <button onclick="editarPend('${itemKey}')" style="padding:5px 10px;background:#ede9fe;color:#5b21b6;border:none;border-radius:6px;cursor:pointer;font-size:12px" title="Editar antes de aprovar">✏️</button>
               <button onclick="abrirRejeitar(${a.id},'${orig}')" style="padding:5px 10px;background:#fee2e2;color:#dc2626;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">✗</button>
             </div>
           </div>
@@ -951,14 +944,15 @@ function renderPendentes() {
 
 // Aprovar único
 async function aprovarLanc(id, origem) {
-  const btn = document.querySelector(`#pend-btns-${id} button`);
+  const itemKey = `${origem||'apontamento'}-${id}`;
+  const btn = document.querySelector(`#pend-btns-${itemKey} button`);
   if (btn) btn.textContent = '⏳';
   const d = await post('/api/rh/lancamento/'+id+'/aprovar', { origem: origem||'apontamento' });
   if (!d.ok) { toast('❌ '+d.erro); if (btn) btn.textContent = '✅'; return; }
   // Remove o item visualmente sem recarregar tudo
-  _pendentes = _pendentes.filter(a => a.id !== id);
+  _pendentes = _pendentes.filter(a => !(a.id === id && (a.origem||'apontamento') === (origem||'apontamento')));
   atualizarBadge(_pendentes.length);
-  const item = document.getElementById('pend-item-'+id);
+  const item = document.getElementById('pend-item-'+itemKey);
   if (item) {
     item.style.transition = 'opacity .3s,max-height .3s';
     item.style.opacity = '0';
@@ -972,38 +966,43 @@ async function aprovarLanc(id, origem) {
 async function aprovarTodosFunc(funcId) {
   const itens = _pendentes.filter(a => a.funcionario_id === funcId);
   if (!itens.length) return;
-  let ok = 0;
+  const aprovados = [];
+  const falhas = [];
   for (const a of itens) {
     const d = await post('/api/rh/lancamento/'+a.id+'/aprovar', { origem: a.origem||'apontamento' });
-    if (d.ok) ok++;
+    if (d.ok) aprovados.push(`${a.origem||'apontamento'}-${a.id}`); else falhas.push(d.erro || `Lançamento ${a.id}`);
   }
-  _pendentes = _pendentes.filter(a => a.funcionario_id !== funcId);
+  _pendentes = _pendentes.filter(a => !aprovados.includes(`${a.origem||'apontamento'}-${a.id}`));
   atualizarBadge(_pendentes.length);
-  toast(`✅ ${ok} lançamento(s) aprovado(s)!`);
+  toast(falhas.length
+    ? `⚠️ ${aprovados.length} aprovado(s) · ${falhas.length} não processado(s)`
+    : `✅ ${aprovados.length} lançamento(s) aprovado(s)!`);
   renderPendentes();
   carregarResumo();
 }
 
 // Edição inline
-function editarPend(id) {
-  document.getElementById('pend-view-'+id).style.display = 'none';
-  document.getElementById('pend-edit-'+id).style.display = '';
-  document.getElementById('pend-btns-'+id).style.display = 'none';
+function editarPend(itemKey) {
+  document.getElementById('pend-view-'+itemKey).style.display = 'none';
+  document.getElementById('pend-edit-'+itemKey).style.display = '';
+  document.getElementById('pend-btns-'+itemKey).style.display = 'none';
 }
-function cancelarEdicaoPend(id) {
-  document.getElementById('pend-view-'+id).style.display = '';
-  document.getElementById('pend-edit-'+id).style.display = 'none';
-  document.getElementById('pend-btns-'+id).style.display = 'flex';
+function cancelarEdicaoPend(itemKey) {
+  document.getElementById('pend-view-'+itemKey).style.display = '';
+  document.getElementById('pend-edit-'+itemKey).style.display = 'none';
+  document.getElementById('pend-btns-'+itemKey).style.display = 'flex';
 }
 async function salvarEdicaoPend(id, origem) {
-  const desc  = document.getElementById('edit-desc-'+id)?.value.trim();
-  const val   = parseFloat(document.getElementById('edit-val-'+id)?.value)||0;
-  const data  = document.getElementById('edit-data-'+id)?.value || null;
-  await post('/api/rh/lancamento/'+id+'/editar', { descricao: desc, valor: val, data_ref: data, origem });
+  const itemKey = `${origem||'apontamento'}-${id}`;
+  const desc  = document.getElementById('edit-desc-'+itemKey)?.value.trim();
+  const val   = parseFloat(document.getElementById('edit-val-'+itemKey)?.value)||0;
+  const data  = document.getElementById('edit-data-'+itemKey)?.value || null;
+  const editado = await post('/api/rh/lancamento/'+id+'/editar', { descricao: desc, valor: val, data_ref: data, origem });
+  if (!editado.ok) { toast('❌ Não foi possível salvar a edição: '+(editado.erro||'erro desconhecido')); return; }
   // Aprova depois de editar
   const d = await post('/api/rh/lancamento/'+id+'/aprovar', { origem });
   if (!d.ok) { toast('❌ '+d.erro); return; }
-  _pendentes = _pendentes.filter(a => a.id !== id);
+  _pendentes = _pendentes.filter(a => !(a.id === id && (a.origem||'apontamento') === (origem||'apontamento')));
   atualizarBadge(_pendentes.length);
   toast('✅ Editado e aprovado!');
   renderPendentes();
@@ -1022,7 +1021,7 @@ async function confirmarRejeitar() {
   const motivo = document.getElementById('rejeitar-motivo').value.trim();
   const d = await post('/api/rh/lancamento/'+id+'/rejeitar', { motivo, origem });
   if (!d.ok) { toast('❌ '+d.erro); return; }
-  _pendentes = _pendentes.filter(a => String(a.id) !== String(id));
+  _pendentes = _pendentes.filter(a => !(String(a.id) === String(id) && (a.origem||'apontamento') === origem));
   atualizarBadge(_pendentes.length);
   fecharModal('modal-rejeitar');
   toast('Lançamento rejeitado.');
@@ -1044,7 +1043,7 @@ async function carregarMeusLanc() {
   const d = await get('/api/rh/meus-lancamentos?'+params);
   if (!d.ok) { c.innerHTML = '<div class="empty"><div class="icon">⚠️</div><p>'+d.erro+'</p></div>'; return; }
   if (!d.data.length) { c.innerHTML = '<div class="empty"><div class="icon">📝</div><p>Nenhum lançamento neste mês.<br><small>Clique em "+ Novo Lançamento"</small></p></div>'; return; }
-  const tipoLabel = t => ({'hora_extra':'⏱️ Hora Extra','adicional_noturno':'🌙 Ad. Noturno','falta':'❌ Falta','comissao':'💰 Comissão','bonus':'🎁 Bônus','desconto':'↘️ Desconto','outro':'📌 Outro'}[t]||t);
+  const tipoLabel = t => ({'hora_extra':'⏱️ Hora Extra','adicional_noturno':'🌙 Ad. Noturno','falta':'❌ Falta','comissao':'💰 Comissão','bonus':'🎁 Bônus','desconto':'↘️ Desconto','entrega':'🚚 Entrega','grelhado':'🥩 Grelhado','outro':'📌 Outro'}[t]||t);
   c.innerHTML = d.data.map(a => {
     const statusEl = {pendente:'<span class="pill-pend">⏳ Aguardando</span>',aprovado:'<span class="pill-aprov">✅ Aprovado</span>',rejeitado:'<span class="pill-rejei">❌ Rejeitado</span>'}[a.status]||'';
     return `<div class="lanc-card ${a.status}">
@@ -1091,14 +1090,14 @@ async function carregarHistorico() {
   if (!d.ok) { c.innerHTML = `<div class="empty"><div class="icon">⚠️</div><p>${d.erro}</p></div>`; return; }
   if (!d.data.length) { c.innerHTML = '<div class="empty"><div class="icon">📜</div><p>Nenhum lançamento encontrado para os filtros selecionados.</p></div>'; return; }
 
-  const tipoLabel = t => ({'hora_extra':'⏱️ Hora Extra','adicional_noturno':'🌙 Ad. Noturno','falta':'❌ Falta','comissao':'💰 Comissão','bonus':'🎁 Bônus','desconto':'↘️ Desconto','outro':'📌 Outro'}[t]||t);
+  const tipoLabel = t => ({'hora_extra':'⏱️ Hora Extra','adicional_noturno':'🌙 Ad. Noturno','falta':'❌ Falta','comissao':'💰 Comissão','bonus':'🎁 Bônus','desconto':'↘️ Desconto','entrega':'🚚 Entrega','grelhado':'🥩 Grelhado','outro':'📌 Outro'}[t]||t);
   const statusEl  = s => ({
     aprovado:  '<span class="pill" style="background:#d1e7dd;color:#0a4a22">✅ Aprovado</span>',
     rejeitado: '<span class="pill" style="background:#f8d7da;color:#721c24">❌ Rejeitado</span>',
     pendente:  '<span class="pill" style="background:#fff3cd;color:#856404">⏳ Pendente</span>',
   }[s] || `<span class="pill">${s}</span>`);
 
-  c.innerHTML = `<table class="hist-table">
+  c.innerHTML = `<div class="hist-table-wrap"><table class="hist-table">
     <thead><tr>
       <th>Funcionário</th><th>Mês</th><th>Tipo</th><th>Descrição</th>
       <th>Qtd</th><th>Valor</th><th>Status</th><th>Motivo</th><th>Data</th>
@@ -1116,7 +1115,7 @@ async function carregarHistorico() {
         <td style="font-size:11px;color:var(--muted)">${a.atualizado_em ? new Date(a.atualizado_em).toLocaleDateString('pt-BR') : '—'}</td>
       </tr>`).join('')}
     </tbody>
-  </table>`;
+  </table></div><div class="rh-table-help">↔ Role para os lados em telas menores.</div>`;
 }
 
 // ── Pagamento extra rápido (tela do funcionário) ─────────────────────────────
@@ -1222,14 +1221,14 @@ async function salvarLancamento() {
 
   // Bônus: qtd=1, valor=vunit (sem quantidade)
   if (tipo === 'bonus') { quantidade = 1; }
-  // Grelhado: valor enviado é 35% da taxa
-  if (tipo === 'grelhado') { valor_unit = valor_unit * 0.35; quantidade = 1; }
+  // O backend aplica os 35% do grelhado uma única vez.
+  if (tipo === 'grelhado') { quantidade = 1; }
 
   if (!descricao)                               { toast('⚠️ Informe a descrição'); return; }
   if (!semQtd && !somenteQtd && !quantidade)    { toast('⚠️ Informe a quantidade'); return; }
   if (!somenteQtd && !valor_unit)               { toast('⚠️ Informe o valor'); return; }
 
-  if (isAdmin) {
+  if (isAdmin || isGestor2) {
     const selecionados = [...document.querySelectorAll('#lanc-funcs-list .cb-func:checked')]
       .map(cb => parseInt(cb.value));
     if (!selecionados.length) { toast('⚠️ Selecione pelo menos um funcionário'); return; }
@@ -1322,8 +1321,6 @@ function calcLanc() {
   const qtd   = parseFloat(document.getElementById('lanc-qtd').value)||0;
   const vu    = parseFloat(document.getElementById('lanc-vunit').value)||0;
   const el    = document.getElementById('lanc-calc');
-  const elTxt = document.getElementById('lanc-vtotal');
-
   let total = 0;
   if (tipo === 'bonus') {
     total = vu; // bônus: valor direto sem quantidade
@@ -1335,9 +1332,9 @@ function calcLanc() {
 
   el.style.display = (total > 0 || vu > 0) ? '' : 'none';
   if (tipo === 'grelhado' && vu > 0) {
-    el.innerHTML = `Taxa de grelha: <strong>${brl(vu)}</strong> → Valor a pagar (35%): <strong id="lanc-vtotal" style="color:var(--green)">${brl(total)}</strong>`;
+    el.innerHTML = `Taxa de grelha: <strong>${brl(vu)}</strong> → Valor a pagar (35%): <strong style="color:var(--green)">${brl(total)}</strong>`;
   } else if (total > 0) {
-    el.innerHTML = `Valor total: <strong id="lanc-vtotal" style="color:var(--green)">${brl(total)}</strong>`;
+    el.innerHTML = `Valor total: <strong style="color:var(--green)">${brl(total)}</strong>`;
   }
 }
 
@@ -1505,7 +1502,7 @@ async function init() {
     if (btnFolha)  btnFolha.style.display  = 'none';
     if (btnEscala) btnEscala.style.display = 'none';
     if (btnRel)    btnRel.style.display    = 'none';
-    if (btnAprov)  btnAprov.style.display  = '';  // vê aprovações
+    if (btnAprov)  btnAprov.style.display  = 'none';
     if (btnMeus)   btnMeus.style.display   = '';
     const qeWrap = document.getElementById('quick-extra-wrap');
     if (qeWrap) {
@@ -1525,9 +1522,6 @@ async function init() {
       if (sel) sel.innerHTML = '<option value="">— selecione —</option>' +
         df.data.map(f => `<option value="${f.id}">${f.nome}${f.cargo ? ' · '+f.cargo : ''}</option>`).join('');
     }
-    get('/api/rh/lancamentos-pendentes/count').then(d => {
-      if (d.ok) atualizarBadge(d.total);
-    });
     showTab('meus');
 
   } else {
