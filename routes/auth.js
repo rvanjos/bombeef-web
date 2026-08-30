@@ -84,6 +84,7 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_login_sessoes_usuario ON login_sessoes(usuario_id, iniciado_em DESC)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_login_sessoes_atividade ON login_sessoes(ultima_atividade DESC)`);
+    await pool.query(`ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS permissoes JSONB NOT NULL DEFAULT '{}'::jsonb`);
 
     // Cria admin padrão se não existir
     const { rows } = await pool.query(`SELECT id FROM usuarios WHERE perfil='admin' LIMIT 1`);
@@ -259,10 +260,10 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
   });
 
   // ── GET /usuarios ──────────────────────────────────────────────────────────
-  r.get('/usuarios', autenticar(['admin', 'gestor']), async (req, res) => {
+  r.get('/usuarios', autenticar('admin'), async (req, res) => {
     try {
       const { rows } = await pool.query(
-        `SELECT id, nome, email, perfil, ativo, ultimo_login, criado_em
+        `SELECT id, nome, email, perfil, ativo, ultimo_login, criado_em, COALESCE(permissoes,'{}'::jsonb) AS permissoes
          FROM usuarios ORDER BY nome ASC`
       );
       res.json({ ok: true, data: rows });
@@ -273,17 +274,17 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
 
   // ── POST /usuarios ─────────────────────────────────────────────────────────
   r.post('/usuarios', autenticar('admin'), async (req, res) => {
-    const { nome, email, senha, perfil } = req.body;
+    const { nome, email, senha, perfil, permissoes } = req.body;
     if (!nome || !email || !senha) {
       return res.status(400).json({ ok: false, erro: 'nome, email e senha são obrigatórios' });
     }
     try {
       const hash = await bcrypt.hash(senha, 12);
       const { rows } = await pool.query(`
-        INSERT INTO usuarios (nome, email, senha_hash, perfil)
-        VALUES ($1, $2, $3, $4)
-        RETURNING id, nome, email, perfil
-      `, [nome.trim(), email.toLowerCase().trim(), hash, perfil || 'caixa']);
+        INSERT INTO usuarios (nome, email, senha_hash, perfil, permissoes)
+        VALUES ($1, $2, $3, $4, $5::jsonb)
+        RETURNING id, nome, email, perfil, permissoes
+      `, [nome.trim(), email.toLowerCase().trim(), hash, perfil || 'caixa', JSON.stringify(permissoes || {})]);
       res.json({ ok: true, data: rows[0] });
     } catch (e) {
       if (e.code === '23505') {
@@ -295,7 +296,7 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
 
   // ── PUT /usuarios/:id ──────────────────────────────────────────────────────
   r.put('/usuarios/:id', autenticar('admin'), async (req, res) => {
-    const { nome, email, perfil, ativo } = req.body;
+    const { nome, email, perfil, ativo, permissoes } = req.body;
     try {
       await pool.query(`
         UPDATE usuarios SET
@@ -303,10 +304,13 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
           email = COALESCE($2, email),
           perfil = COALESCE($3, perfil),
           ativo  = COALESCE($4, ativo),
+          permissoes = COALESCE($5::jsonb, permissoes),
           atualizado_em = NOW()
-        WHERE id = $5
+        WHERE id = $6
       `, [nome || null, email?.toLowerCase() || null, perfil || null,
-          ativo !== undefined ? ativo : null, parseInt(req.params.id)]);
+          ativo !== undefined ? ativo : null,
+          permissoes !== undefined ? JSON.stringify(permissoes) : null,
+          parseInt(req.params.id)]);
       res.json({ ok: true });
     } catch (e) {
       res.status(500).json({ ok: false, erro: e.message });
