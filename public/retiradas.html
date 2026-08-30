@@ -14,7 +14,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
 .ph{background:var(--red);padding:12px 22px;display:flex;align-items:center;gap:10px;box-shadow:0 2px 12px rgba(139,0,0,.3);}
 .ph h2{font-family:'Playfair Display',serif;font-size:17px;color:#fff;font-weight:700;}
 .ph-sub{font-size:11px;color:rgba(255,255,255,.7);margin-left:auto;}
-.body{padding:22px 20px;max-width:1300px;margin:0 auto;overflow-x:auto;;background:var(--bg);}
+.body{padding:18px 16px;width:100%;max-width:none;margin:0 auto;background:var(--bg);}
 /* KPIs */
 .kpi-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:20px;}
 .kc{background:var(--white);border:1px solid var(--border);border-radius:10px;padding:14px;border-left:4px solid var(--purple);box-shadow:var(--shadow);}
@@ -38,7 +38,11 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
 select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--white);cursor:pointer;}
 /* tabela */
 .card{background:var(--white);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);overflow:hidden;}
-.tbl{width:100%;border-collapse:collapse;}
+.tbl{width:100%;min-width:1020px;border-collapse:collapse;}
+.table-scroll{overflow-x:auto;max-width:100%;scrollbar-gutter:stable}.tbl th{position:sticky;top:0;z-index:2}
+.toolbar-card{background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px;box-shadow:var(--shadow)}
+.search{min-width:220px;flex:1;padding:8px 11px;border:1px solid var(--border);border-radius:7px;font:inherit}
+.col-menu{position:relative}.col-pop{display:none;position:absolute;right:0;top:calc(100% + 6px);z-index:20;background:#fff;border:1px solid var(--border);border-radius:9px;box-shadow:0 10px 30px rgba(0,0,0,.15);padding:10px;min-width:190px}.col-pop.open{display:grid;gap:7px}.col-pop label{font-size:12px;display:flex;gap:8px;align-items:center;cursor:pointer}
 .tbl th{background:#f8f4fd;font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:700;padding:10px 12px;text-align:left;border-bottom:2px solid var(--border);}
 .tbl td{padding:10px 12px;font-size:13px;border-bottom:1px solid #f5efe8;vertical-align:middle;}
 .tbl tr:hover td{background:#fdf8ff;}
@@ -123,8 +127,11 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
 <body>
 <div class="ph"><span style="font-size:20px">👥</span><h2>Retiradas de Funcionários</h2><div class="ph-sub" id="ph-sub">—</div></div>
 <div class="body">
-  <div style="display:none">
-    <span id="k-total"></span><span id="k-funcs"></span><span id="k-maior"></span><span id="k-mes"></span>
+  <div class="kpi-row">
+    <div class="kc"><div class="kc-l">Total no mês</div><div class="kc-v" id="k-total">R$ 0,00</div><div class="kc-s" id="k-mes">—</div></div>
+    <div class="kc o"><div class="kc-l">Pendente</div><div class="kc-v" id="k-pendente">R$ 0,00</div><div class="kc-s">aguardando pagamento</div></div>
+    <div class="kc g"><div class="kc-l">Pago</div><div class="kc-v" id="k-pago">R$ 0,00</div><div class="kc-s">retiradas quitadas</div></div>
+    <div class="kc"><div class="kc-l">Lançamentos</div><div class="kc-v" id="k-funcs">0</div><div class="kc-s" id="k-maior">—</div></div>
   </div>
 
   <!-- Limites por funcionário -->
@@ -132,20 +139,23 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
   <div class="limites-grid" id="limites-grid"></div>
 
   <!-- Toolbar -->
-  <div class="toolbar">
+  <div class="toolbar toolbar-card">
     <button class="btn btn-p" onclick="abrirModal()">＋ Nova Retirada</button>
     <button class="btn btn-s" onclick="abrirRelatorio()">📊 Relatório</button>
     <select class="flt" id="flt-func" onchange="typeof carregar==='function'&&carregar()">
       <option value="">Todos os funcionários</option>
     </select>
-    <input type="month" id="flt-mes" class="flt" style="padding:7px 10px" onchange="typeof carregar==='function'&&carregar()">
+    <input type="month" id="flt-mes" class="flt" style="padding:7px 10px" onchange="trocarMes()">
+    <input class="search" id="flt-busca" placeholder="🔎 Buscar funcionário ou produto..." oninput="aplicarFiltros()">
+    <select class="flt" id="flt-status" onchange="aplicarFiltros()"><option value="">Todos os status</option><option value="pendente">Pendentes</option><option value="pago">Pagos</option></select>
+    <div class="col-menu"><button class="btn btn-s" onclick="document.getElementById('col-pop').classList.toggle('open')">⚙️ Colunas</button><div class="col-pop" id="col-pop"></div></div>
       <button class="btn btn-s" onclick="imprimirRetiradas()">🖨️ Imprimir</button>
   </div>
 
   <!-- Tabela -->
   <div class="card">
-    <div style="overflow-x:auto"><table class="tbl tbl-desktop">
-      <thead><tr><th>Data</th><th>Funcionário</th><th>Produto / Descrição</th><th>Qtd</th><th>Preço Unit.</th><th>Total</th><th style="text-align:center">Pgto</th><th style="text-align:center">PDV</th><th>Ações</th></tr></thead>
+    <div class="table-scroll"><table class="tbl tbl-desktop" id="tbl-ret">
+      <thead><tr><th data-col="data">Data</th><th data-col="funcionario">Funcionário</th><th data-col="produto">Produto / Descrição</th><th data-col="qtd">Qtd</th><th data-col="preco">Preço Unit.</th><th data-col="total">Total</th><th data-col="pgto" style="text-align:center">Pgto</th><th data-col="pdv" style="text-align:center">PDV</th><th data-col="acoes">Ações</th></tr></thead>
       <tbody id="tbody"></tbody>
       <tfoot id="tfoot-total" style="display:none">
         <tr style="background:#f7f4f0;border-top:2px solid var(--border)">
@@ -186,8 +196,7 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
         <div>
           <label style="font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px">VALOR A PAGAR *</label>
-          <input type="number" id="pag-ret-valor" step="0.01" min="0.01" placeholder="0,00"
-            oninput="atualizarPreviewPagRet()"
+          <input type="number" id="pag-ret-valor" step="0.01" min="0.01" placeholder="0,00" readonly
             style="width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:8px;font-family:'DM Mono',monospace;font-size:15px;font-weight:700;box-sizing:border-box">
         </div>
         <div>
@@ -279,7 +288,7 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
     </div>
     <div class="modal-foot">
       <button class="btn btn-s" onclick="fecharModal()">Cancelar</button>
-      <button class="btn btn-p" onclick="salvar()">💾 Registrar Retirada</button>
+      <button class="btn btn-p" id="btn-salvar" onclick="salvar()">💾 Registrar Retirada</button>
     </div>
   </div>
 </div>
@@ -294,7 +303,13 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
 
 <script>
 const {api,fmt,toast} = BB;
-let retiradas=[], funcionarios=[], mesAtual='';
+let retiradas=[], funcionarios=[], limites=[], mesAtual='';
+let permissoesRet={visualizarEquipe:false,lancarEquipe:false,pagamentos:false,pdv:false,editar:false}, funcionarioProprioId=null;
+const _token = sessionStorage.getItem('bb_token') || localStorage.getItem('bb_token') || '';
+let _perfil = '';
+try { _perfil = JSON.parse(atob((_token.split('.')[1]||'').replace(/-/g,'+').replace(/_/g,'/'))).perfil || ''; } catch(_) {}
+const isAdmin = _perfil === 'admin';
+const colunas = [['data','Data'],['funcionario','Funcionário'],['produto','Produto'],['qtd','Quantidade'],['preco','Preço unitário'],['total','Total'],['pgto','Pagamento'],['pdv','PDV'],['acoes','Ações']];
 
 let _initDone = false;
 window.onBBReady = () => { if(!_initDone){ _initDone=true; init(); } };
@@ -305,15 +320,18 @@ async function init(){
   document.getElementById('flt-mes').value = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
   document.getElementById('r-dt').value = hoje.toISOString().slice(0,10);
   document.getElementById('k-mes').textContent = mesAtual;
-
+  montarColunas();
   await carregarFuncionarios();
   carregar();
 }
 
 async function carregarFuncionarios(){
-  const d = await api.get('/api/config/funcionarios');
+  const d = await api.get(`/api/retiradas/limites?mes=${mesAtual}`);
   if(!d.ok) return;
-  funcionarios = d.data.filter(f=>f.ativo);
+  permissoesRet=d.permissoes||permissoesRet;
+  funcionarioProprioId=d.funcionarioProprioId||null;
+  limites = d.data || [];
+  funcionarios = limites.map(f=>({id:f.id,nome:f.nome,ativo:true}));
   const sels = [document.getElementById('flt-func'), document.getElementById('r-func')];
   // Limpa selects antes de preencher para evitar duplicação
   sels.forEach(sel => {
@@ -324,24 +342,32 @@ async function carregarFuncionarios(){
       const o=document.createElement('option'); o.value=f.id; o.textContent=f.nome; sel.appendChild(o);
     });
   });
+  if (!permissoesRet.visualizarEquipe && funcionarios.length) {
+    document.getElementById('flt-func').value=funcionarios[0].id;
+    document.getElementById('flt-func').disabled=true;
+    document.getElementById('flt-func').style.display='none';
+  } else {
+    document.getElementById('flt-func').disabled=false;
+    document.getElementById('flt-func').style.display='';
+  }
+  const selRet=document.getElementById('r-func');
+  if(!permissoesRet.lancarEquipe && !isAdmin){ selRet.value=funcionarioProprioId||''; selRet.disabled=true; }
+  else selRet.disabled=false;
   carregarLimites();
 }
 
 async function carregarLimites(){
   const grid = document.getElementById('limites-grid');
   grid.innerHTML='';
-  for(const f of funcionarios){
-    const d = await api.get(`/api/retiradas/limite/${f.id}?mes=${mesAtual}`);
-    if(!d.ok) continue;
-    const ld = d.data;
+  for(const ld of limites){
     const pct = ld.limite>0 ? Math.min(100,(ld.usado/ld.limite)*100) : 0;
     const cls = pct>=90?'danger':pct>=70?'warn':'';
     grid.innerHTML += `<div class="limite-card">
-      <div class="lc-nome">${f.nome}</div>
+      <div class="lc-nome">${ld.nome}</div>
       <div class="lc-bar-bg"><div class="lc-bar ${cls}" style="width:${pct}%"></div></div>
       <div class="lc-info">
         <span>${fmt.brl(ld.usado)} usado</span>
-        <span>${fmt.pct(ld.percentualUsado)}</span>
+        <span>${fmt.pct(pct)}</span>
         <span>Limite: ${fmt.brl(ld.limite)}</span>
       </div>
     </div>`;
@@ -360,15 +386,44 @@ window.carregar = async function carregar(){
 
   // KPIs
   const total = retiradas.reduce((s,r)=>s+parseFloat(r.valor_total||0),0);
-  const funcsUnicos = new Set(retiradas.map(r=>r.funcionario_id)).size;
+  const pago = retiradas.filter(r=>r.status==='pago').reduce((s,r)=>s+parseFloat(r.valor_total||0),0);
+  const pendente = total-pago;
   const maior = retiradas.length ? Math.max(...retiradas.map(r=>parseFloat(r.valor_total||0))) : 0;
   document.getElementById('k-total').textContent = fmt.brl(total);
-  document.getElementById('k-funcs').textContent = fmt.n(funcsUnicos);
-  document.getElementById('k-maior').textContent = fmt.brl(maior);
+  document.getElementById('k-pago').textContent = fmt.brl(pago);
+  document.getElementById('k-pendente').textContent = fmt.brl(pendente);
+  document.getElementById('k-funcs').textContent = fmt.n(retiradas.length);
+  document.getElementById('k-maior').textContent = `Maior: ${fmt.brl(maior)}`;
   document.getElementById('ph-sub').textContent  = `${retiradas.length} retiradas · ${fmt.brl(total)}`;
 
-  renderizar(retiradas);
+  aplicarFiltros();
 }
+
+window.trocarMes = async function trocarMes(){
+  const [y,m]=(document.getElementById('flt-mes').value||'').split('-');
+  if(y&&m) mesAtual=`${m}/${y}`;
+  await carregarFuncionarios();
+  await carregar();
+}
+
+window.aplicarFiltros = function aplicarFiltros(){
+  const q=(document.getElementById('flt-busca')?.value||'').toLowerCase().trim();
+  const st=document.getElementById('flt-status')?.value||'';
+  renderizar(retiradas.filter(r => (!st || (r.status||'pendente')===st) && (!q || `${r.funcionario_nome} ${r.descricao} ${r.prod_descricao||''}`.toLowerCase().includes(q))));
+}
+
+function montarColunas(){
+  const salvas=JSON.parse(localStorage.getItem('bb_ret_colunas')||'null') || Object.fromEntries(colunas.map(([k])=>[k,true]));
+  if(!permissoesRet.editar&&!permissoesRet.pagamentos){ salvas.acoes=false; }
+  const pop=document.getElementById('col-pop');
+  pop.innerHTML=colunas.map(([k,n],i)=>`<label${((k==='acoes'&&!permissoesRet.editar&&!permissoesRet.pagamentos))?' style="display:none"':''}><input type="checkbox" ${salvas[k]!==false?'checked':''} onchange="alternarColuna('${k}',this.checked)">${n}</label>`).join('');
+  colunas.forEach(([k],i)=>aplicarColuna(i,salvas[k]!==false));
+}
+window.alternarColuna=function(k,visivel){
+  const estado=JSON.parse(localStorage.getItem('bb_ret_colunas')||'{}'); estado[k]=visivel; localStorage.setItem('bb_ret_colunas',JSON.stringify(estado));
+  aplicarColuna(colunas.findIndex(c=>c[0]===k),visivel);
+}
+function aplicarColuna(i,visivel){ document.querySelectorAll(`#tbl-ret tr > *:nth-child(${i+1})`).forEach(el=>el.style.display=visivel?'':'none'); }
 
 function renderizar(lista){
   const tb = document.getElementById('tbody');
@@ -385,7 +440,7 @@ function renderizar(lista){
     const badgeCusto = semCusto
       ? `<span style="display:inline-block;background:#fef3c7;color:#d97706;border:1px solid #fcd34d;border-radius:6px;font-size:10px;font-weight:700;padding:1px 6px;margin-left:4px">⚠️ Sem custo</span>`
       : '';
-    const btnAtualizar = semCusto
+    const btnAtualizar = permissoesRet.editar && semCusto
       ? `<button class="act-btn" onclick="atualizarCusto(${r.id},${r.produto_id},${r.qtd||1})" title="Buscar custo atual do produto e atualizar" style="color:#d97706">🔄</button>`
       : '';
     const _qtd = parseFloat(r.qtd||1);
@@ -397,7 +452,7 @@ function renderizar(lista){
     const statusBadge = isPago
       ? `<span style="background:#dcfce7;color:#166534;padding:2px 8px;border-radius:5px;font-size:10px;font-weight:700">✅ Pago${r.dt_pagamento?' · '+fmt.date(r.dt_pagamento):''}</span>`
       : `<span style="background:#f3f4f6;color:#6b7280;padding:2px 8px;border-radius:5px;font-size:10px;font-weight:700">⏳ Pendente</span>`;
-    const btnBaixa = isPago
+    const btnBaixa = !permissoesRet.pagamentos ? '' : isPago
       ? `<button class="act-btn" onclick="reabrirRetirada(${r.id})" title="Reabrir" style="color:#d97706">↩</button>`
       : `<button class="act-btn" onclick="darBaixaRetirada(${r.id})" title="Registrar pagamento antecipado" style="color:#16a34a;font-size:14px">💸</button>`;
     return `<tr${semCusto?' style="background:#fffbeb"':isPago?' style="opacity:.8;background:#f0fdf4"':''}>
@@ -411,12 +466,12 @@ function renderizar(lista){
       </td>
       <td style="text-align:center">${statusBadge}</td>
       <td style="text-align:center">
-        ${r.baixa_pdv
+        ${!permissoesRet.pdv ? (r.baixa_pdv?'✅ Baixado':'—') : r.baixa_pdv
           ? `<span style="background:#dbeafe;color:#1e40af;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:700;cursor:pointer" onclick="toggleBaixaPDV(${r.id},true)" title="Baixado por ${r.baixa_pdv_por_nome||'—'} em ${r.dt_baixa_pdv?fmt.date(r.dt_baixa_pdv):'—'} · Clique para desfazer">✅ PDV${r.dt_baixa_pdv?' '+fmt.date(r.dt_baixa_pdv):''}</span>`
           : `<button class="act-btn" onclick="toggleBaixaPDV(${r.id},false)" title="Marcar que baixou no PDV" style="color:#2563eb;font-size:13px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:5px;padding:2px 7px">PDV?</button>`
         }
       </td>
-      <td>${btnBaixa}${btnAtualizar}<button class="act-btn" onclick="editarPreco(${r.id},${_preco},${_qtd})" title="Editar preço" style="color:var(--purple)">✏️</button><button class="act-btn" onclick="excluir(${r.id})" style="color:var(--red-l)">🗑</button></td>
+      <td>${btnBaixa}${permissoesRet.editar?`${btnAtualizar}<button class="act-btn" onclick="editarPreco(${r.id},${_preco},${_qtd})" title="Editar preço" style="color:var(--purple)">✏️</button><button class="act-btn" onclick="excluir(${r.id})" style="color:var(--red-l)">🗑</button>`:''}${!btnBaixa&&!permissoesRet.editar?'—':''}</td>
     </tr>`;
   }).join('');
 
@@ -427,6 +482,9 @@ function renderizar(lista){
       const _qtd   = parseFloat(r.qtd||1);
       const _preco = parseFloat(r.preco_unitario||0);
       const _total = r.valor_total ? parseFloat(r.valor_total) : _qtd*_preco;
+      const btnBaixaMobile = !permissoesRet.pagamentos ? '' : r.status==='pago'
+        ? `<button class="act-btn" onclick="reabrirRetirada(${r.id})" title="Reabrir" style="color:#d97706">↩ Reabrir</button>`
+        : `<button class="act-btn" onclick="darBaixaRetirada(${r.id})" title="Registrar pagamento" style="color:#16a34a">💸 Pagar</button>`;
       return `<div class="ret-card${semCusto?' style="border-left:3px solid #d97706"':''}">
         <div class="ret-card-header">
           <div>
@@ -440,11 +498,14 @@ function renderizar(lista){
           <span>Qtd: <strong>${_qtd.toFixed(3)}</strong></span>
           <span>Custo: <strong>${semCusto?'—':fmt.brl(_preco)}</strong></span>
         </div>
-        <div class="ret-card-acoes">
+        ${(permissoesRet.editar||permissoesRet.pagamentos)?`<div class="ret-card-acoes">
+          ${btnBaixaMobile}
+          ${permissoesRet.editar?`
           <button class="act-btn" onclick="editarPreco(${r.id},${_preco},${_qtd})" style="color:var(--purple);font-size:13px;padding:4px 10px;border:1px solid var(--border);border-radius:6px;background:#fff;cursor:pointer">✏️ Editar</button>
           <button class="act-btn" onclick="excluir(${r.id})" style="color:var(--red-l);font-size:13px;padding:4px 10px;border:1px solid #fca5a5;border-radius:6px;background:#fff5f5;cursor:pointer">🗑</button>
           ${semCusto?`<button onclick="atualizarCusto(${r.id},${r.produto_id},${_qtd})" style="color:#d97706;font-size:13px;padding:4px 10px;border:1px solid #fcd34d;border-radius:6px;background:#fffbeb;cursor:pointer">🔄 Atualizar custo</button>`:''}
-        </div>
+          `:''}
+        </div>`:''}
       </div>`;
     }).join('') || '<div style="text-align:center;padding:20px;color:var(--muted);font-size:13px">Nenhuma retirada no período</div>';
   }
@@ -455,6 +516,8 @@ function renderizar(lista){
     tfootVal.textContent = fmt.brl(totalLista);
     tfoot.style.display = '';
   }
+  const estado=JSON.parse(localStorage.getItem('bb_ret_colunas')||'{}');
+  colunas.forEach(([k],i)=>aplicarColuna(i, (k==='acoes'&&!permissoesRet.editar&&!permissoesRet.pagamentos) ? false : estado[k]!==false));
 }
 
 async function atualizarCusto(retId, prodId, qtd) {
@@ -808,6 +871,7 @@ async function salvar(){
   });
   if (!itens.length){ toast('Adicione ao menos um produto'); return; }
 
+  const botao=document.getElementById('btn-salvar'); botao.disabled=true; botao.textContent='Salvando...';
   // Salva cada item como uma retirada separada
   let erros = 0;
   for (const item of itens) {
@@ -826,7 +890,8 @@ async function salvar(){
   }
   if (erros) toast(`⚠️ ${erros} item(s) com erro ao salvar`);
   else toast(`✅ ${itens.length} item(s) registrado(s)!`);
-  fecharModal(); carregar(); carregarLimites();
+  botao.disabled=false; botao.textContent='💾 Registrar Retirada';
+  fecharModal(); await carregarFuncionarios(); carregar();
 }
 
 // Estado do modal de pagamento
@@ -904,6 +969,7 @@ window.confirmarPagamentoRet = async function confirmarPagamentoRet() {
     .filter(r => _pagRetIds.includes(r.id))
     .reduce((s,r) => s + parseFloat(r.valor_total||0), 0);
 
+  if (Math.abs(valor-totalSel)>0.01) { toast('⚠️ O pagamento deve quitar integralmente as retiradas selecionadas'); return; }
   const obsCompleta = [forma, obs].filter(Boolean).join(': ') || null;
   let erros = 0, salvos = 0;
 
@@ -911,16 +977,11 @@ window.confirmarPagamentoRet = async function confirmarPagamentoRet() {
     const r = retiradas.find(x => x.id === id);
     if (!r) continue;
     const valorItem = parseFloat(r.valor_total||0);
-    // Marcar como pago apenas se o valor pago cobre o item inteiro
-    const proporcao  = totalSel > 0 ? valorItem / totalSel : 1;
-    const valorPagoItem = Math.min(valor * proporcao, valorItem);
-    const cobreTotal = valorPagoItem >= valorItem - 0.01;
-
     const d = await api.patch(`/api/retiradas/${id}/baixa`, {
       dtPagamento: data || null,
       obs: obsCompleta || null,
-      marcarPago: cobreTotal, // backend usará isso para decidir o status
-      valorPago: parseFloat(valorPagoItem.toFixed(2)),
+      marcarPago: true,
+      valorPago: valorItem,
     });
     if (d.ok) salvos++;
     else { erros++; console.error('baixa erro', id, d.erro); }
@@ -1013,7 +1074,7 @@ window.imprimirRetiradas = function imprimirRetiradas() {
       <td><b>${r.funcionario_nome}</b></td>
       <td>${r.descricao}</td>
       <td style="text-align:right">${fmtQtd(r.qtd)}</td>
-      <td style="text-align:right">${r.preco_custo ? brl(r.preco_custo) : '—'}</td>
+      <td style="text-align:right">${r.preco_unitario ? brl(r.preco_unitario) : '—'}</td>
       <td style="text-align:right;font-weight:700">${brl(r.valor_total)}</td>
       <td style="text-align:center;font-size:10px">${pgto}</td>
       <td style="text-align:center;font-size:10px">${pdv}</td>

@@ -279,6 +279,17 @@ if(window.self !== window.top){
   <option value="admin">Admin — Acesso Total</option>
 </select>
       </div>
+      <div class="fg" id="u-permissoes-wrap">
+        <label>Permissões adicionais — Retiradas</label>
+        <div style="display:grid;gap:8px;background:#faf7f4;border:1px solid var(--border);border-radius:9px;padding:12px">
+          <label style="font-size:12px;text-transform:none;letter-spacing:0;color:var(--text);display:flex;gap:8px;align-items:center"><input type="checkbox" id="u-p-ret-ver" style="width:auto"> Ver retiradas e limites de toda a equipe</label>
+          <label style="font-size:12px;text-transform:none;letter-spacing:0;color:var(--text);display:flex;gap:8px;align-items:center"><input type="checkbox" id="u-p-ret-lancar" style="width:auto"> Lançar retiradas para outros funcionários</label>
+          <label style="font-size:12px;text-transform:none;letter-spacing:0;color:var(--text);display:flex;gap:8px;align-items:center"><input type="checkbox" id="u-p-ret-pagar" style="width:auto"> Marcar pagamentos e reabrir</label>
+          <label style="font-size:12px;text-transform:none;letter-spacing:0;color:var(--text);display:flex;gap:8px;align-items:center"><input type="checkbox" id="u-p-ret-pdv" style="width:auto"> Controlar baixa no PDV</label>
+          <label style="font-size:12px;text-transform:none;letter-spacing:0;color:var(--text);display:flex;gap:8px;align-items:center"><input type="checkbox" id="u-p-ret-editar" style="width:auto"> Editar custos e excluir lançamentos</label>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:5px">Sem essas permissões, o usuário vê e lança apenas as próprias retiradas.</div>
+      </div>
     </div>
     <div class="modal-foot">
       <button class="btn btn-s" onclick="fecharUsr()">Cancelar</button>
@@ -469,6 +480,12 @@ function abrirUsuario(id){
   document.getElementById('u-email').value = u?.email||'';
   document.getElementById('u-senha').value = '';
   document.getElementById('u-perfil').value= u?.perfil||'caixa';
+  const p=u?.permissoes||{};
+  document.getElementById('u-p-ret-ver').checked=!!p.retiradas_visualizar_equipe;
+  document.getElementById('u-p-ret-lancar').checked=!!p.retiradas_lancar_equipe;
+  document.getElementById('u-p-ret-pagar').checked=!!p.retiradas_pagamentos;
+  document.getElementById('u-p-ret-pdv').checked=!!p.retiradas_pdv;
+  document.getElementById('u-p-ret-editar').checked=!!p.retiradas_editar;
   document.getElementById('u-senha-wrap').style.display = u?'none':'';
   document.getElementById('modal-usr').classList.add('open');
 }
@@ -481,11 +498,18 @@ async function salvarUsr(){
     email:  document.getElementById('u-email').value.trim(),
     senha:  document.getElementById('u-senha').value,
     perfil: document.getElementById('u-perfil').value,
+    permissoes: {
+      retiradas_visualizar_equipe:document.getElementById('u-p-ret-ver').checked,
+      retiradas_lancar_equipe:document.getElementById('u-p-ret-lancar').checked,
+      retiradas_pagamentos:document.getElementById('u-p-ret-pagar').checked,
+      retiradas_pdv:document.getElementById('u-p-ret-pdv').checked,
+      retiradas_editar:document.getElementById('u-p-ret-editar').checked
+    },
   };
   if(!body.nome||!body.email){ toast('Nome e e-mail obrigatórios'); return; }
   if(!id && !body.senha){ toast('Senha obrigatória para novo usuário'); return; }
   const d = id
-    ? await api.put(`/auth/usuarios/${id}`, {nome:body.nome,email:body.email,perfil:body.perfil})
+    ? await api.put(`/auth/usuarios/${id}`, {nome:body.nome,email:body.email,perfil:body.perfil,permissoes:body.permissoes})
     : await api.post('/auth/usuarios', body);
   if(!d.ok){ toast('Erro: '+d.erro); return; }
   toast(id?'Usuário atualizado!':'Usuário criado!');

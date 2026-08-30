@@ -96,9 +96,77 @@ module.exports = function (pool, app) {
     return parseFloat(rows[0].total);
   }
 
+  // Gestor representa o funcionário comum: ele só enxerga e lança para o
+  // cadastro de funcionário vinculado ao próprio usuário. Administração é
+  // exclusiva do perfil admin.
+  async function carregarEscopo(req, res, next) {
+    if (req.user?.perfil === 'admin') { req.podeRetirada = () => true; return next(); }
+    try {
+      const { rows } = await pool.query(
+        `SELECT u.permissoes, f.id, f.nome, f.limite_retirada
+           FROM usuarios u
+           LEFT JOIN funcionarios f ON f.usuario_id=u.id AND f.ativo=true
+          WHERE u.id=$1
+          ORDER BY f.id LIMIT 1`,
+        [req.user?.id]
+      );
+      if (!rows.length) return res.status(403).json({ ok:false, erro:'Usuário não encontrado' });
+      const permissoes = rows[0].permissoes || {};
+      req.podeRetirada = chave => permissoes[chave] === true;
+      req.funcionarioProprio = rows[0].id ? rows[0] : null;
+      if (!req.podeRetirada('retiradas_visualizar_equipe')) {
+        if (!req.funcionarioProprio) return res.status(403).json({ ok:false, erro:'Seu usuário não está vinculado a um funcionário ativo' });
+        req.funcionarioEscopo = req.funcionarioProprio;
+      }
+      next();
+    } catch (e) { res.status(500).json({ ok:false, erro:e.message }); }
+  }
+  const permitir = chave => (req, res, next) => req.podeRetirada?.(chave)
+    ? next()
+    : res.status(403).json({ ok:false, erro:'Você não possui permissão para esta ação' });
+
+  r.use(carregarEscopo);
+
+  // ── GET /limites — todos em uma chamada; funcionário recebe apenas o seu ─
+  r.get('/limites', async (req, res) => {
+    try {
+      const mesRef = req.query.mes || (() => {
+        const d = new Date();
+        return `${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+      })();
+      const params = [mesRef], filtro = req.funcionarioEscopo
+        ? (params.push(req.funcionarioEscopo.id), `AND f.id = $2`)
+        : '';
+      const { rows } = await pool.query(`
+        SELECT f.id, f.nome,
+               COALESCE(f.limite_retirada,0)::numeric AS limite,
+               COALESCE(SUM(ret.valor_total),0)::numeric AS usado
+          FROM funcionarios f
+          LEFT JOIN retiradas ret ON ret.funcionario_id=f.id AND ret.mes=$1
+         WHERE f.ativo=true ${filtro}
+         GROUP BY f.id, f.nome, f.limite_retirada
+         ORDER BY f.nome
+      `, params);
+      res.json({ ok:true, funcionarioProprioId:req.funcionarioProprio?.id || null, permissoes: {
+        visualizarEquipe:req.podeRetirada('retiradas_visualizar_equipe'),
+        lancarEquipe:req.podeRetirada('retiradas_lancar_equipe'),
+        pagamentos:req.podeRetirada('retiradas_pagamentos'),
+        pdv:req.podeRetirada('retiradas_pdv'),
+        editar:req.podeRetirada('retiradas_editar')
+      }, data:rows.map(x => ({
+        ...x,
+        limite:Number(x.limite), usado:Number(x.usado),
+        saldo:Math.max(0, Number(x.limite)-Number(x.usado))
+      })) });
+    } catch (e) { res.status(500).json({ ok:false, erro:e.message }); }
+  });
+
   // ── GET /limite/:funcionario_id ────────────────────────────────────────────
   r.get('/limite/:funcionario_id', async (req, res) => {
     try {
+      const funcionarioId = req.funcionarioEscopo?.id || parseInt(req.params.funcionario_id);
+      if (req.funcionarioEscopo && parseInt(req.params.funcionario_id) !== funcionarioId)
+        return res.status(403).json({ ok:false, erro:'Você só pode consultar o próprio limite' });
       const { mes } = req.query;
       const mesRef = mes || (() => {
         const d = new Date();
@@ -106,7 +174,7 @@ module.exports = function (pool, app) {
       })();
 
       const { rows: func } = await pool.query(
-        `SELECT id, nome, limite_retirada FROM funcionarios WHERE id = $1`, [req.params.funcionario_id]
+        `SELECT id, nome, limite_retirada FROM funcionarios WHERE id = $1`, [funcionarioId]
       );
       if (!func.length) return res.status(404).json({ ok: false, erro: 'Funcionário não encontrado' });
 
@@ -125,7 +193,8 @@ module.exports = function (pool, app) {
   // ── GET /relatorio ─────────────────────────────────────────────────────────
   r.get('/relatorio', async (req, res) => {
     try {
-      const { mes, funcionario_id } = req.query;
+      const { mes } = req.query;
+      const funcionario_id = req.funcionarioEscopo?.id || req.query.funcionario_id;
       const mesRef = mes || (() => {
         const d = new Date();
         return `${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
@@ -145,10 +214,10 @@ module.exports = function (pool, app) {
           f.limite_retirada - COALESCE(SUM(ret.valor_total), 0) AS saldo
         FROM funcionarios f
         LEFT JOIN retiradas ret ON ret.funcionario_id = f.id AND ret.mes = $1
-        WHERE f.ativo = true
+        WHERE f.ativo = true ${funcionario_id ? 'AND f.id = $2' : ''}
         GROUP BY f.id, f.nome, f.limite_retirada
         ORDER BY total_retirado DESC
-      `, [mesRef]);
+      `, funcionario_id ? [mesRef, parseInt(funcionario_id)] : [mesRef]);
 
       // Detalhes (se filtrado por funcionário)
       let detalhes = [];
@@ -170,7 +239,8 @@ module.exports = function (pool, app) {
   // ── GET / ──────────────────────────────────────────────────────────────────
   r.get('/', async (req, res) => {
     try {
-      const { mes, funcionario_id } = req.query;
+      const { mes } = req.query;
+      const funcionario_id = req.funcionarioEscopo?.id || req.query.funcionario_id;
       const conds = [], params = [];
       if (mes) { params.push(mes); conds.push(`ret.mes = $${params.length}`); }
       if (funcionario_id) { params.push(parseInt(funcionario_id)); conds.push(`ret.funcionario_id = $${params.length}`); }
@@ -191,9 +261,7 @@ module.exports = function (pool, app) {
   });
 
   // ── GET /pendentes/count — resumo para o dashboard administrativo ─────────
-  r.get('/pendentes/count', async (req, res) => {
-    if (!['admin','gestor'].includes(req.user?.perfil))
-      return res.status(403).json({ ok:false, erro:'Acesso restrito a admin/gestor' });
+  r.get('/pendentes/count', permitir('retiradas_visualizar_equipe'), async (req, res) => {
     try {
       const { rows } = await pool.query(`
         SELECT COUNT(*) AS total, COALESCE(SUM(valor_total),0) AS valor
@@ -207,8 +275,15 @@ module.exports = function (pool, app) {
   // ── POST / ─────────────────────────────────────────────────────────────────
   r.post('/', async (req, res) => {
     const ret = req.body;
+    if (!req.podeRetirada('retiradas_lancar_equipe') && !req.funcionarioProprio && req.user?.perfil !== 'admin')
+      return res.status(403).json({ ok:false, erro:'Seu usuário não está vinculado a um funcionário ativo' });
+    if (req.funcionarioEscopo || (!req.podeRetirada('retiradas_lancar_equipe') && req.funcionarioProprio))
+      ret.funcionarioId = (req.funcionarioEscopo || req.funcionarioProprio).id;
     if (!ret.funcionarioId || !ret.descricao) {
       return res.status(400).json({ ok: false, erro: 'funcionarioId e descricao obrigatórios' });
+    }
+    if (req.user?.perfil !== 'admin' && !ret.produtoId) {
+      return res.status(400).json({ ok:false, erro:'Selecione um produto cadastrado para registrar a retirada' });
     }
     try {
       // Verifica funcionário e limite
@@ -223,9 +298,11 @@ module.exports = function (pool, app) {
 
       // Calcula valor
       let precUnit = parseFloat(ret.precoUnitario || 0);
-      if (!precUnit && ret.produtoId) {
+      if (ret.produtoId) {
         const prod = await pool.query(`SELECT preco_custo FROM produtos WHERE id = $1`, [ret.produtoId]);
-        if (prod.rows.length) precUnit = parseFloat(prod.rows[0].preco_custo);
+        if (!prod.rows.length) return res.status(404).json({ ok:false, erro:'Produto não encontrado' });
+        // O custo oficial do produto prevalece sobre valores enviados pela tela.
+        precUnit = parseFloat(prod.rows[0].preco_custo || 0);
       }
       const qtd        = parseFloat(ret.qtd || 1);
       const descPct    = parseFloat(ret.descontoPct ?? 0); // 0 = paga integral, 100 = gratuito
@@ -265,8 +342,7 @@ module.exports = function (pool, app) {
   });
 
   // ── PUT /:id ───────────────────────────────────────────────────────────────
-  r.put('/:id', async (req, res) => {
-    if (!['admin','gestor'].includes(req.user?.perfil)) return res.status(403).json({ ok:false, erro:'Acesso restrito a admin/gestor' });
+  r.put('/:id', permitir('retiradas_editar'), async (req, res) => {
     const ret = req.body;
     try {
       await pool.query(`
@@ -292,9 +368,7 @@ module.exports = function (pool, app) {
   });
 
   // ── PATCH /:id/baixa-pdv — marca que a baixa foi feita no PDV ───────────────
-  r.patch('/:id/baixa-pdv', async (req, res) => {
-    if (!['admin','gestor','financeiro','operador'].includes(req.user?.perfil))
-      return res.status(403).json({ ok:false, erro:'Sem permissão' });
+  r.patch('/:id/baixa-pdv', permitir('retiradas_pdv'), async (req, res) => {
     const { desfazer } = req.body;
     try {
       await pool.query(`ALTER TABLE retiradas ADD COLUMN IF NOT EXISTS baixa_pdv BOOLEAN DEFAULT false`).catch(()=>{});
@@ -316,20 +390,16 @@ module.exports = function (pool, app) {
   });
 
   // ── PATCH /:id/baixa — funcionário registra pagamento antecipado ────────────
-  r.patch('/:id/baixa', async (req, res) => {
+  r.patch('/:id/baixa', permitir('retiradas_pagamentos'), async (req, res) => {
     const id = parseInt(req.params.id);
-    const { dtPagamento, obs, valorPago } = req.body;
+    const { dtPagamento, valorPago } = req.body;
+    const obs = req.body.obs ?? null;
     const marcarPago = req.body.marcarPago !== false && req.body.marcarPago !== 'false';
     try {
       const { rows } = await pool.query(
         `SELECT usuario_id, funcionario_id FROM retiradas WHERE id=$1`, [id]
       );
       if (!rows.length) return res.status(404).json({ ok:false, erro:'Retirada não encontrada' });
-
-      const isAdminGestor = ['admin','gestor','financeiro','operador'].includes(req.user?.perfil);
-      const isProprietario = rows[0].usuario_id === req.user?.id || rows[0].usuario_id == null;
-      if (!isAdminGestor && !isProprietario)
-        return res.status(403).json({ ok:false, erro:'Você só pode dar baixa nas suas próprias retiradas' });
 
       // Garantir colunas existem (idempotente)
       await Promise.all([
@@ -338,8 +408,6 @@ module.exports = function (pool, app) {
         pool.query(`ALTER TABLE retiradas ADD COLUMN IF NOT EXISTS pago_por INTEGER`).catch(()=>{}),
       ]);
       // Garantir que obs nunca é undefined (causa 'could not determine data type of parameter $4')
-      if (obs === undefined) obs = null;
-
       const novoStatus = marcarPago ? 'pago' : 'pendente';
 
       const obsVal = (obs != null && obs !== '') ? String(obs) : null;
@@ -352,14 +420,12 @@ module.exports = function (pool, app) {
         WHERE id = $5
       `, [novoStatus, dtPagamento||null, req.user?.id, obsVal, id]);
 
-      res.json({ ok:true, msg: novoStatus === 'pago' ? 'Retirada marcada como paga' : 'Pagamento parcial registrado' });
+      res.json({ ok:true, msg: novoStatus === 'pago' ? 'Retirada marcada como paga' : 'Retirada mantida pendente' });
     } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
   });
 
   // ── PATCH /:id/reabrir — admin/gestor reabre retirada paga ─────────────────
-  r.patch('/:id/reabrir', async (req, res) => {
-    if (!['admin','gestor'].includes(req.user?.perfil))
-      return res.status(403).json({ ok:false, erro:'Acesso restrito a admin/gestor' });
+  r.patch('/:id/reabrir', permitir('retiradas_pagamentos'), async (req, res) => {
     try {
       await pool.query(
         `UPDATE retiradas SET status='pendente', dt_pagamento=NULL, pago_por=NULL WHERE id=$1`,
@@ -370,8 +436,7 @@ module.exports = function (pool, app) {
   });
 
   // ── DELETE /:id ────────────────────────────────────────────────────────────
-  r.delete('/:id', async (req, res) => {
-    if (!['admin','gestor'].includes(req.user?.perfil)) return res.status(403).json({ ok:false, erro:'Acesso restrito a admin/gestor' });
+  r.delete('/:id', permitir('retiradas_editar'), async (req, res) => {
     try {
       await pool.query(`DELETE FROM retiradas WHERE id = $1`, [parseInt(req.params.id)]);
       res.json({ ok: true });
