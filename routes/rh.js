@@ -304,6 +304,20 @@ module.exports = function (pool, app) {
         atualizado_em       TIMESTAMPTZ DEFAULT NOW()
       )
     `).catch(() => {});
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS rh_meta_fds_config (
+        id            INTEGER PRIMARY KEY DEFAULT 1 CHECK (id=1),
+        faixas        JSONB NOT NULL DEFAULT '[{"meta":18000,"premio":75},{"meta":24000,"premio":100}]'::jsonb,
+        modo_rateio   TEXT NOT NULL DEFAULT 'todos'
+                      CHECK (modo_rateio IN ('todos','participou','proporcional')),
+        atualizado_por INTEGER,
+        atualizado_em TIMESTAMPTZ DEFAULT NOW()
+      )
+    `).catch(() => {});
+    await pool.query(`
+      INSERT INTO rh_meta_fds_config(id) VALUES(1) ON CONFLICT(id) DO NOTHING
+    `).catch(() => {});
     // Garante colunas novas em tabela existente
     for (const [col, def] of [
       ['status',           "TEXT NOT NULL DEFAULT 'pendente'"],
@@ -590,6 +604,125 @@ module.exports = function (pool, app) {
       `, [funcionario_id, data_inicio, tipo_escala || 'F', primeiro_dia || 'trabalho', trabalha_fds || 'ambos']);
       res.json({ ok: true });
     } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ── Premiação por meta de faturamento do fim de semana ───────────────────
+  function somenteAdmin(req, res, next) {
+    if (req.user?.perfil !== 'admin') return res.status(403).json({ ok:false, erro:'Acesso restrito ao administrador' });
+    next();
+  }
+
+  function trabalhaNoDia(func, data) {
+    if (!func.data_inicio) return null;
+    const inicio = new Date(`${String(func.data_inicio).slice(0,10)}T12:00:00`);
+    const dia = new Date(`${data}T12:00:00`);
+    if (dia < inicio) return false;
+    const dow = dia.getDay();
+    const fds = func.trabalha_fds || 'ambos';
+    if (fds === 'nao' || (fds === 'domingo' && dow !== 0) || (fds === 'sabado' && dow !== 6)) return false;
+    if (dow === 6) return true;
+    if (dow !== 0) return false;
+
+    const primDom = new Date(inicio);
+    while (primDom.getDay() !== 0) primDom.setDate(primDom.getDate() + 1);
+    if (dia < primDom) return false;
+    const semanas = Math.round((dia - primDom) / 604800000);
+    const tipo = func.tipo_escala || 'F';
+    const primeiro = func.primeiro_dia || 'trabalho';
+    if (tipo === 'M') {
+      const ciclo = primeiro === 'trabalho' ? [true,true,false] : [false,true,true];
+      return ciclo[((semanas % 3) + 3) % 3];
+    }
+    return semanas % 2 === 0 ? primeiro === 'trabalho' : primeiro !== 'trabalho';
+  }
+
+  function dataIsoLocal(data) {
+    return `${data.getFullYear()}-${String(data.getMonth()+1).padStart(2,'0')}-${String(data.getDate()).padStart(2,'0')}`;
+  }
+
+  r.get('/meta-fds/config', somenteAdmin, async (req, res) => {
+    try {
+      const { rows } = await pool.query(`SELECT faixas, modo_rateio, atualizado_em FROM rh_meta_fds_config WHERE id=1`);
+      res.json({ ok:true, data:rows[0] || { faixas:[{meta:18000,premio:75},{meta:24000,premio:100}], modo_rateio:'todos' } });
+    } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
+  });
+
+  r.put('/meta-fds/config', somenteAdmin, async (req, res) => {
+    const modo = req.body.modo_rateio;
+    const faixas = Array.isArray(req.body.faixas) ? req.body.faixas
+      .map(f => ({ meta:Number(f.meta), premio:Number(f.premio) }))
+      .filter(f => Number.isFinite(f.meta) && Number.isFinite(f.premio) && f.meta > 0 && f.premio >= 0)
+      .sort((a,b) => a.meta-b.meta) : [];
+    if (!['todos','participou','proporcional'].includes(modo) || !faixas.length)
+      return res.status(400).json({ ok:false, erro:'Informe ao menos uma faixa válida e uma forma de cálculo' });
+    if (new Set(faixas.map(f => f.meta)).size !== faixas.length)
+      return res.status(400).json({ ok:false, erro:'Não repita o mesmo valor de meta' });
+    try {
+      await pool.query(`
+        INSERT INTO rh_meta_fds_config(id,faixas,modo_rateio,atualizado_por,atualizado_em)
+        VALUES(1,$1::jsonb,$2,$3,NOW())
+        ON CONFLICT(id) DO UPDATE SET faixas=$1::jsonb, modo_rateio=$2, atualizado_por=$3, atualizado_em=NOW()
+      `, [JSON.stringify(faixas), modo, req.user.id]);
+      res.json({ ok:true, data:{faixas,modo_rateio:modo} });
+    } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
+  });
+
+  r.get('/meta-fds/calcular', somenteAdmin, async (req, res) => {
+    const mes = String(req.query.mes || ''); // YYYY-MM
+    if (!/^\d{4}-\d{2}$/.test(mes)) return res.status(400).json({ ok:false, erro:'Mês inválido' });
+    try {
+      const [ano, mesNum] = mes.split('-').map(Number);
+      if (mesNum < 1 || mesNum > 12) return res.status(400).json({ ok:false, erro:'Mês inválido' });
+      const inicio = new Date(ano, mesNum-1, 1, 12);
+      const fim = new Date(ano, mesNum, 1, 12);
+      const sabados = [];
+      for (const d=new Date(inicio); d<fim; d.setDate(d.getDate()+1)) {
+        if (d.getDay()===6) {
+          const sab=dataIsoLocal(d), domObj=new Date(d); domObj.setDate(domObj.getDate()+1);
+          sabados.push({sabado:sab,domingo:dataIsoLocal(domObj)});
+        }
+      }
+      const datas = sabados.flatMap(x => [x.sabado,x.domingo]);
+      const [{rows:fatRows},{rows:funcs},{rows:cfgRows}] = await Promise.all([
+        pool.query(`
+          SELECT data_inicio::text AS data, COALESCE(SUM(fat_liquido),0)::numeric AS valor
+          FROM faturamento_periodos
+          WHERE tipo_periodo='dia' AND data_inicio = ANY($1::date[])
+          GROUP BY data_inicio
+        `, [datas]),
+        pool.query(`
+          SELECT f.id,f.nome,f.cargo,e.data_inicio,e.tipo_escala,e.primeiro_dia,e.trabalha_fds
+          FROM funcionarios f LEFT JOIN rh_escalas e ON e.funcionario_id=f.id
+          WHERE f.ativo=true ORDER BY f.nome
+        `),
+        pool.query(`SELECT faixas,modo_rateio FROM rh_meta_fds_config WHERE id=1`)
+      ]);
+      const cfg = cfgRows[0] || {faixas:[{meta:18000,premio:75},{meta:24000,premio:100}],modo_rateio:'todos'};
+      const faixas = [...(cfg.faixas||[])].sort((a,b)=>Number(a.meta)-Number(b.meta));
+      const fat = Object.fromEntries(fatRows.map(x => [String(x.data).slice(0,10),Number(x.valor)]));
+      const finais = sabados.map(fds => {
+        const fatSab=Number(fat[fds.sabado]||0), fatDom=Number(fat[fds.domingo]||0), total=fatSab+fatDom;
+        const faixa=[...faixas].reverse().find(f=>total>=Number(f.meta));
+        const premio=faixa?Number(faixa.premio):0;
+        const pessoas=funcs.map(f => {
+          const sab=trabalhaNoDia(f,fds.sabado), dom=trabalhaNoDia(f,fds.domingo);
+          const dias=[sab,dom].filter(Boolean).length;
+          let fator=cfg.modo_rateio==='todos' ? 1 : cfg.modo_rateio==='participou' ? (dias>0?1:0) : dias/2;
+          if (!premio) fator=0;
+          return {id:f.id,nome:f.nome,cargo:f.cargo||'',trabalhou_sabado:sab,trabalhou_domingo:dom,
+            sem_escala:sab===null&&dom===null,fator,valor:Number((premio*fator).toFixed(2))};
+        });
+        return {...fds,faturamento_sabado:fatSab,faturamento_domingo:fatDom,total,
+          meta_atingida:faixa?Number(faixa.meta):null,premio_base:premio,
+          dados_completos:Object.prototype.hasOwnProperty.call(fat,fds.sabado)&&Object.prototype.hasOwnProperty.call(fat,fds.domingo),
+          pessoas,total_premiacao:Number(pessoas.reduce((s,p)=>s+p.valor,0).toFixed(2))};
+      });
+      res.json({ok:true,data:{mes,config:cfg,finais,resumo:{
+        finais_analisados:finais.length, metas_batidas:finais.filter(x=>x.premio_base>0).length,
+        total_faturamento:Number(finais.reduce((s,x)=>s+x.total,0).toFixed(2)),
+        total_premiacao:Number(finais.reduce((s,x)=>s+x.total_premiacao,0).toFixed(2))
+      }}});
+    } catch(e) { res.status(500).json({ok:false,erro:e.message}); }
   });
 
   // ── POST /apontamento com data ─────────────────────────────────────────────
