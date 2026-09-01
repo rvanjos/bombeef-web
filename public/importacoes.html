@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Central de Importações</title>
+<link rel="stylesheet" href="/css/bb-theme.css?v=central-importacoes-1">
+<script src="/js/api.js"></script>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f7f4f0;color:#1a1a1a;font-family:'DM Sans',Arial,sans-serif}.page{padding:16px 18px 32px;overflow:auto}.head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}.head h1{font-size:18px;margin:0 0 3px}.head p{font-size:12px;color:#766d65;margin:0}.summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:16px}.sum{background:#fff;border:1px solid #e6ded6;border-radius:10px;padding:11px 13px}.sum-l{font-size:9px;text-transform:uppercase;letter-spacing:.7px;color:#766d65;font-weight:700}.sum-v{font-size:14px;font-weight:700;margin-top:4px}.filters{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:#fff;border:1px solid #e6ded6;border-radius:10px;padding:10px 12px;margin-bottom:14px}.search{flex:1;min-width:210px;border:1px solid #ddd4cc;border-radius:7px;padding:8px 10px;font:inherit;font-size:12px}.chips{display:flex;gap:5px;flex-wrap:wrap}.chip{border:1px solid #ddd4cc;background:#fff;border-radius:7px;padding:6px 10px;font-size:11px;cursor:pointer}.chip.active{background:#8b0000;border-color:#8b0000;color:#fff}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.card{background:#fff;border:1px solid #e6ded6;border-radius:11px;padding:14px;display:flex;flex-direction:column;min-height:205px;box-shadow:0 2px 8px rgba(0,0,0,.04)}.card-top{display:flex;gap:10px;align-items:flex-start}.ico{width:38px;height:38px;border-radius:9px;background:#f5eeee;display:grid;place-items:center;font-size:19px;flex:0 0 auto}.card h2{font-size:14px;margin:1px 0 3px}.module{font-size:9px;text-transform:uppercase;letter-spacing:.6px;color:#8b0000;font-weight:700}.desc{font-size:11px;line-height:1.45;color:#766d65;margin:10px 0}.accept{font-size:10px;color:#766d65;background:#f8f5f2;padding:6px 8px;border-radius:6px;margin-top:auto}.actions{display:flex;gap:7px;margin-top:10px}.btn{border:1px solid #ddd4cc;background:#fff;border-radius:7px;padding:7px 11px;font-size:11px;font-weight:700;cursor:pointer}.btn-primary{background:#8b0000;border-color:#8b0000;color:#fff}.status{display:none;margin-top:9px;padding:8px;border-radius:7px;font-size:11px;line-height:1.35}.status.wait{display:block;background:#fff8e1;color:#805800}.status.ok{display:block;background:#eaf8f0;color:#166534}.status.err{display:block;background:#fff0f0;color:#991b1b}.guided{border-left:3px solid #1a5c8a}.note{background:#eef5ff;border:1px solid #bdd4f2;color:#244e77;border-radius:9px;padding:10px 12px;font-size:11px;margin-bottom:14px}.hidden{display:none!important}@media(max-width:1100px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.summary{grid-template-columns:repeat(2,1fr)}}@media(max-width:650px){.page{padding:12px}.grid,.summary{grid-template-columns:1fr}.head{flex-direction:column}.card{min-height:auto}}
+</style>
+</head>
+<body>
+<main class="page">
+  <div class="head"><div><h1>📥 Central de Importações</h1><p>Um único lugar para atualizar os dados de todos os módulos.</p></div><button class="btn" onclick="carregarResumo()">↻ Atualizar status</button></div>
+  <div class="note"><strong>Fluxo seguro:</strong> escolha o relatório pelo nome, confira a finalidade e envie. Importações que exigem conferência manual abrem diretamente na etapa correta do módulo.</div>
+  <section class="summary">
+    <div class="sum"><div class="sum-l">Produtos / Estoque</div><div class="sum-v" id="sum-produtos">—</div></div>
+    <div class="sum"><div class="sum-l">Vendas diárias</div><div class="sum-v" id="sum-vendas">—</div></div>
+    <div class="sum"><div class="sum-l">Boletos / NF-e</div><div class="sum-v" id="sum-boletos">—</div></div>
+    <div class="sum"><div class="sum-l">Validade / Compras</div><div class="sum-v">Importação sob demanda</div></div>
+  </section>
+  <div class="filters"><input class="search" id="busca" placeholder="Buscar relatório ou módulo..." oninput="filtrar()"><div class="chips"><button class="chip active" data-filter="todos" onclick="setFiltro(this)">Todos</button><button class="chip" data-filter="estoque" onclick="setFiltro(this)">Estoque</button><button class="chip" data-filter="financeiro" onclick="setFiltro(this)">Financeiro</button><button class="chip" data-filter="vendas" onclick="setFiltro(this)">Vendas</button></div></div>
+  <section class="grid" id="grid">
+    <article class="card" data-tags="estoque produtos cadastro relatorio pdv 302">
+      <div class="card-top"><div class="ico">📦</div><div><div class="module">Produtos e estoque</div><h2>Relatório completo do PDV</h2></div></div>
+      <p class="desc">Atualiza cadastro, fornecedor, custos, preços, categoria e saldo de estoque. É o caminho oficial para Produtos.</p><div class="accept">XLSX, XLS ou CSV · Relatório 302/completo</div>
+      <div class="actions"><button class="btn btn-primary" onclick="selecionar('produtos')">Selecionar arquivo</button></div><div class="status" id="st-produtos"></div>
+    </article>
+    <article class="card" data-tags="estoque compras vendas planilha relatorio compra fornecedor">
+      <div class="card-top"><div class="ico">🛒</div><div><div class="module">Compras</div><h2>Planilha de compras/vendas</h2></div></div>
+      <p class="desc">Importa a movimentação usada no histórico de compras, custos e sincronização de fornecedores.</p><div class="accept">XLSX, XLS ou CSV</div>
+      <div class="actions"><button class="btn btn-primary" onclick="selecionar('compras')">Selecionar arquivo</button></div><div class="status" id="st-compras"></div>
+    </article>
+    <article class="card" data-tags="vendas financeiro faturamento xmenu listagem diaria nfce mei">
+      <div class="card-top"><div class="ico">💰</div><div><div class="module">Faturamento</div><h2>Vendas diárias XMenu</h2></div></div>
+      <p class="desc">Importa o faturamento por dia, clientes, NFC-e e MEI. Alimenta Dashboard, Metas, DRE e Premiação FDS.</p><div class="accept">Listagem de Vendas por Dia · CSV, TXT ou planilha</div>
+      <div class="actions"><button class="btn btn-primary" onclick="selecionar('faturamento')">Selecionar arquivo</button></div><div class="status" id="st-faturamento"></div>
+    </article>
+    <article class="card" data-tags="vendas financeiro faturamento xmenu formas pagamento relatorio 205 pix cartao">
+      <div class="card-top"><div class="ico">💳</div><div><div class="module">Faturamento</div><h2>Formas de pagamento</h2></div></div>
+      <p class="desc">Complementa os dias já importados com dinheiro, PIX, cartões, vouchers e demais recebimentos.</p><div class="accept">Relatório 205 do XMenu · CSV, TXT ou planilha</div>
+      <div class="actions"><button class="btn btn-primary" onclick="selecionar('formas')">Selecionar arquivo</button></div><div class="status" id="st-formas"></div>
+    </article>
+    <article class="card" data-tags="estoque validade vencimento pereciveis planilha">
+      <div class="card-top"><div class="ico">🗓️</div><div><div class="module">Validade</div><h2>Planilha de perecíveis</h2></div></div>
+      <p class="desc">Importa produtos, datas de validade, lotes, quantidades, responsáveis e ações preventivas.</p><div class="accept">XLSX, XLS ou CSV</div>
+      <div class="actions"><button class="btn btn-primary" onclick="selecionar('validade')">Selecionar arquivo</button></div><div class="status" id="st-validade"></div>
+    </article>
+    <article class="card guided" data-tags="financeiro dre extrato banco ofx xlsx csv">
+      <div class="card-top"><div class="ico">🏦</div><div><div class="module">DRE</div><h2>Extrato bancário</h2></div></div>
+      <p class="desc">Exige conferência, classificação e escolha da competência antes de salvar. A Central abre diretamente o DRE para concluir com segurança.</p><div class="accept">OFX, OFC, XLSX, XLS ou CSV · importação guiada</div>
+      <div class="actions"><button class="btn btn-primary" onclick="abrirModulo('dre','Importe em OFX/XLSX')">Abrir importação guiada</button></div>
+    </article>
+    <article class="card guided" data-tags="financeiro boletos nfe xml pdf nota fiscal">
+      <div class="card-top"><div class="ico">📄</div><div><div class="module">Boletos</div><h2>NF-e XML e boletos PDF</h2></div></div>
+      <p class="desc">A NF-e precisa conferir parcelas e vencimentos; o PDF pode exigir validação dos dados extraídos. Abre o módulo na etapa segura.</p><div class="accept">XML ou PDF · importação guiada</div>
+      <div class="actions"><button class="btn btn-primary" onclick="abrirModulo('boletos')">Abrir importação guiada</button></div>
+    </article>
+    <article class="card guided" data-tags="vendas analise produtos relatorio 101 xlsx">
+      <div class="card-top"><div class="ico">📈</div><div><div class="module">Análise de vendas</div><h2>Vendas por produto</h2></div></div>
+      <p class="desc">O relatório precisa ser pré-visualizado e validado antes de atualizar curva ABC, ranking e histórico.</p><div class="accept">Relatório 101 · XLSX ou XLS · importação guiada</div>
+      <div class="actions"><button class="btn btn-primary" onclick="abrirModulo('vendasproduto')">Abrir importação guiada</button></div>
+    </article>
+  </section>
+</main>
+<input type="file" id="arquivo" hidden onchange="enviarArquivo(this.files[0])">
+<script>
+let api=null, tipoAtual=null, filtro='todos';
+const cfg={
+ produtos:{rota:'/api/produtos/import',accept:'.xlsx,.xls,.csv'},
+ compras:{rota:'/api/compras/importar',accept:'.xlsx,.xls,.csv'},
+ faturamento:{rota:'/api/faturamento/import-listagem',accept:'.csv,.txt,.xlsx,.xls'},
+ formas:{rota:'/api/faturamento/import-formas',accept:'.csv,.txt,.xlsx,.xls'},
+ validade:{rota:'/api/validade/import',accept:'.xlsx,.xls,.csv'}
+};
+window.onBBReady=()=>{api=BB.api;carregarResumo()};
+function selecionar(tipo){tipoAtual=tipo;const el=document.getElementById('arquivo');el.accept=cfg[tipo].accept;el.value='';el.click()}
+function status(tipo,classe,html){const el=document.getElementById('st-'+tipo);el.className='status '+classe;el.innerHTML=html}
+async function enviarArquivo(file){
+ if(!file||!tipoAtual)return;const tipo=tipoAtual,c=cfg[tipo];
+ status(tipo,'wait','⏳ Enviando <strong>'+esc(file.name)+'</strong>...');
+ try{const fd=new FormData();fd.append('arquivo',file);const r=await api.upload(c.rota,fd);if(r.ok===false)throw new Error(r.erro||'Falha na importação');
+  const detalhes=[];if(r.inseridos!=null)detalhes.push(r.inseridos+' inserido(s)');if(r.atualizados!=null)detalhes.push(r.atualizados+' atualizado(s)');if(r.dias!=null)detalhes.push(r.dias+' dia(s)');if(r.duplicatas!=null)detalhes.push(r.duplicatas+' repetido(s) ignorado(s)');
+  status(tipo,'ok','✅ Importação concluída'+(detalhes.length?'<br>'+detalhes.join(' · '):''));BB.toast('✅ Importação concluída');
+  try{await api.get('/api/hub/invalidar-cache')}catch(_){}carregarResumo();
+ }catch(e){status(tipo,'err','❌ '+esc(e.message||'Erro ao importar'))}
+}
+async function carregarResumo(){try{const r=await api.get('/api/hub/resumo');if(!r.ok)return;const i=r.data.importacoes||{};setTxt('sum-produtos',i.produtos?.msg||'—');setTxt('sum-vendas',i.vendas?.msg||'—');setTxt('sum-boletos',i.boletos?.msg||'—')}catch(_){}}
+function setTxt(id,v){const el=document.getElementById(id);if(el)el.textContent='Última atualização: '+v}
+function abrirModulo(tab){try{parent.postMessage({type:'bb_nav',tab},'*')}catch(_){}}
+function setFiltro(btn){filtro=btn.dataset.filter;document.querySelectorAll('.chip').forEach(x=>x.classList.toggle('active',x===btn));filtrar()}
+function filtrar(){const q=document.getElementById('busca').value.toLowerCase().trim();document.querySelectorAll('.card').forEach(c=>{const t=c.dataset.tags||'';c.classList.toggle('hidden',!((filtro==='todos'||t.includes(filtro))&&(!q||t.includes(q)||c.textContent.toLowerCase().includes(q))))})}
+function esc(s){return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+</script>
+</body>
+</html>
