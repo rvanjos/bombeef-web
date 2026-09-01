@@ -614,8 +614,13 @@ module.exports = function (pool, app) {
 
   function trabalhaNoDia(func, data) {
     if (!func.data_inicio) return null;
-    const inicio = new Date(`${String(func.data_inicio).slice(0,10)}T12:00:00`);
+    const inicioIso = func.data_inicio instanceof Date
+      ? func.data_inicio.toISOString().slice(0,10)
+      : String(func.data_inicio).match(/^\d{4}-\d{2}-\d{2}/)?.[0];
+    if (!inicioIso) return null;
+    const inicio = new Date(`${inicioIso}T12:00:00`);
     const dia = new Date(`${data}T12:00:00`);
+    if (Number.isNaN(inicio.getTime()) || Number.isNaN(dia.getTime())) return null;
     if (dia < inicio) return false;
     const dow = dia.getDay();
     const fds = func.trabalha_fds || 'ambos';
@@ -624,7 +629,10 @@ module.exports = function (pool, app) {
     if (dow !== 0) return false;
 
     const primDom = new Date(inicio);
-    while (primDom.getDay() !== 0) primDom.setDate(primDom.getDate() + 1);
+    for (let i=0; i<7 && primDom.getDay() !== 0; i++) {
+      primDom.setDate(primDom.getDate() + 1);
+    }
+    if (primDom.getDay() !== 0) return null;
     if (dia < primDom) return false;
     const semanas = Math.round((dia - primDom) / 604800000);
     const tipo = func.tipo_escala || 'F';
