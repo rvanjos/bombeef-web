@@ -378,7 +378,6 @@ module.exports = function(pool, app) {
   r.post('/import', upload.single('arquivo'), async (req, res) => {
     if (!req.file) return res.status(400).json({ ok: false, erro: 'Arquivo não enviado' });
     const { data_inicio, data_fim, label } = req.body;
-    if (!data_inicio || !data_fim) return res.status(400).json({ ok: false, erro: 'Informe o período' });
     try {
       const formato = detectarFormato(req.file.buffer);
       const d = formato === 'xmenu'
@@ -391,6 +390,8 @@ module.exports = function(pool, app) {
       if (!ini || !fim) return res.status(400).json({ ok: false, erro: 'Informe o período' });
 
       const di = new Date(ini), df = new Date(fim);
+      if (Number.isNaN(di.getTime()) || Number.isNaN(df.getTime()) || df < di)
+        return res.status(400).json({ ok: false, erro: 'Período inválido' });
       const nDias = Math.round((df - di) / 86400000) + 1;
       const tipo = nDias === 1 ? 'dia' : nDias <= 7 ? 'semana' : nDias <= 31 ? 'mes' : 'custom';
 
@@ -398,6 +399,10 @@ module.exports = function(pool, app) {
         (formato === 'xmenu' ? `XMenu ${ini.slice(0,7)}` : null);
 
       const { rows } = await pool.query(`
+        WITH removidos AS (
+          DELETE FROM faturamento_periodos
+          WHERE $3='dia' AND data_inicio=$1 AND tipo_periodo='dia'
+        )
         INSERT INTO faturamento_periodos
           (data_inicio, data_fim, tipo_periodo, label, fat_bruto, fat_liquido,
            total_pessoas, ticket_medio, descontos, categorias, pagamentos, csv_raw)
@@ -433,6 +438,66 @@ module.exports = function(pool, app) {
       );
       res.json({ ok: true, data: rows });
     } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ── GET /qualidade — verifica a integridade da fonte oficial diária ──────
+  r.get('/qualidade', async (req, res) => {
+    try {
+      const { ano, mes, data_ini, data_fim } = req.query;
+      const conds = [`tipo_periodo='dia'`], params = [];
+      if (ano && !data_ini) { params.push(ano); conds.push(`EXTRACT(YEAR FROM data_inicio)=$${params.length}`); }
+      if (mes && ano) { params.push(mes); conds.push(`EXTRACT(MONTH FROM data_inicio)=$${params.length}`); }
+      if (data_ini) { params.push(data_ini); conds.push(`data_inicio >= $${params.length}`); }
+      if (data_fim) { params.push(data_fim); conds.push(`data_inicio <= $${params.length}`); }
+      const { rows } = await pool.query(`
+        SELECT TO_CHAR(data_inicio,'YYYY-MM-DD') AS data, COUNT(*)::int AS registros
+        FROM faturamento_periodos
+        WHERE ${conds.join(' AND ')}
+        GROUP BY data_inicio
+        ORDER BY data_inicio
+      `, params);
+      const duplicados = rows.filter(x => x.registros > 1);
+      res.json({
+        ok: true,
+        registros: rows.reduce((s,x) => s + x.registros, 0),
+        dias: rows.length,
+        duplicados,
+        saudavel: duplicados.length === 0,
+      });
+    } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
+  });
+
+  // Consolidação deliberada: mantém a importação diária mais recente e
+  // instala a proteção que impede novas duplicidades da mesma data.
+  r.post('/corrigir-duplicidades', autoPublish('faturamento', 'faturamento_atualizado'), async (req, res) => {
+    if (req.user?.perfil !== 'admin')
+      return res.status(403).json({ ok:false, erro:'Acesso restrito ao administrador' });
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const removidos = await client.query(`
+        WITH ranked AS (
+          SELECT id, ROW_NUMBER() OVER (
+            PARTITION BY data_inicio, tipo_periodo
+            ORDER BY COALESCE(atualizado_em, criado_em) DESC, id DESC
+          ) AS pos
+          FROM faturamento_periodos
+          WHERE tipo_periodo='dia'
+        )
+        DELETE FROM faturamento_periodos
+        WHERE id IN (SELECT id FROM ranked WHERE pos > 1)
+        RETURNING id
+      `);
+      await client.query(`
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_faturamento_dia
+        ON faturamento_periodos(data_inicio) WHERE tipo_periodo='dia'
+      `);
+      await client.query('COMMIT');
+      res.json({ ok:true, removidos:removidos.rowCount });
+    } catch(e) {
+      await client.query('ROLLBACK');
+      res.status(500).json({ ok:false, erro:e.message });
+    } finally { client.release(); }
   });
 
   // ── GET /resumo — totais agrupados por mês ────────────────────────────────
@@ -487,12 +552,15 @@ module.exports = function(pool, app) {
             nfce_pct: d.fat_bruto > 0 ? Math.round(d.fat_nfce / d.fat_bruto * 100) : 0,
             mei_pct:  d.fat_bruto > 0 ? Math.round(d.fat_mei  / d.fat_bruto * 100) : 0,
           });
-          // Upsert: remove dia existente e reinsere com dados atualizados
+          // Upsert: remove todas as versões do dia e reinsere uma fonte única.
           const existing = await client.query(
             `SELECT id FROM faturamento_periodos WHERE data_inicio=$1 AND tipo_periodo='dia'`, [d.data]
           );
           if (existing.rows.length) {
-            await client.query(`DELETE FROM faturamento_periodos WHERE id=$1`, [existing.rows[0].id]);
+            await client.query(
+              `DELETE FROM faturamento_periodos WHERE data_inicio=$1 AND tipo_periodo='dia'`,
+              [d.data]
+            );
             atualizados++;
           } else {
             inseridos++;
@@ -568,8 +636,9 @@ module.exports = function(pool, app) {
               ...formasNorm,
             };
             await client.query(
-              `UPDATE faturamento_periodos SET pagamentos=$1, atualizado_em=NOW() WHERE id=$2`,
-              [JSON.stringify(pagMerge), existing.rows[0].id]
+              `UPDATE faturamento_periodos SET pagamentos=$1, atualizado_em=NOW()
+               WHERE data_inicio=$2 AND tipo_periodo='dia'`,
+              [JSON.stringify(pagMerge), d.data]
             );
             atualizados++;
           } else {

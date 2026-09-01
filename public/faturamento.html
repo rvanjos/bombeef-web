@@ -84,7 +84,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
 .modal-bg.open{display:flex;}
 .modal{background:var(--white);border-radius:13px;width:100%;max-width:480px;
   box-shadow:0 20px 60px rgba(0,0,0,.3);overflow:hidden;}
-.modal-head{background:var(--green);padding:14px 20px;display:flex;
+.modal-head{background:var(--red);padding:14px 20px;display:flex;
   justify-content:space-between;align-items:center;}
 .modal-head h3{color:#fff;font-size:15px;font-weight:700;}
 .modal-close{background:none;border:none;color:rgba(255,255,255,.8);font-size:22px;cursor:pointer;}
@@ -103,7 +103,14 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
 .pag-cred{background:#e8f0ff;color:#1a5c8a;}.pag-deb{background:#e8fff0;color:#1a7a4a;}
 .pag-pix{background:#f0ffe8;color:#2d7a00;}.pag-din{background:#fff8e0;color:#b35c00;}
 .pag-vou{background:#f5e8ff;color:#6040c0;}.pag-out{background:#f0f0f0;color:#555;}
-@media(max-width:700px){.kpi-grid{grid-template-columns:1fr 1fr;}.charts-row{grid-template-columns:1fr;}.chart-card canvas{max-height:200px;}}
+@media(max-width:1200px){.kpi-grid{grid-template-columns:repeat(3,minmax(0,1fr));}}
+@media(max-width:800px){.kpi-grid{grid-template-columns:1fr 1fr;}.charts-row{grid-template-columns:1fr;}.chart-card canvas{max-height:200px;}}
+@media(max-width:520px){.kpi-grid{grid-template-columns:1fr;}}
+.table-scroll{overflow:auto;max-width:100%;-webkit-overflow-scrolling:touch;}
+.table-scroll .tbl{min-width:760px;}
+.table-scroll .tbl thead th{position:sticky;top:0;z-index:2;}
+.quality-banner{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid #b9e3cb;background:#eefaf3;color:#166534;border-radius:9px;margin-bottom:12px;font-size:12px;}
+.quality-banner.warn{border-color:#f2c46d;background:#fff8e7;color:#8a5100;}
 
 /* ── Normalização bb-base ────────────────────────────────────────────────── */
 /* Botão primário */
@@ -156,6 +163,13 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
 <script>if(window.self!==window.top){var ph=document.querySelector('.ph');if(ph)ph.style.display='none';}</script>
 <div class="body">
 
+  <div class="tabs">
+    <button class="tab active" id="tab-visao" onclick="showTab('visao',this)">📊 Visão Geral</button>
+    <button class="tab" onclick="showTab('periodos',this)">📅 Períodos</button>
+    <button class="tab" onclick="showTab('mensal',this)">📆 Mensal</button>
+    <button class="tab" onclick="showTab('reconciliacao',this)">🔄 Reconciliação</button>
+  </div>
+
   <!-- KPIs -->
   <div style="margin-bottom:16px;">
       <div class="kpi-grid">
@@ -166,14 +180,6 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
     <div class="kpi vermelho"><div class="kpi-l">Descontos</div><div class="kpi-v" id="k-desc">—</div><div class="kpi-s" id="k-desc-s"></div></div>
   </div>
     </div>
-
-  <div class="tabs">
-    <button class="tab active" id="tab-visao" onclick="showTab('visao',this)">📊 Visão Geral</button>
-    <button class="tab" onclick="showTab('periodos',this)">📅 Períodos</button>
-    <button class="tab" onclick="showTab('mensal',this)">📆 Mensal</button>
-
-    <button class="tab" onclick="showTab('reconciliacao',this)">🔄 Reconciliação</button>
-  </div>
 
   <!-- ── VISÃO GERAL ── -->
   <div id="sec-visao" style="padding-top:14px">
@@ -216,11 +222,12 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
       </div>
 
       <div style="flex:1"></div>
-      <button class="btn btn-g" style="background:#1a5c8a" onclick="abrirImportListagem()">📋 Importar</button>
-      <button class="btn btn-g" style="background:#6040c0" onclick="abrirImportFormas()">💳 Formas Pgto <span style="background:rgba(255,255,255,.25);border-radius:4px;padding:1px 6px;font-size:10px;font-weight:800">Rel. 205</span></button>
+      <button class="btn btn-p" onclick="abrirImportListagem()">📋 Importar vendas diárias</button>
+      <button class="btn btn-s" onclick="abrirImportFormas()">💳 Importar formas de pagamento</button>
       <button class="btn btn-s" onclick="exportarXLS()">📊 Excel</button>
       <button class="btn btn-s" style="color:var(--red-l)" onclick="limparFaturamento()">🗑️ Limpar</button>
     </div>
+    <div id="fat-quality" class="quality-banner" style="display:none"></div>
     <!-- Indicador do período selecionado -->
     <div id="fat-periodo-label" style="font-size:11px;color:var(--muted);padding:4px 2px;margin-bottom:4px"></div>
 
@@ -252,10 +259,11 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
         <option value="semana">Semanal</option>
         <option value="mes">Mensal</option>
       </select>
-      <button class="btn btn-g" onclick="abrirImport()">📥 Importar CSV</button>
+      <button class="btn btn-s" onclick="abrirImport()">📥 Importar período manual</button>
+      <span style="font-size:11px;color:var(--muted)">Registros agregados não entram nos totais oficiais.</span>
     </div>
     <div class="card">
-      <div style="overflow-x:auto"><table class="tbl">
+      <div class="table-scroll"><table class="tbl">
         <thead><tr>
           <th>Período</th><th>Tipo</th><th>Pessoas</th><th>Ticket Médio</th>
           <th>Descontos</th><th>Fat. Bruto</th><th>Fat. Líquido</th><th></th>
@@ -465,7 +473,9 @@ async function carregar(){
   const ini  = document.getElementById('flt-data-ini')?.value;
   const fim  = document.getElementById('flt-data-fim')?.value;
 
-  let url = '/api/faturamento?limit=500';
+  // A visão oficial usa somente lançamentos diários. Períodos agregados ficam
+  // disponíveis na aba Períodos, sem serem somados novamente nos indicadores.
+  let url = '/api/faturamento?tipo=dia&limit=500';
   if (modo === 'ano')       url += `&ano=${ano}`;
   if (modo === 'mes')       url += `&ano=${ano}&mes=${mes}`;
   if (modo === 'intervalo' && ini && fim) url += `&data_ini=${ini}&data_fim=${fim}`;
@@ -487,6 +497,38 @@ async function carregar(){
   renderKPIs();
   renderCharts();
   renderCatBars();
+  carregarQualidade();
+}
+
+async function carregarQualidade(){
+  const modo = document.getElementById('flt-modo')?.value || 'ano';
+  const ano  = document.getElementById('flt-ano')?.value;
+  const mes  = document.getElementById('flt-mes-sel')?.value;
+  const ini  = document.getElementById('flt-data-ini')?.value;
+  const fim  = document.getElementById('flt-data-fim')?.value;
+  let url = '/api/faturamento/qualidade?';
+  if(modo==='ano') url += `ano=${ano}`;
+  if(modo==='mes') url += `ano=${ano}&mes=${mes}`;
+  if(modo==='intervalo' && ini && fim) url += `data_ini=${ini}&data_fim=${fim}`;
+  const d = await api.get(url);
+  const el = document.getElementById('fat-quality');
+  if(!el || !d.ok){ if(el) el.style.display='none'; return; }
+  el.style.display='flex';
+  el.classList.toggle('warn', !d.saudavel);
+  if(d.saudavel){
+    el.innerHTML = `<span>✅</span><span><strong>Fonte diária consistente.</strong> ${d.dias} dia(s) importado(s), sem duplicidade.</span>`;
+  } else {
+    const qtd = d.duplicados.length;
+    el.innerHTML = `<span>⚠️</span><span style="flex:1"><strong>${qtd} data(s) duplicada(s).</strong> Os totais podem estar acima do correto.</span><button class="btn btn-p" onclick="corrigirDuplicidades()">Corrigir</button>`;
+  }
+}
+
+async function corrigirDuplicidades(){
+  if(!confirm('Manter a importação diária mais recente de cada data e remover as versões repetidas?')) return;
+  const d = await api.post('/api/faturamento/corrigir-duplicidades', {});
+  if(!d.ok){ toast('Erro: '+(d.erro||'não foi possível corrigir')); return; }
+  toast(`✅ ${d.removidos} registro(s) repetido(s) removido(s)`);
+  carregar();
 }
 
 function renderKPIs(){
@@ -507,7 +549,9 @@ function renderKPIs(){
 
 function renderCharts(){
   // Gráfico de faturamento por período (últimos 12)
-  const ultimos = [...periodos].reverse().slice(-12);
+  const ultimos = [...periodos]
+    .sort((a,b) => String(a.data_inicio).localeCompare(String(b.data_inicio)))
+    .slice(-12);
   const labels  = ultimos.map(p => {
     const di = p.data_inicio?.slice(0,10);
     const df = p.data_fim?.slice(0,10);
@@ -590,6 +634,9 @@ function renderCatBars(){
   for(const p of periodos){
     const cats = typeof p.categorias==='string' ? JSON.parse(p.categorias||'{}') : (p.categorias||{});
     for(const [k,v] of Object.entries(cats)){
+      // nfce_pct/mei_pct são metadados de emissão fiscal, não faturamento de
+      // categoria; somá-los como moeda gerava um gráfico incorreto.
+      if(k.endsWith('_pct')) continue;
       catTotais[k] = (catTotais[k]||0) + parseFloat(v||0);
     }
   }
@@ -1125,8 +1172,8 @@ canvas{max-width:100%;height:auto!important}
 <!-- ── MODAL: Importar Listagem XMenu ────────────────────────────────── -->
 <div class="modal-bg" id="modal-import-listagem" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center;padding:16px">
   <div style="background:#fff;border-radius:13px;width:100%;max-width:460px;box-shadow:0 20px 60px rgba(0,0,0,.3)">
-    <div style="background:#1a5c8a;padding:14px 20px;border-radius:13px 13px 0 0;display:flex;justify-content:space-between;align-items:center">
-      <div style="color:#fff;font-weight:700;font-size:15px">📋 Importar Listagem XMenu</div>
+    <div style="background:#8B0000;padding:14px 20px;border-radius:13px 13px 0 0;display:flex;justify-content:space-between;align-items:center">
+      <div style="color:#fff;font-weight:700;font-size:15px">📋 Importar vendas diárias</div>
       <button onclick="document.getElementById('modal-import-listagem').style.display='none'" style="background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:6px;padding:4px 12px;cursor:pointer;font-size:18px">×</button>
     </div>
     <div style="padding:20px">
@@ -1138,7 +1185,7 @@ canvas{max-width:100%;height:auto!important}
       </div>
       <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px">
         <button onclick="document.getElementById('modal-import-listagem').style.display='none'" style="padding:9px 18px;border:1px solid #e8e0d8;border-radius:7px;background:#fff;cursor:pointer;font-size:13px">Cancelar</button>
-        <button id="btn-imp-listagem" onclick="importarListagem()" style="padding:9px 18px;background:#1a5c8a;color:#fff;border:none;border-radius:7px;cursor:pointer;font-size:13px;font-weight:600">💾 Importar</button>
+        <button id="btn-imp-listagem" onclick="importarListagem()" style="padding:9px 18px;background:#8B0000;color:#fff;border:none;border-radius:7px;cursor:pointer;font-size:13px;font-weight:600">💾 Importar</button>
       </div>
     </div>
   </div>
@@ -1147,8 +1194,8 @@ canvas{max-width:100%;height:auto!important}
 <!-- ── MODAL: Importar Formas de Pagamento (Rel.205) ─────────────────── -->
 <div class="modal-bg" id="modal-import-formas" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center;padding:16px">
   <div style="background:#fff;border-radius:13px;width:100%;max-width:460px;box-shadow:0 20px 60px rgba(0,0,0,.3)">
-    <div style="background:#6040c0;padding:14px 20px;border-radius:13px 13px 0 0;display:flex;justify-content:space-between;align-items:center">
-      <div style="color:#fff;font-weight:700;font-size:15px">💳 Formas de Pagamento — Rel. 205</div>
+    <div style="background:#8B0000;padding:14px 20px;border-radius:13px 13px 0 0;display:flex;justify-content:space-between;align-items:center">
+      <div style="color:#fff;font-weight:700;font-size:15px">💳 Importar formas de pagamento</div>
       <button onclick="document.getElementById('modal-import-formas').style.display='none'" style="background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:6px;padding:4px 12px;cursor:pointer;font-size:18px">×</button>
     </div>
     <div style="padding:20px">
@@ -1160,7 +1207,7 @@ canvas{max-width:100%;height:auto!important}
       </div>
       <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px">
         <button onclick="document.getElementById('modal-import-formas').style.display='none'" style="padding:9px 18px;border:1px solid #e8e0d8;border-radius:7px;background:#fff;cursor:pointer;font-size:13px">Cancelar</button>
-        <button id="btn-imp-formas" onclick="importarFormas()" style="padding:9px 18px;background:#6040c0;color:#fff;border:none;border-radius:7px;cursor:pointer;font-size:13px;font-weight:600">💾 Importar</button>
+        <button id="btn-imp-formas" onclick="importarFormas()" style="padding:9px 18px;background:#8B0000;color:#fff;border:none;border-radius:7px;cursor:pointer;font-size:13px;font-weight:600">💾 Importar</button>
       </div>
     </div>
   </div>
