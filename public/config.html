@@ -664,6 +664,7 @@ async function carregarMetas(){
   if(!d.ok) return;
   metas = d.data;
   const tb = document.getElementById('tbody-metas');
+  if(!tb) return;
   tb.innerHTML = metas.slice(0,12).map(m=>{
     const pct = m.faturamento_meta>0 ? ((m.faturamento_real/m.faturamento_meta)*100).toFixed(0) : '—';
     return `<tr>
