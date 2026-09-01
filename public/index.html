@@ -1222,7 +1222,7 @@ function showTab(tab) {
 // ── RENOVAÇÃO AUTOMÁTICA DE TOKEN ────────────────────────────────────────────
 async function renovarTokenSeNecessario() {
   const tk = token();
-  if (!tk) return false;
+  if (!tk) return;
   try {
     // Decodifica o payload sem verificar assinatura (só para checar exp)
     const payload = JSON.parse(atob(tk.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
@@ -1238,19 +1238,10 @@ async function renovarTokenSeNecessario() {
         sessionStorage.setItem('bb_token', r.token);
         broadcastToken();
         console.log('[auth] Token renovado automaticamente');
-        return true;
       }
-      if (restam <= 0) sessionStorage.removeItem('bb_token');
-      return restam > 0;
     }
-    return true;
   } catch(e) {
     console.warn('[auth] Não foi possível renovar token:', e.message);
-    try {
-      const payload = JSON.parse(atob(tk.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
-      if (payload.exp <= Math.floor(Date.now()/1000)) sessionStorage.removeItem('bb_token');
-    } catch(_) { sessionStorage.removeItem('bb_token'); }
-    return false;
   }
 }
 
@@ -2164,10 +2155,10 @@ window.addEventListener('message', e => {
   }
   // Logout do iframe
   if (e.data.type === 'bb_logout') {
-    // O iframe já tentou renovar e só envia bb_logout quando a renovação falha.
-    // Não redistribuir o mesmo token vencido, pois isso cria um ciclo de 401.
-    fazerLogout();
-    toast('Sua sessão expirou. Entre novamente.', 4500);
+    renovarTokenSeNecessario().then(() => {
+      if (token()) broadcastToken();
+      else fazerLogout();
+    }).catch(() => fazerLogout());
   }
   // Navegação do iframe
   if (e.data.type === 'bb_navigate') showTab(e.data.tab);
