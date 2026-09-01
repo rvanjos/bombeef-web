@@ -240,6 +240,7 @@ let _txs = [];         // lançamentos do mês atual
 let _txsTodos = [];    // lançamentos de todos os meses (para detectar conflitos)
 let _mesAtual = '';
 let _aprovados = new Set(); // IDs aprovados nesta sessão
+let _conflitosResolvidos = new Set(); // decisões persistidas no servidor
 
 // ── Inicialização ─────────────────────────────────────────────────────────────
 async function init() {
@@ -258,6 +259,7 @@ async function carregar() {
   document.getElementById('stats-row').style.display = 'none';
 
   try {
+    await carregarConflitosResolvidos();
     // Carrega todas as sessões do DRE
     const lista = await api.get('/api/dre/sessoes?limit=500');
     if (!lista.ok || !lista.data?.length) {
@@ -435,6 +437,7 @@ function detectarConflitos() {
     if (!t.categoria || !t.lancamento) continue;
     const chave = _chaveForn(t);
     if (!chave || chave.length < 4) continue; // ignora chaves muito curtas/genéricas
+    if (_conflitosResolvidos.has(_chaveResolucao(chave, t.categoria))) continue;
     if (seenForn.has(chave)) continue;
 
     // Outros lançamentos do mesmo fornecedor em outros meses com categoria diferente
@@ -449,10 +452,22 @@ function detectarConflitos() {
     if (outrosMeses.length > 0) {
       seenForn.add(chave);
       const catsOutros = [...new Set(outrosMeses.map(x => x.categoria))];
-      conflitos.push({ tx: t, outrosMeses: outrosMeses.slice(0,5), catsOutros });
+      conflitos.push({ tx: t, outrosMeses, catsOutros });
     }
   }
   return conflitos;
+}
+
+function _chaveResolucao(chaveFornecedor, categoria) {
+  return `${_mesAtual}|${chaveFornecedor}|${categoria}`;
+}
+
+async function carregarConflitosResolvidos() {
+  _conflitosResolvidos = new Set();
+  if (!_mesAtual) return;
+  const r = await api.get('/api/auditoria/dre/conflitos-resolvidos?mes=' + encodeURIComponent(_mesAtual));
+  if (!r.ok) return;
+  r.data.forEach(x => _conflitosResolvidos.add(_chaveResolucao(x.chave_fornecedor, x.categoria_atual)));
 }
 
 function _chaveForn(t) {
@@ -700,23 +715,21 @@ async function aplicarCat(id) {
 
 // Some o card de conflito quando marcado como correto
 // Ignorar todos os conflitos de uma vez
-function ignorarTodosConflitos() {
+async function ignorarTodosConflitos() {
   if (!_conflitosCache?.length) return;
   if (!confirm(`Marcar todos os ${_conflitosCache.length} conflito(s) como corretos?
 
-Isso não altera nenhuma categoria — apenas oculta os conflitos desta sessão de auditoria.`)) return;
-  _conflitosCache.forEach((conf, ci) => {
-    toggleAprovado(conf.tx.id);
+Isso não altera nenhuma categoria. A decisão ficará registrada para este mês.`)) return;
+  let resolvidos = 0;
+  for (let ci=0; ci<_conflitosCache.length; ci++) {
+    const conf = _conflitosCache[ci];
+    if (!await persistirConflitoCorreto(conf)) continue;
+    toggleAprovado(conf.tx.id); resolvidos++;
     const card = document.getElementById('conf-card-' + ci);
     if (card) card.style.display = 'none';
-  });
-  _conflitosCache = [];
-  atualizarBadgesAbas();
-  toast('✅ Todos os conflitos marcados como corretos');
-
-  // Atualiza a aba
-  const el = document.getElementById('lista-conflitos');
-  if (el) el.innerHTML = '<div class="empty">✅ Todos os conflitos foram revisados!</div>';
+  }
+  toast(`✅ ${resolvidos} conflito(s) gravado(s) como corretos`);
+  renderTudo();
 }
 
 // Atualiza os badges das abas após ações
@@ -732,16 +745,27 @@ function atualizarBadgesAbas() {
   if (bc) bc.textContent = conf;
 }
 
-function manterConflito(ci, id) {
+async function manterConflito(ci, id) {
+  const conf = _conflitosCache?.[ci];
+  if (!conf || !await persistirConflitoCorreto(conf)) return;
   toggleAprovado(id);
-  const card = document.getElementById('conf-card-' + ci);
-  if (card) {
-    card.style.transition = 'opacity .3s, max-height .4s';
-    card.style.opacity = '0';
-    card.style.overflow = 'hidden';
-    setTimeout(() => { card.style.display = 'none'; }, 350);
-  }
-  toast('✅ Marcado como correto — não aparecerá mais nesta auditoria');
+  toast('✅ Decisão gravada — este conflito não voltará a aparecer');
+  renderTudo();
+}
+
+async function persistirConflitoCorreto(conf) {
+  return persistirResolucaoConflito(conf.tx, conf.tx.categoria);
+}
+
+async function persistirResolucaoConflito(tx, categoria) {
+  const chave = _chaveForn(tx);
+  const r = await api.post('/api/auditoria/dre/conflitos-resolvidos', {
+    mes_ref:_mesAtual, chave_fornecedor:chave, categoria_atual:categoria,
+    justificativa:'Variação de categoria confirmada como correta pelo administrador'
+  });
+  if (!r.ok) { toast('❌ Não foi possível gravar a decisão: '+(r.erro||'erro desconhecido'), 4500); return false; }
+  _conflitosResolvidos.add(_chaveResolucao(chave, categoria));
+  return true;
 }
 
 // Corrige todos os lançamentos do histórico para a mesma categoria
@@ -764,12 +788,14 @@ async function corrigirTodosHistorico(ci, catAtual) {
 
 async function corrigirCategoria(id, cat) {
   if (!cat) return;
+  const txOriginal = _txsTodos.find(x => String(x.id) === String(id));
   if (!await executarAcaoDRE(id, 'CATEGORIZAR', cat)) return;
   // Atualiza em _txs e _txsTodos
   [_txs, _txsTodos].forEach(arr => {
     const t = arr.find(x => String(x.id) === String(id));
     if (t) t.categoria = cat;
   });
+  if (txOriginal) await persistirResolucaoConflito(txOriginal, cat);
   toggleAprovado(id);
   renderTudo();
 }
