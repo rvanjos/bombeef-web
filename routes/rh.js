@@ -81,7 +81,7 @@ module.exports = function (pool, app) {
                f.usuario_id
                ${camposFinanceiros}
         FROM funcionarios f
-        WHERE f.ativo = true
+        WHERE f.ativo = true AND COALESCE(f.freelancer,false) = false
         ORDER BY f.nome ASC
       `);
       res.json({ ok: true, data: rows });
@@ -96,7 +96,7 @@ module.exports = function (pool, app) {
                e.data_inicio, e.tipo_escala, e.primeiro_dia, e.trabalha_fds
         FROM funcionarios f
         LEFT JOIN rh_escalas e ON e.funcionario_id = f.id
-        WHERE f.ativo = true
+        WHERE f.ativo = true AND COALESCE(f.freelancer,false) = false
         ORDER BY f.nome ASC
       `).catch(() => ({ rows: [] }));
       res.json({ ok: true, data: rows });
@@ -113,7 +113,7 @@ module.exports = function (pool, app) {
     if (perfil !== 'admin') {
       // Verifica se o funcionario_id solicitado corresponde ao usuário logado
       const { rows: check } = await pool.query(
-        `SELECT id FROM funcionarios WHERE id=$1 AND usuario_id=$2 LIMIT 1`,
+        `SELECT id FROM funcionarios WHERE id=$1 AND usuario_id=$2 AND COALESCE(freelancer,false)=false LIMIT 1`,
         [parseInt(funcionario_id), userId]
       ).catch(() => ({ rows: [] }));
       if (!check.length) return res.status(403).json({ ok: false, erro: 'Acesso negado' });
@@ -152,7 +152,7 @@ module.exports = function (pool, app) {
       // O perfil gestor é usado pelos funcionários da operação e fica restrito ao próprio vínculo.
       if (req.user?.perfil !== 'admin') {
         const { rows: vinculados } = await pool.query(
-          `SELECT id FROM funcionarios WHERE id=$1 AND usuario_id=$2 AND ativo=true LIMIT 1`,
+          `SELECT id FROM funcionarios WHERE id=$1 AND usuario_id=$2 AND ativo=true AND COALESCE(freelancer,false)=false LIMIT 1`,
           [funcionarioId, req.user?.id]
         );
         if (!vinculados.length) return res.status(403).json({ ok: false, erro: 'Acesso negado para este funcionário' });
@@ -226,7 +226,7 @@ module.exports = function (pool, app) {
                  atualizado_em, 'pagamento'::text AS origem
           FROM rh_pagamentos
         ) h
-        JOIN funcionarios f ON f.id = h.funcionario_id
+        JOIN funcionarios f ON f.id = h.funcionario_id AND COALESCE(f.freelancer,false)=false
         ${where}
         ORDER BY h.atualizado_em DESC
         LIMIT 500
@@ -332,6 +332,7 @@ module.exports = function (pool, app) {
       ['cargo', 'TEXT'],
       ['salario_base', 'NUMERIC(10,2) DEFAULT 0'],
       ['vale_alimentacao', 'NUMERIC(10,2) DEFAULT 0'],
+      ['freelancer', 'BOOLEAN NOT NULL DEFAULT false'],
     ]) await pool.query(`ALTER TABLE funcionarios ADD COLUMN IF NOT EXISTS ${col} ${def}`).catch(() => {});
   }
   // Aguarda 2s para garantir que config.js já criou a tabela funcionarios
@@ -393,7 +394,7 @@ module.exports = function (pool, app) {
                COALESCE(salario_base, 0) AS salario_base,
                COALESCE(vale_alimentacao, 0) AS vale_alimentacao,
                limite_retirada
-        FROM funcionarios WHERE id = $1
+        FROM funcionarios WHERE id = $1 AND COALESCE(freelancer,false)=false
       `, [funcionario_id]);
 
       res.json({
@@ -526,7 +527,7 @@ module.exports = function (pool, app) {
                     WHERE funcionario_id=f.id AND mes=$1), 0)                                          AS total_retiradas
         FROM funcionarios f
         LEFT JOIN rh_fichas fi ON fi.funcionario_id = f.id AND fi.mes_ref = $1
-        WHERE f.ativo = true
+        WHERE f.ativo = true AND COALESCE(f.freelancer,false) = false
         ORDER BY f.nome ASC
       `, [mes]);
 
@@ -580,7 +581,7 @@ module.exports = function (pool, app) {
                CASE WHEN f.cargo ILIKE '%propri%' OR f.cargo ILIKE '%gerente%' OR f.cargo ILIKE '%homem%' OR f.sexo = 'M' THEN 'M' ELSE 'F' END AS sexo_calc
         FROM rh_escalas e
         JOIN funcionarios f ON f.id = e.funcionario_id
-        WHERE f.ativo = true
+        WHERE f.ativo = true AND COALESCE(f.freelancer,false) = false
         ORDER BY f.nome ASC
       `).catch(() => ({ rows: [] }));
       res.json({ ok: true, data: configs });
@@ -701,7 +702,7 @@ module.exports = function (pool, app) {
         pool.query(`
           SELECT f.id,f.nome,f.cargo,e.data_inicio,e.tipo_escala,e.primeiro_dia,e.trabalha_fds
           FROM funcionarios f LEFT JOIN rh_escalas e ON e.funcionario_id=f.id
-          WHERE f.ativo=true ORDER BY f.nome
+          WHERE f.ativo=true AND COALESCE(f.freelancer,false)=false ORDER BY f.nome
         `),
         pool.query(`SELECT faixas,modo_rateio FROM rh_meta_fds_config WHERE id=1`)
       ]);
@@ -758,8 +759,10 @@ module.exports = function (pool, app) {
     try {
       const { rows } = await pool.query(`
         SELECT
-          (SELECT COUNT(*) FROM rh_apontamentos WHERE status='pendente') +
-          (SELECT COUNT(*) FROM rh_pagamentos WHERE status='pendente') AS total
+          (SELECT COUNT(*) FROM rh_apontamentos a JOIN funcionarios f ON f.id=a.funcionario_id
+            WHERE a.status='pendente' AND COALESCE(f.freelancer,false)=false) +
+          (SELECT COUNT(*) FROM rh_pagamentos p JOIN funcionarios f ON f.id=p.funcionario_id
+            WHERE p.status='pendente' AND COALESCE(f.freelancer,false)=false) AS total
       `);
       res.json({ ok: true, total: parseInt(rows[0].total || 0) });
     } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
@@ -770,13 +773,13 @@ module.exports = function (pool, app) {
     try {
       const { rows: aponts } = await pool.query(`
         SELECT a.*, f.nome AS funcionario_nome, f.cargo, 'apontamento' AS origem
-        FROM rh_apontamentos a JOIN funcionarios f ON f.id=a.funcionario_id
+        FROM rh_apontamentos a JOIN funcionarios f ON f.id=a.funcionario_id AND COALESCE(f.freelancer,false)=false
         WHERE a.status='pendente' ORDER BY a.criado_em DESC
       `);
       const { rows: pags } = await pool.query(`
         SELECT p.*, f.nome AS funcionario_nome, f.cargo, 'pagamento' AS origem,
                p.valor AS valor_total, 1 AS quantidade, p.valor AS valor_unitario
-        FROM rh_pagamentos p JOIN funcionarios f ON f.id=p.funcionario_id
+        FROM rh_pagamentos p JOIN funcionarios f ON f.id=p.funcionario_id AND COALESCE(f.freelancer,false)=false
         WHERE p.status='pendente' ORDER BY p.criado_em DESC
       `);
       res.json({ ok: true, data: [...aponts, ...pags].sort((a,b) => new Date(b.criado_em)-new Date(a.criado_em)) });
@@ -873,7 +876,7 @@ module.exports = function (pool, app) {
                     WHERE funcionario_id=f.id AND mes=$1), 0) AS total_retiradas
         FROM funcionarios f
         LEFT JOIN rh_fichas fi ON fi.funcionario_id=f.id AND fi.mes_ref=$1
-        WHERE f.ativo=true ${whereFunc}
+        WHERE f.ativo=true AND COALESCE(f.freelancer,false)=false ${whereFunc}
         ORDER BY f.nome ASC
       `, params);
 
