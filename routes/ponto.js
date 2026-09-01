@@ -20,6 +20,7 @@ module.exports = function(pool) {
       `ALTER TABLE funcionarios ADD COLUMN IF NOT EXISTS tolerancia_min  INTEGER DEFAULT 10`,
       `ALTER TABLE funcionarios ADD COLUMN IF NOT EXISTS dias_folga      TEXT[] DEFAULT ARRAY[]::TEXT[]`,
       `ALTER TABLE funcionarios ADD COLUMN IF NOT EXISTS usa_ponto       BOOLEAN DEFAULT true`,
+      `ALTER TABLE funcionarios ADD COLUMN IF NOT EXISTS freelancer      BOOLEAN NOT NULL DEFAULT false`,
     ];
     for (const sql of alters) await pool.query(sql).catch(()=>{});
 
@@ -140,7 +141,7 @@ module.exports = function(pool) {
                  COALESCE(tolerancia_min,10)             AS tolerancia_min,
                  COALESCE(dias_folga,ARRAY[]::TEXT[])    AS dias_folga,
                  COALESCE(usa_ponto,true)                AS usa_ponto
-          FROM funcionarios WHERE ativo=true AND COALESCE(usa_ponto,true)=true ${filtroUsuario} ORDER BY nome
+          FROM funcionarios WHERE ativo=true AND COALESCE(usa_ponto,true)=true AND COALESCE(freelancer,false)=false ${filtroUsuario} ORDER BY nome
         `, paramsUsuario);
         rows = r.rows;
       } catch(_) {
@@ -152,7 +153,7 @@ module.exports = function(pool) {
                  COALESCE(jornada_horas,8)               AS jornada_horas,
                  COALESCE(intervalo_min,60)              AS intervalo_min,
                  COALESCE(tolerancia_min,10)             AS tolerancia_min
-          FROM funcionarios WHERE ativo=true AND COALESCE(usa_ponto,true)=true ${filtroUsuario} ORDER BY nome
+          FROM funcionarios WHERE ativo=true AND COALESCE(usa_ponto,true)=true AND COALESCE(freelancer,false)=false ${filtroUsuario} ORDER BY nome
         `, paramsUsuario);
         rows = r2.rows.map(r => ({ ...r, dias_folga:[] }));
       }
@@ -187,7 +188,7 @@ module.exports = function(pool) {
   async function podeRegistrarPara(req, funcionarioId) {
     if (req.user?.perfil === 'admin') return true;
     const { rows } = await pool.query(
-      `SELECT id FROM funcionarios WHERE id=$1 AND usuario_id=$2 AND ativo=true LIMIT 1`,
+      `SELECT id FROM funcionarios WHERE id=$1 AND usuario_id=$2 AND ativo=true AND COALESCE(freelancer,false)=false LIMIT 1`,
       [parseInt(funcionarioId), req.user?.id]
     );
     return rows.length > 0;
@@ -358,7 +359,7 @@ module.exports = function(pool) {
       const { rows } = await pool.query(
         `SELECT p.*, f.horario_entrada, f.horario_saida, f.jornada_horas, f.tolerancia_min, f.intervalo_min
          FROM ponto_registros p
-         JOIN funcionarios f ON f.id=p.funcionario_id
+         JOIN funcionarios f ON f.id=p.funcionario_id AND COALESCE(f.freelancer,false)=false
          WHERE p.funcionario_id=$1 AND p.data_ref=$2`,
         [req.params.funcionario_id, dataRef]
       );
@@ -374,7 +375,7 @@ module.exports = function(pool) {
       const { rows } = await pool.query(`
         SELECT a.*, f.nome AS func_nome
         FROM ponto_auditoria a
-        JOIN funcionarios f ON f.id=a.funcionario_id
+        JOIN funcionarios f ON f.id=a.funcionario_id AND COALESCE(f.freelancer,false)=false
         WHERE ($1::int IS NULL OR a.funcionario_id=$1)
           AND ($2::date IS NULL OR a.horario_batida::date >= $2::date)
           AND ($3::date IS NULL OR a.horario_batida::date <= $3::date)
@@ -404,7 +405,7 @@ module.exports = function(pool) {
           f.nome AS func_nome, f.cargo, f.horario_entrada, f.horario_saida,
           f.jornada_horas, f.tolerancia_min, f.intervalo_min
         FROM ponto_registros p
-        JOIN funcionarios f ON f.id=p.funcionario_id
+        JOIN funcionarios f ON f.id=p.funcionario_id AND COALESCE(f.freelancer,false)=false
         ${where} ORDER BY p.data_ref DESC, f.nome ASC
       `, params);
       res.json({ ok:true, data:rows });
@@ -479,7 +480,7 @@ module.exports = function(pool) {
         LEFT JOIN ponto_registros p ON p.funcionario_id=f.id
           AND EXTRACT(MONTH FROM p.data_ref)=$1
           AND EXTRACT(YEAR FROM p.data_ref)=$2
-        WHERE f.ativo=true
+        WHERE f.ativo=true AND COALESCE(f.freelancer,false)=false
         GROUP BY f.id, f.nome, f.cargo, f.horario_entrada, f.horario_saida,
                  f.jornada_horas, f.tolerancia_min, f.intervalo_min, f.dias_folga
         ORDER BY f.nome
@@ -548,7 +549,7 @@ module.exports = function(pool) {
       `, [req.params.funcionario_id, diaSemana]);
       if (!rows.length) {
         // Sem jornada específica — retorna a jornada padrão do funcionário
-        const { rows: f } = await pool.query(`SELECT * FROM funcionarios WHERE id=$1`, [req.params.funcionario_id]);
+        const { rows: f } = await pool.query(`SELECT * FROM funcionarios WHERE id=$1 AND COALESCE(freelancer,false)=false`, [req.params.funcionario_id]);
         if (!f.length) return res.json({ ok:true, data:null });
         return res.json({ ok:true, data:{ dia_semana:diaSemana, folga:false,
           horario_entrada: f[0].horario_entrada, horario_saida: f[0].horario_saida,
