@@ -196,7 +196,7 @@ if(window.self !== window.top){
       <div class="pg-sub">Cadastro e limites de retirada</div>
       <div style="margin-bottom:14px"><button class="btn btn-p" onclick="abrirFunc()">＋ Novo Funcionário</button></div>
       <div class="card" style="padding:0;overflow:hidden">
-        <table class="tbl"><thead><tr><th>Nome</th><th>Cargo</th><th>E-mail</th><th>Limite/Mês</th><th>Vínculo RH</th><th>Status</th><th>Ações</th></tr></thead>
+        <table class="tbl"><thead><tr><th>Nome</th><th>Cargo</th><th>E-mail</th><th>Limite/Mês</th><th>Tipo</th><th>Vínculo RH</th><th>Status</th><th>Ações</th></tr></thead>
         <tbody id="tbody-func"></tbody></table>
       </div>
     </div>
@@ -311,6 +311,12 @@ if(window.self !== window.top){
       </div>
       <div class="fg"><label>E-mail</label><input type="email" id="f-email" placeholder="funcionario@email.com"></div>
       <div class="fg"><label>Telefone</label><input id="f-tel" placeholder="(19) 99999-9999"></div>
+      <div class="fg">
+        <label style="display:flex;align-items:flex-start;gap:9px;text-transform:none;letter-spacing:0;color:var(--text);cursor:pointer">
+          <input type="checkbox" id="f-freelancer" style="width:auto;margin-top:2px">
+          <span><strong>Freelancer</strong><br><small style="color:var(--muted);font-weight:400">Aparece somente em Retiradas. Não participa da folha, escalas, relatórios ou premiação do RH.</small></span>
+        </label>
+      </div>
       <div class="fg">
         <label>🔗 Vincular ao Usuário do Sistema</label>
         <select id="f-usuario-id">
@@ -545,6 +551,7 @@ async function carregarFuncionarios(){
     <td style="font-size:12px">${f.cargo||'—'}</td>
     <td style="font-size:12px">${f.email||'—'}</td>
     <td style="font-family:'DM Mono',monospace;font-weight:600">${fmt.brl(f.limite_retirada)}</td>
+    <td>${f.freelancer?'<span class="pill" style="background:#fef3c7;color:#92400e">Freelancer</span>':'<span class="pill pill-ok">Funcionário</span>'}</td>
     <td>
       ${f.usuario_id
         ? `<span class="pill pill-ok" title="Vinculado: ${f.usuario_email||''}">🔗 Vinculado</span>`
@@ -567,6 +574,7 @@ async function abrirFunc(id){
   document.getElementById('f-limite').value = f?.limite_retirada||0;
   document.getElementById('f-email').value  = f?.email||'';
   document.getElementById('f-tel').value    = f?.telefone||'';
+  document.getElementById('f-freelancer').checked = !!f?.freelancer;
 
   // Carrega usuários para o select de vínculo
   const sel = document.getElementById('f-usuario-id');
@@ -606,6 +614,7 @@ async function salvarFunc(){
     email:          document.getElementById('f-email').value.trim(),
     telefone:       document.getElementById('f-tel').value.trim(),
     usuarioId:      usuarioId ? parseInt(usuarioId) : null,
+    freelancer:     document.getElementById('f-freelancer').checked,
   };
   if(!body.nome){ toast('Nome obrigatório'); return; }
   const d = id
