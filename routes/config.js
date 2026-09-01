@@ -74,6 +74,7 @@ module.exports = function (pool, app) {
         telefone          TEXT,
         limite_retirada   NUMERIC(10,2) DEFAULT 0,
         usuario_id        INTEGER REFERENCES usuarios(id),
+        freelancer        BOOLEAN NOT NULL DEFAULT false,
         ativo             BOOLEAN DEFAULT true,
         criado_em         TIMESTAMPTZ DEFAULT NOW(),
         atualizado_em     TIMESTAMPTZ DEFAULT NOW()
@@ -224,6 +225,7 @@ module.exports = function (pool, app) {
 
   // Garante coluna usuario_id em bancos criados antes dessa feature
   pool.query(`ALTER TABLE funcionarios ADD COLUMN IF NOT EXISTS usuario_id INTEGER REFERENCES usuarios(id)`).catch(()=>{});
+  pool.query(`ALTER TABLE funcionarios ADD COLUMN IF NOT EXISTS freelancer BOOLEAN NOT NULL DEFAULT false`).catch(()=>{});
 
   // ══════════════════════════════════════════════════════════════════════
   // FUNCIONÁRIOS
@@ -246,10 +248,10 @@ module.exports = function (pool, app) {
     if (!f.nome) return res.status(400).json({ ok: false, erro: 'nome obrigatório' });
     try {
       const { rows } = await pool.query(`
-        INSERT INTO funcionarios (nome, cargo, email, telefone, limite_retirada, usuario_id)
-        VALUES ($1,$2,$3,$4,$5,$6) RETURNING *
+        INSERT INTO funcionarios (nome, cargo, email, telefone, limite_retirada, usuario_id, freelancer)
+        VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *
       `, [f.nome.trim(), f.cargo || null, f.email || null, f.telefone || null,
-          parseFloat(f.limiteRetirada || 0), f.usuarioId || null]);
+          parseFloat(f.limiteRetirada || 0), f.usuarioId || null, f.freelancer === true]);
       res.json({ ok: true, data: rows[0] });
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
@@ -268,6 +270,7 @@ module.exports = function (pool, app) {
         'telefone        = COALESCE($4, telefone)',
         'limite_retirada = COALESCE($5, limite_retirada)',
         'ativo           = COALESCE($6, ativo)',
+        'freelancer      = COALESCE($7, freelancer)',
         'atualizado_em   = NOW()',
       ];
       const vals = [
@@ -277,6 +280,7 @@ module.exports = function (pool, app) {
         f.telefone || null,
         f.limiteRetirada !== undefined ? parseFloat(f.limiteRetirada) : null,
         f.ativo !== undefined ? f.ativo : null,
+        f.freelancer !== undefined ? f.freelancer === true : null,
       ];
 
       if (temUsuarioId) {
