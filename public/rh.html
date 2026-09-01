@@ -1485,9 +1485,16 @@ async function carregarMetaFds() {
   if (!mes) return;
   const container = document.getElementById('meta-fds-container');
   container.innerHTML = '<div class="loading">Calculando faturamento e escalas...</div>';
-  const d = await get('/api/rh/meta-fds/calcular?mes=' + encodeURIComponent(mes));
+  let d;
+  try {
+    d = await get('/api/rh/meta-fds/calcular?mes=' + encodeURIComponent(mes));
+  } catch (e) {
+    container.innerHTML = '<div class="empty"><div class="icon">🔐</div>Sua sessão expirou. Entre novamente para calcular a premiação.</div>';
+    return;
+  }
   if (!d.ok) {
-    container.innerHTML = `<div class="empty"><div class="icon">⚠️</div>${d.erro || 'Não foi possível calcular a premiação.'}</div>`;
+    const sessao = d.erro === 'Sessão expirada';
+    container.innerHTML = `<div class="empty"><div class="icon">${sessao ? '🔐' : '⚠️'}</div>${d.erro || 'Não foi possível calcular a premiação.'}</div>`;
     return;
   }
   const dados = d.data;
