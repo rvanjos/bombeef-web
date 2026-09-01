@@ -228,6 +228,21 @@ main{padding:16px;background:#f8f6f3}
 .rh-section-toolbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:12px}
 .rh-filter-group,.rh-action-group{display:flex;align-items:center;flex-wrap:wrap;gap:7px}
 .rh-filter-group select{min-height:35px;padding:7px 10px;border:1px solid var(--border);border-radius:7px;background:#fff;font:inherit;font-size:12px}
+.meta-fds-kpis{display:grid;grid-template-columns:repeat(4,minmax(150px,1fr));gap:10px;margin-bottom:12px}
+.meta-fds-card{background:#fff;border:1px solid #e5e7eb;border-radius:10px;margin-bottom:12px;overflow:hidden;box-shadow:0 1px 4px rgba(17,24,39,.05)}
+.meta-fds-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;background:#faf8f5;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.meta-fds-days{display:flex;gap:18px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+.meta-fds-days strong{display:block;color:var(--text);font-size:14px;margin-top:2px}
+.meta-fds-result{text-align:right}.meta-fds-result strong{display:block;font-size:18px;color:var(--green)}
+.meta-fds-result.nao strong{color:var(--muted)}
+.meta-fds-table{overflow-x:auto}.meta-fds-table table{width:100%;min-width:720px;border-collapse:collapse}
+.meta-fds-table th{background:#fff;padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);border-bottom:1px solid var(--border)}
+.meta-fds-table td{padding:8px 12px;border-bottom:1px solid #f3eee9;font-size:12px}.meta-fds-table tr:last-child td{border-bottom:0}
+.meta-fds-status{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:700}
+.meta-fds-status.sim{background:#dcfce7;color:#166534}.meta-fds-status.nao{background:#f3f4f6;color:#6b7280}.meta-fds-status.indef{background:#fef3c7;color:#92400e}
+.meta-fds-faixa{display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:end;background:#faf8f5;border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px}
+@media(max-width:900px){.meta-fds-kpis{grid-template-columns:repeat(2,minmax(140px,1fr))}}
+@media(max-width:560px){.meta-fds-kpis{grid-template-columns:1fr}.meta-fds-faixa{grid-template-columns:1fr 1fr}.meta-fds-faixa button{grid-column:1/-1}.meta-fds-result{text-align:left}}
 .rh-kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:9px;margin-bottom:12px}
 .rh-table-card{background:#fff;border:1px solid var(--border);border-radius:10px;overflow:hidden;box-shadow:0 1px 5px rgba(17,24,39,.05)}
 .rh-table-card table{border-collapse:collapse}.rh-table-card th{padding:9px 10px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.45px;color:var(--muted);font-weight:700}.rh-table-card td{padding:9px 10px}
@@ -258,6 +273,7 @@ main{padding:16px;background:#f8f6f3}
     <button class="tab" id="tab-btn-historico" onclick="showTab('historico')" style="display:none">📜 Histórico</button>
     <button class="tab" id="tab-btn-meus" onclick="showTab('meus')" style="display:none">📝 Meus Lançamentos</button>
     <button class="tab" onclick="showTab('escala')">📅 Escala de Domingos</button>
+    <button class="tab" id="tab-btn-meta-fds" onclick="showTab('meta-fds')" style="display:none">🎯 Premiação FDS</button>
     <button class="tab" onclick="showTab('relatorio')">📄 Relatório</button>
     <button class="tab" id="tab-btn-ponto" onclick="showTab('ponto')" style="display:none">⏱️ Ponto</button>
     <button class="tab" id="tab-btn-acessos" onclick="showTab('acessos')" style="display:none">🔐 Acessos</button>
@@ -371,6 +387,25 @@ main{padding:16px;background:#f8f6f3}
     </div>
   </div>
 
+  <!-- ── TAB PREMIAÇÃO DE FIM DE SEMANA (admin) ── -->
+  <div id="tab-meta-fds" class="tab-content">
+    <div class="rh-section-toolbar">
+      <div class="rh-filter-group">
+        <label for="meta-fds-mes" style="font-size:11px;font-weight:700;color:var(--muted)">MÊS:</label>
+        <input type="month" id="meta-fds-mes" onchange="carregarMetaFds()" style="min-height:35px;padding:7px 10px;border:1px solid var(--border);border-radius:7px;background:#fff;font:inherit;font-size:12px">
+        <button class="btn btn-red" onclick="carregarMetaFds()">🔄 Calcular</button>
+      </div>
+      <div class="rh-action-group">
+        <button class="btn btn-gray" onclick="abrirConfigMetaFds()">⚙️ Regras da premiação</button>
+      </div>
+    </div>
+    <div style="background:#eff6ff;border:1px solid #bfdbfe;color:#1e3a8a;border-radius:9px;padding:10px 12px;font-size:12px;margin-bottom:12px">
+      ℹ️ O cálculo usa automaticamente o faturamento líquido diário importado no módulo Faturamento. As faixas não são cumulativas: prevalece o maior prêmio atingido.
+    </div>
+    <div id="meta-fds-kpis" class="meta-fds-kpis"></div>
+    <div id="meta-fds-container"><div class="loading">Selecione o mês para calcular.</div></div>
+  </div>
+
   <!-- ── TAB RELATÓRIO ── -->
   <div id="tab-relatorio" class="tab-content">
 
@@ -480,6 +515,38 @@ main{padding:16px;background:#f8f6f3}
     </div>
   </div>
 </main>
+
+<!-- Modal regras da premiação de fim de semana -->
+<div class="modal-bg" id="modal-meta-fds-config">
+  <div class="modal" style="max-width:650px">
+    <div class="modal-head">
+      <div><h2>🎯 Regras da Premiação FDS</h2><span>Defina metas, prêmios e quem participa do rateio</span></div>
+      <button class="modal-close" onclick="fecharModal('modal-meta-fds-config')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="section">
+        <h3>Forma de cálculo por funcionário</h3>
+        <div class="field">
+          <select id="meta-fds-modo">
+            <option value="todos">Todos os funcionários ativos recebem o valor integral</option>
+            <option value="participou">Quem trabalhou sábado ou domingo recebe o valor integral</option>
+            <option value="proporcional">Rateio proporcional: 50% por dia trabalhado</option>
+          </select>
+        </div>
+        <p style="font-size:11px;color:var(--muted);margin-top:7px">No modo proporcional, quem trabalhou apenas sábado ou apenas domingo recebe metade. Quem trabalhou os dois dias recebe o valor completo.</p>
+      </div>
+      <div class="section">
+        <h3>Faixas de faturamento do sábado + domingo</h3>
+        <div id="meta-fds-faixas"></div>
+        <button class="btn btn-gray btn-sm" onclick="addFaixaMetaFds()">＋ Adicionar faixa</button>
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;border-top:1px solid var(--border);padding-top:14px">
+        <button class="btn btn-gray" onclick="fecharModal('modal-meta-fds-config')">Cancelar</button>
+        <button class="btn btn-red" onclick="salvarConfigMetaFds()">💾 Salvar regras</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- Modal ficha funcionário -->
 <div class="modal-bg" id="modal-ficha">
@@ -781,6 +848,7 @@ let _funcAtual = null;
 let _fichaAtual = null;
 let _resumoData = [];
 let _escalaMes = { ano: new Date().getFullYear(), mes: new Date().getMonth() };
+let _metaFdsConfig = null;
 
 
 // ── Auth ────────────────────────────────────────────────────────────────────
@@ -1389,6 +1457,121 @@ function showTab(t) {
   if (t === 'meus')       carregarMeusLanc();
   if (t === 'historico')  carregarHistorico();
   if (t === 'acessos')    carregarAcessos();
+  if (t === 'meta-fds')   carregarMetaFds();
+}
+
+function fmtDataCurtaMetaFds(data) {
+  if (!data) return '—';
+  const [a,m,d] = data.slice(0,10).split('-');
+  return `${d}/${m}/${a}`;
+}
+
+function metaFdsStatus(valor, semEscala=false) {
+  if (valor === null || semEscala) return '<span class="meta-fds-status indef">⚠ Sem escala</span>';
+  return valor
+    ? '<span class="meta-fds-status sim">✓ Trabalhou</span>'
+    : '<span class="meta-fds-status nao">Folga</span>';
+}
+
+function descricaoModoMetaFds(modo) {
+  return modo === 'participou' ? 'Integral para quem trabalhou ao menos um dia'
+    : modo === 'proporcional' ? '50% por dia trabalhado'
+    : 'Integral para todos os ativos';
+}
+
+async function carregarMetaFds() {
+  if (_perfil !== 'admin') return;
+  const mes = document.getElementById('meta-fds-mes').value;
+  if (!mes) return;
+  const container = document.getElementById('meta-fds-container');
+  container.innerHTML = '<div class="loading">Calculando faturamento e escalas...</div>';
+  const d = await get('/api/rh/meta-fds/calcular?mes=' + encodeURIComponent(mes));
+  if (!d.ok) {
+    container.innerHTML = `<div class="empty"><div class="icon">⚠️</div>${d.erro || 'Não foi possível calcular a premiação.'}</div>`;
+    return;
+  }
+  const dados = d.data;
+  _metaFdsConfig = dados.config;
+  const r = dados.resumo;
+  document.getElementById('meta-fds-kpis').innerHTML = `
+    <div class="bb-card bb-kpi"><div class="bb-kpi-lbl">FINS DE SEMANA</div><div class="bb-kpi-val">${r.finais_analisados}</div></div>
+    <div class="bb-card bb-kpi bb-kpi-green"><div class="bb-kpi-lbl">METAS BATIDAS</div><div class="bb-kpi-val" style="color:var(--green)">${r.metas_batidas}</div></div>
+    <div class="bb-card bb-kpi bb-kpi-blue"><div class="bb-kpi-lbl">FATURAMENTO FDS</div><div class="bb-kpi-val">${brl(r.total_faturamento)}</div></div>
+    <div class="bb-card bb-kpi bb-kpi-amber"><div class="bb-kpi-lbl">TOTAL A PAGAR</div><div class="bb-kpi-val" style="color:var(--red)">${brl(r.total_premiacao)}</div></div>`;
+  container.innerHTML = dados.finais.map((f, idx) => {
+    const atingiu = f.premio_base > 0;
+    const pagas = f.pessoas.filter(p => p.valor > 0);
+    const semEscala = f.pessoas.filter(p => p.sem_escala).length;
+    return `<article class="meta-fds-card">
+      <div class="meta-fds-head">
+        <div class="meta-fds-days">
+          <div>Sábado · ${fmtDataCurtaMetaFds(f.sabado)}<strong>${brl(f.faturamento_sabado)}</strong></div>
+          <div>Domingo · ${fmtDataCurtaMetaFds(f.domingo)}<strong>${brl(f.faturamento_domingo)}</strong></div>
+          <div>Total do fim de semana<strong>${brl(f.total)}</strong></div>
+        </div>
+        <div class="meta-fds-result ${atingiu ? '' : 'nao'}">
+          <span style="font-size:11px;color:var(--muted)">${atingiu ? `Meta de ${brl(f.meta_atingida)} atingida` : 'Meta não atingida'}</span>
+          <strong>${atingiu ? `${brl(f.premio_base)} por pessoa` : 'Sem premiação'}</strong>
+          <span style="font-size:11px;color:var(--muted)">${pagas.length} participante(s) · Total ${brl(f.total_premiacao)}</span>
+        </div>
+      </div>
+      ${!f.dados_completos ? '<div style="padding:8px 14px;background:#fff7ed;color:#9a3412;font-size:11px;border-bottom:1px solid #fed7aa">⚠ Faturamento de sábado ou domingo não encontrado. Confira a importação antes de pagar.</div>' : ''}
+      ${semEscala && dados.config.modo_rateio !== 'todos' ? `<div style="padding:8px 14px;background:#fffbeb;color:#92400e;font-size:11px;border-bottom:1px solid #fde68a">⚠ ${semEscala} funcionário(s) sem escala configurada não receberam neste cálculo.</div>` : ''}
+      <details ${idx === 0 ? 'open' : ''}>
+        <summary style="cursor:pointer;padding:9px 14px;font-size:12px;font-weight:700;color:var(--blue)">Ver cálculo por funcionário · ${descricaoModoMetaFds(dados.config.modo_rateio)}</summary>
+        <div class="meta-fds-table"><table><thead><tr><th>Funcionário</th><th>Sábado</th><th>Domingo</th><th>Participação</th><th>Valor</th></tr></thead><tbody>
+          ${f.pessoas.map(p => `<tr><td><strong>${p.nome}</strong><div style="font-size:10px;color:var(--muted)">${p.cargo || ''}</div></td><td>${metaFdsStatus(p.trabalhou_sabado,p.sem_escala)}</td><td>${metaFdsStatus(p.trabalhou_domingo,p.sem_escala)}</td><td>${Math.round(p.fator*100)}%</td><td><strong>${brl(p.valor)}</strong></td></tr>`).join('')}
+        </tbody></table></div>
+      </details>
+    </article>`;
+  }).join('') || '<div class="empty">Nenhum sábado encontrado no mês selecionado.</div>';
+}
+
+async function abrirConfigMetaFds() {
+  let cfg = _metaFdsConfig;
+  if (!cfg) {
+    const d = await get('/api/rh/meta-fds/config');
+    if (!d.ok) return toast(d.erro || 'Erro ao carregar regras');
+    cfg = d.data;
+  }
+  _metaFdsConfig = { modo_rateio:cfg.modo_rateio, faixas:(cfg.faixas || []).map(f => ({...f})) };
+  document.getElementById('meta-fds-modo').value = _metaFdsConfig.modo_rateio;
+  renderFaixasMetaFds();
+  document.getElementById('modal-meta-fds-config').classList.add('open');
+}
+
+function renderFaixasMetaFds() {
+  document.getElementById('meta-fds-faixas').innerHTML = (_metaFdsConfig.faixas || []).map((f,i) => `
+    <div class="meta-fds-faixa">
+      <div class="field"><label>Meta do fim de semana (R$)</label><input type="number" min="0.01" step="0.01" value="${f.meta}" onchange="_metaFdsConfig.faixas[${i}].meta=Number(this.value)"></div>
+      <div class="field"><label>Prêmio integral por pessoa (R$)</label><input type="number" min="0" step="0.01" value="${f.premio}" onchange="_metaFdsConfig.faixas[${i}].premio=Number(this.value)"></div>
+      <button class="btn btn-gray btn-sm" onclick="removerFaixaMetaFds(${i})">🗑 Remover</button>
+    </div>`).join('');
+}
+
+function addFaixaMetaFds() {
+  _metaFdsConfig.faixas.push({meta:0,premio:0});
+  renderFaixasMetaFds();
+}
+
+function removerFaixaMetaFds(i) {
+  if (_metaFdsConfig.faixas.length === 1) return toast('Mantenha ao menos uma faixa');
+  _metaFdsConfig.faixas.splice(i,1);
+  renderFaixasMetaFds();
+}
+
+async function salvarConfigMetaFds() {
+  const faixas = _metaFdsConfig.faixas.map(f => ({meta:Number(f.meta),premio:Number(f.premio)}));
+  if (faixas.some(f => !f.meta || f.meta <= 0 || f.premio < 0)) return toast('Revise os valores das faixas');
+  const duplicada = new Set(faixas.map(f => f.meta)).size !== faixas.length;
+  if (duplicada) return toast('Não repita o mesmo valor de meta');
+  const modo_rateio = document.getElementById('meta-fds-modo').value;
+  const d = await put('/api/rh/meta-fds/config',{faixas,modo_rateio});
+  if (!d.ok) return toast(d.erro || 'Erro ao salvar regras');
+  _metaFdsConfig = d.data;
+  fecharModal('modal-meta-fds-config');
+  toast('✅ Regras da premiação atualizadas');
+  carregarMetaFds();
 }
 
 function fmtDuracaoSessao(segundos) {
@@ -1436,6 +1619,7 @@ async function init() {
   const ym = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
   document.getElementById('sel-mes').value = ym;
   document.getElementById('sel-mes-rel').value = ym;
+  document.getElementById('meta-fds-mes').value = ym;
   if (document.getElementById('sel-mes-meus')) document.getElementById('sel-mes-meus').value = ym;
   if (document.getElementById('sel-mes-hist'))  document.getElementById('sel-mes-hist').value  = ym;
   _escalaMes = { ano: hoje.getFullYear(), mes: hoje.getMonth() };
@@ -1472,6 +1656,7 @@ async function init() {
   const btnMeus   = document.getElementById('tab-btn-meus');
   const btnAcessos = document.getElementById('tab-btn-acessos');
   const btnPonto = document.getElementById('tab-btn-ponto');
+  const btnMetaFds = document.getElementById('tab-btn-meta-fds');
 
   if (isAdmin) {
     // Admin vê tudo
@@ -1482,6 +1667,7 @@ async function init() {
     if (btnMeus)   btnMeus.style.display   = '';
     if (btnAcessos) btnAcessos.style.display = '';
     if (btnPonto) btnPonto.style.display = '';
+    if (btnMetaFds) btnMetaFds.style.display = '';
     const hojeAcesso = new Date();
     const inicioAcesso = new Date(hojeAcesso); inicioAcesso.setDate(inicioAcesso.getDate() - 6);
     document.getElementById('acesso-de').value = inicioAcesso.toISOString().slice(0,10);
@@ -1502,6 +1688,7 @@ async function init() {
     // Perfis não administrativos (inclusive gestor): somente dados próprios.
     if (btnAcessos) btnAcessos.style.display = 'none';
     if (btnPonto) btnPonto.style.display = 'none';
+    if (btnMetaFds) btnMetaFds.style.display = 'none';
     if (btnFolha)  btnFolha.style.display  = 'none';
     if (btnEscala) btnEscala.style.display = 'none';
     if (btnRel)    btnRel.style.display    = 'none';
