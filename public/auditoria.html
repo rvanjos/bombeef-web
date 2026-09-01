@@ -72,6 +72,12 @@ select,input{padding:6px 10px;border:1px solid var(--border);border-radius:7px;f
 .tab.active{color:var(--red);border-bottom-color:var(--red);}
 .tab-content{display:none;}
 .tab-content.active{display:block;}
+.audit-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:14px}
+.audit-kpi{background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px;border-left:4px solid var(--blue)}
+.audit-kpi strong{display:block;font:700 24px 'DM Mono',monospace;margin-top:5px}.audit-kpi span{font-size:10px;text-transform:uppercase;color:var(--muted);font-weight:700}
+.filters-audit{display:flex;gap:8px;flex-wrap:wrap;padding:12px;background:#fff;border:1px solid var(--border);border-radius:10px;margin-bottom:12px}
+.details-json{max-width:480px;white-space:pre-wrap;word-break:break-word;font:10px 'DM Mono',monospace;background:#f8f4f0;padding:8px;border-radius:6px}
+@media(max-width:800px){.audit-grid,.stats-row{grid-template-columns:repeat(2,minmax(0,1fr))}.tabs{overflow-x:auto;padding:0 6px}.tab{white-space:nowrap;padding:8px}.body{padding:8px}.ph-sub{display:none}}
 .inline-edit{display:none;}
 .editing .inline-edit{display:inline-block;}
 .editing .cat-badge{display:none;}
@@ -82,7 +88,7 @@ select,input{padding:6px 10px;border:1px solid var(--border);border-radius:7px;f
 <body>
 <div class="ph">
   <span style="font-size:20px">🔍</span>
-  <h2>Auditoria de Lançamentos</h2>
+  <h2>Auditoria do Sistema</h2>
   <div class="ph-sub" id="ph-sub">—</div>
 </div>
 
@@ -95,7 +101,9 @@ select,input{padding:6px 10px;border:1px solid var(--border);border-radius:7px;f
 </div>
 
 <div class="tabs" id="tabs">
-  <button class="tab active" onclick="showAuditTab('pendentes')" id="tab-btn-pendentes">⚠️ Pendentes <span id="badge-pendentes" class="badge badge-err" style="margin-left:4px">0</span></button>
+  <button class="tab active" onclick="showAuditTab('visao')" id="tab-btn-visao">📊 Visão Geral</button>
+  <button class="tab" onclick="showAuditTab('eventos')" id="tab-btn-eventos">🕓 Linha do Tempo</button>
+  <button class="tab" onclick="showAuditTab('pendentes')" id="tab-btn-pendentes">⚠️ DRE Pendentes <span id="badge-pendentes" class="badge badge-err" style="margin-left:4px">0</span></button>
   <button class="tab" onclick="showAuditTab('duplicatas')" id="tab-btn-duplicatas">🔁 Duplicatas <span id="badge-duplicatas" class="badge badge-warn" style="margin-left:4px">0</span></button>
   <button class="tab" onclick="showAuditTab('conflitos')" id="tab-btn-conflitos">⚡ Conflitos <span id="badge-conflitos" class="badge badge-purple" style="margin-left:4px">0</span></button>
   <button class="tab" onclick="showAuditTab('categorias')" id="tab-btn-categorias">📂 Por Categoria</button>
@@ -103,6 +111,28 @@ select,input{padding:6px 10px;border:1px solid var(--border);border-radius:7px;f
 </div>
 
 <div class="body">
+  <div class="tab-content active" id="tab-visao">
+    <div class="audit-grid">
+      <div class="audit-kpi"><span>Eventos em 30 dias</span><strong id="au-total">—</strong></div>
+      <div class="audit-kpi" style="border-left-color:var(--red-l)"><span>Falhas registradas</span><strong id="au-falhas">—</strong></div>
+      <div class="audit-kpi" style="border-left-color:var(--orange)"><span>Exclusões</span><strong id="au-exclusoes">—</strong></div>
+      <div class="audit-kpi" style="border-left-color:var(--green)"><span>Usuários ativos</span><strong id="au-usuarios">—</strong></div>
+    </div>
+    <div class="card"><div class="card-hd"><h3>Atividade por módulo</h3></div><div id="au-modulos" class="card-body"><div class="empty">Carregando...</div></div></div>
+    <div class="card"><div class="card-hd"><h3>Falhas recentes</h3></div><div id="au-falhas-lista" class="card-body"><div class="empty">Carregando...</div></div></div>
+  </div>
+  <div class="tab-content" id="tab-eventos">
+    <div class="filters-audit">
+      <select id="au-f-mod"><option value="">Todos os módulos</option></select>
+      <select id="au-f-acao"><option value="">Todas as ações</option></select>
+      <input id="au-f-user" placeholder="Usuário...">
+      <input type="date" id="au-f-ini"><input type="date" id="au-f-fim">
+      <select id="au-f-status"><option value="">Todos os resultados</option><option value="true">Sucesso</option><option value="false">Falha</option></select>
+      <button class="btn btn-red" onclick="carregarEventos(1)">Filtrar</button>
+      <button class="btn btn-gray" onclick="exportarEventosCSV()">Excel/CSV</button>
+    </div>
+    <div class="card" style="overflow-x:auto"><table class="tbl"><thead><tr><th>Data</th><th>Usuário</th><th>Módulo</th><th>Ação</th><th>Registro</th><th>Resultado</th><th>Detalhes</th></tr></thead><tbody id="au-eventos-body"><tr><td colspan="7" class="empty">Carregando...</td></tr></tbody></table><div id="au-pag" style="padding:10px"></div></div>
+  </div>
   <!-- Stats -->
   <div class="stats-row" id="stats-row" style="display:none">
     <div class="stat-card ok"><div class="stat-label">Classificados</div><div class="stat-value" id="st-cls">—</div></div>
@@ -112,7 +142,7 @@ select,input{padding:6px 10px;border:1px solid var(--border);border-radius:7px;f
   </div>
 
   <!-- Aba Pendentes -->
-  <div class="tab-content active" id="tab-pendentes">
+  <div class="tab-content" id="tab-pendentes">
     <div id="lista-pendentes"><div class="empty">Selecione um mês para auditar</div></div>
   </div>
 
@@ -168,6 +198,7 @@ select,input{padding:6px 10px;border:1px solid var(--border);border-radius:7px;f
             <option value="vendas">Vendas</option>
           </select>
         </div>
+        <div class="fg"><label>Usuário (ID)</label><input type="number" id="est-usuario" min="1" placeholder="Todos" style="width:100px"></div>
         <div class="fg">
           <label>Data inicial</label>
           <input type="date" id="est-data-ini">
@@ -215,7 +246,7 @@ async function init() {
   const hoje = new Date();
   const ym = hoje.getFullYear() + '-' + String(hoje.getMonth()+1).padStart(2,'0');
   document.getElementById('sel-mes').value = ym;
-  await carregar();
+  await Promise.all([carregar(), carregarResumo(), carregarFiltrosAuditoria(), carregarEventos(1)]);
 }
 
 async function carregar() {
@@ -228,7 +259,7 @@ async function carregar() {
 
   try {
     // Carrega todas as sessões do DRE
-    const lista = await api.get('/api/dre/sessoes?limit=24');
+    const lista = await api.get('/api/dre/sessoes?limit=500');
     if (!lista.ok || !lista.data?.length) {
       document.getElementById('status-txt').textContent = 'Sem dados no DRE';
       return;
@@ -266,7 +297,8 @@ function renderTudo() {
   document.getElementById('st-pend').textContent  = fmt.n(pendentes.length);
   document.getElementById('st-dup').textContent   = fmt.n(duplicatas.length);
   document.getElementById('st-conf').textContent  = fmt.n(conflitos.length);
-  document.getElementById('stats-row').style.display = '';
+  const abaAtiva = document.querySelector('.tab.active')?.id || '';
+  document.getElementById('stats-row').style.display = /-(pendentes|duplicatas|conflitos|categorias)$/.test(abaAtiva) ? '' : 'none';
 
   // Badges nas abas
   document.getElementById('badge-pendentes').textContent  = pendentes.length;
@@ -652,9 +684,8 @@ async function aplicarCat(id) {
   const cat = sel.value;
   if (!cat) { toast('Selecione uma categoria'); return; }
 
-  // Envia para o DRE via postMessage
-  window.parent.postMessage({ type: 'auditoria_set_cat', id, categoria: cat }, '*');
-  toast('✅ Categoria atualizada — salve o DRE para persistir');
+  const gravou = await executarAcaoDRE(id, 'CATEGORIZAR', cat);
+  if (!gravou) return;
 
   // Atualiza visual
   const t = _txs.find(x => x.id === id);
@@ -714,53 +745,58 @@ function manterConflito(ci, id) {
 }
 
 // Corrige todos os lançamentos do histórico para a mesma categoria
-function corrigirTodosHistorico(ci, catAtual) {
+async function corrigirTodosHistorico(ci, catAtual) {
   const conf = _conflitosCache?.[ci];
   if (!conf) return;
   const ids = conf.outrosMeses.map(x => x.id);
   if (!ids.length) return;
   if (!confirm(`Corrigir ${ids.length} lançamento(s) do histórico para "${catAtual}"?`)) return;
-  // Atualiza memória local
-  ids.forEach(id => {
+  let corrigidos = 0;
+  for (const id of ids) {
+    if (!await executarAcaoDRE(id, 'CATEGORIZAR', catAtual, true)) continue;
     const t = _txsTodos.find(x => String(x.id) === String(id));
     if (t) t.categoria = catAtual;
-  });
-  // Envia todos de uma vez para o portal salvar por mês
-  ids.forEach(id => {
-    window.parent.postMessage({ type: 'auditoria_set_cat', id, categoria: catAtual }, '*');
-  });
-  toast(`✅ ${ids.length} lançamento(s) corrigidos para "${catAtual}"`);
+    corrigidos++;
+  }
+  toast(`✅ ${corrigidos} lançamento(s) corrigidos para "${catAtual}"`);
   renderTudo(); // reanalisa conflitos
 }
 
-function corrigirCategoria(id, cat) {
+async function corrigirCategoria(id, cat) {
   if (!cat) return;
+  if (!await executarAcaoDRE(id, 'CATEGORIZAR', cat)) return;
   // Atualiza em _txs e _txsTodos
   [_txs, _txsTodos].forEach(arr => {
     const t = arr.find(x => String(x.id) === String(id));
     if (t) t.categoria = cat;
   });
-  window.parent.postMessage({ type: 'auditoria_set_cat', id, categoria: cat }, '*');
-  toast('✅ Categoria corrigida para: ' + cat);
   toggleAprovado(id);
   renderTudo();
 }
 
-function excluirDoDRE(id) {
+async function excluirDoDRE(id) {
   if (!confirm('Excluir este lançamento do DRE? Esta ação não pode ser desfeita.')) return;
-  window.parent.postMessage({ type: 'auditoria_excluir', id }, '*');
-  toast('🗑 Lançamento excluído do DRE');
+  const motivo = prompt('Informe o motivo da exclusão:');
+  if (!motivo?.trim()) { toast('O motivo é obrigatório para excluir'); return; }
+  if (!await executarAcaoDRE(id, 'EXCLUIR', null, false, motivo)) return;
   _txs    = _txs.filter(t => String(t.id) !== String(id));
   _txsTodos = _txsTodos.filter(t => String(t.id) !== String(id));
   renderTudo();
 }
 
-function ignorarLanc(id) {
+async function ignorarLanc(id) {
   if (!confirm('Marcar como ignorado? O lançamento não contará no DRE.')) return;
-  window.parent.postMessage({ type: 'auditoria_ignorar', id }, '*');
-  toast('🚫 Lançamento ignorado');
+  if (!await executarAcaoDRE(id, 'IGNORAR')) return;
   _txs = _txs.filter(t => t.id !== id);
   renderTudo();
+}
+
+async function executarAcaoDRE(id, acao, categoria=null, silencioso=false, justificativa=null) {
+  const r = await api.post('/api/auditoria/dre/acao', {id, acao, categoria, justificativa});
+  if (!r.ok) { toast('❌ Não foi possível gravar: ' + (r.erro||'erro desconhecido'), 4500); return false; }
+  if (!silencioso) toast(acao === 'EXCLUIR' ? '🗑 Lançamento excluído e auditado' : acao === 'IGNORAR' ? '🚫 Lançamento ignorado e auditado' : '✅ Categoria gravada e auditada');
+  carregarResumo();
+  return true;
 }
 
 function toggleAprovado(id) {
@@ -783,8 +819,53 @@ function showAuditTab(tab) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.getElementById('tab-'+tab)?.classList.add('active');
   document.getElementById('tab-btn-'+tab)?.classList.add('active');
+  const dreTabs = ['pendentes','duplicatas','conflitos','categorias'];
+  document.getElementById('stats-row').style.display = dreTabs.includes(tab) ? '' : 'none';
   // F2-08: carrega movimentos na primeira abertura
   if (tab === 'estoque' && !window._estCarregado) carregarEstoque();
+}
+
+let _eventosAuditoria = [];
+async function carregarResumo() {
+  const r = await api.get('/api/auditoria/resumo?dias=30');
+  if (!r.ok) return;
+  const t = r.data.totais || {};
+  document.getElementById('au-total').textContent = fmt.n(t.total);
+  document.getElementById('au-falhas').textContent = fmt.n(t.falhas);
+  document.getElementById('au-exclusoes').textContent = fmt.n(t.exclusoes);
+  document.getElementById('au-usuarios').textContent = fmt.n(t.usuarios);
+  document.getElementById('au-modulos').innerHTML = r.data.modulos.length ? r.data.modulos.map(m =>
+    `<div class="alerta-row"><div class="alerta-body"><div class="alerta-title">${esc(m.modulo)}</div></div><span class="badge badge-info">${fmt.n(m.total)} eventos</span></div>`).join('') : '<div class="empty">Os novos eventos aparecerão aqui conforme o sistema for utilizado.</div>';
+  document.getElementById('au-falhas-lista').innerHTML = r.data.falhas.length ? r.data.falhas.map(f =>
+    `<div class="alerta-row"><span class="alerta-icon">⚠️</span><div class="alerta-body"><div class="alerta-title">${esc(f.modulo)} · ${esc(f.acao)}</div><div class="alerta-sub">${esc(f.usuario_nome||'Sistema')} · ${new Date(f.criado_em).toLocaleString('pt-BR')} · ${esc(f.erro)}</div></div></div>`).join('') : '<div class="empty">✅ Nenhuma falha registrada no período.</div>';
+}
+
+async function carregarFiltrosAuditoria() {
+  const r = await api.get('/api/auditoria/filtros');
+  if (!r.ok) return;
+  const preencher = (id, dados) => { const s=document.getElementById(id); dados.forEach(x=>{const o=document.createElement('option');o.value=x.valor;o.textContent=x.valor;s.appendChild(o)}); };
+  preencher('au-f-mod', r.data.modulos); preencher('au-f-acao', r.data.acoes);
+}
+
+async function carregarEventos(pagina=1) {
+  const q = new URLSearchParams({pagina, limite:50});
+  [['modulo','au-f-mod'],['acao','au-f-acao'],['usuario','au-f-user'],['data_ini','au-f-ini'],['data_fim','au-f-fim'],['sucesso','au-f-status']].forEach(([k,id])=>{const v=document.getElementById(id)?.value;if(v)q.set(k,v)});
+  const r = await api.get('/api/auditoria/eventos?' + q);
+  const body = document.getElementById('au-eventos-body');
+  if (!r.ok) { body.innerHTML=`<tr><td colspan="7" class="empty">${esc(r.erro)}</td></tr>`; return; }
+  _eventosAuditoria = r.data;
+  body.innerHTML = r.data.length ? r.data.map(e => `<tr><td style="white-space:nowrap">${new Date(e.criado_em).toLocaleString('pt-BR')}</td><td>${esc(e.usuario_nome||'Sistema')}<small style="display:block;color:var(--muted)">${esc(e.usuario_perfil||'')}</small></td><td><span class="badge badge-info">${esc(e.modulo)}</span></td><td>${esc(e.acao)}</td><td>${esc(e.entidade_id||'—')}</td><td><span class="badge ${e.sucesso?'badge-ok':'badge-err'}">${e.sucesso?'Sucesso':'Falha'}</span></td><td><details><summary style="cursor:pointer">Ver</summary><div class="details-json">${esc(JSON.stringify(e.dados_depois||e.dados_antes||{},null,2))}${e.erro?'\nErro: '+esc(e.erro):''}</div></details></td></tr>`).join('') : '<tr><td colspan="7" class="empty">Nenhum evento encontrado.</td></tr>';
+  document.getElementById('au-pag').innerHTML = `<button class="btn btn-gray" ${pagina<=1?'disabled':''} onclick="carregarEventos(${pagina-1})">← Anterior</button> <span style="margin:0 10px">Página ${r.pagina} de ${r.paginas||1} · ${fmt.n(r.total)} eventos</span> <button class="btn btn-gray" ${pagina>=r.paginas?'disabled':''} onclick="carregarEventos(${pagina+1})">Próxima →</button>`;
+}
+
+async function exportarEventosCSV() {
+  const q = new URLSearchParams({pagina:1, limite:500});
+  [['modulo','au-f-mod'],['acao','au-f-acao'],['usuario','au-f-user'],['data_ini','au-f-ini'],['data_fim','au-f-fim'],['sucesso','au-f-status']].forEach(([k,id])=>{const v=document.getElementById(id)?.value;if(v)q.set(k,v)});
+  const r = await api.get('/api/auditoria/eventos?' + q);
+  if (!r.ok) { toast('Não foi possível exportar: '+r.erro); return; }
+  const linhas = [['Data','Usuário','Perfil','Módulo','Ação','Registro','Resultado','Rota','Justificativa','Erro'], ...r.data.map(e=>[new Date(e.criado_em).toLocaleString('pt-BR'),e.usuario_nome,e.usuario_perfil,e.modulo,e.acao,e.entidade_id,e.sucesso?'Sucesso':'Falha',e.rota,e.justificativa,e.erro])];
+  const csv='\uFEFF'+linhas.map(l=>l.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(';')).join('\n');
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download='auditoria_eventos.csv';a.click();
 }
 
 // ── F2-08 + F2-09: Auditoria de Movimentos de Estoque ────────────────────────
@@ -805,11 +886,13 @@ async function carregarEstoque(pagina) {
   const origem  = document.getElementById('est-origem')?.value;
   const dataIni = document.getElementById('est-data-ini')?.value;
   const dataFim = document.getElementById('est-data-fim')?.value;
+  const usuario = document.getElementById('est-usuario')?.value;
   if (produto) params.set('produto', produto);
   if (tipo)    params.set('tipo', tipo);
   if (origem)  params.set('origem', origem);
   if (dataIni) params.set('data_ini', dataIni);
   if (dataFim) params.set('data_fim', dataFim);
+  if (usuario) params.set('usuario', usuario);
 
   const d = await api.get('/api/estoque/auditoria?' + params.toString());
   window._estCarregado = true;
@@ -843,15 +926,15 @@ async function carregarEstoque(pagina) {
     const tl  = tipoLabels[m.tipo_movimento] || m.tipo_movimento;
     return '<tr>' +
       '<td style="font-size:11px;color:var(--muted);white-space:nowrap">' + fmtDt(m.data_movimento) + '</td>' +
-      '<td><div style="font-weight:600;font-size:12px">' + (m.produto_descricao||'—') + '</div>' +
-        '<div style="font-size:10px;color:var(--muted)">' + (m.produto_codigo||'') + (m.produto_unidade?' · '+m.produto_unidade:'') + '</div></td>' +
+      '<td><div style="font-weight:600;font-size:12px">' + esc(m.produto_descricao||'—') + '</div>' +
+        '<div style="font-size:10px;color:var(--muted)">' + esc(m.produto_codigo||'') + (m.produto_unidade?' · '+esc(m.produto_unidade):'') + '</div></td>' +
       '<td style="text-align:center"><span style="font-size:11px;font-weight:600;color:' + tc + ';background:' + tc + '15;padding:2px 6px;border-radius:4px;white-space:nowrap">' + tl + '</span></td>' +
-      '<td style="text-align:center;font-size:11px;color:var(--muted)">' + (m.origem||'—') + (m.origem_id?' #'+m.origem_id:'') + '</td>' +
+      '<td style="text-align:center;font-size:11px;color:var(--muted)">' + esc(m.origem||'—') + (m.origem_id?' #'+esc(m.origem_id):'') + '</td>' +
       '<td style="text-align:right;font-family:monospace;font-weight:700;color:' + cor + '">' + (isE?'+':'') + fmt(qtd) + '</td>' +
       '<td style="text-align:right;font-family:monospace;font-size:11px;color:var(--muted)">' + fmt(m.estoque_anterior) + '</td>' +
       '<td style="text-align:right;font-family:monospace;font-size:11px;font-weight:600">' + fmt(m.estoque_posterior) + '</td>' +
-      '<td style="font-size:11px;color:var(--muted)">' + (m.usuario_nome||'—') + '</td>' +
-      '<td style="font-size:11px;color:var(--muted);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + (m.observacao||'').replace(/"/g,'') + '">' + (m.observacao||'—') + '</td>' +
+      '<td style="font-size:11px;color:var(--muted)">' + esc(m.usuario_nome||'—') + '</td>' +
+      '<td style="font-size:11px;color:var(--muted);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(m.observacao||'') + '">' + esc(m.observacao||'—') + '</td>' +
     '</tr>';
   }).join('');
 
@@ -859,8 +942,8 @@ async function carregarEstoque(pagina) {
   const totEntrada = d.data.filter(m=>parseFloat(m.quantidade||0)>0).reduce((s,m)=>s+parseFloat(m.quantidade||0),0);
   if (totais) totais.innerHTML =
     '<span style="background:#f3f4f6;border-radius:6px;padding:4px 10px;font-size:11px"><strong>' + d.total + '</strong> movimentos · pág. ' + d.pagina + '/' + d.paginas + '</span>' +
-    (totEntrada>0 ? '<span style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:4px 10px;font-size:11px;color:var(--green)"><strong>↑ +' + totEntrada.toFixed(2) + '</strong> entradas</span>' : '') +
-    (totSaida>0   ? '<span style="background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:4px 10px;font-size:11px;color:var(--red-l)"><strong>↓ -' + totSaida.toFixed(2) + '</strong> saídas</span>' : '');
+    (totEntrada>0 ? '<span style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:4px 10px;font-size:11px;color:var(--green)"><strong>↑ +' + totEntrada.toFixed(2) + '</strong> entradas nesta página</span>' : '') +
+    (totSaida>0   ? '<span style="background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:4px 10px;font-size:11px;color:var(--red-l)"><strong>↓ -' + totSaida.toFixed(2) + '</strong> saídas nesta página</span>' : '');
 
   const pg = document.getElementById('est-paginacao');
   if (pg && d.paginas > 1) {
@@ -871,7 +954,7 @@ async function carregarEstoque(pagina) {
 }
 
 function limparFiltrosEstoque() {
-  ['est-busca-produto','est-tipo','est-origem','est-data-ini','est-data-fim'].forEach(function(id){
+  ['est-busca-produto','est-tipo','est-origem','est-usuario','est-data-ini','est-data-fim'].forEach(function(id){
     const el = document.getElementById(id); if (el) el.value = '';
   });
   carregarEstoque(1);
@@ -941,9 +1024,15 @@ window.addEventListener('message', (e) => {
 });
 
 // Pede categorias ao portal quando pronto
-function pedirCats() {
-  window.parent.postMessage({ type: 'auditoria_get_cats' }, '*');
-  setTimeout(pedirCats, 3000); // re-pede periodicamente para novos selects
+async function pedirCats() {
+  const r = await api.get('/api/dre/categorias');
+  if (!r.ok) return;
+  const cats = {};
+  r.data.forEach(c => {
+    if (!cats[c.grupo]) cats[c.grupo] = {l:c.grupo, s:[]};
+    if (!cats[c.grupo].s.includes(c.subgrupo)) cats[c.grupo].s.push(c.subgrupo);
+  });
+  window.dispatchEvent(new MessageEvent('message', {data:{type:'bb_cats', cats}, origin:location.origin}));
 }
 
 window.onBBReady = () => { init(); pedirCats(); };
