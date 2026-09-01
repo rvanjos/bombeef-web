@@ -62,6 +62,39 @@ module.exports = function(pool) {
     } catch(e) { res.status(500).json({ok:false, erro:e.message}); }
   });
 
+  r.get('/dre/conflitos-resolvidos', async (req, res) => {
+    try {
+      await audit.init(pool);
+      const mes = String(req.query.mes || '').trim();
+      if (!mes) return res.status(400).json({ok:false, erro:'Mês obrigatório'});
+      const {rows} = await pool.query(`SELECT mes_ref, chave_fornecedor, categoria_atual, decisao,
+        usuario_nome, justificativa, resolvido_em
+        FROM auditoria_dre_conflitos_resolvidos WHERE mes_ref=$1`, [mes]);
+      res.json({ok:true, data:rows});
+    } catch(e) { res.status(500).json({ok:false, erro:e.message}); }
+  });
+
+  r.post('/dre/conflitos-resolvidos', async (req, res) => {
+    const {mes_ref, chave_fornecedor, categoria_atual, justificativa} = req.body || {};
+    if (!mes_ref || !chave_fornecedor || !categoria_atual)
+      return res.status(400).json({ok:false, erro:'Mês, fornecedor e categoria são obrigatórios'});
+    try {
+      await audit.init(pool);
+      const {rows} = await pool.query(`INSERT INTO auditoria_dre_conflitos_resolvidos
+        (mes_ref, chave_fornecedor, categoria_atual, decisao, usuario_id, usuario_nome, justificativa)
+        VALUES ($1,$2,$3,'MANTER',$4,$5,$6)
+        ON CONFLICT (mes_ref, chave_fornecedor, categoria_atual) DO UPDATE SET
+          decisao='MANTER', usuario_id=EXCLUDED.usuario_id, usuario_nome=EXCLUDED.usuario_nome,
+          justificativa=EXCLUDED.justificativa, resolvido_em=NOW()
+        RETURNING *`, [mes_ref, chave_fornecedor, categoria_atual, req.user.id, req.user.nome, justificativa || null]);
+      await audit.registrar(pool, {usuario_id:req.user.id, usuario_nome:req.user.nome, usuario_perfil:req.user.perfil,
+        modulo:'dre', acao:'MANTER_CONFLITO', entidade:'conflito_classificacao',
+        entidade_id:`${mes_ref}:${chave_fornecedor}`, dados_depois:rows[0], justificativa,
+        ip_address:req.ip, user_agent:req.headers['user-agent'], sucesso:true, status_http:200});
+      res.json({ok:true, data:rows[0]});
+    } catch(e) { res.status(500).json({ok:false, erro:e.message}); }
+  });
+
   r.post('/dre/acao', async (req, res) => {
     const { id, acao, categoria, justificativa } = req.body || {};
     if (!id || !['CATEGORIZAR','IGNORAR','EXCLUIR'].includes(acao))
