@@ -2009,6 +2009,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 
 // ── Mensagens dos iframes ──────────────────────────────────────────────────
 window.addEventListener('message', e => {
+  if (e.origin !== window.location.origin) return;
   if (!e.data) return;
 
   // Hub Operacional: navegar para outro módulo

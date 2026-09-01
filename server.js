@@ -419,34 +419,13 @@ app.get('/api/events', require('./middleware/auth')(), (req, res) => {
 });
 
 // ── Rotas API ──────────────────────────────────────────────────────────────────
+// Captura centralmente o resultado de todas as mutações. Os routers de cada
+// módulo continuam responsáveis por autenticar e autorizar a operação.
+const auditoriaService = require('./lib/auditoria');
+auditoriaService.init(pool).catch(e => console.error('[auditoria/init]', e.message));
+app.use(auditoriaService.middleware(pool));
+
 app.use('/auth',             require('./routes/auth')(pool));
-// Fix temporário: corrige constraint de ponto_auditoria
-app.get('/fix-ponto', require('./middleware/auth')('admin'), async (req, res) => {
-  const r = [];
-  const run = async (n, sql) => {
-    try { await pool.query(sql); r.push('✅ '+n); }
-    catch(e) { r.push('⚠️ '+n+': '+e.message); }
-  };
-  // Recria ponto_auditoria sem FK para ponto_registros (evita constraint issues)
-  await run('drop auditoria', `DROP TABLE IF EXISTS ponto_auditoria CASCADE`);
-  await run('ponto_auditoria', `CREATE TABLE IF NOT EXISTS ponto_auditoria (
-    id              SERIAL PRIMARY KEY,
-    ponto_id        INTEGER,
-    funcionario_id  INTEGER NOT NULL,
-    tipo            TEXT NOT NULL,
-    horario_batida  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    usuario_login   TEXT,
-    usuario_nome    TEXT,
-    usuario_perfil  TEXT,
-    ip_address      TEXT,
-    user_agent      TEXT,
-    manual          BOOLEAN DEFAULT FALSE,
-    obs             TEXT
-  )`);
-  // Garante que ponto_registros não tem FK quebrada
-  await run('idx ponto', `CREATE UNIQUE INDEX IF NOT EXISTS ponto_func_data_idx ON ponto_registros(funcionario_id, data_ref)`);
-  res.send('<div style="font-family:sans-serif;padding:20px">'+r.map(x=>`<div>${x}</div>`).join('')+'<p>Pronto! Pode fechar.</p></div>');
-});
 
 app.use('/api/boletos',      require('./routes/boletos')(pool, app));
 app.use('/api/faturamento',  require('./routes/faturamento')(pool, app));
@@ -458,6 +437,7 @@ app.use('/api/validade',     require('./routes/validade')(pool, app)); // F1-07
 app.use('/api/compras_pendentes', require('./routes/fiado')(pool, app));
 app.use('/api/fiado',        require('./routes/fiado')(pool, app)); // alias legado
 app.use('/api/ponto',        require('./routes/ponto')(pool));
+app.use('/api/auditoria',    require('./routes/auditoria')(pool));
 
 // ── POST /api/dre/exportar-excel — gera XLSX formatado via Python/openpyxl ──
 app.post('/api/dre/exportar-excel', require('./middleware/auth')(), async (req, res) => {

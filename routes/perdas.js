@@ -183,18 +183,20 @@ module.exports = function (pool, app) {
   r.post('/', async (req, res) => {
     const p = req.body;
     if (!p.descricao) return res.status(400).json({ ok: false, erro: 'descricao obrigatória' });
+    const client = await pool.connect();
     try {
+      await client.query('BEGIN');
       // Calcula valor se não informado (custo × qtd)
       let valor = parseFloat(p.valorPerda || 0);
       if (!valor && p.produtoId && p.qtdUnidades) {
-        const prod = await pool.query(`SELECT preco_custo FROM produtos WHERE id = $1`, [p.produtoId]);
+        const prod = await client.query(`SELECT preco_custo FROM produtos WHERE id = $1`, [p.produtoId]);
         if (prod.rows.length) valor = parseFloat(prod.rows[0].preco_custo) * parseInt(p.qtdUnidades);
       }
 
       const dtPerda = p.dtPerda || new Date().toISOString().slice(0, 10);
       const mes     = p.mes || (dtPerda.slice(5, 7) + '/' + dtPerda.slice(0, 4));
 
-      const { rows } = await pool.query(`
+      const { rows } = await client.query(`
         INSERT INTO perdas
           (validade_item_id, produto_id, descricao, motivo, qtd_unidades,
            valor_perda, funcionario_id, dt_perda, mes, observacao, usuario_id)
@@ -208,20 +210,22 @@ module.exports = function (pool, app) {
 
       // Se veio de validade_item, marca como descartado
       if (p.validadeItemId) {
-        await pool.query(
+        await client.query(
           `UPDATE validade_items SET status='descartado', atualizado_em=NOW() WHERE id=$1`,
           [p.validadeItemId]
         );
       }
 
-      res.json({ ok: true, data: rows[0] });
-
-      // ── F1-06: registrar movimento de estoque (try/catch isolado)
-      // Falha aqui NÃO afeta a perda já registrada acima
-      try {
-        const perda = rows[0];
-        if (perda.produto_id) {
-          await pool.query(`
+      // A perda e a baixa de estoque são uma operação única: qualquer falha
+      // desfaz todo o lançamento para não criar divergência silenciosa.
+      const perda = rows[0];
+      if (perda.produto_id) {
+          const qtdPerda = Math.abs(parseInt(perda.qtd_unidades || 0));
+          const prodLock = await client.query('SELECT estoque FROM produtos WHERE id=$1 FOR UPDATE', [perda.produto_id]);
+          if (!prodLock.rows.length) throw new Error('Produto da perda não foi encontrado');
+          const disponivel = parseFloat(prodLock.rows[0]?.estoque || 0);
+          if (qtdPerda > disponivel) throw new Error(`Estoque insuficiente para registrar a perda. Disponível: ${disponivel}; perda: ${qtdPerda}`);
+          await client.query(`
             INSERT INTO movimentos_estoque
               (produto_id, produto_codigo, tipo_movimento, origem, origem_id,
                quantidade, estoque_anterior, estoque_posterior, usuario_id, observacao)
@@ -240,25 +244,20 @@ module.exports = function (pool, app) {
             perda.produto_id,
           ]);
           // Atualiza produtos.estoque
-          await pool.query(`
+          await client.query(`
             UPDATE produtos
-            SET estoque = GREATEST(0, estoque - $1), atualizado_em = NOW()
+            SET estoque = estoque - $1, atualizado_em = NOW()
             WHERE id = $2
           `, [Math.abs(parseInt(perda.qtd_unidades || 0)), perda.produto_id]);
-          // Emite evento no barramento
-          events.emit(app, 'PERDA_REGISTRADA', {
-            perda_id:   perda.id,
-            produto_id: perda.produto_id,
-            quantidade: perda.qtd_unidades,
-            motivo:     perda.motivo,
-          });
-        }
-      } catch (eMov) {
-        // Log mas nunca quebra o fluxo da perda
-        console.warn('[perdas] movimento estoque falhou (não crítico):', eMov.message);
       }
-
-    } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
+      await client.query('COMMIT');
+      events.emit(app, 'PERDA_REGISTRADA', { perda_id:perda.id, produto_id:perda.produto_id, quantidade:perda.qtd_unidades, motivo:perda.motivo });
+      res.json({ ok: true, data: perda });
+    } catch (e) {
+      await client.query('ROLLBACK').catch(()=>{});
+      const status = /Estoque insuficiente/.test(e.message) ? 409 : 500;
+      res.status(status).json({ ok: false, erro: e.message });
+    } finally { client.release(); }
   });
 
   // ── PUT /:id ───────────────────────────────────────────────────────────────

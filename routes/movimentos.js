@@ -29,7 +29,7 @@ module.exports = function(pool, app) {
   ]);
 
   // ── POST /movimento — registra movimento e atualiza estoque ──────────────────
-  r.post('/movimento', async (req, res) => {
+  r.post('/movimento', autenticar(['admin','gestor','estoque']), async (req, res) => {
     const {
       produto_id,
       tipo_movimento,
@@ -66,7 +66,14 @@ module.exports = function(pool, app) {
 
       const produto        = prods[0];
       const estoqueAnterior = parseFloat(produto.estoque || 0);
-      const estoquePosterior = Math.max(0, estoqueAnterior + qtd);
+      if (qtd < 0 && Math.abs(qtd) > estoqueAnterior) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({
+          ok: false,
+          erro: `Estoque insuficiente. Disponível: ${estoqueAnterior}; saída solicitada: ${Math.abs(qtd)}`,
+        });
+      }
+      const estoquePosterior = estoqueAnterior + qtd;
 
       // 2. Atualiza produtos.estoque
       await client.query(

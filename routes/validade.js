@@ -575,24 +575,25 @@ module.exports = function (pool, app) {
     const motivo = resolucao || 'vendido';
     // Para resolucao='vencimento', o status vira 'descartado' para entrar no histórico
     const novoStatus = motivo === 'vencimento' ? 'descartado' : motivo;
+    const client = await pool.connect();
     try {
-      const result = await pool.query(`
+      await client.query('BEGIN');
+      const result = await client.query(`
         UPDATE validade_items
         SET status=$1, resolucao=$2, dt_resolucao=CURRENT_DATE, atualizado_em=NOW()
         WHERE id=ANY($3::int[])
         RETURNING id, status, resolucao, atualizado_em
       `, [novoStatus, motivo, idsNum]);
       console.log(`[validade] encerrar-multiplos: ids=${idsNum} motivo=${motivo} status=${novoStatus} rowCount=${result.rowCount}`);
-      if (result.rowCount === 0)
+      if (result.rowCount === 0) {
+        await client.query('ROLLBACK');
         return res.status(404).json({ ok: false, erro: 'Nenhum item encontrado com esses IDs' });
-      res.json({ ok: true, atualizados: result.rowCount, motivo });
+      }
 
       // ── F1-07: se foi descarte por vencimento → gera perdas automaticamente
-      // try/catch isolado — falha não afeta o encerramento já confirmado
       if (novoStatus === 'descartado') {
-        try {
           // Busca dados dos itens encerrados para gerar as perdas
-          const { rows: itensDesc } = await pool.query(`
+          const { rows: itensDesc } = await client.query(`
             SELECT vi.id, vi.descricao, vi.codigo, vi.qtd_unidades,
                    vi.produto_id, vi.lote,
                    p.preco_custo
@@ -608,12 +609,12 @@ module.exports = function (pool, app) {
             const valor  = parseFloat(item.preco_custo || 0) * qtd;
 
             // Cria registro em perdas (sem duplicar se já existir)
-            const jaExiste = await pool.query(
+            const jaExiste = await client.query(
               `SELECT id FROM perdas WHERE validade_item_id = $1 LIMIT 1`,
               [item.id]
             );
             if (!jaExiste.rows.length) {
-              await pool.query(`
+              await client.query(`
                 INSERT INTO perdas
                   (validade_item_id, produto_id, descricao, motivo,
                    qtd_unidades, valor_perda, dt_perda, mes, usuario_id)
@@ -625,7 +626,11 @@ module.exports = function (pool, app) {
 
             // Registra movimento de estoque
             if (item.produto_id && qtd > 0) {
-              await pool.query(`
+              const lock = await client.query('SELECT estoque FROM produtos WHERE id=$1 FOR UPDATE', [item.produto_id]);
+              if (!lock.rows.length) throw new Error(`Produto não encontrado para o item de validade ${item.id}`);
+              const disponivel = parseFloat(lock.rows[0].estoque || 0);
+              if (qtd > disponivel) throw new Error(`Estoque insuficiente no descarte. Produto ${item.codigo}: disponível ${disponivel}; descarte ${qtd}`);
+              await client.query(`
                 INSERT INTO movimentos_estoque
                   (produto_id, produto_codigo, tipo_movimento, origem, origem_id,
                    quantidade, estoque_anterior, estoque_posterior, usuario_id, observacao)
@@ -638,27 +643,23 @@ module.exports = function (pool, app) {
               `, [item.id, qtd, req.user?.id || null,
                   'Vencimento: ' + (item.descricao || item.codigo), item.produto_id]);
 
-              await pool.query(`
+              await client.query(`
                 UPDATE produtos
-                SET estoque = GREATEST(0, estoque - $1), atualizado_em = NOW()
+                SET estoque = estoque - $1, atualizado_em = NOW()
                 WHERE id = $2
               `, [qtd, item.produto_id]);
             }
           }
 
-          // Emite evento de atualização de estoque
-          events.emit(app, 'VALIDADE_DESCARTADA', {
-            ids:      idsNum,
-            motivo,
-            total:    itensDesc.length,
-          });
-
-        } catch (eMov) {
-          console.warn('[validade] F1-07 movimento falhou (não crítico):', eMov.message);
-        }
       }
-
-    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+      await client.query('COMMIT');
+      if (novoStatus === 'descartado') events.emit(app, 'VALIDADE_DESCARTADA', { ids:idsNum, motivo });
+      res.json({ ok: true, atualizados: result.rowCount, motivo });
+    } catch(e) {
+      await client.query('ROLLBACK').catch(()=>{});
+      const status = /Estoque insuficiente/.test(e.message) ? 409 : 500;
+      res.status(status).json({ ok: false, erro: e.message });
+    } finally { client.release(); }
   });
 
   // ── DELETE /multiplos — exclui vários itens de uma vez ──────────────────────
