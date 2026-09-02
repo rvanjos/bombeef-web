@@ -1239,7 +1239,7 @@ async function sincronizarBoletosAutomatico({notificar=false}={}) {
           continue;
         }
         // Campos do boleto acompanham a fonte; decisões humanas do DRE são preservadas.
-        const camposFonte = ['data','mes','mesCaixa','valor','lancamento','razaoSocial','fonte','needsReview','parcela','totalParcelas','vinculadoA'];
+        const camposFonte = ['data','mes','mesCaixa','valor','lancamento','razaoSocial','fonte','needsReview','parcela','totalParcelas','vinculadoA','cartaoCredito','cartaoFaturaRef','cartaoItemRef'];
         for (const campo of camposFonte) {
           if (recebido[campo] !== undefined && String(existente[campo] ?? '') !== String(recebido[campo] ?? '')) {
             existente[campo] = recebido[campo];
@@ -1251,6 +1251,7 @@ async function sincronizarBoletosAutomatico({notificar=false}={}) {
       const agora = new Date().toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
       atualizarStatusSyncBoletos('ok', `Boletos sincronizados às ${agora}`);
       if (alterados) {
+        _restaurarConciliacoesCartao();
         _revinculateBoletosPrev();
         showTable(); updMesFiltro(); render(); updStats(); renderDRE();
         autoSv();
@@ -1546,6 +1547,7 @@ async function carregarSessao() {
     // dia, extrato só no fechamento do mês), o vínculo nunca era refeito e o
     // Rafael tinha que marcar cada fatura como paga na mão.
     _revinculateCC();
+    _restaurarConciliacoesCartao();
   } catch(e) {
     console.error('[carregarSessao]', e);
     // Mesmo com erro, se já tem dados em memória, mostra a tabela
@@ -4471,13 +4473,15 @@ async function renderStatusCartoesGrade() {
     const brl = v => 'R$ ' + parseFloat(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
 
     // KPIs topo
+    const pendDocs = TXS.filter(t => t.fonte === 'CC' && parseFloat(t.valor||0) < 0 && !t.ignorar && !t.documentoStatus).length;
     const kpiHtml = `<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;font-size:11px;align-items:center">
       <span>📋 <strong>${kpis.total||0}</strong> faturas</span>
       <span style="color:#92400e">⏳ <strong>${kpis.classificando||0}</strong> classif.</span>
       <span style="color:#1e40af">🔵 <strong>${kpis.classif||0}</strong> prontas</span>
       <span style="color:#16a34a">✅ <strong>${kpis.pagas||0}</strong> pagas</span>
       ${kpis.vencidas>0?`<span style="color:#dc2626;font-weight:700">⚠️ ${kpis.vencidas} vencidas</span>`:''}
-      <button onclick="abrirControleFaturas()" style="margin-left:auto;padding:3px 10px;background:var(--primary);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:11px;font-family:'DM Sans',sans-serif">📋 Detalhes</button>
+      <button onclick="abrirConciliacaoCartao()" style="margin-left:auto;padding:5px 10px;background:${pendDocs?'#7c3aed':'#166534'};color:#fff;border:none;border-radius:7px;cursor:pointer;font-size:11px;font-weight:700;font-family:'DM Sans',sans-serif">🔗 Conciliação ${pendDocs?`(${pendDocs})`:'✓'}</button>
+      <button onclick="abrirControleFaturas()" style="padding:5px 10px;background:var(--primary);color:#fff;border:none;border-radius:7px;cursor:pointer;font-size:11px;font-family:'DM Sans',sans-serif">📋 Detalhes</button>
     </div>`;
 
     // Últimos 6 meses
@@ -4555,6 +4559,109 @@ async function renderStatusCartoesGrade() {
   } catch(e) {
     grid.innerHTML = `<div style="font-size:11px;color:#dc2626;padding:8px">❌ ${e.message}</div>`;
   }
+}
+
+let _concCCSelecionado = null;
+let _concCCMostrarTodos = false;
+
+function _restaurarConciliacoesCartao() {
+  const porItem = new Map(TXS.filter(t => t.fonte?.startsWith('BOLETO') && t.cartaoItemRef)
+    .map(t => [String(t.cartaoItemRef), t]));
+  TXS.filter(t => t.fonte === 'CC').forEach(t => {
+    const bol = porItem.get(String(t.id));
+    if (!bol) return;
+    t.documentoStatus = 'boleto';
+    t.documentoBoletoId = bol.boletoId;
+  });
+}
+
+function _scoreDocumentoCC(cc, bol) {
+  const vc = Math.abs(parseFloat(cc.valor||0)), vb = Math.abs(parseFloat(bol.valor||0));
+  if (!vc || !vb) return -999;
+  const pct = Math.abs(vc-vb)/Math.max(vc,vb);
+  let score = pct <= .005 ? 70 : pct <= .02 ? 50 : pct <= .05 ? 20 : -80;
+  if (cc.data && bol.data) {
+    const dias = Math.abs(new Date(cc.data)-new Date(bol.data))/86400000;
+    score += dias <= 7 ? 20 : dias <= 45 ? 10 : dias > 120 ? -30 : 0;
+  }
+  const norm=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9 ]/g,' ');
+  const a=new Set(norm(cc.razaoSocial||cc.lancamento).split(/\s+/).filter(x=>x.length>3));
+  const b=norm(bol.razaoSocial||bol.lancamento).split(/\s+/).filter(x=>x.length>3);
+  if (b.some(x=>a.has(x))) score += 20;
+  return score;
+}
+
+function abrirConciliacaoCartao() {
+  _concCCMostrarTodos = false;
+  _concCCSelecionado = null;
+  document.getElementById('m-conciliacao-cc')?.remove();
+  document.body.insertAdjacentHTML('beforeend', `<div class="mbg open" id="m-conciliacao-cc">
+    <div class="md" style="max-width:1100px;width:96vw;max-height:90vh;display:flex;flex-direction:column">
+      <div class="mdh"><div><h3>🔗 Conciliação de compras no cartão</h3><div style="font-size:11px;color:rgba(255,255,255,.75);margin-top:2px">Confirme se cada item possui nota/boleto ou se foi uma compra sem nota</div></div><button class="mdx" onclick="document.getElementById('m-conciliacao-cc').remove()">×</button></div>
+      <div id="conc-cc-body" class="mdb" style="overflow:auto;padding:14px"></div>
+    </div></div>`);
+  renderConciliacaoCartao();
+}
+
+function renderConciliacaoCartao() {
+  const el=document.getElementById('conc-cc-body'); if(!el)return;
+  _restaurarConciliacoesCartao();
+  let itens=TXS.filter(t=>t.fonte==='CC' && parseFloat(t.valor||0)<0 && !t.ignorar);
+  if(!_concCCMostrarTodos) itens=itens.filter(t=>!t.documentoStatus);
+  itens.sort((a,b)=>(b.mesCaixa||b.mes||'').localeCompare(a.mesCaixa||a.mes||'')||(b.data||'').localeCompare(a.data||''));
+  if(!_concCCSelecionado || !itens.some(t=>String(t.id)===String(_concCCSelecionado))) _concCCSelecionado=itens[0]?.id||null;
+  const cc=TXS.find(t=>String(t.id)===String(_concCCSelecionado));
+  const docs=cc ? TXS.filter(t=>t.fonte?.startsWith('BOLETO') && !t.ignorar && (!t.cartaoItemRef || String(t.cartaoItemRef)===String(cc.id)))
+    .map(t=>({t,score:_scoreDocumentoCC(cc,t)})).sort((a,b)=>b.score-a.score).slice(0,40) : [];
+  const pend=TXS.filter(t=>t.fonte==='CC'&&parseFloat(t.valor||0)<0&&!t.ignorar&&!t.documentoStatus).length;
+  const linhas=itens.map(t=>`<button onclick="_concCCSelecionado='${esc(String(t.id))}';renderConciliacaoCartao()" style="width:100%;text-align:left;padding:9px;border:1px solid ${String(t.id)===String(_concCCSelecionado)?'#7c3aed':'var(--border)'};background:${String(t.id)===String(_concCCSelecionado)?'#f5f3ff':'#fff'};border-radius:8px;margin-bottom:6px;cursor:pointer">
+    <div style="font-size:12px;font-weight:700">${esc(t.razaoSocial||t.lancamento||'Compra')}</div><div style="font-size:10px;color:var(--muted);margin-top:2px">${t.data||'sem data'} · ${t.mesCaixa||t.mes||''} · <strong>${fmt.brl(Math.abs(parseFloat(t.valor||0)))}</strong> ${t.documentoStatus==='sem_nota'?'· ✅ sem nota':t.documentoStatus==='boleto'?'· 🔗 nota vinculada':''}</div></button>`).join('');
+  const candidatos=docs.map(({t,score})=>`<div style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:9px;border:1px solid ${score>=70?'#86efac':'var(--border)'};background:${score>=70?'#f0fdf4':'#fff'};border-radius:8px;margin-bottom:6px">
+    <div><div style="font-size:12px;font-weight:700">${esc(t.razaoSocial||t.lancamento||'Nota/boleto')}</div><div style="font-size:10px;color:var(--muted)">${t.data||'sem data'} · ${fmt.brl(Math.abs(parseFloat(t.valor||0)))} · ${esc(t.lancamento||'')} ${score>=70?'· sugestão forte':''}</div></div>
+    <button class="btn bg" style="font-size:10px;padding:5px 8px" onclick="vincularItemCCDocumento('${esc(String(cc.id))}','${esc(String(t.boletoId))}')">Vincular</button></div>`).join('');
+  el.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px"><div><strong>${pend} pendência(s)</strong><div style="font-size:11px;color:var(--muted)">Os itens confirmados deixam de gerar duplicidade, mas permanecem no histórico.</div></div><button class="btn bs" onclick="_concCCMostrarTodos=!_concCCMostrarTodos;renderConciliacaoCartao()">${_concCCMostrarTodos?'Mostrar pendentes':'Ver resolvidos'}</button></div>
+    <div style="display:grid;grid-template-columns:minmax(280px,.8fr) minmax(400px,1.2fr);gap:14px">
+      <section><h4 style="margin-bottom:8px">Itens da fatura</h4>${linhas||'<div style="padding:25px;text-align:center;color:var(--muted)">✅ Nenhum item pendente.</div>'}</section>
+      <section><h4 style="margin-bottom:8px">${cc?'Comparar com notas e boletos':'Selecione um item'}</h4>${cc?`<div style="padding:10px;background:#f8fafc;border-radius:8px;margin-bottom:10px;font-size:11px"><strong>${esc(cc.lancamento||'')}</strong><br>${cc.data||''} · ${fmt.brl(Math.abs(parseFloat(cc.valor||0)))} · ${esc(cc.bandeira||'')}</div>${candidatos||'<div style="padding:18px;text-align:center;color:var(--muted)">Nenhuma nota/boleto disponível para vínculo.</div>'}<div style="display:flex;gap:7px;margin-top:10px"><button class="btn bs" onclick="marcarItemCCSemNota('${esc(String(cc.id))}')">✓ Compra sem nota</button>${cc.documentoStatus?`<button class="btn bd" onclick="desfazerConciliacaoCC('${esc(String(cc.id))}')">Desfazer vínculo</button>`:''}</div>`:''}</section>
+    </div><style>@media(max-width:760px){#conc-cc-body>div+div{grid-template-columns:1fr!important}}</style>`;
+}
+
+async function vincularItemCCDocumento(ccId,boletoId) {
+  const cc=TXS.find(t=>String(t.id)===String(ccId));
+  const bol=TXS.find(t=>String(t.boletoId)===String(boletoId)&&t.fonte?.startsWith('BOLETO'));
+  if(!cc||!bol)return;
+  const mesCaixa=cc.mesCaixa||cc.mes||mesRef;
+  const faturaRef=cc.faturaCC||`CC_${mesCaixa.replace('/','_')}_${String(cc.bandeira||'cartao').replace(/\W+/g,'_')}`;
+  const r=await api.post(`/api/boletos/${boletoId}/vincular-cartao`,{cartao:cc.bandeira||'',faturaRef,itemRef:String(cc.id),mesCaixa});
+  if(!r.ok){toast('❌ '+(r.erro||'Não foi possível vincular'));return;}
+  cc.documentoStatus='boleto'; cc.documentoBoletoId=bol.boletoId;
+  cc.faturaCC=cc.faturaCC||faturaRef;
+  bol.cartaoItemRef=String(cc.id); bol.cartaoFaturaRef=faturaRef; bol.cartaoCredito=cc.bandeira||''; bol.fonte='BOLETO'; bol.mesCaixa=mesCaixa;
+  render();renderDRE();autoSv();renderConciliacaoCartao();toast('✅ Nota vinculada ao item do cartão sem duplicar a despesa');
+}
+
+async function marcarItemCCSemNota(ccId) {
+  const cc=TXS.find(t=>String(t.id)===String(ccId)); if(!cc)return;
+  if(cc.documentoStatus==='boleto'&&cc.documentoBoletoId){
+    const r=await api.post(`/api/boletos/${cc.documentoBoletoId}/desvincular-cartao`,{});
+    if(!r.ok){toast('❌ '+(r.erro||'Não foi possível alterar a conciliação'));return;}
+    const bol=TXS.find(t=>String(t.boletoId)===String(cc.documentoBoletoId));
+    if(bol){bol.cartaoItemRef=null;bol.cartaoFaturaRef=null;bol.cartaoCredito='';bol.fonte=r.data?.status==='pago'?'BOLETO':'BOLETO_PREV';bol.mesCaixa=r.data?.mes_caixa||bol.mes;}
+  }
+  cc.documentoStatus='sem_nota'; cc.documentoBoletoId=null;
+  render();renderDRE();autoSv();renderConciliacaoCartao();toast('✅ Compra sem nota confirmada');
+}
+
+async function desfazerConciliacaoCC(ccId) {
+  const cc=TXS.find(t=>String(t.id)===String(ccId)); if(!cc)return;
+  if(cc.documentoStatus==='boleto'&&cc.documentoBoletoId){
+    const r=await api.post(`/api/boletos/${cc.documentoBoletoId}/desvincular-cartao`,{});
+    if(!r.ok){toast('❌ '+(r.erro||'Não foi possível desfazer'));return;}
+    const bol=TXS.find(t=>String(t.boletoId)===String(cc.documentoBoletoId));
+    if(bol){bol.cartaoItemRef=null;bol.cartaoFaturaRef=null;bol.cartaoCredito='';bol.fonte=r.data?.status==='pago'?'BOLETO':'BOLETO_PREV';bol.mesCaixa=r.data?.mes_caixa||bol.mes;}
+  }
+  cc.documentoStatus=null;cc.documentoBoletoId=null;
+  render();renderDRE();autoSv();renderConciliacaoCartao();toast('Vínculo desfeito');
 }
 function toggleStatusCartoes() {
   const painel = document.getElementById('painel-cartoes');
@@ -5242,6 +5349,11 @@ function _revinculateBoletosPrev() {
 
 // ── Deduplicação de boletos vs extrato ───────────────────────────────────────
 function _txsSemDuplicatas(txs) {
+  // Quando um item da fatura representa uma NF/boleto já existente, o boleto
+  // é a fonte contábil oficial e a linha CC fica apenas como prova/auditoria.
+  const itensCCComDocumento = new Set(
+    txs.filter(t => t.fonte?.startsWith('BOLETO') && t.cartaoItemRef).map(t => String(t.cartaoItemRef))
+  );
   // Regra 1: por boletoId — mais confiável
   const extratoPorBoletoId = new Set(
     txs.filter(t => (t.fonte==='EXTRATO'||t.fonte==='OFX') && t.boletoId).map(t => String(t.boletoId))
@@ -5281,6 +5393,9 @@ function _txsSemDuplicatas(txs) {
 
   return txs.filter(t => {
     if (t.ignorar) return false;
+    if (t.fonte === 'CC' && (t.documentoStatus === 'boleto' || itensCCComDocumento.has(String(t.id)))) {
+      return _drop(t, 'item CC representado por nota/boleto vinculado');
+    }
 
     // Dedup EXTRATO duplicado: somente FITID/id bancário exatamente repetido.
     if ((t.fonte === 'EXTRATO' || t.fonte === 'OFX') && t.data && parseFloat(t.valor||0) < 0) {
