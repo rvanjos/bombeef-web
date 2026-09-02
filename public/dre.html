@@ -1578,11 +1578,13 @@ async function procExt(file) {
   // Avisa sobre duplicatas detectadas
   const dup = d.duplicatasEstimadas || 0;
   const bq  = d.boletosQuitados || 0;
+  const ambiguos = lancs.filter(l => l.boletoAmbiguo).length;
   const msgExtra = bq > 0 ? ` · 💳 ${bq} boleto(s) marcado(s) como pago` : '';
+  const msgAmbiguo = ambiguos > 0 ? ` · ⚠️ ${ambiguos} pagamento(s) precisam de vínculo manual` : '';
   if (dup > 0) {
-    toast(`⚠️ ${d.total} lançamentos importados · ${dup} já existem${msgExtra}`, 5000);
+    toast(`⚠️ ${d.total} lançamentos importados · ${dup} já existem${msgExtra}${msgAmbiguo}`, 6000);
   } else {
-    toast(`✅ ${d.total} lançamentos carregados${msgExtra}`);
+    toast(`✅ ${d.total} lançamentos carregados${msgExtra}${msgAmbiguo}`, ambiguos ? 6000 : 2500);
   }
   addLancs(lancs, file.name);
 }
@@ -5110,11 +5112,12 @@ function toggleDREPanel(){
 
 // ── Re-vincula BOLETO_PREV com EXTRATOs após carregar sessões ────────────────
 function _revinculateBoletosPrev() {
-  // Passo 1: deduplicar dois PREVs com mesmo valor+data (mesmo boleto importado duas vezes)
-  const prevVistos = new Map(); // "valCents|data" → primeiro PREV
+  // Passo 1: deduplicar apenas a mesma identidade de boleto. Valor e data
+  // iguais podem representar duas parcelas/fornecedores legítimos.
+  const prevVistos = new Map();
   for (const t of TXS) {
-    if (!t.fonte?.startsWith('BOLETO') || !t.data || t.ignorar) continue;
-    const key = `${Math.round(Math.abs(parseFloat(t.valor||0))*100)}|${t.data}`;
+    if (!t.fonte?.startsWith('BOLETO') || !t.boletoId || t.ignorar) continue;
+    const key = String(t.boletoId);
     if (prevVistos.has(key)) {
       // Segundo PREV com mesmo valor+data → marca como ignorado
       const primeiro = prevVistos.get(key);
@@ -5191,8 +5194,8 @@ function _txsSemDuplicatas(txs) {
        .map(t => `${Math.round(Math.abs(parseFloat(t.valor||0))*100)}|${t.mesCaixa||t.mes}`)
   );
 
-  // Regra extra: dedup EXTRATO vs EXTRATO — mesmo valor+data (pode ter nome ligeiramente diferente)
-  // Quando o mesmo pagamento aparece duas vezes no extrato importado
+  // Dedup de extrato somente por identidade bancária estável. Mesmo valor,
+  // data e estabelecimento pode ser uma compra legítima repetida.
   const extratoVistos = new Set();
 
   // Registro de tudo que a dedup suprimiu, para nada sumir em silêncio.
@@ -5210,12 +5213,11 @@ function _txsSemDuplicatas(txs) {
   return txs.filter(t => {
     if (t.ignorar) return false;
 
-    // Dedup EXTRATO duplicado: mesmo valor+data → manter só o primeiro
+    // Dedup EXTRATO duplicado: somente FITID/id bancário exatamente repetido.
     if ((t.fonte === 'EXTRATO' || t.fonte === 'OFX') && t.data && parseFloat(t.valor||0) < 0) {
-      // Usa valor+data+primeiros 8 chars do lançamento como chave
-      const chaveE = `${Math.round(Math.abs(parseFloat(t.valor||0))*100)}|${t.data}|${(t.lancamento||'').slice(0,8).toUpperCase()}`;
-      if (extratoVistos.has(chaveE)) return false;
-      extratoVistos.add(chaveE);
+      const identidade = t.fitid ? `fitid:${t.fitid}` : null;
+      if (identidade && extratoVistos.has(identidade)) return _drop(t,'FITID bancário repetido');
+      if (identidade) extratoVistos.add(identidade);
     }
 
     // BOLETO_PREV: oculta se extrato já tem o boletoId ou se tem vinculadoA

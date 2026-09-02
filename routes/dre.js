@@ -538,23 +538,8 @@ module.exports = function (pool, app) {
         ).catch(()=>{});
       }
     }
-    // Remove sessões duplicadas por mês — mantém apenas a mais recente com mais lançamentos
-    await pool.query(`
-      DELETE FROM dre_sessoes
-      WHERE id IN (
-        SELECT id FROM (
-          SELECT id,
-            ROW_NUMBER() OVER (
-              PARTITION BY mes_ref
-              ORDER BY
-                COALESCE(jsonb_array_length(dados_json->'transactions'), 0) DESC,
-                atualizado_em DESC
-            ) AS rn
-          FROM dre_sessoes
-        ) ranked
-        WHERE rn > 1
-      )
-    `).catch(e => console.warn('[dre] limpeza duplicatas:', e.message));
+    // Não excluir sessões automaticamente durante a inicialização. Versões antigas
+    // podem pertencer a usuários diferentes e servem como histórico de recuperação.
   }
   initTable().catch(e => console.error('[dre] initTable:', e.message));
 
@@ -774,13 +759,19 @@ module.exports = function (pool, app) {
       const desc = descricao || `Sessão ${mes_ref}`;
       const dadosStr = JSON.stringify(dados_json);
 
-      // Resultado calculado pelo frontend (se enviado)
-      const res_receitas   = resultado?.receitas   != null ? parseFloat(resultado.receitas)   : null;
-      const res_despesas   = resultado?.despesas   != null ? parseFloat(resultado.despesas)   : null;
-      const res_cmv        = resultado?.cmv        != null ? parseFloat(resultado.cmv)        : null;
-      const res_lucro_bruto= resultado?.lucroBruto != null ? parseFloat(resultado.lucroBruto) : null;
-      const res_lucro_op   = resultado?.lucroOp    != null ? parseFloat(resultado.lucroOp)    : null;
-      const res_final      = resultado?.final      != null ? parseFloat(resultado.final)      : null;
+      if (!dados_json || !Array.isArray(dados_json.transactions)) {
+        return res.status(400).json({ ok:false, erro:'Sessão DRE sem lista de lançamentos válida' });
+      }
+      const numeroSeguro = v => v == null ? null : (Number.isFinite(Number(v)) ? Number(v) : null);
+      const res_receitas   = numeroSeguro(resultado?.receitas);
+      const res_despesas   = numeroSeguro(resultado?.despesas);
+      const res_cmv        = numeroSeguro(resultado?.cmv);
+      const res_lucro_bruto= numeroSeguro(resultado?.lucroBruto);
+      const res_lucro_op   = numeroSeguro(resultado?.lucroOp);
+      const res_final      = numeroSeguro(resultado?.final);
+      if (resultado && [res_receitas,res_despesas,res_cmv,res_lucro_bruto,res_lucro_op,res_final].some(v => v === null)) {
+        return res.status(400).json({ ok:false, erro:'Totais do DRE inválidos; recalcule antes de salvar' });
+      }
 
       // Colunas de resultado (só atualiza se enviado)
       const resUpdate = resultado ? `,
@@ -967,7 +958,7 @@ module.exports = function (pool, app) {
   });
 
   // ── POST /import-extrato ───────────────────────────────────────────────────
-  r.post('/import-extrato', upload.single('arquivo'), async (req, res) => {
+  r.post('/import-extrato', autoPublish('dre', 'dre_atualizado'), upload.single('arquivo'), async (req, res) => {
     if (!req.file) return res.status(400).json({ ok: false, erro: 'Arquivo não enviado' });
 
     try {
@@ -1023,10 +1014,12 @@ module.exports = function (pool, app) {
                 OR ABS(vencimento - $2::date) <= 4
               )
             ORDER BY ABS(vencimento - $2::date) ASC, ABS(ROUND(valor::numeric * 100) - $1) ASC
-            LIMIT 1
+            LIMIT 3
           `, [valorCentavos, dtPagamento]);
 
-          if (boletos.length) {
+          // Só efetua baixa automática quando há um único candidato. Dois boletos
+          // iguais exigem escolha manual para não pagar a parcela errada.
+          if (boletos.length === 1) {
             const boleto = boletos[0];
             const dtPag = dtPagamento;
             const descExtrato = [l.lancamento, l.memo, l.razaoSocial]
@@ -1036,6 +1029,7 @@ module.exports = function (pool, app) {
               UPDATE boletos SET
                 status = 'pago',
                 dt_pagamento = $1::date,
+                mes_caixa = TO_CHAR($1::date, 'MM/YYYY'),
                 vinculado_extrato = true,
                 extrato_lancamento = $2,
                 atualizado_em = NOW()
@@ -1046,6 +1040,9 @@ module.exports = function (pool, app) {
             // Marca o lançamento com o boletoId para deduplicação no frontend
             l.boletoId = boleto.id;
             // Não define categoria aqui — será classificado normalmente pelo DRE
+          } else if (boletos.length > 1) {
+            l.boletoAmbiguo = true;
+            l.boletosCandidatos = boletos.map(b => ({ id:b.id, fornecedor:b.fornecedor, vencimento:b.vencimento }));
           }
         } catch(e) {
           console.warn('[dre/import-extrato] auto-baixa boleto:', e.message);
