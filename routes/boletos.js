@@ -41,10 +41,11 @@ module.exports = function (pool, app) {
   const r = express.Router();
   r.use(autenticar());
 
-  // Perfil contabil: somente leitura — bloqueia qualquer escrita
+  // Escritas financeiras ficam restritas aos perfis operacionais autorizados.
   r.use((req, res, next) => {
-    if (req.user?.perfil === 'contabil' && req.method !== 'GET') {
-      return res.status(403).json({ ok: false, erro: 'Perfil contábil tem acesso somente leitura' });
+    const perfil = String(req.user?.perfil || '').toLowerCase();
+    if (req.method !== 'GET' && !['admin', 'gestor', 'financeiro'].includes(perfil)) {
+      return res.status(403).json({ ok: false, erro: 'Seu perfil não pode alterar boletos' });
     }
     next();
   });
@@ -218,7 +219,32 @@ module.exports = function (pool, app) {
       vinculadoExtrato: b.vinculado_extrato || false,
       extratLancamento: b.extrato_lancamento || '',
       cartaoCredito:    b.cartao_credito || '',
+      dt_programado:    fmtDate(b.dt_programado),
     };
+  }
+
+  async function localizarDuplicata(client, b, ignorarId = null) {
+    const codigo = String(b.codigoBarras || b.codigo_barras || '').replace(/\D/g, '');
+    const chave  = String(b.chaveNfe || b.chave_nfe || '').replace(/\D/g, '');
+    const parcela = String(b.parcela || '1').trim();
+    const fornecedor = String(b.fornecedor || '').trim();
+    const nf = String(b.nf || '').trim();
+    const vencimento = b.vencimento || null;
+    const valor = Number(b.valor || 0);
+    const { rows } = await client.query(`
+      SELECT id FROM boletos
+      WHERE status != 'cancelado' AND ($1::int IS NULL OR id != $1)
+        AND (
+          ($2 != '' AND REGEXP_REPLACE(COALESCE(codigo_barras,''),'[^0-9]','','g') = $2)
+          OR ($3 != '' AND chave_nfe = $3 AND COALESCE(parcela,'1') = $4)
+          OR ($5 != '' AND $6 != '' AND UPPER(TRIM(COALESCE(fornecedor,''))) = UPPER($5)
+              AND COALESCE(nf,'') = $6 AND COALESCE(parcela,'1') = $4)
+          OR ($5 != '' AND $7::date IS NOT NULL AND UPPER(TRIM(COALESCE(fornecedor,''))) = UPPER($5)
+              AND vencimento = $7::date AND ABS(COALESCE(valor,0) - $8) < 0.01)
+        )
+      LIMIT 1
+    `, [ignorarId, codigo, chave, parcela, fornecedor, nf, vencimento, valor]);
+    return rows[0] || null;
   }
 
   // Mapeamento Plano de Contas → Categoria DRE (alinhado com dre.html CATS)
@@ -443,9 +469,9 @@ module.exports = function (pool, app) {
 
   // ── GET /:id ───────────────────────────────────────────────────────────────
   // ── POST /desvincular-extrato/:id — remove vínculo com lançamento OFX ─────
-  r.post('/desvincular-extrato/:id', autoPublish('boletos', 'boletos_atualizado'), async (req, res) => {
+  const desvincularExtrato = async (req, res) => {
     try {
-      await pool.query(`
+      const { rowCount } = await pool.query(`
         UPDATE boletos SET
           vinculado_extrato  = false,
           extrato_lancamento = NULL,
@@ -454,13 +480,16 @@ module.exports = function (pool, app) {
             ELSE 'avencer'
           END,
           dt_pagamento       = NULL,
-          mes_caixa          = mes_competencia,
+          mes_caixa          = COALESCE(TO_CHAR(vencimento, 'MM/YYYY'), mes_competencia),
           atualizado_em      = NOW()
         WHERE id = $1
       `, [req.params.id]);
+      if (!rowCount) return res.status(404).json({ ok: false, erro: 'Boleto não encontrado' });
       res.json({ ok: true });
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
-  });
+  };
+  r.post('/:id/desvincular-extrato', autoPublish('boletos', 'boletos_atualizado'), desvincularExtrato);
+  r.post('/desvincular-extrato/:id', autoPublish('boletos', 'boletos_atualizado'), desvincularExtrato);
 
   r.get('/:id', async (req, res) => {
     try {
@@ -474,6 +503,8 @@ module.exports = function (pool, app) {
   r.post('/', autoPublish('boletos', 'boletos_atualizado'), async (req, res) => {
     const b = req.body;
     if (!b.fornecedor && !b.produto) return res.status(400).json({ ok: false, erro: 'fornecedor ou produto obrigatório' });
+    if (!Number.isFinite(Number(b.valor)) || Number(b.valor) <= 0) return res.status(400).json({ ok:false, erro:'Informe um valor maior que zero' });
+    if (b.status && !['avencer','pago','vencido','cancelado'].includes(b.status)) return res.status(400).json({ ok:false, erro:'Status inválido' });
 
     const venc = b.vencimento || null;
     const dtNota = b.dtNota || b.dt_nota || null;
@@ -485,6 +516,10 @@ module.exports = function (pool, app) {
                      : venc ? venc.slice(5,7)+'/'+venc.slice(0,4) : null);
 
     try {
+      const duplicata = await localizarDuplicata(pool, b);
+      if (duplicata && !b.permitirDuplicado) {
+        return res.status(409).json({ ok:false, erro:'Possível boleto duplicado', duplicataId:duplicata.id });
+      }
       const { rows } = await pool.query(`
         INSERT INTO boletos
           (fornecedor,produto,dt_nota,nf,chave_nfe,parcela,total_parcelas,plano,
@@ -510,6 +545,8 @@ module.exports = function (pool, app) {
   // ── PUT /:id — atualiza boleto ─────────────────────────────────────────────
   r.put('/:id', autoPublish('boletos', 'boletos_atualizado'), async (req, res) => {
     const b = req.body;
+    if (b.valor !== undefined && (!Number.isFinite(Number(b.valor)) || Number(b.valor) <= 0)) return res.status(400).json({ ok:false, erro:'Informe um valor maior que zero' });
+    if (b.status && !['avencer','pago','vencido','cancelado'].includes(b.status)) return res.status(400).json({ ok:false, erro:'Status inválido' });
     const dtPag  = b.dtPagamento || b.dt_pagamento || null;
     const dtNota = b.dtNota || b.dt_nota || null;
     const venc   = b.vencimento || null;
@@ -518,6 +555,8 @@ module.exports = function (pool, app) {
     const mesCaixa = b.mesCaixa || (dtPag ? dtPag.slice(5,7)+'/'+dtPag.slice(0,4)
                      : venc ? venc.slice(5,7)+'/'+venc.slice(0,4) : null);
     try {
+      const duplicata = await localizarDuplicata(pool, b, parseInt(req.params.id));
+      if (duplicata && !b.permitirDuplicado) return res.status(409).json({ ok:false, erro:'Possível boleto duplicado', duplicataId:duplicata.id });
       const { rowCount } = await pool.query(`
         UPDATE boletos SET
           fornecedor       = COALESCE($1, fornecedor),
@@ -587,27 +626,36 @@ module.exports = function (pool, app) {
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
-  // ── POST /baixa/:id — registra pagamento ──────────────────────────────────
-  r.post('/baixa/:id', autoPublish('boletos', 'boletos_atualizado'), async (req, res) => {
-    const { dtPagamento, valor } = req.body;
+  // ── POST /:id/baixa — registra pagamento (alias legado /baixa/:id) ─────────
+  const baixarBoleto = async (req, res) => {
+    const { dtPagamento, valor, obs } = req.body;
     try {
-      const dtPag = dtPagamento || new Date().toISOString().slice(0,10);
-      const mc = dtPag.slice(5,7)+'/'+dtPag.slice(0,4);
-      await pool.query(`
+      if (dtPagamento && !/^\d{4}-\d{2}-\d{2}$/.test(dtPagamento)) {
+        return res.status(400).json({ ok:false, erro:'Data de pagamento inválida' });
+      }
+      const { rows, rowCount } = await pool.query(`
         UPDATE boletos SET
           status='pago',
-          dt_pagamento = $1,
-          mes_caixa    = $2,
-          valor        = COALESCE($3, valor),
+          dt_pagamento = COALESCE($1::date, CURRENT_DATE),
+          mes_caixa    = TO_CHAR(COALESCE($1::date, CURRENT_DATE), 'MM/YYYY'),
+          valor        = COALESCE($2, valor),
+          observacao   = CASE WHEN NULLIF($3,'') IS NULL THEN observacao
+                              WHEN NULLIF(observacao,'') IS NULL THEN $3
+                              ELSE observacao || ' | Baixa: ' || $3 END,
+          dt_programado= NULL,
           atualizado_em= NOW()
-        WHERE id=$4
-      `, [dtPag, mc, valor ? parseFloat(valor) : null, req.params.id]);
-      res.json({ ok: true });
+        WHERE id=$4 AND status!='cancelado'
+        RETURNING id, dt_pagamento, mes_caixa
+      `, [dtPagamento||null, valor !== undefined && valor !== '' ? parseFloat(valor) : null, obs||null, req.params.id]);
+      if (!rowCount) return res.status(404).json({ ok:false, erro:'Boleto não encontrado ou cancelado' });
+      res.json({ ok: true, data: rows[0] });
     } catch (e) {
       console.error('[boletos/baixa]', e.message);
       res.status(500).json({ ok: false, erro: e.message });
     }
-  });
+  };
+  r.post('/:id/baixa', autoPublish('boletos', 'boletos_atualizado'), baixarBoleto);
+  r.post('/baixa/:id', autoPublish('boletos', 'boletos_atualizado'), baixarBoleto);
 
   // ── POST /vincular-extrato/:id — vincula boleto com lançamento OFX ────────
   // Evita duplicação no DRE: quando o extrato tiver o mesmo pagamento
@@ -832,6 +880,7 @@ module.exports = function (pool, app) {
     try {
       await client.query('BEGIN');
       const ids = [];
+      let duplicados = 0;
       for (const b of boletos) {
         const venc   = b.vencimento || null;
         const dtNota = b.dtNota || b.dt_nota || null;
@@ -839,16 +888,7 @@ module.exports = function (pool, app) {
                          : venc ? venc.slice(5,7)+'/'+venc.slice(0,4) : null);
         const mesCaixa = b.mesCaixa || mesComp;
 
-        // Evita duplicar NF-e já importada
-        if (b.chaveNfe || b.chave_nfe) {
-          const chave = b.chaveNfe || b.chave_nfe;
-          const parc  = b.parcela || '1';
-          const { rows: dup } = await client.query(
-            `SELECT id FROM boletos WHERE chave_nfe=$1 AND parcela=$2 LIMIT 1`,
-            [chave, parc]
-          );
-          if (dup.length) { ids.push(dup[0].id); continue; }
-        }
+        if (await localizarDuplicata(client, b)) { duplicados++; continue; }
 
         const { rows } = await client.query(`
           INSERT INTO boletos
@@ -871,17 +911,16 @@ module.exports = function (pool, app) {
 
       // Registrar log de importação
       const nfKeys = new Set(boletos.filter(b => b.chaveNfe||b.chave_nfe).map(b => b.chaveNfe||b.chave_nfe));
-      const nfDups = boletos.length - ids.length;
       const valTotal = boletos.reduce((s,b) => s + parseFloat(b.valor||0), 0);
       pool.query(
         `INSERT INTO boletos_importacoes(tipo,chave_nfe,fornecedor,boletos_gerados,boletos_duplicados,valor_total,usuario_id,usuario_nome)
          VALUES('nfe',$1,$2,$3,$4,$5,$6,$7)`,
         [nfKeys.size===1?[...nfKeys][0]:null, boletos[0]?.fornecedor||null,
-         ids.length, nfDups, valTotal, req.user?.id||null, req.user?.nome||null]
+         ids.length, duplicados, valTotal, req.user?.id||null, req.user?.nome||null]
       ).catch(() => {});
 
       // Notifica para atualizar dashboard
-      res.json({ ok: true, ids, count: ids.length });
+      res.json({ ok: true, ids, count: ids.length, duplicados });
     } catch (e) {
       await client.query('ROLLBACK');
       console.error('[boletos/confirmar]', e.message);
@@ -890,7 +929,7 @@ module.exports = function (pool, app) {
   });
 
   // ── POST /import-csv — importa planilha de boletos (Controle Boletos) ─────
-  r.post('/import-csv', upload.single('arquivo'), async (req, res) => {
+  r.post('/import-csv', autoPublish('boletos', 'boletos_atualizado'), upload.single('arquivo'), async (req, res) => {
     if (!req.file) return res.status(400).json({ ok: false, erro: 'Arquivo não enviado' });
 
     try {
@@ -933,11 +972,12 @@ module.exports = function (pool, app) {
 
       const parseVal = v => {
         if (typeof v === 'number') return v;
-        return parseFloat(String(v).replace(/[^\d.,]/g,'').replace(',','.')) || 0;
+        const s = String(v).replace(/[^\d,.-]/g,'').trim();
+        return Number(s.includes(',') ? s.replace(/\./g,'').replace(',','.') : s) || 0;
       };
 
       const client = await pool.connect();
-      let inseridos=0, erros=0;
+      let inseridos=0, duplicados=0, erros=0, valorInserido=0;
       try {
         await client.query('BEGIN');
         for (let i = hIdx+1; i < rows.length; i++) {
@@ -954,8 +994,16 @@ module.exports = function (pool, app) {
           const mesCaixa = dtPag ? dtPag.slice(5,7)+'/'+dtPag.slice(0,4)
                            : venc ? venc.slice(5,7)+'/'+venc.slice(0,4) : null;
           const st = dtPag ? 'pago' : 'avencer';
+          const candidato = {
+            fornecedor: forn,
+            nf: cNF>=0?String(row[cNF]||'').trim():'',
+            parcela: cParc>=0?String(row[cParc]||'1').trim():'1',
+            vencimento: venc,
+            valor: val,
+          };
 
           try {
+            if (await localizarDuplicata(client, candidato)) { duplicados++; continue; }
             await client.query(`
               INSERT INTO boletos
                 (fornecedor,produto,dt_nota,nf,parcela,plano,vencimento,valor,
@@ -970,6 +1018,7 @@ module.exports = function (pool, app) {
               venc||null, val, st, dtPag||null, mesComp, mesCaixa, req.user.id,
             ]);
             inseridos++;
+            valorInserido += val;
           } catch (e) { erros++; }
         }
         await client.query('COMMIT');
@@ -977,7 +1026,12 @@ module.exports = function (pool, app) {
         await client.query('ROLLBACK'); throw e;
       } finally { client.release(); }
 
-      res.json({ ok: true, inseridos, erros });
+      pool.query(
+        `INSERT INTO boletos_importacoes(tipo,nome_arquivo,boletos_gerados,boletos_duplicados,valor_total,usuario_id,usuario_nome)
+         VALUES('csv',$1,$2,$3,$4,$5,$6)`,
+        [req.file.originalname, inseridos, duplicados, valorInserido, req.user?.id||null, req.user?.nome||null]
+      ).catch(() => {});
+      res.json({ ok: true, inseridos, duplicados, erros });
     } catch (e) {
       console.error('[boletos/import-csv]', e.message);
       res.status(500).json({ ok: false, erro: e.message });
