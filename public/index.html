@@ -252,6 +252,7 @@ body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var
 /* Linha de gráficos + atalhos */
 .dash-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;}
 .dash-row.tres{grid-template-columns:1fr 1fr 1fr;}
+.dash-row.operacional{grid-template-columns:1fr 1fr;}
 .dash-card{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:16px 18px;box-shadow:var(--shadow);}
 .dash-card-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin-bottom:12px;}
 
@@ -581,7 +582,7 @@ body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var
           <div class="kpi-sub" id="k-vence7d-val">—</div>
         </div>
         <!-- Perdas do mês vs meta -->
-        <div class="kpi-card k-red" onclick="showTab('perdas')" style="cursor:pointer">
+        <div class="kpi-card k-red" onclick="abrirPerdas()" style="cursor:pointer">
           <span class="kpi-icon2">🗑️</span>
           <div class="kpi-label">Perdas do Mês</div>
           <div class="kpi-val kpi-loading" id="k-perdas">—</div>
@@ -636,7 +637,7 @@ body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var
       </div>
 
       <!-- ══ LINHA 2: Validade + Perdas gauge + RH ══ -->
-      <div class="dash-row tres" style="margin-bottom:14px">
+      <div class="dash-row operacional" style="margin-bottom:14px">
 
         <!-- Validade — situação -->
         <div class="dash-card" id="dash-validade-card">
@@ -669,7 +670,7 @@ body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var
         </div>
 
         <!-- Perdas — gauge vs meta -->
-        <div class="dash-card">
+        <div class="dash-card" style="display:none" aria-hidden="true">
           <div class="dash-card-title">🗑️ Perdas — Meta do Mês</div>
           <div class="gauge-wrap" id="dash-perdas-gauge">
             <svg width="120" height="80" viewBox="0 0 120 80">
@@ -683,7 +684,7 @@ body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var
             <span id="perdas-val">—</span> de <span id="perdas-meta">—</span> permitido
           </div>
           <div style="margin-top:10px">
-            <button class="btn-refresh" style="width:100%;justify-content:center" onclick="showTab('perdas')">Ver Perdas →</button>
+            <button class="btn-refresh" style="width:100%;justify-content:center" onclick="abrirPerdas()">Ver Perdas →</button>
           </div>
         </div>
 
@@ -715,7 +716,7 @@ body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var
 
         <!-- Gráfico 30 dias -->
         <div style="background:#fff;border:1px solid var(--border);border-radius:11px;padding:14px 16px;margin-bottom:14px;box-shadow:0 2px 8px rgba(0,0,0,.06)">
-          <div style="font-size:10px;text-transform:uppercase;letter-spacing:.8px;font-weight:700;color:var(--muted);margin-bottom:10px">📈 Faturamento — Últimos 30 dias</div>
+          <div style="font-size:10px;text-transform:uppercase;letter-spacing:.8px;font-weight:700;color:var(--muted);margin-bottom:10px">📈 Faturamento diário do mês selecionado</div>
           <svg id="dash-grafico-30d" width="100%" height="120" viewBox="0 0 800 120" preserveAspectRatio="none"
                style="display:block;overflow:visible">
             <text x="400" y="65" text-anchor="middle" style="font-size:12px;fill:#9ca3af">Carregando...</text>
@@ -724,12 +725,12 @@ body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var
         </div>
 
         <!-- Top produtos + Curva ABC -->
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px" id="dash-bottom-row">
+        <div style="display:grid;grid-template-columns:1fr;gap:12px;margin-bottom:14px" id="dash-bottom-row">
           <div style="background:#fff;border:1px solid var(--border);border-radius:11px;padding:14px 16px;box-shadow:0 2px 8px rgba(0,0,0,.06)">
             <div style="font-size:10px;text-transform:uppercase;letter-spacing:.8px;font-weight:700;color:var(--muted);margin-bottom:10px">🏆 Top Produtos do Mês</div>
             <div id="dash-top-produtos">—</div>
           </div>
-          <div style="background:#fff;border:1px solid var(--border);border-radius:11px;padding:14px 16px;box-shadow:0 2px 8px rgba(0,0,0,.06)">
+          <div style="display:none" aria-hidden="true">
             <div style="font-size:10px;text-transform:uppercase;letter-spacing:.8px;font-weight:700;color:var(--muted);margin-bottom:10px">📊 Resultado Financeiro</div>
             <div id="dash-resultado-fin">—</div>
           </div>
@@ -1400,7 +1401,7 @@ function renderAtalhos(d) {
 
   // Perdas fora da meta
   if (d.perdasDentroMeta === false)
-    atalhos.push({ icon:'📉', text:'Ver Perdas', sub:'Meta ultrapassada', cls:'atalho-danger', fn:"showTab('validade')" });
+    atalhos.push({ icon:'📉', text:'Ver Perdas', sub:'Meta ultrapassada', cls:'atalho-danger', fn:"abrirPerdas()" });
 
   // RH pendentes
   atalhos.push({ icon:'✅', text:'Aprovar Lançamentos', sub:'RH — apontamentos pendentes', cls:'', fn:"showTab('rh')" });
@@ -1596,9 +1597,7 @@ async function carregarGerencial(mes) {
     const varSinal = f.var_mes_ant !== null ? (f.var_mes_ant >= 0 ? `+${f.var_mes_ant}` : `${f.var_mes_ant}`) : '—';
 
     pCards.innerHTML = [
-      {lbl:'Realizado', val:brl(f.realizado), sub: metaOk ? `${f.pct_meta}% da meta` : `${f.dias_importados}d importados`, cor:'var(--green)'},
       {lbl:'Projeção do Mês', val:brl(f.projecao), sub: projStatus || `Média ${brl(f.media_diaria)}/dia`, cor: metaOk && projPct >= 100 ? 'var(--green)' : 'var(--orange)'},
-      {lbl:'Meta', val: metaOk ? brl(f.meta) : '—', sub: metaOk ? '' : 'Definir em Gestão→Metas', cor:'var(--blue)'},
       {lbl:'Vs mês anterior', val: varSinal + '%', sub: `Mês ant: ${brl(f.fat_mes_ant)}`, cor: f.var_mes_ant >= 0 ? 'var(--green)' : 'var(--red-l)'},
       {lbl:'Ticket médio', val: brl(f.ticket_medio), sub: `${f.pessoas_mes} atendimentos`, cor:'var(--text)'},
       ...(f.fat_liquido > 0 ? [{
@@ -1730,6 +1729,13 @@ function abrirPendenciaAdmin(tipo){
   }
 }
 
+function abrirPerdas(){
+  showTab('validade');
+  const enviar=()=>{try{document.getElementById('iframe-validade')?.contentWindow?.postMessage({type:'bb_open_validade_perdas'},window.location.origin)}catch(_){}};
+  setTimeout(enviar,300);
+  setTimeout(enviar,900);
+}
+
 async function carregarKPIs() {
   setSyncStatus('loading');
 
@@ -1774,7 +1780,12 @@ async function carregarKPIs() {
     $('k-aberto').textContent    = 'Total aberto: ' + fmtBRL(d.boletosAberto);
 
     // ── DRE — só para perfis com acesso ─────────────────────────────────
-    if (['admin','financeiro','contabil'].includes(usuario?.perfil)) {
+    const podeVerDre=['admin','financeiro','contabil'].includes(usuario?.perfil);
+    const dreKpi=$('kpi-card-dre');
+    const dreCard=$('dash-dre-card');
+    if(dreKpi) dreKpi.style.display=podeVerDre?'':'none';
+    if(dreCard) dreCard.style.display=podeVerDre?'':'none';
+    if (podeVerDre) {
       const res = d.dreResultado || 0;
       $('k-resultado').textContent = fmtBRL(res);
       $('k-resultado').className   = 'kpi-val ' + (res >= 0 ? 'c-green' : 'c-red');
@@ -1792,14 +1803,13 @@ async function carregarKPIs() {
         badge.style.color = d.dreResultadoFonte === 'salvo' ? 'var(--green)' : 'var(--orange)';
       }
       // DRE bars
-      const dreCard = $('dash-dre-card'); if(dreCard) dreCard.style.display='';
+      if(dreCard) dreCard.style.display='';
       const maxDre = Math.max(d.dreReceitas||0, d.dreDespesas||0, 1);
       const brec = $('bar-rec'); if(brec){ brec.style.width=Math.round((d.dreReceitas||0)/maxDre*100)+'%'; $('bar-rec-val').textContent=fmtBRL(d.dreReceitas||0); }
       const bdesp = $('bar-desp'); if(bdesp){ bdesp.style.width=Math.round((d.dreDespesas||0)/maxDre*100)+'%'; $('bar-desp-val').textContent=fmtBRL(d.dreDespesas||0); }
       const bres = $('bar-res'); if(bres){ bres.style.width=Math.max(0,Math.round(Math.abs(res)/maxDre*100))+'%'; bres.style.background=res>=0?'var(--green)':'var(--red-l)'; $('bar-res-val').textContent=fmtBRL(res); }
-      // Próximos boletos
-      carregarBoletosProx();
     }
+    carregarBoletosProx();
 
     // ── Validade ──────────────────────────────────────────────────────────
     $('k-val-alerta').textContent = fmtN(d.validadeAlerta);
