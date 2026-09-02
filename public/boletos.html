@@ -14,7 +14,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .ph{background:var(--red);padding:12px 22px;display:flex;align-items:center;gap:10px;box-shadow:0 2px 12px rgba(139,0,0,.3);}
 .ph h2{font-family:'Playfair Display',serif;font-size:17px;color:#fff;font-weight:700;}
 .ph-sub{font-size:11px;color:rgba(255,255,255,.6);margin-left:auto;}
-.body{padding:22px 20px;max-width:1300px;margin:0 auto;;flex:1;overflow-y:auto;overflow-x:auto;;background:var(--bg);}
+.body{padding:14px 16px;width:100%;max-width:none;margin:0 auto;flex:1;overflow-y:auto;background:var(--bg);}
 .kpi-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:20px;}
 .kc{background:var(--white);border:1px solid var(--border);border-radius:10px;padding:14px 16px;border-left:4px solid var(--red);box-shadow:var(--shadow);}
 .kc.g{border-left-color:var(--green);} .kc.o{border-left-color:var(--orange);} .kc.b{border-left-color:var(--blue);}
@@ -23,6 +23,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .kc-s{font-size:11px;color:var(--muted);margin-top:2px;}
 /* toolbar */
 .toolbar{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px;align-items:center;}
+.toolbar-summary{font-size:11px;color:var(--muted);margin-left:auto;white-space:nowrap;}
 .btn{padding:8px 16px;border-radius:8px;border:none;cursor:pointer;font-size:13px;font-weight:600;font-family:'DM Sans',sans-serif;transition:all .15s;display:inline-flex;align-items:center;gap:6px;}
 .btn-p{background:var(--red);color:#fff;} .btn-p:hover{background:var(--red-l);}
 .btn-s{background:var(--white);color:var(--text);border:1px solid var(--border);} .btn-s:hover{border-color:var(--red);color:var(--red);}
@@ -34,7 +35,13 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--white);cursor:pointer;}
 /* tabela */
 .card{background:var(--white);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);overflow:hidden;}
-.tbl{width:100%;border-collapse:collapse;}
+.table-scroll{width:100%;overflow-x:auto;overscroll-behavior-inline:contain;scrollbar-gutter:stable;}
+.tbl{width:100%;min-width:1040px;border-collapse:collapse;}
+.tbl th:last-child,.tbl td:last-child{position:sticky;right:0;background:var(--white);box-shadow:-5px 0 8px rgba(0,0,0,.04);}
+.tbl th:last-child{background:#fdf9f5;z-index:2;}
+.col-hidden{display:none!important;}
+.columns-menu{display:none;position:absolute;right:0;top:calc(100% + 6px);z-index:40;width:230px;padding:10px;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:0 10px 28px rgba(0,0,0,.14);}
+.columns-menu.open{display:block}.columns-menu label{display:flex;align-items:center;gap:8px;padding:6px;font-size:12px;cursor:pointer}.columns-wrap{position:relative}
 .tbl th{background:#fdf9f5;font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:700;padding:10px 12px;text-align:left;border-bottom:2px solid var(--border);}
 .tbl td{padding:10px 12px;font-size:13px;border-bottom:1px solid #f5efe8;vertical-align:middle;}
 .tbl tr:last-child td{border-bottom:none;}
@@ -229,8 +236,7 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
   <!-- Toolbar -->
   <div class="toolbar">
     <button class="btn btn-p" onclick="abrirModal()">＋ Novo Boleto</button>
-    <button class="btn btn-s bb-desktop-only" onclick="abrirImportXML()">📥 Importar XML</button>
-    <button class="btn btn-s bb-desktop-only" onclick="abrirImportPDF()">📄 Importar PDF</button>
+    <button class="btn btn-s bb-desktop-only" onclick="abrirCentralImportacoes()">📥 Central de Importações</button>
     <div class="search-wrap"><input type="text" id="busca" placeholder="Buscar fornecedor, NF..." oninput="filtrar()"></div>
     <select class="flt" id="flt-status" onchange="carregar()">
       <option value="todos" selected>Todos</option><option value="avencer">A Vencer</option>
@@ -242,16 +248,18 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
     <input type="date" id="flt-ate" class="flt" style="padding:7px 10px" onchange="carregar()" title="Vencimento até">
     <input type="month" id="flt-mes" class="flt" style="padding:7px 10px" onchange="carregar()" title="Filtrar por mês">
     <button class="btn btn-s" style="padding:6px 10px;font-size:11px" onclick="limparFiltros()">✕ Limpar</button>
+    <div class="columns-wrap"><button class="btn btn-s" onclick="toggleColunas(event)">⚙️ Colunas</button><div class="columns-menu" id="columns-menu"></div></div>
+    <span class="toolbar-summary" id="lista-resumo"></span>
   </div>
   <!-- Tabela -->
   <div class="card">
-    <div style="overflow-x:auto"><table class="tbl">
+    <div class="table-scroll"><table class="tbl" id="boletos-table">
       <thead><tr>
-        <th>Fornecedor / Produto</th>
-        <th title="Número da Nota Fiscal">NF-e Nº</th>
-        <th>Vencimento</th>
-        <th title="Parcela / Total de parcelas">Parcela</th>
-        <th>Categoria</th><th>Valor</th><th>Status</th><th title="Lançamento do extrato vinculado">Extrato</th><th>Ações</th>
+        <th data-col="fornecedor">Fornecedor / Produto</th>
+        <th data-col="nf" title="Número da Nota Fiscal">NF-e Nº</th>
+        <th data-col="vencimento">Vencimento</th>
+        <th data-col="parcela" title="Parcela / Total de parcelas">Parcela</th>
+        <th data-col="categoria">Categoria</th><th data-col="valor">Valor</th><th data-col="status">Status</th><th data-col="extrato" title="Lançamento do extrato vinculado">Extrato</th><th data-col="acoes">Ações</th>
       </tr></thead>
       <tbody id="tbody"></tbody>
     </table></div>
@@ -441,7 +449,7 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
     </div>
     <div class="modal-foot">
       <button class="btn btn-s" onclick="fecharBaixa()">Cancelar</button>
-      <button class="btn btn-g" onclick="confirmarBaixa()">✅ Confirmar Pagamento</button>
+      <button class="btn btn-g" id="btn-confirmar-baixa" onclick="confirmarBaixa()">✅ Confirmar Pagamento</button>
     </div>
   </div>
 </div>
@@ -449,6 +457,27 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
 <script>
 const {api,fmt,toast} = BB;
 let boletos=[], xmlPreview=[], pdfPreview=null;
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const COLUNAS = [
+  ['fornecedor','Fornecedor / Produto',true],['nf','NF-e',true],['vencimento','Vencimento',true],
+  ['parcela','Parcela',false],['categoria','Categoria',true],['valor','Valor',true],
+  ['status','Status',true],['extrato','Extrato / Cartão',false],['acoes','Ações',true]
+];
+let colunasVisiveis = JSON.parse(localStorage.getItem('bb_boletos_colunas') || 'null') || Object.fromEntries(COLUNAS.map(c=>[c[0],c[2]]));
+
+function abrirCentralImportacoes(){
+  if(window.parent!==window) window.parent.postMessage({type:'bb_navigate',tab:'hub'},'*');
+  else location.href='/importacoes.html';
+}
+function toggleColunas(ev){ ev.stopPropagation(); const m=document.getElementById('columns-menu'); m.classList.toggle('open'); renderMenuColunas(); }
+function renderMenuColunas(){
+  document.getElementById('columns-menu').innerHTML = COLUNAS.map(([id,nome]) => `<label><input type="checkbox" ${colunasVisiveis[id]!==false?'checked':''} onchange="definirColuna('${id}',this.checked)"> ${nome}</label>`).join('');
+}
+function definirColuna(id,visivel){ colunasVisiveis[id]=visivel; localStorage.setItem('bb_boletos_colunas',JSON.stringify(colunasVisiveis)); aplicarColunas(); }
+function aplicarColunas(){
+  COLUNAS.forEach(([id]) => document.querySelectorAll(`[data-col="${id}"]`).forEach(el=>el.classList.toggle('col-hidden',colunasVisiveis[id]===false)));
+}
+document.addEventListener('click',()=>document.getElementById('columns-menu')?.classList.remove('open'));
 
 // ── Init ───────────────────────────────────────────────────────────────────
 async function init() {
@@ -854,6 +883,8 @@ function filtrar(){
 function renderizar(lista){
   const tbody = document.getElementById('tbody');
   const empty = document.getElementById('empty');
+  const resumo=document.getElementById('lista-resumo');
+  if(resumo) resumo.textContent=`${lista.length} boleto(s) · ${fmt.brl(lista.reduce((s,b)=>s+Number(b.valor||0),0))}`;
   if(!lista.length){ tbody.innerHTML=''; empty.style.display=''; return; }
   empty.style.display='none';
   const hoje = new Date(); hoje.setHours(0,0,0,0);
@@ -871,11 +902,11 @@ function renderizar(lista){
         const pillTxt = b.status==='pago' ? '✅ Pago' : isVenc ? '🔴 Vencido' : b.dt_programado ? '📅 Programado' : '🟡 A Vencer';
         const pillCol = b.status==='pago' ? '#2ecc71' : isVenc ? 'var(--red-l)' : b.dt_programado ? '#5b21b6' : '#f39c12';
         return `<div class="mob-boleto-card ${statusCls}">
-          <div class="mob-forn">${b.fornecedor}</div>
+          <div class="mob-forn">${esc(b.fornecedor)}</div>
           <div class="mob-meta">
-            ${b.nf ? `NF ${b.nf} · ` : ''}
+            ${b.nf ? `NF ${esc(b.nf)} · ` : ''}
             ${b.totalParcelas > 1 ? `Parc. ${b.parcela}/${b.totalParcelas} · ` : ''}
-            ${b.plano || ''}
+            ${esc(b.plano || '')}
           </div>
           <div class="mob-row">
             <span class="mob-valor" style="color:${isVenc?'var(--red-l)':'var(--text)'}">${fmt.brl(b.valor)}</span>
@@ -916,18 +947,18 @@ function renderizar(lista){
     const vencStr = b.vencimento ? fmt.date(b.vencimento) : '—';
     const vencClass = isVenc ? 'val-r' : '';
     return `<tr>
-      <td><div style="font-weight:600">${b.fornecedor}</div><div style="font-size:11px;color:var(--muted)">${b.produto||''}</div></td>
-      <td style="font-family:'DM Mono',monospace;font-size:12px">${b.nf ? `<span title="NF-e ${b.nf}">${b.nf}</span>` : '<span style="color:var(--muted)">—</span>'}</td>
-      <td class="${vencClass}">${vencStr}</td>
-      <td style="font-family:'DM Mono',monospace;text-align:center">
+      <td data-col="fornecedor"><div style="font-weight:600">${esc(b.fornecedor)}</div><div style="font-size:11px;color:var(--muted)">${esc(b.produto||'')}</div></td>
+      <td data-col="nf" style="font-family:'DM Mono',monospace;font-size:12px">${b.nf ? `<span title="NF-e ${esc(b.nf)}">${esc(b.nf)}</span>` : '<span style="color:var(--muted)">—</span>'}</td>
+      <td data-col="vencimento" class="${vencClass}">${vencStr}</td>
+      <td data-col="parcela" style="font-family:'DM Mono',monospace;text-align:center">
         ${b.totalParcelas > 1
           ? `<span style="font-weight:600">${b.parcela}</span><span style="color:var(--muted);font-size:11px">/${b.totalParcelas}</span>`
           : `<span style="color:var(--muted)">—</span>`}
       </td>
-      <td style="font-size:12px">${b.plano||'—'}</td>
-      <td style="font-family:'DM Mono',monospace;font-weight:600">${fmt.brl(b.valor)}</td>
-      <td>${pill}</td>
-      <td style="max-width:180px">
+      <td data-col="categoria" style="font-size:12px">${esc(b.plano||'—')}</td>
+      <td data-col="valor" style="font-family:'DM Mono',monospace;font-weight:600">${fmt.brl(b.valor)}</td>
+      <td data-col="status">${pill}</td>
+      <td data-col="extrato" style="max-width:180px">
         ${b.cartaoCredito
           ? `<span style="font-size:10px;background:#ede9fe;color:#5b21b6;padding:2px 7px;border-radius:4px;white-space:nowrap;font-weight:600">💳 ${b.cartaoCredito}</span>`
           : ''}
@@ -940,13 +971,14 @@ function renderizar(lista){
              </div>`
           : (!b.cartaoCredito ? `<span style="font-size:10px;color:var(--muted)">—</span>` : '')}
       </td>
-      <td>
+      <td data-col="acoes">
         ${b.status!=='pago'?`<button class="act-btn" onclick="abrirBaixa(${b.dbId})">✅ Pagar</button>`:''}
         <button class="act-btn" onclick="abrirModal(${b.dbId})">✏️</button>
         <button class="act-btn" onclick="excluir(${b.dbId})" style="color:var(--red-l)">🗑</button>
       </td>
     </tr>`;
   }).join('');
+  aplicarColunas();
 }
 
 // ── Modal CRUD ─────────────────────────────────────────────────────────────
@@ -1035,9 +1067,12 @@ async function salvar(){
     const alterou = b && (b.vencimento !== body.vencimento || b.valor !== body.valor);
     if (alterou) setTimeout(() => toast('ℹ️ Vencimento/valor alterado — atualize "Boletos DB" no DRE.'), 300);
   }
-  const d = dbId
+  let d = dbId
     ? await api.put(`/api/boletos/${dbId}`, body)
     : await api.post('/api/boletos', body);
+  if(!dbId && d.duplicataId && confirm('Já existe um boleto semelhante. Deseja cadastrar mesmo assim?')) {
+    d = await api.post('/api/boletos', {...body, permitirDuplicado:true});
+  }
   if(!d.ok){ toast('Erro: '+d.erro); return; }
   toast(dbId ? '✅ Boleto atualizado!' : '✅ Boleto criado!');
 
@@ -1177,10 +1212,12 @@ function abrirBaixa(dbId){
 function fecharBaixa(){ document.getElementById('modal-baixa').classList.remove('open'); }
 async function confirmarBaixa(){
   const id = document.getElementById('baixa-id').value;
+  const btn=document.getElementById('btn-confirmar-baixa'); btn.disabled=true; btn.textContent='Salvando...';
   const d = await api.post(`/api/boletos/${id}/baixa`,{
     dtPagamento: document.getElementById('baixa-dt').value,
     obs: document.getElementById('baixa-obs').value,
   });
+  btn.disabled=false; btn.textContent='✅ Confirmar Pagamento';
   if(d.ok){
     toast('✅ Pagamento registrado!'); fecharBaixa(); carregar(); carregarKPIs();
     if (typeof renderCalendario === 'function') { await renderCalendario(); await _reabrirPainelLateral(); }
