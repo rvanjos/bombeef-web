@@ -93,6 +93,11 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
 /* Detalhe cliente */
 .det-header{background:linear-gradient(135deg,var(--red),var(--red-l));padding:16px 18px;border-radius:12px;margin-bottom:14px;color:#fff;}
 .det-kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;margin-bottom:14px;}
+.col-picker{position:relative}.col-picker summary{list-style:none;cursor:pointer}.col-picker summary::-webkit-details-marker{display:none}
+.col-menu{position:absolute;right:0;top:38px;z-index:30;width:210px;background:#fff;border:1px solid var(--border);border-radius:9px;padding:10px;box-shadow:0 12px 30px #0002;display:grid;gap:7px}
+.col-menu label{font-size:12px;display:flex;gap:8px;align-items:center;cursor:pointer}.col-menu input{width:auto}
+.table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}.table-scroll table{min-width:980px}.table-scroll th:last-child,.table-scroll td:last-child{position:sticky;right:0;background:inherit;box-shadow:-5px 0 8px #0000000b}
+@media(max-width:760px){.body{padding:10px}.toolbar{align-items:stretch}.toolbar .flt{min-width:160px!important}.kpi-grid{grid-template-columns:1fr 1fr}.ph-actions{display:none}}
 .det-kpi{background:var(--white);border:1px solid var(--border);border-radius:8px;padding:10px 12px;}
 .det-kpi .lbl{font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700;}
 .det-kpi .val{font-size:16px;font-weight:700;font-family:'DM Mono',monospace;margin-top:2px;}
@@ -115,7 +120,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
     <span class="ph-icon">🧾</span>
     <div>
       <h1 class="ph-title">Fiado</h1>
-      <p class="ph-sub">Compras pendentes, clientes, funcionários e aprovações</p>
+      <p class="ph-sub">Crédito de clientes externos, pagamentos e aprovações</p>
     </div>
   </div>
   <div class="ph-actions">
@@ -162,10 +167,21 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
     </select>
     <button class="btn btn-gray btn-sm" onclick="abrirNovoCliente()">＋ Novo cliente</button>
     <button class="btn btn-gray btn-sm" onclick="carregarTudo()">🔄</button>
+    <details class="col-picker">
+      <summary class="btn btn-gray btn-sm">⚙ Colunas</summary>
+      <div class="col-menu" onclick="event.stopPropagation()">
+        <label><input type="checkbox" checked disabled> Cliente</label>
+        <label><input type="checkbox" data-col="2" checked onchange="alternarColunaCliente(this)"> Tipo</label>
+        <label><input type="checkbox" data-col="3" checked onchange="alternarColunaCliente(this)"> Limite</label>
+        <label><input type="checkbox" data-col="5" checked onchange="alternarColunaCliente(this)"> Comprado no mês</label>
+        <label><input type="checkbox" data-col="6" checked onchange="alternarColunaCliente(this)"> Último pagamento</label>
+        <label><input type="checkbox" data-col="7" checked onchange="alternarColunaCliente(this)"> Status</label>
+      </div>
+    </details>
   </div>
 
   <div class="card">
-    <div style="overflow-x:auto">
+    <div class="table-scroll">
     <table class="tbl" id="tbl-clientes">
       <thead><tr>
         <th>Cliente</th><th>Tipo</th><th>Limite</th>
@@ -179,18 +195,19 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
   </div>
 </div>
 
-<!-- ── FUNCIONÁRIOS ─────────────────────────────────────────────── -->
-<div id="sec-funcionarios" style="display:none">
-  <div class="toolbar">
-    <input class="flt" type="text" placeholder="🔍 Buscar funcionário..." id="busca-func-ret" oninput="renderFuncionarios()" style="min-width:200px">
-    <button class="btn btn-red" onclick="abrirNovaVendaFuncionario()">＋ Nova Retirada</button>
-    <button class="btn btn-gray" onclick="sincFuncionarios()">🔄 Sincronizar com RH</button>
-    <button class="btn btn-gray" onclick="dedupFuncionarios()" style="background:#fef3c7;border-color:#fde68a;color:#92400e" title="Remove registros duplicados de funcionários">🧹 Remover duplicatas</button>
-  </div>
-
-  <!-- Cards de funcionários com saldo -->
-  <div id="lista-funcionarios" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px"></div>
-</div>
+<script>
+function alternarColunaCliente(input){
+  const col=Number(input.dataset.col), mostrar=input.checked;
+  document.querySelectorAll(`#tbl-clientes tr > *:nth-child(${col})`).forEach(el=>el.style.display=mostrar?'':'none');
+  const salvas=Object.fromEntries([...document.querySelectorAll('.col-menu input[data-col]')].map(i=>[i.dataset.col,i.checked]));
+  localStorage.setItem('bb_fiado_colunas',JSON.stringify(salvas));
+}
+function restaurarColunasFiado(){
+  let salvas={}; try{salvas=JSON.parse(localStorage.getItem('bb_fiado_colunas')||'{}')}catch(_){}
+  document.querySelectorAll('.col-menu input[data-col]').forEach(i=>{if(i.dataset.col in salvas)i.checked=salvas[i.dataset.col];alternarColunaCliente(i)});
+}
+document.addEventListener('DOMContentLoaded',restaurarColunasFiado);
+</script>
 
 <!-- ── CLIENTES EXTERNOS ──────────────────────────────────────── -->
 <div id="sec-clientes" style="display:none">
@@ -697,7 +714,7 @@ function renderTabelaClientes() {
   const tp = document.getElementById('flt-tipo').value;
   const st = document.getElementById('flt-status-cli').value;
   const lista = _clientes.filter(c =>
-    c.tipo_cliente !== 'funcionario' && // funcionários ficam na aba própria
+    c.tipo_cliente !== 'funcionario' && // funcionários pertencem ao módulo Retiradas
     (!q || c.nome.toLowerCase().includes(q) || (c.telefone||'').includes(q)) &&
     (!tp || c.tipo_cliente===tp) &&
     (!st || c.status===st)
@@ -715,7 +732,6 @@ function renderTabelaClientes() {
       <td><div style="font-weight:600">${c.nome}${pendentes>0?` <span class="badge badge-roxo" style="font-size:9px">⏳${pendentes}</span>`:''}</div><div style="font-size:10px;color:var(--muted)">${c.telefone||'—'}</div></td>
       <td>${badgeTipo}</td>
       <td class="mono" style="font-size:11px">${limite>0?fmt.brl(limite):'—'}</td>
-      <td class="mono" style="text-align:right;color:${saldo>0?'var(--red-l)':'var(--green);'}font-weight:600">${fmt.brl(saldo)}</td>
       <td class="mono" style="text-align:right">${fmt.brl(parseFloat(c.comprado_mes||0))}</td>
       <td style="font-size:11px;color:var(--muted)">${c.ultimo_pagamento?c.ultimo_pagamento.slice(0,10).split('-').reverse().join('/'):'—'}</td>
       <td>${badgeSaldo}</td>
@@ -728,13 +744,14 @@ function renderTabelaClientes() {
       </td>
     </tr>`;
   }).join('');
+  restaurarColunasFiado();
 }
 
 // ── Lista de clientes ───────────────────────────────────────────────────────
 function renderListaClientes() {
   const q = (document.getElementById('busca-cli').value||'').toLowerCase();
   const lista = _clientes.filter(c =>
-    c.tipo_cliente !== 'funcionario' && // funcionários ficam na aba própria
+    c.tipo_cliente !== 'funcionario' && // funcionários pertencem ao módulo Retiradas
     (!q || c.nome.toLowerCase().includes(q) || (c.telefone||'').includes(q))
   );
   document.getElementById('lista-clientes').innerHTML = lista.map(c => `

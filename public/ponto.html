@@ -363,6 +363,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
 <script>
 const {api, fmt} = BB;
 let _func = null, _ponto = null, _tipo = null, _user = null;
+const FUSO_PONTO='America/Sao_Paulo';
+const dataHojePonto=()=>new Intl.DateTimeFormat('en-CA',{timeZone:FUSO_PONTO,year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
 let _funcs = [], _logs = [];
 
 // ── Relógio ───────────────────────────────────────────────────────────────────
@@ -476,7 +478,7 @@ async function carregarPontoHoje() {
   if (!_func) return;
   const [dp, dl] = await Promise.all([
     api.get(`/api/ponto/hoje/${_func.id}`),
-    api.get(`/api/ponto/auditoria?funcionario_id=${_func.id}&data_ini=${new Date().toISOString().slice(0,10)}&data_fim=${new Date().toISOString().slice(0,10)}&limite=20`)
+    api.get(`/api/ponto/auditoria?funcionario_id=${_func.id}&data_ini=${dataHojePonto()}&data_fim=${dataHojePonto()}&limite=20`)
   ]);
 
   // Se tabela não existe, cria automaticamente e tenta de novo
@@ -493,7 +495,7 @@ async function carregarPontoHoje() {
   renderLog();
 }
 
-const fmtTs = ts => ts ? new Date(ts).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}) : null;
+const fmtTs = ts => ts ? new Date(ts).toLocaleTimeString('pt-BR',{timeZone:FUSO_PONTO,hour:'2-digit',minute:'2-digit'}) : null;
 const fmtH  = h => h===null?'—':`${Math.floor(h)}h${String(Math.round((h%1)*60)).padStart(2,'0')}`;
 
 function renderStatus() {
@@ -630,7 +632,7 @@ async function confirmar() {
 // ── Registro retroativo ──────────────────────────────────────────────────────
 function abrirRetroativo() {
   const agora = new Date();
-  document.getElementById('retro-data').value    = agora.toISOString().slice(0,10);
+  document.getElementById('retro-data').value    = dataHojePonto();
   document.getElementById('retro-hora').value    = agora.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}).replace(':','');
   document.getElementById('retro-hora').value    = `${String(agora.getHours()).padStart(2,'0')}:${String(agora.getMinutes()).padStart(2,'0')}`;
   document.getElementById('retro-motivo').value  = '';

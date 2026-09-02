@@ -569,14 +569,14 @@ module.exports = function (pool, app) {
                   (produto_id, produto_codigo, tipo_movimento, origem, origem_id,
                    quantidade, estoque_anterior, estoque_posterior, usuario_id, observacao)
                 SELECT p.id, p.codigo, 'KIT_RESERVA', 'kits', $1,
-                  -$2::numeric,
+                  0,
                   p.estoque,
-                  GREATEST(0, p.estoque - $2::numeric),
+                  p.estoque,
                   $3, $4
                 FROM produtos p WHERE p.id = $5
               `, [pedId, parseFloat(it.quantidade||1),
                   req.usuario?.id||null,
-                  `Kit #${numero}: ${it.slot_nome||'item'}`,
+                  `Kit #${numero}: reserva lógica de ${parseFloat(it.quantidade||1)} unidade(s) — sem baixa física`,
                   it.produto_id]);
             }
             events.emit(app, 'MOVIMENTO_ESTOQUE', { origem:'kits', origem_id:pedId, tipo:'KIT_RESERVA' });
@@ -748,24 +748,55 @@ module.exports = function (pool, app) {
     } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
-  // Transições de status: reservado → separado → entregue | cancelado
+  // Transições válidas de status. Entrega e baixa física são uma única transação.
   r.post('/pedidos/:id/status', async (req, res) => {
     const { status, motivo } = req.body;
     const VALIDOS = ['reservado','separado','entregue','cancelado'];
     if (!VALIDOS.includes(status)) return res.status(400).json({ ok: false, erro: 'status inválido' });
 
     try {
-      const { rows } = await pool.query(`SELECT * FROM kit_pedidos WHERE id=$1`, [req.params.id]);
-      if (!rows.length) return res.status(404).json({ ok: false, erro: 'Não encontrado' });
-      const ped = rows[0];
       const nomeOp = req.usuario?.nome || req.usuario?.email || 'Sistema';
 
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
 
+        const { rows } = await client.query(
+          `SELECT * FROM kit_pedidos WHERE id=$1 FOR UPDATE`, [req.params.id]
+        );
+        if (!rows.length) {
+          await client.query('ROLLBACK');
+          return res.status(404).json({ ok: false, erro: 'Não encontrado' });
+        }
+        const ped = rows[0];
+        const TRANSICOES = {
+          rascunho: ['reservado','cancelado'],
+          reservado: ['separado','cancelado'],
+          separado: ['entregue','cancelado'],
+          entregue: [], cancelado: [], conciliado: []
+        };
+        if (!(TRANSICOES[ped.status] || []).includes(status)) {
+          await client.query('ROLLBACK');
+          return res.status(409).json({
+            ok:false,
+            erro:`Transição inválida: ${ped.status} → ${status}`
+          });
+        }
+
         const upd = {};
-        if (status === 'separado') {
+        if (status === 'reservado') {
+          const { rows: itensReserva } = await client.query(
+            `SELECT produto_id,produto_nome,quantidade FROM kit_pedido_itens WHERE pedido_id=$1 AND produto_id IS NOT NULL`,
+            [req.params.id]
+          );
+          for (const it of itensReserva) {
+            await client.query(
+              `INSERT INTO kit_reservas(pedido_id,produto_id,produto_nome,quantidade,status)
+               VALUES($1,$2,$3,$4,'reservado')`,
+              [req.params.id,it.produto_id,it.produto_nome||'',it.quantidade]
+            );
+          }
+        } else if (status === 'separado') {
           upd.separado_por = req.usuario?.id; upd.separado_por_nome = nomeOp;
           // Consumir reservas → consumido
           await client.query(
@@ -774,12 +805,51 @@ module.exports = function (pool, app) {
           );
         } else if (status === 'entregue') {
           upd.entregue_por = req.usuario?.id; upd.entregue_por_nome = nomeOp;
+          const { rows: itensPed } = await client.query(
+            `WITH somas AS (
+               SELECT produto_id, SUM(quantidade)::numeric AS quantidade
+               FROM kit_pedido_itens
+               WHERE pedido_id=$1 AND produto_id IS NOT NULL
+               GROUP BY produto_id
+             )
+             SELECT s.produto_id,s.quantidade,p.codigo,p.descricao,p.estoque
+             FROM somas s JOIN produtos p ON p.id=s.produto_id
+             ORDER BY s.produto_id FOR UPDATE OF p`,
+            [req.params.id]
+          );
+          const insuficientes = itensPed.filter(it => Number(it.estoque||0) < Number(it.quantidade||0));
+          if (insuficientes.length) {
+            await client.query('ROLLBACK');
+            return res.status(409).json({
+              ok:false,
+              erro:'Estoque insuficiente para concluir a entrega.',
+              itens:insuficientes.map(it => ({
+                produto:it.descricao, necessario:Number(it.quantidade), disponivel:Number(it.estoque||0)
+              }))
+            });
+          }
+          for (const it of itensPed) {
+            const anterior = Number(it.estoque||0);
+            const qtd = Number(it.quantidade||0);
+            await client.query(
+              `UPDATE produtos SET estoque=estoque-$1, atualizado_em=NOW() WHERE id=$2`,
+              [qtd,it.produto_id]
+            );
+            await client.query(`
+              INSERT INTO movimentos_estoque
+                (produto_id,produto_codigo,tipo_movimento,origem,origem_id,
+                 quantidade,estoque_anterior,estoque_posterior,usuario_id,observacao)
+              VALUES($1,$2,'KIT_ENTREGA','kits',$3,$4,$5,$6,$7,$8)`,
+              [it.produto_id,it.codigo,req.params.id,-qtd,anterior,anterior-qtd,
+               req.usuario?.id||null,`Kit #${ped.numero}: entrega confirmada`]
+            );
+          }
         } else if (status === 'cancelado') {
           upd.cancelado_por = req.usuario?.id; upd.cancelado_por_nome = nomeOp;
           upd.motivo_cancelamento = motivo || null;
           // Devolver reservas
           await client.query(
-            `UPDATE kit_reservas SET status='cancelado' WHERE pedido_id=$1 AND status='reservado'`,
+            `UPDATE kit_reservas SET status='cancelado' WHERE pedido_id=$1 AND status IN('reservado','consumido')`,
             [req.params.id]
           );
         }
@@ -794,65 +864,10 @@ module.exports = function (pool, app) {
         );
 
         await client.query('COMMIT');
-        res.json({ ok: true });
-
-        // ── F2-06: movimentos KIT_CANCELAMENTO ou KIT_ENTREGA (try/catch isolado) ──
-        try {
-          if (status === 'cancelado') {
-            // Devolução: gerar KIT_CANCELAMENTO por item do pedido
-            const { rows: itensPed } = await pool.query(
-              `SELECT produto_id, quantidade FROM kit_pedido_itens WHERE pedido_id=$1 AND produto_id IS NOT NULL`,
-              [req.params.id]
-            );
-            for (const it of itensPed) {
-              await pool.query(`
-                INSERT INTO movimentos_estoque
-                  (produto_id, produto_codigo, tipo_movimento, origem, origem_id,
-                   quantidade, estoque_anterior, estoque_posterior, usuario_id, observacao)
-                SELECT p.id, p.codigo, 'KIT_CANCELAMENTO', 'kits', $1,
-                  +$2::numeric,
-                  p.estoque,
-                  p.estoque + $2::numeric,
-                  $3, $4
-                FROM produtos p WHERE p.id = $5
-              `, [req.params.id, parseFloat(it.quantidade||1),
-                  req.usuario?.id||null,
-                  `Kit #${ped.numero}: cancelamento — devolução ao estoque`,
-                  it.produto_id]);
-            }
-            events.emit(app, 'MOVIMENTO_ESTOQUE', { origem:'kits', origem_id:parseInt(req.params.id), tipo:'KIT_CANCELAMENTO' });
-          } else if (status === 'entregue') {
-            // Saída definitiva: gerar KIT_ENTREGA por item
-            const { rows: itensPed } = await pool.query(
-              `SELECT produto_id, quantidade FROM kit_pedido_itens WHERE pedido_id=$1 AND produto_id IS NOT NULL`,
-              [req.params.id]
-            );
-            for (const it of itensPed) {
-              await pool.query(`
-                INSERT INTO movimentos_estoque
-                  (produto_id, produto_codigo, tipo_movimento, origem, origem_id,
-                   quantidade, estoque_anterior, estoque_posterior, usuario_id, observacao)
-                SELECT p.id, p.codigo, 'KIT_ENTREGA', 'kits', $1,
-                  -$2::numeric,
-                  p.estoque,
-                  GREATEST(0, p.estoque - $2::numeric),
-                  $3, $4
-                FROM produtos p WHERE p.id = $5
-              `, [req.params.id, parseFloat(it.quantidade||1),
-                  req.usuario?.id||null,
-                  `Kit #${ped.numero}: entrega confirmada`,
-                  it.produto_id]);
-              // Atualiza estoque físico ao entregar
-              await pool.query(
-                `UPDATE produtos SET estoque = GREATEST(0, estoque - $1), atualizado_em = NOW() WHERE id = $2`,
-                [parseFloat(it.quantidade||1), it.produto_id]
-              );
-            }
-            events.emit(app, 'MOVIMENTO_ESTOQUE', { origem:'kits', origem_id:parseInt(req.params.id), tipo:'KIT_ENTREGA' });
-          }
-        } catch(eMov) {
-          console.warn('[kits] F2-06 movimento estoque falhou (não crítico):', eMov.message);
+        if (status === 'entregue') {
+          events.emit(app, 'MOVIMENTO_ESTOQUE', { origem:'kits', origem_id:parseInt(req.params.id), tipo:'KIT_ENTREGA' });
         }
+        res.json({ ok: true });
 
       } catch(e) {
         await client.query('ROLLBACK'); throw e;

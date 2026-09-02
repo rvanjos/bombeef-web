@@ -162,6 +162,35 @@ module.exports = function(pool) {
   });
 
   // ── Helpers ────────────────────────────────────────────────────────────────
+  const FUSO_NEGOCIO = 'America/Sao_Paulo';
+  function dataSaoPaulo(data=new Date()) {
+    const p = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
+      timeZone:FUSO_NEGOCIO, year:'numeric', month:'2-digit', day:'2-digit'
+    }).formatToParts(data).filter(x=>x.type!=='literal').map(x=>[x.type,x.value]));
+    return `${p.year}-${p.month}-${p.day}`;
+  }
+  function horaSaoPaulo(data=new Date()) {
+    return new Intl.DateTimeFormat('pt-BR', {
+      timeZone:FUSO_NEGOCIO, hour:'2-digit', minute:'2-digit', hour12:false
+    }).format(data);
+  }
+  function timestampSaoPaulo(valor) {
+    if (!valor) return null;
+    if (valor instanceof Date) return valor;
+    const texto=String(valor).trim();
+    if (/([zZ]|[+-]\d{2}:?\d{2})$/.test(texto)) return new Date(texto);
+    const normalizado=/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(texto)
+      ? `${texto}${texto.length===16?':00':''}-03:00` : texto;
+    const data=new Date(normalizado);
+    if (Number.isNaN(data.getTime())) throw new Error('Data ou horário inválido');
+    return data;
+  }
+  function minutosSaoPaulo(data) {
+    const p=Object.fromEntries(new Intl.DateTimeFormat('pt-BR',{
+      timeZone:FUSO_NEGOCIO,hour:'2-digit',minute:'2-digit',hour12:false
+    }).formatToParts(new Date(data)).filter(x=>x.type!=='literal').map(x=>[x.type,x.value]));
+    return Number(p.hour)*60+Number(p.minute);
+  }
   function calcHoras(entrada, saida, saidaInt, retornoInt, intervaloMin) {
     if (!entrada || !saida) return null;
     const ms = new Date(saida) - new Date(entrada);
@@ -178,8 +207,7 @@ module.exports = function(pool) {
   function calcStatus(horasTrab, jornadaHoras, entrada, horarioEntrada, toleranciaMin) {
     if (!entrada) return 'falta';
     const previsto = new Date(`1970-01-01T${horarioEntrada}:00`);
-    const real     = new Date(entrada);
-    const atraso   = (real.getHours()*60+real.getMinutes()) - (previsto.getHours()*60+previsto.getMinutes());
+    const atraso   = minutosSaoPaulo(entrada) - (previsto.getHours()*60+previsto.getMinutes());
     if (atraso > (toleranciaMin||10)) return 'atraso';
     if (horasTrab !== null && horasTrab > jornadaHoras + 0.1) return 'hora_extra';
     return 'ok';
@@ -203,7 +231,7 @@ module.exports = function(pool) {
     }
 
     const agora     = new Date();
-    const dataRef   = agora.toISOString().slice(0,10);
+    const dataRef   = dataSaoPaulo(agora);
     const usuario   = req.user?.nome    || 'Sistema';
     const login     = req.user?.email   || req.user?.nome || 'desconhecido';
     const perfil    = req.user?.perfil  || '—';
@@ -239,7 +267,7 @@ module.exports = function(pool) {
       res.json({
         ok: true,
         data: rows[0],
-        horario: agora.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}),
+        horario: horaSaoPaulo(agora),
         auditoria: { usuario, login, horario: agora.toISOString(), ip }
       });
     } catch(e) {
@@ -301,7 +329,7 @@ module.exports = function(pool) {
       return res.status(400).json({ ok:false, erro:'Parâmetros inválidos' });
     }
     const agora     = new Date(); // momento real do registro
-    const dataRef   = data_ref || agora.toISOString().slice(0,10);
+    const dataRef   = data_ref || dataSaoPaulo(agora);
     const usuario   = req.user?.nome   || 'Sistema';
     const login     = req.user?.email  || req.user?.nome || 'desconhecido';
     const perfil    = req.user?.perfil || '—';
@@ -309,7 +337,7 @@ module.exports = function(pool) {
     const userAgent = req.headers['user-agent'] || '—';
 
     // Monta timestamp com o horário informado pelo usuário mas na data correta
-    const tsInformado = new Date(`${dataRef}T${horario_informado}:00`);
+    const tsInformado = timestampSaoPaulo(`${dataRef}T${horario_informado}:00`);
 
     try {
       if (!(await podeRegistrarPara(req, funcionario_id))) {
@@ -336,14 +364,14 @@ module.exports = function(pool) {
         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,true,$10)
       `, [rows[0].id, funcionario_id, tipo, agora, login, usuario, perfil,
           ip, userAgent.slice(0,200),
-          `REGISTRO RETROATIVO: horário informado ${horario_informado} em ${dataRef}. Motivo: ${justificativa||'não informado'}. Registrado por ${login} às ${agora.toLocaleString('pt-BR')}`
+          `REGISTRO RETROATIVO: horário informado ${horario_informado} em ${dataRef}. Motivo: ${justificativa||'não informado'}. Registrado por ${login} às ${agora.toLocaleString('pt-BR',{timeZone:FUSO_NEGOCIO})}`
       ]).catch(()=>{});
 
       res.json({
         ok: true,
         data: rows[0],
         horario_informado,
-        horario_registro: agora.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}),
+        horario_registro: horaSaoPaulo(agora),
         auditoria: { usuario, login, horario_registro: agora.toISOString(), horario_informado, ip }
       });
     } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
@@ -351,7 +379,7 @@ module.exports = function(pool) {
 
   // ── Status do dia (para o funcionário ver se já bateu) ────────────────────
   r.get('/hoje/:funcionario_id', async (req, res) => {
-    const dataRef = new Date().toISOString().slice(0,10);
+    const dataRef = dataSaoPaulo();
     try {
       if (!(await podeRegistrarPara(req, req.params.funcionario_id))) {
         return res.status(403).json({ ok:false, erro:'Você só pode consultar o próprio ponto' });
@@ -377,8 +405,8 @@ module.exports = function(pool) {
         FROM ponto_auditoria a
         JOIN funcionarios f ON f.id=a.funcionario_id AND COALESCE(f.freelancer,false)=false
         WHERE ($1::int IS NULL OR a.funcionario_id=$1)
-          AND ($2::date IS NULL OR a.horario_batida::date >= $2::date)
-          AND ($3::date IS NULL OR a.horario_batida::date <= $3::date)
+          AND ($2::date IS NULL OR (a.horario_batida AT TIME ZONE 'America/Sao_Paulo')::date >= $2::date)
+          AND ($3::date IS NULL OR (a.horario_batida AT TIME ZONE 'America/Sao_Paulo')::date <= $3::date)
         ORDER BY a.horario_batida DESC
         LIMIT $4
       `, [funcionario_id||null, data_ini||null, data_fim||null, parseInt(limite)]);
@@ -423,7 +451,7 @@ module.exports = function(pool) {
           justificativa=$5, status=$6, entrada_manual=true, saida_manual=true,
           atualizado_em=NOW()
         WHERE id=$7 RETURNING *
-      `, [entrada||null, saida_intervalo||null, retorno_intervalo||null, saida||null,
+      `, [timestampSaoPaulo(entrada), timestampSaoPaulo(saida_intervalo), timestampSaoPaulo(retorno_intervalo), timestampSaoPaulo(saida),
           justificativa||null, status||'ajustado', req.params.id]);
       res.json({ ok:true, data:rows[0] });
     } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
@@ -441,8 +469,8 @@ module.exports = function(pool) {
           SET entrada=$3, saida_intervalo=$4, retorno_intervalo=$5, saida=$6,
               justificativa=$7, status=$8, entrada_manual=true, saida_manual=true, atualizado_em=NOW()
         RETURNING *
-      `, [funcionario_id, data_ref, entrada||null, saida_intervalo||null, retorno_intervalo||null,
-          saida||null, justificativa||null, status||'ajustado', req.user?.nome]);
+      `, [funcionario_id, data_ref, timestampSaoPaulo(entrada), timestampSaoPaulo(saida_intervalo), timestampSaoPaulo(retorno_intervalo),
+          timestampSaoPaulo(saida), justificativa||null, status||'ajustado', req.user?.nome]);
       res.json({ ok:true, data:rows[0] });
     } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
   });
@@ -542,7 +570,8 @@ module.exports = function(pool) {
   // ── GET /jornada-dia-hoje/:funcionario_id — retorna jornada do dia atual ──
   r.get('/jornada-dia-hoje/:funcionario_id', async (req, res) => {
     try {
-      const diaSemana = new Date().getDay();
+      const diaSemana = Number(new Intl.DateTimeFormat('en-US',{timeZone:FUSO_NEGOCIO,weekday:'short'}).format(new Date())
+        .replace(/Sun|Mon|Tue|Wed|Thu|Fri|Sat/,m=>({Sun:0,Mon:1,Tue:2,Wed:3,Thu:4,Fri:5,Sat:6}[m])));
       const { rows } = await pool.query(`
         SELECT * FROM ponto_jornada_dia
         WHERE funcionario_id=$1 AND dia_semana=$2 LIMIT 1
