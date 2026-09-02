@@ -369,12 +369,13 @@ body{font-size:14px;color:#111827}
   <div class="tabs" role="tablist" aria-label="Áreas do módulo Validade">
     <button class="tab active" id="tab-dash" role="tab" aria-selected="true" onclick="showSection('dashboard',this)">📊 Dashboard</button>
     <button class="tab" role="tab" aria-selected="false" onclick="showSection('validade',this)">🗓 Validade</button>
+    <button class="tab" role="tab" aria-selected="false" onclick="showSection('internos',this)">🥣 Produtos Internos</button>
     <button class="tab" role="tab" aria-selected="false" onclick="showSection('perdas',this)">🗑️ Perdas</button>
     <button class="tab" role="tab" aria-selected="false" onclick="showSection('historico',this)">📂 Histórico</button>
   </div>
 
   <!-- KPIs -->
-  <div class="kpi-row">
+  <div class="kpi-row" id="kpi-geral-validade">
     <div class="kc g"><div class="kc-l">OK</div><div class="kc-v" id="k-ok">—</div></div>
     <div class="kc"><div class="kc-l">Em Alerta</div><div class="kc-v" id="k-alerta" style="color:var(--orange)">—</div><div class="kc-s" id="k-alerta-s"></div></div>
     <div class="kc r"><div class="kc-l">Vencidos</div><div class="kc-v" id="k-vencidos" style="color:var(--red-l)">—</div></div>
@@ -555,6 +556,31 @@ body{font-size:14px;color:#111827}
         <div style="font-size:32px;margin-bottom:8px">📦</div>
         <p>Nenhum item encontrado</p>
       </div>
+    </div>
+  </div>
+
+  <!-- ── PRODUTOS INTERNOS ── -->
+  <div id="sec-internos" style="display:none">
+    <div class="section-intro">
+      <div><h2>Produtos abertos para uso interno</h2><p>Controle o prazo após abertura de molhos, temperos e insumos da produção.</p></div>
+    </div>
+    <div class="kpi-row" style="margin-bottom:12px">
+      <div class="kc r"><div class="kc-l">Vencidos</div><div class="kc-v" id="ki-vencidos">0</div></div>
+      <div class="kc"><div class="kc-l">Em alerta</div><div class="kc-v" id="ki-alerta" style="color:var(--orange)">0</div></div>
+      <div class="kc g"><div class="kc-l">Dentro do prazo</div><div class="kc-v" id="ki-ok">0</div></div>
+      <div class="kc b"><div class="kc-l">Total aberto</div><div class="kc-v" id="ki-total">0</div></div>
+    </div>
+    <div class="toolbar">
+      <button class="btn btn-r" onclick="abrirInterno()">＋ Registrar abertura</button>
+      <div class="search-w"><input id="busca-internos" placeholder="Buscar produto, marca ou lote..." oninput="renderInternos()"></div>
+      <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);cursor:pointer"><input type="checkbox" id="internos-historico" onchange="carregarInternos()"> Mostrar encerrados</label>
+    </div>
+    <div class="card">
+      <div class="bb-tbl-scroll" style="width:100%"><table class="tbl" id="tbl-internos">
+        <thead><tr><th>Produto</th><th>Marca / lote</th><th>Abertura</th><th>Prazo</th><th>Validade</th><th>Dias</th><th>Local</th><th>Responsável</th><th>Status</th><th>Ações</th></tr></thead>
+        <tbody id="tbody-internos"></tbody>
+      </table></div>
+      <div class="empty" id="empty-internos" style="display:none"><div style="font-size:30px">🥣</div><p>Nenhum produto interno aberto.</p></div>
     </div>
   </div>
 
@@ -929,9 +955,33 @@ body{font-size:14px;color:#111827}
   </div>
 </div>
 
+<!-- Modal Produto Interno -->
+<div class="modal-bg" id="modal-interno">
+  <div class="modal" style="max-width:650px">
+    <div class="modal-head"><h3 id="interno-title">Registrar abertura</h3><button class="modal-close" onclick="fecharModal('modal-interno')">×</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="i-id">
+      <div class="form-grid">
+        <div class="fg" style="grid-column:1/-1"><label>Produto / insumo *</label><input id="i-nome" list="internos-nomes" placeholder="Ex.: Mostarda amarela" oninput="sugerirPrazoInterno()"><datalist id="internos-nomes"></datalist></div>
+        <div class="fg"><label>Marca</label><input id="i-marca" placeholder="Opcional"></div>
+        <div class="fg"><label>Lote</label><input id="i-lote" placeholder="Opcional"></div>
+        <div class="fg"><label>Data de abertura *</label><input type="date" id="i-abertura" onchange="calcularValidadeInterno()"></div>
+        <div class="fg"><label>Prazo após abertura *</label><div style="display:flex;align-items:center;gap:7px"><input type="number" id="i-prazo" min="1" value="30" onchange="calcularValidadeInterno()"><span style="font-size:12px;color:var(--muted)">dias</span></div></div>
+        <div class="fg"><label>Alertar com antecedência</label><div style="display:flex;align-items:center;gap:7px"><input type="number" id="i-alerta" min="0" value="5"><span style="font-size:12px;color:var(--muted)">dias</span></div></div>
+        <div class="fg"><label>Validade calculada</label><div id="i-validade-preview" style="padding:9px 10px;background:#f8fafc;border:1px solid var(--border);border-radius:7px;font-weight:700">—</div></div>
+        <div class="fg"><label>Local de uso</label><input id="i-local" placeholder="Ex.: Produção / geladeira"></div>
+        <div class="fg"><label>Responsável</label><select id="i-resp"><option value="">— Selecione —</option></select></div>
+        <div class="fg" style="grid-column:1/-1"><label>Observação</label><textarea id="i-obs" rows="2" placeholder="Identificação da embalagem ou orientação de uso"></textarea></div>
+      </div>
+      <div style="margin-top:12px;padding:10px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;font-size:11px;color:#9a3412">A validade é calculada automaticamente a partir da abertura. O prazo usado ficará disponível como sugestão no próximo cadastro deste produto.</div>
+    </div>
+    <div class="modal-foot"><button class="btn btn-s" onclick="fecharModal('modal-interno')">Cancelar</button><button class="btn btn-p" id="btn-salvar-interno" onclick="salvarInterno()">💾 Salvar</button></div>
+  </div>
+</div>
+
 <script>
 let api, fmt, toast;
-let itens=[], perdas=[], funcionarios=[];
+let itens=[], perdas=[], funcionarios=[], internos=[], internosModelos=[];
 
 BB.modulo({
   nome: 'validade',
@@ -943,7 +993,7 @@ BB.modulo({
     bbColunas.aplicarTodas();   // reaplica as colunas que o usuario escondeu
   },
   // Recarrega dados sem resetar os filtros de mês que o usuário tiver aberto
-  reload: () => { carregar(); carregarKPIs(); carregarFuncionarios(); },
+  reload: () => { carregar(); carregarKPIs(); carregarFuncionarios(); if(document.getElementById('sec-internos')?.style.display!=='none') carregarInternos(); },
   eventos: ['validade_atualizado', 'perdas_atualizado', 'faturamento_atualizado', 'cadastro_atualizado'],
 });
 
@@ -1042,8 +1092,11 @@ async function init(){
 }
 
 function showSection(s, btn){
+  const kpiGeral=document.getElementById('kpi-geral-validade');
+  if(kpiGeral) kpiGeral.style.display=s==='internos'?'none':'';
   document.getElementById('sec-dashboard').style.display = s==='dashboard'?'':'none';
   document.getElementById('sec-validade').style.display  = s==='validade'?'':'none';
+  document.getElementById('sec-internos').style.display  = s==='internos'?'':'none';
   document.getElementById('sec-perdas').style.display    = s==='perdas'?'':'none';
   document.querySelectorAll('.tab').forEach(t=>{
     t.classList.remove('active');
@@ -1054,10 +1107,94 @@ function showSection(s, btn){
     btn.setAttribute('aria-selected','true');
   }
   if(s==='perdas') carregarPerdas();
+  if(s==='internos') carregarInternos();
   if(s==='dashboard') renderDashboard();
   if(s==='historico') carregarHistorico();
   if(document.getElementById('sec-historico'))
     document.getElementById('sec-historico').style.display = s==='historico'?'':'none';
+}
+
+async function carregarInternos(){
+  const hist=document.getElementById('internos-historico')?.checked?'?historico=1':'';
+  const d=await api.get('/api/validade/internos'+hist);
+  if(!d.ok){toast('Erro ao carregar produtos internos');return;}
+  internos=d.data||[];
+  internosModelos=d.modelos||[];
+  const nomes=[...new Set(internosModelos.map(x=>x.nome).filter(Boolean))].sort();
+  document.getElementById('internos-nomes').innerHTML=nomes.map(n=>`<option value="${String(n).replace(/"/g,'&quot;')}"></option>`).join('');
+  renderInternos();
+}
+
+function _fmtDataInterno(s){
+  if(!s)return '—'; const p=String(s).slice(0,10).split('-'); return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:s;
+}
+function escInterno(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+
+function renderInternos(){
+  const q=(document.getElementById('busca-internos')?.value||'').toLowerCase();
+  const lista=internos.filter(x=>!q||[x.nome,x.marca,x.lote,x.localizacao].some(v=>String(v||'').toLowerCase().includes(q)));
+  const ativos=internos.filter(x=>x.status==='ativo');
+  document.getElementById('ki-vencidos').textContent=ativos.filter(x=>x.situacao==='vencido').length;
+  document.getElementById('ki-alerta').textContent=ativos.filter(x=>x.situacao==='alerta').length;
+  document.getElementById('ki-ok').textContent=ativos.filter(x=>x.situacao==='ok').length;
+  document.getElementById('ki-total').textContent=ativos.length;
+  const cores={vencido:['#fee2e2','#991b1b','Vencido'],alerta:['#fef3c7','#92400e','Em alerta'],ok:['#dcfce7','#166534','OK'],consumido:['#e0f2fe','#075985','Consumido'],descartado:['#f1f5f9','#475569','Descartado']};
+  document.getElementById('tbody-internos').innerHTML=lista.map(x=>{
+    const st=cores[x.situacao]||cores[x.status]||cores.ok; const dias=parseInt(x.dias_restantes);
+    const diasTxt=x.status!=='ativo'?'—':dias<0?`${Math.abs(dias)}d vencido`:dias===0?'Hoje':`${dias}d`;
+    return `<tr style="${x.situacao==='vencido'?'background:#fff5f5':x.situacao==='alerta'?'background:#fffbeb':''}">
+      <td><strong>${escInterno(x.nome)}</strong>${x.observacao?`<div style="font-size:10px;color:var(--muted);margin-top:2px">${escInterno(x.observacao)}</div>`:''}</td>
+      <td>${escInterno(x.marca||'—')}<div style="font-size:10px;color:var(--muted)">${x.lote?'Lote '+escInterno(x.lote):''}</div></td>
+      <td>${_fmtDataInterno(x.data_abertura)}</td><td>${x.prazo_dias} dias</td><td><strong>${_fmtDataInterno(x.data_validade)}</strong></td>
+      <td><strong style="color:${st[1]}">${diasTxt}</strong></td><td>${escInterno(x.localizacao||'—')}</td><td>${escInterno(x.responsavel||'—')}</td>
+      <td><span style="background:${st[0]};color:${st[1]};padding:3px 7px;border-radius:10px;font-size:10px;font-weight:700">${st[2]}</span></td>
+      <td style="white-space:nowrap"><button class="btn btn-s" style="padding:4px 7px" onclick="abrirInterno(${x.id})">✏️</button> ${x.status==='ativo'?`<button class="btn btn-g" style="padding:4px 7px" onclick="statusInterno(${x.id},'consumido')">✓ Usado</button> <button class="btn btn-s" style="padding:4px 7px" onclick="statusInterno(${x.id},'descartado')">🗑</button>`:`<button class="btn btn-s" style="padding:4px 7px" onclick="statusInterno(${x.id},'ativo')">↩ Reativar</button>`}</td>
+    </tr>`;
+  }).join('');
+  document.getElementById('empty-internos').style.display=lista.length?'none':'';
+}
+
+function abrirInterno(id){
+  const x=internos.find(v=>String(v.id)===String(id));
+  document.getElementById('interno-title').textContent=x?'Editar produto interno':'Registrar abertura de produto';
+  document.getElementById('i-id').value=x?.id||'';
+  document.getElementById('i-nome').value=x?.nome||'';
+  document.getElementById('i-marca').value=x?.marca||'';
+  document.getElementById('i-lote').value=x?.lote||'';
+  document.getElementById('i-abertura').value=x?.data_abertura?String(x.data_abertura).slice(0,10):new Date().toISOString().slice(0,10);
+  document.getElementById('i-prazo').value=x?.prazo_dias||30;
+  document.getElementById('i-alerta').value=x?.dias_alerta??5;
+  document.getElementById('i-local').value=x?.localizacao||'';
+  document.getElementById('i-obs').value=x?.observacao||'';
+  const sel=document.getElementById('i-resp'); sel.innerHTML='<option value="">— Selecione —</option>'+funcionarios.map(f=>`<option value="${escInterno(f.nome||String(f.id))}">${escInterno(f.nome||String(f.id))}</option>`).join(''); sel.value=x?.responsavel||'';
+  calcularValidadeInterno();
+  document.getElementById('modal-interno').classList.add('open');
+}
+
+function sugerirPrazoInterno(){
+  if(document.getElementById('i-id').value)return;
+  const nome=document.getElementById('i-nome').value.trim().toLowerCase(); if(!nome)return;
+  const ant=internosModelos.find(x=>String(x.nome||'').trim().toLowerCase()===nome);
+  if(ant){document.getElementById('i-prazo').value=ant.prazo_dias;document.getElementById('i-alerta').value=ant.dias_alerta;document.getElementById('i-local').value=ant.localizacao||'';calcularValidadeInterno();}
+}
+
+function calcularValidadeInterno(){
+  const dt=document.getElementById('i-abertura').value,p=parseInt(document.getElementById('i-prazo').value||0);
+  const el=document.getElementById('i-validade-preview'); if(!dt||p<1){el.textContent='—';return;}
+  const d=new Date(dt+'T12:00:00');d.setDate(d.getDate()+p);el.textContent=d.toLocaleDateString('pt-BR');
+}
+
+async function salvarInterno(){
+  const btn=document.getElementById('btn-salvar-interno'); if(btn.disabled)return;
+  const body={nome:document.getElementById('i-nome').value.trim(),marca:document.getElementById('i-marca').value.trim(),lote:document.getElementById('i-lote').value.trim(),dataAbertura:document.getElementById('i-abertura').value,prazoDias:parseInt(document.getElementById('i-prazo').value),diasAlerta:parseInt(document.getElementById('i-alerta').value||0),localizacao:document.getElementById('i-local').value.trim(),responsavel:document.getElementById('i-resp').value,observacao:document.getElementById('i-obs').value.trim()};
+  if(!body.nome||!body.dataAbertura||!body.prazoDias){toast('Preencha produto, abertura e prazo');return;}
+  btn.disabled=true;btn.textContent='Salvando...';
+  try{const id=document.getElementById('i-id').value;const d=id?await api.put(`/api/validade/internos/${id}`,body):await api.post('/api/validade/internos',body);if(!d.ok){toast('Erro: '+d.erro);return;}fecharModal('modal-interno');await carregarInternos();toast(id?'✅ Registro atualizado':'✅ Abertura registrada');}finally{btn.disabled=false;btn.textContent='💾 Salvar';}
+}
+
+async function statusInterno(id,status){
+  const msg=status==='ativo'?'Reativar este registro?':status==='consumido'?'Confirmar que o produto foi totalmente utilizado?':'Confirmar descarte do produto?';
+  if(!confirm(msg))return;const d=await api.patch(`/api/validade/internos/${id}/status`,{status});if(!d.ok){toast('Erro: '+d.erro);return;}await carregarInternos();toast('✅ Status atualizado');
 }
 
 window.addEventListener('message',event=>{

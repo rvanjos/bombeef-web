@@ -109,12 +109,106 @@ module.exports = function (pool, app) {
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_val_conf_item ON validade_confirmacoes(item_id)`).catch(() => {});
 
     await pool.query(`
+      CREATE TABLE IF NOT EXISTS validade_internos (
+        id              SERIAL PRIMARY KEY,
+        nome            TEXT NOT NULL,
+        marca           TEXT,
+        lote            TEXT,
+        data_abertura   DATE NOT NULL,
+        prazo_dias      INTEGER NOT NULL DEFAULT 30 CHECK (prazo_dias > 0),
+        data_validade   DATE NOT NULL,
+        dias_alerta     INTEGER NOT NULL DEFAULT 5,
+        localizacao     TEXT,
+        responsavel     TEXT,
+        observacao      TEXT,
+        status          TEXT NOT NULL DEFAULT 'ativo',
+        encerrado_em    TIMESTAMPTZ,
+        encerrado_por   TEXT,
+        criado_por      TEXT,
+        criado_em       TIMESTAMPTZ DEFAULT NOW(),
+        atualizado_em   TIMESTAMPTZ DEFAULT NOW()
+      )
+    `).catch(() => {});
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_val_int_status_data ON validade_internos(status, data_validade)`).catch(() => {});
+
+    await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_val_codigo    ON validade_items(codigo);
       CREATE INDEX IF NOT EXISTS idx_val_validade  ON validade_items(data_validade);
       CREATE INDEX IF NOT EXISTS idx_val_status    ON validade_items(status);
     `).catch(() => {});
   }
   initTable().catch(e => console.error('[validade] initTable:', e.message));
+
+  // ── Produtos internos abertos para uso na produção ───────────────────────
+  r.get('/internos', async (req, res) => {
+    try {
+      const historico = req.query.historico === '1';
+      const { rows } = await pool.query(`
+        SELECT *,
+          (data_validade - CURRENT_DATE) AS dias_restantes,
+          CASE WHEN status != 'ativo' THEN status
+               WHEN data_validade < CURRENT_DATE THEN 'vencido'
+               WHEN data_validade <= CURRENT_DATE + (dias_alerta || ' days')::interval THEN 'alerta'
+               ELSE 'ok' END AS situacao
+        FROM validade_internos
+        WHERE ($1::boolean = true OR status='ativo')
+        ORDER BY CASE WHEN status='ativo' THEN 0 ELSE 1 END, data_validade ASC, nome ASC
+      `, [historico]);
+      const { rows:modelos } = await pool.query(`
+        SELECT DISTINCT ON (LOWER(nome)) nome, prazo_dias, dias_alerta, localizacao
+        FROM validade_internos ORDER BY LOWER(nome), criado_em DESC
+      `);
+      res.json({ ok:true, data:rows, modelos });
+    } catch (e) { res.status(500).json({ ok:false, erro:e.message }); }
+  });
+
+  r.post('/internos', async (req, res) => {
+    const v=req.body||{};
+    const prazo=parseInt(v.prazoDias||0);
+    if(!String(v.nome||'').trim() || !/^\d{4}-\d{2}-\d{2}$/.test(String(v.dataAbertura||'')) || prazo<1) {
+      return res.status(400).json({ok:false,erro:'Produto, data de abertura e prazo são obrigatórios'});
+    }
+    try {
+      const {rows}=await pool.query(`
+        INSERT INTO validade_internos
+          (nome,marca,lote,data_abertura,prazo_dias,data_validade,dias_alerta,localizacao,responsavel,observacao,criado_por)
+        VALUES ($1,$2,$3,$4::date,$5,$4::date+$5::integer,$6,$7,$8,$9,$10)
+        RETURNING *
+      `,[String(v.nome).trim(),v.marca||null,v.lote||null,v.dataAbertura,prazo,
+        Math.max(0,parseInt(v.diasAlerta??5)),v.localizacao||null,v.responsavel||null,
+        v.observacao||null,req.user?.nome||req.user?.email||null]);
+      res.json({ok:true,data:rows[0]});
+    } catch(e){res.status(500).json({ok:false,erro:e.message});}
+  });
+
+  r.put('/internos/:id', async (req,res)=>{
+    const v=req.body||{}; const prazo=parseInt(v.prazoDias||0);
+    if(!String(v.nome||'').trim() || !/^\d{4}-\d{2}-\d{2}$/.test(String(v.dataAbertura||'')) || prazo<1) {
+      return res.status(400).json({ok:false,erro:'Produto, data de abertura e prazo são obrigatórios'});
+    }
+    try{
+      const {rowCount}=await pool.query(`UPDATE validade_internos SET
+        nome=$1,marca=$2,lote=$3,data_abertura=$4::date,prazo_dias=$5,data_validade=$4::date+$5::integer,
+        dias_alerta=$6,localizacao=$7,responsavel=$8,observacao=$9,atualizado_em=NOW()
+        WHERE id=$10`,[String(v.nome).trim(),v.marca||null,v.lote||null,v.dataAbertura,prazo,
+        Math.max(0,parseInt(v.diasAlerta??5)),v.localizacao||null,v.responsavel||null,v.observacao||null,req.params.id]);
+      if(!rowCount)return res.status(404).json({ok:false,erro:'Item não encontrado'});
+      res.json({ok:true});
+    }catch(e){res.status(500).json({ok:false,erro:e.message});}
+  });
+
+  r.patch('/internos/:id/status', async (req,res)=>{
+    const status=String(req.body?.status||'');
+    if(!['ativo','consumido','descartado'].includes(status))return res.status(400).json({ok:false,erro:'Status inválido'});
+    try{
+      const {rowCount}=await pool.query(`UPDATE validade_internos SET status=$1,
+        encerrado_em=CASE WHEN $1='ativo' THEN NULL ELSE NOW() END,
+        encerrado_por=CASE WHEN $1='ativo' THEN NULL ELSE $2 END, atualizado_em=NOW() WHERE id=$3`,
+        [status,req.user?.nome||req.user?.email||null,req.params.id]);
+      if(!rowCount)return res.status(404).json({ok:false,erro:'Item não encontrado'});
+      res.json({ok:true});
+    }catch(e){res.status(500).json({ok:false,erro:e.message});}
+  });
 
   // ── Helper: atualiza status baseado na data ────────────────────────────────
   async function atualizarStatus() {
