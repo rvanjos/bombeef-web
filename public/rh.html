@@ -471,7 +471,7 @@ main{padding:16px;background:#f8f6f3}
         </select>
       </div>
       <div class="rh-action-group">
-        <button class="btn btn-green" onclick="exportarPonto()">📊 Exportar</button>
+        <button class="btn btn-green" onclick="exportarPonto()">🕐 Cartão Ponto</button>
         <button class="btn btn-gray" onclick="abrirAjustePonto(null)">✏️ Ajuste Manual</button>
         <button class="btn btn-gray" onclick="abrirConfJornada()">⚙️ Jornadas</button>
         <button class="rh-cols-btn" id="rh-cols-ponto-btn" onclick="rhColunas.abrir()">⚙️ Colunas</button>
@@ -2499,7 +2499,84 @@ async function salvarAjustePonto(){const id=document.getElementById('aj-id').val
 function abrirConfJornada(){document.getElementById('m-jornada').classList.add('open');}
 function carregarJornadaFunc(){const f=(window._pontoFuncionarios||[]).find(x=>x.id==document.getElementById('jor-func').value);if(f){document.getElementById('jor-entrada').value=(f.horario_entrada||'08:00').slice(0,5);document.getElementById('jor-saida').value=(f.horario_saida||'18:00').slice(0,5);document.getElementById('jor-intervalo').value=f.intervalo_min||60;document.getElementById('jor-horas').value=f.jornada_horas||8;document.getElementById('jor-tolerancia').value=f.tolerancia_min||10;}}
 async function salvarJornada(){const id=document.getElementById('jor-func').value;if(!id){toast('Selecione um funcionário');return;}const body={horario_entrada:document.getElementById('jor-entrada').value,horario_saida:document.getElementById('jor-saida').value,intervalo_min:parseInt(document.getElementById('jor-intervalo').value),jornada_horas:parseFloat(document.getElementById('jor-horas').value),tolerancia_min:parseInt(document.getElementById('jor-tolerancia').value)};const d=await put(`/api/ponto/jornada/${id}`,body);if(!d.ok){toast('❌ '+d.erro);return;}toast('✅ Jornada atualizada!');document.getElementById('m-jornada').classList.remove('open');const f=(window._pontoFuncionarios||[]).find(x=>x.id==id);if(f)Object.assign(f,body);}
-async function exportarPonto(){const mes=document.getElementById('pt-mes').value,ano=document.getElementById('pt-ano').value,d=await get(`/api/ponto/resumo-mensal?mes=${mes}&ano=${ano}`);if(!d.ok||!d.data?.length){toast('Sem dados');return;}const MN=['','Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'],li=[['Funcionário','Cargo','Data','Entrada','Saída Int.','Retorno','Saída','Horas Trab.','Jornada','Situação','Justificativa']];for(const f of d.data){for(const r of(f.registros||[])){const t=r.entrada&&r.saida?((new Date(r.saida)-new Date(r.entrada)-(r.saida_intervalo&&r.retorno_intervalo?new Date(r.retorno_intervalo)-new Date(r.saida_intervalo):0))/3600000):null,fT=ts=>ts?new Date(ts).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}):'',fH=h=>{if(h===null)return'';const hh=Math.floor(h),mm=Math.round((h%1)*60);return`${hh}:${String(mm).padStart(2,'0')}`},e=r.entrada?new Date(r.entrada):null,pv=new Date(`1970-01-01T${f.horario_entrada||'08:00'}:00`),atr=e?(e.getHours()*60+e.getMinutes())-(pv.getHours()*60+pv.getMinutes()):0,sit=!r.entrada?'SEM ENTRADA':!r.saida?'INCOMPLETO':atr>(f.tolerancia_min||10)?`ATRASO ${atr}min`:t&&t>parseFloat(f.jornada_horas||8)+0.1?'HORA EXTRA':r.status==='ajustado'?'AJUSTADO':r.status==='justificado'?'JUSTIFICADO':'NORMAL';li.push([f.nome,f.cargo||'',r.data?.slice(0,10).split('-').reverse().join('/')||'',fT(r.entrada),fT(r.saida_intervalo),fT(r.retorno_intervalo),fT(r.saida),fH(t),fH(parseFloat(f.jornada_horas||8)),sit,r.justificativa||'']);}li.push([]);}const csv=li.map(l=>l.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(';')).join('\n'),a=document.createElement('a');a.href='data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv);a.download=`Ponto_${MN[parseInt(mes)]}_${ano}.csv`;a.click();toast(`✅ Relatório exportado — ${MN[parseInt(mes)]}/${ano}`);}
+async function exportarPontoCsvLegado(){const mes=document.getElementById('pt-mes').value,ano=document.getElementById('pt-ano').value,d=await get(`/api/ponto/resumo-mensal?mes=${mes}&ano=${ano}`);if(!d.ok||!d.data?.length){toast('Sem dados');return;}const MN=['','Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'],li=[['Funcionário','Cargo','Data','Entrada','Saída Int.','Retorno','Saída','Horas Trab.','Jornada','Situação','Justificativa']];for(const f of d.data){for(const r of(f.registros||[])){const t=r.entrada&&r.saida?((new Date(r.saida)-new Date(r.entrada)-(r.saida_intervalo&&r.retorno_intervalo?new Date(r.retorno_intervalo)-new Date(r.saida_intervalo):0))/3600000):null,fT=ts=>ts?new Date(ts).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}):'',fH=h=>{if(h===null)return'';const hh=Math.floor(h),mm=Math.round((h%1)*60);return`${hh}:${String(mm).padStart(2,'0')}`},e=r.entrada?new Date(r.entrada):null,pv=new Date(`1970-01-01T${f.horario_entrada||'08:00'}:00`),atr=e?(e.getHours()*60+e.getMinutes())-(pv.getHours()*60+pv.getMinutes()):0,sit=!r.entrada?'SEM ENTRADA':!r.saida?'INCOMPLETO':atr>(f.tolerancia_min||10)?`ATRASO ${atr}min`:t&&t>parseFloat(f.jornada_horas||8)+0.1?'HORA EXTRA':r.status==='ajustado'?'AJUSTADO':r.status==='justificado'?'JUSTIFICADO':'NORMAL';li.push([f.nome,f.cargo||'',r.data?.slice(0,10).split('-').reverse().join('/')||'',fT(r.entrada),fT(r.saida_intervalo),fT(r.retorno_intervalo),fT(r.saida),fH(t),fH(parseFloat(f.jornada_horas||8)),sit,r.justificativa||'']);}li.push([]);}const csv=li.map(l=>l.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(';')).join('\n'),a=document.createElement('a');a.href='data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv);a.download=`Ponto_${MN[parseInt(mes)]}_${ano}.csv`;a.click();toast(`✅ Relatório exportado — ${MN[parseInt(mes)]}/${ano}`);}
+
+async function exportarPonto(){
+  const mes=Number(document.getElementById('pt-mes').value);
+  const ano=Number(document.getElementById('pt-ano').value);
+  const resposta=await get(`/api/ponto/resumo-mensal?mes=${mes}&ano=${ano}`);
+  if(!resposta.ok||!resposta.data?.length){toast('Sem funcionários para gerar o cartão ponto');return;}
+
+  const meses=['','Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  const diasSemana=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+  const hoje=new Date();
+  const ultimoDia=new Date(ano,mes,0).getDate();
+  const mesAtual=ano===hoje.getFullYear()&&mes===hoje.getMonth()+1;
+  const limite=mesAtual?Math.min(hoje.getDate(),ultimoDia):ultimoDia;
+  const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const hora=ts=>ts?new Date(ts).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',timeZone:'America/Sao_Paulo'}):'—';
+  const minutos=valor=>{const n=Math.max(0,Math.round(Number(valor)||0));return `${String(Math.floor(n/60)).padStart(2,'0')}:${String(n%60).padStart(2,'0')}`;};
+  const chaveData=(ano,mes,dia)=>`${ano}-${String(mes).padStart(2,'0')}-${String(dia).padStart(2,'0')}`;
+  const nomesFolga=['domingo','segunda','terça','quarta','quinta','sexta','sábado'];
+
+  const cartoes=resposta.data.map(func=>{
+    const registros=new Map((func.registros||[]).map(r=>[(r.data_ref||r.data||'').slice(0,10),r]));
+    const jornadas=new Map((func.jornadas_dia||[]).map(j=>[Number(j.dia_semana),j]));
+    const folgas=(func.dias_folga||[]).map(v=>String(v).toLowerCase());
+    let totalPrevisto=0,totalTrabalhado=0,totalExtra=0,totalDesconto=0,almocosCorridos=0,ausencias=0,incompletos=0;
+    const linhas=[];
+
+    for(let dia=1;dia<=limite;dia++){
+      const data=chaveData(ano,mes,dia),dataLocal=new Date(ano,mes-1,dia,12),semana=dataLocal.getDay();
+      const registro=registros.get(data);
+      const jornadaDia=jornadas.get(semana);
+      const folga=jornadaDia?!!jornadaDia.folga:folgas.includes(nomesFolga[semana]);
+      const jornadaHoras=folga?0:Number(jornadaDia?.jornada_horas??func.jornada_horas??8);
+      const previstoMin=Math.round(jornadaHoras*60);
+      let trabalhadoMin=0,extraMin=0,descontoMin=0,ocorrencia=folga?'Folga':'Normal';
+
+      if(registro?.entrada&&registro?.saida){
+        trabalhadoMin=Math.max(0,Math.round((new Date(registro.saida)-new Date(registro.entrada))/60000));
+        if(registro.saida_intervalo&&registro.retorno_intervalo){
+          trabalhadoMin-=Math.max(0,Math.round((new Date(registro.retorno_intervalo)-new Date(registro.saida_intervalo))/60000));
+        }else if(!registro.saida_intervalo&&!registro.retorno_intervalo&&!folga){
+          ocorrencia='Almoço corrido';
+          almocosCorridos++;
+        }else{
+          ocorrencia='Intervalo incompleto';
+          incompletos++;
+        }
+        const saldo=trabalhadoMin-previstoMin;
+        extraMin=saldo>10?saldo:0;
+        descontoMin=saldo<0?Math.abs(saldo):0;
+        if(folga&&trabalhadoMin>10){extraMin=trabalhadoMin;ocorrencia='Trabalho em folga';}
+      }else if(registro){
+        ocorrencia='Marcação incompleta';
+        incompletos++;
+      }else if(!folga){
+        const hojeMesmo=mesAtual&&dia===hoje.getDate();
+        ocorrencia=hojeMesmo?'Aguardando marcação':'Sem marcação';
+        if(!hojeMesmo){descontoMin=previstoMin;ausencias++;}
+      }
+
+      totalPrevisto+=previstoMin;
+      totalTrabalhado+=trabalhadoMin;
+      totalExtra+=extraMin;
+      totalDesconto+=descontoMin;
+      if(folga&&!registro)continue;
+      const jornadaTexto=folga?'Folga':`${(jornadaDia?.horario_entrada||func.horario_entrada||'08:00').slice(0,5)}–${(jornadaDia?.horario_saida||func.horario_saida||'18:00').slice(0,5)}`;
+      linhas.push(`<tr><td>${String(dia).padStart(2,'0')}/${String(mes).padStart(2,'0')}</td><td>${diasSemana[semana]}</td><td>${jornadaTexto}</td><td>${hora(registro?.entrada)}</td><td>${hora(registro?.saida_intervalo)}</td><td>${hora(registro?.retorno_intervalo)}</td><td>${hora(registro?.saida)}</td><td>${minutos(trabalhadoMin)}</td><td class="positivo">${extraMin?minutos(extraMin):'—'}</td><td class="negativo">${descontoMin?minutos(descontoMin):'—'}</td><td>${esc(registro?.justificativa||ocorrencia)}</td></tr>`);
+    }
+    const saldo=totalExtra-totalDesconto;
+    return `<section class="cartao"><header><div><div class="marca">BOM BEEF · CARTÃO PONTO</div><h1>${esc(func.nome)}</h1><p>${esc(func.cargo||'Funcionário')} · ${meses[mes]} de ${ano}</p></div><div class="assinatura">Assinatura do funcionário</div></header><div class="resumo"><div><span>Previstas</span><b>${minutos(totalPrevisto)}</b></div><div><span>Trabalhadas</span><b>${minutos(totalTrabalhado)}</b></div><div class="ok"><span>Horas extras</span><b>${minutos(totalExtra)}</b></div><div class="erro"><span>Horas não trabalhadas</span><b>${minutos(totalDesconto)}</b></div><div><span>Saldo</span><b class="${saldo<0?'negativo':'positivo'}">${saldo<0?'-':'+'}${minutos(Math.abs(saldo))}</b></div></div><table><thead><tr><th>Data</th><th>Dia</th><th>Jornada</th><th>Entrada</th><th>Saída int.</th><th>Retorno</th><th>Saída</th><th>Trabalhadas</th><th>Extra</th><th>Desconto</th><th>Ocorrência</th></tr></thead><tbody>${linhas.join('')}</tbody></table><footer>Almoço corrido: ${almocosCorridos} · Sem marcação: ${ausencias} · Incompletos: ${incompletos} · Hora extra considerada somente quando excede 10 minutos.</footer></section>`;
+  }).join('');
+
+  const janela=window.open('','_blank');
+  if(!janela){toast('Permita pop-ups para gerar o cartão ponto');return;}
+  janela.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Cartão Ponto - ${meses[mes]} ${ano}</title><style>*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#1f2937;margin:0;background:#eee}.acoes{position:sticky;top:0;padding:12px;text-align:right;background:#fff;border-bottom:1px solid #ddd}.acoes button{background:#a90000;color:#fff;border:0;border-radius:7px;padding:10px 18px;font-weight:700;cursor:pointer}.cartao{width:calc(100% - 32px);margin:16px auto;background:#fff;padding:20px;border-radius:10px;page-break-after:always}.cartao header{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #a90000;padding-bottom:12px}.marca{color:#a90000;font-size:11px;font-weight:800;letter-spacing:.12em}.cartao h1{font-size:22px;margin:5px 0}.cartao p{margin:0;color:#6b7280}.assinatura{width:230px;padding-top:28px;border-top:1px solid #555;text-align:center;font-size:10px}.resumo{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:14px 0}.resumo div{border:1px solid #ddd;border-radius:7px;padding:9px}.resumo span{display:block;font-size:9px;text-transform:uppercase;color:#6b7280}.resumo b{font-size:17px}.resumo .ok{border-left:4px solid #168343}.resumo .erro{border-left:4px solid #c62828}table{width:100%;border-collapse:collapse;font-size:9px}th{background:#f4efeb;color:#684e43;text-transform:uppercase;text-align:left;padding:7px 5px}td{border-bottom:1px solid #eee;padding:6px 5px;white-space:nowrap}td:last-child{white-space:normal}.positivo{color:#168343}.negativo{color:#c62828}footer{margin-top:10px;color:#6b7280;font-size:9px}@media print{body{background:#fff}.acoes{display:none}.cartao{width:100%;margin:0;padding:10mm;border-radius:0}.cartao:last-child{page-break-after:auto}}@media(max-width:900px){.resumo{grid-template-columns:repeat(2,1fr)}.cartao{overflow:auto}}</style></head><body><div class="acoes"><button onclick="window.print()">Imprimir / Salvar em PDF</button></div>${cartoes}</body></html>`);
+  janela.document.close();
+  toast(`✅ Cartões ponto gerados — ${meses[mes]}/${ano}`);
+}
 </script>
 
 <script>
