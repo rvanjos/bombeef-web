@@ -51,9 +51,12 @@ module.exports = function (pool) {
         // M4: Validade
         safeQuery(`
           SELECT
-            COALESCE(COUNT(*) FILTER (WHERE status='alerta'),0)  AS alerta,
-            COALESCE(COUNT(*) FILTER (WHERE status='vencido'),0) AS vencidos
-          FROM validade_items WHERE status NOT IN ('descartado')
+            COALESCE(COUNT(*) FILTER (WHERE data_validade < CURRENT_DATE),0) AS vencidos,
+            COALESCE(COUNT(*) FILTER (WHERE data_validade BETWEEN CURRENT_DATE AND CURRENT_DATE+3),0) AS criticos,
+            COALESCE(COUNT(*) FILTER (WHERE data_validade BETWEEN CURRENT_DATE+4 AND CURRENT_DATE+7),0) AS alerta,
+            COALESCE(COUNT(*) FILTER (WHERE data_validade > CURRENT_DATE+7),0) AS ok
+          FROM validade_items
+          WHERE status NOT IN ('descartado','vendido') AND data_validade IS NOT NULL
         `),
         // M4: Perdas — usa coluna mes se existir, senão TO_CHAR
         safeQuery(`
@@ -124,7 +127,9 @@ module.exports = function (pool) {
           dreResultado,
           dreResultadoFonte: temResultadoSalvo ? 'salvo' : 'calculado',
           validadeAlerta:      parseInt(vRow.alerta||0),
+          validadeCriticos:    parseInt(vRow.criticos||0),
           validadeVencidos:    parseInt(vRow.vencidos||0),
+          validadeOk:          parseInt(vRow.ok||0),
           perdasMes:           totalPerdas,
           perdasMeta:          metaPerdasValor,
           perdasDentroMeta:    metaPerdasValor>0 ? totalPerdas<=metaPerdasValor : null,
@@ -185,11 +190,11 @@ module.exports = function (pool) {
         // Faturamento hoje
         r1(`SELECT COALESCE(SUM(fat_bruto),0) AS fat, COALESCE(SUM(total_pessoas),0) AS pessoas
             FROM faturamento_periodos WHERE data_inicio=CURRENT_DATE AND tipo_periodo='dia'`),
-        // Últimos 30 dias (para gráfico)
+        // Dias do mês selecionado (para gráfico)
         safe(`SELECT data_inicio::text AS data, fat_bruto AS fat
               FROM faturamento_periodos
-              WHERE data_inicio >= CURRENT_DATE-29 AND tipo_periodo='dia'
-              ORDER BY data_inicio ASC`),
+              WHERE TO_CHAR(data_inicio,'MM/YYYY')=$1 AND tipo_periodo='dia'
+              ORDER BY data_inicio ASC`, [mes]),
         // Meta do mês
         r1(`SELECT faturamento_meta, meta_perda_pct, meta_retiradas FROM metas WHERE mes=$1`, [mes]),
         // DRE resultado salvo

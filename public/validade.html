@@ -1060,6 +1060,14 @@ function showSection(s, btn){
     document.getElementById('sec-historico').style.display = s==='historico'?'':'none';
 }
 
+window.addEventListener('message',event=>{
+  if(event.origin!==window.location.origin) return;
+  if(event.data?.type==='bb_open_validade_perdas'){
+    const btn=[...document.querySelectorAll('.tab')].find(t=>t.getAttribute('onclick')?.includes("'perdas'"));
+    showSection('perdas',btn);
+  }
+});
+
 function goFiltro(status){
   const mapped = (status==='critico'||status==='vencido') ? 'vencido'
                : status==='ok' ? 'ok'
