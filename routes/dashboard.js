@@ -202,10 +202,10 @@ module.exports = function (pool) {
             WHERE mes_ref=$1 ORDER BY atualizado_em DESC LIMIT 1`, [mes]),
         // Boletos
         r1(`SELECT
-              COALESCE(COUNT(*) FILTER (WHERE status='avencer' AND vencimento<CURRENT_DATE),0) AS vencidos,
+              COALESCE(COUNT(*) FILTER (WHERE status='vencido' OR (status='avencer' AND vencimento<CURRENT_DATE)),0) AS vencidos,
               COALESCE(COUNT(*) FILTER (WHERE status='avencer' AND vencimento BETWEEN CURRENT_DATE AND CURRENT_DATE+7),0) AS vence_7d,
-              COALESCE(SUM(ABS(valor)) FILTER (WHERE status='avencer'),0) AS total_aberto,
-              COALESCE(SUM(ABS(valor)) FILTER (WHERE status='avencer' AND vencimento<CURRENT_DATE),0) AS total_vencido
+              COALESCE(SUM(ABS(valor)) FILTER (WHERE status IN ('avencer','vencido')),0) AS total_aberto,
+              COALESCE(SUM(ABS(valor)) FILTER (WHERE status='vencido' OR (status='avencer' AND vencimento<CURRENT_DATE)),0) AS total_vencido
             FROM boletos WHERE status!='cancelado'`),
         // Perdas mês atual
         r1(`SELECT COALESCE(SUM(valor_perda),0) AS total, COUNT(*) AS qtd

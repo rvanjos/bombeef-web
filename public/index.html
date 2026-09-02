@@ -248,6 +248,8 @@ body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var
 .kpi-sub{font-size:11px;color:var(--muted);}
 .kpi-loading{opacity:.4;animation:pulse .8s ease-in-out infinite alternate;}
 @keyframes pulse{0%{opacity:.3}100%{opacity:.6}}
+.dash-section-head{display:flex;align-items:end;justify-content:space-between;gap:12px;margin:2px 0 9px}.dash-section-head strong{display:block;font-size:14px}.dash-section-head small{display:block;color:var(--muted);font-size:11px;margin-top:2px}.dash-section-head>span{font-size:10px;color:var(--muted)}
+.dash-admin-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:16px}.dash-admin-card{background:#fff;border:1px solid var(--border);border-radius:11px;padding:13px 15px;box-shadow:var(--shadow);border-top:3px solid var(--admin-cor,var(--blue));min-width:0}.dash-admin-card .dac-head{display:flex;align-items:center;justify-content:space-between;gap:8px}.dash-admin-card .dac-label{font-size:9px;text-transform:uppercase;letter-spacing:.65px;font-weight:700;color:var(--muted)}.dash-admin-card .dac-icon{font-size:16px}.dash-admin-card .dac-value{font:700 20px 'DM Mono',monospace;margin:5px 0 2px;color:var(--admin-cor,var(--text));white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.dash-admin-card .dac-sub{font-size:11px;color:var(--muted);line-height:1.35}.dash-admin-card .dac-detail{font-size:10px;margin-top:7px;padding-top:7px;border-top:1px solid #f1ece7;color:var(--text)}.dash-admin-loading{grid-column:1/-1;background:#fff;border:1px solid var(--border);border-radius:10px;padding:16px;color:var(--muted);font-size:12px}
 
 /* Linha de gráficos + atalhos */
 .dash-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;align-items:start;}
@@ -364,6 +366,7 @@ body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var
 }
 @media(min-width:769px) and (max-width:1200px){
   .kpi-row{grid-template-columns:repeat(3,minmax(0,1fr));}
+  .dash-admin-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
 }
 #val-confirm-btn:not([disabled]){opacity:.9!important;}
 #val-confirm-btn:not([disabled]):hover{opacity:1!important;background:#6b0000!important;}
@@ -392,6 +395,8 @@ body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var
   .fat-hero-val{font-size:22px;}
   .portal-page{padding:10px 8px;}
   .dash-title{font-size:17px;}
+  .dash-admin-grid{grid-template-columns:1fr;}
+  .dash-section-head>span{display:none;}
 }
 </style>
 <!-- F1-01: Barramento de eventos — distribuição de eventos SSE para iframes -->
@@ -570,10 +575,10 @@ body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var
           <div class="kpi-val kpi-loading" id="k-resultado" onclick="showTab('dre')" style="cursor:pointer">—</div>
           <div class="kpi-sub" id="k-resultado-sub" onclick="showTab('dre')" style="cursor:pointer">Receitas - Despesas</div>
         </div>
-        <!-- Faturamento do mês -->
-        <div class="kpi-card k-green" onclick="showTab('faturamento')" style="cursor:pointer">
-          <span class="kpi-icon2">💵</span>
-          <div class="kpi-label">Faturamento Mês</div>
+        <!-- Compromissos financeiros atuais -->
+        <div class="kpi-card k-green" onclick="showTab('boletos')" style="cursor:pointer">
+          <span class="kpi-icon2">💳</span>
+          <div class="kpi-label">Compromissos em aberto</div>
           <div class="kpi-val kpi-loading" id="k-fat-mes">—</div>
           <div class="kpi-sub" id="k-fat-pct">—</div>
         </div>
@@ -600,6 +605,14 @@ body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var
         </div>
         <!-- IDs legados -->
         <div style="display:none"><span id="k-vencidos"></span><span id="k-aberto"></span><span id="k-val-alerta"></span><span id="k-val-venc"></span></div>
+      </div>
+
+      <div class="dash-section-head">
+        <div><strong>Visão administrativa</strong><small>Indicadores para decisão e acompanhamento do negócio</small></div>
+        <span id="dash-admin-fonte">Dados consolidados</span>
+      </div>
+      <div class="dash-admin-grid" id="dash-projecao-cards">
+        <div class="dash-admin-loading">Calculando indicadores gerenciais...</div>
       </div>
 
       <!-- ══ LINHA 1: DRE Resumo + Boletos próximos ══ -->
@@ -711,11 +724,6 @@ body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var
       <!-- IDs legados para compatibilidade com carregarKPIs() -->
       <!-- ══ SEÇÃO F2-10: PROJEÇÃO + GRÁFICO + TOP PRODUTOS ══ -->
       <div id="dash-gerencial" style="display:none">
-
-        <!-- Projeção do mês -->
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-bottom:14px" id="dash-projecao-cards">
-          <!-- preenchido por carregarGerencial() -->
-        </div>
 
         <!-- Gráfico 30 dias -->
         <div style="background:#fff;border:1px solid var(--border);border-radius:11px;padding:14px 16px;margin-bottom:14px;box-shadow:0 2px 8px rgba(0,0,0,.06)">
@@ -1588,6 +1596,8 @@ async function carregarGerencial(mes) {
   const f   = d.faturamento;
   const re  = d.dre;
   const pe  = d.perdas;
+  const bo  = d.boletos;
+  const va  = d.validade;
 
   // ── Cards de projeção ────────────────────────────────────────────────────
   const pCards = $('dash-projecao-cards');
@@ -1598,22 +1608,23 @@ async function carregarGerencial(mes) {
       projPct >= 100 ? `✅ Acima da meta (+${projPct-100}%)` :
       `⚠️ Abaixo da meta (${projPct}%)`;
     const varSinal = f.var_mes_ant !== null ? (f.var_mes_ant >= 0 ? `+${f.var_mes_ant}` : `${f.var_mes_ant}`) : '—';
+    const faltaMeta=Math.max(0,(f.meta||0)-(f.realizado||0));
+    const margem=re.receitas>0?(re.resultado/re.receitas*100):0;
+    const riscoTotal=(va.valor_risco||0);
 
     pCards.innerHTML = [
-      {lbl:'Projeção do Mês', val:brl(f.projecao), sub: projStatus || `Média ${brl(f.media_diaria)}/dia`, cor: metaOk && projPct >= 100 ? 'var(--green)' : 'var(--orange)'},
-      {lbl:'Vs mês anterior', val: varSinal + '%', sub: `Mês ant: ${brl(f.fat_mes_ant)}`, cor: f.var_mes_ant >= 0 ? 'var(--green)' : 'var(--red-l)'},
-      {lbl:'Ticket médio', val: brl(f.ticket_medio), sub: `${f.pessoas_mes} atendimentos`, cor:'var(--text)'},
-      ...(f.fat_liquido > 0 ? [{
-        lbl:'Descontos Concedidos',
-        val: brl(f.descontos > 0 ? f.descontos : Math.max(0, f.realizado - f.fat_liquido)),
-        sub: f.realizado > 0 ? `${(((f.descontos > 0 ? f.descontos : Math.max(0, f.realizado - f.fat_liquido)) / f.realizado) * 100).toFixed(1)}% do faturamento bruto` : 'vs faturado PDV',
-        cor:'var(--red-l)',
-      }] : []),
-    ].map(c => `
-      <div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px 14px;box-shadow:0 2px 6px rgba(0,0,0,.05);border-left:3px solid ${c.cor}">
-        <div style="font-size:9px;text-transform:uppercase;letter-spacing:.6px;font-weight:700;color:var(--muted)">${c.lbl}</div>
-        <div style="font-family:'DM Mono',monospace;font-size:19px;font-weight:700;color:${c.cor};margin:3px 0 1px">${c.val}</div>
-        <div style="font-size:11px;color:var(--muted)">${c.sub}</div>
+      {icon:'📈',lbl:'Projeção de fechamento',val:brl(f.projecao),sub:projStatus||`Média ${brl(f.media_diaria)}/dia`,detail:`Realizado: ${brl(f.realizado)} · ${f.dias_importados} dias importados`,cor:metaOk&&projPct>=100?'var(--green)':'var(--orange)'},
+      {icon:'🎯',lbl:'Falta para a meta',val:metaOk?brl(faltaMeta):'Meta não definida',sub:metaOk?`${f.pct_meta||0}% atingido`:'Cadastre a meta mensal',detail:`Meta: ${metaOk?brl(f.meta):'—'} · Vs mês anterior: ${varSinal}%`,cor:!metaOk?'var(--muted)':faltaMeta===0?'var(--green)':'var(--red-l)'},
+      {icon:'💰',lbl:'Resultado e margem',val:brl(re.resultado||0),sub:`Margem líquida: ${margem.toFixed(1)}%`,detail:`Receitas ${brl(re.receitas||0)} · Despesas ${brl(re.despesas||0)}`,cor:(re.resultado||0)>=0?'var(--green)':'var(--red-l)'},
+      {icon:'📄',lbl:'Contas em aberto',val:brl(bo.total_aberto||0),sub:`${bo.vencidos||0} vencida(s) · ${bo.vence_7d||0} nos próximos 7 dias`,detail:`Valor vencido: ${brl(bo.total_vencido||0)}`,cor:(bo.vencidos||0)>0?'var(--red-l)':'var(--orange)'},
+      {icon:'🗑️',lbl:'Índice de perdas',val:`${Number(pe.pct_fat||0).toFixed(2)}%`,sub:`${brl(pe.total_mes||0)} no mês`,detail:`Meta: ${Number(pe.meta_pct||0).toFixed(2)}% · ${pe.pct_fat<=pe.meta_pct?'Dentro do limite':'Acima do limite'}`,cor:pe.pct_fat<=pe.meta_pct?'var(--green)':'var(--red-l)'},
+      {icon:'📦',lbl:'Estoque em risco',val:brl(riscoTotal),sub:`${va.vencidos||0} vencido(s) · ${va.alerta_7d||0} vencendo`,detail:`Ticket médio ${brl(f.ticket_medio||0)} · ${f.pessoas_mes||0} atendimentos`,cor:(va.vencidos||0)>0?'var(--red-l)':(va.alerta_7d||0)>0?'var(--orange)':'var(--green)'},
+    ].filter(c=>c.lbl!=='Resultado e margem'||['admin','financeiro','contabil'].includes(usuario?.perfil)).map(c => `
+      <div class="dash-admin-card" style="--admin-cor:${c.cor}">
+        <div class="dac-head"><span class="dac-label">${c.lbl}</span><span class="dac-icon">${c.icon}</span></div>
+        <div class="dac-value">${c.val}</div>
+        <div class="dac-sub">${c.sub}</div>
+        <div class="dac-detail">${c.detail}</div>
       </div>`).join('');
   }
 
@@ -1829,17 +1840,17 @@ async function carregarKPIs() {
     // ── Retiradas ─────────────────────────────────────────────────────────
     $('k-retiradas').textContent  = fmtBRL(d.retiradasMes);
 
-    // ── Faturamento KPI card (novo campo gerencial) ───────────────────────
+    // ── Compromissos financeiros atuais ──────────────────────────────────
     const fatKpi = $('k-fat-mes');
     if (fatKpi) {
-      fatKpi.textContent  = fmtBRL(d.faturamentoReal || 0);
-      fatKpi.className    = 'kpi-val' + (d.faturamentoReal > 0 ? ' c-green' : '');
+      fatKpi.textContent  = fmtBRL(d.boletosAberto || 0);
+      fatKpi.className    = 'kpi-val' + (d.boletosVencidos > 0 ? ' c-red' : '');
       fatKpi.classList.remove('kpi-loading');
       const fatPctEl = $('k-fat-pct');
       if (fatPctEl) {
-        fatPctEl.textContent = d.faturamentoMeta > 0
-          ? `${d.faturamentoPct || 0}% da meta (${fmtBRL(d.faturamentoMeta)})`
-          : 'Meta não definida';
+        fatPctEl.textContent = d.boletosVencidos > 0
+          ? `${d.boletosVencidos} vencido(s)`
+          : 'Nenhum vencido';
       }
     }
 
