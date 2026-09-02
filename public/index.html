@@ -234,7 +234,7 @@ body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var
 .fat-pct{font-size:22px;font-weight:800;font-family:'DM Mono',monospace;min-width:60px;text-align:right;}
 
 /* KPI row — compacto */
-.kpi-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:16px;}
+.kpi-row{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-bottom:16px;}
 .kpi-card{background:var(--white);border:1px solid var(--border);border-radius:11px;padding:13px 15px;border-left:4px solid var(--border);box-shadow:var(--shadow);transition:all .15s;cursor:pointer;position:relative;overflow:hidden;}
 .kpi-card:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,.1);}
 .kpi-card.k-red{border-left-color:var(--red-l);}
@@ -250,7 +250,7 @@ body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var
 @keyframes pulse{0%{opacity:.3}100%{opacity:.6}}
 
 /* Linha de gráficos + atalhos */
-.dash-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;}
+.dash-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;align-items:start;}
 .dash-row.tres{grid-template-columns:1fr 1fr 1fr;}
 .dash-row.operacional{grid-template-columns:1fr 1fr;}
 .dash-card{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:16px 18px;box-shadow:var(--shadow);}
@@ -361,6 +361,9 @@ body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var
   /* Header menor */
   .ph{padding:8px 12px;}
   .ph-logo{width:28px;height:28px;}
+}
+@media(min-width:769px) and (max-width:1200px){
+  .kpi-row{grid-template-columns:repeat(3,minmax(0,1fr));}
 }
 #val-confirm-btn:not([disabled]){opacity:.9!important;}
 #val-confirm-btn:not([disabled]):hover{opacity:1!important;background:#6b0000!important;}
@@ -593,7 +596,7 @@ body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var
           <span class="kpi-icon2">👥</span>
           <div class="kpi-label">Retiradas Mês</div>
           <div class="kpi-val kpi-loading" id="k-retiradas">—</div>
-          <div class="kpi-sub">funcionários</div>
+          <div class="kpi-sub">valor registrado</div>
         </div>
         <!-- IDs legados -->
         <div style="display:none"><span id="k-vencidos"></span><span id="k-aberto"></span><span id="k-val-alerta"></span><span id="k-val-venc"></span></div>
