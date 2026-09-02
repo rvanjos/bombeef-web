@@ -89,6 +89,9 @@ module.exports = function (pool, app) {
       ['extrato_lancamento', 'TEXT'],
       ['atualizado_em',      'TIMESTAMPTZ DEFAULT NOW()'],
       ['cartao_credito',     'TEXT'],   // ex: 'Itaú Visa', 'Nubank', 'BB Mastercard'
+      ['cartao_fatura_ref',  'TEXT'],   // fatura CC vinculada no DRE
+      ['cartao_item_ref',    'TEXT'],   // item específico da fatura vinculado
+      ['status_antes_cartao','TEXT'],   // permite desfazer a conciliação sem perder estado
       ['dt_programado',      'DATE'],   // data em que o pagamento foi programado no banco
     ];
 
@@ -219,6 +222,8 @@ module.exports = function (pool, app) {
       vinculadoExtrato: b.vinculado_extrato || false,
       extratLancamento: b.extrato_lancamento || '',
       cartaoCredito:    b.cartao_credito || '',
+      cartaoFaturaRef:  b.cartao_fatura_ref || '',
+      cartaoItemRef:    b.cartao_item_ref || '',
       dt_programado:    fmtDate(b.dt_programado),
     };
   }
@@ -414,6 +419,9 @@ module.exports = function (pool, app) {
           needsReview,  // true = vencido sem baixa → sinalizar no DRE
           parcela:      v.parcela || '1',
           totalParcelas:v.totalParcelas || 1,
+          cartaoCredito:v.cartaoCredito || '',
+          cartaoFaturaRef:v.cartaoFaturaRef || '',
+          cartaoItemRef:v.cartaoItemRef || '',
         };
       });
       res.json({ ok: true, data: lancamentos });
@@ -656,6 +664,57 @@ module.exports = function (pool, app) {
   };
   r.post('/:id/baixa', autoPublish('boletos', 'boletos_atualizado'), baixarBoleto);
   r.post('/baixa/:id', autoPublish('boletos', 'boletos_atualizado'), baixarBoleto);
+
+  // Conciliação de uma NF/boleto com um item de fatura de cartão. O registro
+  // continua existindo; apenas passa a ser a fonte contábil oficial da compra.
+  r.post('/:id/vincular-cartao', autoPublish('boletos', 'boletos_atualizado'), async (req, res) => {
+    const { cartao, faturaRef, itemRef, mesCaixa } = req.body || {};
+    if (!faturaRef || !itemRef || !/^\d{2}\/\d{4}$/.test(String(mesCaixa||''))) {
+      return res.status(400).json({ ok:false, erro:'Fatura, item e mês de caixa são obrigatórios' });
+    }
+    try {
+      const { rows, rowCount } = await pool.query(`
+        UPDATE boletos SET
+          status_antes_cartao = CASE WHEN cartao_fatura_ref IS NULL THEN status ELSE status_antes_cartao END,
+          status              = 'pago',
+          cartao_credito      = $1,
+          cartao_fatura_ref   = $2,
+          cartao_item_ref     = $3,
+          mes_caixa           = $4,
+          vinculado_extrato   = false,
+          extrato_lancamento  = NULL,
+          atualizado_em       = NOW()
+        WHERE id=$5 AND status!='cancelado'
+        RETURNING id, status, mes_caixa, cartao_credito, cartao_fatura_ref, cartao_item_ref
+      `, [cartao||null, faturaRef, itemRef, mesCaixa, req.params.id]);
+      if (!rowCount) return res.status(404).json({ ok:false, erro:'Boleto não encontrado ou cancelado' });
+      res.json({ ok:true, data:rows[0] });
+    } catch (e) {
+      console.error('[boletos/vincular-cartao]', e.message);
+      res.status(500).json({ ok:false, erro:'Erro ao vincular boleto à fatura' });
+    }
+  });
+
+  r.post('/:id/desvincular-cartao', autoPublish('boletos', 'boletos_atualizado'), async (req, res) => {
+    try {
+      const { rows, rowCount } = await pool.query(`
+        UPDATE boletos SET
+          status             = COALESCE(NULLIF(status_antes_cartao,''), 'avencer'),
+          status_antes_cartao= NULL,
+          cartao_credito     = NULL,
+          cartao_fatura_ref  = NULL,
+          cartao_item_ref    = NULL,
+          atualizado_em      = NOW()
+        WHERE id=$1 AND cartao_fatura_ref IS NOT NULL
+        RETURNING id, status, mes_caixa
+      `, [req.params.id]);
+      if (!rowCount) return res.status(404).json({ ok:false, erro:'Vínculo não encontrado' });
+      res.json({ ok:true, data:rows[0] });
+    } catch (e) {
+      console.error('[boletos/desvincular-cartao]', e.message);
+      res.status(500).json({ ok:false, erro:'Erro ao desfazer vínculo com cartão' });
+    }
+  });
 
   // ── POST /vincular-extrato/:id — vincula boleto com lançamento OFX ────────
   // Evita duplicação no DRE: quando o extrato tiver o mesmo pagamento
