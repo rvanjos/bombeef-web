@@ -8,6 +8,17 @@ const autenticar = require('../middleware/auth');
 module.exports = function(pool, app) {
   const r = express.Router();
   r.use(autenticar());
+  const permitir = (chave, perfisPadrao=[]) => async (req, res, next) => {
+    if (req.user?.perfil === 'admin' || perfisPadrao.includes(req.user?.perfil)) return next();
+    try {
+      const { rows } = await pool.query(
+        `SELECT COALESCE(permissoes,'{}'::jsonb) AS permissoes FROM usuarios WHERE id=$1 AND ativo=true`,
+        [req.user?.id]
+      );
+      if (rows[0]?.permissoes?.[chave] === true) return next();
+      return res.status(403).json({ ok:false, erro:'Usuário sem permissão para esta operação.' });
+    } catch (e) { return res.status(500).json({ ok:false, erro:'Não foi possível validar a permissão.' }); }
+  };
   // BB-SSE-AUTOPUBLISH — avisa os outros modulos quando algo muda aqui.
   // Roda em todas as rotas, mas so publica em mutacao bem-sucedida.
   const _pub = (c, d) => { try { app?.locals?.ssePublish?.(c, d); } catch(_) {} };
@@ -196,7 +207,7 @@ module.exports = function(pool, app) {
 
   // ── CLIENTES ───────────────────────────────────────────────────────────────
   // Sincroniza funcionários como clientes tipo 'funcionario'
-  r.post('/sync-funcionarios', async (req, res) => {
+  r.post('/sync-funcionarios', permitir('fiado_administrar'), async (req, res) => {
     try {
       const { rows: funcs } = await pool.query(`SELECT id, nome FROM funcionarios WHERE ativo=true`); // F2-13
       let criados = 0;
@@ -212,7 +223,7 @@ module.exports = function(pool, app) {
   });
 
   // Deduplicar clientes_fiado funcionários por nome (manter o que tem mais vendas ou menor id)
-  r.post('/dedup-funcionarios', async (req, res) => {
+  r.post('/dedup-funcionarios', permitir('fiado_administrar'), async (req, res) => {
     try {
       // Para cada nome duplicado de funcionario, manter o id com mais vendas (ou menor id), remover os outros
       const { rows: dups } = await pool.query(`
@@ -289,7 +300,7 @@ module.exports = function(pool, app) {
     } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
   });
 
-  r.post('/clientes', async (req, res) => {
+  r.post('/clientes', permitir('fiado_clientes',['gestor']), async (req, res) => {
     const { nome, telefone, tipo_cliente='normal', desconto_pct=0, limite_credito, status='ativo', observacoes } = req.body;
     if (!nome?.trim()) return res.status(400).json({ ok:false, erro:'Nome obrigatório' });
     try {
@@ -303,7 +314,7 @@ module.exports = function(pool, app) {
     } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
   });
 
-  r.put('/clientes/:id', async (req, res) => {
+  r.put('/clientes/:id', permitir('fiado_clientes',['gestor']), async (req, res) => {
     const { nome, telefone, tipo_cliente, desconto_pct, limite_credito, status, observacoes } = req.body;
     try {
       const { rows } = await pool.query(
@@ -336,7 +347,7 @@ module.exports = function(pool, app) {
     } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
   });
 
-  r.post('/vendas', async (req, res) => {
+  r.post('/vendas', permitir('fiado_lancar',['gestor','caixa']), async (req, res) => {
     const { cliente_id, data_compra, itens=[], observacoes } = req.body;
     if (!cliente_id || !itens.length) return res.status(400).json({ ok:false, erro:'cliente e itens obrigatórios' });
     const cli = await pool.query('SELECT * FROM clientes_fiado WHERE id=$1', [cliente_id]);
@@ -404,7 +415,7 @@ module.exports = function(pool, app) {
   });
 
   // ── PUT /vendas/:id/editar — editar itens/preços de venda aberta/parcial ──
-  r.put('/vendas/:id/editar', async (req, res) => {
+  r.put('/vendas/:id/editar', permitir('fiado_editar',['gestor']), async (req, res) => {
     const { itens, observacoes } = req.body;
     if (!itens || !itens.length) return res.status(400).json({ ok:false, erro:'itens obrigatórios' });
 
@@ -440,6 +451,12 @@ module.exports = function(pool, app) {
 
       // Preservar valor já pago — saldo restante = novo total - já pago
       const ja_pago = parseFloat(venda.total_final||0) - parseFloat(venda.saldo_restante||0);
+      if (total_final + 0.005 < ja_pago) {
+        return res.status(409).json({
+          ok:false,
+          erro:`O novo total não pode ser menor que o valor já pago (R$ ${ja_pago.toFixed(2)}). Faça o ajuste financeiro antes de editar a venda.`
+        });
+      }
       const novo_saldo = Math.max(0, total_final - ja_pago);
 
       const client = await pool.connect();
@@ -509,7 +526,7 @@ module.exports = function(pool, app) {
     } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
   });
 
-  r.put('/vendas/:id/cancelar', async (req, res) => {
+  r.put('/vendas/:id/cancelar', permitir('fiado_cancelar',['gestor']), async (req, res) => {
     const { motivo } = req.body;
     if (!motivo?.trim()) return res.status(400).json({ ok:false, erro:'Motivo obrigatório' });
     try {
@@ -526,29 +543,49 @@ module.exports = function(pool, app) {
   });
 
   // ── PAGAMENTOS ─────────────────────────────────────────────────────────────
-  r.post('/pagamentos', async (req, res) => {
+  r.post('/pagamentos', permitir('fiado_pagamentos',['gestor']), async (req, res) => {
     const { cliente_id, data_pagamento, valor_pago, forma_pagamento='dinheiro', observacoes, venda_id } = req.body;
-    if (!cliente_id || !valor_pago) return res.status(400).json({ ok:false, erro:'Campos obrigatórios faltando' });
+    const valorNumerico = Number(valor_pago);
+    if (!cliente_id || !Number.isFinite(valorNumerico) || valorNumerico <= 0)
+      return res.status(400).json({ ok:false, erro:'Informe um pagamento maior que zero.' });
     const usuario = req.user?.nome || 'Sistema';
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
+      const alvo = venda_id
+        ? await client.query(
+            `SELECT * FROM vendas_fiado WHERE id=$1 AND cliente_id=$2 AND status IN('aberto','parcial') FOR UPDATE`,
+            [venda_id,cliente_id])
+        : await client.query(
+            `SELECT * FROM vendas_fiado WHERE cliente_id=$1 AND status IN('aberto','parcial') ORDER BY data_compra,id FOR UPDATE`,
+            [cliente_id]);
+      const saldoDisponivel = alvo.rows.reduce((s,v)=>s+Number(v.saldo_restante||0),0);
+      if (!alvo.rows.length) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ok:false,erro:'Não existem vendas em aberto para este pagamento.'});
+      }
+      if (valorNumerico > saldoDisponivel + 0.005) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({
+          ok:false,
+          erro:`Pagamento maior que o saldo aberto (R$ ${saldoDisponivel.toFixed(2)}). Registre somente o valor devido.`,
+          saldo_aberto:saldoDisponivel
+        });
+      }
       const { rows: [pag] } = await client.query(
         `INSERT INTO pagamentos_fiado(cliente_id,data_pagamento,valor_pago,forma_pagamento,observacoes,usuario_resp)
          VALUES($1,$2,$3,$4,$5,$6) RETURNING *`,
         [cliente_id, data_pagamento||new Date().toISOString().slice(0,10),
-         valor_pago, forma_pagamento, observacoes||null, usuario]
+         valorNumerico, forma_pagamento, observacoes||null, usuario]
       );
 
       // Abater nas vendas
-      let restante = parseFloat(valor_pago);
+      let restante = valorNumerico;
       let vendasAbatidas = [];
 
       if (venda_id) {
         // Pagamento para venda específica
-        const { rows: [v] } = await client.query(
-          `SELECT * FROM vendas_fiado WHERE id=$1 AND cliente_id=$2 AND status IN('aberto','parcial')`, [venda_id, cliente_id]
-        );
+        const v = alvo.rows[0];
         if (v) {
           const abater = Math.min(restante, parseFloat(v.saldo_restante));
           const novoSaldo = parseFloat(v.saldo_restante) - abater;
@@ -566,10 +603,7 @@ module.exports = function(pool, app) {
         }
       } else {
         // Abater nas mais antigas em aberto
-        const { rows: vendas } = await client.query(
-          `SELECT * FROM vendas_fiado WHERE cliente_id=$1 AND status IN('aberto','parcial')
-           ORDER BY data_compra ASC, id ASC`, [cliente_id]
-        );
+        const vendas = alvo.rows;
         for (const v of vendas) {
           if (restante <= 0.005) break;
           const abater = Math.min(restante, parseFloat(v.saldo_restante));
@@ -588,22 +622,19 @@ module.exports = function(pool, app) {
         }
       }
 
-      // Se sobrou, registrar como crédito do cliente
-      let credito = restante > 0.005 ? restante : 0;
-
+      await client.query(
+        `INSERT INTO historico_fiado(cliente_id,pagamento_id,tipo_evento,descricao,usuario)
+         VALUES($1,$2,'pagamento_registrado',$3,$4)`,
+        [cliente_id,pag.id,`Pagamento R$ ${valorNumerico.toFixed(2)} via ${forma_pagamento}`,usuario]
+      );
       await client.query('COMMIT');
-      await log(cliente_id, 'pagamento_registrado',
-        `Pagamento R$ ${parseFloat(valor_pago).toFixed(2)} via ${forma_pagamento}${credito>0?' (crédito R$'+credito.toFixed(2)+')':''}`,
-        usuario, null, pag.id);
-      res.json({ ok:true, data:pag, vendas_abatidas:vendasAbatidas, credito_gerado:credito });
+      res.json({ ok:true, data:pag, vendas_abatidas:vendasAbatidas, credito_gerado:0 });
     } catch(e) { await client.query('ROLLBACK'); res.status(500).json({ ok:false, erro:e.message }); }
     finally { client.release(); }
   });
 
   // ── PATCH /vendas/:id/baixa-pdv — marca que a venda foi lançada no PDV ──────
-  r.patch('/vendas/:id/baixa-pdv', async (req, res) => {
-    if (!['admin','gestor','financeiro','operador'].includes(req.user?.perfil))
-      return res.status(403).json({ ok:false, erro:'Sem permissão' });
+  r.patch('/vendas/:id/baixa-pdv', permitir('fiado_pdv',['gestor','financeiro']), async (req, res) => {
     const { desfazer } = req.body;
     try {
       await pool.query(`ALTER TABLE vendas_fiado ADD COLUMN IF NOT EXISTS baixa_pdv BOOLEAN DEFAULT false`).catch(()=>{});

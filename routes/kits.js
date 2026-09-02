@@ -7,6 +7,35 @@ const autenticar = require('../middleware/auth');
 module.exports = function (pool) {
   const r = express.Router();
   r.use(autenticar());
+  const gerenciarKits = async (req,res,next) => {
+    if (['admin','gestor'].includes(req.user?.perfil)) return next();
+    try {
+      const { rows } = await pool.query(
+        `SELECT COALESCE(permissoes,'{}'::jsonb) AS permissoes FROM usuarios WHERE id=$1 AND ativo=true`,
+        [req.user?.id]
+      );
+      if (rows[0]?.permissoes?.kits_gerenciar === true) return next();
+      res.status(403).json({ok:false,erro:'Usuário sem permissão para gerenciar Kits.'});
+    } catch(_){ res.status(500).json({ok:false,erro:'Não foi possível validar a permissão.'}); }
+  };
+
+  r.get('/config/precificacao', async (req,res) => {
+    try {
+      const { rows } = await pool.query(`SELECT valor FROM config_sistema WHERE chave='kit_precificacao'`);
+      res.json({ok:true,data:rows[0]?.valor ? JSON.parse(rows[0].valor) : null});
+    } catch(e){ res.status(500).json({ok:false,erro:e.message}); }
+  });
+  r.put('/config/precificacao', gerenciarKits, async (req,res) => {
+    const cfg=req.body||{};
+    const nums=['cartao','royalties','desperdicio','imposto','fixos','lucro'];
+    if(nums.some(k=>!Number.isFinite(Number(cfg[k])) || Number(cfg[k])<0 || Number(cfg[k])>=100))
+      return res.status(400).json({ok:false,erro:'Parâmetros percentuais inválidos.'});
+    try{
+      await pool.query(`INSERT INTO config_sistema(chave,valor) VALUES('kit_precificacao',$1)
+                        ON CONFLICT(chave) DO UPDATE SET valor=EXCLUDED.valor`,[JSON.stringify(cfg)]);
+      res.json({ok:true});
+    }catch(e){ res.status(500).json({ok:false,erro:e.message}); }
+  });
 
   async function initTable() {
     // Migration PRIMEIRO — renomeia colunas legadas antes de qualquer outra operação
@@ -198,7 +227,7 @@ module.exports = function (pool) {
   });
 
   // ── POST /semanas ──────────────────────────────────────────────────────────
-  r.post('/semanas', async (req, res) => {
+  r.post('/semanas', gerenciarKits, async (req, res) => {
     const { kit_id, semana_ini, qtd_produzida, qtd_vendida, obs } = req.body;
     if (!kit_id || !semana_ini) return res.status(400).json({ ok: false, erro: 'kit_id e semana_ini obrigatórios' });
     try {
@@ -211,7 +240,7 @@ module.exports = function (pool) {
   });
 
   // ── PUT /semanas/:id ───────────────────────────────────────────────────────
-  r.put('/semanas/:id', async (req, res) => {
+  r.put('/semanas/:id', gerenciarKits, async (req, res) => {
     const { qtd_produzida, qtd_vendida, obs } = req.body;
     try {
       await pool.query(`UPDATE kit_semanas SET qtd_produzida=$1, qtd_vendida=$2, obs=$3 WHERE id=$4`,
@@ -221,7 +250,7 @@ module.exports = function (pool) {
   });
 
   // ── DELETE /semanas/:id ────────────────────────────────────────────────────
-  r.delete('/semanas/:id', async (req, res) => {
+  r.delete('/semanas/:id', gerenciarKits, async (req, res) => {
     try {
       await pool.query(`DELETE FROM kit_semanas WHERE id=$1`, [parseInt(req.params.id)]);
       res.json({ ok: true });
@@ -320,7 +349,7 @@ module.exports = function (pool) {
   });
 
   // POST /
-  r.post('/', async (req, res) => {
+  r.post('/', gerenciarKits, async (req, res) => {
     const { codigo, nome, descricao, precoVenda, margem, dataInicio, dataFim, itens = [] } = req.body;
     if (!nome) return res.status(400).json({ ok: false, erro: 'nome é obrigatório' });
     const client = await pool.connect();
@@ -376,7 +405,7 @@ module.exports = function (pool) {
   });
 
   // PUT /:id
-  r.put('/:id', async (req, res) => {
+  r.put('/:id', gerenciarKits, async (req, res) => {
     const { nome, descricao, precoVenda, margem, dataInicio, dataFim, itens } = req.body;
     const client = await pool.connect();
     try {
@@ -435,7 +464,7 @@ module.exports = function (pool) {
   });
 
   // DELETE /:id
-  r.delete('/:id', async (req, res) => {
+  r.delete('/:id', gerenciarKits, async (req, res) => {
     try {
       const delId = parseInt(req.params.id);
       if (!isNaN(delId)) {

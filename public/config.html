@@ -290,6 +290,18 @@ if(window.self !== window.top){
         </div>
         <div style="font-size:11px;color:var(--muted);margin-top:5px">Sem essas permissões, o usuário vê e lança apenas as próprias retiradas.</div>
       </div>
+      <div class="fg">
+        <label>Permissões adicionais — Fiado</label>
+        <div style="display:grid;gap:8px;background:#faf7f4;border:1px solid var(--border);border-radius:9px;padding:12px">
+          <label style="font-size:12px;text-transform:none;letter-spacing:0;color:var(--text);display:flex;gap:8px;align-items:center"><input type="checkbox" id="u-p-fia-clientes" style="width:auto"> Cadastrar e editar clientes</label>
+          <label style="font-size:12px;text-transform:none;letter-spacing:0;color:var(--text);display:flex;gap:8px;align-items:center"><input type="checkbox" id="u-p-fia-lancar" style="width:auto"> Lançar vendas fiadas</label>
+          <label style="font-size:12px;text-transform:none;letter-spacing:0;color:var(--text);display:flex;gap:8px;align-items:center"><input type="checkbox" id="u-p-fia-editar" style="width:auto"> Editar vendas abertas</label>
+          <label style="font-size:12px;text-transform:none;letter-spacing:0;color:var(--text);display:flex;gap:8px;align-items:center"><input type="checkbox" id="u-p-fia-cancelar" style="width:auto"> Cancelar vendas</label>
+          <label style="font-size:12px;text-transform:none;letter-spacing:0;color:var(--text);display:flex;gap:8px;align-items:center"><input type="checkbox" id="u-p-fia-pagar" style="width:auto"> Registrar pagamentos</label>
+          <label style="font-size:12px;text-transform:none;letter-spacing:0;color:var(--text);display:flex;gap:8px;align-items:center"><input type="checkbox" id="u-p-fia-pdv" style="width:auto"> Controlar baixa no PDV</label>
+          <label style="font-size:12px;text-transform:none;letter-spacing:0;color:var(--text);display:flex;gap:8px;align-items:center"><input type="checkbox" id="u-p-kits-gerenciar" style="width:auto"> Gerenciar composições e parâmetros de Kits</label>
+        </div>
+      </div>
     </div>
     <div class="modal-foot">
       <button class="btn btn-s" onclick="fecharUsr()">Cancelar</button>
@@ -492,6 +504,13 @@ function abrirUsuario(id){
   document.getElementById('u-p-ret-pagar').checked=!!p.retiradas_pagamentos;
   document.getElementById('u-p-ret-pdv').checked=!!p.retiradas_pdv;
   document.getElementById('u-p-ret-editar').checked=!!p.retiradas_editar;
+  document.getElementById('u-p-fia-clientes').checked=!!p.fiado_clientes;
+  document.getElementById('u-p-fia-lancar').checked=!!p.fiado_lancar;
+  document.getElementById('u-p-fia-editar').checked=!!p.fiado_editar;
+  document.getElementById('u-p-fia-cancelar').checked=!!p.fiado_cancelar;
+  document.getElementById('u-p-fia-pagar').checked=!!p.fiado_pagamentos;
+  document.getElementById('u-p-fia-pdv').checked=!!p.fiado_pdv;
+  document.getElementById('u-p-kits-gerenciar').checked=!!p.kits_gerenciar;
   document.getElementById('u-senha-wrap').style.display = u?'none':'';
   document.getElementById('modal-usr').classList.add('open');
 }
@@ -509,7 +528,14 @@ async function salvarUsr(){
       retiradas_lancar_equipe:document.getElementById('u-p-ret-lancar').checked,
       retiradas_pagamentos:document.getElementById('u-p-ret-pagar').checked,
       retiradas_pdv:document.getElementById('u-p-ret-pdv').checked,
-      retiradas_editar:document.getElementById('u-p-ret-editar').checked
+      retiradas_editar:document.getElementById('u-p-ret-editar').checked,
+      fiado_clientes:document.getElementById('u-p-fia-clientes').checked,
+      fiado_lancar:document.getElementById('u-p-fia-lancar').checked,
+      fiado_editar:document.getElementById('u-p-fia-editar').checked,
+      fiado_cancelar:document.getElementById('u-p-fia-cancelar').checked,
+      fiado_pagamentos:document.getElementById('u-p-fia-pagar').checked,
+      fiado_pdv:document.getElementById('u-p-fia-pdv').checked,
+      kits_gerenciar:document.getElementById('u-p-kits-gerenciar').checked
     },
   };
   if(!body.nome||!body.email){ toast('Nome e e-mail obrigatórios'); return; }

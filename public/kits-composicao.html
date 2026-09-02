@@ -473,10 +473,22 @@ if(cfgSalva) try { CFG = {...CFG, ...JSON.parse(cfgSalva)}; } catch(_) {}
 
 window.onBBReady = () => {
   ({ api, fmt, toast } = BB);
+  carregarCfgCompartilhada();
   carregarKits();
   carregarSemanas();
   carregarRanking();
 };
+
+async function carregarCfgCompartilhada(){
+  const d=await api.get('/api/kits/config/precificacao');
+  if(d.ok && d.data){
+    try{
+      CFG={...CFG,...d.data};
+      localStorage.setItem('bb_kit_cfg',JSON.stringify(CFG));
+      if(document.getElementById('ksec-parametros')?.style.display!=='none') carregarCfgUI();
+    }catch(_){ /* mantém configuração local válida */ }
+  }
+}
 
 // showKTab vem do JS de kits abaixo
 
@@ -509,12 +521,18 @@ function carregarCfgUI(){
   renderCfgMargens();
 }
 
+let cfgTimer;
 function salvarCfg(){
   ['cartao','royalties','desperdicio','imposto','fixos','lucro'].forEach(campo => {
     const el=document.getElementById('cfg-'+campo);
     if(el) CFG[campo]=parseFloat(el.value)||0;
   });
   localStorage.setItem('bb_kit_cfg',JSON.stringify(CFG));
+  clearTimeout(cfgTimer);
+  cfgTimer=setTimeout(async()=>{
+    const d=await api.put('/api/kits/config/precificacao',CFG);
+    if(!d.ok) toast(d.erro||'Não foi possível salvar os parâmetros compartilhados.');
+  },500);
   atualizarCfgTotais();
 }
 
