@@ -486,6 +486,14 @@ module.exports = function(pool) {
           f.id, f.nome, f.cargo, f.horario_entrada, f.horario_saida,
           f.jornada_horas, f.tolerancia_min, f.intervalo_min,
           COALESCE(f.dias_folga, ARRAY[]::TEXT[]) AS dias_folga,
+          COALESCE((
+            SELECT JSON_AGG(JSON_BUILD_OBJECT(
+              'dia_semana',jd.dia_semana,'folga',jd.folga,
+              'horario_entrada',jd.horario_entrada,'horario_saida',jd.horario_saida,
+              'jornada_horas',jd.jornada_horas,'intervalo_min',jd.intervalo_min
+            ) ORDER BY jd.dia_semana)
+            FROM ponto_jornada_dia jd WHERE jd.funcionario_id=f.id
+          ),'[]'::json) AS jornadas_dia,
           COUNT(p.id) AS dias_registrados,
           COUNT(CASE WHEN p.entrada IS NOT NULL AND p.saida IS NOT NULL THEN 1 END) AS dias_completos,
           COUNT(CASE WHEN p.status='falta' OR (p.data_ref::date <= CURRENT_DATE AND p.entrada IS NULL) THEN 1 END) AS faltas,
