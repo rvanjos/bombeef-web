@@ -52,6 +52,10 @@ body{font-family:'DM Sans',system-ui,sans-serif;font-size:13px;background:var(--
 .btn-r{background:#fee2e2;color:var(--red-l);border-color:#fca5a5;}
 .btn-sm{padding:4px 10px;font-size:11px;}
 .toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;}
+.toolbar-panel{background:var(--white);border:1px solid var(--border);border-radius:10px;padding:10px;box-shadow:var(--shadow)}
+.toolbar-search{min-width:240px;max-width:420px;flex:1}
+.table-scroll{width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--border);border-radius:10px;background:var(--white)}
+.table-scroll table{min-width:850px}
 select,input[type=text],input[type=date],input[type=number],textarea{
   padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;
   font-family:inherit;background:var(--white);color:var(--text);width:100%;}
@@ -61,6 +65,7 @@ select:focus,input:focus{outline:none;border-color:var(--red);}
 .fg label{display:block;font-size:11px;font-weight:600;color:var(--muted);
           text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;}
 table{width:100%;border-collapse:collapse;font-size:12px;}
+.tab-content>table,.tab-content>div>table{min-width:760px}
 th{background:var(--red);color:#fff;padding:8px 10px;text-align:left;
    font-size:10px;text-transform:uppercase;letter-spacing:.5px;font-weight:700;}
 th:first-child{border-radius:6px 0 0 0;}th:last-child{border-radius:0 6px 0 0;}
@@ -128,6 +133,11 @@ tr:hover td{background:#faf8f5;}
   .form-grid,.form-grid.tres{grid-template-columns:1fr;}
   .camp-grid{grid-template-columns:1fr;}
   .kpi-row{grid-template-columns:1fr 1fr;}
+  .tabs{overflow-x:auto;padding:0 8px;scrollbar-width:thin}
+  .tab{padding:10px 12px}
+  .tab-content{padding:10px}
+  .toolbar-panel>*{width:100%!important;max-width:none!important}
+  .camp-card{padding:13px}
 }
 
 /* ── Normalização bb-base ────────────────────────────────────────────────── */
@@ -202,9 +212,16 @@ if (window.self !== window.top) {
   <div id="dash-status" style="margin-bottom:16px"></div>
   <div class="toolbar">
     <button class="btn btn-p" onclick="abrirModalCampanha()">➕ Nova Campanha</button>
-    <button class="btn btn-s bb-desktop-only" onclick="abrirModalEstoque()">📦 Atualizar Estoque</button>
-    <button class="btn btn-s bb-desktop-only" onclick="sincEstoquePDV()" id="btn-sinc-pdv" title="Importa saldo do estoque da aba Produtos para cá automaticamente">🔄 Sincronizar PDV</button>
-    <button class="btn btn-s" onclick="carregarCampanhas()">🔄 Atualizar</button>
+  </div>
+  <div class="toolbar toolbar-panel">
+    <input class="toolbar-search" type="text" id="f-busca-camp" placeholder="🔍 Buscar campanha..." oninput="renderizarCampanhas()">
+    <select id="f-status-camp" onchange="renderizarCampanhas()" style="width:auto;min-width:160px">
+      <option value="">Todos os status</option>
+      <option value="ativa">Ativas</option>
+      <option value="pausada">Pausadas</option>
+      <option value="encerrada">Encerradas</option>
+    </select>
+    <button class="btn btn-s" onclick="carregarCampanhas()" title="Atualizar dados">↻ Atualizar</button>
   </div>
   <div id="camp-grid" class="camp-grid"></div>
 </div>
@@ -695,7 +712,7 @@ async function calcularPlanejamento() {
     </div>
     <div class="modal-foot">
       <button class="btn btn-s" onclick="fecharModal('modal-campanha')">Cancelar</button>
-      <button class="btn btn-p" onclick="salvarCampanha()">💾 Salvar Campanha</button>
+      <button class="btn btn-p" id="btn-salvar-campanha" onclick="salvarCampanha()">💾 Salvar Campanha</button>
     </div>
   </div>
 </div>
@@ -932,14 +949,25 @@ async function carregarKPIs() {
 // ── CAMPANHAS ─────────────────────────────────────────────────────────────────
 async function carregarCampanhas() {
   carregarKPIs();
+  document.getElementById('camp-grid').innerHTML = '<div class="empty"><p>Carregando campanhas...</p></div>';
   const d = await api.get('/api/kits-campanha/campanhas');
   if (!d.ok) { document.getElementById('camp-grid').innerHTML = '<div class="alert danger">Erro ao carregar campanhas</div>'; return; }
   _campanhas = d.data;
-  if (!d.data.length) {
+  renderizarCampanhas();
+}
+
+function renderizarCampanhas() {
+  const busca = (document.getElementById('f-busca-camp')?.value||'').trim().toLocaleLowerCase('pt-BR');
+  const status = document.getElementById('f-status-camp')?.value||'';
+  const campanhas = _campanhas.filter(c =>
+    (!status || c.status === status) &&
+    (!busca || `${c.nome||''} ${c.descricao||''}`.toLocaleLowerCase('pt-BR').includes(busca))
+  );
+  if (!campanhas.length) {
     document.getElementById('camp-grid').innerHTML = '<div class="empty"><div class="ei">🎯</div><p>Nenhuma campanha cadastrada.<br><small>Clique em "+ Nova Campanha" para criar.</small></p></div>';
     return;
   }
-  document.getElementById('camp-grid').innerHTML = d.data.map(c => {
+  document.getElementById('camp-grid').innerHTML = campanhas.map(c => {
     const dispNum = c.disponivel ?? '—';
     const dispCls = c.disponivel===null?'':c.disponivel>10?'ok':c.disponivel>3?'warn':'crit';
     const pct = c.limite_campanha>0 ? Math.min(100,Math.round((c.vendidos||0)/c.limite_campanha*100)) : null;
@@ -1171,20 +1199,34 @@ function removerProdSlot(idx, prodId) {
 async function salvarCampanha() {
   const nome = document.getElementById('mc-nome').value.trim();
   if (!nome) { toast('Nome obrigatório','warn'); return; }
+  if (!_slotsAtual.length) { toast('Adicione ao menos um grupo de produtos','warn'); return; }
   for (const s of _slotsAtual) {
-    if (!s.nome.trim()) { toast('Todos os slots precisam de nome','warn'); return; }
+    if (!s.nome.trim()) { toast('Todos os grupos precisam de nome','warn'); return; }
+    if (!s.produtos_permitidos?.length) { toast(`Adicione um produto ao grupo "${s.nome}"`,'warn'); return; }
   }
+  const ini = document.getElementById('mc-ini').value||null;
+  const fim = document.getElementById('mc-fim').value||null;
+  if (ini && fim && fim < ini) { toast('A data final não pode ser anterior à inicial','warn'); return; }
   const body = {
     nome, descricao: document.getElementById('mc-desc').value||null,
     preco_referencia: parseFloat(document.getElementById('mc-preco').value)||0,
     limite_campanha: parseInt(document.getElementById('mc-limite').value)||0,
-    data_inicio: document.getElementById('mc-ini').value||null,
-    data_fim: document.getElementById('mc-fim').value||null,
+    data_inicio: ini,
+    data_fim: fim,
     slots: _slotsAtual,
   };
   const id = document.getElementById('mc-id').value;
-  const d = id ? await api.put('/api/kits-campanha/campanhas/'+id, body)
-               : await api.post('/api/kits-campanha/campanhas', body);
+  const btn = document.getElementById('btn-salvar-campanha');
+  btn.disabled = true;
+  btn.textContent = 'Salvando...';
+  let d;
+  try {
+    d = id ? await api.put('/api/kits-campanha/campanhas/'+id, body)
+           : await api.post('/api/kits-campanha/campanhas', body);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '💾 Salvar Campanha';
+  }
   if (!d.ok) { toast('Erro: '+d.erro,'err'); return; }
   toast('✅ Campanha salva!');
   fecharModal('modal-campanha');
@@ -1636,7 +1678,6 @@ async function carregarSeparacao() {
       <td style="display:flex;gap:6px">
         <button class="btn btn-s btn-sm" onclick="verPedido(${p.id})">👁 Ver</button>
         <button class="btn btn-o btn-sm" onclick="mudarStatus(${p.id},'separado');carregarSeparacao()">📦 Separar</button>
-        <button class="btn btn-g btn-sm" onclick="mudarStatus(${p.id},'entregue');carregarSeparacao()">✅ Entregar</button>
       </td>
     </tr>`).join('')}
   </table>`;
