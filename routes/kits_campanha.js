@@ -328,9 +328,17 @@ module.exports = function (pool, app) {
 
   r.post('/campanhas', async (req, res) => {
     const { nome, descricao, preco_referencia, limite_campanha, data_inicio, data_fim, slots } = req.body;
-    if (!nome) return res.status(400).json({ ok: false, erro: 'nome obrigatório' });
+    if (!String(nome||'').trim()) return res.status(400).json({ ok: false, erro: 'Nome obrigatório' });
+    if (data_inicio && data_fim && data_fim < data_inicio)
+      return res.status(400).json({ ok:false, erro:'A data final não pode ser anterior à data inicial' });
+    if (!Array.isArray(slots) || !slots.length)
+      return res.status(400).json({ ok:false, erro:'Adicione ao menos um grupo de produtos à campanha' });
+    if (slots.some(s => !String(s.nome||'').trim() || !Array.isArray(s.produtos_permitidos) || !s.produtos_permitidos.length))
+      return res.status(400).json({ ok:false, erro:'Todos os grupos precisam de nome e ao menos um produto' });
+    const client = await pool.connect();
     try {
-      const { rows } = await pool.query(`
+      await client.query('BEGIN');
+      const { rows } = await client.query(`
         INSERT INTO kit_campanhas (nome,descricao,preco_referencia,limite_campanha,data_inicio,data_fim,criado_por)
         VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
         [nome, descricao||null, preco_referencia||0, limite_campanha||0,
@@ -341,7 +349,7 @@ module.exports = function (pool, app) {
       if (slots?.length) {
         for (let i=0; i<slots.length; i++) {
           const s = slots[i];
-          await pool.query(`
+          await client.query(`
             INSERT INTO kit_campanha_slots
               (campanha_id,nome,tipo,obrigatorio,quantidade,aceita_peso_real,ordem,produtos_permitidos)
             VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
@@ -350,23 +358,38 @@ module.exports = function (pool, app) {
           );
         }
       }
+      await client.query('COMMIT');
       res.json({ ok: true, id: campId });
-    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+    } catch(e) {
+      await client.query('ROLLBACK');
+      res.status(500).json({ ok: false, erro: e.message });
+    } finally { client.release(); }
   });
 
   r.put('/campanhas/:id', async (req, res) => {
     const { nome, descricao, preco_referencia, limite_campanha, data_inicio, data_fim, status, slots } = req.body;
+    if (!String(nome||'').trim()) return res.status(400).json({ ok:false, erro:'Nome obrigatório' });
+    if (data_inicio && data_fim && data_fim < data_inicio)
+      return res.status(400).json({ ok:false, erro:'A data final não pode ser anterior à data inicial' });
+    if (slots && (!Array.isArray(slots) || !slots.length || slots.some(s => !String(s.nome||'').trim() || !Array.isArray(s.produtos_permitidos) || !s.produtos_permitidos.length)))
+      return res.status(400).json({ ok:false, erro:'Todos os grupos precisam de nome e ao menos um produto' });
+    const client = await pool.connect();
     try {
-      await pool.query(`
+      await client.query('BEGIN');
+      const { rowCount } = await client.query(`
         UPDATE kit_campanhas SET nome=$1,descricao=$2,preco_referencia=$3,limite_campanha=$4,
           data_inicio=$5,data_fim=$6,status=COALESCE($7,status),atualizado_em=NOW() WHERE id=$8`,
         [nome, descricao||null, preco_referencia||0, limite_campanha||0,
          data_inicio||null, data_fim||null, status||null, req.params.id]
       );
+      if (!rowCount) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ ok:false, erro:'Campanha não encontrada' });
+      }
       // Atualiza slots: upsert seguro (nunca deleta slots com pedidos vinculados)
       if (slots) {
         // Busca IDs dos slots existentes desta campanha
-        const { rows: slotsExist } = await pool.query(
+        const { rows: slotsExist } = await client.query(
           `SELECT id FROM kit_campanha_slots WHERE campanha_id=$1 ORDER BY ordem,id`,
           [req.params.id]
         );
@@ -377,7 +400,7 @@ module.exports = function (pool, app) {
           const prodJson = JSON.stringify(s.produtos_permitidos||[]);
           if (i < idsExist.length) {
             // Slot já existe — atualiza preservando o id (evita violar FK)
-            await pool.query(`
+            await client.query(`
               UPDATE kit_campanha_slots SET
                 nome=$1, tipo=$2, obrigatorio=$3, quantidade=$4,
                 aceita_peso_real=$5, ordem=$6, produtos_permitidos=$7
@@ -387,7 +410,7 @@ module.exports = function (pool, app) {
             );
           } else {
             // Slot novo — insere
-            await pool.query(`
+            await client.query(`
               INSERT INTO kit_campanha_slots
                 (campanha_id,nome,tipo,obrigatorio,quantidade,aceita_peso_real,ordem,produtos_permitidos)
               VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
@@ -400,18 +423,22 @@ module.exports = function (pool, app) {
         if (idsExist.length > slots.length) {
           const idsRemover = idsExist.slice(slots.length);
           for (const sid of idsRemover) {
-            const { rows: temPedido } = await pool.query(
+            const { rows: temPedido } = await client.query(
               `SELECT 1 FROM kit_pedido_itens WHERE slot_id=$1 LIMIT 1`, [sid]
             );
             if (!temPedido.length) {
-              await pool.query(`DELETE FROM kit_campanha_slots WHERE id=$1`, [sid]);
+              await client.query(`DELETE FROM kit_campanha_slots WHERE id=$1`, [sid]);
             }
             // Se tem pedido, mantém o slot oculto (não aparece no front mas não quebra FK)
           }
         }
       }
+      await client.query('COMMIT');
       res.json({ ok: true });
-    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+    } catch(e) {
+      await client.query('ROLLBACK');
+      res.status(500).json({ ok: false, erro: e.message });
+    } finally { client.release(); }
   });
 
   // Disponibilidade de uma campanha
@@ -595,8 +622,22 @@ module.exports = function (pool, app) {
   r.put('/pedidos/:id', async (req, res) => {
     const { cliente_nome, cliente_tel, observacao, canal, qtd_kits,
             endereco_rua, endereco_num, endereco_bairro, endereco_cidade, endereco_ref } = req.body;
+    const id = parseInt(req.params.id);
+    const qtdNova = qtd_kits ? parseInt(qtd_kits) : null;
+    if (qtdNova !== null && (!Number.isInteger(qtdNova) || qtdNova < 1))
+      return res.status(400).json({ ok:false, erro:'A quantidade de kits deve ser maior que zero' });
+    const client = await pool.connect();
     try {
-      const { rowCount } = await pool.query(`
+      await client.query('BEGIN');
+      const { rows: anteriores } = await client.query(
+        `SELECT qtd_kits, status FROM kit_pedidos WHERE id=$1 FOR UPDATE`, [id]
+      );
+      if (!anteriores.length) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ ok: false, erro: 'Pedido não encontrado' });
+      }
+      const qtdAnterior = parseInt(anteriores[0].qtd_kits || 1);
+      const { rowCount } = await client.query(`
         UPDATE kit_pedidos SET
           cliente_nome    = COALESCE($1, cliente_nome),
           cliente_tel     = COALESCE($2, cliente_tel),
@@ -612,45 +653,44 @@ module.exports = function (pool, app) {
         WHERE id = $11
       `, [
         cliente_nome||null, cliente_tel||null, observacao||null,
-        canal||null, qtd_kits ? parseInt(qtd_kits) : null,
+        canal||null, qtdNova,
         endereco_rua||null, endereco_num||null, endereco_bairro||null,
         endereco_cidade||null, endereco_ref||null,
-        parseInt(req.params.id)
+        id
       ]);
       if (!rowCount) return res.status(404).json({ ok: false, erro: 'Pedido não encontrado' });
 
       // Se qtd_kits mudou, recalcula quantidades dos itens e reservas proporcionalmente
-      if (qtd_kits) {
-        const { rows: pedAtual } = await pool.query(
-          `SELECT qtd_kits, status FROM kit_pedidos WHERE id=$1`, [parseInt(req.params.id)]
-        );
-        const qtdAnterior = parseInt(pedAtual[0]?.qtd_kits || 1);
-        const qtdNova     = parseInt(qtd_kits);
+      if (qtdNova !== null) {
         if (qtdNova !== qtdAnterior && qtdAnterior > 0) {
           const fator = qtdNova / qtdAnterior;
           // Atualiza quantidades dos itens
-          await pool.query(`
+          await client.query(`
             UPDATE kit_pedido_itens
             SET quantidade = ROUND((quantidade * $1)::numeric, 3)
             WHERE pedido_id = $2
-          `, [fator, parseInt(req.params.id)]);
+          `, [fator, id]);
           // Atualiza reservas
-          await pool.query(`
+          await client.query(`
             UPDATE kit_reservas
             SET quantidade = ROUND((quantidade * $1)::numeric, 3)
             WHERE pedido_id = $2 AND status = 'reservado'
-          `, [fator, parseInt(req.params.id)]);
+          `, [fator, id]);
           // Atualiza valor_total proporcional
-          await pool.query(`
+          await client.query(`
             UPDATE kit_pedidos
             SET valor_total = ROUND((valor_total * $1)::numeric, 2)
             WHERE id = $2
-          `, [fator, parseInt(req.params.id)]);
+          `, [fator, id]);
         }
       }
 
+      await client.query('COMMIT');
       res.json({ ok: true });
-    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+    } catch(e) {
+      await client.query('ROLLBACK');
+      res.status(500).json({ ok: false, erro: e.message });
+    } finally { client.release(); }
   });
 
   // ── DELETE /pedidos/:id — excluir pedido (apenas se não entregue/conciliado) ──
@@ -672,6 +712,10 @@ module.exports = function (pool, app) {
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
+        const { rows: itensExcluidos } = await client.query(
+          `SELECT produto_id, quantidade FROM kit_pedido_itens WHERE pedido_id=$1 AND produto_id IS NOT NULL`,
+          [id]
+        );
         // Devolve reservas ao estoque (se houver)
         await client.query(
           `UPDATE kit_reservas SET status='cancelado' WHERE pedido_id=$1 AND status='reservado'`,
@@ -689,11 +733,7 @@ module.exports = function (pool, app) {
         // ── F2-06: KIT_CANCELAMENTO ao excluir pedido reservado (try/catch isolado) ──
         if (status === 'reservado') {
           try {
-            const { rows: itensPed } = await pool.query(
-              `SELECT produto_id, quantidade FROM kit_pedido_itens WHERE pedido_id=$1 AND produto_id IS NOT NULL`,
-              [id]
-            );
-            for (const it of itensPed) {
+            for (const it of itensExcluidos) {
               await pool.query(`
                 INSERT INTO movimentos_estoque
                   (produto_id, produto_codigo, tipo_movimento, origem, origem_id,
