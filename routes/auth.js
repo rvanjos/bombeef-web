@@ -365,7 +365,8 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
           (SELECT COUNT(*)::int FROM lojas WHERE ativa=true) AS lojas_ativas,
           (SELECT COUNT(*)::int FROM usuarios WHERE ativo=true) AS usuarios_ativos,
           (SELECT COUNT(DISTINCT usuario_id)::int FROM usuario_lojas WHERE ativo=true) AS usuarios_vinculados,
-          (SELECT COUNT(*)::int FROM login_sessoes WHERE loja_id IS NULL) AS sessoes_sem_loja
+          (SELECT COUNT(*)::int FROM login_sessoes WHERE loja_id IS NULL) AS sessoes_sem_loja,
+          (SELECT COUNT(*)::int FROM multiloja_modulos WHERE isolado=false) AS modulos_pendentes
       `);
       const status = rows[0];
       res.json({
@@ -374,7 +375,8 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
           ...status,
           fundacao_pronta: status.lojas_ativas > 0
             && status.usuarios_ativos === status.usuarios_vinculados
-            && status.sessoes_sem_loja === 0,
+            && status.sessoes_sem_loja === 0
+            && status.modulos_pendentes === 0,
         },
       });
     } catch (e) {
@@ -489,6 +491,30 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
     }catch(e){await client.query('ROLLBACK').catch(()=>{});console.error('[auth/multiloja/lojas PUT]',e.message);
       res.status(e.status||500).json({ok:false,erro:e.status?e.message:'Não foi possível atualizar a loja'});
     }finally{client.release();}
+  });
+
+  r.post('/multiloja/lojas/:id/ativar', autenticar('admin'), async (req,res)=>{
+    const lojaId=Number(req.params.id);
+    if(!Number.isInteger(lojaId)) return res.status(400).json({ok:false,erro:'Loja inválida'});
+    try{
+      await garantirTabelas();
+      const {rows:pendentes}=await pool.query(`SELECT nome FROM multiloja_modulos WHERE isolado=false ORDER BY ordem`);
+      if(pendentes.length) return res.status(409).json({
+        ok:false,
+        erro:`Aguarde a conclusão dos módulos: ${pendentes.map(m=>m.nome).join(', ')}`
+      });
+      const {rows:vinculos}=await pool.query(`SELECT COUNT(*)::int total FROM usuario_lojas WHERE loja_id=$1 AND ativo=true`,[lojaId]);
+      if(!vinculos[0].total) return res.status(400).json({ok:false,erro:'Vincule pelo menos um usuário antes de ativar a loja'});
+      const {rows}=await pool.query(`
+        UPDATE lojas SET pronta_operacao=true,ativa=true,atualizado_em=NOW()
+        WHERE id=$1 RETURNING *
+      `,[lojaId]);
+      if(!rows.length) return res.status(404).json({ok:false,erro:'Loja não encontrada'});
+      res.json({ok:true,data:rows[0]});
+    }catch(e){
+      console.error('[auth/multiloja/lojas ativar]',e.message);
+      res.status(500).json({ok:false,erro:'Não foi possível ativar a loja'});
+    }
   });
 
   // ── GET /usuarios ──────────────────────────────────────────────────────────

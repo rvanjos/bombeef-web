@@ -47,7 +47,8 @@ module.exports = function (pool, app) {
         descricao TEXT NOT NULL,
         ativo     BOOLEAN DEFAULT true,
         ordem     INTEGER DEFAULT 99,
-        criado_em TIMESTAMPTZ DEFAULT NOW()
+        criado_em TIMESTAMPTZ DEFAULT NOW(),
+        loja_id   INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id)
       )
     `).catch(()=>{});
     // Seed inicial se vazia
@@ -108,9 +109,11 @@ module.exports = function (pool, app) {
     `);
     await pool.query(`
       CREATE TABLE IF NOT EXISTS config_sistema (
-        chave   TEXT PRIMARY KEY,
+        chave   TEXT NOT NULL,
         valor   TEXT,
-        descricao TEXT
+        descricao TEXT,
+        loja_id INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id),
+        UNIQUE(loja_id, chave)
       )
     `);
 
@@ -221,7 +224,7 @@ module.exports = function (pool, app) {
         ('fuso_horario',    'America/Sao_Paulo','Fuso horário do sistema'),
         ('aliquota_simples', '8',              'Alíquota do Simples Nacional sobre NFC-e (%)'),
         ('taxa_royalties_pct','4.88',          'Taxa de royalties MDK (%) — usada no cálculo automático do DRE')
-      ON CONFLICT (chave) DO NOTHING
+      ON CONFLICT (loja_id, chave) DO NOTHING
     `);
   }
   initTable().catch(e => console.error('[config] initTable:', e.message));
@@ -388,6 +391,17 @@ module.exports = function (pool, app) {
 
   r.get('/sistema', async (req, res) => {
     try {
+      await pool.query(`
+        INSERT INTO config_sistema (chave, valor, descricao) VALUES
+          ('nome_empresa','Bom Beef','Nome da empresa'),
+          ('logo_emoji','🥩','Emoji do logo'),
+          ('dias_alerta_val','7','Dias de antecedência para alerta de validade'),
+          ('taxa_desconto_fun','100','Desconto padrão para retiradas de funcionários (%)'),
+          ('fuso_horario','America/Sao_Paulo','Fuso horário do sistema'),
+          ('aliquota_simples','8','Alíquota do Simples Nacional sobre NFC-e (%)'),
+          ('taxa_royalties_pct','4.88','Taxa de royalties (%)')
+        ON CONFLICT (loja_id, chave) DO NOTHING
+      `);
       const { rows } = await pool.query(`SELECT chave, valor FROM config_sistema`);
       const cfg = {};
       rows.forEach(r => { cfg[r.chave] = r.valor; });
@@ -402,7 +416,7 @@ module.exports = function (pool, app) {
       for (const [chave, valor] of Object.entries(updates)) {
         await pool.query(`
           INSERT INTO config_sistema (chave, valor) VALUES ($1, $2)
-          ON CONFLICT (chave) DO UPDATE SET valor = EXCLUDED.valor
+          ON CONFLICT (loja_id, chave) DO UPDATE SET valor = EXCLUDED.valor
         `, [chave, String(valor)]);
       }
       res.json({ ok: true });
@@ -412,6 +426,13 @@ module.exports = function (pool, app) {
   // ── GET /acoes-validade ───────────────────────────────────────────────────
   r.get('/acoes-validade', async (req, res) => {
     try {
+      const { rows: existentes } = await pool.query(`SELECT COUNT(*)::int total FROM validade_acoes`);
+      if (!existentes[0].total) await pool.query(`
+        INSERT INTO validade_acoes (descricao, ordem) VALUES
+          ('Promover com 30% de desconto',1),('Promover com 50% de desconto',2),
+          ('Montar kit anti-desperdício',3),('Doação para funcionários',4),
+          ('Verificar com fornecedor',5),('Retirar de circulação',6),('Descarte imediato',7)
+      `);
       const { rows } = await pool.query(`SELECT * FROM validade_acoes WHERE ativo=true ORDER BY ordem, descricao`);
       res.json({ ok: true, data: rows });
     } catch(e){ res.status(500).json({ ok: false, erro: e.message }); }

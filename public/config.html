@@ -398,7 +398,7 @@ if(window.self !== window.top){
 
 <script>
 const {api,fmt,toast} = BB;
-let usuarios=[], funcionarios=[], metas=[], categorias=[], lojas=[], vinculosLojas=[];
+let usuarios=[], funcionarios=[], metas=[], categorias=[], lojas=[], vinculosLojas=[], multilojaLiberada=false;
 
 window.onBBReady = () => { init(); };
 
@@ -467,11 +467,15 @@ async function carregarLojas(){
   if(!d.ok){ toast('Erro: '+(d.erro||'não foi possível carregar as lojas')); return; }
   lojas=d.data.lojas||[]; usuarios=d.data.usuarios||[]; vinculosLojas=d.data.vinculos||[];
   const modulos=d.data.modulos||[];
+  multilojaLiberada=modulos.length>0&&modulos.every(m=>m.isolado);
   document.getElementById('multiloja-modulos').innerHTML=modulos.map(m=>`<div style="padding:10px;border:1px solid var(--border);border-radius:9px;background:${m.isolado?'#f0faf4':'#faf7f4'}"><b style="font-size:12px">${m.isolado?'✅':'⏳'} ${escLoja(m.nome)}</b><div style="font-size:10px;color:var(--muted);margin-top:3px">${m.isolado?'Isolamento concluído':'Em implantação'}</div></div>`).join('');
   document.getElementById('lista-lojas').innerHTML=lojas.map(l=>`<div class="card" style="display:grid;grid-template-columns:minmax(220px,1.6fr) 1fr auto;gap:18px;align-items:center">
     <div><div style="font-size:16px;font-weight:700">🏢 ${escLoja(l.nome)}</div><div style="font-size:11px;color:var(--muted);margin-top:4px">${escLoja(l.empresa_nome)} · ${escLoja(l.cidade||'Cidade não informada')}${l.uf?' / '+escLoja(l.uf):''}</div></div>
     <div><span class="pill ${l.pronta_operacao?'pill-ok':'pill-off'}">${l.pronta_operacao?'Em operação':'Em preparação'}</span><div style="font-size:11px;color:var(--muted);margin-top:5px">${l.usuarios_vinculados} usuário(s) vinculado(s)</div></div>
-    <button class="btn btn-s" onclick="abrirLoja(${l.id})">✏️ Configurar</button>
+    <div style="display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end">
+      ${!l.pronta_operacao&&multilojaLiberada?`<button class="btn btn-s btn-primary" onclick="ativarLoja(${l.id})">✅ Ativar</button>`:''}
+      <button class="btn btn-s" onclick="abrirLoja(${l.id})">✏️ Configurar</button>
+    </div>
   </div>`).join('')||'<div class="card">Nenhuma loja cadastrada.</div>';
 }
 function escLoja(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
@@ -493,6 +497,14 @@ async function salvarLoja(){
   if(!body.nome){toast('Informe o nome da loja');return;}
   const d=id?await api.put('/auth/multiloja/lojas/'+id,body):await api.post('/auth/multiloja/lojas',body);
   if(!d.ok){toast('Erro: '+d.erro);return;} toast(id?'Loja atualizada!':'Loja criada em preparação!'); fecharLoja(); carregarLojas();
+}
+async function ativarLoja(id){
+  const nome=lojas.find(l=>Number(l.id)===Number(id))?.nome||'esta loja';
+  if(!confirm(`Ativar a loja "${nome}" para operação? Ela passará a aparecer no seletor dos usuários vinculados.`)) return;
+  const d=await api.post('/auth/multiloja/lojas/'+id+'/ativar',{});
+  if(!d.ok){toast('Erro: '+(d.erro||'não foi possível ativar a loja'));return;}
+  toast('✅ Loja ativada para operação!');
+  carregarLojas();
 }
 
 // ── Usuários ───────────────────────────────────────────────────────────────
