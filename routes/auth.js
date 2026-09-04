@@ -209,6 +209,7 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
         process.env.JWT_SECRET,
         { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
       );
+      const lojasDisponiveis = await listarLojasDoUsuario(pool, usuario.id);
 
       res.json({
         ok: true,
@@ -219,6 +220,7 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
           email:  usuario.email,
           perfil: loja.perfil,
           loja: contextoLojaPublico(loja),
+          lojas: lojasDisponiveis.map(contextoLojaPublico),
         },
       });
     } catch (e) {
@@ -374,6 +376,113 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
     } catch (e) {
       res.status(500).json({ ok:false, erro:'Não foi possível validar a fundação multi-loja' });
     }
+  });
+
+  // ── Administração multi-loja ─────────────────────────────────────────────
+  r.get('/multiloja/admin', autenticar('admin'), async (req, res) => {
+    try {
+      await garantirTabelas();
+      const [empresas, lojas, usuarios] = await Promise.all([
+        pool.query(`SELECT id,codigo,nome,cnpj,ativa,criado_em FROM empresas ORDER BY nome`),
+        pool.query(`
+          SELECT l.id,l.empresa_id,l.codigo,l.nome,l.cnpj,l.timezone,l.endereco,l.cidade,l.uf,
+                 l.ativa,l.pronta_operacao,l.criado_em,e.nome AS empresa_nome,
+                 COUNT(ul.id)::int AS usuarios_vinculados
+          FROM lojas l
+          JOIN empresas e ON e.id=l.empresa_id
+          LEFT JOIN usuario_lojas ul ON ul.loja_id=l.id AND ul.ativo=true
+          GROUP BY l.id,e.nome ORDER BY l.pronta_operacao DESC,l.nome
+        `),
+        pool.query(`SELECT id,nome,email,perfil,ativo FROM usuarios ORDER BY nome`),
+      ]);
+      const { rows: vinculos } = await pool.query(`
+        SELECT usuario_id,loja_id,perfil,permissoes,ativo,principal
+        FROM usuario_lojas ORDER BY loja_id,usuario_id
+      `);
+      res.json({ok:true,data:{
+        empresas:empresas.rows,
+        lojas:lojas.rows,
+        usuarios:usuarios.rows,
+        vinculos,
+      }});
+    } catch (e) {
+      console.error('[auth/multiloja/admin]', e.message);
+      res.status(500).json({ok:false,erro:'Não foi possível carregar empresas e lojas'});
+    }
+  });
+
+  r.post('/multiloja/lojas', autenticar('admin'), async (req, res) => {
+    const {empresa_id,nome,codigo,cnpj,timezone,endereco,cidade,uf,usuario_ids=[]}=req.body||{};
+    if(!nome?.trim()) return res.status(400).json({ok:false,erro:'Nome da loja é obrigatório'});
+    const codigoNormalizado=String(codigo||nome).normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+      .toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,60);
+    if(!codigoNormalizado) return res.status(400).json({ok:false,erro:'Código da loja é inválido'});
+    const client=await pool.connect();
+    try {
+      await garantirTabelas();
+      await client.query('BEGIN');
+      const empresaId=Number(empresa_id)||req.user.empresaId;
+      const {rows:empresa}=await client.query(`SELECT id FROM empresas WHERE id=$1 AND ativa=true`,[empresaId]);
+      if(!empresa.length) throw Object.assign(new Error('Empresa inválida'),{status:400});
+      const {rows}=await client.query(`
+        INSERT INTO lojas(empresa_id,nome,codigo,cnpj,timezone,endereco,cidade,uf,pronta_operacao)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,false)
+        RETURNING *
+      `,[empresaId,nome.trim(),codigoNormalizado,String(cnpj||'').replace(/\D/g,'')||null,
+          timezone||'America/Sao_Paulo',endereco?.trim()||null,cidade?.trim()||null,
+          String(uf||'').trim().toUpperCase().slice(0,2)||null]);
+      const ids=[...new Set((Array.isArray(usuario_ids)?usuario_ids:[]).map(Number).filter(Number.isInteger))];
+      for(const usuarioId of ids){
+        await client.query(`
+          INSERT INTO usuario_lojas(usuario_id,loja_id,perfil,permissoes,principal)
+          SELECT u.id,$1,u.perfil,COALESCE(u.permissoes,'{}'::jsonb),false FROM usuarios u WHERE u.id=$2
+          ON CONFLICT(usuario_id,loja_id) DO UPDATE SET ativo=true,atualizado_em=NOW()
+        `,[rows[0].id,usuarioId]);
+      }
+      await client.query('COMMIT');
+      res.status(201).json({ok:true,data:rows[0],aviso:'Loja criada em preparação. Os módulos ainda não foram liberados.'});
+    } catch(e){
+      await client.query('ROLLBACK').catch(()=>{});
+      if(e.code==='23505') return res.status(409).json({ok:false,erro:'Já existe uma loja com esse código'});
+      console.error('[auth/multiloja/lojas POST]',e.message);
+      res.status(e.status||500).json({ok:false,erro:e.status?e.message:'Não foi possível cadastrar a loja'});
+    } finally {client.release();}
+  });
+
+  r.put('/multiloja/lojas/:id', autenticar('admin'), async (req,res)=>{
+    const lojaId=Number(req.params.id);
+    const {nome,cnpj,timezone,endereco,cidade,uf,ativa,usuario_ids}=req.body||{};
+    if(!Number.isInteger(lojaId)) return res.status(400).json({ok:false,erro:'Loja inválida'});
+    const client=await pool.connect();
+    try{
+      await garantirTabelas(); await client.query('BEGIN');
+      const {rows}=await client.query(`
+        UPDATE lojas SET nome=COALESCE($1,nome),cnpj=$2,timezone=COALESCE($3,timezone),
+          endereco=$4,cidade=$5,uf=$6,ativa=COALESCE($7,ativa),atualizado_em=NOW()
+        WHERE id=$8 RETURNING *
+      `,[nome?.trim()||null,String(cnpj||'').replace(/\D/g,'')||null,timezone||null,
+          endereco?.trim()||null,cidade?.trim()||null,String(uf||'').trim().toUpperCase().slice(0,2)||null,
+          typeof ativa==='boolean'?ativa:null,lojaId]);
+      if(!rows.length) throw Object.assign(new Error('Loja não encontrada'),{status:404});
+      if(Array.isArray(usuario_ids)){
+        const ids=[...new Set(usuario_ids.map(Number).filter(Number.isInteger))];
+        if(Number(req.user.lojaId)===lojaId && !ids.includes(Number(req.user.id))){
+          throw Object.assign(new Error('Você não pode remover seu próprio acesso da loja ativa'),{status:400});
+        }
+        await client.query(`UPDATE usuario_lojas SET ativo=false,atualizado_em=NOW() WHERE loja_id=$1`,[lojaId]);
+        for(const usuarioId of ids){
+          await client.query(`
+            INSERT INTO usuario_lojas(usuario_id,loja_id,perfil,permissoes,principal)
+            SELECT u.id,$1,u.perfil,COALESCE(u.permissoes,'{}'::jsonb),false FROM usuarios u WHERE u.id=$2
+            ON CONFLICT(usuario_id,loja_id) DO UPDATE SET ativo=true,perfil=EXCLUDED.perfil,
+              permissoes=EXCLUDED.permissoes,atualizado_em=NOW()
+          `,[lojaId,usuarioId]);
+        }
+      }
+      await client.query('COMMIT'); res.json({ok:true,data:rows[0]});
+    }catch(e){await client.query('ROLLBACK').catch(()=>{});console.error('[auth/multiloja/lojas PUT]',e.message);
+      res.status(e.status||500).json({ok:false,erro:e.status?e.message:'Não foi possível atualizar a loja'});
+    }finally{client.release();}
   });
 
   // ── GET /usuarios ──────────────────────────────────────────────────────────
