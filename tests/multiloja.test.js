@@ -107,6 +107,12 @@ const pool = {
   assert.match(migracao, /FORCE ROW LEVEL SECURITY/);
   assert.match(migracao, /uq_faturamento_dia_loja/);
   assert.match(migracao, /idx_cf_hash_loja/);
+  for (const tabela of ['kits','kit_pedidos','cortes_registros','retiradas','clientes_fiado','vendas_fiado','vendas_produto']) {
+    assert.match(migracao, new RegExp(`['"]${tabela}['"]`));
+  }
+  assert.match(migracao, /2026-09-producao-comercial-v1/);
+  assert.match(migracao, /uq_kit_pedidos_loja_numero/);
+  assert.match(migracao, /uq_clientes_fiado_loja_func/);
 
   console.log('multiloja: testes concluídos');
 })().catch(erro => {

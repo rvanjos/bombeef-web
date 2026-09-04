@@ -35,7 +35,8 @@ module.exports = function (pool, app) {
                         CHECK (status IN ('ativa','pausada','encerrada')),
         criado_por      INTEGER,
         criado_em       TIMESTAMPTZ DEFAULT NOW(),
-        atualizado_em   TIMESTAMPTZ DEFAULT NOW()
+        atualizado_em   TIMESTAMPTZ DEFAULT NOW(),
+        loja_id         INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id)
       )
     `).catch(() => {});
 
@@ -51,14 +52,15 @@ module.exports = function (pool, app) {
         aceita_peso_real BOOLEAN DEFAULT false,
         ordem           INTEGER DEFAULT 0,
         -- produtos_permitidos: array de produto_ids em JSON
-        produtos_permitidos JSONB DEFAULT '[]'
+        produtos_permitidos JSONB DEFAULT '[]',
+        loja_id         INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id)
       )
     `).catch(() => {});
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS kit_pedidos (
         id              SERIAL PRIMARY KEY,
-        numero          TEXT UNIQUE NOT NULL,  -- KIT-2026-0001
+        numero          TEXT NOT NULL,  -- KIT-2026-0001
         campanha_id     INTEGER REFERENCES kit_campanhas(id),
         campanha_nome   TEXT,
         canal           TEXT DEFAULT 'balcao'
@@ -93,7 +95,9 @@ module.exports = function (pool, app) {
         cancelado_por_nome TEXT,
         motivo_cancelamento TEXT,
         criado_em       TIMESTAMPTZ DEFAULT NOW(),
-        atualizado_em   TIMESTAMPTZ DEFAULT NOW()
+        atualizado_em   TIMESTAMPTZ DEFAULT NOW(),
+        loja_id         INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id),
+        UNIQUE(loja_id, numero)
       )
     `).catch(() => {});
 
@@ -108,7 +112,8 @@ module.exports = function (pool, app) {
         produto_nome    TEXT,
         quantidade      NUMERIC(8,3) DEFAULT 1,
         peso_real       NUMERIC(8,3),          -- para itens com peso variável
-        preco_custo_unit NUMERIC(10,4) DEFAULT 0
+        preco_custo_unit NUMERIC(10,4) DEFAULT 0,
+        loja_id         INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id)
       )
     `).catch(() => {});
 
@@ -121,18 +126,21 @@ module.exports = function (pool, app) {
         quantidade      NUMERIC(8,3) DEFAULT 0,
         status          TEXT NOT NULL DEFAULT 'reservado'
                         CHECK (status IN ('reservado','consumido','cancelado')),
-        criado_em       TIMESTAMPTZ DEFAULT NOW()
+        criado_em       TIMESTAMPTZ DEFAULT NOW(),
+        loja_id         INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id)
       )
     `).catch(() => {});
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS kit_estoque_interno (
         id              SERIAL PRIMARY KEY,
-        produto_id      INTEGER UNIQUE REFERENCES produtos(id),
+        produto_id      INTEGER REFERENCES produtos(id),
         produto_codigo  TEXT,
         produto_nome    TEXT,
         saldo           NUMERIC(10,3) DEFAULT 0,
-        atualizado_em   TIMESTAMPTZ DEFAULT NOW()
+        atualizado_em   TIMESTAMPTZ DEFAULT NOW(),
+        loja_id         INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id),
+        UNIQUE(loja_id, produto_id)
       )
     `).catch(() => {});
 
@@ -149,7 +157,8 @@ module.exports = function (pool, app) {
         diferenca       INTEGER GENERATED ALWAYS AS (qtd_pdv - qtd_interna) STORED,
         observacao      TEXT,
         registrado_por  INTEGER,
-        criado_em       TIMESTAMPTZ DEFAULT NOW()
+        criado_em       TIMESTAMPTZ DEFAULT NOW(),
+        loja_id         INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id)
       )
     `).catch(() => {});
 
@@ -190,7 +199,8 @@ module.exports = function (pool, app) {
         observacoes        TEXT,
         criado_em          TIMESTAMPTZ DEFAULT NOW(),
         atualizado_em      TIMESTAMPTZ DEFAULT NOW(),
-        UNIQUE(campanha_id)
+        loja_id             INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id),
+        UNIQUE(loja_id, campanha_id)
       )
     `).catch(() => {});
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_camp_plan ON campanha_planejamento(campanha_id)`).catch(() => {});
@@ -941,7 +951,7 @@ module.exports = function (pool, app) {
       await pool.query(`
         INSERT INTO kit_estoque_interno (produto_id,produto_codigo,produto_nome,saldo,atualizado_em)
         VALUES ($1,$2,$3,$4,NOW())
-        ON CONFLICT (produto_id) DO UPDATE SET saldo=$4, atualizado_em=NOW()`,
+        ON CONFLICT (loja_id, produto_id) DO UPDATE SET saldo=$4, atualizado_em=NOW()`,
         [req.params.produto_id, p[0].codigo, p[0].descricao, parseFloat(saldo)]
       );
       res.json({ ok: true });
@@ -976,7 +986,7 @@ module.exports = function (pool, app) {
           AND NOT EXISTS (
             SELECT 1 FROM kit_estoque_interno kei WHERE kei.produto_id = p.id
           )
-        ON CONFLICT (produto_id) DO UPDATE
+        ON CONFLICT (loja_id, produto_id) DO UPDATE
           SET saldo = EXCLUDED.saldo, atualizado_em = NOW()
         RETURNING produto_id
       `);
@@ -1466,7 +1476,7 @@ module.exports = function (pool, app) {
         INSERT INTO campanha_planejamento
           (campanha_id, qtd_prevista, orcamento_previsto, valor_estimado, observacoes, atualizado_em)
         VALUES ($1, $2, $3, $4, $5, NOW())
-        ON CONFLICT (campanha_id) DO UPDATE SET
+        ON CONFLICT (loja_id, campanha_id) DO UPDATE SET
           qtd_prevista       = EXCLUDED.qtd_prevista,
           orcamento_previsto = EXCLUDED.orcamento_previsto,
           valor_estimado     = EXCLUDED.valor_estimado,

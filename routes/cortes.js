@@ -45,7 +45,8 @@ module.exports = function(pool, app) {
         estoque       NUMERIC(10,3) NOT NULL DEFAULT 0,
         produto_id    INTEGER REFERENCES produtos(id) ON DELETE SET NULL,
         obs           TEXT,
-        criado_em     TIMESTAMPTZ DEFAULT NOW()
+        criado_em     TIMESTAMPTZ DEFAULT NOW(),
+        loja_id       INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id)
       )
     `).catch(()=>{});
 
@@ -55,7 +56,7 @@ module.exports = function(pool, app) {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS cortes_insumos (
         id            SERIAL PRIMARY KEY,
-        nome          TEXT NOT NULL UNIQUE,
+        nome          TEXT NOT NULL,
         categoria     TEXT NOT NULL DEFAULT 'Tempero',
         preco_unit    NUMERIC(10,4) NOT NULL DEFAULT 0,
         unidade       TEXT NOT NULL DEFAULT 'kg',
@@ -63,7 +64,9 @@ module.exports = function(pool, app) {
         fornecedor    TEXT,
         produto_id    INTEGER REFERENCES produtos(id) ON DELETE SET NULL,
         criado_em     TIMESTAMPTZ DEFAULT NOW(),
-        atualizado_em TIMESTAMPTZ DEFAULT NOW()
+        atualizado_em TIMESTAMPTZ DEFAULT NOW(),
+        loja_id       INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id),
+        UNIQUE(loja_id, nome)
       )
     `).catch(()=>{});
 
@@ -77,7 +80,8 @@ module.exports = function(pool, app) {
         itens         JSONB NOT NULL DEFAULT '[]',
         produto_id    INTEGER REFERENCES produtos(id) ON DELETE SET NULL,
         criado_em     TIMESTAMPTZ DEFAULT NOW(),
-        atualizado_em TIMESTAMPTZ DEFAULT NOW()
+        atualizado_em TIMESTAMPTZ DEFAULT NOW(),
+        loja_id       INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id)
       )
     `).catch(()=>{});
 
@@ -91,15 +95,18 @@ module.exports = function(pool, app) {
         custo_unit    NUMERIC(10,2) NOT NULL DEFAULT 0,
         total         NUMERIC(10,2) NOT NULL DEFAULT 0,
         data          DATE NOT NULL DEFAULT CURRENT_DATE,
-        criado_em     TIMESTAMPTZ DEFAULT NOW()
+        criado_em     TIMESTAMPTZ DEFAULT NOW(),
+        loja_id       INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id)
       )
     `).catch(()=>{});
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS cortes_config (
-        chave   TEXT PRIMARY KEY,
+        chave   TEXT NOT NULL,
         valor   TEXT NOT NULL,
-        atualizado_em TIMESTAMPTZ DEFAULT NOW()
+        atualizado_em TIMESTAMPTZ DEFAULT NOW(),
+        loja_id       INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id),
+        UNIQUE(loja_id, chave)
       )
     `).catch(()=>{});
 
@@ -302,7 +309,7 @@ module.exports = function(pool, app) {
       const { rows } = await pool.query(`
         INSERT INTO cortes_insumos (nome, categoria, preco_unit, unidade, estoque, fornecedor, produto_id)
         VALUES ($1,$2,$3,$4,$5,$6,$7)
-        ON CONFLICT (nome) DO UPDATE SET
+        ON CONFLICT (loja_id, nome) DO UPDATE SET
           categoria=$2, preco_unit=$3, unidade=$4, estoque=$5,
           fornecedor=$6, produto_id=$7, atualizado_em=NOW()
         RETURNING *
@@ -429,7 +436,7 @@ module.exports = function(pool, app) {
       for (const [chave, valor] of entries) {
         await pool.query(`
           INSERT INTO cortes_config (chave, valor) VALUES ($1,$2)
-          ON CONFLICT (chave) DO UPDATE SET valor=$2, atualizado_em=NOW()
+          ON CONFLICT (loja_id, chave) DO UPDATE SET valor=$2, atualizado_em=NOW()
         `, [chave, String(valor)]);
       }
       res.json({ ok:true });

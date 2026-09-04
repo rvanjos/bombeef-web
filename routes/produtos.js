@@ -480,7 +480,7 @@ module.exports = function (pool, app) {
               AND NOT EXISTS (
                 SELECT 1 FROM kit_estoque_interno kei WHERE kei.produto_id = p.id
               )
-            ON CONFLICT (produto_id) DO UPDATE
+            ON CONFLICT (loja_id, produto_id) DO UPDATE
               SET saldo = EXCLUDED.saldo, atualizado_em = NOW()
           `);
         }
@@ -615,7 +615,7 @@ module.exports = function (pool, app) {
         FROM kit_itens ki JOIN produtos p ON p.id = ki.produto_id
         WHERE p.estoque > 0
           AND NOT EXISTS (SELECT 1 FROM kit_estoque_interno kei WHERE kei.produto_id = p.id)
-        ON CONFLICT (produto_id) DO UPDATE SET saldo = EXCLUDED.saldo, atualizado_em = NOW()
+        ON CONFLICT (loja_id, produto_id) DO UPDATE SET saldo = EXCLUDED.saldo, atualizado_em = NOW()
       `).catch(e => console.error('[sync-estoque] insert kits:', e.message));
 
       publish('estoque', { type: 'estoque_atualizado', atualizados: encontrados.length });
