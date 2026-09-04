@@ -37,7 +37,7 @@ module.exports = function (pool, app) {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS produtos (
         id            SERIAL PRIMARY KEY,
-        codigo        TEXT UNIQUE NOT NULL,
+        codigo        TEXT NOT NULL,
         descricao     TEXT NOT NULL,
         fornecedor    TEXT,
         preco_custo   NUMERIC(10,4) DEFAULT 0,
@@ -48,7 +48,9 @@ module.exports = function (pool, app) {
         ativo         BOOLEAN DEFAULT true,
         origem        TEXT DEFAULT 'manual',
         criado_em     TIMESTAMPTZ DEFAULT NOW(),
-        atualizado_em TIMESTAMPTZ DEFAULT NOW()
+        atualizado_em TIMESTAMPTZ DEFAULT NOW(),
+        loja_id       INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id),
+        UNIQUE(loja_id, codigo)
       )
     `);
     await pool.query(`
@@ -425,7 +427,7 @@ module.exports = function (pool, app) {
             UNNEST($7::text[]),
             'pdv',
             UNNEST($8::numeric[])
-          ON CONFLICT (codigo) DO UPDATE SET
+          ON CONFLICT (loja_id, codigo) DO UPDATE SET
             descricao     = EXCLUDED.descricao,
             fornecedor    = COALESCE(EXCLUDED.fornecedor, produtos.fornecedor),
             preco_custo   = CASE WHEN EXCLUDED.preco_custo > 0 THEN EXCLUDED.preco_custo ELSE produtos.preco_custo END,

@@ -5,6 +5,7 @@ const {
   contextoLojaPublico,
   payloadComLoja,
 } = require('../lib/multiloja');
+const { executarNaLoja, lojaAtual, protegerPoolPorLoja } = require('../lib/tenant-context');
 
 const lojas = [
   {
@@ -73,6 +74,29 @@ const pool = {
   assert.equal(payload.vinculoLojaId, 11);
   assert.equal(payload.perfil, 'gestor');
   assert.equal(payload.sessaoId, 55);
+
+  const contextos = await Promise.all([
+    executarNaLoja(1, async () => { await Promise.resolve(); return lojaAtual(); }),
+    executarNaLoja(2, async () => { await Promise.resolve(); return lojaAtual(); }),
+  ]);
+  assert.deepEqual(contextos, [1, 2]);
+  assert.equal(lojaAtual(), null);
+
+  const comandos = [];
+  const fakeClient = {
+    async query(sql, params) { comandos.push({ sql, params }); return { rows: [{ ok: true }] }; },
+    release() { comandos.push({ sql: 'RELEASE' }); },
+  };
+  const fakePool = {
+    async connect() { return fakeClient; },
+    async query(sql, params) { comandos.push({ sql: 'POOL:'+sql, params }); return { rows: [] }; },
+  };
+  protegerPoolPorLoja(fakePool);
+  await executarNaLoja(8, () => fakePool.query('SELECT * FROM produtos'));
+  assert.equal(comandos[0].params[0], '8');
+  assert.equal(comandos[1].sql, 'SELECT * FROM produtos');
+  assert.match(comandos[2].sql, /set_config/);
+  assert.equal(comandos[3].sql, 'RELEASE');
 
   console.log('multiloja: testes concluídos');
 })().catch(erro => {

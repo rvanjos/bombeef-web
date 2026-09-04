@@ -28,6 +28,7 @@ const pool = new Pool({
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 20000,
 });
+require('./lib/tenant-context').protegerPoolPorLoja(pool);
 
 pool.on('error', (err) => {
   console.error('[pool] erro inesperado:', err.message);

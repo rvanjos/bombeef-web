@@ -68,7 +68,8 @@ module.exports = function (pool, app) {
         localizacao         TEXT,
         observacao          TEXT,
         criado_em           TIMESTAMPTZ DEFAULT NOW(),
-        atualizado_em       TIMESTAMPTZ DEFAULT NOW()
+        atualizado_em       TIMESTAMPTZ DEFAULT NOW(),
+        loja_id             INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id)
       )
     `).catch(() => {});
 
@@ -103,7 +104,8 @@ module.exports = function (pool, app) {
         usuario_id      INTEGER,
         usuario_nome    TEXT,
         acao_hash       TEXT,
-        confirmado_em   TIMESTAMPTZ DEFAULT NOW()
+        confirmado_em   TIMESTAMPTZ DEFAULT NOW(),
+        loja_id          INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id)
       )
     `).catch(() => {});
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_val_conf_item ON validade_confirmacoes(item_id)`).catch(() => {});
@@ -126,7 +128,8 @@ module.exports = function (pool, app) {
         encerrado_por   TEXT,
         criado_por      TEXT,
         criado_em       TIMESTAMPTZ DEFAULT NOW(),
-        atualizado_em   TIMESTAMPTZ DEFAULT NOW()
+        atualizado_em   TIMESTAMPTZ DEFAULT NOW(),
+        loja_id          INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id)
       )
     `).catch(() => {});
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_val_int_status_data ON validade_internos(status, data_validade)`).catch(() => {});
