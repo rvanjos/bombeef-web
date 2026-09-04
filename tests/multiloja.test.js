@@ -119,6 +119,11 @@ const pool = {
   assert.match(migracao, /2026-09-pessoas-v1/);
   assert.match(migracao, /uq_ponto_loja_func_data/);
   assert.match(migracao, /uq_rh_meta_fds_loja/);
+  for (const tabela of ['auditoria_eventos','config_sistema','validade_acoes','perdas']) {
+    assert.match(migracao, new RegExp(`['"]${tabela}['"]`));
+  }
+  assert.match(migracao, /2026-09-administracao-v1/);
+  assert.match(migracao, /uq_config_sistema_loja_chave/);
 
   console.log('multiloja: testes concluídos');
 })().catch(erro => {
