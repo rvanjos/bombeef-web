@@ -20,6 +20,7 @@ const jwt      = require('jsonwebtoken');
 const autenticar = require('../middleware/auth');
 const {
   garantirEstruturaMultiloja,
+  iniciarMigracaoOperacionalMultiloja,
   listarLojasDoUsuario,
   resolverLojaDoUsuario,
   contextoLojaPublico,
@@ -113,6 +114,9 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
     }
 
     await garantirEstruturaMultiloja(pool);
+    iniciarMigracaoOperacionalMultiloja(pool).catch(e => {
+      console.error('[multiloja] migração operacional em segundo plano:', e.message);
+    });
   }
   let initPromise = null;
   const garantirTabelas = () => {

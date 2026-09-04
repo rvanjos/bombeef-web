@@ -83,7 +83,7 @@ module.exports = function(pool) {
       const {rows} = await pool.query(`INSERT INTO auditoria_dre_conflitos_resolvidos
         (mes_ref, chave_fornecedor, categoria_atual, decisao, usuario_id, usuario_nome, justificativa)
         VALUES ($1,$2,$3,'MANTER',$4,$5,$6)
-        ON CONFLICT (mes_ref, chave_fornecedor, categoria_atual) DO UPDATE SET
+        ON CONFLICT (loja_id, mes_ref, chave_fornecedor, categoria_atual) DO UPDATE SET
           decisao='MANTER', usuario_id=EXCLUDED.usuario_id, usuario_nome=EXCLUDED.usuario_nome,
           justificativa=EXCLUDED.justificativa, resolvido_em=NOW()
         RETURNING *`, [mes_ref, chave_fornecedor, categoria_atual, req.user.id, req.user.nome, justificativa || null]);

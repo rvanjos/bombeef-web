@@ -83,14 +83,16 @@ module.exports = function (pool, app) {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS metas (
         id                  SERIAL PRIMARY KEY,
-        mes                 TEXT UNIQUE NOT NULL,
+        mes                 TEXT NOT NULL,
         faturamento_meta    NUMERIC(14,2) DEFAULT 0,
         faturamento_real    NUMERIC(14,2) DEFAULT 0,
         meta_perda_pct      NUMERIC(5,2) DEFAULT 2,
         meta_retiradas      NUMERIC(14,2) DEFAULT 0,
         observacao          TEXT,
         criado_em           TIMESTAMPTZ DEFAULT NOW(),
-        atualizado_em       TIMESTAMPTZ DEFAULT NOW()
+        atualizado_em       TIMESTAMPTZ DEFAULT NOW(),
+        loja_id             INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id),
+        UNIQUE(loja_id, mes)
       )
     `);
     await pool.query(`

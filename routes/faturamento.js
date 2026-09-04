@@ -48,7 +48,8 @@ module.exports = function(pool, app) {
         categorias    JSONB DEFAULT '{}',
         pagamentos    JSONB DEFAULT '{}',
         csv_raw       TEXT,
-        criado_em     TIMESTAMPTZ DEFAULT NOW()
+        criado_em     TIMESTAMPTZ DEFAULT NOW(),
+        loja_id       INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id)
       )
     `).catch(()=>{});
     await pool.query(`
@@ -71,18 +72,21 @@ module.exports = function(pool, app) {
         tipo          TEXT NOT NULL, -- 'pagamento', 'retirada', 'deposito', 'caixa_fisico'
         descricao     TEXT,
         valor         NUMERIC(12,2) NOT NULL DEFAULT 0,
-        criado_em     TIMESTAMPTZ DEFAULT NOW()
+        criado_em     TIMESTAMPTZ DEFAULT NOW(),
+        loja_id       INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id)
       )
     `).catch(()=>{});
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS faturamento_metas (
         id         SERIAL PRIMARY KEY,
-        mes_ref    TEXT NOT NULL UNIQUE,  -- MM/YYYY
+        mes_ref    TEXT NOT NULL,  -- MM/YYYY
         meta       NUMERIC(12,2) NOT NULL DEFAULT 0,
         obs        TEXT,
         criado_em  TIMESTAMPTZ DEFAULT NOW(),
-        atualizado_em TIMESTAMPTZ DEFAULT NOW()
+        atualizado_em TIMESTAMPTZ DEFAULT NOW(),
+        loja_id     INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id),
+        UNIQUE(loja_id, mes_ref)
       )
     `).catch(()=>{});
   }
@@ -489,8 +493,8 @@ module.exports = function(pool, app) {
         RETURNING id
       `);
       await client.query(`
-        CREATE UNIQUE INDEX IF NOT EXISTS uq_faturamento_dia
-        ON faturamento_periodos(data_inicio) WHERE tipo_periodo='dia'
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_faturamento_dia_loja
+        ON faturamento_periodos(loja_id,data_inicio) WHERE tipo_periodo='dia'
       `);
       await client.query('COMMIT');
       res.json({ ok:true, removidos:removidos.rowCount });
@@ -884,7 +888,7 @@ module.exports = function(pool, app) {
       const { rows } = await pool.query(`
         INSERT INTO metas (mes, faturamento_meta, observacao)
         VALUES ($1, $2, $3)
-        ON CONFLICT (mes) DO UPDATE SET
+        ON CONFLICT (loja_id, mes) DO UPDATE SET
           faturamento_meta = EXCLUDED.faturamento_meta,
           observacao       = COALESCE(EXCLUDED.observacao, metas.observacao),
           atualizado_em    = NOW()
@@ -894,7 +898,7 @@ module.exports = function(pool, app) {
       pool.query(`
         INSERT INTO faturamento_metas (mes_ref, meta, obs)
         VALUES ($1, $2, $3)
-        ON CONFLICT (mes_ref) DO UPDATE SET
+        ON CONFLICT (loja_id, mes_ref) DO UPDATE SET
           meta = EXCLUDED.meta, atualizado_em = NOW()
       `, [mes_ref, valorMeta, obs||null]).catch(()=>{});
       res.json({ ok: true, data: rows[0] });

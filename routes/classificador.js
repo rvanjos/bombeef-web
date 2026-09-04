@@ -21,7 +21,8 @@ module.exports = (pool) => {
       descricao     TEXT,
       dados_json    JSONB NOT NULL,
       criado_em     TIMESTAMPTZ DEFAULT NOW(),
-      atualizado_em TIMESTAMPTZ DEFAULT NOW()
+      atualizado_em TIMESTAMPTZ DEFAULT NOW(),
+      loja_id       INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id)
     );
 
     CREATE TABLE IF NOT EXISTS classificador_transacoes (
@@ -40,7 +41,8 @@ module.exports = (pool) => {
       categoria     TEXT,
       ignorar       BOOLEAN DEFAULT false,
       extra_json    JSONB,
-      criado_em     TIMESTAMPTZ DEFAULT NOW()
+      criado_em     TIMESTAMPTZ DEFAULT NOW(),
+      loja_id       INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id)
     );
   `).catch(e => console.error('[classificador] Erro ao criar tabelas:', e.message));
 

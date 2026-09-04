@@ -1,4 +1,6 @@
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const {
   listarLojasDoUsuario,
   resolverLojaDoUsuario,
@@ -97,6 +99,14 @@ const pool = {
   assert.equal(comandos[1].sql, 'SELECT * FROM produtos');
   assert.match(comandos[2].sql, /set_config/);
   assert.equal(comandos[3].sql, 'RELEASE');
+
+  const migracao = fs.readFileSync(path.join(__dirname, '../lib/multiloja.js'), 'utf8');
+  for (const tabela of ['boletos','dre_sessoes','dre_lancamentos','faturamento_periodos','cartao_faturas','cartao_fatura_itens']) {
+    assert.match(migracao, new RegExp(`['"]${tabela}['"]`));
+  }
+  assert.match(migracao, /FORCE ROW LEVEL SECURITY/);
+  assert.match(migracao, /uq_faturamento_dia_loja/);
+  assert.match(migracao, /idx_cf_hash_loja/);
 
   console.log('multiloja: testes concluídos');
 })().catch(erro => {
