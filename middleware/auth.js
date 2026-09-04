@@ -10,6 +10,7 @@
  */
 
 const jwt = require('jsonwebtoken');
+const { executarNaLoja } = require('../lib/tenant-context');
 
 const PERFIS_ORDEM = ['contabil', 'caixa', 'estoque', 'financeiro', 'gestor', 'admin'];
 
@@ -28,6 +29,9 @@ function autenticar(perfisPermitidos = null) {
     } catch (e) {
       const msg = e.name === 'TokenExpiredError' ? 'Token expirado' : 'Token inválido';
       return res.status(401).json({ ok: false, erro: msg });
+    }
+    if (!payload.lojaId) {
+      return res.status(401).json({ ok: false, erro: 'Sessão anterior à implantação multi-loja. Renove o acesso.' });
     }
 
     // Injeta dados do usuário no request (ambos req.user e req.usuario para compatibilidade)
@@ -58,7 +62,7 @@ function autenticar(perfisPermitidos = null) {
       }
     }
 
-    next();
+    executarNaLoja(req.user.lojaId, next);
   };
 }
 
