@@ -188,6 +188,7 @@ if(window.self !== window.top){
         <button class="btn btn-p" onclick="abrirLoja()">＋ Nova Loja</button>
       </div>
       <div class="card" style="background:#eef6ff;border-color:#b9d8fa;color:#184f82;font-size:12px"><b>Implantação segura:</b> novas lojas são criadas como <b>Em preparação</b>. Elas só aparecem no seletor do portal depois que os dados operacionais estiverem isolados por unidade.</div>
+      <div class="card"><div class="card-title">Progresso da implantação</div><div id="multiloja-modulos" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:9px"></div></div>
       <div id="lista-lojas"></div>
     </div>
 
@@ -465,6 +466,8 @@ async function carregarLojas(){
   const d=await api.get('/auth/multiloja/admin');
   if(!d.ok){ toast('Erro: '+(d.erro||'não foi possível carregar as lojas')); return; }
   lojas=d.data.lojas||[]; usuarios=d.data.usuarios||[]; vinculosLojas=d.data.vinculos||[];
+  const modulos=d.data.modulos||[];
+  document.getElementById('multiloja-modulos').innerHTML=modulos.map(m=>`<div style="padding:10px;border:1px solid var(--border);border-radius:9px;background:${m.isolado?'#f0faf4':'#faf7f4'}"><b style="font-size:12px">${m.isolado?'✅':'⏳'} ${escLoja(m.nome)}</b><div style="font-size:10px;color:var(--muted);margin-top:3px">${m.isolado?'Isolamento concluído':'Em implantação'}</div></div>`).join('');
   document.getElementById('lista-lojas').innerHTML=lojas.map(l=>`<div class="card" style="display:grid;grid-template-columns:minmax(220px,1.6fr) 1fr auto;gap:18px;align-items:center">
     <div><div style="font-size:16px;font-weight:700">🏢 ${escLoja(l.nome)}</div><div style="font-size:11px;color:var(--muted);margin-top:4px">${escLoja(l.empresa_nome)} · ${escLoja(l.cidade||'Cidade não informada')}${l.uf?' / '+escLoja(l.uf):''}</div></div>
     <div><span class="pill ${l.pronta_operacao?'pill-ok':'pill-off'}">${l.pronta_operacao?'Em operação':'Em preparação'}</span><div style="font-size:11px;color:var(--muted);margin-top:5px">${l.usuarios_vinculados} usuário(s) vinculado(s)</div></div>

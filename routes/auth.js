@@ -399,11 +399,13 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
         SELECT usuario_id,loja_id,perfil,permissoes,ativo,principal
         FROM usuario_lojas ORDER BY loja_id,usuario_id
       `);
+      const { rows: modulos } = await pool.query(`SELECT modulo,nome,ordem,isolado,atualizado_em FROM multiloja_modulos ORDER BY ordem`);
       res.json({ok:true,data:{
         empresas:empresas.rows,
         lojas:lojas.rows,
         usuarios:usuarios.rows,
         vinculos,
+        modulos,
       }});
     } catch (e) {
       console.error('[auth/multiloja/admin]', e.message);
