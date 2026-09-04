@@ -106,6 +106,7 @@ if(window.self !== window.top){
 <!-- Menu mobile (visível apenas em telas pequenas) -->
 <div class="mobile-nav" id="mobile-nav">
   <button class="mobile-nav-btn active" onclick="showPage('sistema',this,true)">⚙️ Sistema</button>
+  <button class="mobile-nav-btn admin-only" onclick="showPage('lojas',this,true)">🏢 Lojas</button>
   <button class="mobile-nav-btn" onclick="showPage('usuarios',this,true)">👤 Usuários</button>
   <button class="mobile-nav-btn" onclick="showPage('funcionarios',this,true)">👥 Funcionários</button>
 
@@ -116,6 +117,7 @@ if(window.self !== window.top){
   <div class="sidebar">
     <div class="sb-sec">Principal</div>
     <div class="nav-item active" onclick="showPage('sistema',this)">⚙️ Sistema</div>
+    <div class="nav-item admin-only" onclick="showPage('lojas',this)">🏢 Empresas e Lojas</div>
     <div class="nav-item" onclick="showPage('usuarios',this)">👤 Usuários</div>
     <div class="nav-item" onclick="showPage('funcionarios',this)">👥 Funcionários</div>
     <div class="sb-sec">Financeiro</div>
@@ -177,6 +179,16 @@ if(window.self !== window.top){
         </div>
       </div>
       <button class="btn btn-p" onclick="salvarConfig()">💾 Salvar Configurações</button>
+    </div>
+
+    <!-- LOJAS -->
+    <div class="page" id="page-lojas">
+      <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start">
+        <div><div class="pg-title">Empresas e Lojas</div><div class="pg-sub">Cadastre unidades e defina quais usuários poderão acessá-las</div></div>
+        <button class="btn btn-p" onclick="abrirLoja()">＋ Nova Loja</button>
+      </div>
+      <div class="card" style="background:#eef6ff;border-color:#b9d8fa;color:#184f82;font-size:12px"><b>Implantação segura:</b> novas lojas são criadas como <b>Em preparação</b>. Elas só aparecem no seletor do portal depois que os dados operacionais estiverem isolados por unidade.</div>
+      <div id="lista-lojas"></div>
     </div>
 
     <!-- USUÁRIOS -->
@@ -259,6 +271,19 @@ if(window.self !== window.top){
 
   </div><!-- /content -->
 </div><!-- /layout -->
+
+<!-- Modal Loja -->
+<div class="modal-bg" id="modal-loja"><div class="modal" style="max-width:650px">
+  <div class="modal-head"><h3 id="loja-title">Nova Loja</h3><button class="modal-close" onclick="fecharLoja()">×</button></div>
+  <div class="modal-body"><input type="hidden" id="l-id">
+    <div class="fg-row"><div class="fg"><label>Nome da loja *</label><input id="l-nome" placeholder="Bom Beef Campinas"></div><div class="fg"><label>Código</label><input id="l-codigo" placeholder="campinas"></div></div>
+    <div class="fg-row"><div class="fg"><label>CNPJ</label><input id="l-cnpj" placeholder="00.000.000/0000-00"></div><div class="fg"><label>Fuso horário</label><select id="l-timezone"><option value="America/Sao_Paulo">Brasília — São Paulo</option></select></div></div>
+    <div class="fg"><label>Endereço</label><input id="l-endereco" placeholder="Rua, número e bairro"></div>
+    <div class="fg-row"><div class="fg"><label>Cidade</label><input id="l-cidade"></div><div class="fg"><label>UF</label><input id="l-uf" maxlength="2" placeholder="SP"></div></div>
+    <div class="fg"><label>Usuários com acesso</label><div id="l-usuarios" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:7px;background:#faf7f4;border:1px solid var(--border);border-radius:9px;padding:12px"></div></div>
+  </div>
+  <div class="modal-foot"><button class="btn btn-s" onclick="fecharLoja()">Cancelar</button><button class="btn btn-p" onclick="salvarLoja()">💾 Salvar loja</button></div>
+</div></div>
 
 <!-- Modal Usuário -->
 <div class="modal-bg" id="modal-usr">
@@ -372,7 +397,7 @@ if(window.self !== window.top){
 
 <script>
 const {api,fmt,toast} = BB;
-let usuarios=[], funcionarios=[], metas=[], categorias=[];
+let usuarios=[], funcionarios=[], metas=[], categorias=[], lojas=[], vinculosLojas=[];
 
 window.onBBReady = () => { init(); };
 
@@ -383,6 +408,7 @@ async function init(){
   const meConf = await api.get('/auth/me');
   const perfilAtual = meConf?.data?.perfil || '';
   if (perfilAtual !== 'admin') {
+    document.querySelectorAll('.admin-only').forEach(el => el.style.display='none');
     document.querySelectorAll('[onclick*="usuarios"]').forEach(el => el.style.display = 'none');
     document.querySelectorAll('[onclick*="funcionarios"]').forEach(el => {
       if (!el.closest('#page-sistema')) el.style.display = 'none';
@@ -432,6 +458,38 @@ async function salvarConfig(){
   if (!d.ok) { toast('Erro: '+d.erro); return; }
 
   toast('✅ Configurações salvas!');
+}
+
+// ── Empresas e lojas ──────────────────────────────────────────────────────
+async function carregarLojas(){
+  const d=await api.get('/auth/multiloja/admin');
+  if(!d.ok){ toast('Erro: '+(d.erro||'não foi possível carregar as lojas')); return; }
+  lojas=d.data.lojas||[]; usuarios=d.data.usuarios||[]; vinculosLojas=d.data.vinculos||[];
+  document.getElementById('lista-lojas').innerHTML=lojas.map(l=>`<div class="card" style="display:grid;grid-template-columns:minmax(220px,1.6fr) 1fr auto;gap:18px;align-items:center">
+    <div><div style="font-size:16px;font-weight:700">🏢 ${escLoja(l.nome)}</div><div style="font-size:11px;color:var(--muted);margin-top:4px">${escLoja(l.empresa_nome)} · ${escLoja(l.cidade||'Cidade não informada')}${l.uf?' / '+escLoja(l.uf):''}</div></div>
+    <div><span class="pill ${l.pronta_operacao?'pill-ok':'pill-off'}">${l.pronta_operacao?'Em operação':'Em preparação'}</span><div style="font-size:11px;color:var(--muted);margin-top:5px">${l.usuarios_vinculados} usuário(s) vinculado(s)</div></div>
+    <button class="btn btn-s" onclick="abrirLoja(${l.id})">✏️ Configurar</button>
+  </div>`).join('')||'<div class="card">Nenhuma loja cadastrada.</div>';
+}
+function escLoja(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function abrirLoja(id){
+  const l=id?lojas.find(x=>Number(x.id)===Number(id)):null;
+  document.getElementById('loja-title').textContent=l?'Configurar Loja':'Nova Loja';
+  document.getElementById('l-id').value=l?.id||''; document.getElementById('l-nome').value=l?.nome||'';
+  document.getElementById('l-codigo').value=l?.codigo||''; document.getElementById('l-codigo').disabled=!!l;
+  document.getElementById('l-cnpj').value=l?.cnpj||''; document.getElementById('l-timezone').value=l?.timezone||'America/Sao_Paulo';
+  document.getElementById('l-endereco').value=l?.endereco||''; document.getElementById('l-cidade').value=l?.cidade||''; document.getElementById('l-uf').value=l?.uf||'';
+  const vinculados=new Set(vinculosLojas.filter(v=>Number(v.loja_id)===Number(id)&&v.ativo).map(v=>Number(v.usuario_id)));
+  document.getElementById('l-usuarios').innerHTML=usuarios.filter(u=>u.ativo).map(u=>`<label style="display:flex;gap:8px;align-items:center;font-size:12px"><input type="checkbox" class="l-usuario" value="${u.id}" ${vinculados.has(Number(u.id))?'checked':''} style="width:auto"> ${escLoja(u.nome)} <small style="color:var(--muted)">${escLoja(u.perfil)}</small></label>`).join('');
+  document.getElementById('modal-loja').classList.add('open');
+}
+function fecharLoja(){document.getElementById('modal-loja').classList.remove('open');}
+async function salvarLoja(){
+  const id=document.getElementById('l-id').value;
+  const body={nome:document.getElementById('l-nome').value.trim(),codigo:document.getElementById('l-codigo').value.trim(),cnpj:document.getElementById('l-cnpj').value,timezone:document.getElementById('l-timezone').value,endereco:document.getElementById('l-endereco').value.trim(),cidade:document.getElementById('l-cidade').value.trim(),uf:document.getElementById('l-uf').value.trim(),usuario_ids:[...document.querySelectorAll('.l-usuario:checked')].map(e=>Number(e.value))};
+  if(!body.nome){toast('Informe o nome da loja');return;}
+  const d=id?await api.put('/auth/multiloja/lojas/'+id,body):await api.post('/auth/multiloja/lojas',body);
+  if(!d.ok){toast('Erro: '+d.erro);return;} toast(id?'Loja atualizada!':'Loja criada em preparação!'); fecharLoja(); carregarLojas();
 }
 
 // ── Usuários ───────────────────────────────────────────────────────────────
@@ -881,6 +939,7 @@ function showPage(page, el, fromMobile){
 
   // Carrega dados da página
   if(page==='usuarios')       carregarUsuarios();
+  if(page==='lojas')          carregarLojas();
   if(page==='funcionarios')   carregarFuncionarios();
   if(page==='categorias')     carregarCategorias();
   if(page==='acoes-validade') carregarAcoes();
