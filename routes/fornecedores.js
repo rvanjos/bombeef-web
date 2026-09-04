@@ -16,7 +16,8 @@ module.exports = (pool) => {
       ultimo_preco     NUMERIC(12,4),
       compras_count    INT DEFAULT 1,
       atualizado_em    TIMESTAMPTZ DEFAULT NOW(),
-      UNIQUE(cnpj_fornecedor, produto_codigo)
+      loja_id          INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id),
+      UNIQUE(loja_id, cnpj_fornecedor, produto_codigo)
     )
   `).catch(()=>{});
 
@@ -27,7 +28,7 @@ module.exports = (pool) => {
   pool.query(`
     CREATE TABLE IF NOT EXISTS fornecedores (
       id               SERIAL PRIMARY KEY,
-      cnpj_fornecedor  TEXT UNIQUE,
+      cnpj_fornecedor  TEXT,
       razao_social     TEXT NOT NULL,
       nome_fantasia    TEXT,
       contato          TEXT,
@@ -38,7 +39,9 @@ module.exports = (pool) => {
       observacao       TEXT,
       ativo            BOOLEAN DEFAULT true,
       criado_em        TIMESTAMPTZ DEFAULT NOW(),
-      atualizado_em    TIMESTAMPTZ DEFAULT NOW()
+      atualizado_em    TIMESTAMPTZ DEFAULT NOW(),
+      loja_id          INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id),
+      UNIQUE(loja_id, cnpj_fornecedor)
     )
   `).catch(()=>{});
 
@@ -123,7 +126,7 @@ module.exports = (pool) => {
         const r = await pool.query(`
           INSERT INTO fornecedores (cnpj_fornecedor, razao_social)
           VALUES ($1, $2)
-          ON CONFLICT (cnpj_fornecedor) DO UPDATE
+          ON CONFLICT (loja_id, cnpj_fornecedor) DO UPDATE
             SET razao_social  = CASE
               WHEN fornecedores.razao_social IS NULL OR fornecedores.razao_social = ''
               THEN EXCLUDED.razao_social
@@ -175,7 +178,7 @@ module.exports = (pool) => {
           SELECT * FROM unnest(
             $1::text[], $2::text[], $3::text[], $4::date[], $5::numeric[], $6::int[]
           ) AS t(cnpj_fornecedor, produto_codigo, produto_nome, ultima_compra, ultimo_preco, compras_count)
-          ON CONFLICT (cnpj_fornecedor, produto_codigo) DO UPDATE
+          ON CONFLICT (loja_id, cnpj_fornecedor, produto_codigo) DO UPDATE
             SET produto_nome  = COALESCE(EXCLUDED.produto_nome, fornecedor_produtos.produto_nome),
                 ultima_compra = GREATEST(EXCLUDED.ultima_compra, fornecedor_produtos.ultima_compra),
                 ultimo_preco  = CASE
