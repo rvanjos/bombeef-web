@@ -37,6 +37,10 @@ function autenticar(perfisPermitidos = null) {
       email:  payload.email,
       perfil: payload.perfil,
       sessaoId: payload.sessaoId || null,
+      lojaId: payload.lojaId || null,
+      lojaCodigo: payload.lojaCodigo || null,
+      empresaId: payload.empresaId || null,
+      vinculoLojaId: payload.vinculoLojaId || null,
     };
     req.usuario = req.user; // alias — algumas rotas usam req.usuario
 
