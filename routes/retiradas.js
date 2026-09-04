@@ -55,7 +55,8 @@ module.exports = function (pool, app) {
         observacao        TEXT,
         autorizado_por    INTEGER,
         usuario_id        INTEGER,
-        criado_em         TIMESTAMPTZ DEFAULT NOW()
+        criado_em         TIMESTAMPTZ DEFAULT NOW(),
+        loja_id           INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id)
       )
     `);
     // Garante colunas

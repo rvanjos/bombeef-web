@@ -48,7 +48,8 @@ module.exports = function(pool, app) {
         status            TEXT NOT NULL DEFAULT 'ativo' CHECK(status IN('ativo','inativo')),
         observacoes       TEXT,
         created_at        TIMESTAMPTZ DEFAULT NOW(),
-        updated_at        TIMESTAMPTZ DEFAULT NOW()
+        updated_at        TIMESTAMPTZ DEFAULT NOW(),
+        loja_id           INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id)
       )`).catch(()=>{});
 
     await pool.query(`
@@ -70,7 +71,8 @@ module.exports = function(pool, app) {
         baixa_pdv         BOOLEAN DEFAULT FALSE,
         dt_baixa_pdv      DATE,
         created_at        TIMESTAMPTZ DEFAULT NOW(),
-        updated_at        TIMESTAMPTZ DEFAULT NOW()
+        updated_at        TIMESTAMPTZ DEFAULT NOW(),
+        loja_id           INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id)
       )`).catch(()=>{});
 
     await pool.query(`
@@ -83,7 +85,8 @@ module.exports = function(pool, app) {
         valor_unit_venda  NUMERIC(12,2) NOT NULL DEFAULT 0,
         valor_unit_custo  NUMERIC(12,2) DEFAULT 0,
         desconto_pct      NUMERIC(5,2) DEFAULT 0,
-        valor_final_item  NUMERIC(12,2) NOT NULL DEFAULT 0
+        valor_final_item  NUMERIC(12,2) NOT NULL DEFAULT 0,
+        loja_id           INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id)
       )`).catch(()=>{});
 
     await pool.query(`
@@ -95,7 +98,8 @@ module.exports = function(pool, app) {
         forma_pagamento   TEXT NOT NULL DEFAULT 'dinheiro',
         observacoes       TEXT,
         usuario_resp      TEXT,
-        created_at        TIMESTAMPTZ DEFAULT NOW()
+        created_at        TIMESTAMPTZ DEFAULT NOW(),
+        loja_id           INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id)
       )`).catch(()=>{});
 
     await pool.query(`
@@ -103,7 +107,8 @@ module.exports = function(pool, app) {
         id                SERIAL PRIMARY KEY,
         pagamento_id      INTEGER NOT NULL REFERENCES pagamentos_fiado(id),
         venda_id          INTEGER NOT NULL REFERENCES vendas_fiado(id),
-        valor_abatido     NUMERIC(12,2) NOT NULL
+        valor_abatido     NUMERIC(12,2) NOT NULL,
+        loja_id           INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id)
       )`).catch(()=>{});
 
     await pool.query(`
@@ -115,7 +120,8 @@ module.exports = function(pool, app) {
         tipo_evento       TEXT NOT NULL,
         descricao         TEXT,
         usuario           TEXT,
-        data_evento       TIMESTAMPTZ DEFAULT NOW()
+        data_evento       TIMESTAMPTZ DEFAULT NOW(),
+        loja_id           INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id)
       )`).catch(()=>{});
   }
   initTables();
@@ -146,7 +152,7 @@ module.exports = function(pool, app) {
       // Garante coluna funcionario_id
       await pool.query(`ALTER TABLE clientes_fiado ADD COLUMN IF NOT EXISTS funcionario_id INTEGER`).catch(()=>{});
       // Garantir unicidade de funcionario_id para evitar duplicatas
-      await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_clientes_fiado_func ON clientes_fiado(funcionario_id) WHERE funcionario_id IS NOT NULL`).catch(()=>{});
+      await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS uq_clientes_fiado_loja_func ON clientes_fiado(loja_id,funcionario_id) WHERE funcionario_id IS NOT NULL`).catch(()=>{});
       // Remover duplicatas existentes (manter o de menor id)
       await pool.query(`
         DELETE FROM clientes_fiado a
@@ -159,7 +165,7 @@ module.exports = function(pool, app) {
         await pool.query(`
           INSERT INTO clientes_fiado(nome, tipo_cliente, funcionario_id, status)
           VALUES($1, 'funcionario', $2, 'ativo')
-          ON CONFLICT (funcionario_id) DO NOTHING
+          ON CONFLICT (loja_id, funcionario_id) WHERE funcionario_id IS NOT NULL DO NOTHING
         `, [f.nome, f.id]).catch(()=>{});
       }
       // Migra retiradas existentes para vendas_fiado

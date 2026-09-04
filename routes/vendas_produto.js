@@ -22,7 +22,8 @@ module.exports = (pool, app) => {
         quantidade    NUMERIC(12,4) DEFAULT 0,
         valor_total   NUMERIC(14,2) DEFAULT 0,
         importacao_id INTEGER,
-        criado_em     TIMESTAMPTZ DEFAULT NOW()
+        criado_em     TIMESTAMPTZ DEFAULT NOW(),
+        loja_id       INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id)
       )
     `).catch(()=>{});
     await pool.query(`
@@ -33,7 +34,8 @@ module.exports = (pool, app) => {
         periodo_fim  DATE,
         total_linhas INTEGER,
         total_valor  NUMERIC(14,2),
-        criado_em    TIMESTAMPTZ DEFAULT NOW()
+        criado_em    TIMESTAMPTZ DEFAULT NOW(),
+        loja_id      INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id)
       )
     `).catch(()=>{});
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_vp_data    ON vendas_produto(data_venda)`).catch(()=>{});

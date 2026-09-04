@@ -21,8 +21,9 @@ module.exports = function (pool) {
 
   r.get('/config/precificacao', async (req,res) => {
     try {
-      const { rows } = await pool.query(`SELECT valor FROM config_sistema WHERE chave='kit_precificacao'`);
-      res.json({ok:true,data:rows[0]?.valor ? JSON.parse(rows[0].valor) : null});
+      const { rows } = await pool.query(`SELECT valor FROM kit_precificacao_config LIMIT 1`);
+      const valor = rows[0]?.valor;
+      res.json({ok:true,data:valor ? (typeof valor === 'string' ? JSON.parse(valor) : valor) : null});
     } catch(e){ res.status(500).json({ok:false,erro:e.message}); }
   });
   r.put('/config/precificacao', gerenciarKits, async (req,res) => {
@@ -31,13 +32,25 @@ module.exports = function (pool) {
     if(nums.some(k=>!Number.isFinite(Number(cfg[k])) || Number(cfg[k])<0 || Number(cfg[k])>=100))
       return res.status(400).json({ok:false,erro:'Parâmetros percentuais inválidos.'});
     try{
-      await pool.query(`INSERT INTO config_sistema(chave,valor) VALUES('kit_precificacao',$1)
-                        ON CONFLICT(chave) DO UPDATE SET valor=EXCLUDED.valor`,[JSON.stringify(cfg)]);
+      await pool.query(`INSERT INTO kit_precificacao_config(valor) VALUES($1::jsonb)
+                        ON CONFLICT(loja_id) DO UPDATE SET valor=EXCLUDED.valor, atualizado_em=NOW()`,[JSON.stringify(cfg)]);
       res.json({ok:true});
     }catch(e){ res.status(500).json({ok:false,erro:e.message}); }
   });
 
   async function initTable() {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS kit_precificacao_config (
+        loja_id INTEGER PRIMARY KEY DEFAULT bb_loja_padrao() REFERENCES lojas(id),
+        valor JSONB NOT NULL DEFAULT '{}'::jsonb,
+        atualizado_em TIMESTAMPTZ DEFAULT NOW()
+      )
+    `).catch(() => {});
+    await pool.query(`
+      INSERT INTO kit_precificacao_config(valor)
+      SELECT valor::jsonb FROM config_sistema WHERE chave='kit_precificacao'
+      ON CONFLICT(loja_id) DO NOTHING
+    `).catch(() => {});
     // Migration PRIMEIRO — renomeia colunas legadas antes de qualquer outra operação
     await pool.query(`
       DO $$ BEGIN
@@ -61,7 +74,8 @@ module.exports = function (pool) {
         id SERIAL PRIMARY KEY, codigo TEXT, nome TEXT NOT NULL,
         descricao TEXT, preco_venda NUMERIC(10,4) DEFAULT 0,
         margem NUMERIC(5,2) DEFAULT 0, ativo BOOLEAN DEFAULT true,
-        criado_em TIMESTAMPTZ DEFAULT NOW(), atualizado_em TIMESTAMPTZ DEFAULT NOW()
+        criado_em TIMESTAMPTZ DEFAULT NOW(), atualizado_em TIMESTAMPTZ DEFAULT NOW(),
+        loja_id INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id)
       )
     `).catch(() => {});
     for (const [col, def] of [
@@ -75,7 +89,8 @@ module.exports = function (pool) {
         id SERIAL PRIMARY KEY, kit_id INTEGER, produto_id INTEGER,
         codigo_produto TEXT, descricao_produto TEXT,
         quantidade NUMERIC(10,3) DEFAULT 1, preco_custo_unitario NUMERIC(10,4) DEFAULT 0,
-        ignorar_margem BOOLEAN DEFAULT false, custo_kit NUMERIC(10,4)
+        ignorar_margem BOOLEAN DEFAULT false, custo_kit NUMERIC(10,4),
+        loja_id INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id)
       )
     `).catch(() => {});
     // Garante que kit_id existe — se só existia id_kit, adiciona kit_id e migra os dados
@@ -108,7 +123,8 @@ module.exports = function (pool) {
         qtd_produzida INTEGER DEFAULT 0,
         qtd_vendida   INTEGER DEFAULT 0,
         obs           TEXT,
-        criado_em    TIMESTAMPTZ DEFAULT NOW()
+        criado_em    TIMESTAMPTZ DEFAULT NOW(),
+        loja_id      INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id)
       )
     `).catch(() => {});
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_ks_kit    ON kit_semanas(kit_id)`).catch(() => {});
