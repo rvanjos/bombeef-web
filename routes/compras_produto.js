@@ -41,7 +41,8 @@ module.exports = function(pool, app) {
           total_valor        NUMERIC(14,2) DEFAULT 0,
           fornecedores_json  JSONB DEFAULT '[]',
           usuario_id         INTEGER,
-          criado_em          TIMESTAMPTZ DEFAULT NOW()
+          criado_em          TIMESTAMPTZ DEFAULT NOW(),
+          loja_id            INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id)
         )
       `);
       await c.query(`
@@ -71,7 +72,8 @@ module.exports = function(pool, app) {
           icmsst             NUMERIC(10,2),
           origem             TEXT DEFAULT 'pdv_xlsx',
           arquivo_importado  TEXT,
-          criado_em          TIMESTAMPTZ DEFAULT NOW()
+          criado_em          TIMESTAMPTZ DEFAULT NOW(),
+          loja_id            INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id)
         )
       `);
       // Índices
@@ -80,7 +82,7 @@ module.exports = function(pool, app) {
       await c.query(`CREATE INDEX IF NOT EXISTS idx_cp_impid   ON compras_produto(importacao_id)`);
       await c.query(`
         CREATE UNIQUE INDEX IF NOT EXISTS idx_cp_dedup
-        ON compras_produto(numero_nfe, serie_nfe, fornecedor_cnpj, produto_codigo, cod_item_nfe)
+        ON compras_produto(loja_id, numero_nfe, serie_nfe, fornecedor_cnpj, produto_codigo, cod_item_nfe)
         WHERE numero_nfe IS NOT NULL AND serie_nfe IS NOT NULL AND fornecedor_cnpj IS NOT NULL AND cod_item_nfe IS NOT NULL
       `);
 
@@ -498,7 +500,7 @@ module.exports = function(pool, app) {
             await pool.query(`
               INSERT INTO fornecedores (cnpj_fornecedor, razao_social)
               VALUES ($1, $2)
-              ON CONFLICT (cnpj_fornecedor) DO UPDATE
+              ON CONFLICT (loja_id, cnpj_fornecedor) DO UPDATE
                 SET razao_social  = CASE WHEN fornecedores.razao_social IS NULL OR fornecedores.razao_social = '' THEN $2 ELSE fornecedores.razao_social END,
                     atualizado_em = NOW()
             `, [cnpjF, f.fornecedor_nome]);
@@ -519,7 +521,7 @@ module.exports = function(pool, app) {
               INSERT INTO fornecedor_produtos
                 (cnpj_fornecedor, produto_codigo, produto_nome, ultima_compra, ultimo_preco, compras_count)
               VALUES ($1, $2, $3, $4, $5, 1)
-              ON CONFLICT (cnpj_fornecedor, produto_codigo) DO UPDATE
+              ON CONFLICT (loja_id, cnpj_fornecedor, produto_codigo) DO UPDATE
                 SET produto_nome  = COALESCE(EXCLUDED.produto_nome, fornecedor_produtos.produto_nome),
                     ultima_compra = GREATEST(EXCLUDED.ultima_compra, fornecedor_produtos.ultima_compra),
                     ultimo_preco  = CASE
