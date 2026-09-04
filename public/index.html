@@ -67,6 +67,8 @@ body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var
 .ph-av{width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,.15);border:2px solid rgba(255,255,255,.3);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;}
 .ph-uname{font-size:12px;font-weight:600;color:#fff;}
 .ph-role{background:rgba(255,255,255,.15);color:rgba(255,255,255,.85);border:1px solid rgba(255,255,255,.2);padding:2px 7px;border-radius:7px;font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;}
+.ph-store{display:none;max-width:190px;background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.28);border-radius:7px;padding:5px 8px;font:600 11px 'DM Sans',sans-serif;}
+.ph-store option{color:#222;background:#fff;}
 .ph-logout{padding:5px 12px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:6px;color:rgba(255,255,255,.8);cursor:pointer;font-size:11px;font-weight:600;transition:.15s;}
 .ph-logout:hover{background:rgba(255,255,255,.22);}
 
@@ -446,6 +448,7 @@ body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var
       <div class="ph-dot" id="sync-dot"></div>
       <span id="sync-txt">online</span>
     </div>
+    <select class="ph-store" id="ph-store" aria-label="Loja ativa" onchange="trocarLojaAtiva(this.value)"></select>
     <div class="ph-user">
       <button class="mob-menu-btn" onclick="abrirMobMenu()">☰</button>
       <span class="mob-active-label" id="mob-active-label">Dashboard</span>
@@ -941,12 +944,33 @@ function broadcastToken() {
   });
 }
 
+function renderLojaAtiva(){
+  const sel=$('ph-store');
+  if(!sel) return;
+  const lojas=Array.isArray(usuario?.lojas)?usuario.lojas:[];
+  if(lojas.length<2){sel.style.display='none';return;}
+  sel.innerHTML=lojas.map(l=>`<option value="${l.id}" ${Number(l.id)===Number(usuario?.loja?.id)?'selected':''}>${String(l.nome||'Loja').replace(/</g,'&lt;')}</option>`).join('');
+  sel.style.display='block';
+}
+
+async function trocarLojaAtiva(lojaId){
+  const sel=$('ph-store'); sel.disabled=true;
+  try{
+    const d=await apiFetch('/auth/loja-ativa',{method:'POST',body:JSON.stringify({loja_id:Number(lojaId)})});
+    if(!d.ok) throw new Error(d.erro||'Não foi possível trocar de loja');
+    sessionStorage.setItem('bb_token',d.token); usuario=d.usuario;
+    const me=await apiFetch('/auth/me'); if(me.ok) usuario=me.data;
+    broadcastToken(); location.reload();
+  }catch(e){alert(e.message);renderLojaAtiva();sel.disabled=false;}
+}
+
 function entrarNoPortal() {
   $('scr-login').classList.remove('active');
   $('scr-portal').classList.add('active');
   $('ph-av').textContent   = (usuario.nome||'?')[0].toUpperCase();
   $('ph-uname').textContent = usuario.nome;
   $('ph-role').textContent  = usuario.perfil;
+  renderLojaAtiva();
 
   // Define mês atual no seletor
   const hoje = new Date();
