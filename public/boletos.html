@@ -236,6 +236,7 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
   <!-- Toolbar -->
   <div class="toolbar">
     <button class="btn btn-p" onclick="abrirModal()">＋ Novo Boleto</button>
+    <button class="btn btn-s" onclick="abrirImportXML()" title="Importar uma NF-e pelo arquivo XML">📄 Importar XML</button>
     <button class="btn btn-s bb-desktop-only" onclick="abrirCentralImportacoes()">📥 Central de Importações</button>
     <div class="search-wrap"><input type="text" id="busca" placeholder="Buscar fornecedor, NF..." oninput="filtrar()"></div>
     <select class="flt" id="flt-status" onchange="carregar()">
@@ -397,7 +398,12 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
   <div class="modal" style="max-width:640px">
     <div class="modal-head"><h3>Importar NF-e (XML)</h3><button class="modal-close" onclick="fecharXML()">×</button></div>
     <div class="modal-body">
-      <div class="upload-zone" id="zone-xml" onclick="document.getElementById('file-xml').click()" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')">
+      <div class="upload-zone" id="zone-xml" role="button" tabindex="0"
+        onclick="document.getElementById('file-xml').click()"
+        onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();document.getElementById('file-xml').click()}"
+        ondragover="event.preventDefault();this.classList.add('drag')"
+        ondragleave="this.classList.remove('drag')"
+        ondrop="soltarXML(event)">
         <div style="font-size:36px">📥</div>
         <p>Clique ou arraste o arquivo XML da NF-e aqui</p>
         <p style="font-size:11px;margin-top:4px">Formato: NF-e SEFAZ (.xml)</p>
@@ -1226,8 +1232,31 @@ async function confirmarBaixa(){
 }
 
 // ── Import XML ─────────────────────────────────────────────────────────────
-function abrirImportXML(){ document.getElementById('modal-xml').classList.add('open'); }
-function fecharXML(){ document.getElementById('modal-xml').classList.remove('open'); xmlPreview=[]; document.getElementById('xml-preview').style.display='none'; document.getElementById('btn-confirm-xml').style.display='none'; }
+function abrirImportXML(){
+  const inp=document.getElementById('file-xml');
+  inp.value='';
+  document.getElementById('modal-xml').classList.add('open');
+}
+function fecharXML(){
+  document.getElementById('modal-xml').classList.remove('open');
+  xmlPreview=[];
+  document.getElementById('file-xml').value='';
+  document.getElementById('xml-preview').style.display='none';
+  const btn=document.getElementById('btn-confirm-xml');
+  btn.style.display='none'; btn.disabled=false; btn.textContent='✅ Confirmar Importação';
+}
+
+function soltarXML(ev){
+  ev.preventDefault();
+  document.getElementById('zone-xml').classList.remove('drag');
+  const arquivo=ev.dataTransfer?.files?.[0];
+  if(!arquivo) return;
+  if(!/\.xml$/i.test(arquivo.name)){
+    toast('Selecione um arquivo XML de NF-e');
+    return;
+  }
+  processarArquivoXML(arquivo);
+}
 
 // Categorias carregadas do banco (mesmas do DRE)
 let _dreCategoriasOpts = ''; // HTML de options para reusar
@@ -1284,25 +1313,34 @@ function catOptsHtmlBoleto(sel='') {
 
 async function processarXML(inp){
   const f = inp.files[0]; if(!f) return;
+  await processarArquivoXML(f);
+}
+
+async function processarArquivoXML(f){
+  if(!/\.xml$/i.test(f.name||'')){
+    toast('Selecione um arquivo XML de NF-e');
+    return;
+  }
   const fd = new FormData(); fd.append('arquivo', f);
   toast('Processando XML...');
   const d = await api.upload('/api/boletos/import-xml', fd);
   if(!d.ok){ toast('Erro: '+d.erro); return; }
-  xmlPreview = d.preview;
+  xmlPreview = Array.isArray(d.preview) ? d.preview : [];
+  if(!xmlPreview.length){ toast('O XML não possui parcelas válidas'); return; }
   const origemLabel = (p) => p.origemParcela==='infCpl'
     ? '<span class="origin-badge">infCpl</span>'
     : p.totalParcelas>1 ? '<span class="origin-badge">cobr/dup</span>' : '';
   document.getElementById('xml-info').innerHTML =
-    `<b>${d.fornecedor}</b> &nbsp;·&nbsp; NF ${d.nf} &nbsp;·&nbsp; `+
+    `<b>${esc(d.fornecedor)}</b> &nbsp;·&nbsp; NF ${esc(d.nf)} &nbsp;·&nbsp; `+
     `${d.totalParcelas} boleto(s) &nbsp;·&nbsp; Total: <b>${fmt.brl(d.valorTotal)}</b>`;
   document.getElementById('xml-list').innerHTML = d.preview.map((p,i)=> {
     const planoOpts = catOptsHtmlBoleto(p.plano || '');
     return `<div class="preview-item">
       <div class="pi-left">
-        <div style="font-weight:600">${p.fornecedor}${origemLabel(p)}</div>
+        <div style="font-weight:600">${esc(p.fornecedor)}${origemLabel(p)}</div>
         <div style="font-size:11px;color:var(--muted);margin-top:2px">
-          NF ${p.nf||'—'} &nbsp;·&nbsp; Parcela ${p.parcela} de ${p.totalParcelas}
-          &nbsp;·&nbsp; Competência: ${p.mesCompetencia||'—'}
+          NF ${esc(p.nf||'—')} &nbsp;·&nbsp; Parcela ${esc(p.parcela)} de ${esc(p.totalParcelas)}
+          &nbsp;·&nbsp; Competência: ${esc(p.mesCompetencia||'—')}
         </div>
         <select onchange="xmlPreview[${i}].plano=this.value" style="width:100%;padding:4px 7px;border:1px solid var(--border);border-radius:6px;font-size:11px;background:#fff;margin-top:6px">
           <option value="">— Plano de Contas —</option>${planoOpts}
@@ -1324,9 +1362,16 @@ async function confirmarXML(){
     ...p,
     plano: p.plano || '',  // backend faz guessPlano se vier vazio
   }));
+  const btn=document.getElementById('btn-confirm-xml');
+  if(btn.disabled || !boletos.length) return;
+  btn.disabled=true; btn.textContent='Importando...';
   const d = await api.post('/api/boletos/import-xml/confirmar',{boletos});
-  if(!d.ok){ toast('Erro: '+d.erro); return; }
-  toast(`✅ ${d.count} boleto(s) importado(s)!`);
+  if(!d.ok){ btn.disabled=false; btn.textContent='✅ Confirmar Importação'; toast('Erro: '+d.erro); return; }
+  const duplicados=Number(d.duplicados||0);
+  const importados=Number(d.count||0);
+  toast(importados
+    ? `✅ ${importados} boleto(s) importado(s)${duplicados?` · ${duplicados} já existente(s)`:''}`
+    : `ℹ️ Nenhum boleto novo. ${duplicados} já estava(m) cadastrado(s).`, 4000);
   fecharXML(); carregar(); carregarKPIs();
   try { window.parent.postMessage({ type: 'bb_refresh_kpis' }, '*'); } catch(_) {}
 }
