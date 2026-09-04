@@ -18,6 +18,13 @@ const express  = require('express');
 const bcrypt   = require('bcryptjs');
 const jwt      = require('jsonwebtoken');
 const autenticar = require('../middleware/auth');
+const {
+  garantirEstruturaMultiloja,
+  listarLojasDoUsuario,
+  resolverLojaDoUsuario,
+  contextoLojaPublico,
+  payloadComLoja,
+} = require('../lib/multiloja');
 
 module.exports = function (pool) {
   const r = express.Router();
@@ -89,7 +96,10 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
     // Cria admin padrão se não existir
     const { rows } = await pool.query(`SELECT id FROM usuarios WHERE perfil='admin' LIMIT 1`);
     if (rows.length === 0) {
-      const hash = await bcrypt.hash(process.env.ADMIN_SENHA || 'BomBeef@2024', 12);
+      if (!process.env.ADMIN_SENHA) {
+        throw new Error('ADMIN_SENHA deve ser configurada para criar o primeiro administrador');
+      }
+      const hash = await bcrypt.hash(process.env.ADMIN_SENHA, 12);
       await pool.query(`
         INSERT INTO usuarios (nome, email, senha_hash, perfil)
         VALUES ($1, $2, $3, 'admin')
@@ -99,8 +109,10 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
         process.env.ADMIN_EMAIL || 'admin@bombeef.com.br',
         hash,
       ]);
-      console.log('[auth] usuário admin criado:', process.env.ADMIN_EMAIL || 'admin@bombeef.com.br');
+      console.log('[auth] usuário administrador inicial criado');
     }
+
+    await garantirEstruturaMultiloja(pool);
   }
   let initPromise = null;
   const garantirTabelas = () => {
@@ -115,12 +127,12 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
   };
   garantirTabelas().catch(() => {});
 
-  const abrirSessao = async (usuarioId, req) => {
+  const abrirSessao = async (usuarioId, req, lojaId = null) => {
     await garantirTabelas();
     const { rows } = await pool.query(`
-      INSERT INTO login_sessoes (usuario_id, ip, user_agent)
-      VALUES ($1, $2, $3) RETURNING id
-    `, [usuarioId, req.ip || null, String(req.headers['user-agent'] || '').slice(0, 500) || null]);
+      INSERT INTO login_sessoes (usuario_id, loja_id, ip, user_agent)
+      VALUES ($1, $2, $3, $4) RETURNING id
+    `, [usuarioId, lojaId, req.ip || null, String(req.headers['user-agent'] || '').slice(0, 500) || null]);
     return rows[0].id;
   };
 
@@ -137,6 +149,7 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
     const oldToken = auth.replace('Bearer ', '');
     if (!oldToken) return res.status(401).json({ ok: false, erro: 'Token não fornecido' });
     try {
+      await garantirTabelas();
       // Verifica mesmo expirado (ignoreExpiration) para permitir renovação
       const payload = jwt.verify(oldToken, process.env.JWT_SECRET, { ignoreExpiration: true });
       // Só renova se expirou há menos de 1 dia (segurança)
@@ -145,12 +158,14 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
       // Verifica se usuário ainda existe e está ativo
       const { rows } = await pool.query('SELECT id,nome,email,perfil FROM usuarios WHERE id=$1 AND ativo=true', [payload.id]);
       if (!rows.length) return res.status(401).json({ ok: false, erro: 'Usuário inativo' });
-      const sessaoId = payload.sessaoId || await abrirSessao(rows[0].id, req);
+      const loja = await resolverLojaDoUsuario(pool, rows[0].id, payload.lojaId || null);
+      if (!loja) return res.status(403).json({ ok: false, erro: 'Usuário sem acesso a uma loja ativa' });
+      const sessaoId = payload.sessaoId || await abrirSessao(rows[0].id, req, loja.loja_id);
       const newToken = jwt.sign(
-        { id: rows[0].id, nome: rows[0].nome, email: rows[0].email, perfil: rows[0].perfil, sessaoId },
-        process.env.JWT_SECRET, { expiresIn: '7d' }
+        payloadComLoja(rows[0], sessaoId, loja),
+        process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
       );
-      res.json({ ok: true, token: newToken, usuario: rows[0] });
+      res.json({ ok: true, token: newToken, usuario: { ...rows[0], perfil: loja.perfil, loja: contextoLojaPublico(loja) } });
     } catch(e) {
       res.status(401).json({ ok: false, erro: 'Token inválido' });
     }
@@ -180,12 +195,17 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
         return res.status(401).json({ ok: false, erro: 'E-mail ou senha incorretos' });
       }
 
+      const loja = await resolverLojaDoUsuario(pool, usuario.id);
+      if (!loja) {
+        return res.status(403).json({ ok: false, erro: 'Usuário sem acesso a uma loja ativa' });
+      }
+
       // Atualiza último login
       await pool.query(`UPDATE usuarios SET ultimo_login = NOW() WHERE id = $1`, [usuario.id]);
-      const sessaoId = await abrirSessao(usuario.id, req);
+      const sessaoId = await abrirSessao(usuario.id, req, loja.loja_id);
 
       const token = jwt.sign(
-        { id: usuario.id, nome: usuario.nome, email: usuario.email, perfil: usuario.perfil, sessaoId },
+        payloadComLoja(usuario, sessaoId, loja),
         process.env.JWT_SECRET,
         { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
       );
@@ -197,7 +217,8 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
           id:     usuario.id,
           nome:   usuario.nome,
           email:  usuario.email,
-          perfil: usuario.perfil,
+          perfil: loja.perfil,
+          loja: contextoLojaPublico(loja),
         },
       });
     } catch (e) {
@@ -209,12 +230,23 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
   // ── GET /me ────────────────────────────────────────────────────────────────
   r.get('/me', autenticar(), async (req, res) => {
     try {
+      await garantirTabelas();
       const { rows } = await pool.query(
         `SELECT id, nome, email, perfil, ultimo_login, criado_em FROM usuarios WHERE id = $1`,
         [req.user.id]
       );
       if (!rows.length) return res.status(404).json({ ok: false, erro: 'Usuário não encontrado' });
-      res.json({ ok: true, data: rows[0] });
+      const lojas = await listarLojasDoUsuario(pool, req.user.id);
+      const lojaAtual = lojas.find(loja => Number(loja.loja_id) === Number(req.user.lojaId)) || lojas[0] || null;
+      res.json({
+        ok: true,
+        data: {
+          ...rows[0],
+          perfil: lojaAtual?.perfil || rows[0].perfil,
+          loja: contextoLojaPublico(lojaAtual),
+          lojas: lojas.map(contextoLojaPublico),
+        },
+      });
     } catch (e) {
       res.status(500).json({ ok: false, erro: e.message });
     }
@@ -238,12 +270,15 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
 
   r.post('/heartbeat', autenticar(), async (req, res) => {
     try {
+      await garantirTabelas();
       let sessaoId = req.user.sessaoId;
       let newToken = null;
       if (!sessaoId) {
-        sessaoId = await abrirSessao(req.user.id, req);
+        const loja = await resolverLojaDoUsuario(pool, req.user.id, req.user.lojaId || null);
+        if (!loja) return res.status(403).json({ ok:false, erro:'Usuário sem acesso a uma loja ativa' });
+        sessaoId = await abrirSessao(req.user.id, req, loja.loja_id);
         newToken = jwt.sign(
-          { id:req.user.id, nome:req.user.nome, email:req.user.email, perfil:req.user.perfil, sessaoId },
+          payloadComLoja(req.user, sessaoId, loja),
           process.env.JWT_SECRET,
           { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
         );
@@ -256,6 +291,88 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
       res.json({ ok: true, token: newToken || undefined });
     } catch (e) {
       res.status(500).json({ ok: false, erro: e.message });
+    }
+  });
+
+  // ── Lojas autorizadas e troca de unidade ativa ───────────────────────────
+  r.get('/lojas', autenticar(), async (req, res) => {
+    try {
+      await garantirTabelas();
+      const lojas = await listarLojasDoUsuario(pool, req.user.id);
+      res.json({
+        ok: true,
+        loja_ativa_id: req.user.lojaId,
+        data: lojas.map(loja => ({
+          ...contextoLojaPublico(loja),
+          perfil: loja.perfil,
+          principal: loja.principal,
+        })),
+      });
+    } catch (e) {
+      res.status(500).json({ ok:false, erro:'Não foi possível carregar as lojas' });
+    }
+  });
+
+  r.post('/loja-ativa', autenticar(), async (req, res) => {
+    try {
+      await garantirTabelas();
+      const lojaId = Number(req.body?.loja_id);
+      if (!Number.isInteger(lojaId) || lojaId <= 0) {
+        return res.status(400).json({ ok:false, erro:'Loja inválida' });
+      }
+      const { rows } = await pool.query(
+        `SELECT id, nome, email, perfil FROM usuarios WHERE id=$1 AND ativo=true`,
+        [req.user.id]
+      );
+      if (!rows.length) return res.status(401).json({ ok:false, erro:'Usuário inativo' });
+      const loja = await resolverLojaDoUsuario(pool, req.user.id, lojaId);
+      if (!loja) return res.status(403).json({ ok:false, erro:'Acesso à loja não autorizado' });
+
+      if (req.user.sessaoId) {
+        await pool.query(
+          `UPDATE login_sessoes SET loja_id=$1, ultima_atividade=NOW()
+           WHERE id=$2 AND usuario_id=$3 AND encerrado_em IS NULL`,
+          [loja.loja_id, req.user.sessaoId, req.user.id]
+        );
+      }
+      const token = jwt.sign(
+        payloadComLoja(rows[0], req.user.sessaoId, loja),
+        process.env.JWT_SECRET,
+        { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+      );
+      res.json({
+        ok:true,
+        token,
+        usuario:{ ...rows[0], perfil:loja.perfil, loja:contextoLojaPublico(loja) },
+      });
+    } catch (e) {
+      res.status(500).json({ ok:false, erro:'Não foi possível trocar de loja' });
+    }
+  });
+
+  r.get('/multiloja/status', autenticar('admin'), async (req, res) => {
+    try {
+      await garantirTabelas();
+      const { rows } = await pool.query(`
+        SELECT
+          (SELECT COUNT(*)::int FROM empresas WHERE ativa=true) AS empresas_ativas,
+          (SELECT COUNT(*)::int FROM lojas WHERE ativa=true) AS lojas_ativas,
+          (SELECT COUNT(*)::int FROM usuarios WHERE ativo=true) AS usuarios_ativos,
+          (SELECT COUNT(DISTINCT usuario_id)::int FROM usuario_lojas WHERE ativo=true) AS usuarios_vinculados,
+          (SELECT COUNT(*)::int FROM login_sessoes WHERE loja_id IS NULL) AS sessoes_sem_loja
+      `);
+      const status = rows[0];
+      res.json({
+        ok:true,
+        data:{
+          ...status,
+          fundacao_pronta: status.lojas_ativas > 0
+            && status.usuarios_ativos === status.usuarios_vinculados
+            && status.sessoes_sem_loja === 0,
+        },
+      });
+    } catch (e) {
+      res.status(500).json({ ok:false, erro:'Não foi possível validar a fundação multi-loja' });
     }
   });
 
@@ -278,19 +395,32 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
     if (!nome || !email || !senha) {
       return res.status(400).json({ ok: false, erro: 'nome, email e senha são obrigatórios' });
     }
+    const client = await pool.connect();
     try {
+      await garantirTabelas();
       const hash = await bcrypt.hash(senha, 12);
-      const { rows } = await pool.query(`
+      const loja = await resolverLojaDoUsuario(pool, req.user.id, req.user.lojaId || null);
+      if (!loja) return res.status(403).json({ ok:false, erro:'Administrador sem loja ativa' });
+      await client.query('BEGIN');
+      const { rows } = await client.query(`
         INSERT INTO usuarios (nome, email, senha_hash, perfil, permissoes)
         VALUES ($1, $2, $3, $4, $5::jsonb)
         RETURNING id, nome, email, perfil, permissoes
       `, [nome.trim(), email.toLowerCase().trim(), hash, perfil || 'caixa', JSON.stringify(permissoes || {})]);
+      await client.query(`
+        INSERT INTO usuario_lojas (usuario_id, loja_id, perfil, permissoes, principal)
+        VALUES ($1, $2, $3, $4::jsonb, true)
+      `, [rows[0].id, loja.loja_id, perfil || 'caixa', JSON.stringify(permissoes || {})]);
+      await client.query('COMMIT');
       res.json({ ok: true, data: rows[0] });
     } catch (e) {
+      await client.query('ROLLBACK').catch(() => {});
       if (e.code === '23505') {
         return res.status(409).json({ ok: false, erro: 'E-mail já cadastrado' });
       }
       res.status(500).json({ ok: false, erro: e.message });
+    } finally {
+      client.release();
     }
   });
 
@@ -311,6 +441,22 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
           ativo !== undefined ? ativo : null,
           permissoes !== undefined ? JSON.stringify(permissoes) : null,
           parseInt(req.params.id)]);
+      if (req.user.lojaId) {
+        await pool.query(`
+          UPDATE usuario_lojas SET
+            perfil = COALESCE($1, perfil),
+            permissoes = COALESCE($2::jsonb, permissoes),
+            ativo = COALESCE($3, ativo),
+            atualizado_em = NOW()
+          WHERE usuario_id=$4 AND loja_id=$5
+        `, [
+          perfil || null,
+          permissoes !== undefined ? JSON.stringify(permissoes) : null,
+          ativo !== undefined ? ativo : null,
+          parseInt(req.params.id),
+          req.user.lojaId,
+        ]);
+      }
       res.json({ ok: true });
     } catch (e) {
       res.status(500).json({ ok: false, erro: e.message });

@@ -59,6 +59,11 @@ No painel do Railway, vá em **Variables** e adicione:
 | `UPLOAD_MAX_MB` | `15`                                           |
 | `ADMIN_EMAIL`   | `admin@bombeef.com.br`                         |
 | `ADMIN_SENHA`   | Senha forte para o admin inicial               |
+| `EMPRESA_PADRAO_CODIGO` | `ar-boutique-carnes` (opcional)       |
+| `EMPRESA_PADRAO_NOME`   | `AR Boutique de Carnes LTDA` (opcional) |
+| `EMPRESA_PADRAO_CNPJ`   | CNPJ somente com números (opcional)   |
+| `LOJA_PADRAO_CODIGO`    | `valinhos` (opcional)                 |
+| `LOJA_PADRAO_NOME`      | `Bom Beef Valinhos` (opcional)        |
 
 **Gerar JWT_SECRET seguro:**
 ```bash
@@ -102,6 +107,9 @@ Após o deploy, Railway fornece uma URL pública como:
 **Primeiro acesso:**
 - E-mail: valor de `ADMIN_EMAIL`
 - Senha: valor de `ADMIN_SENHA`
+
+`ADMIN_SENHA` é obrigatória apenas quando ainda não existe nenhum administrador.
+O sistema não cria mais administrador com senha pública ou predefinida.
 
 ---
 
