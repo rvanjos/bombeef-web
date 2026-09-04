@@ -381,7 +381,8 @@ module.exports = function (pool, app) {
         usuario_id    INTEGER,
         criado_em     TIMESTAMPTZ DEFAULT NOW(),
         atualizado_em TIMESTAMPTZ DEFAULT NOW(),
-        UNIQUE (mes_ref, usuario_id)
+        loja_id       INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id),
+        UNIQUE (loja_id, mes_ref, usuario_id)
       )
     `);
     await pool.query(`
@@ -399,7 +400,8 @@ module.exports = function (pool, app) {
         ignorar       BOOLEAN DEFAULT false,
         boleto_id     INTEGER,
         usuario_id    INTEGER,
-        criado_em     TIMESTAMPTZ DEFAULT NOW()
+        criado_em     TIMESTAMPTZ DEFAULT NOW(),
+        loja_id       INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id)
       )
     `);
     // Garante colunas extras na dre_lancamentos
@@ -446,7 +448,8 @@ module.exports = function (pool, app) {
         sessao_id          INTEGER,
         usuario_id         INTEGER,
         importado_em       TIMESTAMPTZ DEFAULT NOW(),
-        atualizado_em      TIMESTAMPTZ DEFAULT NOW()
+        atualizado_em      TIMESTAMPTZ DEFAULT NOW(),
+        loja_id            INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id)
       )
     `).catch(()=>{});
 
@@ -459,7 +462,8 @@ module.exports = function (pool, app) {
         valor           NUMERIC(14,2),
         categoria_dre   TEXT,
         portador        TEXT,
-        criado_em       TIMESTAMPTZ DEFAULT NOW()
+        criado_em       TIMESTAMPTZ DEFAULT NOW(),
+        loja_id         INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id)
       )
     `).catch(()=>{});
 
@@ -475,7 +479,7 @@ module.exports = function (pool, app) {
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_cf_status ON cartao_faturas(status)`).catch(()=>{});
     await pool.query(`ALTER TABLE cartao_fatura_itens ADD COLUMN IF NOT EXISTS hash_item TEXT`).catch(()=>{});
     await pool.query(`ALTER TABLE cartao_fatura_itens ADD COLUMN IF NOT EXISTS removido BOOLEAN DEFAULT false`).catch(()=>{});
-    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_cf_hash ON cartao_faturas(hash_fatura) WHERE hash_fatura IS NOT NULL`).catch(()=>{});
+    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_cf_hash_loja ON cartao_faturas(loja_id,hash_fatura) WHERE hash_fatura IS NOT NULL`).catch(()=>{});
     await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_cfi_hash ON cartao_fatura_itens(fatura_id, hash_item) WHERE hash_item IS NOT NULL`).catch(()=>{});
 
     // Agrupamento manual de cartão: cartões adicionais (corporativo — cada
@@ -486,10 +490,12 @@ module.exports = function (pool, app) {
     // adivinhar padrão), "grupo_id" é o destino (ex: 'itau_novo').
     await pool.query(`
       CREATE TABLE IF NOT EXISTS cartao_apelido_mapa (
-        chave           TEXT PRIMARY KEY,
+        chave           TEXT NOT NULL,
         grupo_id        TEXT NOT NULL,
         grupo_label     TEXT,
-        atualizado_em   TIMESTAMPTZ DEFAULT NOW()
+        atualizado_em   TIMESTAMPTZ DEFAULT NOW(),
+        loja_id         INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id),
+        UNIQUE(loja_id, chave)
       )
     `).catch(()=>{});
 
@@ -1393,7 +1399,7 @@ module.exports = function (pool, app) {
       await pool.query(`
         INSERT INTO cartao_apelido_mapa (chave, grupo_id, grupo_label, atualizado_em)
         VALUES ($1,$2,$3,NOW())
-        ON CONFLICT (chave) DO UPDATE SET grupo_id=$2, grupo_label=$3, atualizado_em=NOW()
+        ON CONFLICT (loja_id, chave) DO UPDATE SET grupo_id=$2, grupo_label=$3, atualizado_em=NOW()
       `, [chave, grupo_id, grupo_label || null]);
       res.json({ ok: true });
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }

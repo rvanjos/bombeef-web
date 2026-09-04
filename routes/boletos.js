@@ -59,7 +59,8 @@ module.exports = function (pool, app) {
         fornecedor  TEXT,
         valor       NUMERIC(14,2) DEFAULT 0,
         status      TEXT DEFAULT 'avencer',
-        criado_em   TIMESTAMPTZ DEFAULT NOW()
+        criado_em   TIMESTAMPTZ DEFAULT NOW(),
+        loja_id     INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id)
       )
     `).catch(() => {});
 
@@ -118,7 +119,8 @@ module.exports = function (pool, app) {
         valor_total   NUMERIC(14,2) DEFAULT 0,
         usuario_id    INTEGER REFERENCES usuarios(id),
         usuario_nome  TEXT,
-        criado_em     TIMESTAMPTZ DEFAULT NOW()
+        criado_em     TIMESTAMPTZ DEFAULT NOW(),
+        loja_id       INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id)
       )
     `).catch(() => {});
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_bol_imp_criado ON boletos_importacoes(criado_em DESC)`).catch(() => {});
