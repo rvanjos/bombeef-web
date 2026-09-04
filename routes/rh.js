@@ -249,7 +249,8 @@ module.exports = function (pool, app) {
         observacao          TEXT,
         criado_em           TIMESTAMPTZ DEFAULT NOW(),
         atualizado_em       TIMESTAMPTZ DEFAULT NOW(),
-        UNIQUE(funcionario_id, mes_ref)
+        loja_id             INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id),
+        UNIQUE(loja_id, funcionario_id, mes_ref)
       )
     `).catch(() => {});
 
@@ -270,7 +271,8 @@ module.exports = function (pool, app) {
         aprovador_id        INTEGER,  -- usuario_id que aprovou/rejeitou
         motivo_rejeicao     TEXT,
         criado_em           TIMESTAMPTZ DEFAULT NOW(),
-        atualizado_em       TIMESTAMPTZ DEFAULT NOW()
+        atualizado_em       TIMESTAMPTZ DEFAULT NOW(),
+        loja_id             INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id)
       )
     `).catch(() => {});
 
@@ -301,22 +303,25 @@ module.exports = function (pool, app) {
         aprovador_id        INTEGER,
         motivo_rejeicao     TEXT,
         criado_em           TIMESTAMPTZ DEFAULT NOW(),
-        atualizado_em       TIMESTAMPTZ DEFAULT NOW()
+        atualizado_em       TIMESTAMPTZ DEFAULT NOW(),
+        loja_id             INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id)
       )
     `).catch(() => {});
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS rh_meta_fds_config (
-        id            INTEGER PRIMARY KEY DEFAULT 1 CHECK (id=1),
+        id            INTEGER NOT NULL DEFAULT 1 CHECK (id=1),
         faixas        JSONB NOT NULL DEFAULT '[{"meta":18000,"premio":75},{"meta":24000,"premio":100}]'::jsonb,
         modo_rateio   TEXT NOT NULL DEFAULT 'todos'
                       CHECK (modo_rateio IN ('todos','participou','proporcional')),
         atualizado_por INTEGER,
-        atualizado_em TIMESTAMPTZ DEFAULT NOW()
+        atualizado_em TIMESTAMPTZ DEFAULT NOW(),
+        loja_id       INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id),
+        UNIQUE(loja_id, id)
       )
     `).catch(() => {});
     await pool.query(`
-      INSERT INTO rh_meta_fds_config(id) VALUES(1) ON CONFLICT(id) DO NOTHING
+      INSERT INTO rh_meta_fds_config(id) VALUES(1) ON CONFLICT(loja_id, id) DO NOTHING
     `).catch(() => {});
     // Garante colunas novas em tabela existente
     for (const [col, def] of [
@@ -341,13 +346,15 @@ module.exports = function (pool, app) {
   pool.query(`
     CREATE TABLE IF NOT EXISTS rh_escalas (
       id              SERIAL PRIMARY KEY,
-      funcionario_id  INTEGER NOT NULL UNIQUE,
+      funcionario_id  INTEGER NOT NULL,
       data_inicio     DATE NOT NULL,
       tipo_escala     TEXT DEFAULT 'F',
       primeiro_dia    TEXT DEFAULT 'trabalho',
       trabalha_fds    TEXT DEFAULT 'ambos',
       criado_em       TIMESTAMPTZ DEFAULT NOW(),
-      atualizado_em   TIMESTAMPTZ DEFAULT NOW()
+      atualizado_em   TIMESTAMPTZ DEFAULT NOW(),
+      loja_id         INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id),
+      UNIQUE(loja_id, funcionario_id)
     )
   `).catch(e => console.warn('[rh] rh_escalas:', e.message));
 
@@ -418,7 +425,7 @@ module.exports = function (pool, app) {
         INSERT INTO rh_fichas
           (funcionario_id, mes_ref, salario_base, vale_alimentacao, escala_domingo, valor_domingo, observacao, atualizado_em)
         VALUES ($1,$2,$3,$4,$5,$6,$7,NOW())
-        ON CONFLICT (funcionario_id, mes_ref) DO UPDATE SET
+        ON CONFLICT (loja_id, funcionario_id, mes_ref) DO UPDATE SET
           salario_base     = $3,
           vale_alimentacao = $4,
           escala_domingo   = $5,
@@ -596,7 +603,7 @@ module.exports = function (pool, app) {
       await pool.query(`
         INSERT INTO rh_escalas (funcionario_id, data_inicio, tipo_escala, primeiro_dia, trabalha_fds, atualizado_em)
         VALUES ($1, $2, $3, $4, $5, NOW())
-        ON CONFLICT (funcionario_id) DO UPDATE SET
+        ON CONFLICT (loja_id, funcionario_id) DO UPDATE SET
           data_inicio   = $2,
           tipo_escala   = $3,
           primeiro_dia  = $4,
@@ -670,7 +677,7 @@ module.exports = function (pool, app) {
       await pool.query(`
         INSERT INTO rh_meta_fds_config(id,faixas,modo_rateio,atualizado_por,atualizado_em)
         VALUES(1,$1::jsonb,$2,$3,NOW())
-        ON CONFLICT(id) DO UPDATE SET faixas=$1::jsonb, modo_rateio=$2, atualizado_por=$3, atualizado_em=NOW()
+        ON CONFLICT(loja_id, id) DO UPDATE SET faixas=$1::jsonb, modo_rateio=$2, atualizado_por=$3, atualizado_em=NOW()
       `, [JSON.stringify(faixas), modo, req.user.id]);
       res.json({ ok:true, data:{faixas,modo_rateio:modo} });
     } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }

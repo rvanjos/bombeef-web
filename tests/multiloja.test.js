@@ -113,6 +113,12 @@ const pool = {
   assert.match(migracao, /2026-09-producao-comercial-v1/);
   assert.match(migracao, /uq_kit_pedidos_loja_numero/);
   assert.match(migracao, /uq_clientes_fiado_loja_func/);
+  for (const tabela of ['funcionarios','rh_fichas','rh_apontamentos','rh_escalas','ponto_registros','ponto_auditoria','ponto_jornada_dia','login_sessoes']) {
+    assert.match(migracao, new RegExp(`['"]${tabela}['"]`));
+  }
+  assert.match(migracao, /2026-09-pessoas-v1/);
+  assert.match(migracao, /uq_ponto_loja_func_data/);
+  assert.match(migracao, /uq_rh_meta_fds_loja/);
 
   console.log('multiloja: testes concluídos');
 })().catch(erro => {

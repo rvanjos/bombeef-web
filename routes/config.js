@@ -77,7 +77,8 @@ module.exports = function (pool, app) {
         freelancer        BOOLEAN NOT NULL DEFAULT false,
         ativo             BOOLEAN DEFAULT true,
         criado_em         TIMESTAMPTZ DEFAULT NOW(),
-        atualizado_em     TIMESTAMPTZ DEFAULT NOW()
+        atualizado_em     TIMESTAMPTZ DEFAULT NOW(),
+        loja_id           INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id)
       )
     `);
     await pool.query(`

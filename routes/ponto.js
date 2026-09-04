@@ -39,10 +39,11 @@ module.exports = function(pool) {
         observacao        TEXT,
         status            TEXT DEFAULT 'ok' CHECK(status IN('ok','pendente','ajustado','falta','justificado')),
         criado_por        TEXT,
-        atualizado_em     TIMESTAMPTZ DEFAULT NOW()
+        atualizado_em     TIMESTAMPTZ DEFAULT NOW(),
+        loja_id           INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id)
       )`).catch(e=>console.error('[ponto] criar ponto_registros:', e.message));
 
-    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS ponto_func_data_idx ON ponto_registros(funcionario_id, data_ref)`).catch(()=>{});
+    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS uq_ponto_loja_func_data ON ponto_registros(loja_id, funcionario_id, data_ref)`).catch(()=>{});
 
     // Tabela de auditoria — registra CADA batida com usuário logado, IP e timestamp
     await pool.query(`
@@ -58,7 +59,8 @@ module.exports = function(pool) {
         ip_address      TEXT,
         user_agent      TEXT,
         manual          BOOLEAN DEFAULT FALSE,
-        obs             TEXT
+        obs             TEXT,
+        loja_id         INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id)
       )`).catch(()=>{});
 
     // Colunas de auditoria extras no registro (quem registrou entrada/saída especificamente)
@@ -73,7 +75,7 @@ module.exports = function(pool) {
         .catch(e => console.warn('[ponto] alter col', col, e.message));
     }
     // Garante índice único necessário para ON CONFLICT
-    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS ponto_func_data_idx ON ponto_registros(funcionario_id, data_ref)`)
+    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS uq_ponto_loja_func_data ON ponto_registros(loja_id, funcionario_id, data_ref)`)
       .catch(e => console.warn('[ponto] idx:', e.message));
 
     // Tabela de jornada por dia da semana (0=dom, 1=seg ... 6=sab)
@@ -87,7 +89,8 @@ module.exports = function(pool) {
         horario_saida   TIME,
         jornada_horas   NUMERIC(4,2),
         intervalo_min   INTEGER,
-        UNIQUE(funcionario_id, dia_semana)
+        loja_id         INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id),
+        UNIQUE(loja_id, funcionario_id, dia_semana)
       )
     `).catch(()=>{});
 
@@ -253,7 +256,7 @@ module.exports = function(pool) {
       const { rows } = await pool.query(`
         INSERT INTO ponto_registros(funcionario_id, data_ref, ${tipo}, criado_por${colPor?', '+colPor:''}${colEm?', '+colEm:''})
         VALUES($1, $2, $3, $4${colPor?', $4':''}${colEm?', NOW()':''})
-        ON CONFLICT(funcionario_id, data_ref) DO UPDATE
+        ON CONFLICT(loja_id, funcionario_id, data_ref) DO UPDATE
           SET ${tipo} = $3, atualizado_em = NOW()${extraSet}
         RETURNING *
       `, [funcionario_id, dataRef, agora, usuario]);
@@ -299,9 +302,10 @@ module.exports = function(pool) {
           observacao        TEXT,
           status            TEXT DEFAULT 'ok',
           criado_por        TEXT,
-          atualizado_em     TIMESTAMPTZ DEFAULT NOW()
+          atualizado_em     TIMESTAMPTZ DEFAULT NOW(),
+          loja_id           INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id)
         )`);
-      await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS ponto_func_data_idx ON ponto_registros(funcionario_id, data_ref)`).catch(()=>{});
+      await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS uq_ponto_loja_func_data ON ponto_registros(loja_id, funcionario_id, data_ref)`).catch(()=>{});
       await pool.query(`
         CREATE TABLE IF NOT EXISTS ponto_auditoria (
           id              SERIAL PRIMARY KEY,
@@ -315,7 +319,8 @@ module.exports = function(pool) {
           ip_address      TEXT,
           user_agent      TEXT,
           manual          BOOLEAN DEFAULT FALSE,
-          obs             TEXT
+          obs             TEXT,
+          loja_id         INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id)
         )`);
       res.json({ ok:true, msg:'Tabelas criadas com sucesso' });
     } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
@@ -352,7 +357,7 @@ module.exports = function(pool) {
       const { rows } = await pool.query(`
         INSERT INTO ponto_registros(funcionario_id, data_ref, ${tipo}, criado_por, entrada_manual, saida_manual, justificativa${colPor?', '+colPor:''}${colEm?', '+colEm:''})
         VALUES($1,$2,$3,$4,true,true,$5${colPor?', $4':''}${colEm?', NOW()':''})
-        ON CONFLICT(funcionario_id, data_ref) DO UPDATE
+        ON CONFLICT(loja_id, funcionario_id, data_ref) DO UPDATE
           SET ${tipo}=$3, atualizado_em=NOW(), entrada_manual=true, saida_manual=true,
               justificativa=COALESCE($5, ponto_registros.justificativa)${extraSet}
         RETURNING *
@@ -465,7 +470,7 @@ module.exports = function(pool) {
       const { rows } = await pool.query(`
         INSERT INTO ponto_registros(funcionario_id, data_ref, entrada, saida_intervalo, retorno_intervalo, saida, justificativa, status, entrada_manual, saida_manual, criado_por)
         VALUES($1,$2,$3,$4,$5,$6,$7,$8,true,true,$9)
-        ON CONFLICT(funcionario_id, data_ref) DO UPDATE
+        ON CONFLICT(loja_id, funcionario_id, data_ref) DO UPDATE
           SET entrada=$3, saida_intervalo=$4, retorno_intervalo=$5, saida=$6,
               justificativa=$7, status=$8, entrada_manual=true, saida_manual=true, atualizado_em=NOW()
         RETURNING *
@@ -563,7 +568,7 @@ module.exports = function(pool) {
         await pool.query(`
           INSERT INTO ponto_jornada_dia (funcionario_id, dia_semana, folga, horario_entrada, horario_saida, jornada_horas, intervalo_min)
           VALUES ($1,$2,$3,$4,$5,$6,$7)
-          ON CONFLICT (funcionario_id, dia_semana) DO UPDATE SET
+          ON CONFLICT (loja_id, funcionario_id, dia_semana) DO UPDATE SET
             folga=$3, horario_entrada=$4, horario_saida=$5, jornada_horas=$6, intervalo_min=$7
         `, [req.params.funcionario_id, d.dia_semana, d.folga||false,
             d.folga ? null : (d.horario_entrada||'08:00'),
