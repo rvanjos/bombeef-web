@@ -182,15 +182,6 @@
   // ── Contrato de módulo ─────────────────────────────────────────────────────
   // Padrão único que toda tela segue. Substitui o par
   // "window.onBBReady + bloco de listener SSE copiado em cada arquivo".
-  //
-  //   BB.modulo({
-  //     nome:    'validade',
-  //     init:    () => {...},                  // roda 1x, no boot
-  //     reload:  () => {...},                  // recarrega DADOS, sem resetar filtros
-  //     eventos: ['validade_atualizado'],      // SSE que disparam o reload
-  //   });
-  //
-  // Compatibilidade: quem ainda usa window.onBBReady continua funcionando.
   const _mod = { nome: null, init: null, reload: null, eventos: [] };
   let _initFeito = false;
 
@@ -207,41 +198,65 @@
     _mod.init    = cfg.init    || null;
     _mod.reload  = cfg.reload  || null;
     _mod.eventos = Array.isArray(cfg.eventos) ? cfg.eventos : [];
-    // Se o BB já ficou pronto antes deste registro, dispara agora.
     if (_bbReady) _rodarInit(w.__bbUsuario);
   }
 
-  // Recarga sob demanda — o módulo pode chamar BB.recarregar() a qualquer momento.
   function recarregar() {
     if (typeof _mod.reload !== 'function') return;
     try { _mod.reload(); }
     catch (e) { console.error('[BB] reload de "' + _mod.nome + '":', e); }
   }
 
-  // Listener SSE único e centralizado (antes era copiado em cada tela).
   let _tReload = null;
   w.addEventListener('message', function (e) {
     if (!e.data || e.data.type !== 'bb_data_changed') return;
     if (!_mod.eventos.length || typeof _mod.reload !== 'function') return;
     const tipo = e.data.evento && e.data.evento.type;
     if (_mod.eventos.indexOf(tipo) === -1) return;
-    clearTimeout(_tReload);            // debounce: várias mutações seguidas = 1 recarga
+    clearTimeout(_tReload);
     _tReload = setTimeout(recarregar, 400);
   });
 
   // ── Inicialização com token ────────────────────────────────────────────────
   let _bbReady = false;
 
+  function _perfilDoToken() {
+    try {
+      const p = JSON.parse(atob(getToken().split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
+      return p.perfil || '';
+    } catch (_) { return ''; }
+  }
+
+  function _injetarVisaoMultiloja(usuario) {
+    if (!/\/config\.html$/i.test(location.pathname)) return;
+    const perfil = usuario?.perfil || _perfilDoToken();
+    if (perfil !== 'admin' || document.getElementById('bb-multiloja-admin-link')) return;
+    const btn = document.createElement('button');
+    btn.id = 'bb-multiloja-admin-link';
+    btn.type = 'button';
+    btn.innerHTML = '🏢 <span>Visão Multi-loja</span>';
+    btn.title = 'Abrir visão administrativa consolidada de todas as lojas';
+    btn.style.cssText = 'position:fixed;right:18px;bottom:18px;z-index:9990;border:0;border-radius:10px;background:#8B0000;color:#fff;padding:10px 14px;font:700 12px DM Sans,sans-serif;box-shadow:0 6px 20px rgba(90,0,0,.24);cursor:pointer;display:flex;gap:7px;align-items:center';
+    btn.onclick = () => {
+      try { w.top.open('/admin-multiloja.html', '_blank', 'noopener'); }
+      catch (_) { w.open('/admin-multiloja.html', '_blank'); }
+    };
+    document.body.appendChild(btn);
+  }
+
   function _dispararReady(usuario) {
-    if (_bbReady) return;
+    if (_bbReady) {
+      _injetarVisaoMultiloja(usuario);
+      return;
+    }
     _bbReady = true;
+    _injetarVisaoMultiloja(usuario);
     if (typeof w.onBBReady === 'function') {
       try { w.onBBReady(usuario); } catch(e) { console.error('[BB] onBBReady:', e); }
     }
     _rodarInit(usuario);
   }
 
-  // Escuta token enviado pelo portal pai
   window.addEventListener('message', e => {
     if (e.data?.type === 'bb_token' && e.data.token) {
       setToken(e.data.token);
@@ -250,12 +265,9 @@
     }
   });
 
-  // Token já existe no storage (recarga de página)
   if (getToken()) {
     setTimeout(() => _dispararReady(w.__bbUsuario), 50);
   } else if (_emIframe) {
-    // Dentro de iframe sem token — pede ao portal pai
-    // Retry em 500ms, 1.5s e 4s para cobrir mobile com rede lenta
     function _pedirToken() {
       try { w.parent.postMessage({ type: 'bb_request_auth' }, '*'); } catch (_) {}
     }
@@ -267,7 +279,6 @@
     }, d));
   }
 
-  // ── Expõe globalmente ──────────────────────────────────────────────────────
   w.BB = { api, fmt, toast, modulo, recarregar };
 
 })(window);
