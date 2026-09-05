@@ -6,10 +6,8 @@
 (function(w) {
   'use strict';
 
-  // Detecta se está rodando dentro de um iframe
   const _emIframe = w.self !== w.top;
 
-  // ── Token ──────────────────────────────────────────────────────────────────
   function getToken() {
     return sessionStorage.getItem('bb_token') || localStorage.getItem('bb_token') || '';
   }
@@ -17,26 +15,16 @@
     if (tk) sessionStorage.setItem('bb_token', tk);
   }
 
-  // ── Tratamento de 401 ─────────────────────────────────────────────────────
-  // CRÍTICO: dentro de iframe NUNCA redirecionar com location.href
-  // Só faz logout se o módulo já estava inicializado (_bbReady = true).
-  // Se ainda está na fase de inicialização, apenas descarta o token expirado
-  // e pede um novo ao portal — evita o bug de "precisa fazer login duas vezes"
-  // causado por token residual expirado no sessionStorage de sessão anterior.
-  // Flag global para evitar múltiplos 401 simultâneos
   let _logoutEmAndamento = false;
-
   function handle401() {
-    if (_logoutEmAndamento) return; // já está tratando
+    if (_logoutEmAndamento) return;
     sessionStorage.removeItem('bb_token');
     localStorage.removeItem('bb_token');
     if (_emIframe) {
       if (_bbReady) {
-        // Sessão expirou durante uso normal → logout único
         _logoutEmAndamento = true;
         try { w.parent.postMessage({ type: 'bb_logout' }, '*'); } catch (_) {}
       } else {
-        // Token expirado na inicialização → pede token fresco
         try { w.parent.postMessage({ type: 'bb_request_auth' }, '*'); } catch (_) {}
       }
     } else {
@@ -44,10 +32,8 @@
     }
   }
 
-  // ── Renovação de token ────────────────────────────────────────────────────
   let _refreshing = false;
   let _refreshProm = null;
-
   async function tryRefresh() {
     if (!_refreshing) {
       _refreshing = true;
@@ -60,7 +46,6 @@
     return _refreshProm;
   }
 
-  // ── apiFetch ───────────────────────────────────────────────────────────────
   async function apiFetch(path, opts = {}) {
     const makeHeaders = () => ({
       'Content-Type': 'application/json',
@@ -74,12 +59,10 @@
       return { ok: false, erro: 'Sem conexão com o servidor' };
     }
     if (res.status === 401) {
-      // Tenta renovar antes de deslogar
       try {
         const ref = await tryRefresh();
         if (ref && ref.ok && ref.token) {
           setToken(ref.token);
-          // Reexecuta com novo token
           res = await fetch(path, { cache: 'no-store', ...opts, headers: makeHeaders() });
           if (res.status !== 401) {
             try { return await res.json(); }
@@ -94,7 +77,6 @@
     catch (_) { return { ok: false, erro: 'Resposta inválida do servidor' }; }
   }
 
-  // ── apiUpload ──────────────────────────────────────────────────────────────
   async function apiUpload(path, formData) {
     let res;
     try {
@@ -126,7 +108,6 @@
     catch (_) { return { ok: false, erro: 'Resposta inválida do servidor' }; }
   }
 
-  // ── Helpers de API ─────────────────────────────────────────────────────────
   const api = {
     token:  getToken,
     setToken,
@@ -138,7 +119,6 @@
     upload: apiUpload,
   };
 
-  // ── Formatadores ───────────────────────────────────────────────────────────
   const fmt = {
     brl: v => 'R$ ' + parseFloat(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
     n:   v => parseInt(v || 0).toLocaleString('pt-BR'),
@@ -146,7 +126,6 @@
     date: iso => {
       if (!iso) return '—';
       const s = String(iso).slice(0, 10);
-      // Proteção: se não tem o formato de data ISO (YYYY-MM-DD), é dado corrompido
       if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return '⚠️ data inválida';
       const [y, m, d] = s.split('-');
       return `${d}/${m}/${y}`;
@@ -163,7 +142,6 @@
     },
   };
 
-  // ── Toast ──────────────────────────────────────────────────────────────────
   let _toastTimer;
   function toast(msg, ms = 2500) {
     let el = document.getElementById('bb-toast');
@@ -179,69 +157,75 @@
     _toastTimer = setTimeout(() => { el.style.transform = 'translateX(-50%) translateY(60px)'; }, ms);
   }
 
-  // ── Contrato de módulo ─────────────────────────────────────────────────────
-  // Padrão único que toda tela segue. Substitui o par
-  // "window.onBBReady + bloco de listener SSE copiado em cada arquivo".
-  //
-  //   BB.modulo({
-  //     nome:    'validade',
-  //     init:    () => {...},                  // roda 1x, no boot
-  //     reload:  () => {...},                  // recarrega DADOS, sem resetar filtros
-  //     eventos: ['validade_atualizado'],      // SSE que disparam o reload
-  //   });
-  //
-  // Compatibilidade: quem ainda usa window.onBBReady continua funcionando.
   const _mod = { nome: null, init: null, reload: null, eventos: [] };
   let _initFeito = false;
-
   function _rodarInit(usuario) {
     if (_initFeito || typeof _mod.init !== 'function') return;
     _initFeito = true;
     try { _mod.init(usuario); }
     catch (e) { console.error('[BB] init de "' + _mod.nome + '":', e); }
   }
-
   function modulo(cfg) {
     if (!cfg || typeof cfg !== 'object') return;
     _mod.nome    = cfg.nome    || 'modulo';
     _mod.init    = cfg.init    || null;
     _mod.reload  = cfg.reload  || null;
     _mod.eventos = Array.isArray(cfg.eventos) ? cfg.eventos : [];
-    // Se o BB já ficou pronto antes deste registro, dispara agora.
     if (_bbReady) _rodarInit(w.__bbUsuario);
   }
-
-  // Recarga sob demanda — o módulo pode chamar BB.recarregar() a qualquer momento.
   function recarregar() {
     if (typeof _mod.reload !== 'function') return;
     try { _mod.reload(); }
     catch (e) { console.error('[BB] reload de "' + _mod.nome + '":', e); }
   }
 
-  // Listener SSE único e centralizado (antes era copiado em cada tela).
   let _tReload = null;
   w.addEventListener('message', function (e) {
     if (!e.data || e.data.type !== 'bb_data_changed') return;
     if (!_mod.eventos.length || typeof _mod.reload !== 'function') return;
     const tipo = e.data.evento && e.data.evento.type;
     if (_mod.eventos.indexOf(tipo) === -1) return;
-    clearTimeout(_tReload);            // debounce: várias mutações seguidas = 1 recarga
+    clearTimeout(_tReload);
     _tReload = setTimeout(recarregar, 400);
   });
 
-  // ── Inicialização com token ────────────────────────────────────────────────
   let _bbReady = false;
+  function _perfilDoToken() {
+    try {
+      const p = JSON.parse(atob(getToken().split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
+      return p.perfil || '';
+    } catch (_) { return ''; }
+  }
+  function _injetarVisaoMultiloja(usuario) {
+    if (!/\/config\.html$/i.test(location.pathname)) return;
+    const perfil = usuario?.perfil || _perfilDoToken();
+    if (perfil !== 'admin' || document.getElementById('bb-multiloja-admin-link')) return;
+    const btn = document.createElement('button');
+    btn.id = 'bb-multiloja-admin-link';
+    btn.type = 'button';
+    btn.innerHTML = '🏢 <span>Visão Multi-loja</span>';
+    btn.title = 'Abrir visão administrativa consolidada de todas as lojas';
+    btn.style.cssText = 'position:fixed;right:18px;bottom:18px;z-index:9990;border:0;border-radius:10px;background:#8B0000;color:#fff;padding:10px 14px;font:700 12px DM Sans,sans-serif;box-shadow:0 6px 20px rgba(90,0,0,.24);cursor:pointer;display:flex;gap:7px;align-items:center';
+    btn.onclick = () => {
+      try { w.top.open('/admin-multiloja.html', '_blank'); }
+      catch (_) { w.open('/admin-multiloja.html', '_blank'); }
+    };
+    document.body.appendChild(btn);
+  }
 
   function _dispararReady(usuario) {
-    if (_bbReady) return;
+    if (_bbReady) {
+      _injetarVisaoMultiloja(usuario);
+      return;
+    }
     _bbReady = true;
+    _injetarVisaoMultiloja(usuario);
     if (typeof w.onBBReady === 'function') {
       try { w.onBBReady(usuario); } catch(e) { console.error('[BB] onBBReady:', e); }
     }
     _rodarInit(usuario);
   }
 
-  // Escuta token enviado pelo portal pai
   window.addEventListener('message', e => {
     if (e.data?.type === 'bb_token' && e.data.token) {
       setToken(e.data.token);
@@ -250,12 +234,9 @@
     }
   });
 
-  // Token já existe no storage (recarga de página)
   if (getToken()) {
     setTimeout(() => _dispararReady(w.__bbUsuario), 50);
   } else if (_emIframe) {
-    // Dentro de iframe sem token — pede ao portal pai
-    // Retry em 500ms, 1.5s e 4s para cobrir mobile com rede lenta
     function _pedirToken() {
       try { w.parent.postMessage({ type: 'bb_request_auth' }, '*'); } catch (_) {}
     }
@@ -267,7 +248,6 @@
     }, d));
   }
 
-  // ── Expõe globalmente ──────────────────────────────────────────────────────
   w.BB = { api, fmt, toast, modulo, recarregar };
 
 })(window);
