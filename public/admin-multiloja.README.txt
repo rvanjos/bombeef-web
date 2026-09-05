@@ -1,2 +1,0 @@
-Painel administrativo multi-loja: /admin-multiloja.html
-Acesso exclusivo do perfil admin.
