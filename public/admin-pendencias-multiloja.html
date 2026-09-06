@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Pendências Multi-loja — Bom Beef</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root{--red:#8B0000;--red2:#b42318;--bg:#f6f3ef;--card:#fff;--text:#1e1b18;--muted:#776f68;--border:#e8e0d8;--green:#18864b;--orange:#c77700;--blue:#2563a6;--shadow:0 4px 18px rgba(54,36,24,.07)}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif}.wrap{max-width:1450px;margin:auto;padding:20px}.top{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;margin-bottom:14px}.title h1{margin:0;color:var(--red);font-size:23px}.title p{margin:4px 0 0;color:var(--muted);font-size:12px}.actions{display:flex;gap:8px;flex-wrap:wrap}.btn,select{height:38px;border:1px solid var(--border);border-radius:9px;background:#fff;padding:0 12px;font:600 12px 'DM Sans',sans-serif;color:#342d28}.btn{cursor:pointer}.btn.primary{background:var(--red);color:#fff;border-color:var(--red)}.notice{background:#fff8e7;border:1px solid #f0d594;border-radius:10px;padding:10px 13px;font-size:12px;color:#6f520d;margin-bottom:12px}.status{font-size:11px;color:var(--muted);margin:8px 0 14px}.summary{display:grid;grid-template-columns:repeat(4,minmax(160px,1fr));gap:10px;margin-bottom:14px}.sum{background:#fff;border:1px solid var(--border);border-radius:12px;padding:13px 14px;box-shadow:var(--shadow)}.sum .lab{font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700}.sum .val{font:700 23px 'DM Mono',monospace;margin-top:5px}.sum.crit{border-top:3px solid var(--red2)}.sum.warn{border-top:3px solid var(--orange)}.sum.ok{border-top:3px solid var(--green)}.stores{display:grid;gap:12px}.store{background:#fff;border:1px solid var(--border);border-radius:13px;box-shadow:var(--shadow);overflow:hidden}.store-head{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:13px 15px;border-bottom:1px solid var(--border);background:#fcfaf8}.store-name{font-weight:700;font-size:14px}.store-meta{font-size:10px;color:var(--muted);margin-top:2px}.score{display:inline-flex;gap:5px;align-items:center;border-radius:14px;padding:4px 9px;font-size:10px;font-weight:700}.score.crit{background:#feecec;color:#a22020}.score.warn{background:#fff1d7;color:#946000}.score.ok{background:#e9f7ef;color:#14733f}.alerts{display:grid;grid-template-columns:repeat(3,minmax(220px,1fr));gap:9px;padding:12px}.alert{border:1px solid var(--border);border-radius:10px;padding:10px 11px;display:flex;align-items:center;gap:10px;min-height:72px}.alert.crit{background:#fff7f7;border-color:#f2c4c4}.alert.warn{background:#fffbf1;border-color:#f0d9a7}.ico{font-size:20px;width:27px;text-align:center}.ainfo{min-width:0;flex:1}.ainfo b{display:block;font-size:11px}.ainfo small{display:block;color:var(--muted);font-size:10px;margin-top:2px;line-height:1.3}.count{font:700 17px 'DM Mono',monospace}.open{border:1px solid #d8cbc0;background:#fff;border-radius:7px;padding:5px 8px;font-size:9px;font-weight:700;cursor:pointer}.empty{padding:22px;text-align:center;color:var(--green);font-size:12px}.footer{text-align:right;color:var(--muted);font-size:10px;margin-top:10px}
+@media(max-width:1000px){.alerts{grid-template-columns:repeat(2,1fr)}.summary{grid-template-columns:repeat(2,1fr)}}@media(max-width:650px){.wrap{padding:12px}.top{flex-direction:column}.actions{width:100%}.actions>*{flex:1}.alerts{grid-template-columns:1fr}.summary{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><div class="title"><h1>🔔 Pendências e Alertas Multi-loja</h1><p>Central administrativa de ações que exigem atenção por unidade</p></div><div class="actions"><select id="filtro"><option value="all">Todas as lojas</option></select><button class="btn primary" onclick="carregar()">↻ Atualizar</button><button class="btn" onclick="location.href='/admin-multiloja.html'">🏢 Visão gerencial</button><button class="btn" onclick="voltar()">← Sistema</button></div></div>
+  <div class="notice">Esta tela é somente de leitura. Ao clicar em “Abrir”, o sistema entra na loja correta antes de abrir o módulo operacional.</div>
+  <div class="status" id="status">Preparando central de pendências...</div>
+  <div class="summary"><div class="sum crit"><div class="lab">Críticas</div><div class="val" id="s-crit">—</div></div><div class="sum warn"><div class="lab">Atenção</div><div class="val" id="s-warn">—</div></div><div class="sum"><div class="lab">Lojas com pendências</div><div class="val" id="s-lojas">—</div></div><div class="sum ok"><div class="lab">Lojas sem pendências</div><div class="val" id="s-ok">—</div></div></div>
+  <div class="stores" id="stores"><div class="store"><div class="empty">Carregando lojas...</div></div></div>
+  <div class="footer" id="footer"></div>
+</div>
+<script>
+const $=id=>document.getElementById(id),brl=v=>'R$\u00a0'+Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+let tokenOriginal='',lojaOriginal=null,lojas=[],dados=[];
+function tok(){return sessionStorage.getItem('bb_token')||localStorage.getItem('bb_token')||''}
+async function req(path,token,opts={}){try{const r=await fetch(path,{cache:'no-store',...opts,headers:{'Content-Type':'application/json','Authorization':'Bearer '+token,...(opts.headers||{})}});let d={ok:false};try{d=await r.json()}catch{};if(!r.ok&&d.ok!==true)d.ok=false;return d}catch(e){return{ok:false,erro:e.message}}}
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function n(v){return Number(v||0)}
+async function tokenLoja(id){const d=await req('/auth/loja-ativa',tokenOriginal,{method:'POST',body:JSON.stringify({loja_id:Number(id)})});if(!d.ok||!d.token)throw new Error(d.erro||'Falha ao acessar loja');return d.token}
+async function restaurar(){if(!lojaOriginal)return;await req('/auth/loja-ativa',tokenOriginal,{method:'POST',body:JSON.stringify({loja_id:Number(lojaOriginal)})}).catch(()=>{})}
+async function lerLoja(loja){const tk=await tokenLoja(loja.id);const[k,rh,ret,fia,val,aud]=await Promise.all([
+ req('/api/dashboard/kpis',tk),req('/api/rh/lancamentos-pendentes/count',tk),req('/api/retiradas/pendentes/count',tk),req('/api/fiado/pendentes-aprovacao/count',tk),req('/api/validade/alertas-dashboard?dias=30',tk),req('/api/auditoria/resumo?dias=7',tk)
+]);const x=k.data||{},a=aud.data?.totais||{};const alertas=[];
+ const push=(tipo,icone,titulo,qtd,sub,modulo)=>{qtd=n(qtd);if(qtd>0)alertas.push({tipo,icone,titulo,qtd,sub,modulo})};
+ push('crit','🚨','Boletos vencidos',x.boletosVencidos,brl(x.boletosValorVencidos||0),'boletos');
+ push('crit','🔴','Produtos vencidos',x.validadeVencidos,'retirada imediata','validade');
+ push('crit','🧾','Falhas de auditoria',a.falhas,'últimos 7 dias','auditoria');
+ push('warn','📅','Boletos a vencer em 7 dias',x.boletosVence7d,brl(x.boletosValorVence7d||0),'boletos');
+ push('warn','🟠','Validades críticas',x.validadeCriticos,'até 3 dias','validade');
+ push('warn','🔔','Ações de validade',Array.isArray(val.data)?val.data.length:0,'ações cadastradas até 30 dias','validade');
+ push('warn','🧑‍💼','Aprovações no RH',rh.total,'lançamentos pendentes','rh');
+ push('warn','💸','Retiradas pendentes',ret.total,ret.valor?brl(ret.valor):'aguardando análise','retiradas');
+ push('warn','💳','Fiado aguardando aprovação',fia.total,'aguardando aprovação','fiado');
+ return{loja,alertas,erro:!k.ok};}
+async function init(){tokenOriginal=tok();if(!tokenOriginal){location.href='/';return}const me=await req('/auth/me',tokenOriginal);const u=me.data||me.usuario||{};if(!me.ok||u.perfil!=='admin'){document.body.innerHTML='<div style="padding:40px;font-family:sans-serif">Acesso exclusivo do administrador.</div>';return}const l=await req('/auth/lojas',tokenOriginal);if(!l.ok){$('status').textContent='Não foi possível carregar as lojas';return}lojaOriginal=l.loja_ativa_id;lojas=(l.data||[]).filter(x=>x.ativa!==false);$('filtro').innerHTML='<option value="all">Todas as lojas</option>'+lojas.map(x=>'<option value="'+x.id+'">'+esc(x.nome||'Loja')+'</option>').join('');$('filtro').onchange=render;await carregar()}
+async function carregar(){$('status').textContent='Atualizando '+lojas.length+' loja(s)...';dados=[];try{for(let i=0;i<lojas.length;i++){$('status').textContent='Verificando '+lojas[i].nome+' ('+(i+1)+'/'+lojas.length+')...';try{dados.push(await lerLoja(lojas[i]))}catch(e){dados.push({loja:lojas[i],alertas:[],erro:true,mensagem:e.message})}}}finally{await restaurar()}render();$('status').textContent='Central atualizada';$('footer').textContent='Atualizado em '+new Date().toLocaleString('pt-BR')}
+function selecionados(){const id=$('filtro').value;return id==='all'?dados:dados.filter(x=>String(x.loja.id)===String(id))}
+function render(){const a=selecionados(),crit=a.reduce((s,x)=>s+x.alertas.filter(y=>y.tipo==='crit').reduce((t,y)=>t+y.qtd,0),0),warn=a.reduce((s,x)=>s+x.alertas.filter(y=>y.tipo==='warn').reduce((t,y)=>t+y.qtd,0),0),com=a.filter(x=>x.alertas.length).length;$('s-crit').textContent=crit;$('s-warn').textContent=warn;$('s-lojas').textContent=com;$('s-ok').textContent=a.length-com;$('stores').innerHTML=a.length?a.map(renderLoja).join(''):'<div class="store"><div class="empty">Nenhuma loja selecionada</div></div>'}
+function renderLoja(x){if(x.erro)return'<div class="store"><div class="store-head"><div><div class="store-name">'+esc(x.loja.nome)+'</div><div class="store-meta">Não foi possível consultar esta unidade</div></div><span class="score crit">Erro</span></div></div>';const c=x.alertas.filter(a=>a.tipo==='crit').length,w=x.alertas.filter(a=>a.tipo==='warn').length,cls=c?'crit':w?'warn':'ok',label=c?'🔴 '+c+' crítica(s)':w?'🟡 '+w+' atenção':'🟢 Sem pendências';return'<div class="store"><div class="store-head"><div><div class="store-name">'+esc(x.loja.nome)+'</div><div class="store-meta">'+x.alertas.length+' categoria(s) com ação</div></div><span class="score '+cls+'">'+label+'</span></div>'+(x.alertas.length?'<div class="alerts">'+x.alertas.map(a=>'<div class="alert '+a.tipo+'"><div class="ico">'+a.icone+'</div><div class="ainfo"><b>'+esc(a.titulo)+'</b><small>'+esc(a.sub)+'</small></div><div class="count">'+a.qtd+'</div><button class="open" onclick="abrir('+Number(x.loja.id)+',\''+a.modulo+'\')">Abrir</button></div>').join('')+'</div>':'<div class="empty">✅ Nenhuma pendência relevante encontrada nesta unidade</div>')+'</div>'}
+const modUrl={boletos:'/boletos.html',validade:'/validade.html',auditoria:'/auditoria.html',rh:'/rh.html',retiradas:'/retiradas.html',fiado:'/fiado.html'};
+async function abrir(lojaId,modulo){$('status').textContent='Abrindo '+modulo+' na loja selecionada...';const d=await req('/auth/loja-ativa',tokenOriginal,{method:'POST',body:JSON.stringify({loja_id:Number(lojaId)})});if(!d.ok||!d.token){alert(d.erro||'Não foi possível abrir a unidade');return}sessionStorage.setItem('bb_token',d.token);location.href=modUrl[modulo]||'/'}
+function voltar(){restaurar().finally(()=>location.href='/')}
+init();
+</script>
+</body>
+</html>
