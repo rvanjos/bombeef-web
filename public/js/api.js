@@ -8,13 +8,6 @@
 
   const _emIframe = w.self !== w.top;
 
-  // Retiradas ganhou uma tela gerencial simplificada. A tela antiga permanece
-  // disponível com ?legacy=1 para lançamentos/ações avançadas e compatibilidade.
-  if (/\/retiradas\.html$/i.test(w.location.pathname) && new URLSearchParams(w.location.search).get('legacy') !== '1') {
-    w.location.replace('/retiradas-gestao.html');
-    return;
-  }
-
   function getToken() {
     return sessionStorage.getItem('bb_token') || localStorage.getItem('bb_token') || '';
   }
