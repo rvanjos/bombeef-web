@@ -87,11 +87,10 @@ async function main() {
         SET razao_social=$1
         WHERE UPPER(COALESCE(fonte,''))='EXTRATO'
           AND (
-            REGEXP_REPLACE(COALESCE(cnpj_doc,''), '[^0-9]', '', 'g')=$2
-            OR lancamento ILIKE 'PIX RECEBIDO AR BOUT%'
+            lancamento ILIKE 'PIX RECEBIDO AR BOUT%'
             OR UPPER(COALESCE(razao_social,'')) IN ('ARTMILL ACESSORIOS LTDA EPP','B2B - HOME23 COMERCIO')
           )
-      `, [NOME_PROPRIO, CNPJ_PROPRIO]);
+      `, [NOME_PROPRIO]);
 
       await client.query(`
         CREATE OR REPLACE FUNCTION bb_dre_ignorar_credito_extrato()
@@ -103,8 +102,8 @@ async function main() {
               NEW.categoria := '${CAT_CREDITO_EXTRATO}';
             END IF;
           END IF;
-          IF REGEXP_REPLACE(COALESCE(NEW.cnpj_doc,''), '[^0-9]', '', 'g')='${CNPJ_PROPRIO}'
-             OR UPPER(COALESCE(NEW.razao_social,'')) IN ('ARTMILL ACESSORIOS LTDA EPP','B2B - HOME23 COMERCIO') THEN
+          IF UPPER(COALESCE(NEW.razao_social,'')) IN ('ARTMILL ACESSORIOS LTDA EPP','B2B - HOME23 COMERCIO')
+             OR NEW.lancamento ILIKE 'PIX RECEBIDO AR BOUT%' THEN
             NEW.razao_social := '${NOME_PROPRIO}';
           END IF;
           RETURN NEW;
