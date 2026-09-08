@@ -8,6 +8,13 @@
 
   const _emIframe = w.self !== w.top;
 
+  // Retiradas ganhou uma tela gerencial simplificada. A tela antiga permanece
+  // disponível com ?legacy=1 para lançamentos/ações avançadas e compatibilidade.
+  if (/\/retiradas\.html$/i.test(w.location.pathname) && new URLSearchParams(w.location.search).get('legacy') !== '1') {
+    w.location.replace('/retiradas-gestao.html');
+    return;
+  }
+
   function getToken() {
     return sessionStorage.getItem('bb_token') || localStorage.getItem('bb_token') || '';
   }
@@ -213,13 +220,33 @@
     document.body.appendChild(btn);
   }
 
+  function _injetarPendenciasFuncionarios(usuario) {
+    if (!/\/rh\.html$/i.test(location.pathname)) return;
+    const perfil = usuario?.perfil || _perfilDoToken();
+    if (perfil !== 'admin' || document.getElementById('bb-rh-pendencias-tab')) return;
+    const tabs = document.querySelector('.tabs');
+    if (!tabs) return;
+    const btn = document.createElement('button');
+    btn.id = 'bb-rh-pendencias-tab';
+    btn.type = 'button';
+    btn.className = 'tab';
+    btn.textContent = '💳 Pendências Funcionários';
+    btn.title = 'Relatório financeiro das retiradas pendentes por funcionário';
+    btn.onclick = () => { w.location.href = '/funcionarios-pendencias.html'; };
+    const relatorio = [...tabs.querySelectorAll('button')].find(b => /Relatório/i.test(b.textContent || ''));
+    if (relatorio) tabs.insertBefore(btn, relatorio);
+    else tabs.appendChild(btn);
+  }
+
   function _dispararReady(usuario) {
     if (_bbReady) {
       _injetarVisaoMultiloja(usuario);
+      _injetarPendenciasFuncionarios(usuario);
       return;
     }
     _bbReady = true;
     _injetarVisaoMultiloja(usuario);
+    _injetarPendenciasFuncionarios(usuario);
     if (typeof w.onBBReady === 'function') {
       try { w.onBBReady(usuario); } catch(e) { console.error('[BB] onBBReady:', e); }
     }
