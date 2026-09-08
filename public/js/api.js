@@ -8,6 +8,13 @@
 
   const _emIframe = w.self !== w.top;
 
+  // Retiradas: a visão gerencial é a entrada padrão. O fluxo operacional
+  // completo permanece disponível com ?legacy=1 para lançamentos avançados.
+  if (/\/retiradas\.html$/i.test(w.location.pathname) && new URLSearchParams(w.location.search).get('legacy') !== '1') {
+    w.location.replace('/retiradas-gestao.html');
+    return;
+  }
+
   function getToken() {
     return sessionStorage.getItem('bb_token') || localStorage.getItem('bb_token') || '';
   }
