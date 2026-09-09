@@ -133,6 +133,28 @@ module.exports = function (pool, app) {
       )
     `).catch(() => {});
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_val_int_status_data ON validade_internos(status, data_validade)`).catch(() => {});
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS validade_interno_anexos (
+        id            SERIAL PRIMARY KEY,
+        interno_id    INTEGER NOT NULL REFERENCES validade_internos(id) ON DELETE CASCADE,
+        nome_arquivo  TEXT NOT NULL,
+        mime_type     TEXT NOT NULL,
+        tamanho_bytes INTEGER NOT NULL,
+        conteudo      BYTEA NOT NULL,
+        descricao     TEXT,
+        criado_por    TEXT,
+        criado_em     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        loja_id       INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id)
+      )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_val_int_anexos_item ON validade_interno_anexos(interno_id, criado_em DESC)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_validade_interno_anexos_loja ON validade_interno_anexos(loja_id)`);
+    await pool.query(`ALTER TABLE validade_interno_anexos ENABLE ROW LEVEL SECURITY`);
+    await pool.query(`ALTER TABLE validade_interno_anexos FORCE ROW LEVEL SECURITY`);
+    await pool.query(`DROP POLICY IF EXISTS bb_isolamento_loja ON validade_interno_anexos`);
+    await pool.query(`CREATE POLICY bb_isolamento_loja ON validade_interno_anexos
+      USING (NULLIF(current_setting('app.loja_id', true),'') IS NULL OR loja_id=NULLIF(current_setting('app.loja_id', true),'')::integer)
+      WITH CHECK (NULLIF(current_setting('app.loja_id', true),'') IS NULL OR loja_id=NULLIF(current_setting('app.loja_id', true),'')::integer)`);
 
     await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_val_codigo    ON validade_items(codigo);
@@ -211,6 +233,44 @@ module.exports = function (pool, app) {
       if(!rowCount)return res.status(404).json({ok:false,erro:'Item não encontrado'});
       res.json({ok:true});
     }catch(e){res.status(500).json({ok:false,erro:e.message});}
+  });
+
+  r.get('/internos/:id/anexos', async (req,res)=>{
+    try {
+      const {rows}=await pool.query(`SELECT id,interno_id,nome_arquivo,mime_type,tamanho_bytes,descricao,criado_por,criado_em FROM validade_interno_anexos WHERE interno_id=$1 ORDER BY criado_em DESC`,[req.params.id]);
+      res.json({ok:true,data:rows});
+    } catch(e){res.status(500).json({ok:false,erro:e.message});}
+  });
+
+  r.post('/internos/:id/anexos', upload.single('arquivo'), async (req,res)=>{
+    const permitidos=new Set(['application/pdf','image/png','image/jpeg','image/webp']);
+    if(!req.file)return res.status(400).json({ok:false,erro:'Selecione um arquivo'});
+    if(!permitidos.has(req.file.mimetype))return res.status(400).json({ok:false,erro:'Envie PDF, PNG, JPG ou WEBP'});
+    if(req.file.size>10*1024*1024)return res.status(400).json({ok:false,erro:'O arquivo deve ter no máximo 10 MB'});
+    try {
+      const existe=await pool.query(`SELECT 1 FROM validade_internos WHERE id=$1`,[req.params.id]);
+      if(!existe.rowCount)return res.status(404).json({ok:false,erro:'Produto interno não encontrado'});
+      const {rows}=await pool.query(`INSERT INTO validade_interno_anexos(interno_id,nome_arquivo,mime_type,tamanho_bytes,conteudo,descricao,criado_por) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id,nome_arquivo,mime_type,tamanho_bytes,descricao,criado_por,criado_em`,[req.params.id,req.file.originalname,req.file.mimetype,req.file.size,req.file.buffer,String(req.body?.descricao||'').trim()||null,req.user?.nome||req.user?.email||null]);
+      res.json({ok:true,data:rows[0]});
+    } catch(e){res.status(500).json({ok:false,erro:e.message});}
+  });
+
+  r.get('/internos/anexos/:anexoId/download', async (req,res)=>{
+    try {
+      const {rows}=await pool.query(`SELECT nome_arquivo,mime_type,conteudo FROM validade_interno_anexos WHERE id=$1`,[req.params.anexoId]);
+      if(!rows.length)return res.status(404).json({ok:false,erro:'Documento não encontrado'});
+      const a=rows[0];
+      const nomeOriginal=String(a.nome_arquivo||'documento').replace(/[\r\n"]/g,'_');
+      const nomeAscii=nomeOriginal.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^\x20-\x7E]/g,'_');
+      res.setHeader('Content-Type',a.mime_type||'application/octet-stream');
+      res.setHeader('Content-Disposition',`attachment; filename="${nomeAscii}"; filename*=UTF-8''${encodeURIComponent(nomeOriginal)}`);
+      res.send(a.conteudo);
+    } catch(e){res.status(500).json({ok:false,erro:e.message});}
+  });
+
+  r.delete('/internos/anexos/:anexoId', async (req,res)=>{
+    try { const d=await pool.query(`DELETE FROM validade_interno_anexos WHERE id=$1`,[req.params.anexoId]); if(!d.rowCount)return res.status(404).json({ok:false,erro:'Documento não encontrado'}); res.json({ok:true}); }
+    catch(e){res.status(500).json({ok:false,erro:e.message});}
   });
 
   // ── Helper: atualiza status baseado na data ────────────────────────────────
@@ -315,7 +375,7 @@ module.exports = function (pool, app) {
 
       const where = conds.length ? 'WHERE ' + conds.join(' AND ') : '';
       const { rows } = await pool.query(
-        `SELECT vi.*, p.descricao AS prod_descricao, p.preco_custo
+        `SELECT vi.*, p.descricao AS prod_descricao, p.preco_custo, p.categoria
          FROM validade_items vi
          LEFT JOIN produtos p ON p.id = vi.produto_id
          ${where} ORDER BY vi.data_validade ASC NULLS LAST, vi.descricao ASC`,

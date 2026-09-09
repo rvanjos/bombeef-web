@@ -141,7 +141,7 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
   <!-- Toolbar -->
   <div class="toolbar toolbar-card">
     <button class="btn btn-p" onclick="abrirModal()">＋ Nova Retirada</button>
-    <button class="btn btn-s" id="btn-pagamento-lote" onclick="abrirPagamentoEmLote()" style="color:#166534;border-color:#86efac">💸 Registrar Pagamento</button>
+    <button class="btn btn-green" id="btn-pagamento-lote" onclick="abrirPagamentoEmLote()">💸 Lançar pagamento</button>
     <button class="btn btn-s" onclick="abrirRelatorio()">📊 Relatório</button>
     <select class="flt" id="flt-func" onchange="typeof carregar==='function'&&carregar()">
       <option value="">Todos os funcionários</option>
@@ -182,8 +182,8 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
     </div>
     <!-- KPI funcionário -->
     <div style="padding:12px 16px 0;flex-shrink:0;background:#faf7f4;border-bottom:1px solid var(--border)">
-      <div style="display:flex;gap:20px;flex-wrap:wrap;padding-bottom:12px">
-        <div style="font-size:11px;color:var(--muted)">Funcionário<strong id="pag-ret-nome" style="font-size:13px;display:block;color:var(--text)">—</strong></div>
+      <div style="display:grid;grid-template-columns:minmax(220px,1fr) auto;gap:20px;align-items:end;padding-bottom:12px">
+        <div style="font-size:11px;color:var(--muted)"><label for="pag-ret-funcionario" style="display:block;margin-bottom:4px;font-weight:700">FUNCIONÁRIO *</label><select id="pag-ret-funcionario" onchange="carregarPendenciasPagamentoRet()" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:#fff;font-size:13px"><option value="">— Selecione —</option></select></div>
         <div style="font-size:11px;color:var(--muted)">Total em Aberto<strong id="pag-ret-total" style="font-size:15px;display:block;color:#dc2626;font-family:'DM Mono',monospace">—</strong></div>
       </div>
     </div>
@@ -335,11 +335,11 @@ async function carregarFuncionarios(){
   const d = await api.get(`/api/retiradas/limites?mes=${mesAtual}`);
   if(!d.ok) return;
   permissoesRet=d.permissoes||permissoesRet;
-  document.getElementById('btn-pagamento-lote').style.display = permissoesRet.pagamentos ? '' : 'none';
+  document.getElementById('btn-pagamento-lote').style.display = (isAdmin || permissoesRet.pagamentos) ? '' : 'none';
   funcionarioProprioId=d.funcionarioProprioId||null;
   limites = d.data || [];
   funcionarios = limites.map(f=>({id:f.id,nome:f.nome,ativo:true}));
-  const sels = [document.getElementById('flt-func'), document.getElementById('r-func')];
+  const sels = [document.getElementById('flt-func'), document.getElementById('r-func'), document.getElementById('pag-ret-funcionario')];
   // Limpa selects antes de preencher para evitar duplicação
   sels.forEach(sel => {
     while(sel.options.length > 1) sel.remove(1); // mantém o "— Selecione —" / "Todos"
@@ -910,8 +910,15 @@ let _pagRetIds = [], _pagRetPendentes = [], _pagRetFuncionarioId = null;
 
 window.abrirPagamentoEmLote = async function abrirPagamentoEmLote() {
   const funcionarioId = Number(document.getElementById('flt-func')?.value || funcionarioProprioId);
-  if (!funcionarioId) { toast('⚠️ Selecione um funcionário para registrar o pagamento'); return; }
-  await abrirModalPagamentoRet(funcionarioId, null);
+  document.getElementById('modal-pag-ret').classList.add('open');
+  document.getElementById('pag-ret-funcionario').value = funcionarioId || '';
+  document.getElementById('pag-ret-total').textContent = '—';
+  document.getElementById('pag-ret-lista').innerHTML = '<div style="padding:18px;text-align:center;color:var(--muted)">Selecione o funcionário para consultar e abater o saldo total.</div>';
+  document.getElementById('pag-ret-valor').value = '';
+  document.getElementById('pag-ret-data').value = new Date().toISOString().slice(0,10);
+  document.getElementById('pag-ret-obs').value = '';
+  document.getElementById('pag-ret-preview').style.display = 'none';
+  if (funcionarioId) await carregarPendenciasPagamentoRet();
 };
 
 window.darBaixaRetirada = async function darBaixaRetirada(idUnico) {
@@ -921,17 +928,32 @@ window.darBaixaRetirada = async function darBaixaRetirada(idUnico) {
 };
 
 async function abrirModalPagamentoRet(funcionarioId, idUnico) {
+  document.getElementById('modal-pag-ret').classList.add('open');
+  document.getElementById('pag-ret-funcionario').value = funcionarioId;
+  await carregarPendenciasPagamentoRet(idUnico);
+}
+
+window.carregarPendenciasPagamentoRet = async function carregarPendenciasPagamentoRet(idUnico=null) {
+  const funcionarioId = Number(document.getElementById('pag-ret-funcionario').value);
+  if (!funcionarioId) {
+    _pagRetFuncionarioId=null; _pagRetPendentes=[]; _pagRetIds=[];
+    document.getElementById('pag-ret-total').textContent='—';
+    document.getElementById('pag-ret-lista').innerHTML='<div style="padding:18px;text-align:center;color:var(--muted)">Selecione o funcionário para consultar as dívidas.</div>';
+    return;
+  }
   const resposta = await api.get(`/api/retiradas?funcionario_id=${funcionarioId}`);
   if (!resposta.ok) { toast('❌ Não foi possível carregar as retiradas pendentes'); return; }
   _pagRetFuncionarioId = funcionarioId;
   _pagRetPendentes = (resposta.data || [])
     .filter(r => r.status !== 'pago' && parseFloat(r.saldo_restante ?? r.valor_total ?? 0) > 0)
     .sort((a,b) => String(a.dt_retirada).localeCompare(String(b.dt_retirada)) || a.id-b.id);
-  if (!_pagRetPendentes.length) { toast('✅ Este funcionário não possui retiradas pendentes'); return; }
+  if (!_pagRetPendentes.length) {
+    document.getElementById('pag-ret-total').textContent=fmt.brl(0);
+    document.getElementById('pag-ret-lista').innerHTML='<div style="padding:18px;text-align:center;color:#166534">✅ Este funcionário não possui retiradas pendentes.</div>';
+    document.getElementById('pag-ret-valor').value='';
+    return;
+  }
   const totalAberto = _pagRetPendentes.reduce((s,r) => s + parseFloat(r.saldo_restante ?? r.valor_total ?? 0), 0);
-  const nome = _pagRetPendentes[0]?.funcionario_nome || funcionarios.find(f=>f.id===funcionarioId)?.nome || '—';
-
-  document.getElementById('pag-ret-nome').textContent  = nome;
   document.getElementById('pag-ret-total').textContent = fmt.brl(totalAberto);
 
   // Data default = hoje
@@ -957,7 +979,6 @@ async function abrirModalPagamentoRet(funcionarioId, idUnico) {
     </label>`;
   }).join('');
 
-  document.getElementById('modal-pag-ret').classList.add('open');
   alterarCriterioPagRet();
 }
 
