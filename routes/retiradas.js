@@ -66,6 +66,7 @@ module.exports = function (pool, app) {
       ['qtd','NUMERIC(10,3) DEFAULT 1'],
       ['preco_unitario','NUMERIC(10,4) DEFAULT 0'],
       ['status','TEXT DEFAULT \'pendente\''],
+      ['saldo_restante','NUMERIC(10,2)'],
       ['dt_pagamento','DATE'],
       ['pago_por','INTEGER'],
       ['baixa_pdv','BOOLEAN DEFAULT false'],
@@ -73,6 +74,50 @@ module.exports = function (pool, app) {
       ['baixa_pdv_por','INTEGER'],
     ];
     for(const[c,d]of needed) await pool.query(`ALTER TABLE retiradas ADD COLUMN IF NOT EXISTS ${c} ${d}`).catch(()=>{});
+    await pool.query(`
+      UPDATE retiradas
+         SET saldo_restante = CASE WHEN COALESCE(status,'pendente')='pago' THEN 0 ELSE valor_total END
+       WHERE saldo_restante IS NULL
+    `).catch(()=>{});
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS pagamentos_retiradas (
+        id SERIAL PRIMARY KEY,
+        funcionario_id INTEGER NOT NULL REFERENCES funcionarios(id),
+        data_pagamento DATE NOT NULL DEFAULT CURRENT_DATE,
+        valor_pago NUMERIC(10,2) NOT NULL CHECK (valor_pago > 0),
+        forma_pagamento TEXT NOT NULL DEFAULT 'dinheiro',
+        observacao TEXT,
+        usuario_id INTEGER,
+        criado_em TIMESTAMPTZ DEFAULT NOW(),
+        loja_id INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id)
+      )
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS pagamento_retirada_itens (
+        id SERIAL PRIMARY KEY,
+        pagamento_id INTEGER NOT NULL REFERENCES pagamentos_retiradas(id) ON DELETE CASCADE,
+        retirada_id INTEGER NOT NULL REFERENCES retiradas(id),
+        valor_abatido NUMERIC(10,2) NOT NULL CHECK (valor_abatido > 0),
+        loja_id INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id)
+      )
+    `);
+    for (const tabela of ['pagamentos_retiradas','pagamento_retirada_itens']) {
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_${tabela}_loja ON ${tabela}(loja_id)`);
+      await pool.query(`ALTER TABLE ${tabela} ENABLE ROW LEVEL SECURITY`);
+      await pool.query(`ALTER TABLE ${tabela} FORCE ROW LEVEL SECURITY`);
+      await pool.query(`DROP POLICY IF EXISTS bb_isolamento_loja ON ${tabela}`);
+      await pool.query(`
+        CREATE POLICY bb_isolamento_loja ON ${tabela}
+        USING (
+          NULLIF(current_setting('app.loja_id', true),'') IS NULL
+          OR loja_id = NULLIF(current_setting('app.loja_id', true),'')::integer
+        )
+        WITH CHECK (
+          NULLIF(current_setting('app.loja_id', true),'') IS NULL
+          OR loja_id = NULLIF(current_setting('app.loja_id', true),'')::integer
+        )
+      `);
+    }
     await pool.query(`UPDATE retiradas SET mes=TO_CHAR(dt_retirada,'MM/YYYY') WHERE mes IS NULL AND dt_retirada IS NOT NULL`).catch(()=>{});
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_ret_funcionario ON retiradas(funcionario_id)`).catch(()=>{});
     // Corrige retiradas com desconto_pct=100 (valor_total=0) recalculando pelo custo do produto
@@ -141,7 +186,7 @@ module.exports = function (pool, app) {
       const { rows } = await pool.query(`
         SELECT f.id, f.nome,
                COALESCE(f.limite_retirada,0)::numeric AS limite,
-               COALESCE(SUM(ret.valor_total),0)::numeric AS usado
+          COALESCE(SUM(ret.valor_total),0)::numeric AS usado
           FROM funcionarios f
           LEFT JOIN retiradas ret ON ret.funcionario_id=f.id AND ret.mes=$1
          WHERE f.ativo=true ${filtro}
@@ -212,6 +257,8 @@ module.exports = function (pool, app) {
           f.id, f.nome, f.limite_retirada,
           COUNT(ret.id) AS qtd_itens,
           COALESCE(SUM(ret.valor_total), 0) AS total_retirado,
+          COALESCE(SUM(ret.valor_total-COALESCE(ret.saldo_restante,CASE WHEN ret.status='pago' THEN 0 ELSE ret.valor_total END)),0) AS total_pago,
+          COALESCE(SUM(COALESCE(ret.saldo_restante,CASE WHEN ret.status='pago' THEN 0 ELSE ret.valor_total END)),0) AS total_em_aberto,
           f.limite_retirada - COALESCE(SUM(ret.valor_total), 0) AS saldo
         FROM funcionarios f
         LEFT JOIN retiradas ret ON ret.funcionario_id = f.id AND ret.mes = $1
@@ -259,6 +306,114 @@ module.exports = function (pool, app) {
       `, params);
       res.json({ ok: true, data: rows, total: rows.length });
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ── POST /pagamentos — baixa por valor (FIFO) ou lançamentos selecionados ─
+  r.get('/pagamentos', permitir('retiradas_pagamentos'), async (req, res) => {
+    try {
+      const params = [], conds = [];
+      if (req.query.funcionario_id) { params.push(Number(req.query.funcionario_id)); conds.push(`p.funcionario_id=$${params.length}`); }
+      if (req.query.mes) { params.push(req.query.mes); conds.push(`TO_CHAR(p.data_pagamento,'MM/YYYY')=$${params.length}`); }
+      const { rows } = await pool.query(`
+        SELECT p.*, f.nome AS funcionario_nome,
+          COALESCE(json_agg(json_build_object(
+            'retirada_id', pri.retirada_id,
+            'valor_abatido', pri.valor_abatido,
+            'data_retirada', r.dt_retirada,
+            'descricao', r.descricao
+          ) ORDER BY r.dt_retirada, r.id) FILTER (WHERE pri.id IS NOT NULL),'[]'::json) AS abatimentos
+        FROM pagamentos_retiradas p
+        JOIN funcionarios f ON f.id=p.funcionario_id
+        LEFT JOIN pagamento_retirada_itens pri ON pri.pagamento_id=p.id
+        LEFT JOIN retiradas r ON r.id=pri.retirada_id
+        ${conds.length ? 'WHERE '+conds.join(' AND ') : ''}
+        GROUP BY p.id,f.nome
+        ORDER BY p.data_pagamento DESC,p.id DESC
+        LIMIT 500
+      `, params);
+      res.json({ ok:true, data:rows });
+    } catch (e) { res.status(500).json({ ok:false, erro:e.message }); }
+  });
+
+  r.post('/pagamentos', permitir('retiradas_pagamentos'), async (req, res) => {
+    const funcionarioId = Number(req.body.funcionarioId);
+    const valorPago = Number(req.body.valorPago);
+    const criterio = req.body.criterio === 'selecionadas' ? 'selecionadas' : 'antigas';
+    const retiradaIds = [...new Set((req.body.retiradaIds || []).map(Number).filter(Number.isInteger))];
+    if (!Number.isInteger(funcionarioId) || !Number.isFinite(valorPago) || valorPago <= 0)
+      return res.status(400).json({ ok:false, erro:'Informe o funcionário e um valor maior que zero.' });
+    if (criterio === 'selecionadas' && !retiradaIds.length)
+      return res.status(400).json({ ok:false, erro:'Selecione ao menos uma retirada.' });
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const params = [funcionarioId];
+      let filtroIds = '';
+      if (criterio === 'selecionadas') {
+        params.push(retiradaIds);
+        filtroIds = `AND id = ANY($2::int[])`;
+      }
+      const { rows: pendentes } = await client.query(`
+        SELECT id, dt_retirada, valor_total,
+               COALESCE(saldo_restante, CASE WHEN COALESCE(status,'pendente')='pago' THEN 0 ELSE valor_total END)::numeric AS saldo
+          FROM retiradas
+         WHERE funcionario_id=$1
+           AND COALESCE(status,'pendente') <> 'pago'
+           AND COALESCE(saldo_restante, valor_total) > 0
+           ${filtroIds}
+         ORDER BY dt_retirada ASC, id ASC
+         FOR UPDATE
+      `, params);
+      const saldoAlvo = pendentes.reduce((s, x) => s + Number(x.saldo || 0), 0);
+      if (!pendentes.length) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ ok:false, erro:'Não existem retiradas pendentes para o critério informado.' });
+      }
+      if (valorPago > saldoAlvo + 0.005) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({
+          ok:false,
+          erro:`O pagamento excede o saldo selecionado de R$ ${saldoAlvo.toFixed(2)}.`,
+          saldo_aberto:saldoAlvo
+        });
+      }
+
+      const { rows:[pagamento] } = await client.query(`
+        INSERT INTO pagamentos_retiradas
+          (funcionario_id,data_pagamento,valor_pago,forma_pagamento,observacao,usuario_id)
+        VALUES ($1,COALESCE($2::date,CURRENT_DATE),$3,$4,$5,$6)
+        RETURNING *
+      `, [funcionarioId, req.body.dataPagamento || null, valorPago,
+          req.body.formaPagamento || 'dinheiro', req.body.observacao || null, req.user?.id || null]);
+
+      let restante = valorPago;
+      const abatimentos = [];
+      for (const retirada of pendentes) {
+        if (restante <= 0.005) break;
+        const saldo = Number(retirada.saldo || 0);
+        const abatido = Math.min(restante, saldo);
+        const novoSaldo = Math.max(0, saldo - abatido);
+        const novoStatus = novoSaldo <= 0.005 ? 'pago' : 'parcial';
+        await client.query(`
+          UPDATE retiradas SET saldo_restante=$1, status=$2,
+            dt_pagamento=CASE WHEN $2='pago' THEN COALESCE($3::date,CURRENT_DATE) ELSE NULL END,
+            pago_por=$4
+          WHERE id=$5
+        `, [novoSaldo.toFixed(2), novoStatus, req.body.dataPagamento || null, req.user?.id || null, retirada.id]);
+        await client.query(`
+          INSERT INTO pagamento_retirada_itens(pagamento_id,retirada_id,valor_abatido)
+          VALUES($1,$2,$3)
+        `, [pagamento.id, retirada.id, abatido.toFixed(2)]);
+        abatimentos.push({ retirada_id:retirada.id, valor_abatido:abatido, saldo_restante:novoSaldo });
+        restante -= abatido;
+      }
+      await client.query('COMMIT');
+      res.json({ ok:true, data:pagamento, abatimentos });
+    } catch (e) {
+      await client.query('ROLLBACK');
+      res.status(500).json({ ok:false, erro:e.message });
+    } finally { client.release(); }
   });
 
   // ── GET /pendentes/count — resumo para o dashboard administrativo ─────────
@@ -415,6 +570,7 @@ module.exports = function (pool, app) {
       await pool.query(`
         UPDATE retiradas SET
           status       = $1,
+          saldo_restante = CASE WHEN $1='pago' THEN 0 ELSE COALESCE(saldo_restante,valor_total) END,
           dt_pagamento = CASE WHEN $1='pago' THEN COALESCE($2::date, CURRENT_DATE) ELSE dt_pagamento END,
           pago_por     = CASE WHEN $1='pago' THEN $3 ELSE pago_por END,
           observacao   = CASE WHEN $4::text IS NOT NULL THEN COALESCE(observacao||' | ','') || $4::text ELSE observacao END
@@ -429,7 +585,7 @@ module.exports = function (pool, app) {
   r.patch('/:id/reabrir', permitir('retiradas_pagamentos'), async (req, res) => {
     try {
       await pool.query(
-        `UPDATE retiradas SET status='pendente', dt_pagamento=NULL, pago_por=NULL WHERE id=$1`,
+        `UPDATE retiradas SET status='pendente', saldo_restante=valor_total, dt_pagamento=NULL, pago_por=NULL WHERE id=$1`,
         [parseInt(req.params.id)]
       );
       res.json({ ok:true });
