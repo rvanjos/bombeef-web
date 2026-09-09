@@ -487,6 +487,9 @@ body{font-size:14px;color:#111827}
       <button class="btn btn-s" onclick="limparDuplicatas()" id="btn-dedup" style="background:#fff3cd;color:#856404;border-color:#ffc107" title="Remove itens com mesma descrição e data de validade">🧹 Limpar Duplicatas</button>
       <button class="btn btn-s" onclick="abrirRelVencimento()" style="background:#eff6ff;color:#1a5c8a;border-color:#93c5fd" title="Relatório de itens a vencer">🖨️ Rel. Vencimento</button>
       <div class="search-w"><input type="text" id="busca-val" placeholder="Buscar produto, código, lote..." oninput="filtrarVal()" style="min-width:0;flex:1;max-width:340px"></div>
+      <select class="flt" id="flt-categoria" onchange="filtrarVal()" title="Filtrar por categoria ou setor">
+        <option value="">Todas as categorias</option>
+      </select>
       <select class="flt" id="flt-status" onchange="carregar()">
         <option value="todos">Todos</option>
         <option value="alerta">Em Alerta</option>
@@ -972,6 +975,15 @@ body{font-size:14px;color:#111827}
         <div class="fg"><label>Local de uso</label><input id="i-local" placeholder="Ex.: Produção / geladeira"></div>
         <div class="fg"><label>Responsável</label><select id="i-resp"><option value="">— Selecione —</option></select></div>
         <div class="fg" style="grid-column:1/-1"><label>Observação</label><textarea id="i-obs" rows="2" placeholder="Identificação da embalagem ou orientação de uso"></textarea></div>
+        <div class="fg" style="grid-column:1/-1">
+          <label>Documentação</label>
+          <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px">
+            <input type="file" id="i-anexo" accept=".pdf,.png,.jpg,.jpeg,.webp,application/pdf,image/png,image/jpeg,image/webp">
+            <input id="i-anexo-desc" placeholder="Descrição do documento (opcional)">
+          </div>
+          <div style="font-size:10px;color:var(--muted);margin-top:4px">PDF ou imagem, até 10 MB. Para vários documentos, salve e anexe os próximos ao editar.</div>
+          <div id="i-anexos-lista" style="display:none;margin-top:8px;border:1px solid var(--border);border-radius:8px;overflow:hidden"></div>
+        </div>
       </div>
       <div style="margin-top:12px;padding:10px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;font-size:11px;color:#9a3412">A validade é calculada automaticamente a partir da abertura. O prazo usado ficará disponível como sugestão no próximo cadastro deste produto.</div>
     </div>
@@ -1166,10 +1178,52 @@ function abrirInterno(id){
   document.getElementById('i-alerta').value=x?.dias_alerta??5;
   document.getElementById('i-local').value=x?.localizacao||'';
   document.getElementById('i-obs').value=x?.observacao||'';
+  document.getElementById('i-anexo').value='';
+  document.getElementById('i-anexo-desc').value='';
+  document.getElementById('i-anexos-lista').style.display='none';
+  document.getElementById('i-anexos-lista').innerHTML='';
   const sel=document.getElementById('i-resp'); sel.innerHTML='<option value="">— Selecione —</option>'+funcionarios.map(f=>`<option value="${escInterno(f.nome||String(f.id))}">${escInterno(f.nome||String(f.id))}</option>`).join(''); sel.value=x?.responsavel||'';
   calcularValidadeInterno();
   document.getElementById('modal-interno').classList.add('open');
+  if(x?.id) carregarAnexosInterno(x.id);
 }
+
+async function carregarAnexosInterno(internoId){
+  const el=document.getElementById('i-anexos-lista');
+  const d=await api.get(`/api/validade/internos/${internoId}/anexos`);
+  if(!d.ok){el.style.display='';el.innerHTML='<div style="padding:8px;color:#b91c1c">Não foi possível carregar os documentos.</div>';return;}
+  const docs=d.data||[];
+  el.style.display=docs.length?'':'none';
+  el.innerHTML=docs.map(a=>`<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--border)">
+    <span>📎</span><div style="min-width:0;flex:1"><strong style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escInterno(a.nome_arquivo)}</strong><span style="font-size:10px;color:var(--muted)">${escInterno(a.descricao||'')} · ${(Number(a.tamanho_bytes||0)/1024).toFixed(0)} KB</span></div>
+    <button type="button" class="btn btn-s" style="padding:4px 7px" onclick="baixarAnexoInterno(${a.id},'${String(a.nome_arquivo||'documento').replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')">⬇️</button>
+    <button type="button" class="btn btn-s" style="padding:4px 7px;color:#b91c1c" onclick="excluirAnexoInterno(${a.id},${internoId})">🗑</button>
+  </div>`).join('');
+}
+
+async function anexarDocumentoInterno(internoId){
+  const input=document.getElementById('i-anexo');
+  if(!input.files?.length)return true;
+  const fd=new FormData();fd.append('arquivo',input.files[0]);fd.append('descricao',document.getElementById('i-anexo-desc').value.trim());
+  const d=await api.upload(`/api/validade/internos/${internoId}/anexos`,fd);
+  if(!d.ok){toast('Registro salvo, mas o documento falhou: '+(d.erro||'erro no envio'));return false;}
+  return true;
+}
+
+window.baixarAnexoInterno=async function baixarAnexoInterno(id,nome){
+  try{
+    const token=api.token();
+    const r=await fetch(`/api/validade/internos/anexos/${id}/download`,{headers:{Authorization:'Bearer '+token}});
+    if(!r.ok)throw new Error('Falha no download');
+    const url=URL.createObjectURL(await r.blob());const a=document.createElement('a');a.href=url;a.download=nome||'documento';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  }catch(e){toast('Erro ao baixar o documento');}
+};
+
+window.excluirAnexoInterno=async function excluirAnexoInterno(id,internoId){
+  if(!confirm('Excluir este documento?'))return;
+  const d=await api.delete(`/api/validade/internos/anexos/${id}`);if(!d.ok){toast('Erro: '+(d.erro||'não foi possível excluir'));return;}
+  await carregarAnexosInterno(internoId);toast('✅ Documento excluído');
+};
 
 function sugerirPrazoInterno(){
   if(document.getElementById('i-id').value)return;
@@ -1189,7 +1243,15 @@ async function salvarInterno(){
   const body={nome:document.getElementById('i-nome').value.trim(),marca:document.getElementById('i-marca').value.trim(),lote:document.getElementById('i-lote').value.trim(),dataAbertura:document.getElementById('i-abertura').value,prazoDias:parseInt(document.getElementById('i-prazo').value),diasAlerta:parseInt(document.getElementById('i-alerta').value||0),localizacao:document.getElementById('i-local').value.trim(),responsavel:document.getElementById('i-resp').value,observacao:document.getElementById('i-obs').value.trim()};
   if(!body.nome||!body.dataAbertura||!body.prazoDias){toast('Preencha produto, abertura e prazo');return;}
   btn.disabled=true;btn.textContent='Salvando...';
-  try{const id=document.getElementById('i-id').value;const d=id?await api.put(`/api/validade/internos/${id}`,body):await api.post('/api/validade/internos',body);if(!d.ok){toast('Erro: '+d.erro);return;}fecharModal('modal-interno');await carregarInternos();toast(id?'✅ Registro atualizado':'✅ Abertura registrada');}finally{btn.disabled=false;btn.textContent='💾 Salvar';}
+  try{
+    const id=document.getElementById('i-id').value;
+    const d=id?await api.put(`/api/validade/internos/${id}`,body):await api.post('/api/validade/internos',body);
+    if(!d.ok){toast('Erro: '+d.erro);return;}
+    const internoId=Number(id||d.data?.id);
+    const anexoOk=await anexarDocumentoInterno(internoId);
+    fecharModal('modal-interno');await carregarInternos();
+    if(anexoOk)toast(id?'✅ Registro atualizado':'✅ Abertura registrada');
+  }finally{btn.disabled=false;btn.textContent='💾 Salvar';}
 }
 
 async function statusInterno(id,status){
@@ -1400,7 +1462,6 @@ function nomeResponsavel(valor){
 
 // ── Carregar itens ────────────────────────────────────────────────────────────
 async function carregar(){
-  const statusFiltro = document.getElementById('flt-status').value;
   const d = await api.get('/api/validade?status=todos');
   if(!d.ok) return;
 
@@ -1413,21 +1474,10 @@ async function carregar(){
   // Separa ativos (não vendido/descartado) dos encerrados
   const ativos = todos.filter(v => v.status !== 'vendido' && v.status !== 'descartado' && v.status !== 'devolucao');
   itens = ativos;
+  atualizarCategoriasValidade(ativos);
 
-  // Se o filtro sem código estava ativo, mantém — senão aplica filtro de status
-  if(_filtroSemCod){
-    filtrarVal(); // respeitará _filtroSemCod + busca por texto
-  } else {
-    let lista = ativos;
-    if(statusFiltro === 'vencido'){
-      lista = ativos.filter(v => v._urg === 'vencido');
-    } else if(statusFiltro === 'alerta'){
-      lista = ativos.filter(v => v._urg === 'alerta' || v._urg === 'critico');
-    } else if(statusFiltro === 'ok'){
-      lista = ativos.filter(v => v._urg === 'ok');
-    }
-    renderVal(lista);
-  }
+  // Aplica conjuntamente status, categoria, busca e filtro sem código.
+  filtrarVal();
 
   if(document.getElementById('sec-dashboard') &&
      document.getElementById('sec-dashboard').style.display !== 'none'){
@@ -1446,13 +1496,27 @@ function valSetPill(btn, val){
 
 function filtrarVal(){
   const q = document.getElementById('busca-val').value.toLowerCase();
+  const categoria = (document.getElementById('flt-categoria')?.value||'').toLowerCase();
+  const status = document.getElementById('flt-status')?.value||'todos';
   let lista = _filtroSemCod ? itens.filter(i=>!i.codigo) : itens;
+  if(status==='vencido') lista=lista.filter(i=>i._urg==='vencido');
+  else if(status==='alerta') lista=lista.filter(i=>i._urg==='alerta'||i._urg==='critico');
+  else if(status==='ok') lista=lista.filter(i=>i._urg==='ok');
+  if(categoria) lista=lista.filter(i=>String(i.categoria||'').toLowerCase()===categoria);
   if(q) lista = lista.filter(i=>
     i.descricao.toLowerCase().includes(q)||
     (i.codigo||'').toLowerCase().includes(q)||
     (i.lote||'').toLowerCase().includes(q)
   );
   renderVal(lista);
+}
+
+function atualizarCategoriasValidade(lista){
+  const sel=document.getElementById('flt-categoria'); if(!sel)return;
+  const atual=sel.value;
+  const categorias=[...new Set(lista.map(i=>String(i.categoria||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
+  sel.innerHTML='<option value="">Todas as categorias</option>'+categorias.map(c=>`<option value="${escInterno(c)}">${escInterno(c)}</option>`).join('');
+  if(categorias.includes(atual))sel.value=atual;
 }
 
 function filtrarStatus(status){
