@@ -509,6 +509,7 @@ body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var
     <div class="pnav-section">Operacional</div>
     <button class="pnav-tab" data-label="Retiradas" onclick="showTab('retiradas')" data-tab="retiradas" data-perfil="admin,gestor,caixa"><span class="tab-icon">💸</span><span class="tab-label">Retiradas</span><span id="nav-badge-retiradas-pend" style="display:none;background:#dc2626;color:#fff;border-radius:9px;padding:0 5px;font-size:10px;margin-left:3px;font-weight:700">0</span></button>
     <button class="pnav-tab" data-label="Fiado" onclick="showTab('fiado')"     data-tab="fiado"     data-perfil="admin,gestor,caixa"><span class="tab-icon">💳</span><span class="tab-label">Fiado</span><span id="nav-badge-fiado" style="display:none;background:#dc2626;color:#fff;border-radius:9px;padding:0 5px;font-size:10px;margin-left:3px;font-weight:700">0</span></button>
+    <button class="pnav-tab" data-label="Documentação" onclick="showTab('documentacao')" data-tab="documentacao" data-perfil="admin,gestor"><span class="tab-icon">📄</span><span class="tab-label">Documentação</span></button>
 
     <div class="pnav-section">Administração</div>
     <button class="pnav-tab" data-label="Config" onclick="showTab('config')"    data-tab="config"    data-perfil="admin,gestor"><span class="tab-icon">⚙️</span><span class="tab-label">Config</span></button>
@@ -809,6 +810,9 @@ body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var
     </div>
     <div class="frame-container" id="frame-retiradas">
       <iframe class="module-frame" id="iframe-retiradas" src="retiradas.html?v=1775328871"></iframe>
+    </div>
+    <div class="frame-container" id="frame-documentacao">
+      <iframe class="module-frame" id="iframe-documentacao" data-src="documentacao.html"></iframe>
     </div>
     <div class="frame-container" id="frame-vendasproduto">
       <iframe class="module-frame" id="iframe-vendasproduto" src=""  data-src="vendas-produto.html"></iframe>
