@@ -153,8 +153,8 @@ module.exports = function (pool, app) {
     await pool.query(`ALTER TABLE validade_interno_anexos FORCE ROW LEVEL SECURITY`);
     await pool.query(`DROP POLICY IF EXISTS bb_isolamento_loja ON validade_interno_anexos`);
     await pool.query(`CREATE POLICY bb_isolamento_loja ON validade_interno_anexos
-      USING (NULLIF(current_setting('app.loja_id', true),'') IS NULL OR loja_id=NULLIF(current_setting('app.loja_id', true),'')::integer)
-      WITH CHECK (NULLIF(current_setting('app.loja_id', true),'') IS NULL OR loja_id=NULLIF(current_setting('app.loja_id', true),'')::integer)`);
+      USING (current_setting('app.bb_system',true)='1' OR (NULLIF(current_setting('app.loja_id',true),'') IS NOT NULL AND loja_id=NULLIF(current_setting('app.loja_id',true),'')::integer))
+      WITH CHECK (current_setting('app.bb_system',true)='1' OR (NULLIF(current_setting('app.loja_id',true),'') IS NOT NULL AND loja_id=NULLIF(current_setting('app.loja_id',true),'')::integer))`);
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS validade_documentos (
@@ -180,8 +180,8 @@ module.exports = function (pool, app) {
     await pool.query(`ALTER TABLE validade_documentos FORCE ROW LEVEL SECURITY`);
     await pool.query(`DROP POLICY IF EXISTS bb_isolamento_loja ON validade_documentos`);
     await pool.query(`CREATE POLICY bb_isolamento_loja ON validade_documentos
-      USING (NULLIF(current_setting('app.loja_id', true),'') IS NULL OR loja_id=NULLIF(current_setting('app.loja_id', true),'')::integer)
-      WITH CHECK (NULLIF(current_setting('app.loja_id', true),'') IS NULL OR loja_id=NULLIF(current_setting('app.loja_id', true),'')::integer)`);
+      USING (current_setting('app.bb_system',true)='1' OR (NULLIF(current_setting('app.loja_id',true),'') IS NOT NULL AND loja_id=NULLIF(current_setting('app.loja_id',true),'')::integer))
+      WITH CHECK (current_setting('app.bb_system',true)='1' OR (NULLIF(current_setting('app.loja_id',true),'') IS NOT NULL AND loja_id=NULLIF(current_setting('app.loja_id',true),'')::integer))`);
 
     await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_val_codigo    ON validade_items(codigo);
