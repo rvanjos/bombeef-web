@@ -95,10 +95,11 @@ const pool = {
   };
   protegerPoolPorLoja(fakePool);
   await executarNaLoja(8, () => fakePool.query('SELECT * FROM produtos'));
-  assert.equal(comandos[0].params[0], '8');
-  assert.equal(comandos[1].sql, 'SELECT * FROM produtos');
-  assert.match(comandos[2].sql, /set_config/);
-  assert.equal(comandos[3].sql, 'RELEASE');
+  assert.equal(comandos[0].params[0], '0');
+  assert.equal(comandos[1].params[0], '8');
+  assert.equal(comandos[2].sql, 'SELECT * FROM produtos');
+  assert.match(comandos[3].sql, /set_config/);
+  assert.equal(comandos[5].sql, 'RELEASE');
 
   const migracao = fs.readFileSync(path.join(__dirname, '../lib/multiloja.js'), 'utf8');
   for (const tabela of ['boletos','dre_sessoes','dre_lancamentos','faturamento_periodos','cartao_faturas','cartao_fatura_itens']) {
@@ -107,7 +108,7 @@ const pool = {
   assert.match(migracao, /FORCE ROW LEVEL SECURITY/);
   assert.match(migracao, /uq_faturamento_dia_loja/);
   assert.match(migracao, /idx_cf_hash_loja/);
-  for (const tabela of ['kits','kit_pedidos','cortes_registros','retiradas','clientes_fiado','vendas_fiado','vendas_produto']) {
+  for (const tabela of ['kits','kit_pedidos','cortes_registros','retiradas','clientes_fiado','vendas_fiado','vendas_produto','pagamentos_retiradas','pagamento_retirada_itens']) {
     assert.match(migracao, new RegExp(`['"]${tabela}['"]`));
   }
   assert.match(migracao, /2026-09-producao-comercial-v1/);

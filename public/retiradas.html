@@ -141,13 +141,14 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
   <!-- Toolbar -->
   <div class="toolbar toolbar-card">
     <button class="btn btn-p" onclick="abrirModal()">＋ Nova Retirada</button>
+    <button class="btn btn-s" id="btn-pagamento-lote" onclick="abrirPagamentoEmLote()" style="color:#166534;border-color:#86efac">💸 Registrar Pagamento</button>
     <button class="btn btn-s" onclick="abrirRelatorio()">📊 Relatório</button>
     <select class="flt" id="flt-func" onchange="typeof carregar==='function'&&carregar()">
       <option value="">Todos os funcionários</option>
     </select>
     <input type="month" id="flt-mes" class="flt" style="padding:7px 10px" onchange="trocarMes()">
     <input class="search" id="flt-busca" placeholder="🔎 Buscar funcionário ou produto..." oninput="aplicarFiltros()">
-    <select class="flt" id="flt-status" onchange="aplicarFiltros()"><option value="">Todos os status</option><option value="pendente">Pendentes</option><option value="pago">Pagos</option></select>
+    <select class="flt" id="flt-status" onchange="aplicarFiltros()"><option value="">Todos os status</option><option value="aberto">Pendentes e parciais</option><option value="pago">Pagos</option></select>
     <div class="col-menu"><button class="btn btn-s" onclick="document.getElementById('col-pop').classList.toggle('open')">⚙️ Colunas</button><div class="col-pop" id="col-pop"></div></div>
       <button class="btn btn-s" onclick="imprimirRetiradas()">🖨️ Imprimir</button>
   </div>
@@ -188,7 +189,12 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
     </div>
     <!-- Lista rolável -->
     <div style="flex-shrink:0;padding:10px 16px 4px">
-      <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Selecione as retiradas a pagar</div>
+      <label style="font-size:10px;font-weight:700;color:var(--muted);display:block;margin-bottom:5px">COMO ABATER</label>
+      <select id="pag-ret-criterio" onchange="alterarCriterioPagRet()" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:#fff;font-size:12px">
+        <option value="antigas">Abater automaticamente as dívidas mais antigas</option>
+        <option value="selecionadas">Abater somente datas/lançamentos selecionados</option>
+      </select>
+      <div id="pag-ret-lista-titulo" style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-top:9px">Ordem de abatimento: mais antigas primeiro</div>
     </div>
     <div id="pag-ret-lista" style="overflow-y:auto;max-height:220px;border-top:1px solid var(--border);border-bottom:1px solid var(--border)"></div>
     <!-- Campos fixos -->
@@ -196,7 +202,7 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
         <div>
           <label style="font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px">VALOR A PAGAR *</label>
-          <input type="number" id="pag-ret-valor" step="0.01" min="0.01" placeholder="0,00" readonly
+          <input type="number" id="pag-ret-valor" step="0.01" min="0.01" placeholder="0,00" oninput="atualizarPreviewPagRet()"
             style="width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:8px;font-family:'DM Mono',monospace;font-size:15px;font-weight:700;box-sizing:border-box">
         </div>
         <div>
@@ -329,6 +335,7 @@ async function carregarFuncionarios(){
   const d = await api.get(`/api/retiradas/limites?mes=${mesAtual}`);
   if(!d.ok) return;
   permissoesRet=d.permissoes||permissoesRet;
+  document.getElementById('btn-pagamento-lote').style.display = permissoesRet.pagamentos ? '' : 'none';
   funcionarioProprioId=d.funcionarioProprioId||null;
   limites = d.data || [];
   funcionarios = limites.map(f=>({id:f.id,nome:f.nome,ativo:true}));
@@ -386,8 +393,8 @@ window.carregar = async function carregar(){
 
   // KPIs
   const total = retiradas.reduce((s,r)=>s+parseFloat(r.valor_total||0),0);
-  const pago = retiradas.filter(r=>r.status==='pago').reduce((s,r)=>s+parseFloat(r.valor_total||0),0);
-  const pendente = total-pago;
+  const pendente = retiradas.reduce((s,r)=>s+parseFloat(r.saldo_restante ?? (r.status==='pago'?0:r.valor_total) ?? 0),0);
+  const pago = total-pendente;
   const maior = retiradas.length ? Math.max(...retiradas.map(r=>parseFloat(r.valor_total||0))) : 0;
   document.getElementById('k-total').textContent = fmt.brl(total);
   document.getElementById('k-pago').textContent = fmt.brl(pago);
@@ -409,7 +416,7 @@ window.trocarMes = async function trocarMes(){
 window.aplicarFiltros = function aplicarFiltros(){
   const q=(document.getElementById('flt-busca')?.value||'').toLowerCase().trim();
   const st=document.getElementById('flt-status')?.value||'';
-  renderizar(retiradas.filter(r => (!st || (r.status||'pendente')===st) && (!q || `${r.funcionario_nome} ${r.descricao} ${r.prod_descricao||''}`.toLowerCase().includes(q))));
+  renderizar(retiradas.filter(r => (!st || (st==='aberto' ? r.status!=='pago' : (r.status||'pendente')===st)) && (!q || `${r.funcionario_nome} ${r.descricao} ${r.prod_descricao||''}`.toLowerCase().includes(q))));
 }
 
 function montarColunas(){
@@ -449,9 +456,13 @@ function renderizar(lista){
       ? `<span id="preco-txt-${r.id}" style="color:#d97706">—</span>`
       : `<span id="preco-txt-${r.id}">${fmt.brl(_preco)}</span>`;
     const isPago = r.status === 'pago';
+    const isParcial = r.status === 'parcial';
+    const saldoRestante = parseFloat(r.saldo_restante ?? (isPago?0:r.valor_total) ?? 0);
     const statusBadge = isPago
       ? `<span style="background:#dcfce7;color:#166534;padding:2px 8px;border-radius:5px;font-size:10px;font-weight:700">✅ Pago${r.dt_pagamento?' · '+fmt.date(r.dt_pagamento):''}</span>`
-      : `<span style="background:#f3f4f6;color:#6b7280;padding:2px 8px;border-radius:5px;font-size:10px;font-weight:700">⏳ Pendente</span>`;
+      : isParcial
+        ? `<span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:5px;font-size:10px;font-weight:700">◐ Parcial · falta ${fmt.brl(saldoRestante)}</span>`
+        : `<span style="background:#f3f4f6;color:#6b7280;padding:2px 8px;border-radius:5px;font-size:10px;font-weight:700">⏳ Pendente</span>`;
     const btnBaixa = !permissoesRet.pagamentos ? '' : isPago
       ? `<button class="act-btn" onclick="reabrirRetirada(${r.id})" title="Reabrir" style="color:#d97706">↩</button>`
       : `<button class="act-btn" onclick="darBaixaRetirada(${r.id})" title="Registrar pagamento antecipado" style="color:#16a34a;font-size:14px">💸</button>`;
@@ -895,32 +906,46 @@ async function salvar(){
 }
 
 // Estado do modal de pagamento
-let _pagRetIds = []; // ids das retiradas selecionadas no modal
+let _pagRetIds = [], _pagRetPendentes = [], _pagRetFuncionarioId = null;
+
+window.abrirPagamentoEmLote = async function abrirPagamentoEmLote() {
+  const funcionarioId = Number(document.getElementById('flt-func')?.value || funcionarioProprioId);
+  if (!funcionarioId) { toast('⚠️ Selecione um funcionário para registrar o pagamento'); return; }
+  await abrirModalPagamentoRet(funcionarioId, null);
+};
 
 window.darBaixaRetirada = async function darBaixaRetirada(idUnico) {
-  // Abrir modal com a retirada pré-selecionada (ou todas pendentes do funcionário)
   const ret = retiradas.find(r => r.id === idUnico);
   if (!ret) return;
+  await abrirModalPagamentoRet(ret.funcionario_id, idUnico);
+};
 
-  // Pré-popular: todas pendentes do mesmo funcionário
-  const pendentes = retiradas.filter(r =>
-    r.funcionario_id === ret.funcionario_id && r.status !== 'pago'
-  );
-  const totalAberto = pendentes.reduce((s,r) => s + parseFloat(r.valor_total||0), 0);
+async function abrirModalPagamentoRet(funcionarioId, idUnico) {
+  const resposta = await api.get(`/api/retiradas?funcionario_id=${funcionarioId}`);
+  if (!resposta.ok) { toast('❌ Não foi possível carregar as retiradas pendentes'); return; }
+  _pagRetFuncionarioId = funcionarioId;
+  _pagRetPendentes = (resposta.data || [])
+    .filter(r => r.status !== 'pago' && parseFloat(r.saldo_restante ?? r.valor_total ?? 0) > 0)
+    .sort((a,b) => String(a.dt_retirada).localeCompare(String(b.dt_retirada)) || a.id-b.id);
+  if (!_pagRetPendentes.length) { toast('✅ Este funcionário não possui retiradas pendentes'); return; }
+  const totalAberto = _pagRetPendentes.reduce((s,r) => s + parseFloat(r.saldo_restante ?? r.valor_total ?? 0), 0);
+  const nome = _pagRetPendentes[0]?.funcionario_nome || funcionarios.find(f=>f.id===funcionarioId)?.nome || '—';
 
-  document.getElementById('pag-ret-nome').textContent  = ret.funcionario_nome;
+  document.getElementById('pag-ret-nome').textContent  = nome;
   document.getElementById('pag-ret-total').textContent = fmt.brl(totalAberto);
 
   // Data default = hoje
   const hoje = new Date().toISOString().slice(0,10);
   document.getElementById('pag-ret-data').value = hoje;
-  document.getElementById('pag-ret-valor').value = '';
+  document.getElementById('pag-ret-valor').value = totalAberto.toFixed(2);
   document.getElementById('pag-ret-obs').value = '';
   document.getElementById('pag-ret-preview').style.display = 'none';
+  document.getElementById('pag-ret-criterio').value = idUnico ? 'selecionadas' : 'antigas';
 
-  // Lista de retiradas selecionáveis
   const lista = document.getElementById('pag-ret-lista');
-  lista.innerHTML = pendentes.map(r => `
+  lista.innerHTML = _pagRetPendentes.map(r => {
+    const saldo = parseFloat(r.saldo_restante ?? r.valor_total ?? 0);
+    return `
     <label style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--border);cursor:pointer;${r.id===idUnico?'background:#f0fdf4':''}">
       <input type="checkbox" value="${r.id}" ${r.id===idUnico?'checked':''} onchange="onCheckPagRet()"
         style="width:16px;height:16px;cursor:pointer">
@@ -928,19 +953,36 @@ window.darBaixaRetirada = async function darBaixaRetirada(idUnico) {
         <div style="font-size:12px;font-weight:600">${r.descricao}</div>
         <div style="font-size:10px;color:var(--muted)">${fmt.date(r.dt_retirada)}</div>
       </div>
-      <span style="font-family:'DM Mono',monospace;font-size:12px;font-weight:700;color:var(--purple)">${fmt.brl(r.valor_total)}</span>
-    </label>`).join('');
+      <span style="font-family:'DM Mono',monospace;font-size:12px;font-weight:700;color:var(--purple)">${fmt.brl(saldo)}</span>
+    </label>`;
+  }).join('');
 
   document.getElementById('modal-pag-ret').classList.add('open');
-  onCheckPagRet(); // preencher valor automaticamente
+  alterarCriterioPagRet();
 }
+
+window.alterarCriterioPagRet = function alterarCriterioPagRet() {
+  const selecionadas = document.getElementById('pag-ret-criterio').value === 'selecionadas';
+  document.querySelectorAll('#pag-ret-lista input[type=checkbox]').forEach(c => {
+    c.disabled = !selecionadas;
+    if (!selecionadas) c.checked = false;
+  });
+  document.getElementById('pag-ret-lista-titulo').textContent = selecionadas
+    ? 'Selecione as datas/lançamentos que receberão a baixa'
+    : 'Ordem de abatimento: mais antigas primeiro';
+  _pagRetIds = selecionadas
+    ? [...document.querySelectorAll('#pag-ret-lista input[type=checkbox]:checked')].map(c=>Number(c.value))
+    : [];
+  if (selecionadas && _pagRetIds.length) onCheckPagRet();
+  else atualizarPreviewPagRet();
+};
 
 window.onCheckPagRet = function onCheckPagRet() {
   const checks = [...document.querySelectorAll('#pag-ret-lista input[type=checkbox]:checked')];
   _pagRetIds = checks.map(c => parseInt(c.value));
-  const total = retiradas
+  const total = _pagRetPendentes
     .filter(r => _pagRetIds.includes(r.id))
-    .reduce((s,r) => s + parseFloat(r.valor_total||0), 0);
+    .reduce((s,r) => s + parseFloat(r.saldo_restante ?? r.valor_total ?? 0), 0);
   document.getElementById('pag-ret-valor').value = total.toFixed(2);
   atualizarPreviewPagRet();
 }
@@ -950,9 +992,13 @@ window.atualizarPreviewPagRet = function atualizarPreviewPagRet() {
   const prev = document.getElementById('pag-ret-preview');
   const txt  = document.getElementById('pag-ret-preview-txt');
   if (val <= 0) { prev.style.display='none'; return; }
-  const totalSel = retiradas.filter(r => _pagRetIds.includes(r.id)).reduce((s,r) => s+parseFloat(r.valor_total||0),0);
-  const resto = totalSel - val;
-  txt.textContent = `Pagando ${fmt.brl(val)} de ${fmt.brl(totalSel)} selecionado${resto>0?' — saldo restante: '+fmt.brl(resto):''}`;
+  const selecionadas = document.getElementById('pag-ret-criterio').value === 'selecionadas';
+  const saldoAlvo = (selecionadas ? _pagRetPendentes.filter(r=>_pagRetIds.includes(r.id)) : _pagRetPendentes)
+    .reduce((s,r) => s+parseFloat(r.saldo_restante ?? r.valor_total ?? 0),0);
+  const resto = saldoAlvo - val;
+  txt.textContent = `${fmt.brl(val)} será abatido ${selecionadas?'somente nas datas selecionadas':'das dívidas mais antigas'}${resto>0?' — restará '+fmt.brl(resto):''}`;
+  prev.style.background = val > saldoAlvo + .005 ? '#fef2f2' : '#f0fdf4';
+  prev.style.borderColor = val > saldoAlvo + .005 ? '#fca5a5' : '#86efac';
   prev.style.display = '';
 }
 
@@ -961,36 +1007,19 @@ window.confirmarPagamentoRet = async function confirmarPagamentoRet() {
   const data  = document.getElementById('pag-ret-data').value;
   const forma = document.getElementById('pag-ret-forma').value;
   const obs   = document.getElementById('pag-ret-obs').value;
+  const criterio = document.getElementById('pag-ret-criterio').value;
 
   if (!valor || valor <= 0) { toast('⚠️ Informe o valor'); return; }
-  if (!_pagRetIds.length)   { toast('⚠️ Selecione ao menos uma retirada'); return; }
-
-  const totalSel = retiradas
-    .filter(r => _pagRetIds.includes(r.id))
-    .reduce((s,r) => s + parseFloat(r.valor_total||0), 0);
-
-  if (Math.abs(valor-totalSel)>0.01) { toast('⚠️ O pagamento deve quitar integralmente as retiradas selecionadas'); return; }
-  const obsCompleta = [forma, obs].filter(Boolean).join(': ') || null;
-  let erros = 0, salvos = 0;
-
-  for (const id of _pagRetIds) {
-    const r = retiradas.find(x => x.id === id);
-    if (!r) continue;
-    const valorItem = parseFloat(r.valor_total||0);
-    const d = await api.patch(`/api/retiradas/${id}/baixa`, {
-      dtPagamento: data || null,
-      obs: obsCompleta || null,
-      marcarPago: true,
-      valorPago: valorItem,
-    });
-    if (d.ok) salvos++;
-    else { erros++; console.error('baixa erro', id, d.erro); }
-  }
+  if (criterio === 'selecionadas' && !_pagRetIds.length) { toast('⚠️ Selecione ao menos uma retirada'); return; }
+  const d = await api.post('/api/retiradas/pagamentos', {
+    funcionarioId:_pagRetFuncionarioId, valorPago:valor, dataPagamento:data || null,
+    formaPagamento:forma, observacao:obs || null, criterio,
+    retiradaIds:criterio === 'selecionadas' ? _pagRetIds : []
+  });
+  if (!d.ok) { toast('❌ ' + (d.erro || 'Erro ao registrar pagamento')); return; }
 
   fecharModal('modal-pag-ret');
-  if (erros && !salvos) toast(`❌ Erro ao registrar pagamento`);
-  else if (erros) toast(`⚠️ ${salvos} salvo(s), ${erros} erro(s)`);
-  else toast(`✅ Pagamento de ${fmt.brl(valor)} registrado!`);
+  toast(`✅ Pagamento de ${fmt.brl(valor)} registrado e distribuído!`);
   await carregar();
 }
 
@@ -1024,20 +1053,34 @@ window.abrirRelatorio = async function abrirRelatorio(){
   const mesVal = document.getElementById('flt-mes').value;
   let mes = mesAtual;
   if(mesVal){ const [y,m]=mesVal.split('-'); mes=`${m}/${y}`; }
-  const d = await api.get(`/api/retiradas/relatorio?mes=${mes}`);
+  const [d, dp] = await Promise.all([
+    api.get(`/api/retiradas/relatorio?mes=${mes}`),
+    api.get(`/api/retiradas/pagamentos?mes=${mes}`)
+  ]);
   if(!d.ok){ document.getElementById('rel-body').innerHTML='Erro ao carregar'; return; }
   const r = d.data;
   document.getElementById('rel-body').innerHTML = `
     <div style="font-size:14px;font-weight:600;margin-bottom:14px">Referência: ${r.mes} · Total Geral: <b style="color:var(--purple)">${fmt.brl(r.totalGeral)}</b></div>
     <table class="rel-table">
-      <thead><tr><th>Funcionário</th><th>Qtd Itens</th><th>Total Retirado</th><th>Limite</th><th>Saldo</th></tr></thead>
+      <thead><tr><th>Funcionário</th><th>Qtd Itens</th><th>Total Retirado</th><th>Pago</th><th>Em aberto</th><th>Limite</th><th>Saldo limite</th></tr></thead>
       <tbody>${r.resumo.map(f=>`<tr>
         <td><b>${f.nome}</b></td>
         <td>${f.qtd_itens}</td>
         <td style="font-family:'DM Mono',monospace;font-weight:600">${fmt.brl(f.total_retirado)}</td>
+        <td style="font-family:'DM Mono',monospace;color:var(--green)">${fmt.brl(f.total_pago)}</td>
+        <td style="font-family:'DM Mono',monospace;color:var(--red-l)">${fmt.brl(f.total_em_aberto)}</td>
         <td style="font-family:'DM Mono',monospace">${fmt.brl(f.limite_retirada)}</td>
 	<td style="color:${parseFloat(f.saldo||0)>=0?'var(--green)':'var(--red-l)'};font-weight:600">${fmt.brl(f.saldo||0)}</td>
       </tr>`).join('')}</tbody>
+    </table>
+    <div style="font-size:12px;font-weight:700;margin:18px 0 8px">Pagamentos registrados no período</div>
+    <table class="rel-table">
+      <thead><tr><th>Data</th><th>Funcionário</th><th>Valor</th><th>Forma</th><th>Retiradas abatidas</th></tr></thead>
+      <tbody>${(dp.ok?dp.data:[]).map(p=>`<tr>
+        <td>${fmt.date(p.data_pagamento)}</td><td><b>${p.funcionario_nome}</b></td>
+        <td style="font-family:'DM Mono',monospace;color:var(--green);font-weight:700">${fmt.brl(p.valor_pago)}</td>
+        <td>${p.forma_pagamento||'—'}</td><td>${(p.abatimentos||[]).length}</td>
+      </tr>`).join('') || '<tr><td colspan="5">Nenhum pagamento registrado no período.</td></tr>'}</tbody>
     </table>`;
 }
 

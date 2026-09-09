@@ -284,6 +284,7 @@ module.exports = function(pool, app) {
           (SELECT COUNT(*) FROM vendas_fiado v WHERE v.cliente_id=c.id
             AND v.status='aguardando') AS vendas_pendentes
         FROM clientes_fiado c
+        WHERE c.tipo_cliente <> 'funcionario'
         ORDER BY c.nome
       `);
       res.json({ ok:true, data:rows });
@@ -299,7 +300,7 @@ module.exports = function(pool, app) {
           COALESCE((SELECT SUM(v.total_final) FROM vendas_fiado v
             WHERE v.cliente_id=c.id AND v.status NOT IN('cancelado','reprovado')),0) AS total_comprado,
           COALESCE((SELECT SUM(p.valor_pago) FROM pagamentos_fiado p WHERE p.cliente_id=c.id),0) AS total_pago
-        FROM clientes_fiado c WHERE c.id=$1
+        FROM clientes_fiado c WHERE c.id=$1 AND c.tipo_cliente <> 'funcionario'
       `, [parseInt(req.params.id)]);
       if (!rows.length) return res.status(404).json({ ok:false, erro:'Cliente não encontrado' });
       res.json({ ok:true, data:rows[0] });
@@ -309,6 +310,7 @@ module.exports = function(pool, app) {
   r.post('/clientes', permitir('fiado_clientes',['gestor']), async (req, res) => {
     const { nome, telefone, tipo_cliente='normal', desconto_pct=0, limite_credito, status='ativo', observacoes } = req.body;
     if (!nome?.trim()) return res.status(400).json({ ok:false, erro:'Nome obrigatório' });
+    if (tipo_cliente === 'funcionario') return res.status(409).json({ ok:false, erro:'Funcionários devem ser cadastrados e movimentados no módulo Retiradas.' });
     try {
       const { rows } = await pool.query(
         `INSERT INTO clientes_fiado(nome,telefone,tipo_cliente,desconto_pct,limite_credito,status,observacoes)
@@ -339,7 +341,7 @@ module.exports = function(pool, app) {
   r.get('/vendas', async (req, res) => {
     const { cliente_id, status } = req.query;
     try {
-      let where = 'WHERE 1=1';
+      let where = `WHERE c.tipo_cliente <> 'funcionario'`;
       const params = [];
       if (cliente_id) { params.push(cliente_id); where += ` AND v.cliente_id=$${params.length}`; }
       if (status)     { params.push(status);      where += ` AND v.status=$${params.length}`; }
@@ -356,7 +358,7 @@ module.exports = function(pool, app) {
   r.post('/vendas', permitir('fiado_lancar',['gestor','caixa']), async (req, res) => {
     const { cliente_id, data_compra, itens=[], observacoes } = req.body;
     if (!cliente_id || !itens.length) return res.status(400).json({ ok:false, erro:'cliente e itens obrigatórios' });
-    const cli = await pool.query('SELECT * FROM clientes_fiado WHERE id=$1', [cliente_id]);
+    const cli = await pool.query(`SELECT * FROM clientes_fiado WHERE id=$1 AND tipo_cliente <> 'funcionario'`, [cliente_id]);
     if (!cli.rows.length) return res.status(404).json({ ok:false, erro:'Cliente não encontrado' });
     const c = cli.rows[0];
     if (c.status !== 'ativo') return res.status(400).json({ ok:false, erro:'Cliente inativo' });
@@ -558,6 +560,14 @@ module.exports = function(pool, app) {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
+      const clienteExterno = await client.query(
+        `SELECT id FROM clientes_fiado WHERE id=$1 AND tipo_cliente <> 'funcionario' FOR UPDATE`,
+        [cliente_id]
+      );
+      if (!clienteExterno.rows.length) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ ok:false, erro:'Pagamentos de funcionários devem ser registrados no módulo Retiradas.' });
+      }
       const alvo = venda_id
         ? await client.query(
             `SELECT * FROM vendas_fiado WHERE id=$1 AND cliente_id=$2 AND status IN('aberto','parcial') FOR UPDATE`,
@@ -668,6 +678,7 @@ module.exports = function(pool, app) {
           (SELECT json_agg(json_build_object('venda_id',pv.venda_id,'valor_abatido',pv.valor_abatido))
            FROM pagamento_venda_fiado pv WHERE pv.pagamento_id=p.id) AS vendas_abatidas
         FROM pagamentos_fiado p
+        JOIN clientes_fiado c ON c.id=p.cliente_id AND c.tipo_cliente <> 'funcionario'
         WHERE ($1::int IS NULL OR p.cliente_id=$1)
         ORDER BY p.data_pagamento DESC, p.id DESC LIMIT 200
       `, [cliente_id||null]);
@@ -724,17 +735,20 @@ module.exports = function(pool, app) {
             AND EXTRACT(YEAR FROM v.data_compra)=EXTRACT(YEAR FROM NOW())
             AND v.status NOT IN('cancelado','reprovado') THEN v.total_final END),0) AS vendido_mes
         FROM vendas_fiado v
+        JOIN clientes_fiado c ON c.id=v.cliente_id AND c.tipo_cliente <> 'funcionario'
       `);
       const { rows: [r2] } = await pool.query(`
         SELECT COALESCE(SUM(p.valor_pago),0) AS recebido_mes
         FROM pagamentos_fiado p
+        JOIN clientes_fiado c ON c.id=p.cliente_id AND c.tipo_cliente <> 'funcionario'
         WHERE EXTRACT(MONTH FROM p.data_pagamento)=EXTRACT(MONTH FROM NOW())
           AND EXTRACT(YEAR FROM p.data_pagamento)=EXTRACT(YEAR FROM NOW())
       `);
       const { rows: acima } = await pool.query(`
         SELECT COUNT(*) AS qt FROM (
           SELECT c.id FROM clientes_fiado c
-          WHERE c.limite_credito IS NOT NULL AND c.limite_credito > 0
+          WHERE c.tipo_cliente <> 'funcionario'
+            AND c.limite_credito IS NOT NULL AND c.limite_credito > 0
             AND (SELECT COALESCE(SUM(v.saldo_restante),0) FROM vendas_fiado v
                  WHERE v.cliente_id=c.id AND v.status IN('aberto','parcial')) > c.limite_credito
         ) x
@@ -746,7 +760,11 @@ module.exports = function(pool, app) {
   // ── PENDENTES APROVAÇÃO (para dashboard admin) ────────────────────────────
   r.get('/pendentes-aprovacao/count', async (req, res) => {
     try {
-      const { rows } = await pool.query(`SELECT COUNT(*) AS total FROM vendas_fiado WHERE status='aguardando'`);
+      const { rows } = await pool.query(`
+        SELECT COUNT(*) AS total
+        FROM vendas_fiado v JOIN clientes_fiado c ON c.id=v.cliente_id
+        WHERE v.status='aguardando' AND c.tipo_cliente <> 'funcionario'
+      `);
       res.json({ ok:true, total: parseInt(rows[0].total) });
     } catch(e) { res.json({ ok:false, total:0 }); }
   });
