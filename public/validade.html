@@ -370,6 +370,7 @@ body{font-size:14px;color:#111827}
     <button class="tab active" id="tab-dash" role="tab" aria-selected="true" onclick="showSection('dashboard',this)">📊 Dashboard</button>
     <button class="tab" role="tab" aria-selected="false" onclick="showSection('validade',this)">🗓 Validade</button>
     <button class="tab" role="tab" aria-selected="false" onclick="showSection('internos',this)">🥣 Produtos Internos</button>
+    <button class="tab" role="tab" aria-selected="false" onclick="showSection('documentos',this)">📄 Documentação</button>
     <button class="tab" role="tab" aria-selected="false" onclick="showSection('perdas',this)">🗑️ Perdas</button>
     <button class="tab" role="tab" aria-selected="false" onclick="showSection('historico',this)">📂 Histórico</button>
   </div>
@@ -585,6 +586,24 @@ body{font-size:14px;color:#111827}
       </table></div>
       <div class="empty" id="empty-internos" style="display:none"><div style="font-size:30px">🥣</div><p>Nenhum produto interno aberto.</p></div>
     </div>
+  </div>
+
+  <!-- ── DOCUMENTAÇÃO ── -->
+  <div id="sec-documentos" style="display:none">
+    <div class="section-intro"><div><h2>Documentação e licenças</h2><p>Controle certificados, laudos e documentos exigidos pela nutricionista ou fiscalização.</p></div></div>
+    <div class="kpi-row" style="margin-bottom:12px">
+      <div class="kc r"><div class="kc-l">Vencidos</div><div class="kc-v" id="kd-vencidos">0</div></div>
+      <div class="kc"><div class="kc-l">Próximos do vencimento</div><div class="kc-v" id="kd-alerta" style="color:var(--orange)">0</div></div>
+      <div class="kc g"><div class="kc-l">Válidos</div><div class="kc-v" id="kd-validos">0</div></div>
+      <div class="kc b"><div class="kc-l">Total</div><div class="kc-v" id="kd-total">0</div></div>
+    </div>
+    <div class="toolbar">
+      <button class="btn btn-r" onclick="abrirDocumento()">＋ Novo documento</button>
+      <div class="search-w"><input id="busca-documentos" placeholder="Buscar documento..." oninput="renderDocumentos()"></div>
+      <select class="flt" id="flt-documentos" onchange="renderDocumentos()"><option value="">Todos os status</option><option value="vencido">Vencidos</option><option value="alerta">Próximos do vencimento</option><option value="valido">Válidos</option></select>
+    </div>
+    <div id="doc-alertas"></div>
+    <div class="card"><div class="bb-tbl-scroll" style="width:100%"><table class="tbl"><thead><tr><th>Documento</th><th>Emissão</th><th>Validade</th><th>Dias</th><th>Status</th><th>Arquivo</th><th>Ações</th></tr></thead><tbody id="tbody-documentos"></tbody></table></div><div class="empty" id="empty-documentos" style="display:none"><div style="font-size:30px">📄</div><p>Nenhum documento cadastrado.</p></div></div>
   </div>
 
   <!-- ── PERDAS ── -->
@@ -991,9 +1010,23 @@ body{font-size:14px;color:#111827}
   </div>
 </div>
 
+<!-- Modal Documento -->
+<div class="modal-bg" id="modal-documento"><div class="modal" style="max-width:620px">
+  <div class="modal-head"><h3 id="documento-title">Novo documento</h3><button class="modal-close" onclick="fecharModal('modal-documento')">×</button></div>
+  <div class="modal-body"><input type="hidden" id="d-id"><div class="form-grid">
+    <div class="fg" style="grid-column:1/-1"><label>Nome do documento *</label><input id="d-nome" placeholder="Ex.: Licença Sanitária"></div>
+    <div class="fg"><label>Data de emissão</label><input type="date" id="d-emissao"></div>
+    <div class="fg"><label>Data de validade *</label><input type="date" id="d-validade"></div>
+    <div class="fg"><label>Alertar antes do vencimento</label><div style="display:flex;align-items:center;gap:7px"><input type="number" id="d-alerta" min="0" value="30"><span style="font-size:12px;color:var(--muted)">dias</span></div></div>
+    <div class="fg"><label>Anexar arquivo</label><input type="file" id="d-arquivo" accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx"></div>
+    <div class="fg" style="grid-column:1/-1"><label>Descrição / observação</label><textarea id="d-descricao" rows="3" placeholder="Finalidade, órgão emissor ou observações"></textarea></div>
+  </div><div style="margin-top:10px;padding:9px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;font-size:11px;color:#1e40af">O cadastro pode ser feito somente com o nome e as datas. O arquivo é opcional e pode ser anexado posteriormente.</div></div>
+  <div class="modal-foot"><button class="btn btn-s" onclick="fecharModal('modal-documento')">Cancelar</button><button class="btn btn-p" id="btn-salvar-documento" onclick="salvarDocumento()">💾 Salvar documento</button></div>
+</div></div>
+
 <script>
 let api, fmt, toast;
-let itens=[], perdas=[], funcionarios=[], internos=[], internosModelos=[];
+let itens=[], perdas=[], funcionarios=[], internos=[], internosModelos=[], documentos=[];
 
 BB.modulo({
   nome: 'validade',
@@ -1105,10 +1138,11 @@ async function init(){
 
 function showSection(s, btn){
   const kpiGeral=document.getElementById('kpi-geral-validade');
-  if(kpiGeral) kpiGeral.style.display=s==='internos'?'none':'';
+  if(kpiGeral) kpiGeral.style.display=(s==='internos'||s==='documentos')?'none':'';
   document.getElementById('sec-dashboard').style.display = s==='dashboard'?'':'none';
   document.getElementById('sec-validade').style.display  = s==='validade'?'':'none';
   document.getElementById('sec-internos').style.display  = s==='internos'?'':'none';
+  document.getElementById('sec-documentos').style.display = s==='documentos'?'':'none';
   document.getElementById('sec-perdas').style.display    = s==='perdas'?'':'none';
   document.querySelectorAll('.tab').forEach(t=>{
     t.classList.remove('active');
@@ -1120,6 +1154,7 @@ function showSection(s, btn){
   }
   if(s==='perdas') carregarPerdas();
   if(s==='internos') carregarInternos();
+  if(s==='documentos') carregarDocumentos();
   if(s==='dashboard') renderDashboard();
   if(s==='historico') carregarHistorico();
   if(document.getElementById('sec-historico'))
@@ -1258,6 +1293,59 @@ async function statusInterno(id,status){
   const msg=status==='ativo'?'Reativar este registro?':status==='consumido'?'Confirmar que o produto foi totalmente utilizado?':'Confirmar descarte do produto?';
   if(!confirm(msg))return;const d=await api.patch(`/api/validade/internos/${id}/status`,{status});if(!d.ok){toast('Erro: '+d.erro);return;}await carregarInternos();toast('✅ Status atualizado');
 }
+
+async function carregarDocumentos(){
+  const d=await api.get('/api/validade/documentos');
+  if(!d.ok){toast('Erro ao carregar documentos');return;}
+  documentos=d.data||[];renderDocumentos();
+}
+
+function renderDocumentos(){
+  const q=(document.getElementById('busca-documentos')?.value||'').toLowerCase();
+  const st=document.getElementById('flt-documentos')?.value||'';
+  const lista=documentos.filter(d=>(!st||d.situacao===st)&&(!q||[d.nome,d.descricao,d.nome_arquivo].some(v=>String(v||'').toLowerCase().includes(q))));
+  document.getElementById('kd-vencidos').textContent=documentos.filter(d=>d.situacao==='vencido').length;
+  document.getElementById('kd-alerta').textContent=documentos.filter(d=>d.situacao==='alerta').length;
+  document.getElementById('kd-validos').textContent=documentos.filter(d=>d.situacao==='valido').length;
+  document.getElementById('kd-total').textContent=documentos.length;
+  const pendentes=documentos.filter(d=>d.situacao!=='valido');
+  document.getElementById('doc-alertas').innerHTML=pendentes.length?`<div style="margin-bottom:12px;padding:10px 13px;border-radius:8px;border:1px solid ${pendentes.some(d=>d.situacao==='vencido')?'#fecaca':'#fde68a'};background:${pendentes.some(d=>d.situacao==='vencido')?'#fef2f2':'#fffbeb'};color:${pendentes.some(d=>d.situacao==='vencido')?'#991b1b':'#92400e'};font-size:12px;font-weight:600">⚠️ ${pendentes.length} documento(s) exigem atenção: ${documentos.filter(d=>d.situacao==='vencido').length} vencido(s) e ${documentos.filter(d=>d.situacao==='alerta').length} próximo(s) do vencimento.</div>`:'';
+  const cores={vencido:['#fee2e2','#991b1b','Vencido'],alerta:['#fef3c7','#92400e','A vencer'],valido:['#dcfce7','#166534','Válido']};
+  document.getElementById('tbody-documentos').innerHTML=lista.map(d=>{const c=cores[d.situacao]||cores.valido;const dias=Number(d.dias_restantes);const txt=d.situacao==='vencido'?`${Math.abs(dias)}d vencido`:dias===0?'Hoje':`${dias} dias`;return `<tr style="${d.situacao==='vencido'?'background:#fff5f5':d.situacao==='alerta'?'background:#fffbeb':''}"><td><strong>${escInterno(d.nome)}</strong>${d.descricao?`<div style="font-size:10px;color:var(--muted)">${escInterno(d.descricao)}</div>`:''}</td><td>${_fmtDataInterno(d.data_emissao)}</td><td><strong>${_fmtDataInterno(d.data_validade)}</strong></td><td>${txt}</td><td><span style="background:${c[0]};color:${c[1]};padding:3px 8px;border-radius:10px;font-size:10px;font-weight:700">${c[2]}</span></td><td>${d.nome_arquivo?`<button class="btn btn-s" style="padding:4px 7px" onclick="baixarDocumento(${d.id},'${String(d.nome_arquivo).replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')">📎 ${escInterno(d.nome_arquivo)}</button>`:'<span style="color:var(--muted)">Somente cadastro</span>'}</td><td style="white-space:nowrap"><button class="btn btn-s" style="padding:4px 7px" onclick="abrirDocumento(${d.id})">✏️</button> <button class="btn btn-s" style="padding:4px 7px;color:#b91c1c" onclick="excluirDocumento(${d.id})">🗑</button></td></tr>`;}).join('');
+  document.getElementById('empty-documentos').style.display=lista.length?'none':'';
+}
+
+window.abrirDocumento=function abrirDocumento(id){
+  const d=documentos.find(x=>String(x.id)===String(id));
+  document.getElementById('documento-title').textContent=d?'Editar documento':'Novo documento';
+  document.getElementById('d-id').value=d?.id||'';document.getElementById('d-nome').value=d?.nome||'';
+  document.getElementById('d-emissao').value=d?.data_emissao?String(d.data_emissao).slice(0,10):'';
+  document.getElementById('d-validade').value=d?.data_validade?String(d.data_validade).slice(0,10):'';
+  document.getElementById('d-alerta').value=d?.dias_alerta??30;document.getElementById('d-descricao').value=d?.descricao||'';document.getElementById('d-arquivo').value='';
+  document.getElementById('modal-documento').classList.add('open');
+};
+
+window.salvarDocumento=async function salvarDocumento(){
+  const nome=document.getElementById('d-nome').value.trim(),validade=document.getElementById('d-validade').value;
+  if(!nome||!validade){toast('Preencha o nome e a data de validade');return;}
+  const btn=document.getElementById('btn-salvar-documento');btn.disabled=true;btn.textContent='Salvando...';
+  try{
+    const fd=new FormData();fd.append('nome',nome);fd.append('dataEmissao',document.getElementById('d-emissao').value);fd.append('dataValidade',validade);fd.append('diasAlerta',document.getElementById('d-alerta').value||30);fd.append('descricao',document.getElementById('d-descricao').value.trim());
+    const arq=document.getElementById('d-arquivo').files?.[0];if(arq)fd.append('arquivo',arq);
+    const id=document.getElementById('d-id').value;
+    const d=await api.upload(`/api/validade/documentos${id?'/'+id:''}`,fd,id?'PUT':'POST');
+    if(!d.ok){toast('Erro: '+(d.erro||'não foi possível salvar'));return;}
+    fecharModal('modal-documento');await carregarDocumentos();toast('✅ Documento salvo');
+  }finally{btn.disabled=false;btn.textContent='💾 Salvar documento';}
+};
+
+window.baixarDocumento=async function baixarDocumento(id,nome){
+  try{const r=await fetch(`/api/validade/documentos/${id}/download`,{headers:{Authorization:'Bearer '+api.token()}});if(!r.ok)throw new Error();const url=URL.createObjectURL(await r.blob());const a=document.createElement('a');a.href=url;a.download=nome||'documento';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch(_){toast('Erro ao baixar o documento');}
+};
+
+window.excluirDocumento=async function excluirDocumento(id){
+  if(!confirm('Excluir este documento e o arquivo anexado?'))return;const d=await api.delete(`/api/validade/documentos/${id}`);if(!d.ok){toast('Erro: '+d.erro);return;}await carregarDocumentos();toast('✅ Documento excluído');
+};
 
 window.addEventListener('message',event=>{
   if(event.origin!==window.location.origin) return;

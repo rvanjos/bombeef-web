@@ -84,11 +84,11 @@
     catch (_) { return { ok: false, erro: 'Resposta inválida do servidor' }; }
   }
 
-  async function apiUpload(path, formData) {
+  async function apiUpload(path, formData, method = 'POST') {
     let res;
     try {
       res = await fetch(path, {
-        method: 'POST',
+        method,
         headers: { 'Authorization': 'Bearer ' + getToken() },
         body: formData,
       });
@@ -99,7 +99,7 @@
         if (ref && ref.ok && ref.token) {
           setToken(ref.token);
           res = await fetch(path, {
-            method: 'POST',
+            method,
             headers: { 'Authorization': 'Bearer ' + ref.token },
             body: formData,
           });

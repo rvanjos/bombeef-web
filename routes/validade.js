@@ -157,12 +157,106 @@ module.exports = function (pool, app) {
       WITH CHECK (NULLIF(current_setting('app.loja_id', true),'') IS NULL OR loja_id=NULLIF(current_setting('app.loja_id', true),'')::integer)`);
 
     await pool.query(`
+      CREATE TABLE IF NOT EXISTS validade_documentos (
+        id             SERIAL PRIMARY KEY,
+        nome           TEXT NOT NULL,
+        descricao      TEXT,
+        data_emissao   DATE,
+        data_validade  DATE NOT NULL,
+        dias_alerta    INTEGER NOT NULL DEFAULT 30 CHECK (dias_alerta >= 0),
+        nome_arquivo   TEXT,
+        mime_type      TEXT,
+        tamanho_bytes  INTEGER,
+        conteudo       BYTEA,
+        criado_por     TEXT,
+        criado_em      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        atualizado_em  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        loja_id        INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id)
+      )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_validade_documentos_data ON validade_documentos(data_validade)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_validade_documentos_loja ON validade_documentos(loja_id)`);
+    await pool.query(`ALTER TABLE validade_documentos ENABLE ROW LEVEL SECURITY`);
+    await pool.query(`ALTER TABLE validade_documentos FORCE ROW LEVEL SECURITY`);
+    await pool.query(`DROP POLICY IF EXISTS bb_isolamento_loja ON validade_documentos`);
+    await pool.query(`CREATE POLICY bb_isolamento_loja ON validade_documentos
+      USING (NULLIF(current_setting('app.loja_id', true),'') IS NULL OR loja_id=NULLIF(current_setting('app.loja_id', true),'')::integer)
+      WITH CHECK (NULLIF(current_setting('app.loja_id', true),'') IS NULL OR loja_id=NULLIF(current_setting('app.loja_id', true),'')::integer)`);
+
+    await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_val_codigo    ON validade_items(codigo);
       CREATE INDEX IF NOT EXISTS idx_val_validade  ON validade_items(data_validade);
       CREATE INDEX IF NOT EXISTS idx_val_status    ON validade_items(status);
     `).catch(() => {});
   }
   initTable().catch(e => console.error('[validade] initTable:', e.message));
+
+  const tiposDocumento = new Set([
+    'application/pdf','image/png','image/jpeg','image/webp',
+    'application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  ]);
+  function validarDocumento(req,res){
+    if(!req.file)return true;
+    if(!tiposDocumento.has(req.file.mimetype)){res.status(400).json({ok:false,erro:'Formato não permitido. Envie PDF, imagem, Word ou Excel'});return false;}
+    if(req.file.size>15*1024*1024){res.status(400).json({ok:false,erro:'O arquivo deve ter no máximo 15 MB'});return false;}
+    return true;
+  }
+
+  // ── Documentos sanitários, licenças e certificados ─────────────────────
+  r.get('/documentos', async (_req,res)=>{
+    try{
+      const {rows}=await pool.query(`SELECT id,nome,descricao,data_emissao,data_validade,dias_alerta,nome_arquivo,mime_type,tamanho_bytes,criado_por,criado_em,atualizado_em,
+        (data_validade-CURRENT_DATE) AS dias_restantes,
+        CASE WHEN data_validade<CURRENT_DATE THEN 'vencido' WHEN data_validade<=CURRENT_DATE+(dias_alerta||' days')::interval THEN 'alerta' ELSE 'valido' END AS situacao
+        FROM validade_documentos ORDER BY data_validade ASC,nome ASC`);
+      res.json({ok:true,data:rows});
+    }catch(e){res.status(500).json({ok:false,erro:e.message});}
+  });
+
+  r.post('/documentos',upload.single('arquivo'),async(req,res)=>{
+    if(!validarDocumento(req,res))return;
+    const v=req.body||{};
+    if(!String(v.nome||'').trim()||!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(String(v.dataValidade||'')))return res.status(400).json({ok:false,erro:'Nome e data de validade são obrigatórios'});
+    if(v.dataEmissao&&v.dataEmissao>v.dataValidade)return res.status(400).json({ok:false,erro:'A emissão não pode ser posterior à validade'});
+    try{
+      const {rows}=await pool.query(`INSERT INTO validade_documentos(nome,descricao,data_emissao,data_validade,dias_alerta,nome_arquivo,mime_type,tamanho_bytes,conteudo,criado_por)
+        VALUES($1,$2,$3::date,$4::date,$5,$6,$7,$8,$9,$10) RETURNING id`,[
+        String(v.nome).trim(),String(v.descricao||'').trim()||null,v.dataEmissao||null,v.dataValidade,Math.max(0,parseInt(v.diasAlerta||30)),
+        req.file?.originalname||null,req.file?.mimetype||null,req.file?.size||null,req.file?.buffer||null,req.user?.nome||req.user?.email||null]);
+      res.json({ok:true,data:rows[0]});
+    }catch(e){res.status(500).json({ok:false,erro:e.message});}
+  });
+
+  r.put('/documentos/:id',upload.single('arquivo'),async(req,res)=>{
+    if(!validarDocumento(req,res))return;
+    const v=req.body||{};
+    if(!String(v.nome||'').trim()||!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(String(v.dataValidade||'')))return res.status(400).json({ok:false,erro:'Nome e data de validade são obrigatórios'});
+    if(v.dataEmissao&&v.dataEmissao>v.dataValidade)return res.status(400).json({ok:false,erro:'A emissão não pode ser posterior à validade'});
+    try{
+      const {rowCount}=await pool.query(`UPDATE validade_documentos SET nome=$1,descricao=$2,data_emissao=$3::date,data_validade=$4::date,dias_alerta=$5,
+        nome_arquivo=CASE WHEN $6::text IS NULL THEN nome_arquivo ELSE $6 END,mime_type=CASE WHEN $6::text IS NULL THEN mime_type ELSE $7 END,
+        tamanho_bytes=CASE WHEN $6::text IS NULL THEN tamanho_bytes ELSE $8 END,conteudo=CASE WHEN $6::text IS NULL THEN conteudo ELSE $9 END,atualizado_em=NOW() WHERE id=$10`,[
+        String(v.nome).trim(),String(v.descricao||'').trim()||null,v.dataEmissao||null,v.dataValidade,Math.max(0,parseInt(v.diasAlerta||30)),
+        req.file?.originalname||null,req.file?.mimetype||null,req.file?.size||null,req.file?.buffer||null,req.params.id]);
+      if(!rowCount)return res.status(404).json({ok:false,erro:'Documento não encontrado'});res.json({ok:true});
+    }catch(e){res.status(500).json({ok:false,erro:e.message});}
+  });
+
+  r.get('/documentos/:id/download',async(req,res)=>{
+    try{
+      const {rows}=await pool.query(`SELECT nome_arquivo,mime_type,conteudo FROM validade_documentos WHERE id=$1`,[req.params.id]);
+      if(!rows.length||!rows[0].conteudo)return res.status(404).json({ok:false,erro:'Arquivo não encontrado'});
+      const d=rows[0],original=String(d.nome_arquivo||'documento').replace(/[\r\n"]/g,'_');
+      const ascii=original.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^\x20-\x7e]/g,'_');
+      res.setHeader('Content-Type',d.mime_type||'application/octet-stream');res.setHeader('Content-Disposition',`attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(original)}`);res.send(d.conteudo);
+    }catch(e){res.status(500).json({ok:false,erro:e.message});}
+  });
+
+  r.delete('/documentos/:id',async(req,res)=>{
+    try{const d=await pool.query(`DELETE FROM validade_documentos WHERE id=$1`,[req.params.id]);if(!d.rowCount)return res.status(404).json({ok:false,erro:'Documento não encontrado'});res.json({ok:true});}
+    catch(e){res.status(500).json({ok:false,erro:e.message});}
+  });
 
   // ── Produtos internos abertos para uso na produção ───────────────────────
   r.get('/internos', async (req, res) => {
