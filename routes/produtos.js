@@ -420,6 +420,10 @@ module.exports = function (pool, app) {
         // ter loja_id, mas ainda não possuir a chave exigida pelo upsert abaixo.
         // A verificação é idempotente e não altera nem remove produtos existentes.
         await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS uq_produtos_loja_codigo ON produtos(loja_id, codigo)`);
+        await client.query(`
+          CREATE UNIQUE INDEX IF NOT EXISTS uq_kit_estoque_loja_produto
+          ON kit_estoque_interno(loja_id, produto_id)
+        `);
 
         const result = await client.query(`
           INSERT INTO produtos (codigo, descricao, fornecedor, preco_custo, preco_venda, unidade, categoria, origem, estoque)

@@ -143,6 +143,10 @@ module.exports = function (pool, app) {
         UNIQUE(loja_id, produto_id)
       )
     `).catch(() => {});
+    await pool.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS uq_kit_estoque_loja_produto
+      ON kit_estoque_interno(loja_id, produto_id)
+    `).catch(e => console.warn('[kits-campanha] chave estoque multi-loja:', e.message));
 
     // Migration: corrige tipo NULL em slots antigos
     await pool.query(`UPDATE kit_campanha_slots SET tipo='choice' WHERE tipo IS NULL`).catch(()=>{});
