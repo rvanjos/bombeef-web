@@ -108,6 +108,9 @@ const pool = {
   assert.match(migracao, /FORCE ROW LEVEL SECURITY/);
   assert.match(migracao, /uq_faturamento_dia_loja/);
   assert.match(migracao, /idx_cf_hash_loja/);
+  const produtosRoute = fs.readFileSync(path.join(__dirname, '../routes/produtos.js'), 'utf8');
+  assert.match(produtosRoute, /CREATE UNIQUE INDEX IF NOT EXISTS uq_produtos_loja_codigo ON produtos\(loja_id, codigo\)/);
+  assert.match(produtosRoute, /ON CONFLICT \(loja_id, codigo\) DO UPDATE/);
   for (const tabela of ['kits','kit_pedidos','cortes_registros','retiradas','clientes_fiado','vendas_fiado','vendas_produto','pagamentos_retiradas','pagamento_retirada_itens']) {
     assert.match(migracao, new RegExp(`['"]${tabela}['"]`));
   }
