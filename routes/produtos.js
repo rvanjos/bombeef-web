@@ -57,6 +57,7 @@ module.exports = function (pool, app) {
       CREATE INDEX IF NOT EXISTS idx_produtos_codigo     ON produtos(codigo);
       CREATE INDEX IF NOT EXISTS idx_produtos_descricao  ON produtos(descricao);
       CREATE INDEX IF NOT EXISTS idx_produtos_fornecedor ON produtos(fornecedor);
+      CREATE UNIQUE INDEX IF NOT EXISTS uq_produtos_loja_codigo ON produtos(loja_id, codigo);
     `);
   }
   // initTable + migration síncronos
@@ -414,6 +415,11 @@ module.exports = function (pool, app) {
 
         // Garante coluna estoque existe (migration defensiva)
         await client.query(`ALTER TABLE produtos ADD COLUMN IF NOT EXISTS estoque NUMERIC(12,3) DEFAULT 0`).catch(()=>{});
+
+        // Bancos que concluíram uma versão anterior da migração multi-loja podem
+        // ter loja_id, mas ainda não possuir a chave exigida pelo upsert abaixo.
+        // A verificação é idempotente e não altera nem remove produtos existentes.
+        await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS uq_produtos_loja_codigo ON produtos(loja_id, codigo)`);
 
         const result = await client.query(`
           INSERT INTO produtos (codigo, descricao, fornecedor, preco_custo, preco_venda, unidade, categoria, origem, estoque)
