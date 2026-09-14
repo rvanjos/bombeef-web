@@ -131,6 +131,16 @@ const pool = {
   assert.match(migracao, /2026-09-administracao-v1/);
   assert.match(migracao, /uq_config_sistema_loja_chave/);
 
+  const index = fs.readFileSync(path.join(__dirname, '../public/index.html'), 'utf8');
+  const centralAgentes = fs.readFileSync(path.join(__dirname, '../public/central-agentes.html'), 'utf8');
+  const dashboardRoute = fs.readFileSync(path.join(__dirname, '../routes/dashboard.js'), 'utf8');
+  assert.match(index, /data-tab="agentes" data-perfil="admin,gestor"/);
+  assert.match(index, /iframe-agentes/);
+  assert.match(centralAgentes, /\/api\/dashboard\/agente-gestor/);
+  assert.doesNotMatch(centralAgentes, /api\.(post|put|patch|delete|upload)\s*\(/);
+  assert.match(dashboardRoute, /r\.get\('\/agente-gestor', autenticar\(\['admin','gestor'\]\)/);
+  assert.match(dashboardRoute, /dre: \['admin','financeiro','contabil'\]\.includes\(req\.user\?\.perfil\)/);
+
   console.log('multiloja: testes concluídos');
 })().catch(erro => {
   console.error(erro);
