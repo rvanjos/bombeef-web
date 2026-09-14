@@ -134,11 +134,15 @@ const pool = {
   const index = fs.readFileSync(path.join(__dirname, '../public/index.html'), 'utf8');
   const centralAgentes = fs.readFileSync(path.join(__dirname, '../public/central-agentes.html'), 'utf8');
   const dashboardRoute = fs.readFileSync(path.join(__dirname, '../routes/dashboard.js'), 'utf8');
-  assert.match(index, /data-tab="agentes" data-perfil="admin,gestor"/);
+  assert.match(index, /data-tab="agentes" data-perfil="admin,gestor,financeiro,contabil"/);
   assert.match(index, /iframe-agentes/);
   assert.match(centralAgentes, /\/api\/dashboard\/agente-gestor/);
+  assert.match(centralAgentes, /\/api\/dashboard\/agente-financeiro/);
+  assert.match(centralAgentes, /\/api\/dre\/diagnostico\//);
+  assert.match(centralAgentes, /\/api\/dre\/checklist\//);
   assert.doesNotMatch(centralAgentes, /api\.(post|put|patch|delete|upload)\s*\(/);
   assert.match(dashboardRoute, /r\.get\('\/agente-gestor', autenticar\(\['admin','gestor'\]\)/);
+  assert.match(dashboardRoute, /r\.get\('\/agente-financeiro', autenticar\(\['admin','financeiro','contabil'\]\)/);
   assert.match(dashboardRoute, /dre: \['admin','financeiro','contabil'\]\.includes\(req\.user\?\.perfil\)/);
 
   console.log('multiloja: testes concluídos');
