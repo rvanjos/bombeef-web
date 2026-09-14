@@ -146,7 +146,7 @@ module.exports = function (pool) {
   });
 
   // ── GET /gerencial — Dashboard Gerencial completo (F2-10) ─────────────────
-  r.get('/gerencial', async (req, res) => {
+  const carregarGerencial = async (req, res) => {
     const mesRaw = req.query.mes || '';
     const mes = mesRaw.replace(/-(\d{4})$/, '/$1') || (() => {
       const d = new Date();
@@ -275,14 +275,14 @@ module.exports = function (pool) {
           descontos:    parseFloat(fatMes.descontos||0),
           grafico_30d:  fat30d,
         },
-        dre: {
+        dre: ['admin','financeiro','contabil'].includes(req.user?.perfil) ? {
           receitas:  parseFloat(dreRow.res_receitas||0),
           despesas:  parseFloat(dreRow.res_despesas||0),
           resultado: parseFloat(dreRow.res_final||0),
           margem:    parseFloat(dreRow.res_receitas||0) > 0
             ? parseFloat(((parseFloat(dreRow.res_final||0)/parseFloat(dreRow.res_receitas||0))*100).toFixed(1))
             : 0,
-        },
+        } : { restrito: true },
         boletos: {
           vencidos:     parseInt(bolRow.vencidos||0),
           vence_7d:     parseInt(bolRow.vence_7d||0),
@@ -309,7 +309,10 @@ module.exports = function (pool) {
       console.error('[dashboard/gerencial]', e.message);
       res.status(500).json({ ok: false, erro: e.message });
     }
-  });
+  };
+
+  r.get('/gerencial', carregarGerencial);
+  r.get('/agente-gestor', autenticar(['admin','gestor']), carregarGerencial);
 
   // ── GET /curva-abc — Curva ABC por faturamento (F2-12) ───────────────────
   r.get('/curva-abc', async (req, res) => {
