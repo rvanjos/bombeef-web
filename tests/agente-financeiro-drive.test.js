@@ -1,0 +1,20 @@
+const fs = require('fs');
+const path = require('path');
+const assert = require('assert');
+
+const root = path.join(__dirname,'..');
+const route = fs.readFileSync(path.join(root,'routes/agente_financeiro_drive.js'),'utf8');
+const start = fs.readFileSync(path.join(root,'scripts/start.js'),'utf8');
+const page = fs.readFileSync(path.join(root,'public/agente-financeiro-semanal.html'),'utf8');
+
+assert.match(route,/drive\.readonly/);
+assert.match(route,/GOOGLE_DRIVE_SERVICE_ACCOUNT_EMAIL/);
+assert.match(route,/GOOGLE_DRIVE_PRIVATE_KEY/);
+assert.match(route,/GOOGLE_DRIVE_FATURAS_FOLDER_ID/);
+assert.match(route,/r\.get\('\/status'/);
+assert.match(route,/r\.get\('\/arquivos'/);
+assert.match(route,/r\.post\('\/extrair'/);
+assert.match(start,/\/api\/agente-financeiro\/drive/);
+assert.match(page,/drive\/status/);
+assert.match(page,/drive\/arquivos/);
+console.log('agente-financeiro-drive.test.js: OK');
