@@ -3,6 +3,8 @@
  *
  * Rotas:
  *   GET /api/dashboard/kpis  → todos os KPIs do dashboard principal
+ *   GET /api/dashboard/agente-gestor      → resumo somente leitura para gestor/admin
+ *   GET /api/dashboard/agente-financeiro → resumo financeiro para perfis autorizados
  */
 
 const express    = require('express');
@@ -276,6 +278,7 @@ module.exports = function (pool) {
           grafico_30d:  fat30d,
         },
         dre: ['admin','financeiro','contabil'].includes(req.user?.perfil) ? {
+          disponivel: Object.keys(dreRow).length > 0,
           receitas:  parseFloat(dreRow.res_receitas||0),
           despesas:  parseFloat(dreRow.res_despesas||0),
           resultado: parseFloat(dreRow.res_final||0),
@@ -313,6 +316,7 @@ module.exports = function (pool) {
 
   r.get('/gerencial', carregarGerencial);
   r.get('/agente-gestor', autenticar(['admin','gestor']), carregarGerencial);
+  r.get('/agente-financeiro', autenticar(['admin','financeiro','contabil']), carregarGerencial);
 
   // ── GET /curva-abc — Curva ABC por faturamento (F2-12) ───────────────────
   r.get('/curva-abc', async (req, res) => {
