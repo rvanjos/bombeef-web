@@ -178,7 +178,7 @@
     _mod.init    = cfg.init    || null;
     _mod.reload  = cfg.reload  || null;
     _mod.eventos = Array.isArray(cfg.eventos) ? cfg.eventos : [];
-    if (_bbReady) _rodarInit(w.__bbUsuario);
+    if (_bbReady) _rodarInit(w.__bbUsuario || _usuarioDoToken());
   }
   function recarregar() {
     if (typeof _mod.reload !== 'function') return;
@@ -197,11 +197,33 @@
   });
 
   let _bbReady = false;
-  function _perfilDoToken() {
+  function _payloadDoToken() {
     try {
-      const p = JSON.parse(atob(getToken().split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
-      return p.perfil || '';
-    } catch (_) { return ''; }
+      const parte = getToken().split('.')[1];
+      if (!parte) return {};
+      const base64 = parte.replace(/-/g,'+').replace(/_/g,'/');
+      const padded = base64 + '='.repeat((4 - base64.length % 4) % 4);
+      return JSON.parse(atob(padded));
+    } catch (_) { return {}; }
+  }
+  function _usuarioDoToken() {
+    const p = _payloadDoToken();
+    if (!p || !p.perfil) return {};
+    return {
+      id: p.id || null,
+      nome: p.nome || '',
+      email: p.email || '',
+      perfil: p.perfil || '',
+      sessaoId: p.sessaoId || null,
+      lojaId: p.lojaId || null,
+      lojaCodigo: p.lojaCodigo || null,
+      empresaId: p.empresaId || null,
+      vinculoLojaId: p.vinculoLojaId || null,
+      lojaNome: p.lojaNome || '',
+    };
+  }
+  function _perfilDoToken() {
+    return _payloadDoToken().perfil || '';
   }
   function _injetarVisaoMultiloja(usuario) {
     if (!/\/config\.html$/i.test(location.pathname)) return;
@@ -239,30 +261,35 @@
   }
 
   function _dispararReady(usuario) {
+    const usuarioEfetivo = usuario && usuario.perfil ? usuario : (w.__bbUsuario || _usuarioDoToken());
+    if (usuarioEfetivo && usuarioEfetivo.perfil && !w.__bbUsuario) w.__bbUsuario = usuarioEfetivo;
     if (_bbReady) {
-      _injetarVisaoMultiloja(usuario);
-      _injetarPendenciasFuncionarios(usuario);
+      _injetarVisaoMultiloja(usuarioEfetivo);
+      _injetarPendenciasFuncionarios(usuarioEfetivo);
       return;
     }
     _bbReady = true;
-    _injetarVisaoMultiloja(usuario);
-    _injetarPendenciasFuncionarios(usuario);
+    _injetarVisaoMultiloja(usuarioEfetivo);
+    _injetarPendenciasFuncionarios(usuarioEfetivo);
     if (typeof w.onBBReady === 'function') {
-      try { w.onBBReady(usuario); } catch(e) { console.error('[BB] onBBReady:', e); }
+      try { w.onBBReady(usuarioEfetivo); } catch(e) { console.error('[BB] onBBReady:', e); }
     }
-    _rodarInit(usuario);
+    _rodarInit(usuarioEfetivo);
   }
 
   window.addEventListener('message', e => {
     if (e.data?.type === 'bb_token' && e.data.token) {
       setToken(e.data.token);
-      w.__bbUsuario = e.data.usuario;
-      _dispararReady(e.data.usuario);
+      w.__bbUsuario = e.data.usuario || _usuarioDoToken();
+      _dispararReady(w.__bbUsuario);
     }
   });
 
   if (getToken()) {
-    setTimeout(() => _dispararReady(w.__bbUsuario), 50);
+    setTimeout(() => _dispararReady(w.__bbUsuario || _usuarioDoToken()), 50);
+    if (_emIframe && !w.__bbUsuario) {
+      try { w.parent.postMessage({ type: 'bb_request_auth' }, '*'); } catch (_) {}
+    }
   } else if (_emIframe) {
     function _pedirToken() {
       try { w.parent.postMessage({ type: 'bb_request_auth' }, '*'); } catch (_) {}
@@ -270,7 +297,7 @@
     _pedirToken();
     [500, 1500, 4000].forEach(d => setTimeout(() => {
       if (_bbReady) return;
-      if (getToken()) _dispararReady(w.__bbUsuario);
+      if (getToken()) _dispararReady(w.__bbUsuario || _usuarioDoToken());
       else _pedirToken();
     }, d));
   }
