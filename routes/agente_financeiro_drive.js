@@ -17,7 +17,7 @@ function normalizarFolderId(valor) {
 }
 
 function cfg() {
-  const email = process.env.GOOGLE_DRIVE_SERVICE_ACCOUNT_EMAIL || '';
+  const email = String(process.env.GOOGLE_DRIVE_SERVICE_ACCOUNT_EMAIL || '').trim();
   const key = (process.env.GOOGLE_DRIVE_PRIVATE_KEY || '').replace(/\\n/g, '\n');
   const folderId = normalizarFolderId(process.env.GOOGLE_DRIVE_FATURAS_FOLDER_ID || '');
   return { email, key, folderId, ok: !!(email && key && folderId) };
@@ -60,7 +60,9 @@ async function driveFetch(url, opts={}) {
   const resp = await fetch(url, { ...opts, headers:{ ...(opts.headers||{}), authorization:`Bearer ${token}` } });
   if (!resp.ok) {
     const txt = await resp.text().catch(()=> '');
-    throw new Error(`Google Drive ${resp.status}: ${txt.slice(0,220)}`);
+    const err = new Error(`Google Drive ${resp.status}: ${txt.slice(0,220)}`);
+    err.status = resp.status;
+    throw err;
   }
   return resp;
 }
@@ -77,10 +79,39 @@ function arquivosUrl(folderId, pageSize=50) {
   return `https://www.googleapis.com/drive/v3/files?${p.toString()}`;
 }
 
+function visiveisUrl(pageSize=20) {
+  const p = new URLSearchParams({
+    q: 'trashed = false',
+    pageSize: String(Math.min(Math.max(Number(pageSize)||20,1),50)),
+    orderBy: 'modifiedTime desc',
+    fields: 'files(id,name,mimeType,parents)',
+    supportsAllDrives: 'true',
+    includeItemsFromAllDrives: 'true'
+  });
+  return `https://www.googleapis.com/drive/v3/files?${p.toString()}`;
+}
+
 async function metadata(fileId) {
   const fields = encodeURIComponent('id,name,mimeType,size,modifiedTime,parents,md5Checksum,webViewLink');
   const resp = await driveFetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?fields=${fields}&supportsAllDrives=true`);
   return resp.json();
+}
+
+async function diagnosticoVisibilidade() {
+  const c = cfg();
+  try {
+    const resp = await driveFetch(visiveisUrl(20));
+    const data = await resp.json();
+    const files = data.files || [];
+    return {
+      contaServico: c.email,
+      pastaConfiguradaId: c.folderId,
+      itensVisiveis: files.length,
+      amostraVisivel: files.slice(0,5).map(f => ({ id:f.id, nome:f.name, mimeType:f.mimeType }))
+    };
+  } catch(e) {
+    return { contaServico:c.email, pastaConfiguradaId:c.folderId, itensVisiveis:null, erroVisibilidade:e.message };
+  }
 }
 
 async function pastaConfigurada() {
@@ -103,9 +134,28 @@ r.get('/status', async (req,res) => {
   try {
     await getToken();
     const pasta = await pastaConfigurada();
-    res.json({ ok:true, configurado:true, conectado:true, pastaConfigurada:true, pasta:{ id:pasta.id, nome:pasta.name } });
+    res.json({
+      ok:true,
+      configurado:true,
+      conectado:true,
+      pastaConfigurada:true,
+      contaServico:c.email,
+      pasta:{ id:pasta.id, nome:pasta.name }
+    });
   } catch(e) {
-    res.json({ ok:true, configurado:true, conectado:false, erro:e.message });
+    const diagnostico = await diagnosticoVisibilidade();
+    const semAcessoPasta = Number(e.status) === 404 || /404|File not found/i.test(e.message || '');
+    res.json({
+      ok:true,
+      configurado:true,
+      conectado:false,
+      erro:e.message,
+      codigo:'PASTA_INACESSIVEL',
+      orientacao: semAcessoPasta
+        ? 'A conta de serviço autenticou, mas não enxerga a pasta configurada. Compare o e-mail exibido aqui com o e-mail que recebeu o compartilhamento no Google Drive.'
+        : 'Confira a credencial da conta de serviço e a configuração da pasta.',
+      diagnostico
+    });
   }
 });
 
@@ -122,12 +172,16 @@ r.get('/arquivos', async (req,res) => {
       ok:true,
       data:files,
       diagnostico:{
+        contaServico:c.email,
         pasta:{ id:pasta.id, nome:pasta.name },
         itensEncontrados:encontrados.length,
         arquivosCompativeis:files.length
       }
     });
-  } catch(e) { res.status(502).json({ ok:false, erro:e.message }); }
+  } catch(e) {
+    const diagnostico = await diagnosticoVisibilidade();
+    res.status(502).json({ ok:false, erro:e.message, diagnostico });
+  }
 });
 
 r.post('/extrair', express.json({limit:'100kb'}), async (req,res) => {
