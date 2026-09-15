@@ -36,9 +36,15 @@ async function tokenGoogle() {
   const p=b64url(JSON.stringify({iss:email,scope:'https://www.googleapis.com/auth/drive.readonly',aud:'https://oauth2.googleapis.com/token',exp:now+3600,iat:now}));
   const signer=crypto.createSign('RSA-SHA256'); signer.update(`${h}.${p}`); signer.end();
   const assertion=`${h}.${p}.${b64url(signer.sign(key))}`;
-  const resp=await fetch('https://oauth2.googleapis.com/token',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams({grant_type:'urn:ietf:params:oauth:grant-type:jwt-bearer',assertion})});
+  const resp=await fetch('https://oauth2.googleapis.com/token',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams({grant_type:'urn:ietf:params:oauth-token:jwt-bearer',assertion})});
   const data=await resp.json();
-  if(!resp.ok||!data.access_token) throw new Error(data.error_description||data.error||'Falha ao autenticar no Google Drive');
+  if(!resp.ok||!data.access_token) {
+    const fallbackResp=await fetch('https://oauth2.googleapis.com/token',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams({grant_type:'urn:ietf:params:oauth:grant-type:jwt-bearer',assertion})});
+    const fallbackData=await fallbackResp.json();
+    if(!fallbackResp.ok||!fallbackData.access_token) throw new Error(fallbackData.error_description||fallbackData.error||data.error_description||data.error||'Falha ao autenticar no Google Drive');
+    tokenCache={token:fallbackData.access_token,exp:now+Number(fallbackData.expires_in||3600)};
+    return tokenCache.token;
+  }
   tokenCache={token:data.access_token,exp:now+Number(data.expires_in||3600)};
   return tokenCache.token;
 }
@@ -81,19 +87,20 @@ async function interpretarArquivo(fileId) {
   }
 
   const candidatos=[];
+  if(textos.sequencial) candidatos.push({...interpretarFatura(textos.sequencial,meta.name),_origem:'sequencial'});
   if(textos.estruturado) candidatos.push({...interpretarFatura(textos.estruturado,meta.name),_origem:'layout'});
   if(textos.bruto) candidatos.push({...interpretarFatura(textos.bruto,meta.name),_origem:'bruto'});
   let preview=melhorPreview(candidatos);
   let iaTentada=false, iaErro=null;
 
-  // Quando os parsers determinísticos não fecham matematicamente a fatura,
-  // a IA atua apenas como extrator. O backend recalcula a soma e mantém o bloqueio
-  // caso a resposta da IA não feche exatamente com o total do documento.
+  console.info('[Agente Financeiro][Parser candidatos]',JSON.stringify(candidatos.map(c=>({metodo:c._origem,ok:c.ok,itens:c.qtd_itens||0,diferenca:c.diferenca??null,confere:Boolean(c.conferencia_ok)}))));
+
   if(!preview?.conferencia_ok && process.env.ANTHROPIC_API_KEY) {
     iaTentada=true;
     try {
-      const fonteIa = [textos.bruto, textos.estruturado]
+      const fonteIa = [textos.sequencial, textos.bruto, textos.estruturado]
         .filter(Boolean)
+        .filter((v,i,a)=>a.indexOf(v)===i)
         .sort((a,b)=>b.length-a.length)
         .join('\n\n--- LEITURA ALTERNATIVA DO MESMO PDF ---\n\n')
         .slice(0,50000);
