@@ -73,21 +73,24 @@ function arquivosUrl(folderId, pageSize=50) {
     pageSize: String(Math.min(Math.max(Number(pageSize)||50,1),100)),
     orderBy: 'modifiedTime desc',
     fields: 'nextPageToken,files(id,name,mimeType,size,modifiedTime,createdTime,md5Checksum,webViewLink,parents)',
+    spaces: 'drive',
     supportsAllDrives: 'true',
     includeItemsFromAllDrives: 'true'
   });
   return `https://www.googleapis.com/drive/v3/files?${p.toString()}`;
 }
 
-function visiveisUrl(pageSize=20) {
+function visiveisUrl(pageSize=100, pageToken='') {
   const p = new URLSearchParams({
     q: 'trashed = false',
-    pageSize: String(Math.min(Math.max(Number(pageSize)||20,1),50)),
+    pageSize: String(Math.min(Math.max(Number(pageSize)||100,1),100)),
     orderBy: 'modifiedTime desc',
-    fields: 'files(id,name,mimeType,parents)',
+    fields: 'nextPageToken,files(id,name,mimeType,size,modifiedTime,createdTime,md5Checksum,webViewLink,parents)',
+    spaces: 'drive',
     supportsAllDrives: 'true',
     includeItemsFromAllDrives: 'true'
   });
+  if (pageToken) p.set('pageToken', pageToken);
   return `https://www.googleapis.com/drive/v3/files?${p.toString()}`;
 }
 
@@ -97,31 +100,30 @@ async function metadata(fileId) {
   return resp.json();
 }
 
-async function diagnosticoVisibilidade() {
-  const c = cfg();
-  try {
-    const resp = await driveFetch(visiveisUrl(20));
+async function listarVisiveis(maxPaginas=5) {
+  const todos=[];
+  let token='';
+  for (let pagina=0; pagina<maxPaginas; pagina++) {
+    const resp = await driveFetch(visiveisUrl(100, token));
     const data = await resp.json();
-    const files = data.files || [];
-    return {
-      contaServico: c.email,
-      pastaConfiguradaId: c.folderId,
-      itensVisiveis: files.length,
-      amostraVisivel: files.slice(0,5).map(f => ({ id:f.id, nome:f.name, mimeType:f.mimeType }))
-    };
+    todos.push(...(data.files||[]));
+    token = data.nextPageToken || '';
+    if (!token) break;
+  }
+  return todos;
+}
+
+async function tentarMetadataPasta(folderId) {
+  try {
+    const meta = await metadata(folderId);
+    return { acessivel:true, id:meta.id, nome:meta.name, mimeType:meta.mimeType };
   } catch(e) {
-    return { contaServico:c.email, pastaConfiguradaId:c.folderId, itensVisiveis:null, erroVisibilidade:e.message };
+    return { acessivel:false, erro:e.message, status:e.status || null };
   }
 }
 
-async function pastaConfigurada() {
-  const c = cfg();
-  if (!c.ok) throw new Error('Google Drive não configurado no Railway');
-  const meta = await metadata(c.folderId);
-  if (meta.mimeType !== 'application/vnd.google-apps.folder') {
-    throw new Error(`O ID configurado aponta para "${meta.name || 'item'}", que não é uma pasta do Google Drive`);
-  }
-  return meta;
+function compativel(f) {
+  return /pdf|spreadsheet|excel|csv|text/i.test(`${f.mimeType||''} ${f.name||''}`);
 }
 
 r.get('/status', async (req,res) => {
@@ -133,28 +135,23 @@ r.get('/status', async (req,res) => {
   ].filter(Boolean) });
   try {
     await getToken();
-    const pasta = await pastaConfigurada();
+    const pasta = await tentarMetadataPasta(c.folderId);
     res.json({
       ok:true,
       configurado:true,
       conectado:true,
-      pastaConfigurada:true,
       contaServico:c.email,
-      pasta:{ id:pasta.id, nome:pasta.name }
+      pastaConfiguradaId:c.folderId,
+      pasta
     });
   } catch(e) {
-    const diagnostico = await diagnosticoVisibilidade();
-    const semAcessoPasta = Number(e.status) === 404 || /404|File not found/i.test(e.message || '');
     res.json({
       ok:true,
       configurado:true,
       conectado:false,
-      erro:e.message,
-      codigo:'PASTA_INACESSIVEL',
-      orientacao: semAcessoPasta
-        ? 'A conta de serviço autenticou, mas não enxerga a pasta configurada. Compare o e-mail exibido aqui com o e-mail que recebeu o compartilhamento no Google Drive.'
-        : 'Confira a credencial da conta de serviço e a configuração da pasta.',
-      diagnostico
+      contaServico:c.email,
+      pastaConfiguradaId:c.folderId,
+      erro:e.message
     });
   }
 });
@@ -163,24 +160,56 @@ r.get('/arquivos', async (req,res) => {
   const c = cfg();
   if (!c.ok) return res.status(503).json({ ok:false, erro:'Google Drive ainda não configurado no Railway' });
   try {
-    const pasta = await pastaConfigurada();
-    const resp = await driveFetch(arquivosUrl(c.folderId, req.query.limit));
-    const data = await resp.json();
-    const encontrados = data.files || [];
-    const files = encontrados.filter(f => /pdf|spreadsheet|excel|csv|text/i.test(`${f.mimeType} ${f.name}`));
+    await getToken();
+    let encontrados=[];
+    let metodo='consulta_por_pasta';
+    let erroConsultaDireta=null;
+
+    try {
+      const resp = await driveFetch(arquivosUrl(c.folderId, req.query.limit));
+      const data = await resp.json();
+      encontrados = data.files || [];
+    } catch(e) {
+      erroConsultaDireta = e.message;
+    }
+
+    let visiveis=[];
+    if (!encontrados.length) {
+      metodo='varredura_visiveis';
+      visiveis = await listarVisiveis(5);
+      encontrados = visiveis.filter(f => Array.isArray(f.parents) && f.parents.includes(c.folderId));
+    }
+
+    const files = encontrados.filter(compativel);
+    const pasta = await tentarMetadataPasta(c.folderId);
+    const amostra = (visiveis.length ? visiveis : encontrados).slice(0,8).map(f => ({
+      id:f.id,
+      nome:f.name,
+      mimeType:f.mimeType,
+      parents:f.parents||[]
+    }));
+
     res.json({
       ok:true,
       data:files,
       diagnostico:{
         contaServico:c.email,
-        pasta:{ id:pasta.id, nome:pasta.name },
+        pastaConfiguradaId:c.folderId,
+        pasta,
+        metodo,
+        erroConsultaDireta,
         itensEncontrados:encontrados.length,
-        arquivosCompativeis:files.length
+        arquivosCompativeis:files.length,
+        itensVisiveisConta:visiveis.length || null,
+        amostraVisivel:amostra
       }
     });
   } catch(e) {
-    const diagnostico = await diagnosticoVisibilidade();
-    res.status(502).json({ ok:false, erro:e.message, diagnostico });
+    res.status(502).json({
+      ok:false,
+      erro:e.message,
+      diagnostico:{ contaServico:c.email, pastaConfiguradaId:c.folderId }
+    });
   }
 });
 
