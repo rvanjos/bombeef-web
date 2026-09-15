@@ -2,25 +2,29 @@
 // Injeta rotas complementares antes dos handlers principais/404.
 const express = require('express');
 const originalUse = express.application.use;
-let mounted = false;
+let boletosIaMounted = false;
+let agenteMounted = false;
 
 express.application.use = function (...args) {
   const result = originalUse.apply(this, args);
-  if (!mounted && args[0] === '/api/dashboard') {
-    mounted = true;
 
-    // Sobrescreve apenas os endpoints de leitura PDF de Boletos/NF-e.
-    // Fica antes da rota antiga de boletos; assim o fluxo ativo usa OpenAI e nunca Anthropic.
+  // server.js registra /auth imediatamente antes de /api/boletos.
+  // Montamos aqui a sobrescrita dos dois endpoints PDF para que o fluxo ativo use OpenAI.
+  if (!boletosIaMounted && args[0] === '/auth') {
+    boletosIaMounted = true;
     try {
       originalUse.call(this, '/api/boletos', require('../routes/boletos_ai_openai'));
       console.log('[boletos/ia] rotas PDF registradas com provedor OpenAI');
     } catch (e) {
       console.warn('[boletos/ia] não foi possível registrar rota OpenAI:', e.message);
     }
+  }
 
+  // O Agente Financeiro continua sendo montado após /api/dashboard,
+  // antes dos handlers finais/404.
+  if (!agenteMounted && args[0] === '/api/dashboard') {
+    agenteMounted = true;
     try {
-      // Parser v2 vem primeiro: trata /interpretar e /importar.
-      // Demais endpoints caem normalmente na rota original logo abaixo.
       originalUse.call(this, '/api/agente-financeiro/drive', require('../routes/agente_financeiro_drive_parser_v2'));
       originalUse.call(this, '/api/agente-financeiro/drive', require('../routes/agente_financeiro_drive'));
       console.log('[agente-financeiro/drive] rotas registradas (parser v2 + base)');
