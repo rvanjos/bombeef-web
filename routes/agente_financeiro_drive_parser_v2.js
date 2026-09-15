@@ -80,6 +80,7 @@ async function interpretarArquivo(fileId) {
   }
 
   const candidatos=[];
+  if(textos.caixa) candidatos.push({...interpretarFatura(textos.caixa,meta.name),_origem:'caixa-coluna'});
   if(textos.sequencial) candidatos.push({...interpretarFatura(textos.sequencial,meta.name),_origem:'sequencial'});
   if(textos.estruturado) candidatos.push({...interpretarFatura(textos.estruturado,meta.name),_origem:'layout'});
   if(textos.bruto) candidatos.push({...interpretarFatura(textos.bruto,meta.name),_origem:'bruto'});
