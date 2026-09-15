@@ -7,7 +7,7 @@
     "start": "node scripts/finalize-multiloja.js && node scripts/ensure-validade-documentos.js && node scripts/fix-ponto-multiloja.js && node scripts/seed-fornecedores-dre.js && node scripts/fix-dre-ofx-creditos.js && node scripts/audit-multiloja.js && node scripts/start.js",
     "dev": "node scripts/start.js",
     "seed": "node seed.js",
-    "test": "node tests/multiloja.test.js && node tests/agente-financeiro-drive.test.js && node tests/cartao-fatura-parser.test.js"
+    "test": "node tests/multiloja.test.js && node tests/agente-financeiro-drive.test.js && node tests/cartao-fatura-parser.test.js && node tests/cartao-fatura-ai.test.js"
   },
   "engines": {
     "node": ">=18.0.0"
