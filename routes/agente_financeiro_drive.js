@@ -45,7 +45,7 @@ async function getToken() {
   signer.end();
   const sig = signer.sign(c.key);
   const assertion = `${header}.${payload}.${b64url(sig)}`;
-  const body = new URLSearchParams({ grant_type:'urn:ietf:params:oauth2:grant-type:jwt-bearer', assertion });
+  const body = new URLSearchParams({ grant_type:'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion });
   const resp = await fetch('https://oauth2.googleapis.com/token', {
     method:'POST', headers:{'content-type':'application/x-www-form-urlencoded'}, body
   });
