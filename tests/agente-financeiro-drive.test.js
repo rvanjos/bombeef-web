@@ -6,6 +6,8 @@ const { montarSequencial } = require('../lib/pdf-layout-extractor');
 const root = path.join(__dirname,'..');
 const route = fs.readFileSync(path.join(root,'routes/agente_financeiro_drive.js'),'utf8');
 const routeV2 = fs.readFileSync(path.join(root,'routes/agente_financeiro_drive_parser_v2.js'),'utf8');
+const routeV3 = fs.readFileSync(path.join(root,'routes/agente_financeiro_cartao_v3.js'),'utf8');
+const parserV3 = fs.readFileSync(path.join(root,'lib/cartao-caixa-pdf-v3.js'),'utf8');
 const extractor = fs.readFileSync(path.join(root,'lib/pdf-layout-extractor.js'),'utf8');
 const start = fs.readFileSync(path.join(root,'scripts/start.js'),'utf8');
 const page = fs.readFileSync(path.join(root,'public/agente-financeiro-semanal.html'),'utf8');
@@ -36,14 +38,21 @@ assert.match(route,/DIVERGENCIA_TOTAL/);
 assert.match(route,/FATURA_EXISTENTE/);
 assert.match(route,/protegerPoolPorLoja/);
 
+assert.match(routeV3,/interpretarCaixaPdfV3/);
+assert.match(routeV3,/caixa-coordenadas-v3/);
+assert.match(routeV3,/DIVERGENCIA_TOTAL/);
+assert.match(routeV3,/FATURA_EXISTENTE/);
+assert.match(routeV3,/protegerPoolPorLoja/);
+assert.match(parserV3,/agruparLinhas/);
+assert.match(parserV3,/interpretarLinhasFinanceiras/);
+assert.match(parserV3,/valorFinalDaLinha/);
+
 assert.match(routeV2,/extrairTextosPdf/);
 assert.match(routeV2,/textos\.sequencial/);
 assert.match(routeV2,/_origem:'sequencial'/);
 assert.match(routeV2,/Parser candidatos/);
 assert.match(routeV2,/metodo_extracao/);
 assert.match(routeV2,/melhorPreview/);
-assert.match(routeV2,/DIVERGENCIA_TOTAL/);
-assert.match(routeV2,/FATURA_EXISTENTE/);
 assert.match(extractor,/montarLinhas/);
 assert.match(extractor,/montarSequencial/);
 assert.match(extractor,/hasEOL/);
@@ -60,6 +69,7 @@ const seq = montarSequencial([
 ]);
 assert.deepEqual(seq,['06/12 TENDA ATACADO 10,75D','08/12 MARAVILHAS DO LAR 15,96D']);
 
+assert.ok(start.indexOf('agente_financeiro_cartao_v3') < start.indexOf('agente_financeiro_drive_parser_v2'));
 assert.ok(start.indexOf('agente_financeiro_drive_parser_v2') < start.indexOf("require('../routes/agente_financeiro_drive')"));
 assert.match(start,/\/api\/agente-financeiro\/drive/);
 assert.match(page,/drive\/status/);

@@ -20,14 +20,15 @@ express.application.use = function (...args) {
     }
   }
 
-  // O Agente Financeiro continua sendo montado após /api/dashboard,
-  // antes dos handlers finais/404.
+  // O Agente Financeiro é montado após /api/dashboard, antes dos handlers finais/404.
+  // v3 assume interpretar/importar. v2 e base ficam como fallback/status/listagem.
   if (!agenteMounted && args[0] === '/api/dashboard') {
     agenteMounted = true;
     try {
+      originalUse.call(this, '/api/agente-financeiro/drive', require('../routes/agente_financeiro_cartao_v3'));
       originalUse.call(this, '/api/agente-financeiro/drive', require('../routes/agente_financeiro_drive_parser_v2'));
       originalUse.call(this, '/api/agente-financeiro/drive', require('../routes/agente_financeiro_drive'));
-      console.log('[agente-financeiro/drive] rotas registradas (parser v2 + base)');
+      console.log('[agente-financeiro/drive] rotas registradas (cartão v3 + parser v2 + base)');
     } catch (e) {
       console.warn('[agente-financeiro/drive] não foi possível registrar rota:', e.message);
     }
