@@ -60,7 +60,22 @@ assert.equal(cartoes.reduce((s,c)=>s+c.qtd_itens,0),20);
 assert.equal(cartoes.find(c=>c.final==='9284').valor_total,3034.33);
 assert.equal(cartoes.find(c=>c.final==='7954').valor_total,10232.21);
 assert.equal(Number(cartoes.reduce((s,c)=>s+c.valor_total,0).toFixed(2)),13266.54);
-assert.ok(cartoes.flatMap(c=>c.itens).some(i=>i.valor<0));
-assert.ok(!cartoes.flatMap(c=>c.itens).some(i=>/FATURA ANTERIOR|OBRIGADO PELO PAGAMENTO/i.test(i.descricao)));
+const todos = cartoes.flatMap(c=>c.itens);
+assert.ok(todos.some(i=>i.valor<0));
+assert.ok(todos.some(i=>i.movimento==='CASHBACK' && i.efeito==='ABATE_FATURA'));
+assert.ok(todos.some(i=>i.movimento==='ANUIDADE' && i.efeito==='AUMENTA_FATURA'));
+assert.ok(!todos.some(i=>/FATURA ANTERIOR|OBRIGADO PELO PAGAMENTO/i.test(i.descricao)));
+
+// Cobrança e desconto de mesmo valor devem coexistir; nunca podem sumir por dedupe.
+const ajuste = interpretarLinhasFinanceiras([
+  linha(['ANUIDADE','10,00D'],100),
+  linha(['DESCONTO','ANUIDADE','10,00C'],90)
+],{...cab,primeiro_final:'9284'});
+assert.equal(ajuste[0].qtd_itens,2);
+assert.equal(ajuste[0].valor_total,0);
+assert.equal(ajuste[0].itens[0].movimento,'ANUIDADE');
+assert.equal(ajuste[0].itens[1].movimento,'DESCONTO');
+assert.equal(ajuste[0].itens[0].efeito,'AUMENTA_FATURA');
+assert.equal(ajuste[0].itens[1].efeito,'ABATE_FATURA');
 
 console.log('cartao-caixa-pdf-v3.test.js: OK');
