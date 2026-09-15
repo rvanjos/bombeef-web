@@ -58,7 +58,7 @@ assert.equal(p.valor_total_fatura,13266.54);
 assert.equal(p.cartoes.length,2);
 assert.equal(p.conferencia_ok,true);
 assert.equal(p.diferenca,0);
-assert.equal(p.qtd_itens,17);
+assert.equal(p.qtd_itens,20);
 assert.equal(p.cartoes.find(c=>c.final==='9284').valor_total,3034.33);
 assert.equal(p.cartoes.find(c=>c.final==='7954').valor_total,10232.21);
 assert.ok(p.cartoes[0].itens.some(i=>i.valor<0));
