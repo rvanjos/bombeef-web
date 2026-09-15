@@ -1,5 +1,6 @@
 const assert = require('assert');
 const { interpretarCaixa } = require('../lib/cartao-fatura-parser');
+const { montarLinhasColuna } = require('../lib/pdf-layout-extractor');
 
 const texto = `4219.XXXX.XXXX.9284
 VENCIMENTO
@@ -67,8 +68,6 @@ function validar(p) {
 
 validar(interpretarCaixa(texto,'Fatura 01-2026.pdf'));
 
-// Simula exatamente as distorções típicas do pdf-parse: valor colado ao nº de parcelas
-// e transações quebradas em múltiplas linhas.
 const textoQuebrado = texto
   .replace('ANUIDADE DIFERENCIADA TIT 04/ 12 6,90D','ANUIDADE DIFERENCIADA TIT 04/ 126,90D')
   .replace('16/12 CLUBE DA PICANHA SUMARE 4.656,71D','16/12 CLUBE DA PICANHA\nSUMARE\n4.656,71D')
@@ -76,4 +75,28 @@ const textoQuebrado = texto
   .replace('24/06 AUTOMACAO 2000 07 DE 12 SAO BERNARDO 510,00D','24/06 AUTOMACAO 2000 07 DE 12\nSAO BERNARDO\n510,00D');
 
 validar(interpretarCaixa(textoQuebrado,'Fatura 01-2026.pdf'));
+
+// Simula a página 2 real: conteúdo de pontos/encargos na coluna esquerda e
+// lançamentos na coluna direita. O recorte deve ignorar a esquerda e manter
+// a compra completa em uma única linha.
+const item = (str,x,y)=>({str,transform:[1,0,0,1,x,y]});
+const duasColunas = [
+  item('Programa de Pontos',40,500),
+  item('7177',210,500),
+  item('06/12',305,500),
+  item('TENDA ATACADO S A',331,500),
+  item('CAMPINAS',430,500),
+  item('10,75D',520,500),
+  item('ROTATIVO',40,480),
+  item('234,65% a.a',120,480),
+  item('08/12',305,480),
+  item('MARAVILHAS DO LAR',331,480),
+  item('CAMPINAS',430,480),
+  item('15,96D',520,480)
+];
+assert.deepEqual(montarLinhasColuna(duasColunas,295),[
+  '06/12 TENDA ATACADO S A CAMPINAS 10,75D',
+  '08/12 MARAVILHAS DO LAR CAMPINAS 15,96D'
+]);
+
 console.log('cartao-fatura-parser.test.js: OK');
