@@ -81,19 +81,20 @@ async function interpretarArquivo(fileId) {
   }
 
   const candidatos=[];
+  if(textos.sequencial) candidatos.push({...interpretarFatura(textos.sequencial,meta.name),_origem:'sequencial'});
   if(textos.estruturado) candidatos.push({...interpretarFatura(textos.estruturado,meta.name),_origem:'layout'});
   if(textos.bruto) candidatos.push({...interpretarFatura(textos.bruto,meta.name),_origem:'bruto'});
   let preview=melhorPreview(candidatos);
   let iaTentada=false, iaErro=null;
 
-  // Quando os parsers determinísticos não fecham matematicamente a fatura,
-  // a IA atua apenas como extrator. O backend recalcula a soma e mantém o bloqueio
-  // caso a resposta da IA não feche exatamente com o total do documento.
+  console.info('[Agente Financeiro][Parser candidatos]',JSON.stringify(candidatos.map(c=>({metodo:c._origem,ok:c.ok,itens:c.qtd_itens||0,diferenca:c.diferenca??null,confere:Boolean(c.conferencia_ok)}))));
+
   if(!preview?.conferencia_ok && process.env.ANTHROPIC_API_KEY) {
     iaTentada=true;
     try {
-      const fonteIa = [textos.bruto, textos.estruturado]
+      const fonteIa = [textos.sequencial, textos.bruto, textos.estruturado]
         .filter(Boolean)
+        .filter((v,i,a)=>a.indexOf(v)===i)
         .sort((a,b)=>b.length-a.length)
         .join('\n\n--- LEITURA ALTERNATIVA DO MESMO PDF ---\n\n')
         .slice(0,50000);

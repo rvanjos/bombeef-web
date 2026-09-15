@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const assert = require('assert');
+const { montarSequencial } = require('../lib/pdf-layout-extractor');
 
 const root = path.join(__dirname,'..');
 const route = fs.readFileSync(path.join(root,'routes/agente_financeiro_drive.js'),'utf8');
@@ -36,13 +37,29 @@ assert.match(route,/FATURA_EXISTENTE/);
 assert.match(route,/protegerPoolPorLoja/);
 
 assert.match(routeV2,/extrairTextosPdf/);
+assert.match(routeV2,/textos\.sequencial/);
+assert.match(routeV2,/_origem:'sequencial'/);
+assert.match(routeV2,/Parser candidatos/);
 assert.match(routeV2,/metodo_extracao/);
 assert.match(routeV2,/melhorPreview/);
 assert.match(routeV2,/DIVERGENCIA_TOTAL/);
 assert.match(routeV2,/FATURA_EXISTENTE/);
 assert.match(extractor,/montarLinhas/);
+assert.match(extractor,/montarSequencial/);
+assert.match(extractor,/hasEOL/);
 assert.match(extractor,/transform\?\.\[4\]/);
 assert.match(extractor,/transform\?\.\[5\]/);
+
+const seq = montarSequencial([
+  {str:'06/12',transform:[0,0,0,0,10,100],hasEOL:false},
+  {str:'TENDA ATACADO',transform:[0,0,0,0,50,100],hasEOL:false},
+  {str:'10,75D',transform:[0,0,0,0,180,100],hasEOL:true},
+  {str:'08/12',transform:[0,0,0,0,10,90],hasEOL:false},
+  {str:'MARAVILHAS DO LAR',transform:[0,0,0,0,50,90],hasEOL:false},
+  {str:'15,96D',transform:[0,0,0,0,180,90],hasEOL:true}
+]);
+assert.deepEqual(seq,['06/12 TENDA ATACADO 10,75D','08/12 MARAVILHAS DO LAR 15,96D']);
+
 assert.ok(start.indexOf('agente_financeiro_drive_parser_v2') < start.indexOf("require('../routes/agente_financeiro_drive')"));
 assert.match(start,/\/api\/agente-financeiro\/drive/);
 assert.match(page,/drive\/status/);
