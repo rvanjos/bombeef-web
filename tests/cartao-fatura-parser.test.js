@@ -50,17 +50,30 @@ Total COMPRAS PARCELADAS 1.175,86D
 Total final (cartão 7954) 10.232,21D
 Valor total desta fatura R$ 13.266,54 D`;
 
-const p = interpretarCaixa(texto,'Fatura 01-2026.pdf');
-assert.equal(p.ok,true);
-assert.equal(p.competencia,'01/2026');
-assert.equal(p.vencimento,'2026-01-12');
-assert.equal(p.valor_total_fatura,13266.54);
-assert.equal(p.cartoes.length,2);
-assert.equal(p.conferencia_ok,true);
-assert.equal(p.diferenca,0);
-assert.equal(p.qtd_itens,20);
-assert.equal(p.cartoes.find(c=>c.final==='9284').valor_total,3034.33);
-assert.equal(p.cartoes.find(c=>c.final==='7954').valor_total,10232.21);
-assert.ok(p.cartoes[0].itens.some(i=>i.valor<0));
-assert.ok(!p.cartoes.flatMap(c=>c.itens).some(i=>/FATURA ANTERIOR|OBRIGADO PELO PAGAMENTO/i.test(i.descricao)));
+function validar(p) {
+  assert.equal(p.ok,true);
+  assert.equal(p.competencia,'01/2026');
+  assert.equal(p.vencimento,'2026-01-12');
+  assert.equal(p.valor_total_fatura,13266.54);
+  assert.equal(p.cartoes.length,2);
+  assert.equal(p.conferencia_ok,true);
+  assert.equal(p.diferenca,0);
+  assert.equal(p.qtd_itens,20);
+  assert.equal(p.cartoes.find(c=>c.final==='9284').valor_total,3034.33);
+  assert.equal(p.cartoes.find(c=>c.final==='7954').valor_total,10232.21);
+  assert.ok(p.cartoes[0].itens.some(i=>i.valor<0));
+  assert.ok(!p.cartoes.flatMap(c=>c.itens).some(i=>/FATURA ANTERIOR|OBRIGADO PELO PAGAMENTO/i.test(i.descricao)));
+}
+
+validar(interpretarCaixa(texto,'Fatura 01-2026.pdf'));
+
+// Simula exatamente as distorções típicas do pdf-parse: valor colado ao nº de parcelas
+// e transações quebradas em múltiplas linhas.
+const textoQuebrado = texto
+  .replace('ANUIDADE DIFERENCIADA TIT 04/ 12 6,90D','ANUIDADE DIFERENCIADA TIT 04/ 126,90D')
+  .replace('16/12 CLUBE DA PICANHA SUMARE 4.656,71D','16/12 CLUBE DA PICANHA\nSUMARE\n4.656,71D')
+  .replace('10/12 PRIME CATER COMERCIAL SAO PAULO 7.593,82D','10/12 PRIME CATER COMERCIAL\nSAO PAULO\n7.593,82D')
+  .replace('24/06 AUTOMACAO 2000 07 DE 12 SAO BERNARDO 510,00D','24/06 AUTOMACAO 2000 07 DE 12\nSAO BERNARDO\n510,00D');
+
+validar(interpretarCaixa(textoQuebrado,'Fatura 01-2026.pdf'));
 console.log('cartao-fatura-parser.test.js: OK');
