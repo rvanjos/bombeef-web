@@ -36,15 +36,9 @@ async function tokenGoogle() {
   const p=b64url(JSON.stringify({iss:email,scope:'https://www.googleapis.com/auth/drive.readonly',aud:'https://oauth2.googleapis.com/token',exp:now+3600,iat:now}));
   const signer=crypto.createSign('RSA-SHA256'); signer.update(`${h}.${p}`); signer.end();
   const assertion=`${h}.${p}.${b64url(signer.sign(key))}`;
-  const resp=await fetch('https://oauth2.googleapis.com/token',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams({grant_type:'urn:ietf:params:oauth-token:jwt-bearer',assertion})});
+  const resp=await fetch('https://oauth2.googleapis.com/token',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams({grant_type:'urn:ietf:params:oauth:grant-type:jwt-bearer',assertion})});
   const data=await resp.json();
-  if(!resp.ok||!data.access_token) {
-    const fallbackResp=await fetch('https://oauth2.googleapis.com/token',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams({grant_type:'urn:ietf:params:oauth:grant-type:jwt-bearer',assertion})});
-    const fallbackData=await fallbackResp.json();
-    if(!fallbackResp.ok||!fallbackData.access_token) throw new Error(fallbackData.error_description||fallbackData.error||data.error_description||data.error||'Falha ao autenticar no Google Drive');
-    tokenCache={token:fallbackData.access_token,exp:now+Number(fallbackData.expires_in||3600)};
-    return tokenCache.token;
-  }
+  if(!resp.ok||!data.access_token) throw new Error(data.error_description||data.error||'Falha ao autenticar no Google Drive');
   tokenCache={token:data.access_token,exp:now+Number(data.expires_in||3600)};
   return tokenCache.token;
 }
