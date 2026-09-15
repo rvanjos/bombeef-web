@@ -20,6 +20,8 @@ assert.match(route,/tentarMetadataPasta/);
 assert.match(route,/contaServico/);
 assert.match(route,/pastaConfiguradaId/);
 assert.match(route,/itensEncontrados/);
+assert.match(route,/candidatosFaturaVisiveis/);
+assert.match(route,/\[Agente Financeiro\]\[Drive\]/);
 assert.match(route,/r\.get\('\/status'/);
 assert.match(route,/r\.get\('\/arquivos'/);
 assert.match(route,/r\.post\('\/extrair'/);

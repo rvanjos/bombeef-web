@@ -126,6 +126,10 @@ function compativel(f) {
   return /pdf|spreadsheet|excel|csv|text/i.test(`${f.mimeType||''} ${f.name||''}`);
 }
 
+function pareceFatura(f) {
+  return /fatura/i.test(String(f?.name||'')) && compativel(f);
+}
+
 r.get('/status', async (req,res) => {
   const c = cfg();
   if (!c.ok) return res.json({ ok:true, configurado:false, faltando:[
@@ -182,6 +186,12 @@ r.get('/arquivos', async (req,res) => {
 
     const files = encontrados.filter(compativel);
     const pasta = await tentarMetadataPasta(c.folderId);
+    const candidatosFatura = visiveis.filter(pareceFatura).slice(0,12).map(f => ({
+      id:f.id,
+      nome:f.name,
+      mimeType:f.mimeType,
+      parents:f.parents||[]
+    }));
     const amostra = (visiveis.length ? visiveis : encontrados).slice(0,8).map(f => ({
       id:f.id,
       nome:f.name,
@@ -189,22 +199,33 @@ r.get('/arquivos', async (req,res) => {
       parents:f.parents||[]
     }));
 
-    res.json({
-      ok:true,
-      data:files,
-      diagnostico:{
-        contaServico:c.email,
-        pastaConfiguradaId:c.folderId,
-        pasta,
-        metodo,
-        erroConsultaDireta,
-        itensEncontrados:encontrados.length,
-        arquivosCompativeis:files.length,
-        itensVisiveisConta:visiveis.length || null,
-        amostraVisivel:amostra
-      }
-    });
+    const diagnostico = {
+      contaServico:c.email,
+      pastaConfiguradaId:c.folderId,
+      pasta,
+      metodo,
+      erroConsultaDireta,
+      itensEncontrados:encontrados.length,
+      arquivosCompativeis:files.length,
+      itensVisiveisConta:visiveis.length || null,
+      candidatosFaturaVisiveis:candidatosFatura,
+      amostraVisivel:amostra
+    };
+
+    console.info('[Agente Financeiro][Drive]', JSON.stringify({
+      contaServico:diagnostico.contaServico,
+      pastaConfiguradaId:diagnostico.pastaConfiguradaId,
+      pastaAcessivel:diagnostico.pasta?.acessivel,
+      metodo:diagnostico.metodo,
+      itensEncontrados:diagnostico.itensEncontrados,
+      arquivosCompativeis:diagnostico.arquivosCompativeis,
+      itensVisiveisConta:diagnostico.itensVisiveisConta,
+      candidatosFaturaVisiveis:diagnostico.candidatosFaturaVisiveis.map(f=>({nome:f.nome,parents:f.parents}))
+    }));
+
+    res.json({ ok:true, data:files, diagnostico });
   } catch(e) {
+    console.error('[Agente Financeiro][Drive] falha na listagem:', e.message);
     res.status(502).json({
       ok:false,
       erro:e.message,
