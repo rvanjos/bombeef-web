@@ -7,6 +7,7 @@ const autenticar = require('../middleware/auth');
 const { protegerPoolPorLoja } = require('../lib/tenant-context');
 const { interpretarFatura } = require('../lib/cartao-fatura-parser');
 const { extrairTextosPdf } = require('../lib/pdf-layout-extractor');
+const { interpretarComIa } = require('../lib/cartao-fatura-ai');
 
 const r = express.Router();
 r.use(autenticar(['admin','financeiro','contabil']));
@@ -78,12 +79,37 @@ async function interpretarArquivo(fileId) {
     const err=new Error(protegida && !senha ? 'PDF protegido por senha. Configure CARTAO_PDF_PASSWORD no Railway.' : e.message);
     err.status=422; err.codigo=protegida?'PDF_PROTEGIDO':'PDF_INVALIDO'; throw err;
   }
+
   const candidatos=[];
   if(textos.estruturado) candidatos.push({...interpretarFatura(textos.estruturado,meta.name),_origem:'layout'});
   if(textos.bruto) candidatos.push({...interpretarFatura(textos.bruto,meta.name),_origem:'bruto'});
-  const preview=melhorPreview(candidatos);
+  let preview=melhorPreview(candidatos);
+  let iaTentada=false, iaErro=null;
+
+  // Quando os parsers determinísticos não fecham matematicamente a fatura,
+  // a IA atua apenas como extrator. O backend recalcula a soma e mantém o bloqueio
+  // caso a resposta da IA não feche exatamente com o total do documento.
+  if(!preview?.conferencia_ok && process.env.ANTHROPIC_API_KEY) {
+    iaTentada=true;
+    try {
+      const fonteIa = [textos.bruto, textos.estruturado]
+        .filter(Boolean)
+        .sort((a,b)=>b.length-a.length)
+        .join('\n\n--- LEITURA ALTERNATIVA DO MESMO PDF ---\n\n')
+        .slice(0,50000);
+      const ia=await interpretarComIa(fonteIa,meta.name);
+      if(ia) candidatos.push({...ia,_origem:'ia'});
+      preview=melhorPreview(candidatos);
+    } catch(e) {
+      iaErro=e.message;
+      console.warn('[Agente Financeiro][IA] fallback não concluído:',e.message);
+    }
+  }
+
   if(!preview) throw Object.assign(new Error('Não foi possível interpretar a fatura.'),{status:422});
   preview.metodo_extracao=preview._origem; delete preview._origem;
+  preview.ia_tentada=iaTentada;
+  if(iaErro) preview.ia_erro=iaErro;
   return {meta,preview};
 }
 
@@ -108,7 +134,7 @@ r.post('/interpretar',express.json({limit:'100kb'}),async(req,res)=>{
   try {
     const {meta,preview}=await interpretarArquivo(fileId);
     if(!preview.ok) return res.status(422).json(preview);
-    console.info('[Agente Financeiro][Parser v2]',JSON.stringify({arquivo:meta.name,metodo:preview.metodo_extracao,itens:preview.qtd_itens,diferenca:preview.diferenca,confere:preview.conferencia_ok}));
+    console.info('[Agente Financeiro][Parser v2]',JSON.stringify({arquivo:meta.name,metodo:preview.metodo_extracao,itens:preview.qtd_itens,diferenca:preview.diferenca,confere:preview.conferencia_ok,iaTentada:preview.ia_tentada,iaErro:preview.ia_erro||null}));
     res.json({ok:true,arquivo:{id:meta.id,name:meta.name},preview});
   } catch(e){res.status(e.status||502).json({ok:false,erro:e.message,codigo:e.codigo||null});}
 });
