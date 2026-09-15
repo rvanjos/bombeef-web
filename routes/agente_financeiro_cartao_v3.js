@@ -6,6 +6,7 @@ const { Pool } = require('pg');
 const autenticar = require('../middleware/auth');
 const { protegerPoolPorLoja } = require('../lib/tenant-context');
 const { interpretarCaixaPdfV3 } = require('../lib/cartao-caixa-pdf-v3');
+const { interpretarItauPdfV1 } = require('../lib/cartao-itau-pdf-v1');
 
 const r = express.Router();
 r.use(autenticar(['admin','financeiro','contabil']));
@@ -34,7 +35,7 @@ async function tokenGoogle() {
   const p = b64url(JSON.stringify({iss:email,scope:'https://www.googleapis.com/auth/drive.readonly',aud:'https://oauth2.googleapis.com/token',exp:now+3600,iat:now}));
   const signer = crypto.createSign('RSA-SHA256'); signer.update(`${h}.${p}`); signer.end();
   const assertion = `${h}.${p}.${b64url(signer.sign(key))}`;
-  const resp = await fetch('https://oauth2.googleapis.com/token',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams({grant_type:'urn:ietf:params:oauth:grant-type:jwt-bearer',assertion})});
+  const resp = await fetch('https://oauth2.googleapis.com/token',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams({grant_type:'urn:ietf:params:oauth2:grant-type:jwt-bearer',assertion})});
   const data = await resp.json();
   if (!resp.ok || !data.access_token) throw new Error(data.error_description || data.error || 'Falha ao autenticar no Google Drive');
   tokenCache = {token:data.access_token,exp:now+Number(data.expires_in||3600)};
@@ -56,21 +57,33 @@ async function baixar(fileId) {
   return {meta,buf:Buffer.from(await resp.arrayBuffer())};
 }
 
+async function interpretarPorBanco(buf, senha, nome) {
+  const parsers = [interpretarCaixaPdfV3, interpretarItauPdfV1];
+  let ultimo = null;
+  for (const parser of parsers) {
+    const r = await parser(buf, senha, nome);
+    if (r?.ok) return r;
+    ultimo = r;
+    if (r?.codigo && r.codigo !== 'FORMATO_NAO_SUPORTADO') return r;
+  }
+  return ultimo || {ok:false,codigo:'FORMATO_NAO_SUPORTADO',erro:'Banco/layout ainda não suportado.'};
+}
+
 async function interpretarArquivo(fileId) {
   const {meta,buf} = await baixar(fileId);
   if (!/pdf/i.test(String(meta.mimeType||'')) && !/\.pdf$/i.test(String(meta.name||''))) throw Object.assign(new Error('Esta etapa aceita faturas em PDF.'),{status:415});
   const senha = String(process.env.CARTAO_PDF_PASSWORD || '');
   let preview;
   try {
-    preview = await interpretarCaixaPdfV3(buf, senha, meta.name);
+    preview = await interpretarPorBanco(buf, senha, meta.name);
   } catch (e) {
     const protegida = /password|encrypted|senha/i.test(`${e?.name||''} ${e?.message||''}`);
     const err = new Error(protegida && !senha ? 'PDF protegido por senha. Configure CARTAO_PDF_PASSWORD no Railway.' : e.message);
     err.status = 422; err.codigo = protegida ? 'PDF_PROTEGIDO' : 'PDF_INVALIDO'; throw err;
   }
-  if (!preview?.ok) throw Object.assign(new Error(preview?.erro || 'Formato de fatura ainda não suportado pelo novo leitor.'),{status:422,codigo:preview?.codigo});
-  preview.metodo_extracao = 'caixa-coordenadas-v3';
-  console.info('[Agente Financeiro][Cartao v3]', JSON.stringify({arquivo:meta.name,itens:preview.qtd_itens,diferenca:preview.diferenca,confere:preview.conferencia_ok,cartoes:preview.cartoes.map(c=>({final:c.final,itens:c.qtd_itens,valor:c.valor_total}))}));
+  if (!preview?.ok) throw Object.assign(new Error(preview?.erro || 'Formato de fatura ainda não suportado.'),{status:422,codigo:preview?.codigo});
+  preview.metodo_extracao = preview.parser || 'parser-cartao';
+  console.info('[Agente Financeiro][Cartao]', JSON.stringify({arquivo:meta.name,banco:preview.banco,parser:preview.parser,itens:preview.qtd_itens,diferenca:preview.diferenca,confere:preview.conferencia_ok,cartoes:preview.cartoes.map(c=>({final:c.final,itens:c.qtd_itens,valor:c.valor_total}))}));
   return {meta,preview};
 }
 
@@ -129,7 +142,7 @@ r.post('/importar', express.json({limit:'100kb'}), async (req,res) => {
         loja_id:req.user.lojaId, cartao:cartao.cartao, bandeira:cartao.bandeira, competencia:preview.competencia,
         vencimento:preview.vencimento, valor_total:cartao.valor_total, qtd_itens:cartao.qtd_itens, arquivo_nome:meta.name,
         hash_fatura:hf, fatura_id_ref:`DRIVE:${fileId}:${cartao.final}`, status:'IMPORTADA', situacao:'AGENTE_DRIVE',
-        usuario_id:req.user.id, log_json:JSON.stringify([{em:new Date().toISOString(),acao:'IMPORTADA_PELO_AGENTE_FINANCEIRO_V3',arquivo:meta.name,fileId,metodo_extracao:preview.metodo_extracao}])
+        usuario_id:req.user.id, log_json:JSON.stringify([{em:new Date().toISOString(),acao:'IMPORTADA_PELO_AGENTE_FINANCEIRO',arquivo:meta.name,fileId,banco:preview.banco,metodo_extracao:preview.metodo_extracao}])
       });
 
       let itensCriados = 0;
