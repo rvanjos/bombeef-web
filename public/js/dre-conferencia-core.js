@@ -208,6 +208,31 @@
       });
     });
 
+    // Um mesmo fornecedor lançado em categorias diferentes no mesmo mês é um
+    // forte indício de classificação inconsistente (não uma correção automática).
+    const porFornecedorMes = new Map();
+    lista.filter(t => !t.ignorar && t.categoria).forEach(t => {
+      const nome = fornecedor(t);
+      const nomeNormalizado = normalizarTexto(nome);
+      const mes = t.mes || t.mesCaixa || '';
+      if (!nomeNormalizado || !mes) return;
+      const chave = `${mes}|${nomeNormalizado}`;
+      if (!porFornecedorMes.has(chave)) porFornecedorMes.set(chave, {fornecedor:nome, mes, itens:[]});
+      porFornecedorMes.get(chave).itens.push(t);
+    });
+    const categoriasInconsistentes = [];
+    porFornecedorMes.forEach(grupo => {
+      const categorias = [...new Set(grupo.itens.map(t => t.categoria).filter(Boolean))].sort();
+      if (categorias.length < 2) return;
+      categoriasInconsistentes.push({
+        tipo: 'CATEGORIA_INCONSISTENTE',
+        fornecedor: grupo.fornecedor,
+        mes: grupo.mes,
+        categorias,
+        transacoes: grupo.itens.map(resumoTransacao)
+      });
+    });
+
     const impactoPotencial = exatas.reduce((soma, grupo) => soma + grupo.impactoPotencial, 0);
     return {
       totalTransacoes: lista.length,
@@ -216,8 +241,9 @@
       pagamentosParecidos,
       conciliacoes,
       mesesInvalidos,
+      categoriasInconsistentes,
       impactoPotencial,
-      totalAlertas: exatas.length + pagamentosParecidos.length + mesesInvalidos.length
+      totalAlertas: exatas.length + pagamentosParecidos.length + mesesInvalidos.length + categoriasInconsistentes.length
     };
   }
 
@@ -261,10 +287,13 @@ if (typeof window !== 'undefined') {
     }
 
     function botaoAcao(t) {
+      const analisar = t && t.categoria
+        ? `<button class="confx-open" onclick="abrirCategoriaConferencia('${escHtml(t.id)}')">📊 Analisar categoria</button>`
+        : `<button class="confx-open" onclick="localizarConferencia('${escHtml(t.id)}')">✏️ Classificar</button>`;
       if (temVinculo(t)) {
-        return '<span class="confx-vinc">🔗 Vinculado — desvincule antes de excluir</span>';
+        return `${analisar}<span class="confx-vinc">🔗 Vinculado — desvincule antes de excluir</span>`;
       }
-      return `<button class="confx-del" onclick="confExcluirDre('${escHtml(t.id)}')">🗑️ Excluir lançamento</button>`;
+      return `${analisar}<button class="confx-del" onclick="confExcluirDre('${escHtml(t.id)}')">🗑️ Excluir lançamento</button>`;
     }
 
     function cardTx(t, rotulo) {
@@ -304,7 +333,7 @@ if (typeof window !== 'undefined') {
         .confx-rotulo{font-size:9px;color:#7a7068;text-transform:uppercase;font-weight:800;letter-spacing:.45px}.confx-desc{font-weight:700;font-size:12px;margin-top:2px;word-break:break-word}
         .confx-valor{font:700 13px 'DM Mono',monospace;white-space:nowrap}.confx-valor.neg{color:#dc2626}.confx-valor.pos{color:#16a34a}
         .confx-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}.confx-grid div{min-width:0}.confx-grid span{display:block;font-size:8px;text-transform:uppercase;color:#9a928b;font-weight:800}.confx-grid strong{display:block;font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px}
-        .confx-actions{display:flex;justify-content:flex-end;align-items:center;margin-top:10px;padding-top:8px;border-top:1px solid #ece7e1}.confx-del{border:1px solid #fecaca;background:#fff;color:#b91c1c;border-radius:7px;padding:6px 9px;font-size:10px;font-weight:800;cursor:pointer}.confx-del:hover{background:#fef2f2}.confx-vinc{font-size:9px;color:#92400e;background:#fef3c7;border-radius:6px;padding:5px 8px}
+        .confx-actions{display:flex;justify-content:flex-end;align-items:center;gap:6px;flex-wrap:wrap;margin-top:10px;padding-top:8px;border-top:1px solid #ece7e1}.confx-open{border:1px solid #c7d2fe;background:#fff;color:#3730a3;border-radius:7px;padding:6px 9px;font-size:10px;font-weight:800;cursor:pointer}.confx-open:hover{background:#eef2ff}.confx-del{border:1px solid #fecaca;background:#fff;color:#b91c1c;border-radius:7px;padding:6px 9px;font-size:10px;font-weight:800;cursor:pointer}.confx-del:hover{background:#fef2f2}.confx-vinc{font-size:9px;color:#92400e;background:#fef3c7;border-radius:6px;padding:5px 8px}
         .confx-aviso{background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:9px;padding:9px 10px;font-size:10px;margin-bottom:10px}
         @media(max-width:700px){.confx-list{grid-template-columns:1fr}.confx-grid{grid-template-columns:1fr}.confx-grid strong{white-space:normal}}
       `;
