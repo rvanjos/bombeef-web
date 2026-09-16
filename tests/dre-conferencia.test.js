@@ -48,4 +48,12 @@ assert.strictEqual(conciliacao.mesesInvalidos[0].valor, '.9/4605');
 
 assert.strictEqual(DREConferencia.normalizarTexto('  Parcela  Giro   23/48 '), 'PARCELA GIRO 23/48');
 
+const categorias = DREConferencia.analisar([
+  {id:'f1', data:'2026-07-01', mes:'07/2026', fonte:'EXTRATO', razaoSocial:'Fornecedor Único', lancamento:'Compra 1', categoria:'Suíno', valor:-100},
+  {id:'f2', data:'2026-07-02', mes:'07/2026', fonte:'EXTRATO', razaoSocial:'FORNECEDOR UNICO', lancamento:'Compra 2', categoria:'Bovino', valor:-200},
+  {id:'f3', data:'2026-08-02', mes:'08/2026', fonte:'EXTRATO', razaoSocial:'Fornecedor Único', lancamento:'Compra 3', categoria:'Bovino', valor:-300}
+]);
+assert.strictEqual(categorias.categoriasInconsistentes.length, 1, 'deve apontar fornecedor em categorias diferentes no mesmo mês');
+assert.deepStrictEqual(categorias.categoriasInconsistentes[0].categorias, ['Bovino', 'Suíno']);
+
 console.log('dre-conferencia.test.js: OK');

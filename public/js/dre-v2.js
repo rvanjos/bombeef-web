@@ -6,7 +6,13 @@ let renderOriginal=null;
 let inicializado=false;
 
 function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-function txs(){return Array.isArray(window.TXS)?window.TXS:[];}
+function txs(){
+  if(typeof window.getDreTransactions==='function'){
+    const lista=window.getDreTransactions();
+    if(Array.isArray(lista))return lista;
+  }
+  return Array.isArray(window.TXS)?window.TXS:[];
+}
 function statusTx(t){
   if(t.ignorar) return {txt:'IGNORADO',cls:'muted'};
   if(t.needsReview) return {txt:'REVISAR',cls:'review'};

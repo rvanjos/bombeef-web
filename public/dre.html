@@ -758,13 +758,13 @@ thead th{padding:6px 9px;}
 <input type="file" id="f-ofx" accept=".ofx,.ofc,.xlsx,.xls,.csv" style="display:none" onchange="loadFile(this,'ext')">
 <input type="file" id="f-cc" accept=".csv,.xlsx,.xls,.pdf" style="display:none" onchange="loadFile(this,'cc')">
 
-<!-- Conferência do DRE: somente leitura, sem exclusão automática -->
+<!-- Conferência do DRE: diagnóstico e tratamento assistido -->
 <div class="mbg" id="m-conferencia-dre">
   <div class="md md-lg md-flex" style="max-height:94vh">
     <div class="mdh">
       <div>
         <h3>🔎 Conferência do DRE</h3>
-        <div style="font-size:10px;color:var(--muted);margin-top:2px">Origem, duplicidades, pagamentos parecidos e conciliações</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:2px">Origem, duplicidades, categorias divergentes e conciliações</div>
       </div>
       <button class="mdx" onclick="fecharModal('m-conferencia-dre')">×</button>
     </div>
@@ -772,20 +772,21 @@ thead th{padding:6px 9px;}
       <div class="conf-kpis">
         <div class="conf-kpi alerta"><div class="conf-kpi-label">Reimportações</div><div class="conf-kpi-valor" id="conf-kpi-reimport">0</div></div>
         <div class="conf-kpi aviso"><div class="conf-kpi-label">Pagamentos parecidos</div><div class="conf-kpi-valor" id="conf-kpi-parecidos">0</div></div>
-        <div class="conf-kpi ok"><div class="conf-kpi-label">Conciliações</div><div class="conf-kpi-valor" id="conf-kpi-conc">0</div></div>
+        <div class="conf-kpi aviso"><div class="conf-kpi-label">Categorias divergentes</div><div class="conf-kpi-valor" id="conf-kpi-categorias">0</div></div>
         <div class="conf-kpi"><div class="conf-kpi-label">Impacto potencial</div><div class="conf-kpi-valor" id="conf-kpi-impacto">R$ 0,00</div></div>
       </div>
       <div class="conf-tabs">
         <button class="conf-tab active" data-conf-tab="resumo" onclick="confSelecionarAba('resumo')">Resumo</button>
         <button class="conf-tab" data-conf-tab="reimportacoes" onclick="confSelecionarAba('reimportacoes')">Reimportações</button>
         <button class="conf-tab" data-conf-tab="parecidos" onclick="confSelecionarAba('parecidos')">Pagamentos parecidos</button>
+        <button class="conf-tab" data-conf-tab="categorias" onclick="confSelecionarAba('categorias')">Categorias divergentes</button>
         <button class="conf-tab" data-conf-tab="conciliacoes" onclick="confSelecionarAba('conciliacoes')">Conciliações</button>
         <button class="conf-tab" data-conf-tab="dados" onclick="confSelecionarAba('dados')">Dados inconsistentes</button>
       </div>
       <div id="conf-conteudo"></div>
     </div>
     <div class="mdf" style="justify-content:space-between;align-items:center">
-      <span style="font-size:10px;color:var(--muted)">Nenhum lançamento é apagado ou ignorado por esta conferência.</span>
+      <span style="font-size:10px;color:var(--muted)">Alterações e exclusões sempre dependem de uma ação explícita.</span>
       <button class="btn bn" onclick="fecharModal('m-conferencia-dre')">Fechar</button>
     </div>
   </div>
@@ -1038,6 +1039,9 @@ thead th{padding:6px 9px;}
 <script>
 const {api, fmt, toast} = BB;
 let TXS=[], sessId=null, mesRef='', files=[], supMem={}, selIds=new Set(), _sv;
+// A camada visual do DRE usa este acesso controlado porque `TXS` é uma variável
+// lexical deste script e, portanto, não existe automaticamente em window.TXS.
+window.getDreTransactions = () => TXS;
 let _taxaRoyalties = 4.88; // Sprint 3.1-B: carregada do backend em carregarCategorias()
 let _filtroRapido = 'todos'; // Sprint 3.1-F: filtro rápido ativo
 let _estoquesMes = {}; // { 'MM/YYYY': valorEstoqueFinal }
@@ -6733,122 +6737,147 @@ function limpar(){
 }
 
 // ─── EXPORTAR EXCEL ───────────────────────────────────────────────────────────
-function drillDown(cat, mes) {
-  // Filtra lançamentos da categoria e mês clicados
-  const modo = getModo();
-  const lancs = _txsSemDuplicatas(TXS).filter(t => {
-    if (!t.categoria) return false;
-    if (t.categoria !== cat) return false;
-    const mTx = modo === 'caixa' ? (t.mesCaixa || t.mes || mesRef) : (t.mes || mesRef);
-    return mTx === mes;
-  });
+let _drillContext = {cat:'', mes:'', modo:'caixa', grupo:'fornecedor', soProblemas:false, busca:''};
 
-  // Preenche modal
-  const el = document.getElementById('m-drill');
-  const tbody = document.getElementById('drill-tbody');
-  const empty = document.getElementById('drill-empty');
-  document.getElementById('drill-title').textContent = `${cat}`;
-  document.getElementById('drill-sub').textContent = `${fmtMes(mes)} · ${modo === 'caixa' ? 'Mês Caixa' : 'Mês Competência'}`;
-
-  if (!lancs.length) {
-    tbody.innerHTML = '';
-    empty.style.display = '';
-  } else {
-    empty.style.display = 'none';
-    const total = lancs.reduce((s, t) => s + parseFloat(t.valor || 0), 0);
-    const FONTE_BADGE = {
-      EXTRATO: '<span style="background:#e8f0ff;color:#1a5c8a;padding:1px 6px;border-radius:4px;font-size:10px">Extrato</span>',
-      BOLETO: '<span style="background:#fff0e0;color:#b35c00;padding:1px 6px;border-radius:4px;font-size:10px">Boleto</span>',
-      BOLETO_PREV: '<span style="background:#fff8e0;color:#b39000;padding:1px 6px;border-radius:4px;font-size:10px">Prev.</span>',
-      MANUAL: '<span style="background:#f0f0ff;color:#6040c0;padding:1px 6px;border-radius:4px;font-size:10px">Manual</span>',
-      CC: '<span style="background:#ffe8f0;color:#c02060;padding:1px 6px;border-radius:4px;font-size:10px">Cartão</span>',
-    };
-
-    tbody.innerHTML = lancs
-      .sort((a,b) => (a.data||'').localeCompare(b.data||''))
-      .map(t => {
-        const v = parseFloat(t.valor || 0);
-        const vCol = v >= 0 ? 'var(--green)' : 'var(--red-l)';
-        const badge = FONTE_BADGE[t.fonte] || `<span style="font-size:10px">${t.fonte||'—'}</span>`;
-        const catBadge = t.categoria
-          ? `<span style="font-size:10px;background:#f0ebe4;color:var(--text);padding:1px 6px;border-radius:4px;cursor:pointer" title="Duplo clique para alterar">${t.categoria}</span>`
-          : `<span style="font-size:10px;color:#e74c3c;cursor:pointer" title="Duplo clique para classificar">⚠️ Sem categoria</span>`;
-        return `<tr style="border-bottom:1px solid #f5efe8" ondblclick="drillEditarCat('${t.id}')" title="Duplo clique para alterar a classificação">
-          <td style="padding:7px 12px;font-family:'DM Mono',monospace;font-size:11px;white-space:nowrap">${t.data ? t.data.slice(0,10) : '—'}</td>
-          <td style="padding:7px 12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(t.lancamento||'')}">${esc(t.lancamento||'—')}</td>
-          <td style="padding:7px 12px;font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(t.razaoSocial||'')}">${esc(t.razaoSocial||t.portador||'—')}</td>
-          <td style="padding:7px 12px">${badge}</td>
-          <td id="drill-cat-${t.id}" style="padding:7px 12px;overflow:hidden">${catBadge}</td>
-          <td style="padding:7px 12px;text-align:right;font-family:'DM Mono',monospace;font-weight:600;color:${vCol};white-space:nowrap">${fmt.brl(v)}</td>
-        </tr>`;
-      }).join('');
-
-    document.getElementById('drill-total').textContent = `Total: ${fmt.brl(total)}`;
-    document.getElementById('drill-count').textContent = `${lancs.length} lançamento(s)`;
-  }
-
-  el.style.display = 'flex';
+function _drillMesTx(t, modo) {
+  return modo === 'caixa' ? (t.mesCaixa || t.mes || mesRef) : (t.mes || mesRef);
 }
 
-function drillEditarCat(id) {
+function _drillFornecedor(t) {
+  return (t.razaoSocial || t.fornecedor || t.portador || 'Sem fornecedor').trim();
+}
+
+function _drillCategoriasOptions(atual) {
+  const opts = Object.values(CATS).flatMap(g => g.s).sort((a,b) => a.localeCompare(b,'pt-BR'));
+  const cartoes = CARTOES_MONITORADOS.map(c => `<option value="__FATURA_CC__${esc(c.id)}">💳 Pagamento fatura — ${esc(c.label)}</option>`).join('');
+  return `<option value="">— Sem categoria —</option><optgroup label="Pagamento de Fatura CC">${cartoes}</optgroup><optgroup label="Categorias DRE">${opts.map(c => `<option value="${esc(c)}"${c === atual ? ' selected' : ''}>${esc(c)}</option>`).join('')}</optgroup>`;
+}
+
+function _drillDados() {
+  const {cat, mes, modo} = _drillContext;
+  const todosMes = TXS.filter(t => !t.ignorar && _drillMesTx(t, modo) === mes);
+  const lancs = todosMes.filter(t => t.categoria === cat);
+  const alertas = new Map();
+  const add = (id, texto, tipo='warn') => {
+    const k = String(id); if (!alertas.has(k)) alertas.set(k, []);
+    alertas.get(k).push({texto, tipo});
+  };
+  if (window.DREConferencia) {
+    const a = window.DREConferencia.analisar(TXS);
+    a.reimportacoes.forEach(g => g.transacoes.forEach(t => add(t.id, 'Possível reimportação', 'danger')));
+    a.pagamentosParecidos.forEach(g => g.transacoes.forEach(t => add(t.id, 'Pagamento parecido')));
+    a.mesesInvalidos.forEach(i => add(i.transacao.id, 'Mês inválido', 'danger'));
+  }
+  lancs.forEach(t => { if (t.needsReview) add(t.id, 'Revisar classificação'); });
+
+  const norm = v => window.DREConferencia ? window.DREConferencia.normalizarTexto(v) : String(v||'').toUpperCase().trim();
+  const catsFornecedor = new Map();
+  todosMes.forEach(t => {
+    const k = norm(_drillFornecedor(t)); if (!k || k === 'SEM FORNECEDOR') return;
+    if (!catsFornecedor.has(k)) catsFornecedor.set(k, new Set());
+    if (t.categoria) catsFornecedor.get(k).add(t.categoria);
+  });
+  lancs.forEach(t => {
+    const cats = catsFornecedor.get(norm(_drillFornecedor(t)));
+    if (cats && cats.size > 1) add(t.id, `Fornecedor em ${cats.size} categorias`);
+  });
+  return {lancs, alertas};
+}
+
+function _drillGrupoChave(t) {
+  if (_drillContext.grupo === 'dia') return t.data ? t.data.slice(0,10) : 'Sem data';
+  if (_drillContext.grupo === 'origem') return t.fonte || 'Sem origem';
+  if (_drillContext.grupo === 'lista') return 'Todos os lançamentos';
+  return _drillFornecedor(t);
+}
+
+function _drillRender() {
+  const tbody = document.getElementById('drill-tbody');
+  const empty = document.getElementById('drill-empty');
+  if (!tbody || !empty) return;
+  const {lancs, alertas} = _drillDados();
+  const idsNoDre = new Set(_txsSemDuplicatas(TXS).map(t => String(t.id)));
+  const busca = (_drillContext.busca || '').toUpperCase();
+  let visiveis = lancs.filter(t => {
+    if (_drillContext.soProblemas && !alertas.has(String(t.id))) return false;
+    if (!busca) return true;
+    return [t.data,t.lancamento,_drillFornecedor(t),t.fonte,t.categoria].some(v => String(v||'').toUpperCase().includes(busca));
+  });
+  const grupos = new Map();
+  visiveis.sort((a,b) => _drillGrupoChave(a).localeCompare(_drillGrupoChave(b),'pt-BR') || String(a.data||'').localeCompare(String(b.data||''))).forEach(t => {
+    const k = _drillGrupoChave(t); if (!grupos.has(k)) grupos.set(k, []); grupos.get(k).push(t);
+  });
+  const fonteNome = {EXTRATO:'Banco',OFX:'Banco',BOLETO:'Boleto',BOLETO_PREV:'Previsão',MANUAL:'Manual',CC:'Cartão'};
+  tbody.innerHTML = [...grupos.entries()].map(([nome,itens]) => {
+    const subtotal = itens.filter(t => idsNoDre.has(String(t.id))).reduce((s,t) => s + Number(t.valor||0), 0);
+    const problemas = itens.reduce((s,t) => s + (alertas.has(String(t.id)) ? 1 : 0), 0);
+    const head = `<tr class="drill-group"><td colspan="6"><div><strong>${esc(nome)}</strong><span>${itens.length} lançamento(s) · ${fmt.brl(subtotal)}</span></div>${problemas ? `<b>${problemas} para conferir</b>` : '<i>sem alertas</i>'}</td></tr>`;
+    return head + itens.map(t => {
+      const v = Number(t.valor||0); const avisos = alertas.get(String(t.id)) || [];
+      return `<tr class="drill-row${avisos.length?' has-warning':''}">
+        <td data-label="Data">${t.data ? t.data.slice(0,10).split('-').reverse().join('/') : '—'}</td>
+        <td data-label="Lançamento"><strong>${esc(t.lancamento||'—')}</strong>${avisos.length ? `<div class="drill-alerts">${avisos.map(a => `<span class="${a.tipo}">${esc(a.texto)}</span>`).join('')}</div>` : ''}</td>
+        <td data-label="Fornecedor" title="${esc(_drillFornecedor(t))}">${esc(_drillFornecedor(t))}</td>
+        <td data-label="Origem"><span class="drill-source">${esc(fonteNome[t.fonte]||t.fonte||'—')}</span></td>
+        <td data-label="Categoria"><select class="drill-cat-select" data-id="${esc(t.id)}" data-original="${esc(t.categoria||'')}" onchange="drillSalvarCategoria(this)">${_drillCategoriasOptions(t.categoria)}</select></td>
+        <td data-label="Valor" class="drill-value ${v < 0 ? 'neg' : 'pos'}">${fmt.brl(v)}</td>
+      </tr>`;
+    }).join('');
+  }).join('');
+  empty.style.display = visiveis.length ? 'none' : '';
+  const totalDre = lancs.filter(t => idsNoDre.has(String(t.id))).reduce((s,t) => s + Number(t.valor||0), 0);
+  const qtdProblemas = lancs.filter(t => alertas.has(String(t.id))).length;
+  document.getElementById('drill-total').textContent = `Total no DRE: ${fmt.brl(totalDre)}`;
+  document.getElementById('drill-count').textContent = `${lancs.length} lançamento(s)`;
+  document.getElementById('drill-kpi-count').textContent = lancs.length;
+  document.getElementById('drill-kpi-total').textContent = fmt.brl(totalDre);
+  document.getElementById('drill-kpi-problems').textContent = qtdProblemas;
+  document.getElementById('drill-kpi-groups').textContent = grupos.size;
+}
+
+function drillDown(cat, mes) {
+  _drillContext.cat = cat; _drillContext.mes = mes; _drillContext.modo = getModo();
+  _drillContext.busca = ''; _drillContext.soProblemas = false;
+  const busca = document.getElementById('drill-search'); if (busca) busca.value = '';
+  const chk = document.getElementById('drill-only-problems'); if (chk) chk.checked = false;
+  document.getElementById('drill-title').textContent = cat;
+  document.getElementById('drill-sub').textContent = `${fmtMes(mes)} · ${_drillContext.modo === 'caixa' ? 'Mês Caixa' : 'Mês Competência'} · alterações atualizam o DRE automaticamente`;
+  document.getElementById('m-drill').style.display = 'flex';
+  _drillRender();
+}
+
+function drillAlterarGrupo(valor) { _drillContext.grupo = valor; _drillRender(); }
+function drillFiltrar() {
+  _drillContext.busca = document.getElementById('drill-search')?.value || '';
+  _drillContext.soProblemas = Boolean(document.getElementById('drill-only-problems')?.checked);
+  _drillRender();
+}
+function drillAbrirConferencia() { fecharModal('m-drill'); abrirConferenciaDRE(); }
+function abrirCategoriaConferencia(id) {
+  const t = TXS.find(x => String(x.id) === String(id));
+  if (!t || !t.categoria) { localizarConferencia(id); return; }
+  fecharModal('m-conferencia-dre');
+  drillDown(t.categoria, _drillMesTx(t, getModo()));
+}
+
+function drillSalvarCategoria(sel) {
+  const id = sel.dataset.id;
   const t = TXS.find(x => String(x.id) === String(id));
   if (!t) return;
-  const cel = document.getElementById('drill-cat-' + id);
-  if (!cel) return;
-  if (cel.querySelector('select')) return; // já aberto
-
-  // Monta select com todas as categorias disponíveis
-  const opts = Object.values(CATS)
-    .flatMap(g => g.s)
-    .sort((a, b) => a.localeCompare(b, 'pt-BR'));
-
-  const sel = document.createElement('select');
-  sel.style.cssText = 'font-size:11px;padding:3px 6px;border:1px solid var(--red);border-radius:5px;background:#fff;width:100%;max-width:220px';
-  // Opção especial de pagamento de fatura CC no topo
-  const optFaturaCC = CARTOES_MONITORADOS.map(cartao =>
-    `<option value="__FATURA_CC__${cartao.id}">💳 Pagamento fatura — ${cartao.label}</option>`
-  ).join('');
-
-  sel.innerHTML = '<option value="">— Sem categoria —</option>'
-    + '<optgroup label="─── Pagamento de Fatura CC ───">' + optFaturaCC + '</optgroup>'
-    + '<optgroup label="─── Categorias DRE ───">'
-    + opts.map(c => `<option value="${c}"${c === t.categoria ? ' selected' : ''}>${c}</option>`).join('')
-    + '</optgroup>';
-
-  sel.onchange = () => {
-    const novaCat = sel.value;
-
-    // Intercepta seleção de pagamento de fatura CC
-    if (novaCat.startsWith('__FATURA_CC__')) {
-      const cartaoId = novaCat.replace('__FATURA_CC__', '');
-      const cartao = CARTOES_MONITORADOS.find(k => k.id === cartaoId);
-      sel.value = t.categoria || ''; // reverte o select
-      abrirVinculacaoPagFaturaFromExtrato(id, cartao);
-      return;
-    }
-
-    setCat(id, novaCat); // reutiliza a função existente que salva e atualiza supMem
-    // Atualiza visual da célula
-    cel.innerHTML = novaCat
-      ? `<span style="font-size:10px;background:#f0ebe4;color:var(--text);padding:1px 6px;border-radius:4px;cursor:pointer" title="Duplo clique para alterar">${novaCat}</span>`
-      : `<span style="font-size:10px;color:#e74c3c;cursor:pointer">⚠️ Sem categoria</span>`;
-    // Atualiza o DRE renderizado
-    renderDRE();
-    if (document.getElementById('m-dre')?.classList.contains('open')) renderDREFull();
-    toast(`✅ Reclassificado: ${novaCat || 'sem categoria'}`);
-  };
-
-  sel.onblur = () => {
-    if (!sel.value || sel.value === t.categoria) {
-      cel.innerHTML = t.categoria
-        ? `<span style="font-size:10px;background:#f0ebe4;color:var(--text);padding:1px 6px;border-radius:4px;cursor:pointer">${t.categoria}</span>`
-        : `<span style="font-size:10px;color:#e74c3c;cursor:pointer">⚠️ Sem categoria</span>`;
-    }
-  };
-
-  cel.innerHTML = '';
-  cel.appendChild(sel);
-  sel.focus();
+  const novaCat = sel.value;
+  if (novaCat.startsWith('__FATURA_CC__')) {
+    const cartao = CARTOES_MONITORADOS.find(k => String(k.id) === novaCat.replace('__FATURA_CC__',''));
+    sel.value = sel.dataset.original || '';
+    abrirVinculacaoPagFaturaFromExtrato(id, cartao);
+    return;
+  }
+  setCat(id, novaCat);
+  render();
+  renderDRE();
+  if (document.getElementById('m-dre')?.classList.contains('open')) renderDREFull();
+  atualizarBadgeConferencia();
+  _drillRender();
+  toast(`✅ Reclassificado: ${novaCat || 'sem categoria'}`);
 }
 
 // ── Exporta cada lançamento em sua própria linha (SEM agrupar por categoria) ──
@@ -8342,7 +8371,7 @@ function abrirConferenciaDRE() {
   _confDreAnalise = window.DREConferencia.analisar(TXS);
   document.getElementById('conf-kpi-reimport').textContent = _confDreAnalise.reimportacoes.length;
   document.getElementById('conf-kpi-parecidos').textContent = _confDreAnalise.pagamentosParecidos.length;
-  document.getElementById('conf-kpi-conc').textContent = _confDreAnalise.conciliacoes.length;
+  document.getElementById('conf-kpi-categorias').textContent = _confDreAnalise.categoriasInconsistentes.length;
   document.getElementById('conf-kpi-impacto').textContent = _confBrl(_confDreAnalise.impactoPotencial);
   document.getElementById('m-conferencia-dre').classList.add('open');
   document.getElementById('m-conferencia-dre').style.display = 'flex';
@@ -8430,6 +8459,17 @@ function confRenderConteudo() {
     return;
   }
 
+  if (_confDreAba === 'categorias') {
+    if (!a.categoriasInconsistentes.length) { el.innerHTML = _confVazio('Nenhum fornecedor aparece em categorias diferentes no mesmo mês.'); return; }
+    el.innerHTML = `<div style="font-size:11px;color:#92400e;background:#fffbeb;border:1px solid #fde68a;padding:9px 11px;border-radius:8px;margin-bottom:10px">Uma divergência não significa necessariamente erro. Abra a categoria para comparar os lançamentos do fornecedor e reclassifique diretamente.</div>` +
+      a.categoriasInconsistentes.map((grupo, indice) => `<div class="conf-card" style="border-left:4px solid #d97706">
+        <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap"><div><div style="font-weight:800;font-size:13px">${esc(grupo.fornecedor || 'Fornecedor')} · ${esc(grupo.mes)}</div><div style="font-size:10px;color:var(--muted);margin-top:2px">${grupo.categorias.map(esc).join(' · ')}</div></div><span class="conf-pill" style="background:#fef3c7;color:#92400e">${grupo.transacoes.length} lançamentos</span></div>
+        ${_confTabelaTransacoes(grupo.transacoes)}
+        <div style="text-align:right;margin-top:8px"><button class="btn bs" onclick="abrirCategoriaConferencia('${esc(grupo.transacoes[0].id)}')">Analisar e corrigir</button></div>
+      </div>`).join('');
+    return;
+  }
+
   if (!a.mesesInvalidos.length) { el.innerHTML = _confVazio('Nenhum mês inválido encontrado nos lançamentos carregados.'); return; }
   el.innerHTML = `<div style="font-size:11px;color:#92400e;background:#fffbeb;border:1px solid #fde68a;padding:9px 11px;border-radius:8px;margin-bottom:10px">Valores inválidos de mês prejudicam filtros e totais. A conferência apenas mostra os registros; nenhuma correção é automática.</div>` +
     `<div class="conf-table-wrap"><table class="conf-table"><thead><tr><th>Campo</th><th>Valor inválido</th><th>Lançamento</th><th>Data</th><th></th></tr></thead><tbody>${a.mesesInvalidos.map(item => `<tr><td>${esc(item.campo)}</td><td><strong style="color:#dc2626">${esc(item.valor)}</strong></td><td>${esc(item.transacao.descricao || '—')}</td><td>${_confData(item.transacao.data)}</td><td><button class="btn bs" onclick="localizarConferencia('${esc(item.transacao.id)}')">Ver</button></td></tr>`).join('')}</tbody></table></div>`;
@@ -8459,7 +8499,7 @@ function localizarConferencia(id) {
 </script>
 <!-- Modal Drill-Down DRE -->
 <div class="mbg" id="m-drill" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center">
-  <div style="background:var(--white);border-radius:13px;width:96%;max-width:960px;max-height:90vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.35)">
+  <div class="drill-modal-box">
     <div style="background:var(--red);padding:14px 20px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
       <div>
         <div id="drill-title" style="color:#fff;font-weight:700;font-size:15px"></div>
@@ -8467,8 +8507,27 @@ function localizarConferencia(id) {
       </div>
       <button onclick="fecharModal('m-drill')" style="background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:6px;padding:4px 12px;cursor:pointer;font-size:18px">×</button>
     </div>
-    <div style="overflow-y:auto;overflow-x:hidden;flex:1">
-      <table style="width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed">
+    <div class="drill-workbar">
+      <div class="drill-kpis">
+        <div><span>Lançamentos</span><strong id="drill-kpi-count">0</strong></div>
+        <div><span>Total no DRE</span><strong id="drill-kpi-total">R$ 0,00</strong></div>
+        <div class="warn"><span>Para conferir</span><strong id="drill-kpi-problems">0</strong></div>
+        <div><span>Grupos visíveis</span><strong id="drill-kpi-groups">0</strong></div>
+      </div>
+      <div class="drill-controls">
+        <input id="drill-search" type="search" placeholder="Buscar lançamento ou fornecedor" oninput="drillFiltrar()">
+        <select onchange="drillAlterarGrupo(this.value)" aria-label="Agrupar lançamentos">
+          <option value="fornecedor">Agrupar por fornecedor</option>
+          <option value="dia">Agrupar por dia</option>
+          <option value="origem">Agrupar por origem</option>
+          <option value="lista">Sem agrupamento</option>
+        </select>
+        <label><input id="drill-only-problems" type="checkbox" onchange="drillFiltrar()"> Somente inconsistências</label>
+        <button type="button" onclick="drillAbrirConferencia()">⚠️ Abrir Conferência</button>
+      </div>
+    </div>
+    <div class="drill-table-wrap">
+      <table class="drill-table">
         <colgroup>
           <col style="width:90px">   <!-- Data -->
           <col style="width:25%">    <!-- Operação -->
@@ -8483,7 +8542,7 @@ function localizarConferencia(id) {
             <th style="padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--muted);border-bottom:2px solid var(--border);position:sticky;top:0;background:#f8f4f0;z-index:2">Operação</th>
             <th style="padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--muted);border-bottom:2px solid var(--border);position:sticky;top:0;background:#f8f4f0;z-index:2">Fornecedor / Razão</th>
             <th style="padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--muted);border-bottom:2px solid var(--border);position:sticky;top:0;background:#f8f4f0;z-index:2">Fonte</th>
-            <th style="padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--muted);border-bottom:2px solid var(--border);position:sticky;top:0;background:#f8f4f0;z-index:2">Categoria <span style="font-weight:400;font-style:italic">(duplo clique)</span></th>
+            <th style="padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--muted);border-bottom:2px solid var(--border);position:sticky;top:0;background:#f8f4f0;z-index:2">Categoria <span style="font-weight:400;font-style:italic">(alteração direta)</span></th>
             <th style="padding:8px 12px;text-align:right;font-size:10px;text-transform:uppercase;color:var(--muted);border-bottom:2px solid var(--border);position:sticky;top:0;background:#f8f4f0;z-index:2">Valor</th>
           </tr>
         </thead>
