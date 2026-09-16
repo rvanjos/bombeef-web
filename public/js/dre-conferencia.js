@@ -229,3 +229,150 @@
     similaridadeTexto
   };
 });
+
+// Melhorias de UX da Central de Conferência do DRE.
+// Mantidas neste arquivo para não alterar o motor financeiro nem a persistência.
+if (typeof window !== 'undefined') {
+  (function () {
+    'use strict';
+
+    function escHtml(v) {
+      return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({
+        '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+      }[c]));
+    }
+
+    function brl(v) {
+      return 'R$ ' + Number(v || 0).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
+    }
+
+    function dataBr(v) {
+      const m = String(v || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+      return m ? `${m[3]}/${m[2]}/${m[1]}` : (v || '—');
+    }
+
+    function entradaBr(v) {
+      if (!v) return 'Horário não identificado';
+      try { return new Date(v).toLocaleString('pt-BR'); } catch (_) { return 'Horário não identificado'; }
+    }
+
+    function temVinculo(t) {
+      return Boolean(t && (t.boletoId || t.faturaCC || t.vinculadoFaturaCC));
+    }
+
+    function botaoAcao(t) {
+      if (temVinculo(t)) {
+        return '<span class="confx-vinc">🔗 Vinculado — desvincule antes de excluir</span>';
+      }
+      return `<button class="confx-del" onclick="confExcluirDre('${escHtml(t.id)}')">🗑️ Excluir lançamento</button>`;
+    }
+
+    function cardTx(t, rotulo) {
+      const val = Number(t.valor || 0);
+      return `<div class="confx-tx">
+        <div class="confx-top">
+          <div>
+            <div class="confx-rotulo">${escHtml(rotulo || 'Lançamento')}</div>
+            <div class="confx-desc">${escHtml(t.descricao || 'Sem descrição')}</div>
+          </div>
+          <div class="confx-valor ${val < 0 ? 'neg' : 'pos'}">${val < 0 ? '- ' : ''}${brl(Math.abs(val))}</div>
+        </div>
+        <div class="confx-grid">
+          <div><span>Data</span><strong>${escHtml(dataBr(t.data))}</strong></div>
+          <div><span>Origem</span><strong>${escHtml(t.fonte || '—')}</strong></div>
+          <div><span>Fornecedor</span><strong>${escHtml(t.fornecedor || '—')}</strong></div>
+          <div><span>Categoria</span><strong>${escHtml(t.categoria || 'Sem categoria')}</strong></div>
+          <div><span>Entrada no sistema</span><strong>${escHtml(entradaBr(t.entradaEm))}</strong></div>
+          <div><span>Situação</span><strong>${t.ignorado ? 'Ignorado' : (temVinculo(t) ? 'Vinculado' : 'Ativo')}</strong></div>
+        </div>
+        <div class="confx-actions">${botaoAcao(t)}</div>
+      </div>`;
+    }
+
+    function instalarEstilo() {
+      if (document.getElementById('confx-style')) return;
+      const st = document.createElement('style');
+      st.id = 'confx-style';
+      st.textContent = `
+        .confx-grupo{background:#fff;border:1px solid #e8e0d8;border-radius:12px;padding:13px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,.03)}
+        .confx-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap;margin-bottom:10px}
+        .confx-title{font-weight:800;font-size:13px}.confx-motivo{font-size:10px;color:#7a7068;margin-top:3px}
+        .confx-badge{font-size:9px;font-weight:800;border-radius:12px;padding:4px 8px;background:#fef3c7;color:#92400e;white-space:nowrap}
+        .confx-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:10px}
+        .confx-tx{border:1px solid #e5e7eb;border-radius:10px;padding:11px;background:#fafafa}
+        .confx-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;border-bottom:1px solid #ece7e1;padding-bottom:8px;margin-bottom:8px}
+        .confx-rotulo{font-size:9px;color:#7a7068;text-transform:uppercase;font-weight:800;letter-spacing:.45px}.confx-desc{font-weight:700;font-size:12px;margin-top:2px;word-break:break-word}
+        .confx-valor{font:700 13px 'DM Mono',monospace;white-space:nowrap}.confx-valor.neg{color:#dc2626}.confx-valor.pos{color:#16a34a}
+        .confx-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}.confx-grid div{min-width:0}.confx-grid span{display:block;font-size:8px;text-transform:uppercase;color:#9a928b;font-weight:800}.confx-grid strong{display:block;font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px}
+        .confx-actions{display:flex;justify-content:flex-end;align-items:center;margin-top:10px;padding-top:8px;border-top:1px solid #ece7e1}.confx-del{border:1px solid #fecaca;background:#fff;color:#b91c1c;border-radius:7px;padding:6px 9px;font-size:10px;font-weight:800;cursor:pointer}.confx-del:hover{background:#fef2f2}.confx-vinc{font-size:9px;color:#92400e;background:#fef3c7;border-radius:6px;padding:5px 8px}
+        .confx-aviso{background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:9px;padding:9px 10px;font-size:10px;margin-bottom:10px}
+        @media(max-width:700px){.confx-list{grid-template-columns:1fr}.confx-grid{grid-template-columns:1fr}.confx-grid strong{white-space:normal}}
+      `;
+      document.head.appendChild(st);
+    }
+
+    window.confExcluirDre = function (id) {
+      if (typeof window.excluirLanc !== 'function') {
+        alert('Não foi possível acessar a exclusão do DRE. Atualize a página e tente novamente.');
+        return;
+      }
+      window.excluirLanc(String(id));
+      setTimeout(function () {
+        try { if (typeof window.abrirConferenciaDRE === 'function') window.abrirConferenciaDRE(); } catch (_) {}
+      }, 180);
+    };
+
+    function instalarRender() {
+      instalarEstilo();
+      if (typeof window.confRenderConteudo !== 'function' || window.confRenderConteudo.__confMelhorada) return;
+      const original = window.confRenderConteudo;
+
+      function melhorada() {
+        let aba, analise, el;
+        try {
+          aba = _confDreAba;
+          analise = _confDreAnalise;
+          el = document.getElementById('conf-conteudo');
+        } catch (_) { return original(); }
+        if (!el || !analise) return original();
+
+        if (aba === 'reimportacoes') {
+          if (!analise.reimportacoes.length) {
+            el.innerHTML = '<div style="padding:34px 18px;text-align:center;background:#f8fafc;border:1px dashed #e8e0d8;border-radius:10px;color:#7a7068;font-size:12px">✅ Nenhuma reimportação exata encontrada.</div>';
+            return;
+          }
+          el.innerHTML = '<div class="confx-aviso"><strong>Como usar:</strong> compare os lançamentos do mesmo grupo. Exclua somente o registro duplicado. Lançamentos vinculados a boleto ou fatura precisam ser desvinculados antes.</div>' +
+            analise.reimportacoes.map((g, i) => `<div class="confx-grupo" style="border-left:4px solid #dc2626">
+              <div class="confx-head"><div><div class="confx-title">Possível reimportação ${i + 1}</div><div class="confx-motivo">${escHtml(g.motivo)} · impacto potencial ${brl(g.impactoPotencial)}</div></div><span class="confx-badge">Confiança ${escHtml(g.confianca)}</span></div>
+              <div class="confx-list">${g.transacoes.map((t, idx) => cardTx(t, idx === 0 ? 'Registro A' : `Registro ${String.fromCharCode(65 + idx)}`)).join('')}</div>
+            </div>`).join('');
+          return;
+        }
+
+        if (aba === 'parecidos') {
+          if (!analise.pagamentosParecidos.length) {
+            el.innerHTML = '<div style="padding:34px 18px;text-align:center;background:#f8fafc;border:1px dashed #e8e0d8;border-radius:10px;color:#7a7068;font-size:12px">✅ Nenhum pagamento parecido encontrado.</div>';
+            return;
+          }
+          el.innerHTML = '<div class="confx-aviso"><strong>Atenção:</strong> pagamentos parecidos não são necessariamente duplicados. Confira data, fornecedor e descrição antes de excluir.</div>' +
+            analise.pagamentosParecidos.map((g, i) => `<div class="confx-grupo" style="border-left:4px solid #d97706">
+              <div class="confx-head"><div><div class="confx-title">Pagamentos parecidos ${i + 1}</div><div class="confx-motivo">${escHtml(g.motivo)}</div></div><span class="confx-badge">Revisão manual</span></div>
+              <div class="confx-list">${g.transacoes.map((t, idx) => cardTx(t, idx === 0 ? 'Pagamento A' : 'Pagamento B')).join('')}</div>
+            </div>`).join('');
+          return;
+        }
+
+        return original();
+      }
+
+      melhorada.__confMelhorada = true;
+      window.confRenderConteudo = melhorada;
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', function () { setTimeout(instalarRender, 0); });
+    } else {
+      setTimeout(instalarRender, 0);
+    }
+  })();
+}
