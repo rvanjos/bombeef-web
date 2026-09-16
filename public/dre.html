@@ -8,6 +8,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="/js/api.js"></script>
+<script src="/js/dre-conferencia.js"></script>
 <script>
   if (typeof pdfjsLib !== 'undefined') {
     pdfjsLib.GlobalWorkerOptions.workerSrc =
@@ -188,6 +189,18 @@ td{padding:5px 9px;vertical-align:middle;}
 .fg input,.fg select{width:100%;padding:7px 9px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:'DM Sans',sans-serif;}
 .fg input:focus,.fg select:focus{outline:none;border-color:var(--blue);}
 .fgr{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.conf-kpis{display:grid;grid-template-columns:repeat(4,minmax(150px,1fr));gap:8px;margin-bottom:14px;}
+.conf-kpi{background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px 12px;border-left:4px solid var(--blue);}
+.conf-kpi.alerta{border-left-color:#dc2626}.conf-kpi.aviso{border-left-color:#d97706}.conf-kpi.ok{border-left-color:#16a34a}
+.conf-kpi-label{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.55px;color:var(--muted);}
+.conf-kpi-valor{font:700 18px 'DM Mono',monospace;margin-top:3px;}
+.conf-tabs{display:flex;gap:5px;flex-wrap:wrap;border-bottom:1px solid var(--border);padding-bottom:8px;margin-bottom:12px;}
+.conf-tab{border:1px solid var(--border);background:#fff;border-radius:7px;padding:6px 10px;font:600 11px 'DM Sans',sans-serif;cursor:pointer;color:var(--muted);}
+.conf-tab.active{background:var(--red);border-color:var(--red);color:#fff;}
+.conf-card{background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:9px;}
+.conf-table{width:100%;font-size:11px;margin-top:8px;}.conf-table th{position:static;background:#f6f2ee;color:var(--muted);}.conf-table td{padding:6px 7px;}
+.conf-pill{display:inline-block;border-radius:10px;padding:2px 7px;font-size:9px;font-weight:700;background:#fef3c7;color:#92400e;}
+@media(max-width:768px){.conf-kpis{grid-template-columns:1fr 1fr}.conf-table-wrap{overflow-x:auto}.conf-table{min-width:720px}}
 .si{display:flex;justify-content:space-between;align-items:center;padding:7px 12px;border-bottom:1px solid var(--border);cursor:pointer;font-size:12px;}
 .si:hover{background:#f5f9ff;}
 .chk{accent-color:var(--red);}
@@ -577,6 +590,9 @@ thead th{padding:6px 9px;}
         <button class="btn br" style="padding:6px 11px;font-size:11px" onclick="abrirManual()">＋ Lançamento</button>
         <button class="btn bs bb-desktop-only" style="padding:6px 10px;font-size:11px" onclick="abrirProvisao()">📅 Provisão</button>
         <div class="dre-toolbar-spacer"></div>
+        <button class="btn bs" style="padding:6px 10px;font-size:11px" onclick="abrirConferenciaDRE()" title="Conferir reimportações, pagamentos parecidos e vínculos">
+          🔎 Conferência <span id="dre-conf-badge" style="display:none;background:#dc2626;color:#fff;border-radius:10px;padding:1px 6px;font-size:9px;margin-left:3px">0</span>
+        </button>
         <button class="btn bs" style="padding:6px 10px;font-size:11px" onclick="toggleSidebar()" id="toggle-sidebar-btn">☰ Filtros</button>
         <button class="btn bg" style="padding:6px 11px;font-size:11px" onclick="salvarTodos()">💾 Salvar</button>
         <div class="dre-more">
@@ -741,6 +757,39 @@ thead th{padding:6px 9px;}
 <!-- Inputs ocultos -->
 <input type="file" id="f-ofx" accept=".ofx,.ofc,.xlsx,.xls,.csv" style="display:none" onchange="loadFile(this,'ext')">
 <input type="file" id="f-cc" accept=".csv,.xlsx,.xls,.pdf" style="display:none" onchange="loadFile(this,'cc')">
+
+<!-- Conferência do DRE: somente leitura, sem exclusão automática -->
+<div class="mbg" id="m-conferencia-dre">
+  <div class="md md-lg md-flex" style="max-height:94vh">
+    <div class="mdh">
+      <div>
+        <h3>🔎 Conferência do DRE</h3>
+        <div style="font-size:10px;color:var(--muted);margin-top:2px">Origem, duplicidades, pagamentos parecidos e conciliações</div>
+      </div>
+      <button class="mdx" onclick="fecharModal('m-conferencia-dre')">×</button>
+    </div>
+    <div class="mdb" style="overflow-y:auto;flex:1">
+      <div class="conf-kpis">
+        <div class="conf-kpi alerta"><div class="conf-kpi-label">Reimportações</div><div class="conf-kpi-valor" id="conf-kpi-reimport">0</div></div>
+        <div class="conf-kpi aviso"><div class="conf-kpi-label">Pagamentos parecidos</div><div class="conf-kpi-valor" id="conf-kpi-parecidos">0</div></div>
+        <div class="conf-kpi ok"><div class="conf-kpi-label">Conciliações</div><div class="conf-kpi-valor" id="conf-kpi-conc">0</div></div>
+        <div class="conf-kpi"><div class="conf-kpi-label">Impacto potencial</div><div class="conf-kpi-valor" id="conf-kpi-impacto">R$ 0,00</div></div>
+      </div>
+      <div class="conf-tabs">
+        <button class="conf-tab active" data-conf-tab="resumo" onclick="confSelecionarAba('resumo')">Resumo</button>
+        <button class="conf-tab" data-conf-tab="reimportacoes" onclick="confSelecionarAba('reimportacoes')">Reimportações</button>
+        <button class="conf-tab" data-conf-tab="parecidos" onclick="confSelecionarAba('parecidos')">Pagamentos parecidos</button>
+        <button class="conf-tab" data-conf-tab="conciliacoes" onclick="confSelecionarAba('conciliacoes')">Conciliações</button>
+        <button class="conf-tab" data-conf-tab="dados" onclick="confSelecionarAba('dados')">Dados inconsistentes</button>
+      </div>
+      <div id="conf-conteudo"></div>
+    </div>
+    <div class="mdf" style="justify-content:space-between;align-items:center">
+      <span style="font-size:10px;color:var(--muted)">Nenhum lançamento é apagado ou ignorado por esta conferência.</span>
+      <button class="btn bn" onclick="fecharModal('m-conferencia-dre')">Fechar</button>
+    </div>
+  </div>
+</div>
 
 <!-- Modal confirmação mês fatura CC -->
 <div class="mbg" id="m-cc-mes">
@@ -2969,6 +3018,7 @@ function render() {
   if (!lista.length) {
     tb.innerHTML='<tr><td colspan="10" style="text-align:center;padding:28px;color:var(--muted)">Nenhum lançamento encontrado</td></tr>';
     document.getElementById('footer-note').textContent='';
+    atualizarBadgeConferencia();
     return;
   }
 
@@ -3036,6 +3086,7 @@ function render() {
 
   document.getElementById('footer-note').textContent = `${listaRender.length} de ${lista.length} lançamento(s) exibido(s) · ${TXS.length} total`;
   try { renderCardsMobile(lista); } catch(_) {} // cards mobile
+  atualizarBadgeConferencia();
 }
 
 function fmtMes(m) {
@@ -8253,6 +8304,156 @@ async function _sincronizarCategoriesCC(lancs, faturaIdRef) {
   } catch(e) {
     console.warn('[sincronizarCategoriesCC]', e.message);
   }
+}
+
+// ── Conferência do DRE: auditoria visual sem alteração automática ───────────
+let _confDreAnalise = null;
+let _confDreAba = 'resumo';
+
+function _confBrl(valor) {
+  return 'R$ ' + Number(valor || 0).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+
+function _confData(data) {
+  if (!data) return '—';
+  const partes = String(data).slice(0,10).split('-');
+  return partes.length === 3 ? `${partes[2]}/${partes[1]}/${partes[0]}` : data;
+}
+
+function _confEntrada(dataIso) {
+  if (!dataIso) return 'origem sem horário';
+  try { return new Date(dataIso).toLocaleString('pt-BR'); }
+  catch (_) { return 'origem sem horário'; }
+}
+
+function atualizarBadgeConferencia() {
+  const badge = document.getElementById('dre-conf-badge');
+  if (!badge || !window.DREConferencia) return;
+  const analise = window.DREConferencia.analisar(TXS);
+  badge.textContent = analise.totalAlertas;
+  badge.style.display = analise.totalAlertas ? '' : 'none';
+}
+
+function abrirConferenciaDRE() {
+  if (!window.DREConferencia) {
+    toast('❌ Não foi possível carregar a conferência do DRE.');
+    return;
+  }
+  _confDreAnalise = window.DREConferencia.analisar(TXS);
+  document.getElementById('conf-kpi-reimport').textContent = _confDreAnalise.reimportacoes.length;
+  document.getElementById('conf-kpi-parecidos').textContent = _confDreAnalise.pagamentosParecidos.length;
+  document.getElementById('conf-kpi-conc').textContent = _confDreAnalise.conciliacoes.length;
+  document.getElementById('conf-kpi-impacto').textContent = _confBrl(_confDreAnalise.impactoPotencial);
+  document.getElementById('m-conferencia-dre').classList.add('open');
+  document.getElementById('m-conferencia-dre').style.display = 'flex';
+  confSelecionarAba(_confDreAba || 'resumo');
+}
+
+function confSelecionarAba(aba) {
+  _confDreAba = aba;
+  document.querySelectorAll('[data-conf-tab]').forEach(btn => btn.classList.toggle('active', btn.dataset.confTab === aba));
+  confRenderConteudo();
+}
+
+function _confTabelaTransacoes(transacoes) {
+  return `<div class="conf-table-wrap"><table class="conf-table">
+    <thead><tr><th>Data</th><th>Fonte</th><th>Lançamento / fornecedor</th><th>Valor</th><th>Entrada no sistema</th><th>Situação</th></tr></thead>
+    <tbody>${transacoes.map(t => `<tr>
+      <td style="white-space:nowrap">${_confData(t.data)}</td>
+      <td>${esc(t.fonte || '—')}</td>
+      <td><strong>${esc(t.descricao || '—')}</strong><div style="color:var(--muted);font-size:10px">${esc(t.fornecedor || '—')}</div></td>
+      <td style="white-space:nowrap;font-family:'DM Mono',monospace;color:${t.valor < 0 ? '#dc2626' : '#16a34a'}">${t.valor < 0 ? '- ' : ''}${_confBrl(Math.abs(t.valor))}</td>
+      <td style="white-space:nowrap">${esc(_confEntrada(t.entradaEm))}</td>
+      <td>${t.ignorado ? '<span class="conf-pill" style="background:#f3f4f6;color:#6b7280">ignorado</span>' : '<span class="conf-pill" style="background:#dcfce7;color:#166534">ativo</span>'}</td>
+    </tr>`).join('')}</tbody>
+  </table></div>`;
+}
+
+function _confVazio(texto) {
+  return `<div style="padding:34px 18px;text-align:center;background:#f8fafc;border:1px dashed var(--border);border-radius:10px;color:var(--muted);font-size:12px">✅ ${texto}</div>`;
+}
+
+function confRenderConteudo() {
+  const el = document.getElementById('conf-conteudo');
+  if (!el || !_confDreAnalise) return;
+  const a = _confDreAnalise;
+
+  if (_confDreAba === 'resumo') {
+    el.innerHTML = `
+      <div class="conf-card" style="border-left:4px solid ${a.reimportacoes.length ? '#dc2626' : '#16a34a'}">
+        <div style="font-weight:800;font-size:13px">${a.reimportacoes.length ? '⚠️ Existem registros com forte sinal de reimportação' : '✅ Nenhuma reimportação exata encontrada'}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">A conferência compara primeiro o identificador bancário e depois data, valor, descrição e fornecedor normalizados. Espaços duplicados deixam de esconder ocorrências iguais.</div>
+      </div>
+      <div class="conf-card">
+        <div style="font-weight:700;font-size:12px">Como interpretar</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:8px;margin-top:9px;font-size:11px;color:var(--muted)">
+          <div><strong style="color:var(--text)">Reimportação</strong><br>Mesmo registro bancário carregado mais de uma vez. Pode estar duplicando o DRE.</div>
+          <div><strong style="color:var(--text)">Pagamento parecido</strong><br>Débitos distintos com mesmo valor e favorecido próximos. Exige conferência bancária.</div>
+          <div><strong style="color:var(--text)">Conciliação</strong><br>Extrato vinculado a boleto ou fatura. São duas representações do mesmo compromisso.</div>
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--muted);padding:4px 2px">Analisados: <strong>${a.totalTransacoes}</strong> lançamentos, sendo <strong>${a.totalBanco}</strong> do extrato bancário. Impacto potencial das reimportações ativas: <strong style="color:#dc2626">${_confBrl(a.impactoPotencial)}</strong>.</div>`;
+    return;
+  }
+
+  if (_confDreAba === 'reimportacoes') {
+    if (!a.reimportacoes.length) { el.innerHTML = _confVazio('Nenhuma reimportação exata encontrada.'); return; }
+    el.innerHTML = a.reimportacoes.map((grupo, indice) => `
+      <div class="conf-card" style="border-left:4px solid #dc2626">
+        <div style="display:flex;align-items:flex-start;gap:10px;justify-content:space-between;flex-wrap:wrap">
+          <div><div style="font-weight:800;font-size:13px">Possível reimportação ${indice + 1}</div><div style="font-size:10px;color:var(--muted);margin-top:2px">${esc(grupo.motivo)} · confiança ${esc(grupo.confianca)}</div></div>
+          <div style="text-align:right"><div style="font-size:10px;color:var(--muted)">Impacto potencial</div><strong style="color:#dc2626">${_confBrl(grupo.impactoPotencial)}</strong></div>
+        </div>
+        ${_confTabelaTransacoes(grupo.transacoes)}
+        <div style="text-align:right;margin-top:8px"><button class="btn bs" onclick="localizarConferencia('${esc(grupo.transacoes[0].id)}')">Ver na tabela</button></div>
+      </div>`).join('');
+    return;
+  }
+
+  if (_confDreAba === 'parecidos') {
+    if (!a.pagamentosParecidos.length) { el.innerHTML = _confVazio('Nenhum pagamento parecido encontrado no intervalo de três dias.'); return; }
+    el.innerHTML = `<div style="font-size:11px;color:#92400e;background:#fffbeb;border:1px solid #fde68a;padding:9px 11px;border-radius:8px;margin-bottom:10px">Estes itens não são excluídos: podem ser pagamentos legítimos repetidos. Confira o extrato antes de qualquer tratamento.</div>` +
+      a.pagamentosParecidos.map((grupo, indice) => `<div class="conf-card" style="border-left:4px solid #d97706">
+        <div style="font-weight:800;font-size:13px">Pagamento parecido ${indice + 1}</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:2px">${esc(grupo.motivo)}</div>
+        ${_confTabelaTransacoes(grupo.transacoes)}
+        <div style="text-align:right;margin-top:8px"><button class="btn bs" onclick="localizarConferencia('${esc(grupo.transacoes[0].id)}')">Ver na tabela</button></div>
+      </div>`).join('');
+    return;
+  }
+
+  if (_confDreAba === 'conciliacoes') {
+    if (!a.conciliacoes.length) { el.innerHTML = _confVazio('Nenhum vínculo entre extrato, boletos ou cartões encontrado.'); return; }
+    el.innerHTML = `<div class="conf-table-wrap"><table class="conf-table"><thead><tr><th>Tipo</th><th>Data</th><th>Lançamento</th><th>Valor</th><th>Referência</th><th></th></tr></thead><tbody>` +
+      a.conciliacoes.map(item => `<tr><td><span class="conf-pill" style="background:#dcfce7;color:#166534">${esc(item.tipo)}</span></td><td>${_confData(item.transacao.data)}</td><td><strong>${esc(item.transacao.descricao || '—')}</strong><div style="font-size:10px;color:var(--muted)">${esc(item.transacao.fornecedor || '—')}</div></td><td style="white-space:nowrap">${_confBrl(Math.abs(item.transacao.valor))}</td><td>${esc(String(item.referencia || '—'))}</td><td><button class="btn bs" onclick="localizarConferencia('${esc(item.transacao.id)}')">Ver</button></td></tr>`).join('') +
+      `</tbody></table></div>`;
+    return;
+  }
+
+  if (!a.mesesInvalidos.length) { el.innerHTML = _confVazio('Nenhum mês inválido encontrado nos lançamentos carregados.'); return; }
+  el.innerHTML = `<div style="font-size:11px;color:#92400e;background:#fffbeb;border:1px solid #fde68a;padding:9px 11px;border-radius:8px;margin-bottom:10px">Valores inválidos de mês prejudicam filtros e totais. A conferência apenas mostra os registros; nenhuma correção é automática.</div>` +
+    `<div class="conf-table-wrap"><table class="conf-table"><thead><tr><th>Campo</th><th>Valor inválido</th><th>Lançamento</th><th>Data</th><th></th></tr></thead><tbody>${a.mesesInvalidos.map(item => `<tr><td>${esc(item.campo)}</td><td><strong style="color:#dc2626">${esc(item.valor)}</strong></td><td>${esc(item.transacao.descricao || '—')}</td><td>${_confData(item.transacao.data)}</td><td><button class="btn bs" onclick="localizarConferencia('${esc(item.transacao.id)}')">Ver</button></td></tr>`).join('')}</tbody></table></div>`;
+}
+
+function localizarConferencia(id) {
+  const tx = TXS.find(t => String(t.id) === String(id));
+  if (!tx) return;
+  fecharModal('m-conferencia-dre');
+  const mes = tx.mes || '';
+  const filtroMes = document.getElementById('f-mes');
+  if (filtroMes && [...filtroMes.options].some(o => o.value === mes)) filtroMes.value = mes;
+  const busca = document.getElementById('busca');
+  if (busca) busca.value = '';
+  _filtroRapido = '';
+  syncSidebarSelects();
+  render();
+  setTimeout(() => {
+    const linha = document.getElementById('tr-' + id);
+    if (!linha) return;
+    linha.scrollIntoView({behavior:'smooth', block:'center'});
+    linha.style.boxShadow = 'inset 4px 0 #dc2626, 0 0 0 2px #fecaca';
+    setTimeout(() => { linha.style.boxShadow = ''; }, 4000);
+  }, 80);
 }
 
 </script>
