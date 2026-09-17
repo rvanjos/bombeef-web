@@ -4,6 +4,7 @@ const express = require('express');
 const originalUse = express.application.use;
 let boletosIaMounted = false;
 let agenteMounted = false;
+let dreConferenciaV2Mounted = false;
 
 express.application.use = function (...args) {
   const result = originalUse.apply(this, args);
@@ -17,6 +18,18 @@ express.application.use = function (...args) {
       console.log('[boletos/ia] rotas PDF registradas com provedor OpenAI');
     } catch (e) {
       console.warn('[boletos/ia] não foi possível registrar rota OpenAI:', e.message);
+    }
+  }
+
+  // Extensão da Central de Conferência do DRE. É montada no mesmo prefixo,
+  // depois do router principal; endpoints não conflitantes seguem normalmente.
+  if (!dreConferenciaV2Mounted && args[0] === '/api/dre') {
+    dreConferenciaV2Mounted = true;
+    try {
+      originalUse.call(this, '/api/dre/conferencia-v2', require('../routes/dre_conferencia_v2'));
+      console.log('[dre/conferencia-v2] rotas de decisões persistentes registradas');
+    } catch (e) {
+      console.warn('[dre/conferencia-v2] não foi possível registrar rota:', e.message);
     }
   }
 
