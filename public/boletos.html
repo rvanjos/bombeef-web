@@ -1348,7 +1348,11 @@ async function processarArquivoXML(f){
       </div>
       <div class="pi-right">
         <div class="pi-valor">${fmt.brl(p.valor)}</div>
-        <div class="pi-venc">Venc: ${fmt.date(p.vencimento)}</div>
+        <label style="font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-top:2px">Vencimento / data prevista de pagamento</label>
+        <input type="date" value="${esc(p.vencimento||'')}"
+          onchange="xmlPreview[${i}].vencimento=this.value; xmlPreview[${i}].mesCaixa=this.value ? this.value.slice(5,7)+'/'+this.value.slice(0,4) : xmlPreview[${i}].mesCompetencia"
+          style="width:170px;padding:5px 7px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:#fff">
+        <div class="pi-venc" style="max-width:190px;text-align:right">A data da NF permanece ${fmt.date(p.dtNota)} para a competência.</div>
       </div>
     </div>`;
   }).join('');
