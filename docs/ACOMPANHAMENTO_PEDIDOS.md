@@ -33,7 +33,11 @@ Este arquivo é o registro vivo dos pedidos feitos pelo usuário no projeto Sist
 | BB-012 | Fazer uma melhoria geral no DRE, principalmente visualização e tratamento dos lançamentos | EM ANDAMENTO | PRs #105, #108, #109, #111, #112, #113 e #114 publicados. Visual, conferência, lançamentos, fechamento mensal e motor único já estão em produção. Falta validar conciliação/planejamento do bloco final. |
 | BB-013 | Unificar a regra de pagamento de cartão: pagamento total neutro e despesas pelos itens da fatura | EM ANDAMENTO | PR #106 está na main e a nova área de Conciliação torna o vínculo fatura ↔ pagamento visível. Aguarda validação real de casos da loja. |
 
-| BB-014 | Criar fechamento mensal seguro do DRE com checklist, snapshot, bloqueio e reabertura auditada | FINALIZADO | PR #112 publicado e deploy validado com SUCCESS. |\n| BB-015 | Unificar cálculo do DRE entre demonstrativo, cards e exportações | FINALIZADO | PRs #113 e #114 publicados e deploy validado com SUCCESS. |\n| BB-016 | Criar planejamento anual projetado x realizado por categoria e mês | EM ANDAMENTO | Implementação no bloco final do DRE; persistência por loja e tela anual adicionadas na branch atual. |\n| BB-017 | Criar visão de conciliação financeira dentro do DRE | EM ANDAMENTO | Implementação no bloco final: cartões, pagamento bancário, boletos e pendências em uma visão própria. |\n
+| BB-014 | Criar fechamento mensal seguro do DRE com checklist, snapshot, bloqueio e reabertura auditada | FINALIZADO | PR #112 publicado e deploy validado com SUCCESS. |
+| BB-015 | Unificar cálculo do DRE entre demonstrativo, cards e exportações | FINALIZADO | PRs #113 e #114 publicados e deploy validado com SUCCESS. |
+| BB-016 | Criar planejamento anual projetado x realizado por categoria e mês | EM ANDAMENTO | Implementação no bloco final do DRE; persistência por loja e tela anual adicionadas na branch atual. |
+| BB-017 | Criar visão de conciliação financeira dentro do DRE | EM ANDAMENTO | Implementação no bloco final: cartões, pagamento bancário, boletos e pendências em uma visão própria. |
+
 ## Regra estrutural — Cartões de crédito
 - O débito bancário referente ao pagamento total da fatura é uma liquidação e NÃO é uma nova despesa do DRE.
 - Os itens individuais da fatura são as despesas reais e mantêm categorias próprias.
