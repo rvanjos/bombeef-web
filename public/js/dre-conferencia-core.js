@@ -102,6 +102,13 @@
     ].join('|');
   }
 
+  function chaveDuplicidade(transacoes) {
+    const lista = (Array.isArray(transacoes) ? transacoes : []).filter(Boolean);
+    const mes = lista.map(t => t.mes || t.mesCaixa || '').find(Boolean) || '';
+    const ids = lista.map(t => String(t.id == null ? '' : t.id)).filter(Boolean).sort();
+    return ('DUP|' + mes + '|' + ids.join('~')).slice(0,220);
+  }
+
   function analisar(transacoes) {
     const lista = Array.isArray(transacoes) ? transacoes.filter(Boolean) : [];
     const banco = lista.filter(fonteBanco);
@@ -119,13 +126,15 @@
       unicos.forEach(t => idsEmDuplicidade.add(String(t.id)));
       const ativos = unicos.filter(t => !t.ignorar);
       const valorUnitario = Math.abs(Number.parseFloat(unicos[0].valor || 0));
+      const resumo = unicos.map(resumoTransacao);
       exatas.push({
         tipo: 'REIMPORTACAO',
+        chave: chaveDuplicidade(resumo),
         motivo,
         confianca,
         quantidade: unicos.length,
         impactoPotencial: ativos.length > 1 ? valorUnitario * (ativos.length - 1) : 0,
-        transacoes: unicos.map(resumoTransacao)
+        transacoes: resumo
       });
     }
 
@@ -178,13 +187,15 @@
           const descricaoCompativel = descricaoUtil && similaridadeTexto(descA, descB) >= 0.72;
           if (!fornecedorCompativel && !descricaoCompativel) continue;
 
+          const resumo = [resumoTransacao(a), resumoTransacao(b)];
           pagamentosParecidos.push({
             tipo: 'PAGAMENTO_PARECIDO',
+            chave: chaveDuplicidade(resumo),
             motivo: fornecedorCompativel
               ? `Mesmo valor e fornecedor em ${diferencaDias} dia(s)`
               : `Mesmo valor e descrição semelhante em ${diferencaDias} dia(s)`,
             diferencaDias,
-            transacoes: [resumoTransacao(a), resumoTransacao(b)]
+            transacoes: resumo
           });
         }
       }
@@ -252,7 +263,8 @@
     normalizarTexto,
     dataCanonica,
     instanteEntrada,
-    similaridadeTexto
+    similaridadeTexto,
+    chaveDuplicidade
   };
 });
 
@@ -335,6 +347,7 @@ if (typeof window !== 'undefined') {
         .confx-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}.confx-grid div{min-width:0}.confx-grid span{display:block;font-size:8px;text-transform:uppercase;color:#9a928b;font-weight:800}.confx-grid strong{display:block;font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px}
         .confx-actions{display:flex;justify-content:flex-end;align-items:center;gap:6px;flex-wrap:wrap;margin-top:10px;padding-top:8px;border-top:1px solid #ece7e1}.confx-open{border:1px solid #c7d2fe;background:#fff;color:#3730a3;border-radius:7px;padding:6px 9px;font-size:10px;font-weight:800;cursor:pointer}.confx-open:hover{background:#eef2ff}.confx-del{border:1px solid #fecaca;background:#fff;color:#b91c1c;border-radius:7px;padding:6px 9px;font-size:10px;font-weight:800;cursor:pointer}.confx-del:hover{background:#fef2f2}.confx-vinc{font-size:9px;color:#92400e;background:#fef3c7;border-radius:6px;padding:5px 8px}
         .confx-aviso{background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:9px;padding:9px 10px;font-size:10px;margin-bottom:10px}
+        .confx-ok{border:1px solid #bbf7d0;background:#fff;color:#166534;border-radius:7px;padding:6px 9px;font-size:10px;font-weight:800;cursor:pointer}.confx-ok:hover{background:#f0fdf4}.confx-resolvido{background:#dcfce7;color:#166534;border-radius:999px;padding:4px 8px;font-size:9px;font-weight:800}
         @media(max-width:700px){.confx-list{grid-template-columns:1fr}.confx-grid{grid-template-columns:1fr}.confx-grid strong{white-space:normal}}
       `;
       document.head.appendChild(st);
@@ -349,6 +362,32 @@ if (typeof window !== 'undefined') {
       setTimeout(function () {
         try { if (typeof window.abrirConferenciaDRE === 'function') window.abrirConferenciaDRE(); } catch (_) {}
       }, 180);
+    };
+
+    function grupoResolvido(g) {
+      try { return !!window.DREConfV2Decisao?.(g && g.chave); } catch (_) { return false; }
+    }
+
+    window.confValidarDuplicidade = async function (chave, tipo, mes, ids) {
+      if (!chave) return;
+      if (!confirm(tipo === 'PAGAMENTO_PARECIDO'
+        ? 'Confirmar que estes pagamentos são legítimos e não representam duplicidade?'
+        : 'Confirmar que estes lançamentos estão corretos e não devem ser tratados como duplicidade?')) return;
+      const justificativa = prompt('Justificativa (opcional):','') || '';
+      try {
+        const r = await api.post('/api/dre/conferencia-v2/decisoes', {
+          chave, tipo:'DUPLICIDADE', status:'VALIDADO', decisao:'NAO_DUPLICADO',
+          escopo:'MES', mes_ref:mes || null, justificativa,
+          metadados:{ subtipo:tipo, ids:Array.isArray(ids)?ids:[] }
+        });
+        if (!r?.ok) { alert(r?.erro || 'Não foi possível registrar a decisão'); return; }
+        if (window.DREConfV2Recarregar) await window.DREConfV2Recarregar();
+        if (typeof window.dreFechAtualizar === 'function') window.dreFechAtualizar();
+        if (typeof window.abrirConferenciaDRE === 'function') {
+          window.abrirConferenciaDRE();
+          setTimeout(() => { try { window.confRenderConteudo?.(); } catch (_) {} }, 80);
+        }
+      } catch (e) { alert('Não foi possível registrar a decisão: ' + e.message); }
     };
 
     function instalarRender() {
@@ -366,28 +405,40 @@ if (typeof window !== 'undefined') {
         if (!el || !analise) return original();
 
         if (aba === 'reimportacoes') {
-          if (!analise.reimportacoes.length) {
-            el.innerHTML = '<div style="padding:34px 18px;text-align:center;background:#f8fafc;border:1px dashed #e8e0d8;border-radius:10px;color:#7a7068;font-size:12px">✅ Nenhuma reimportação exata encontrada.</div>';
+          const pendentes = analise.reimportacoes.filter(g => !grupoResolvido(g));
+          if (!pendentes.length) {
+            el.innerHTML = '<div style="padding:34px 18px;text-align:center;background:#f8fafc;border:1px dashed #e8e0d8;border-radius:10px;color:#7a7068;font-size:12px">✅ Nenhuma reimportação pendente.</div>';
             return;
           }
-          el.innerHTML = '<div class="confx-aviso"><strong>Como usar:</strong> compare os lançamentos do mesmo grupo. Exclua somente o registro duplicado. Lançamentos vinculados a boleto ou fatura precisam ser desvinculados antes.</div>' +
-            analise.reimportacoes.map((g, i) => `<div class="confx-grupo" style="border-left:4px solid #dc2626">
-              <div class="confx-head"><div><div class="confx-title">Possível reimportação ${i + 1}</div><div class="confx-motivo">${escHtml(g.motivo)} · impacto potencial ${brl(g.impactoPotencial)}</div></div><span class="confx-badge">Confiança ${escHtml(g.confianca)}</span></div>
-              <div class="confx-list">${g.transacoes.map((t, idx) => cardTx(t, idx === 0 ? 'Registro A' : `Registro ${String.fromCharCode(65 + idx)}`)).join('')}</div>
-            </div>`).join('');
+          el.innerHTML = '<div class="confx-aviso"><strong>Como usar:</strong> compare os lançamentos do mesmo grupo. Se forem lançamentos legítimos, marque como correto. Se houver duplicidade real, exclua somente o registro duplicado.</div>' +
+            pendentes.map((g, i) => {
+              const mes = g.transacoes.map(t=>t.mes||t.mesCaixa||'').find(Boolean)||'';
+              const ids = g.transacoes.map(t=>String(t.id||''));
+              return `<div class="confx-grupo" style="border-left:4px solid #dc2626">
+                <div class="confx-head"><div><div class="confx-title">Possível reimportação ${i + 1}</div><div class="confx-motivo">${escHtml(g.motivo)} · impacto potencial ${brl(g.impactoPotencial)}</div></div><span class="confx-badge">Confiança ${escHtml(g.confianca)}</span></div>
+                <div class="confx-list">${g.transacoes.map((t, idx) => cardTx(t, idx === 0 ? 'Registro A' : `Registro ${String.fromCharCode(65 + idx)}`)).join('')}</div>
+                <div class="confx-actions"><button class="confx-ok" onclick='confValidarDuplicidade(${JSON.stringify(g.chave)}, "REIMPORTACAO", ${JSON.stringify(mes)}, ${JSON.stringify(ids)})'>✓ Está correto / não é duplicidade</button></div>
+              </div>`;
+            }).join('');
           return;
         }
 
         if (aba === 'parecidos') {
-          if (!analise.pagamentosParecidos.length) {
-            el.innerHTML = '<div style="padding:34px 18px;text-align:center;background:#f8fafc;border:1px dashed #e8e0d8;border-radius:10px;color:#7a7068;font-size:12px">✅ Nenhum pagamento parecido encontrado.</div>';
+          const pendentes = analise.pagamentosParecidos.filter(g => !grupoResolvido(g));
+          if (!pendentes.length) {
+            el.innerHTML = '<div style="padding:34px 18px;text-align:center;background:#f8fafc;border:1px dashed #e8e0d8;border-radius:10px;color:#7a7068;font-size:12px">✅ Nenhum pagamento parecido pendente.</div>';
             return;
           }
-          el.innerHTML = '<div class="confx-aviso"><strong>Atenção:</strong> pagamentos parecidos não são necessariamente duplicados. Confira data, fornecedor e descrição antes de excluir.</div>' +
-            analise.pagamentosParecidos.map((g, i) => `<div class="confx-grupo" style="border-left:4px solid #d97706">
-              <div class="confx-head"><div><div class="confx-title">Pagamentos parecidos ${i + 1}</div><div class="confx-motivo">${escHtml(g.motivo)}</div></div><span class="confx-badge">Revisão manual</span></div>
-              <div class="confx-list">${g.transacoes.map((t, idx) => cardTx(t, idx === 0 ? 'Pagamento A' : 'Pagamento B')).join('')}</div>
-            </div>`).join('');
+          el.innerHTML = '<div class="confx-aviso"><strong>Atenção:</strong> pagamentos parecidos são apenas uma suspeita e não bloqueiam o fechamento. Confira e marque como correto quando forem legítimos.</div>' +
+            pendentes.map((g, i) => {
+              const mes=g.transacoes.map(t=>t.mes||t.mesCaixa||'').find(Boolean)||'';
+              const ids=g.transacoes.map(t=>String(t.id||''));
+              return `<div class="confx-grupo" style="border-left:4px solid #d97706">
+                <div class="confx-head"><div><div class="confx-title">Pagamentos parecidos ${i + 1}</div><div class="confx-motivo">${escHtml(g.motivo)}</div></div><span class="confx-badge">Revisão manual</span></div>
+                <div class="confx-list">${g.transacoes.map((t, idx) => cardTx(t, idx === 0 ? 'Pagamento A' : 'Pagamento B')).join('')}</div>
+                <div class="confx-actions"><button class="confx-ok" onclick='confValidarDuplicidade(${JSON.stringify(g.chave)}, "PAGAMENTO_PARECIDO", ${JSON.stringify(mes)}, ${JSON.stringify(ids)})'>✓ Está correto</button></div>
+              </div>`;
+            }).join('');
           return;
         }
 
