@@ -461,6 +461,28 @@ module.exports = function (pool, app) {
     `).catch(()=>{});
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_dre_fech_loja_mes ON dre_fechamentos(loja_id,mes_ref)`).catch(()=>{});
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_dre_fech_evt_loja_mes ON dre_fechamento_eventos(loja_id,mes_ref,criado_em DESC)`).catch(()=>{});
+    for (const tabela of ['dre_fechamentos','dre_fechamento_eventos']) {
+      await pool.query(`ALTER TABLE ${tabela} ENABLE ROW LEVEL SECURITY`).catch(()=>{});
+      await pool.query(`ALTER TABLE ${tabela} FORCE ROW LEVEL SECURITY`).catch(()=>{});
+      await pool.query(`DROP POLICY IF EXISTS bb_isolamento_loja ON ${tabela}`).catch(()=>{});
+      await pool.query(`
+        CREATE POLICY bb_isolamento_loja ON ${tabela}
+        USING (
+          current_setting('app.bb_system', true)='1'
+          OR (
+            NULLIF(current_setting('app.loja_id', true),'') IS NOT NULL
+            AND loja_id = NULLIF(current_setting('app.loja_id', true),'')::INTEGER
+          )
+        )
+        WITH CHECK (
+          current_setting('app.bb_system', true)='1'
+          OR (
+            NULLIF(current_setting('app.loja_id', true),'') IS NOT NULL
+            AND loja_id = NULLIF(current_setting('app.loja_id', true),'')::INTEGER
+          )
+        )
+      `).catch(()=>{});
+    }
 
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_dre_lanc_fitid ON dre_lancamentos(fitid) WHERE fitid IS NOT NULL`).catch(()=>{});
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_dre_sessoes_mes  ON dre_sessoes(mes_ref)`).catch(()=>{});
