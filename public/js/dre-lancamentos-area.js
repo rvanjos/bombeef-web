@@ -5,6 +5,7 @@ const st={
   view:localStorage.getItem('dre-main-view')||'demonstrativo',
   q:'',grupo:'nenhum',status:'todos',origem:'todas',
   sel:new Set(),detalhe:null,gruposFechados:new Set(),
+  limite:300,
   ferramentas:localStorage.getItem('dre-ferramentas')==='1'
 };
 
@@ -197,10 +198,16 @@ function setView(v){
 }
 root.dreSetView=setView;
 
-function catOptions(cur){
+let _catValsCache=null;
+function catVals(){
+  if(_catValsCache) return _catValsCache;
   const dl=document.getElementById('cats-dl');
   const vals=dl?[...dl.querySelectorAll('option')].map(o=>o.value).filter(Boolean):[];
-  const all=[...new Set([cur,...vals].filter(Boolean))];
+  _catValsCache=[...new Set(vals)];
+  return _catValsCache;
+}
+function catOptions(cur){
+  const all=[...new Set([cur,...catVals()].filter(Boolean))];
   return '<option value="">— Sem categoria —</option>'+all.map(x=>`<option value="${esc(x)}" ${x===cur?'selected':''}>${esc(x)}</option>`).join('');
 }
 
@@ -221,8 +228,7 @@ function chaveGrupo(t){
   if(st.grupo==='status')return status(t);
   return'';
 }
-function grupos(){
-  const l=listaFiltrada();
+function grupos(l=listaFiltrada()){
   if(st.grupo==='nenhum')return[['',l]];
   const m=new Map();
   l.forEach(t=>{const k=chaveGrupo(t);if(!m.has(k))m.set(k,[]);m.get(k).push(t);});
@@ -236,7 +242,7 @@ function row(t){
     <span>${esc(dataBr(t.data))}</span>
     <span>${esc(origem(t))}</span>
     <div class="dla-desc"><strong title="${esc(descricao(t))}">${esc(descricao(t))}</strong><small>${esc(fornecedor(t)||'Sem fornecedor')}</small></div>
-    <select class="dla-cat ${!t.categoria?'pendente':''}" onchange="setCat('${esc(id)}',this.value);dreLancRefresh()">${catOptions(t.categoria||'')}</select>
+    <input class="dla-cat ${!t.categoria?'pendente':''}" list="cats-dl" value="${esc(t.categoria||'')}" placeholder="— Sem categoria —" onchange="setCat('${esc(id)}',this.value);dreLancRefresh()">
     <span class="dla-status ${esc(s)}">${esc(s)}</span>
     <span class="dla-val ${v<0?'neg':'pos'}">${brl(v)}</span>
     <div class="dla-act">
@@ -254,7 +260,8 @@ function render(){
   const rev=ativos.filter(t=>t.needsReview).length;
   const vinc=ativos.filter(temVinculo).length;
   const ign=l.filter(t=>t.ignorar).length;
-  const gs=grupos();
+  const visiveis=l.slice(0,st.limite);
+  const gs=grupos(visiveis);
 
   a.innerHTML=`
     <div class="dla-top">
@@ -292,13 +299,14 @@ function render(){
     </div>
     <div class="dla-note">Dica: agrupe por fornecedor para corrigir categorias repetidas com mais segurança. Use a Conferência quando o sistema detectar inconsistência.</div>
     ${st.sel.size?`<div class="dla-bulk"><strong>${st.sel.size} selecionado(s)</strong><select id="dla-bulk-cat"><option value="">Escolha a categoria...</option>${catOptions('').replace('<option value="">— Sem categoria —</option>','')}</select><button class="btn bg" onclick="dreLancAplicarLote()">Aplicar categoria</button><button class="btn bs" onclick="dreLancLimparSel()">Limpar seleção</button></div>`:''}
-    ${l.length?gs.map(([k,it])=>{
+    ${visiveis.length?gs.map(([k,it])=>{
       const key=encodeURIComponent(k||'_todos_'),fechado=st.gruposFechados.has(key);
       return `<div class="dla-group">
         ${st.grupo!=='nenhum'?`<div class="dla-gh" onclick="dreLancToggleGrupo('${key}')"><div class="dla-gh-left"><span>${fechado?'▸':'▾'}</span><strong>${esc(k)}</strong></div><div class="dla-gh-right"><span>${it.length} lançamento(s)</span><span>${brl(it.reduce((s,t)=>s+Number(t.valor||0),0))}</span></div></div>`:''}
         ${fechado?'':`<div class="dla-headrow"><span></span><span>Data</span><span>Origem</span><span>Lançamento / fornecedor</span><span>Categoria</span><span>Status</span><span style="text-align:right">Valor</span><span style="text-align:right">Ações</span></div>${it.map(row).join('')}`}
       </div>`;
     }).join(''):'<div class="dla-empty">Nenhum lançamento encontrado com estes filtros.</div>'}
+    ${l.length>visiveis.length?`<div style="display:flex;justify-content:center;padding:14px"><button class="btn bs" onclick="dreLancMais()">Mostrar mais ${Math.min(300,l.length-visiveis.length)} de ${l.length-visiveis.length} restantes</button></div>`:''}
   `;
   const sels=a.querySelectorAll('.dla-filtros select');
   if(sels[0])sels[0].value=st.grupo;
@@ -338,7 +346,7 @@ function abrirDetalhes(id){
   d.innerHTML=detalheHtml(t);d.classList.add('open');bg.classList.add('open');
 }
 function fecharDetalhes(){st.detalhe=null;document.getElementById('dre-lanc-drawer')?.classList.remove('open');document.getElementById('dre-lanc-drawer-bg')?.classList.remove('open');}
-function refresh(){if(st.view==='lancamentos')setTimeout(render,20);}
+function refresh(){_catValsCache=null;if(st.view==='lancamentos')setTimeout(render,20);}
 function wrapRender(){
   if(root.__dreWsWrapped||typeof root.render!=='function')return;
   root.__dreWsWrapped=true;
@@ -347,8 +355,9 @@ function wrapRender(){
 }
 
 root.dreLancRefresh=refresh;
-root.dreLancBusca=v=>{st.q=v;render();};
-root.dreLancGrupo=v=>{st.grupo=v;render();};
+root.dreLancBusca=v=>{st.q=v;st.limite=300;render();};
+root.dreLancGrupo=v=>{st.grupo=v;st.limite=300;render();};
+root.dreLancMais=()=>{st.limite+=300;render();};
 root.dreLancStatus=v=>{st.status=v;render();};
 root.dreLancOrigem=v=>{st.origem=v;render();};
 root.dreLancSel=(id,on)=>{on?st.sel.add(String(id)):st.sel.delete(String(id));render();};

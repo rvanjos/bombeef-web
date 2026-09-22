@@ -32,3 +32,32 @@ test('conciliação preserva regra contábil do cartão',()=>{
   assert.match(fin,/Itens da fatura entram no DRE; pagamento bancário não/);
   assert.match(fin,/reprocessarPagamentosCartaoDRE/);
 });
+
+
+test('conciliação suporta saldo patrimonial inicial sem virar receita do DRE',()=>{
+  const rota=ler('routes/dre.js');
+  const fin=ler('public/js/dre-planejamento-conciliacao.js');
+  assert.match(rota,/CREATE TABLE IF NOT EXISTS dre_fluxo_saldo_controle/);
+  assert.match(rota,/UNIQUE\(loja_id\)/);
+  assert.match(rota,/r\.get\('\/fluxo-saldo'/);
+  assert.match(rota,/r\.put\('\/fluxo-saldo'/);
+  assert.match(rota,/saldo_esperado/);
+  assert.match(fin,/Saldo real do fluxo de caixa/);
+  assert.match(fin,/Não entra como receita no DRE/);
+  assert.match(fin,/\/api\/dre\/fluxo-saldo/);
+});
+
+test('abertura e navegação do DRE evitam trabalho redundante',()=>{
+  const rota=ler('routes/dre.js');
+  const dre=ler('public/dre.html');
+  const lanc=ler('public/js/dre-lancamentos-area.js');
+  assert.match(rota,/r\.get\('\/sessoes-completas'/);
+  assert.match(dre,/\/api\/dre\/sessoes-completas\?limit=24/);
+  assert.doesNotMatch(dre,/lista\.data\.map\(s => api\.get\(\`\/api\/dre\/sessoes\/\$\{s\.id\}\`\)\)/);
+  assert.match(dre,/Não grava sessões apenas por abrir o DRE/);
+  assert.match(dre,/As 24 sessões já estão em memória/);
+  assert.match(dre,/_fatCacheEm/);
+  assert.match(lanc,/limite:300/);
+  assert.match(lanc,/dreLancMais/);
+  assert.match(lanc,/list="cats-dl"/);
+});

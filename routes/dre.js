@@ -404,6 +404,46 @@ module.exports = function (pool, app) {
         loja_id       INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id)
       )
     `);
+    // Controle do saldo inicial/real para conciliação do fluxo de caixa.
+    // É patrimonial: nunca entra como receita/despesa do DRE.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS dre_fluxo_saldo_controle (
+        id                BIGSERIAL PRIMARY KEY,
+        loja_id           INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id),
+        data_inicio       DATE NOT NULL,
+        saldo_inicial     NUMERIC(14,2) NOT NULL DEFAULT 0,
+        saldo_real        NUMERIC(14,2),
+        data_saldo_real   DATE,
+        observacoes       TEXT,
+        usuario_id        INTEGER,
+        usuario_nome      TEXT,
+        criado_em         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        atualizado_em     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE(loja_id)
+      )
+    `).catch(()=>{});
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_dre_fluxo_saldo_loja ON dre_fluxo_saldo_controle(loja_id)`).catch(()=>{});
+    await pool.query(`ALTER TABLE dre_fluxo_saldo_controle ENABLE ROW LEVEL SECURITY`).catch(()=>{});
+    await pool.query(`ALTER TABLE dre_fluxo_saldo_controle FORCE ROW LEVEL SECURITY`).catch(()=>{});
+    await pool.query(`DROP POLICY IF EXISTS bb_isolamento_loja ON dre_fluxo_saldo_controle`).catch(()=>{});
+    await pool.query(`
+      CREATE POLICY bb_isolamento_loja ON dre_fluxo_saldo_controle
+      USING (
+        current_setting('app.bb_system', true)='1'
+        OR (
+          NULLIF(current_setting('app.loja_id', true),'') IS NOT NULL
+          AND loja_id = NULLIF(current_setting('app.loja_id', true),'')::INTEGER
+        )
+      )
+      WITH CHECK (
+        current_setting('app.bb_system', true)='1'
+        OR (
+          NULLIF(current_setting('app.loja_id', true),'') IS NOT NULL
+          AND loja_id = NULLIF(current_setting('app.loja_id', true),'')::INTEGER
+        )
+      )
+    `).catch(()=>{});
+
     // Garante colunas extras na dre_lancamentos
     for (const [col, def] of [
       ['fitid',       'TEXT'],
@@ -714,6 +754,134 @@ module.exports = function (pool, app) {
       `, [limit]);
       res.json({ ok: true, data: rows });
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // ── GET /sessoes-completas — uma chamada para carga inicial do DRE ─────────
+  // Evita 1 + N requisições ao abrir o módulo.
+  r.get('/sessoes-completas', async (req, res) => {
+    try {
+      const limit=Math.min(Math.max(parseInt(req.query.limit)||24,1),60);
+      const lojaId=Number(req.user?.lojaId);
+      const {rows}=await pool.query(`
+        SELECT id,mes_ref,descricao,dados_json,criado_em,atualizado_em,
+               res_receitas,res_despesas,res_cmv,res_lucro_bruto,res_lucro_op,res_final
+        FROM dre_sessoes
+        WHERE loja_id=$1
+        ORDER BY atualizado_em DESC
+        LIMIT $2
+      `,[lojaId,limit]);
+      res.json({ok:true,data:rows});
+    } catch(e) { res.status(500).json({ok:false,erro:e.message}); }
+  });
+
+  function _dataTxIso(t) {
+    const s=String(t?.data||t?.date||'').slice(0,10);
+    return /^\d{4}-\d{2}-\d{2}$/.test(s)?s:null;
+  }
+  function _chaveMovCaixa(t) {
+    if(t?.id!=null&&String(t.id)!=='') return 'id:'+String(t.id);
+    if(t?.fitid) return 'fitid:'+String(t.fitid);
+    return [
+      _dataTxIso(t)||'',
+      Number(t?.valor||0).toFixed(2),
+      String(t?.lancamento||t?.descricao||'').trim().toUpperCase(),
+      String(t?.razaoSocial||t?.fornecedor||'').trim().toUpperCase()
+    ].join('|');
+  }
+  async function calcularFluxoCaixa(lojaId, cfg) {
+    if(!cfg?.data_inicio) return null;
+    const fim=cfg.data_saldo_real ? String(cfg.data_saldo_real).slice(0,10) : new Date().toISOString().slice(0,10);
+    const {rows}=await pool.query(`
+      SELECT dados_json
+      FROM (
+        SELECT dados_json,mes_ref,atualizado_em,id,
+               ROW_NUMBER() OVER(PARTITION BY mes_ref ORDER BY atualizado_em DESC,id DESC) rn
+        FROM dre_sessoes
+        WHERE loja_id=$1 AND dados_json IS NOT NULL
+      ) s
+      WHERE rn=1
+    `,[Number(lojaId)]);
+    const vistos=new Set();
+    let entradas=0,saidas=0,movimentos=0;
+    for(const row of rows){
+      for(const t of extrairTransacoes(row.dados_json)){
+        const fonte=String(t?.fonte||'').toUpperCase();
+        if(!['EXTRATO','OFX'].includes(fonte)) continue;
+        const data=_dataTxIso(t);
+        if(!data || data<String(cfg.data_inicio).slice(0,10) || data>fim) continue;
+        const chave=_chaveMovCaixa(t);
+        if(vistos.has(chave)) continue;
+        vistos.add(chave);
+        const v=Number(t?.valor||0);
+        if(!Number.isFinite(v)||Math.abs(v)<0.005) continue;
+        movimentos++;
+        if(v>0) entradas+=v; else saidas+=Math.abs(v);
+      }
+    }
+    const saldoInicial=Number(cfg.saldo_inicial||0);
+    const saldoEsperado=saldoInicial+entradas-saidas;
+    const saldoReal=cfg.saldo_real==null?null:Number(cfg.saldo_real);
+    return {
+      data_inicio:String(cfg.data_inicio).slice(0,10),
+      data_fim:fim,
+      saldo_inicial:saldoInicial,
+      entradas:Number(entradas.toFixed(2)),
+      saidas:Number(saidas.toFixed(2)),
+      saldo_esperado:Number(saldoEsperado.toFixed(2)),
+      saldo_real:saldoReal,
+      diferenca:saldoReal==null?null:Number((saldoReal-saldoEsperado).toFixed(2)),
+      movimentos
+    };
+  }
+
+  // ── Saldo patrimonial inicial e conferência do fluxo de caixa ──────────────
+  r.get('/fluxo-saldo', async (req,res)=>{
+    try{
+      const lojaId=Number(req.user?.lojaId);
+      const {rows}=await pool.query(`
+        SELECT data_inicio,saldo_inicial,saldo_real,data_saldo_real,observacoes,
+               usuario_id,usuario_nome,atualizado_em
+        FROM dre_fluxo_saldo_controle WHERE loja_id=$1 LIMIT 1
+      `,[lojaId]);
+      const cfg=rows[0]||null;
+      const calculo=cfg?await calcularFluxoCaixa(lojaId,cfg):null;
+      res.json({ok:true,data:cfg,calculo});
+    }catch(e){res.status(500).json({ok:false,erro:e.message});}
+  });
+
+  r.put('/fluxo-saldo', autoPublish('dre','dre_fluxo_saldo_atualizado'), async (req,res)=>{
+    try{
+      const lojaId=Number(req.user?.lojaId);
+      const dataInicio=String(req.body?.data_inicio||'').slice(0,10);
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(dataInicio)) return res.status(400).json({ok:false,erro:'Informe a data inicial'});
+      const saldoInicial=Number(req.body?.saldo_inicial);
+      if(!Number.isFinite(saldoInicial)) return res.status(400).json({ok:false,erro:'Saldo inicial inválido'});
+      const saldoRealRaw=req.body?.saldo_real;
+      const saldoReal=saldoRealRaw==null||saldoRealRaw===''?null:Number(saldoRealRaw);
+      if(saldoReal!=null&&!Number.isFinite(saldoReal)) return res.status(400).json({ok:false,erro:'Saldo real inválido'});
+      const dataReal=saldoReal==null?null:String(req.body?.data_saldo_real||new Date().toISOString().slice(0,10)).slice(0,10);
+      if(dataReal && !/^\d{4}-\d{2}-\d{2}$/.test(dataReal)) return res.status(400).json({ok:false,erro:'Data do saldo real inválida'});
+      if(dataReal && dataReal<dataInicio) return res.status(400).json({ok:false,erro:'A data do saldo real não pode ser anterior à data inicial'});
+      const obs=String(req.body?.observacoes||'').trim().slice(0,1000)||null;
+      const nome=req.user?.nome||req.user?.usuario||req.user?.email||null;
+      const {rows}=await pool.query(`
+        INSERT INTO dre_fluxo_saldo_controle
+          (loja_id,data_inicio,saldo_inicial,saldo_real,data_saldo_real,observacoes,usuario_id,usuario_nome,criado_em,atualizado_em)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,NOW(),NOW())
+        ON CONFLICT(loja_id) DO UPDATE SET
+          data_inicio=EXCLUDED.data_inicio,
+          saldo_inicial=EXCLUDED.saldo_inicial,
+          saldo_real=EXCLUDED.saldo_real,
+          data_saldo_real=EXCLUDED.data_saldo_real,
+          observacoes=EXCLUDED.observacoes,
+          usuario_id=EXCLUDED.usuario_id,
+          usuario_nome=EXCLUDED.usuario_nome,
+          atualizado_em=NOW()
+        RETURNING data_inicio,saldo_inicial,saldo_real,data_saldo_real,observacoes,usuario_id,usuario_nome,atualizado_em
+      `,[lojaId,dataInicio,saldoInicial,saldoReal,dataReal,obs,req.user?.id||null,nome]);
+      const calculo=await calcularFluxoCaixa(lojaId,rows[0]);
+      res.json({ok:true,data:rows[0],calculo});
+    }catch(e){res.status(500).json({ok:false,erro:e.message});}
   });
 
   // ── GET /sessoes/:id ───────────────────────────────────────────────────────
