@@ -37,6 +37,42 @@
     });
     return [...mapa.values()].map(f=>({...f,total:Math.abs(f.soma)})).filter(f=>f.total>0.009);
   }
+  function grupoDriveRef(ref){
+    const s=String(ref||'');
+    if(!s.startsWith('DRIVE:'))return null;
+    const partes=s.split(':');
+    if(partes.length<3)return null;
+    return partes.slice(0,-1).join(':');
+  }
+  function faturasDoBanco(rows){
+    const individuais=(Array.isArray(rows)?rows:[]).filter(r=>r&&r.fatura_id_ref&&Number(r.valor_total||0)>0.009).map(r=>({
+      faturaId:String(r.fatura_id_ref), refs:[String(r.fatura_id_ref)], dbIds:[Number(r.id)],
+      mes:r.competencia||'', bandeira:r.bandeira||r.cartao||'', total:Math.abs(Number(r.valor_total||0)),
+      itens:Number(r.itens_total||r.qtd_itens||0), status:r.status||'', vencimento:r.vencimento||null,
+      arquivo:r.arquivo_nome||'', origemBanco:true
+    }));
+    const grupos=new Map();
+    for(const f of individuais){
+      const k=grupoDriveRef(f.faturaId);
+      if(!k)continue;
+      if(!grupos.has(k))grupos.set(k,{faturaId:'GRUPO:'+k,refs:[],dbIds:[],mes:f.mes,bandeira:f.bandeira,total:0,itens:0,status:'',vencimento:f.vencimento,arquivo:f.arquivo,grupoPagamento:true,origemBanco:true});
+      const g=grupos.get(k);g.refs.push(...f.refs);g.dbIds.push(...f.dbIds);g.total+=f.total;g.itens+=f.itens;
+      if(!g.bandeira&&f.bandeira)g.bandeira=f.bandeira;
+    }
+    return [...individuais,...[...grupos.values()].filter(g=>g.refs.length>1).map(g=>({...g,total:Number(g.total.toFixed(2))))];
+  }
+  function combinarFaturas(txs,dbRows){
+    const mapa=new Map();
+    for(const f of [...faturasDosLancamentos(txs),...faturasDoBanco(dbRows)]){
+      const k=String(f.faturaId||'');if(!k)continue;
+      if(!mapa.has(k))mapa.set(k,f);
+      else {
+        const a=mapa.get(k);
+        mapa.set(k,{...a,...f,total:Number(f.total||a.total||0),refs:f.refs||a.refs,dbIds:f.dbIds||a.dbIds});
+      }
+    }
+    return [...mapa.values()];
+  }
   function tolerancia(total){return Math.max(0.05,Math.min(2,Math.abs(total||0)*0.001));}
   function tokenBandeiraCombina(tx,f){
     const texto=norm((tx.lancamento||'')+' '+(tx.razaoSocial||''));
@@ -79,32 +115,108 @@
   function instalarBrowser(){
     if(!root||!root.document||root.__dreCartaoPagamentosInstalado)return;
     root.__dreCartaoPagamentosInstalado=true;
-    let renderBase=null,processando=false;
+    let renderBase=null,processando=false,dbFaturas=[],ultimoFetch=0;
+    const pagosMarcados=new Set();
+
+    function txsAtuais(){
+      try{
+        if(typeof root.getDreTransactions==='function'){
+          const v=root.getDreTransactions();
+          if(Array.isArray(v))return v;
+        }
+      }catch(_){}
+      return Array.isArray(root.TXS)?root.TXS:[];
+    }
+    function bbApi(){return root.BB&&root.BB.api?root.BB.api:null;}
 
     function limparOpcoesDuplicadas(){
       document.querySelectorAll('option').forEach(o=>{if(o.value===LEGACY)o.remove();});
       document.querySelectorAll('input.csel').forEach(i=>{if(i.value===LEGACY)i.value=CAT;});
     }
-    function processar(){
-      if(processando||!Array.isArray(root.TXS))return false;
+
+    async function carregarBanco(force){
+      const now=Date.now();
+      if(!force&&now-ultimoFetch<30000)return;
+      const api=bbApi();if(!api)return;
+      ultimoFetch=now;
+      try{
+        const [fat,itens]=await Promise.all([
+          api.get('/api/dre/cartao-faturas'),
+          api.get('/api/dre/cartao-faturas/itens-dre?meses=24')
+        ]);
+        if(fat&&fat.ok)dbFaturas=Array.isArray(fat.data)?fat.data:[];
+        if(itens&&itens.ok&&Array.isArray(itens.data))sincronizarItens(itens.data);
+      }catch(e){console.warn('[DRE cartões] sincronização:',e.message);}
+    }
+
+    function sincronizarItens(itens){
+      const txs=txsAtuais();if(!Array.isArray(txs))return 0;
+      const refs=new Set(txs.map(t=>String(t.cartaoItemRef||'')).filter(Boolean));
+      const hashes=new Set(txs.filter(t=>t.faturaCC&&t.hash_item).map(t=>String(t.faturaCC)+'|'+String(t.hash_item)));
+      let criados=0;
+      for(const it of itens){
+        const ref=String(it.cartaoItemRef||'');
+        const hk=String(it.faturaCC||'')+'|'+String(it.hash_item||'');
+        if((ref&&refs.has(ref))||(it.hash_item&&hashes.has(hk)))continue;
+        txs.push({...it});
+        if(ref)refs.add(ref);if(it.hash_item)hashes.add(hk);criados++;
+      }
+      if(criados){
+        if(typeof root.render==='function')root.render();
+        if(typeof root.renderDRE==='function')root.renderDRE();
+        if(typeof root.updStats==='function')root.updStats();
+        if(typeof root.autoSv==='function')root.autoSv();
+        if(typeof root.toast==='function')root.toast('💳 '+criados+' item(ns) de fatura sincronizado(s) com o DRE');
+      }
+      return criados;
+    }
+
+    async function marcarFaturaPaga(fatura,tx){
+      const api=bbApi();if(!api||!fatura)return;
+      const refs=(Array.isArray(fatura.refs)&&fatura.refs.length?fatura.refs:[fatura.faturaId]).filter(r=>r&&!String(r).startsWith('GRUPO:'));
+      for(const ref of refs){
+        if(pagosMarcados.has(ref))continue;
+        pagosMarcados.add(ref);
+        try{
+          const r=await api.patch('/api/dre/cartao-faturas/marcar-paga-por-ref',{
+            fatura_id_ref:ref,data_pagamento:String(tx.data||'').slice(0,10)||null,origem:'dre_extrato_auto'
+          });
+          if(!r||r.ok===false)pagosMarcados.delete(ref);
+        }catch(_){pagosMarcados.delete(ref);}
+      }
+    }
+
+    async function processar(forceBanco){
+      if(processando)return false;
       processando=true;
       try{
-        const faturas=faturasDosLancamentos(root.TXS);
+        await carregarBanco(!!forceBanco);
+        const txs=txsAtuais();
+        if(!Array.isArray(txs))return false;
+        const faturas=combinarFaturas(txs,dbFaturas);
         let mudou=false,vinculados=0,pendentes=0,normalizados=0;
-        root.TXS.forEach(tx=>{
+        const paraPagar=[];
+
+        for(const tx of txs){
           if(tx.categoria===LEGACY){tx.categoria=CAT;normalizados++;mudou=true;}
           const r=decidir(tx,faturas);
           if(r.acao==='vinculado'){
             if(tx.categoria!==CAT){tx.categoria=CAT;mudou=true;}
             if(tx.needsReview){tx.needsReview=false;mudou=true;}
             tx._pagamentoCartaoPendente=false;
+            const f=faturas.find(x=>String(x.faturaId)===String(tx.faturaCC));
+            if(f)paraPagar.push([f,tx]);
           }else if(r.acao==='vincular'&&r.fatura){
             tx.categoria=CAT;
             tx.faturaCC=r.fatura.faturaId;
+            tx.faturasCC=Array.isArray(r.fatura.refs)?r.fatura.refs:[r.fatura.faturaId];
+            tx.faturaDbIds=Array.isArray(r.fatura.dbIds)?r.fatura.dbIds:[];
             tx.vinculadoFaturaCC=true;
             tx.needsReview=false;
             tx._pagamentoCartaoPendente=false;
             tx._pagamentoCartaoAuto=true;
+            tx._pagamentoCartaoScore=r.score;
+            paraPagar.push([r.fatura,tx]);
             vinculados++;mudou=true;
           }else if(r.acao==='pendente'){
             if(tx.categoria!==CAT){tx.categoria=CAT;mudou=true;}
@@ -113,7 +225,7 @@
             tx._pagamentoCartaoMotivo=r.motivo;
             pendentes++;
           }
-        });
+        }
         limparOpcoesDuplicadas();
         if(mudou){
           if(typeof root.autoSv==='function')root.autoSv();
@@ -121,26 +233,32 @@
           if(renderBase)setTimeout(()=>renderBase(),0);
           if((vinculados||normalizados)&&typeof root.toast==='function')root.toast(`💳 Cartões: ${vinculados} pagamento(s) vinculado(s) automaticamente${normalizados?` · ${normalizados} classificação(ões) unificada(s)`:''}`);
         }
+        paraPagar.forEach(([fat,tx])=>marcarFaturaPaga(fat,tx));
         return mudou;
       }finally{processando=false;}
     }
+
     function envolverRender(){
       if(renderBase||typeof root.render!=='function')return;
       renderBase=root.render;
-      root.render=function(){const r=renderBase.apply(this,arguments);setTimeout(processar,10);return r;};
+      root.render=function(){const r=renderBase.apply(this,arguments);setTimeout(()=>processar(false),30);return r;};
     }
     function envolverSetCat(){
       if(typeof root.setCat!=='function'||root.setCat.__cartaoCanon)return;
       const old=root.setCat;
-      const wrap=function(id,cat){const r=old.call(this,id,cat===LEGACY?CAT:cat);setTimeout(processar,20);return r;};
+      const wrap=function(id,cat){const r=old.call(this,id,cat===LEGACY?CAT:cat);setTimeout(()=>processar(false),40);return r;};
       wrap.__cartaoCanon=true;root.setCat=wrap;
     }
-    function init(){envolverRender();envolverSetCat();limparOpcoesDuplicadas();setTimeout(processar,350);}
+    function init(){
+      envolverRender();envolverSetCat();limparOpcoesDuplicadas();
+      setTimeout(()=>processar(true),450);
+    }
     if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(init,180));else setTimeout(init,180);
-    root.reprocessarPagamentosCartaoDRE=processar;
+    root.reprocessarPagamentosCartaoDRE=()=>processar(true);
+    root.sincronizarFaturasAgenteDRE=()=>carregarBanco(true).then(()=>processar(false));
   }
 
-  const api={CAT,LEGACY,norm,textoForte,categoriaCartao,faturasDosLancamentos,candidatos,decidir,instalarBrowser};
+  const api={CAT,LEGACY,norm,textoForte,categoriaCartao,faturasDosLancamentos,faturasDoBanco,combinarFaturas,candidatos,decidir,instalarBrowser};
   instalarBrowser();
   return api;
 });
