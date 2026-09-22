@@ -3,7 +3,7 @@
 
 const MONTHS=['01','02','03','04','05','06','07','08','09','10','11','12'];
 const MONTH_LABEL={'01':'Jan','02':'Fev','03':'Mar','04':'Abr','05':'Mai','06':'Jun','07':'Jul','08':'Ago','09':'Set','10':'Out','11':'Nov','12':'Dez'};
-const st={ano:new Date().getFullYear(),plan:{},obs:'',loading:false};
+const st={ano:new Date().getFullYear(),plan:{},obs:'',loading:false,fluxo:null,fluxoCalc:null,fluxoLoading:false};
 
 const esc=v=>String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const brl=v=>Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
@@ -13,6 +13,54 @@ const neutral=cat=>{try{if(root.CATS_NAO_OPERACIONAIS instanceof Set&&root.CATS_
 const mesCompetencia=t=>String(t?.mes||'');
 const anoDeMes=m=>{const x=String(m||'').match(/^(\d{2})\/(\d{4})$/);return x?Number(x[2]):null;};
 const mmDeMes=m=>{const x=String(m||'').match(/^(\d{2})\/(\d{4})$/);return x?x[1]:null;};
+
+function isoHoje(){return new Date().toISOString().slice(0,10);}
+async function carregarFluxo(){
+  if(st.fluxoLoading)return;
+  st.fluxoLoading=true;
+  try{
+    const r=await api.get('/api/dre/fluxo-saldo');
+    if(r?.ok){st.fluxo=r.data||null;st.fluxoCalc=r.calculo||null;}
+    else throw new Error(r?.erro||'Erro ao carregar saldo do fluxo');
+  }catch(e){console.warn('[DRE Fluxo]',e);st.fluxo=null;st.fluxoCalc=null;}
+  finally{st.fluxoLoading=false;renderConc();}
+}
+function fluxoCard(){
+  const f=st.fluxo||{},x=st.fluxoCalc||{};
+  const tem=!!f.data_inicio;
+  const diff=x.diferenca;
+  const cls=diff==null?'blue':Math.abs(Number(diff))<=0.05?'ok':'bad';
+  return `
+    <div class="dfv-card">
+      <div class="dfv-card-h">
+        <div><strong>🏦 Saldo real do fluxo de caixa</strong><div style="font-size:10px;color:var(--muted);margin-top:2px">Saldo patrimonial inicial + movimentos bancários = saldo esperado. Não entra como receita no DRE.</div></div>
+        <span class="dfv-status ${cls}">${diff==null?'Configure para conciliar':Math.abs(Number(diff))<=0.05?'Conta conciliada':'Diferença '+brl(diff)}</span>
+      </div>
+      <div class="dfv-card-b">
+        <div class="dfv-grid" style="margin-bottom:10px">
+          <div class="dfv-field"><span>Saldo inicial</span><b>${tem?brl(x.saldo_inicial):'—'}</b></div>
+          <div class="dfv-field"><span>Entradas desde o início</span><b>${tem?brl(x.entradas):'—'}</b></div>
+          <div class="dfv-field"><span>Saídas desde o início</span><b>${tem?brl(x.saidas):'—'}</b></div>
+          <div class="dfv-field"><span>Saldo esperado</span><b>${tem?brl(x.saldo_esperado):'—'}</b></div>
+        </div>
+        <div class="dfv-grid" style="margin-bottom:10px">
+          <div class="dfv-field"><span>Saldo real informado</span><b>${f.saldo_real==null?'—':brl(f.saldo_real)}</b></div>
+          <div class="dfv-field"><span>Diferença</span><b style="color:${diff==null?'inherit':Math.abs(Number(diff))<=0.05?'#15803d':'#b91c1c'}">${diff==null?'—':brl(diff)}</b></div>
+          <div class="dfv-field"><span>Data inicial</span><b>${esc(f.data_inicio||'—')}</b></div>
+          <div class="dfv-field"><span>Conferido até</span><b>${esc(x.data_fim||f.data_saldo_real||'—')}</b></div>
+        </div>
+        <div class="plan-toolbar">
+          <label style="font-size:10px;color:var(--muted)">Data inicial <input id="dre-fluxo-data" type="date" value="${esc(f.data_inicio||'')}" style="margin-left:4px"></label>
+          <label style="font-size:10px;color:var(--muted)">Saldo inicial <input id="dre-fluxo-inicial" type="number" step="0.01" value="${f.saldo_inicial==null?'':Number(f.saldo_inicial)}" placeholder="0,00" style="width:125px;margin-left:4px"></label>
+          <label style="font-size:10px;color:var(--muted)">Saldo real <input id="dre-fluxo-real" type="number" step="0.01" value="${f.saldo_real==null?'':Number(f.saldo_real)}" placeholder="opcional" style="width:125px;margin-left:4px"></label>
+          <label style="font-size:10px;color:var(--muted)">Data saldo real <input id="dre-fluxo-data-real" type="date" value="${esc(f.data_saldo_real||isoHoje())}" style="margin-left:4px"></label>
+          <button class="btn bg" onclick="dreFluxoSalvar()">💾 Salvar e recalcular</button>
+        </div>
+        <div style="font-size:10px;color:var(--muted);margin-top:8px">Informe o saldo que havia na conta antes dos primeiros movimentos da data inicial. O cálculo considera somente movimentos bancários EXTRATO/OFX e serve para conferência consolidada da empresa.</div>
+      </div>
+    </div>`;
+}
+
 
 function css(){
   if(document.getElementById('dre-finance-views-style'))return;
@@ -70,6 +118,7 @@ function renderConc(){
   const fechadas=fs.filter(f=>f.pago>0&&f.diff<=0.05&&f.pendCat===0).length;
   el.innerHTML=`
     <div class="dfv-head"><div><h2>Conciliação financeira</h2><p>Confirme se despesas e pagamentos estão ligados corretamente. O pagamento total do cartão é neutro no DRE; as despesas são os itens individuais da fatura.</p></div><div class="dfv-actions"><button class="btn bs" onclick="dreConcReprocessar()">↻ Reprocessar cartões</button><button class="btn bs" onclick="abrirConferenciaDRE()">Abrir Conferência</button></div></div>
+    ${fluxoCard()}
     <div class="dfv-kpis">
       <div class="dfv-kpi blue"><b>${fs.length}</b><span>Faturas no DRE</span></div>
       <div class="dfv-kpi ok"><b>${fechadas}</b><span>Faturas conciliadas</span></div>
@@ -176,8 +225,34 @@ function renderPlan(){
     <div class="dfv-card" style="margin-top:10px"><div class="dfv-card-h"><strong>Observações do planejamento</strong></div><div class="dfv-card-b"><textarea id="dre-plan-obs" style="width:100%;min-height:70px;border:1px solid var(--border);border-radius:7px;padding:8px" placeholder="Premissas, metas, reajustes previstos...">${esc(st.obs)}</textarea></div></div>`;
 }
 
-root.dreFinanceViewRender=function(v){ensureAreas();if(v==='conciliacao')renderConc();if(v==='planejamento'){if(!Object.keys(st.plan).length&&!st.loading)carregarPlano();else renderPlan();}};
+root.dreFinanceViewRender=function(v){
+  ensureAreas();
+  if(v==='conciliacao'){
+    renderConc();
+    if(st.fluxo===null&&!st.fluxoLoading)carregarFluxo();
+  }
+  if(v==='planejamento'){if(!Object.keys(st.plan).length&&!st.loading)carregarPlano();else renderPlan();}
+};
 root.dreConcReprocessar=function(){try{root.reprocessarPagamentosCartaoDRE?.();}catch(_){}setTimeout(renderConc,120);};
+root.dreFluxoSalvar=async function(){
+  const data_inicio=document.getElementById('dre-fluxo-data')?.value||'';
+  const saldo_inicial=document.getElementById('dre-fluxo-inicial')?.value;
+  const saldo_real=document.getElementById('dre-fluxo-real')?.value;
+  const data_saldo_real=document.getElementById('dre-fluxo-data-real')?.value||isoHoje();
+  if(!data_inicio){root.toast?.('⚠️ Informe a data inicial do controle');return;}
+  if(saldo_inicial===''||!Number.isFinite(Number(saldo_inicial))){root.toast?.('⚠️ Informe o saldo inicial');return;}
+  const r=await api.put('/api/dre/fluxo-saldo',{
+    data_inicio,
+    saldo_inicial:Number(saldo_inicial),
+    saldo_real:saldo_real===''?null:Number(saldo_real),
+    data_saldo_real:saldo_real===''?null:data_saldo_real
+  });
+  if(!r?.ok){root.toast?.('❌ '+(r?.erro||'Erro ao salvar saldo'));return;}
+  st.fluxo=r.data||null;st.fluxoCalc=r.calculo||null;
+  root.toast?.('✅ Saldo do fluxo atualizado');
+  renderConc();
+};
+
 root.drePlanAno=v=>{st.ano=Number(v)||new Date().getFullYear();st.plan={};st.obs='';carregarPlano();};
 root.drePlanSet=(cat,mm,v)=>{if(!st.plan[cat])st.plan[cat]={};const n=Number(v);st.plan[cat][mm]=Number.isFinite(n)?Math.max(0,n):0;renderPlan();};
 root.drePlanAddCat=function(){
