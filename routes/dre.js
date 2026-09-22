@@ -1216,9 +1216,10 @@ module.exports = function (pool, app) {
   });
 
   // ── Fechamento mensal seguro ───────────────────────────────────────────────
-  r.get('/fechamento/:mes(*)', async (req,res)=>{
+  r.get('/fechamento', async (req,res)=>{
     try{
-      const mes=decodeURIComponent(req.params.mes);
+      const mes=String(req.query.mes||'').trim();
+      if(!/^\d{2}\/\d{4}$/.test(mes)) return res.status(400).json({ok:false,erro:'mes inválido'});
       const [f,check,eventos]=await Promise.all([
         estadoFechamento(mes),
         checklistFechamento(mes),
@@ -1232,11 +1233,12 @@ module.exports = function (pool, app) {
     }catch(e){res.status(500).json({ok:false,erro:e.message});}
   });
 
-  r.post('/fechamento/:mes(*)/fechar', autoPublish('dre','dre_fechado'), async (req,res)=>{
+  r.post('/fechamento/fechar', autoPublish('dre','dre_fechado'), async (req,res)=>{
     const perfil=String(req.user?.perfil||'').toLowerCase();
     if(!['admin','financeiro'].includes(perfil)) return res.status(403).json({ok:false,erro:'Sem permissão para fechar o DRE'});
     try{
-      const mes=decodeURIComponent(req.params.mes);
+      const mes=String(req.body?.mes_ref||'').trim();
+      if(!/^\d{2}\/\d{4}$/.test(mes)) return res.status(400).json({ok:false,erro:'mes_ref inválido'});
       const atual=await estadoFechamento(mes);
       if(atual?.status==='FECHADO') return res.json({ok:true,data:atual,ja_fechado:true});
       const check=await checklistFechamento(mes);
@@ -1269,10 +1271,11 @@ module.exports = function (pool, app) {
     }catch(e){res.status(500).json({ok:false,erro:e.message});}
   });
 
-  r.post('/fechamento/:mes(*)/reabrir', autoPublish('dre','dre_reaberto'), async (req,res)=>{
+  r.post('/fechamento/reabrir', autoPublish('dre','dre_reaberto'), async (req,res)=>{
     if(String(req.user?.perfil||'').toLowerCase()!=='admin') return res.status(403).json({ok:false,erro:'Apenas administrador pode reabrir um mês fechado'});
     try{
-      const mes=decodeURIComponent(req.params.mes);
+      const mes=String(req.body?.mes_ref||'').trim();
+      if(!/^\d{2}\/\d{4}$/.test(mes)) return res.status(400).json({ok:false,erro:'mes_ref inválido'});
       const motivo=String(req.body?.motivo||'').trim();
       if(motivo.length<5) return res.status(400).json({ok:false,erro:'Informe o motivo da reabertura'});
       const nome=nomeUsuario(req);
