@@ -9,7 +9,7 @@ const esc=v=>String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;'
 const brl=v=>Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const txs=()=>{try{if(typeof root.getDreTransactions==='function'){const v=root.getDreTransactions();if(Array.isArray(v))return v;}}catch(_){}return Array.isArray(root.TXS)?root.TXS:[];};
 const grupo=cat=>{try{return typeof root.catGrupo==='function'?(root.catGrupo(cat)||'OUTROS'):'OUTROS';}catch(_){return'OUTROS';}};
-const neutral=cat=>{try{return root.CATS_NAO_OPERACIONAIS instanceof Set&&root.CATS_NAO_OPERACIONAIS.has(cat);}catch(_){return /PAGAMENTO DE FATURA|TRANSFERENCIA INTERNA/i.test(String(cat||''));}};
+const neutral=cat=>{try{if(root.CATS_NAO_OPERACIONAIS instanceof Set&&root.CATS_NAO_OPERACIONAIS.has(cat))return true;}catch(_){}return /PAGAMENTO DE FATURA|PAGAMENTO DE CARTAO|TRANSFERENCIA INTERNA|TRANSFERÊNCIA INTERNA/i.test(String(cat||''));};
 const mesCompetencia=t=>String(t?.mes||'');
 const anoDeMes=m=>{const x=String(m||'').match(/^(\d{2})\/(\d{4})$/);return x?Number(x[2]):null;};
 const mmDeMes=m=>{const x=String(m||'').match(/^(\d{2})\/(\d{4})$/);return x?x[1]:null;};
@@ -118,12 +118,27 @@ function planVal(cat,mm){return Number(st.plan?.[cat]?.[mm]||0);}
 function planTotalCat(cat){return MONTHS.reduce((s,m)=>s+planVal(cat,m),0);}
 function realTotalCat(real,cat){return MONTHS.reduce((s,m)=>s+Number(real?.[cat]?.[m]||0),0);}
 function planResumo(real){
-  let recP=0,despP=0,recR=0,despR=0;
+  let recP=0,despP=0,recR=0,despR=0,resR=0;
   categoriasPlano(real).forEach(cat=>{
-    const g=grupo(cat),p=planTotalCat(cat),r=realTotalCat(real,cat);
-    if(g==='RECEITAS'){recP+=p;recR+=r;}else{despP+=p;despR+=r;}
+    const g=grupo(cat),p=planTotalCat(cat);
+    if(g==='RECEITAS')recP+=p;else despP+=p;
   });
-  return {recP,despP,resP:recP-despP,recR,despR,resR:recR-despR};
+  // O consolidado realizado usa o mesmo motor do Demonstrativo/Excel.
+  if(typeof root.calcularMotorDRE==='function'){
+    MONTHS.forEach(mm=>{
+      const r=root.calcularMotorDRE(mm+'/'+st.ano,'comp')||{};
+      recR+=Number(r.receitas||0);
+      despR+=Number(r.despesas||0);
+      resR+=Number(r.final||0);
+    });
+  }else{
+    categoriasPlano(real).forEach(cat=>{
+      const g=grupo(cat),r=realTotalCat(real,cat);
+      if(g==='RECEITAS')recR+=r;else despR+=r;
+    });
+    resR=recR-despR;
+  }
+  return {recP,despP,resP:recP-despP,recR,despR,resR};
 }
 async function carregarPlano(){
   st.loading=true;renderPlan();
