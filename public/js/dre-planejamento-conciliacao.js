@@ -2,7 +2,7 @@
 'use strict';
 
 const MONTHS=['01','02','03','04','05','06','07','08','09','10','11','12'];
-const MONTH_LABEL={01:'Jan',02:'Fev',03:'Mar',04:'Abr',05:'Mai',06:'Jun',07:'Jul',08:'Ago',09:'Set',10:'Out',11:'Nov',12:'Dez'};
+const MONTH_LABEL={'01':'Jan','02':'Fev','03':'Mar','04':'Abr','05':'Mai','06':'Jun','07':'Jul','08':'Ago','09':'Set','10':'Out','11':'Nov','12':'Dez'};
 const st={ano:new Date().getFullYear(),plan:{},obs:'',loading:false};
 
 const esc=v=>String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
