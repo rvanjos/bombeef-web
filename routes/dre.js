@@ -1080,6 +1080,9 @@ module.exports = function (pool, app) {
   r.post('/recuperar/:mes', autoPublish('dre', 'dre_atualizado'), async (req, res) => {
     try {
       const mes = decodeURIComponent(req.params.mes);
+      if (await bloquearSeFechado(mes, req.user?.lojaId)) {
+        return res.status(423).json({ok:false,erro:'Este mês está fechado. Reabra antes de recuperar/alterar a sessão.',codigo:'DRE_MES_FECHADO'});
+      }
       // Busca sessão ou cria nova
       let sessao = await pool.query(
         `SELECT id, dados_json FROM dre_sessoes WHERE mes_ref=$1 ORDER BY atualizado_em DESC LIMIT 1`, [mes]
@@ -1535,6 +1538,9 @@ module.exports = function (pool, app) {
       );
       if (!rows.length) return res.status(404).json({ ok:false, erro:'Fatura não encontrada' });
       const fatura = rows[0];
+      if (fatura.competencia && await bloquearSeFechado(fatura.competencia, req.user?.lojaId)) {
+        return res.status(423).json({ok:false,erro:'A competência desta fatura está em um DRE fechado. Reabra o mês antes de excluir a fatura.',codigo:'DRE_MES_FECHADO'});
+      }
       const faturaCC = fatura.fatura_id_ref; // ex: "CC_04_2026_ItauNovo"
 
       let txsRemovidas = 0;
@@ -1543,9 +1549,16 @@ module.exports = function (pool, app) {
       if (faturaCC) {
         // Varrer todas as sessões DRE removendo transações desta fatura
         const { rows: sessoes } = await pool.query(
-          `SELECT id, dados_json FROM dre_sessoes`
+          `SELECT id, mes_ref, dados_json FROM dre_sessoes`
         );
         for (const s of sessoes) {
+          if (await bloquearSeFechado(s.mes_ref, req.user?.lojaId)) {
+            const txsFechados = s.dados_json?.transactions || [];
+            if (txsFechados.some(t => t.faturaCC === faturaCC)) {
+              return res.status(423).json({ok:false,erro:'Esta fatura possui lançamentos em mês fechado ('+s.mes_ref+'). Reabra o mês antes de excluir.',codigo:'DRE_MES_FECHADO'});
+            }
+            continue;
+          }
           const txs = s.dados_json?.transactions || [];
           const filtradas = txs.filter(t => t.faturaCC !== faturaCC);
           if (filtradas.length !== txs.length) {
