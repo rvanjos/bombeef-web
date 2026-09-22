@@ -43,6 +43,14 @@ test('interface carrega status e permite fechar ou reabrir', () => {
 });
 
 
+test('interface de fechamento não cria ciclo de renderização no menu', () => {
+  const ui = ler('public/js/dre-fechamento.js');
+  assert.doesNotMatch(ui, /new MutationObserver/);
+  assert.match(ui, /tentativas<50/);
+  assert.match(ui, /if\(document\.getElementById\('dre-main-tabs'\)\)\{nav\(\);readonlyBanner\(\);return;\}/);
+});
+
+
 test('conferência permite validar suspeita e fechamento respeita decisão', () => {
   const core = ler('public/js/dre-conferencia-core.js');
   const rota = ler('routes/dre.js');

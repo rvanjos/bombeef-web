@@ -112,8 +112,17 @@ function envolverTroca(){
   root.trocarMes=async function(){const r=await st.trocarBase.apply(this,arguments);await carregar(true);return r;};
 }
 function observarTabs(){
-  const obs=new MutationObserver(()=>{if(document.getElementById('dre-main-tabs')){nav();readonlyBanner();}});
-  obs.observe(document.documentElement,{childList:true,subtree:true});
+  // O menu principal é criado por outro módulo alguns milissegundos depois.
+  // Um MutationObserver sobre a página inteira não pode chamar nav(): nav()
+  // altera o próprio menu e voltaria a disparar o observer indefinidamente,
+  // congelando o DRE. A espera limitada abaixo encerra assim que o menu existe.
+  let tentativas=0;
+  const tentar=()=>{
+    if(document.getElementById('dre-main-tabs')){nav();readonlyBanner();return;}
+    tentativas++;
+    if(tentativas<50)setTimeout(tentar,100);
+  };
+  tentar();
 }
 
 root.dreFechAbrir=abrir;
