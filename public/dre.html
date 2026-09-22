@@ -743,7 +743,7 @@ thead th{padding:6px 9px;}
       <div style="display:flex;gap:5px;align-items:center">
         <select id="dre-modo" onchange="renderDRE();atualizarAvisoModo()" style="padding:2px 6px;border:1px solid rgba(255,255,255,.4);border-radius:5px;font-size:11px;background:#5a0000;color:#fff;font-weight:600;cursor:pointer">
           <option value="caixa" style="background:#fff;color:#1a1a1a">Caixa (extrato bancário)</option>
-          <option value="comp"  style="background:#fff;color:#1a1a1a">Competência (faturamento)</option>
+          <option value="comp" selected style="background:#fff;color:#1a1a1a">Competência (faturamento)</option>
         </select>
         <button id="btn-pct" class="btn bn" style="padding:2px 7px;font-size:11px" onclick="togglePct()" title="Mostrar % de cada categoria sobre a receita total">%</button>
         <button class="btn bn" style="padding:2px 9px;font-size:11px" onclick="abrirDREModal()">⛶</button>
@@ -1016,7 +1016,7 @@ thead th{padding:6px 9px;}
         <h3 style="color:#fff;font-size:15px">📊 DRE — DEMONSTRATIVO POR MÊS</h3>
         <select id="dre-modo-full" onchange="sincModo()" style="padding:4px 10px;border:1px solid rgba(255,255,255,.4);border-radius:6px;font-size:12px;background:#5a0000;color:#fff;font-weight:600;cursor:pointer">
           <option value="caixa" style="background:#fff;color:#1a1a1a">Caixa (extrato bancário)</option>
-          <option value="comp"  style="background:#fff;color:#1a1a1a">Competência (faturamento XMenu)</option>
+          <option value="comp" selected style="background:#fff;color:#1a1a1a">Competência (faturamento XMenu)</option>
         </select>
         <button id="btn-pct-full" style="padding:3px 10px;border:1px solid rgba(255,255,255,.3);border-radius:6px;font-size:12px;background:rgba(255,255,255,.15);color:#fff;cursor:pointer;font-weight:600" onclick="togglePct()" title="Mostrar % de cada categoria sobre a receita total">% Custos</button>
         <button onclick="exportXLS()" style="padding:3px 10px;border:1px solid rgba(255,255,255,.3);border-radius:6px;font-size:12px;background:rgba(255,255,255,.15);color:#fff;cursor:pointer;font-weight:600" title="Exportar Excel com formatação">📤 Excel</button>
@@ -1403,13 +1403,20 @@ async function inicializar() {
       if (btn) btn.textContent = '⤡ Compactar';
     }
   } catch(_) {}
-  // Sprint 3.1-C: restaurar modo salvo antes de carregar
+  // Sprint 3.1-C: restaurar modo salvo antes de carregar.
+  // Migração v2: versões anteriores gravavam "caixa" automaticamente no primeiro load,
+  // fazendo o Demonstrativo parecer sem receitas do XMenu. Na primeira execução após
+  // esta correção, volta para Competência; depois disso escolhas explícitas persistem.
   try {
+    const prefV2 = localStorage.getItem('bb_dre_modo_pref_v2') === '1';
     const modoSalvo = localStorage.getItem('bb_dre_modo');
-    if (modoSalvo === 'comp' || modoSalvo === 'caixa') {
-      const sel = document.getElementById('dre-modo');
-      if (sel) sel.value = modoSalvo;
-    }
+    const modoInicial = prefV2 && (modoSalvo === 'comp' || modoSalvo === 'caixa')
+      ? modoSalvo
+      : 'comp';
+    const sel = document.getElementById('dre-modo');
+    if (sel) sel.value = modoInicial;
+    localStorage.setItem('bb_dre_modo', modoInicial);
+    localStorage.setItem('bb_dre_modo_pref_v2', '1');
   } catch(_) {}
   // Carrega dados essenciais primeiro. Categorias/faturamento são enriquecimentos
   // e não podem impedir o DRE de recuperar as sessões e exibir os lançamentos.
@@ -5131,8 +5138,11 @@ window.atualizarAvisoModo = function atualizarAvisoModo() {
     el.style.borderBottomColor = '#86efac';
     el.style.color = '#14532d';
   }
-  // Persistir preferência
-  try { localStorage.setItem('bb_dre_modo', modo); } catch(_) {}
+  // Persistir preferência explícita/atual.
+  try {
+    localStorage.setItem('bb_dre_modo', modo);
+    localStorage.setItem('bb_dre_modo_pref_v2', '1');
+  } catch(_) {}
 }
 
 // ── Sprint 3.1-F: Painel de Pendências + Filtros Rápidos ─────────────────────
@@ -5227,7 +5237,7 @@ function getModo(){
     const full = document.getElementById('dre-modo-full');
     if (full) return full.value || 'comp';
   }
-  return document.getElementById('dre-modo')?.value||'caixa';
+  return document.getElementById('dre-modo')?.value||'comp';
 }
 window.sincModo = function sincModo(){
   const v=document.getElementById('dre-modo-full')?.value||'comp';
