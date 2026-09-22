@@ -5,6 +5,7 @@ const originalUse = express.application.use;
 let boletosIaMounted = false;
 let agenteMounted = false;
 let dreConferenciaV2Mounted = false;
+let drePlanejamentoMounted = false;
 
 express.application.use = function (...args) {
   const result = originalUse.apply(this, args);
@@ -30,6 +31,16 @@ express.application.use = function (...args) {
       console.log('[dre/conferencia-v2] rotas de decisões persistentes registradas');
     } catch (e) {
       console.warn('[dre/conferencia-v2] não foi possível registrar rota:', e.message);
+    }
+  }
+
+  if (!drePlanejamentoMounted && args[0] === '/api/dre') {
+    drePlanejamentoMounted = true;
+    try {
+      originalUse.call(this, '/api/dre/planejamento', require('../routes/dre_planejamento'));
+      console.log('[dre/planejamento] rotas de planejamento anual registradas');
+    } catch (e) {
+      console.warn('[dre/planejamento] não foi possível registrar rota:', e.message);
     }
   }
 

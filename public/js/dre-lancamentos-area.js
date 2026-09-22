@@ -68,6 +68,8 @@ function css(){
   body.dre-view-lancamentos .totals-row,
   body.dre-view-lancamentos .prog,
   body.dre-view-lancamentos .banner{display:none!important}
+  body.dre-view-conciliacao #tbl-area,body.dre-view-conciliacao #painel-pendencias,body.dre-view-conciliacao .dre-p,body.dre-view-conciliacao .ctrl,body.dre-view-conciliacao .stats-grid,body.dre-view-conciliacao .totals-row,body.dre-view-conciliacao .prog,body.dre-view-conciliacao .banner{display:none!important}
+  body.dre-view-planejamento #tbl-area,body.dre-view-planejamento #painel-pendencias,body.dre-view-planejamento .dre-p,body.dre-view-planejamento .ctrl,body.dre-view-planejamento .stats-grid,body.dre-view-planejamento .totals-row,body.dre-view-planejamento .prog,body.dre-view-planejamento .banner{display:none!important}
 
   .dla-top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:12px}
   .dla-title{font-size:20px;font-weight:800;line-height:1.1}
@@ -145,6 +147,8 @@ function nav(){
     <button class="dre-main-tab" data-v="demonstrativo">📊 Demonstrativo</button>
     <button class="dre-main-tab" data-v="lancamentos">🧾 Lançamentos</button>
     <button class="dre-main-tab" data-v="conferencia">🔎 Conferência</button>
+    <button class="dre-main-tab" data-v="conciliacao">🔗 Conciliação</button>
+    <button class="dre-main-tab" data-v="planejamento">📅 Planejamento</button>
     <span class="dre-ws-spacer"></span>
     <button class="dre-ws-tools ${st.ferramentas?'on':''}" id="dre-tools-btn">⚙️ ${st.ferramentas?'Ocultar ferramentas':'Ferramentas'}</button>`;
   n.querySelectorAll('[data-v]').forEach(b=>b.onclick=()=>setView(b.dataset.v));
@@ -183,11 +187,15 @@ function setView(v){
   localStorage.setItem('dre-main-view',v);
   document.body.classList.toggle('dre-view-lancamentos',v==='lancamentos');
   document.body.classList.toggle('dre-view-demonstrativo',v==='demonstrativo');
+  document.body.classList.toggle('dre-view-conciliacao',v==='conciliacao');
+  document.body.classList.toggle('dre-view-planejamento',v==='planejamento');
   document.body.classList.add('dre-clean');
   document.body.classList.toggle('dre-tools-open',st.ferramentas);
   marcarTab();
   if(v==='lancamentos')render();
+  if((v==='conciliacao'||v==='planejamento')&&typeof root.dreFinanceViewRender==='function') root.dreFinanceViewRender(v);
 }
+root.dreSetView=setView;
 
 function catOptions(cur){
   const dl=document.getElementById('cats-dl');
@@ -368,7 +376,7 @@ function init(){
   css();nav();area();wrapRender();
   document.body.classList.add('dre-clean');
   document.body.classList.toggle('dre-tools-open',st.ferramentas);
-  setView(st.view==='lancamentos'?'lancamentos':'demonstrativo');
+  setView(['lancamentos','conciliacao','planejamento'].includes(st.view)?st.view:'demonstrativo');
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(init,180));else setTimeout(init,180);
 })(window);
