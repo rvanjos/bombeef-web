@@ -7261,8 +7261,12 @@ async function gerarExcelDRE() {
     addRow(['SUBTOTAL CMV', ...cmvTotais, cmvTotais.reduce((s, v) => s + v, 0)], 'subtotal');
     addRow([], 'blank');
 
-    // Lucro bruto
-    const lucBruto = meses.map((m, i) => recTotais[i] + cmvTotais[i]);
+    // Lucro bruto — mesmo motor usado pelo Demonstrativo
+    const ajustesEstoque = meses.map(m => calcularMotorDRE(m,modo).ajusteEstoque);
+    if (ajustesEstoque.some(v=>Math.abs(v)>0.005)) {
+      addRow(['  · Ajuste de Estoque (+Inicial − Final)', ...ajustesEstoque, ajustesEstoque.reduce((s,v)=>s+v,0)], 'cat');
+    }
+    const lucBruto = meses.map(m => calcularMotorDRE(m,modo).lucroBruto);
     addRow(['LUCRO BRUTO', ...lucBruto, lucBruto.reduce((s, v) => s + v, 0)], 'resultado_verde');
     addRow([], 'blank');
 
@@ -7287,6 +7291,11 @@ async function gerarExcelDRE() {
       addRow(['  Subtotal ' + (grpLabel[gk] || gk), ...subTot, subTot.reduce((s, v) => s + v, 0)], 'subtotal_small');
       lucOp = lucOp.map((v, i) => v + subTot[i]);
     });
+    const dasEstimado = meses.map(m => calcularMotorDRE(m,modo).dasEstimado);
+    if (dasEstimado.some(v=>v>0.005)) {
+      addRow(['  · DAS / Simples Nacional estimado', ...dasEstimado.map(v=>-Math.abs(v)), -dasEstimado.reduce((s,v)=>s+v,0)], 'cat');
+    }
+    lucOp = meses.map(m => calcularMotorDRE(m,modo).lucroOp);
     addRow([], 'blank');
     addRow(['LUCRO OPERACIONAL', ...lucOp, lucOp.reduce((s, v) => s + v, 0)], 'resultado_azul');
     addRow([], 'blank');
@@ -7299,7 +7308,7 @@ async function gerarExcelDRE() {
         addRow(['  · ' + cat, ...meses.map(m => porMes[m] || 0), total], 'cat');
       });
     }
-    const resFin = lucOp.map((v, i) => v + (dataD['FINANCEIRAS'] ? meses.map(m => sg('FINANCEIRAS', m))[i] : 0));
+    const resFin = meses.map(m => calcularMotorDRE(m,modo).antesRetiradas);
     addRow(['RESULTADO ANTES DAS RETIRADAS', ...resFin, resFin.reduce((s, v) => s + v, 0)], 'resultado_amarelo');
     addRow([], 'blank');
 
@@ -7311,7 +7320,7 @@ async function gerarExcelDRE() {
         addRow(['  · ' + cat, ...meses.map(m => porMes[m] || 0), total], 'cat');
       });
     }
-    const resFinal = resFin.map((v, i) => v + (dataD['OUTROS'] ? meses.map(m => sg('OUTROS', m))[i] : 0));
+    const resFinal = meses.map(m => calcularMotorDRE(m,modo).final);
     addRow(['RESULTADO FINAL (LUCRO / PREJUÍZO REAL)', ...resFinal, resFinal.reduce((s, v) => s + v, 0)], 'resultado_final');
 
     return { rows, styles, meses };
