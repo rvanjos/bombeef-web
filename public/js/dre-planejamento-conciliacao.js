@@ -84,7 +84,7 @@ function renderConc(){
       }).join('')+'</div>':'<div class="dfv-empty">Nenhuma fatura de cartão importada neste conjunto de lançamentos.</div>'}
     </div></div>
     <div class="dfv-card"><div class="dfv-card-h"><strong>🏦 Pagamentos de cartão no extrato</strong><span class="dfv-status ${pendPag.length?'warn':'ok'}">${pendPag.length?'Há pendências':'Sem pendências'}</span></div><div class="dfv-card-b">
-      ${pendPag.length?'<div class="dfv-list">'+pendPag.map(t=>`<div class="dfv-row"><div><strong>${esc(t.lancamento||t.descricao||'Pagamento')}</strong><small>${esc(t.data||'')} · ${esc(t.razaoSocial||'')}</small></div><span>${brl(Math.abs(Number(t.valor||0)))}</span><span>${esc(t.mesCaixa||t.mes||'')}</span><span>${esc(t._pagamentoCartaoMotivo||'Aguardando fatura')}</span><span class="dfv-status warn">REVISAR</span></div>`).join('')+'</div>':'<div class="dfv-empty">Nenhum pagamento de cartão aguardando vínculo.</div>'}
+      ${pendPag.length?'<div class="dfv-list">'+pendPag.map(t=>`<div class="dfv-row"><div><strong>${esc(t.lancamento||t.descricao||'Pagamento')}</strong><small>${esc(t.data||'')} · ${esc(t.razaoSocial||'')}</small></div><span>${brl(Math.abs(Number(t.valor||0)))}</span><span>${esc(t.mesCaixa||t.mes||'')}</span><span>${esc(t._pagamentoCartaoMotivo||'Aguardando fatura')}</span><span style="display:flex;gap:5px;align-items:center"><span class="dfv-status warn">REVISAR</span>${typeof root.abrirVinculoFatura==='function'?`<button class="btn bs" style="padding:4px 7px;font-size:9px" onclick="abrirVinculoFatura('${esc(t.id)}')">Vincular</button>`:''}</span></div>`).join('')+'</div>':'<div class="dfv-empty">Nenhum pagamento de cartão aguardando vínculo.</div>'}
     </div></div>
     <div class="dfv-card"><div class="dfv-card-h"><strong>📄 Boletos x extrato</strong></div><div class="dfv-card-b"><div class="dfv-grid">
       <div class="dfv-field"><span>Boletos no DRE</span><b>${bolPrev.length}</b></div>
@@ -107,12 +107,16 @@ function atualPorCategoria(){
 }
 function categoriasPlano(real){
   const cats=new Set([...Object.keys(real),...Object.keys(st.plan||{})]);
-  const dl=document.getElementById('cats-dl');
-  if(dl)[...dl.querySelectorAll('option')].map(o=>o.value).filter(Boolean).forEach(c=>{if(!neutral(c))cats.add(c);});
   return [...cats].sort((a,b)=>{
     const ga=grupo(a),gb=grupo(b);
     return ga===gb?a.localeCompare(b,'pt-BR'):ga.localeCompare(gb,'pt-BR');
   });
+}
+function categoriasDisponiveis(real){
+  const usadas=new Set(categoriasPlano(real));
+  const dl=document.getElementById('cats-dl');
+  const vals=dl?[...dl.querySelectorAll('option')].map(o=>o.value).filter(Boolean):[];
+  return [...new Set(vals)].filter(c=>!neutral(c)&&!usadas.has(c)).sort((a,b)=>a.localeCompare(b,'pt-BR'));
 }
 function planVal(cat,mm){return Number(st.plan?.[cat]?.[mm]||0);}
 function planTotalCat(cat){return MONTHS.reduce((s,m)=>s+planVal(cat,m),0);}
@@ -156,7 +160,7 @@ function renderPlan(){
   const anos=[st.ano-2,st.ano-1,st.ano,st.ano+1,st.ano+2].filter((v,i,a)=>a.indexOf(v)===i).sort();
   el.innerHTML=`
     <div class="dfv-head"><div><h2>Planejamento anual</h2><p>Defina orçamento mensal por categoria e acompanhe planejado x realizado. Os valores planejados são informados como valores positivos; o sistema separa receitas e despesas pelo grupo do DRE.</p></div>
-      <div class="plan-toolbar"><select onchange="drePlanAno(this.value)">${anos.map(a=>`<option value="${a}" ${a===st.ano?'selected':''}>${a}</option>`).join('')}</select><button class="btn bs" onclick="drePlanMedia()">Preencher vazios pela média realizada</button><button class="btn bg" onclick="drePlanSalvar()">💾 Salvar planejamento</button></div>
+      <div class="plan-toolbar"><select onchange="drePlanAno(this.value)">${anos.map(a=>`<option value="${a}" ${a===st.ano?'selected':''}>${a}</option>`).join('')}</select><select id="dre-plan-add-cat"><option value="">Adicionar categoria...</option>${categoriasDisponiveis(real).map(cat=>`<option value="${esc(cat)}">${esc(cat)}</option>`).join('')}</select><button class="btn bs" onclick="drePlanAddCat()">＋ Categoria</button><button class="btn bs" onclick="drePlanMedia()">Preencher vazios pela média realizada</button><button class="btn bg" onclick="drePlanSalvar()">💾 Salvar planejamento</button></div>
     </div>
     <div class="plan-summary">
       <div class="plan-sum"><span>Receita planejada</span><b>${brl(sum.recP)}</b><small class="real">Realizado: ${brl(sum.recR)}</small></div>
@@ -176,6 +180,13 @@ root.dreFinanceViewRender=function(v){ensureAreas();if(v==='conciliacao')renderC
 root.dreConcReprocessar=function(){try{root.reprocessarPagamentosCartaoDRE?.();}catch(_){}setTimeout(renderConc,120);};
 root.drePlanAno=v=>{st.ano=Number(v)||new Date().getFullYear();st.plan={};st.obs='';carregarPlano();};
 root.drePlanSet=(cat,mm,v)=>{if(!st.plan[cat])st.plan[cat]={};const n=Number(v);st.plan[cat][mm]=Number.isFinite(n)?Math.max(0,n):0;renderPlan();};
+root.drePlanAddCat=function(){
+  const cat=document.getElementById('dre-plan-add-cat')?.value;
+  if(!cat)return;
+  if(!st.plan[cat])st.plan[cat]={};
+  MONTHS.forEach(m=>{if(st.plan[cat][m]==null)st.plan[cat][m]=0;});
+  renderPlan();
+};
 root.drePlanMedia=function(){
   const real=atualPorCategoria();
   for(const cat of categoriasPlano(real)){
