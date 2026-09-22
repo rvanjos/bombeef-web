@@ -11,7 +11,7 @@ const st={
 const esc=v=>String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const norm=v=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim().toUpperCase();
 const brl=v=>Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
-const txs=()=>Array.isArray(root.TXS)?root.TXS:[];
+const txs=()=>{try{if(typeof root.getDreTransactions==='function'){const v=root.getDreTransactions();if(Array.isArray(v))return v;}}catch(_){}return Array.isArray(root.TXS)?root.TXS:[];};
 const fornecedor=t=>t?.razaoSocial||t?.fornecedor||t?.portador||t?.boletoFornecedor||'';
 const descricao=t=>t?.lancamento||t?.descricao||'Sem descrição';
 const origem=t=>{
