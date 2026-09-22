@@ -41,3 +41,36 @@ test('interface carrega status e permite fechar ou reabrir', () => {
   assert.match(ui, /dre-mes-fechado/);
   assert.match(loader, /dre-fechamento\.js/);
 });
+
+
+test('conferência permite validar suspeita e fechamento respeita decisão', () => {
+  const core = ler('public/js/dre-conferencia-core.js');
+  const rota = ler('routes/dre.js');
+  assert.match(core, /Está correto \/ não é duplicidade/);
+  assert.match(core, /tipo:'DUPLICIDADE'/);
+  assert.match(core, /chaveDuplicidade/);
+  assert.match(rota, /dre_conferencia_decisoes/);
+  assert.match(rota, /duplicidadesPendentes/);
+  assert.match(rota, /Pagamentos parecidos para revisão/);
+});
+
+test('área de lançamentos usa a mesma fonte em memória do DRE', () => {
+  const area = ler('public/js/dre-lancamentos-area.js');
+  assert.match(area, /getDreTransactions/);
+});
+
+test('mês fechado também protege auditoria, recuperação e exclusão de fatura', () => {
+  const dre = ler('routes/dre.js');
+  const aud = ler('routes/auditoria.js');
+  assert.match(dre, /Reabra antes de recuperar\/alterar a sessão/);
+  assert.match(dre, /competência desta fatura está em um DRE fechado/);
+  assert.match(aud, /fechamento_status/);
+  assert.match(aud, /DRE_MES_FECHADO/);
+});
+
+test('tabelas de fechamento aplicam RLS fail-closed no próprio módulo', () => {
+  const dre = ler('routes/dre.js');
+  assert.match(dre, /ALTER TABLE \$\{tabela\} ENABLE ROW LEVEL SECURITY/);
+  assert.match(dre, /ALTER TABLE \$\{tabela\} FORCE ROW LEVEL SECURITY/);
+  assert.match(dre, /CREATE POLICY bb_isolamento_loja/);
+});
