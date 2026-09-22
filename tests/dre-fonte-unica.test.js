@@ -41,3 +41,14 @@ test('Demonstrativo abre em competência para preservar receitas do faturamento'
   assert.match(dre,/bb_dre_modo_pref_v2/);
   assert.match(dre,/const modoInicial = prefV2[\s\S]*?: 'comp';/);
 });
+
+
+test('créditos positivos classificados como receita não podem ser ignorados automaticamente',()=>{
+  const fix=ler('scripts/fix-dre-ofx-creditos.js');
+  assert.match(fix,/const CAT_RECEITA = 'VENDAS DE MERCADORIAS'/);
+  assert.match(fix,/SET ignorar = false/);
+  assert.match(fix,/categoria = \$1/);
+  assert.match(fix,/DROP TRIGGER IF EXISTS trg_bb_dre_ignorar_credito_extrato/);
+  assert.doesNotMatch(fix,/NEW\.ignorar := true/);
+  assert.doesNotMatch(fix,/t\.ignorar = true/);
+});
