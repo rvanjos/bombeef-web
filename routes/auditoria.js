@@ -106,14 +106,23 @@ module.exports = function(pool) {
       await client.query('BEGIN');
       // O identificador pode ter sido salvo como número ou texto em versões antigas;
       // a localização é feita no Node para manter compatibilidade com ambos.
-      const {rows} = await client.query(`SELECT id, mes_ref, dados_json FROM dre_sessoes
-        WHERE dados_json IS NOT NULL FOR UPDATE`);
+      const {rows} = await client.query(`
+        SELECT ds.id, ds.mes_ref, ds.dados_json, COALESCE(df.status,'ABERTO') AS fechamento_status
+        FROM dre_sessoes ds
+        LEFT JOIN dre_fechamentos df ON df.loja_id=ds.loja_id AND df.mes_ref=ds.mes_ref
+        WHERE ds.dados_json IS NOT NULL
+        FOR UPDATE OF ds
+      `);
       let alterados=0, antes=null, depois=null;
       for (const sessao of rows) {
         const dados = typeof sessao.dados_json === 'string' ? JSON.parse(sessao.dados_json) : sessao.dados_json;
         const txs = Array.isArray(dados) ? dados : (dados.transactions || []);
         const idx = txs.findIndex(t => String(t.id) === String(id));
         if (idx < 0) continue;
+        if (String(sessao.fechamento_status).toUpperCase()==='FECHADO') {
+          await client.query('ROLLBACK');
+          return res.status(423).json({ok:false,erro:'O lançamento pertence ao DRE fechado de '+sessao.mes_ref+'. Reabra o mês antes de alterar.',codigo:'DRE_MES_FECHADO'});
+        }
         antes = {...txs[idx]};
         if (acao === 'EXCLUIR') txs.splice(idx,1);
         else if (acao === 'IGNORAR') txs[idx].ignorar = true;
