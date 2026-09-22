@@ -730,15 +730,15 @@ module.exports = function (pool, app) {
     return req.user?.nome || req.user?.usuario || req.user?.email || 'Usuário';
   }
 
-  async function estadoFechamento(mes) {
+  async function estadoFechamento(mes, lojaId) {
     const { rows } = await pool.query(
-      `SELECT * FROM dre_fechamentos WHERE mes_ref=$1 LIMIT 1`, [mes]
+      `SELECT * FROM dre_fechamentos WHERE loja_id=$1 AND mes_ref=$2 LIMIT 1`, [Number(lojaId), mes]
     );
     return rows[0] || null;
   }
 
-  async function bloquearSeFechado(mes) {
-    const f = await estadoFechamento(mes);
+  async function bloquearSeFechado(mes, lojaId) {
+    const f = await estadoFechamento(mes, lojaId);
     return !!(f && String(f.status).toUpperCase()==='FECHADO');
   }
 
@@ -790,10 +790,11 @@ module.exports = function (pool, app) {
     };
   }
 
-  async function checklistFechamento(mes) {
+  async function checklistFechamento(mes, lojaId) {
+    const lid=Number(lojaId);
     const sessaoQ = await pool.query(
       `SELECT id,dados_json,atualizado_em,res_receitas,res_despesas,res_cmv,res_lucro_bruto,res_lucro_op,res_final
-         FROM dre_sessoes WHERE mes_ref=$1 ORDER BY atualizado_em DESC LIMIT 1`, [mes]
+         FROM dre_sessoes WHERE loja_id=$1 AND mes_ref=$2 ORDER BY atualizado_em DESC LIMIT 1`, [lid,mes]
     );
     const sessao=sessaoQ.rows[0]||null;
     const txs=sessao?extrairTransacoes(sessao.dados_json):[];
@@ -802,11 +803,11 @@ module.exports = function (pool, app) {
     const [mmStr, yyyyStr] = String(mes).split('/');
     const mm=parseInt(mmStr), yy=parseInt(yyyyStr);
     const [faturamento, boletos, prevVencidos] = await Promise.all([
-      pool.query(`SELECT COUNT(*) AS n,COALESCE(SUM(fat_bruto),0) AS fat FROM faturamento_periodos WHERE TO_CHAR(data_inicio,'MM/YYYY')=$1`,[mes]),
-      pool.query(`SELECT COUNT(*) AS n FROM boletos WHERE mes_competencia=$1 AND origem='nfe'`,[mes]),
+      pool.query(`SELECT COUNT(*) AS n,COALESCE(SUM(fat_bruto),0) AS fat FROM faturamento_periodos WHERE loja_id=$1 AND TO_CHAR(data_inicio,'MM/YYYY')=$2`,[lid,mes]),
+      pool.query(`SELECT COUNT(*) AS n FROM boletos WHERE loja_id=$1 AND mes_competencia=$2 AND origem='nfe'`,[lid,mes]),
       pool.query(`SELECT COUNT(*) AS n,COALESCE(SUM(ABS(valor)),0) AS total FROM boletos
-                   WHERE status='avencer' AND vencimento < CURRENT_DATE - INTERVAL '30 days'
-                     AND (mes_competencia=$1 OR TO_CHAR(vencimento::date,'MM/YYYY')=$1)`,[mes]),
+                   WHERE loja_id=$1 AND status='avencer' AND vencimento < CURRENT_DATE - INTERVAL '30 days'
+                     AND (mes_competencia=$2 OR TO_CHAR(vencimento::date,'MM/YYYY')=$2)`,[lid,mes]),
     ]);
     const nFat=Number(faturamento.rows[0]?.n||0), fat=Number(faturamento.rows[0]?.fat||0);
     const nBol=Number(boletos.rows[0]?.n||0);
@@ -897,7 +898,7 @@ module.exports = function (pool, app) {
     const { sessao_id, mes_ref, descricao, dados_json, resultado } = req.body;
     if (!mes_ref) return res.status(400).json({ ok: false, erro: 'mes_ref obrigatório' });
     try {
-      if (await bloquearSeFechado(mes_ref)) {
+      if (await bloquearSeFechado(mes_ref, req.user?.lojaId)) {
         return res.status(423).json({ ok:false, erro:'Este mês está fechado. Reabra o mês antes de alterar o DRE.', codigo:'DRE_MES_FECHADO' });
       }
       const uid  = req.user?.id || null;
@@ -1220,10 +1221,11 @@ module.exports = function (pool, app) {
     try{
       const mes=String(req.query.mes||'').trim();
       if(!/^\d{2}\/\d{4}$/.test(mes)) return res.status(400).json({ok:false,erro:'mes inválido'});
+      const lojaId=Number(req.user?.lojaId);
       const [f,check,eventos]=await Promise.all([
-        estadoFechamento(mes),
-        checklistFechamento(mes),
-        pool.query(`SELECT evento,usuario_nome,justificativa,criado_em FROM dre_fechamento_eventos WHERE mes_ref=$1 ORDER BY criado_em DESC LIMIT 30`,[mes]),
+        estadoFechamento(mes,lojaId),
+        checklistFechamento(mes,lojaId),
+        pool.query(`SELECT evento,usuario_nome,justificativa,criado_em FROM dre_fechamento_eventos WHERE loja_id=$1 AND mes_ref=$2 ORDER BY criado_em DESC LIMIT 30`,[lojaId,mes]),
       ]);
       res.json({ok:true,data:{
         mes,status:f?.status||'ABERTO',fechado_em:f?.fechado_em||null,fechado_por_nome:f?.fechado_por_nome||null,
@@ -1239,9 +1241,10 @@ module.exports = function (pool, app) {
     try{
       const mes=String(req.body?.mes_ref||'').trim();
       if(!/^\d{2}\/\d{4}$/.test(mes)) return res.status(400).json({ok:false,erro:'mes_ref inválido'});
-      const atual=await estadoFechamento(mes);
+      const lojaId=Number(req.user?.lojaId);
+      const atual=await estadoFechamento(mes,lojaId);
       if(atual?.status==='FECHADO') return res.json({ok:true,data:atual,ja_fechado:true});
-      const check=await checklistFechamento(mes);
+      const check=await checklistFechamento(mes,lojaId);
       if(!check.sessao) return res.status(409).json({ok:false,erro:'Não existe sessão salva para este mês'});
       const bloqueios=check.itens.filter(i=>i.urgente&&!i.ok);
       if(bloqueios.length) return res.status(409).json({ok:false,erro:'Existem pendências obrigatórias antes do fechamento',pendencias:bloqueios});
@@ -1265,8 +1268,8 @@ module.exports = function (pool, app) {
           snapshot_json=EXCLUDED.snapshot_json,checklist_json=EXCLUDED.checklist_json,fechado_por=EXCLUDED.fechado_por,
           fechado_por_nome=EXCLUDED.fechado_por_nome,fechado_em=NOW(),reaberto_por=NULL,reaberto_por_nome=NULL,reaberto_em=NULL,
           motivo_reabertura=NULL,atualizado_em=NOW()
-        RETURNING *`,[mes,check.sessao.id,JSON.stringify(snapshot),JSON.stringify({itens:check.itens,pronto:check.pronto}),req.user?.id||null,nome,Number(req.user?.lojaId)]);
-      await pool.query(`INSERT INTO dre_fechamento_eventos(loja_id,mes_ref,evento,usuario_id,usuario_nome) VALUES($4,$1,'FECHADO',$2,$3)`,[mes,req.user?.id||null,nome,Number(req.user?.lojaId)]);
+        RETURNING *`,[mes,check.sessao.id,JSON.stringify(snapshot),JSON.stringify({itens:check.itens,pronto:check.pronto}),req.user?.id||null,nome,lojaId]);
+      await pool.query(`INSERT INTO dre_fechamento_eventos(loja_id,mes_ref,evento,usuario_id,usuario_nome) VALUES($4,$1,'FECHADO',$2,$3)`,[mes,req.user?.id||null,nome,lojaId]);
       res.json({ok:true,data:rows[0],snapshot});
     }catch(e){res.status(500).json({ok:false,erro:e.message});}
   });
@@ -1279,11 +1282,12 @@ module.exports = function (pool, app) {
       const motivo=String(req.body?.motivo||'').trim();
       if(motivo.length<5) return res.status(400).json({ok:false,erro:'Informe o motivo da reabertura'});
       const nome=nomeUsuario(req);
+      const lojaId=Number(req.user?.lojaId);
       const {rows}=await pool.query(`
-        UPDATE dre_fechamentos SET status='ABERTO',reaberto_por=$2,reaberto_por_nome=$3,reaberto_em=NOW(),
-          motivo_reabertura=$4,atualizado_em=NOW() WHERE mes_ref=$1 RETURNING *`,[mes,req.user?.id||null,nome,motivo]);
+        UPDATE dre_fechamentos SET status='ABERTO',reaberto_por=$3,reaberto_por_nome=$4,reaberto_em=NOW(),
+          motivo_reabertura=$5,atualizado_em=NOW() WHERE loja_id=$1 AND mes_ref=$2 RETURNING *`,[lojaId,mes,req.user?.id||null,nome,motivo]);
       if(!rows.length) return res.status(404).json({ok:false,erro:'Fechamento não encontrado'});
-      await pool.query(`INSERT INTO dre_fechamento_eventos(loja_id,mes_ref,evento,usuario_id,usuario_nome,justificativa) VALUES($5,$1,'REABERTO',$2,$3,$4)`,[mes,req.user?.id||null,nome,motivo,Number(req.user?.lojaId)]);
+      await pool.query(`INSERT INTO dre_fechamento_eventos(loja_id,mes_ref,evento,usuario_id,usuario_nome,justificativa) VALUES($5,$1,'REABERTO',$2,$3,$4)`,[mes,req.user?.id||null,nome,motivo,lojaId]);
       res.json({ok:true,data:rows[0]});
     }catch(e){res.status(500).json({ok:false,erro:e.message});}
   });
@@ -1293,7 +1297,7 @@ module.exports = function (pool, app) {
   r.get('/checklist/:mes(*)', async (req,res)=>{
     try{
       const mes=decodeURIComponent(req.params.mes);
-      const check=await checklistFechamento(mes);
+      const check=await checklistFechamento(mes,req.user?.lojaId);
       res.json({ok:true,data:{mes,itens:check.itens,pronto:check.pronto}});
     }catch(e){res.status(500).json({ok:false,erro:e.message});}
   });
