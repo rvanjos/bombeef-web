@@ -32,3 +32,22 @@ r=C.decidir({fonte:'EXTRATO',valor:-7892.79,mes:'06/2026',lancamento:'OUTRO',cat
 assert.strictEqual(r.acao,'vincular','classificação antiga deve continuar reconhecida e convergir para a categoria canônica');
 
 console.log('dre-cartao-pagamentos.test.js: OK');
+
+const dbFats=C.faturasDoBanco([
+  {id:11,fatura_id_ref:'DRIVE:file123:9284',competencia:'01/2026',bandeira:'CAIXA',valor_total:3034.33,itens_total:11,status:'CLASSIFICADA'},
+  {id:12,fatura_id_ref:'DRIVE:file123:7954',competencia:'01/2026',bandeira:'CAIXA',valor_total:10232.21,itens_total:8,status:'CLASSIFICADA'}
+]);
+const grupo=dbFats.find(f=>f.grupoPagamento);
+assert.ok(grupo,'faturas do mesmo PDF do Drive devem formar um grupo de pagamento');
+assert.strictEqual(Number(grupo.total.toFixed(2)),13266.54,'grupo deve somar todos os cartões da fatura');
+assert.deepStrictEqual(grupo.refs.sort(),['DRIVE:file123:7954','DRIVE:file123:9284'].sort());
+
+r=C.decidir({fonte:'EXTRATO',valor:-13266.54,mes:'01/2026',lancamento:'PAGAMENTO FATURA CARTAO CAIXA'},dbFats);
+assert.strictEqual(r.acao,'vincular','pagamento total deve vincular ao grupo completo da fatura');
+assert.strictEqual(r.fatura.grupoPagamento,true);
+
+const combinadas=C.combinarFaturas(itens,dbFats);
+assert.ok(combinadas.some(f=>f.faturaId==='CC_06_2026_Itau'),'deve manter faturas já presentes no DRE');
+assert.ok(combinadas.some(f=>f.grupoPagamento),'deve incluir faturas importadas pelo Agente Financeiro');
+
+console.log('dre-cartao-pagamentos.test.js: integração Agente Financeiro OK');
