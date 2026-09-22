@@ -1252,10 +1252,32 @@ function preencherSels() {
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 let _inicializado = false;
+let _inicializando = false;
 let _syncBoletosPromise = null;
+
+function solicitarInicializacaoDRE() {
+  if (_inicializado || _inicializando) {
+    if (_inicializado && TXS.length > 0) {
+      showTable(); render(); updStats(); renderDRE();
+    }
+    return;
+  }
+  _inicializando = true;
+  Promise.resolve(inicializar())
+    .catch(e => console.error('[DRE] falha na inicialização:', e))
+    .finally(() => { _inicializando = false; });
+}
+
 window.onBBReady = () => {
-  inicializar();
+  solicitarInicializacaoDRE();
 };
+
+// O DRE é uma página grande. Em alguns carregamentos o api.js já recebe o
+// token antes deste trecho ser interpretado; nesse caso onBBReady já ocorreu.
+// Se já houver token, inicia explicitamente para não deixar a tela zerada.
+if (window.BB?.api?.token?.()) {
+  setTimeout(solicitarInicializacaoDRE, 50);
+}
 window.addEventListener('message', e => {
   if (e.data?.type !== 'bb_data_changed') return;
   const t = e.data.evento?.type;
