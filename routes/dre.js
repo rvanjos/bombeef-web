@@ -1393,135 +1393,143 @@ module.exports = function (pool, app) {
     }catch(e){res.status(500).json({ok:false,erro:e.message});}
   });
 
-  // ── GET /diagnostico/:mes — análise automática (F2.5) ────────────────────
-  r.get('/diagnostico/:mes(*)', async (req, res) => {
-    try {
-      const mes = decodeURIComponent(req.params.mes);
-      const [mm, yy] = mes.split('/').map(Number);
-      const mesAnt = mm === 1 ? `12/${yy-1}` : `${String(mm-1).padStart(2,'0')}/${yy}`;
+  // ── Leituras consolidadas do DRE: usam a mesma sessão/resultados da tela ──
+  const CATS_NEUTRAS_RELATORIO = new Set(['Transferência entre contas','Pagamento de Cartão','Pagamento de Fatura CC']);
 
-      const [atual, anterior, topDesp, porCategoria] = await Promise.all([
-        // Totais do mês atual
-        pool.query(`
-          SELECT
-            COALESCE(SUM(valor) FILTER (WHERE valor > 0),0) AS receitas,
-            COALESCE(SUM(ABS(valor)) FILTER (WHERE valor < 0),0) AS despesas
-          FROM dre_lancamentos WHERE mes=$1 AND ignorar=false
-        `, [mes]),
-        // Totais do mês anterior
-        pool.query(`
-          SELECT
-            COALESCE(SUM(valor) FILTER (WHERE valor > 0),0) AS receitas,
-            COALESCE(SUM(ABS(valor)) FILTER (WHERE valor < 0),0) AS despesas
-          FROM dre_lancamentos WHERE mes=$1 AND ignorar=false
-        `, [mesAnt]),
-        // Top 5 fornecedores/categorias por valor
-        pool.query(`
-          SELECT
-            COALESCE(razao_social, lancamento) AS nome,
-            categoria,
-            COALESCE(SUM(ABS(valor)),0) AS total
-          FROM dre_lancamentos
-          WHERE mes=$1 AND valor < 0 AND ignorar=false
-            AND (categoria IS NOT NULL AND categoria != '')
-          GROUP BY COALESCE(razao_social, lancamento), categoria
-          ORDER BY SUM(ABS(valor)) DESC
-          LIMIT 5
-        `, [mes]),
-        // Despesas por categoria
-        pool.query(`
-          SELECT
-            categoria,
-            COALESCE(SUM(ABS(valor)),0) AS total,
-            COUNT(*) AS qtd
-          FROM dre_lancamentos
-          WHERE mes=$1 AND valor < 0 AND ignorar=false
-            AND (categoria IS NOT NULL AND categoria != '')
-          GROUP BY categoria
-          ORDER BY SUM(ABS(valor)) DESC
-        `, [mes]),
-      ]);
+  async function ultimaSessaoDre(mes, lojaId) {
+    const {rows}=await pool.query(`
+      SELECT id,mes_ref,dados_json,atualizado_em,
+             res_receitas,res_despesas,res_cmv,res_lucro_bruto,res_lucro_op,res_final
+      FROM dre_sessoes
+      WHERE loja_id=$1 AND mes_ref=$2
+      ORDER BY atualizado_em DESC LIMIT 1
+    `,[Number(lojaId),mes]);
+    return rows[0]||null;
+  }
 
-      const rec  = parseFloat(atual.rows[0]?.receitas || 0);
-      const desp = parseFloat(atual.rows[0]?.despesas || 0);
-      const res2 = rec - desp;
-      const recAnt  = parseFloat(anterior.rows[0]?.receitas || 0);
-      const despAnt = parseFloat(anterior.rows[0]?.despesas || 0);
-      const margem  = rec > 0 ? ((res2 / rec) * 100).toFixed(1) : '0.0';
-      const brl = v => 'R$ ' + parseFloat(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
-      const pct = (a,b) => b > 0 ? (((a-b)/b)*100).toFixed(1) : null;
-
-      // Gerar diagnósticos automáticos
-      const alertas = [];
-      const varDesp = pct(desp, despAnt);
-      const varRec  = pct(rec,  recAnt);
-      if (varDesp && parseFloat(varDesp) > 10) alertas.push({ tipo:'alerta', msg:`Despesas aumentaram ${varDesp}% vs mês anterior (${brl(despAnt)} → ${brl(desp)})` });
-      if (varDesp && parseFloat(varDesp) < -10) alertas.push({ tipo:'ok',    msg:`Despesas reduziram ${Math.abs(varDesp)}% vs mês anterior` });
-      if (varRec  && parseFloat(varRec)  > 5)  alertas.push({ tipo:'ok',    msg:`Receitas cresceram ${varRec}% vs mês anterior` });
-      if (varRec  && parseFloat(varRec)  < -5) alertas.push({ tipo:'alerta', msg:`Receitas caíram ${Math.abs(varRec)}% vs mês anterior` });
-      if (parseFloat(margem) < 0)  alertas.push({ tipo:'critico', msg:`Resultado negativo: ${brl(Math.abs(res2))} de prejuízo (margem ${margem}%)` });
-      if (parseFloat(margem) > 20) alertas.push({ tipo:'ok',     msg:`Margem de ${margem}% — acima da média` });
-
-      // Fornecedor de maior representatividade
-      if (topDesp.rows.length > 0) {
-        const top = topDesp.rows[0];
-        const pctTop = desp > 0 ? ((parseFloat(top.total)/desp)*100).toFixed(0) : 0;
-        if (parseFloat(pctTop) > 20) alertas.push({ tipo:'info', msg:`${top.nome} representa ${pctTop}% das despesas do mês (${brl(top.total)})` });
-      }
-
-      res.json({ ok: true, data: {
-        mes, mes_ant: mesAnt,
-        resumo: { receitas: rec, despesas: desp, resultado: res2, margem: parseFloat(margem), margem_fmt: margem+'%' },
-        comparativo: { var_receitas_pct: varRec ? parseFloat(varRec) : null, var_despesas_pct: varDesp ? parseFloat(varDesp) : null },
-        top_despesas: topDesp.rows,
-        por_categoria: porCategoria.rows,
-        alertas,
-      }});
-    } catch(e) {
-      console.error('[dre/diagnostico]', e.message);
-      res.status(500).json({ ok: false, erro: e.message });
+  function detalheDespesasSessao(sessao, mes) {
+    const txs=extrairTransacoes(sessao?.dados_json).filter(t=>{
+      if(t?.ignorar || !String(t?.categoria||'').trim()) return false;
+      if(CATS_NEUTRAS_RELATORIO.has(String(t.categoria))) return false;
+      const m=String(t?.mes||mes);
+      return m===mes && Number(t?.valor||0)<0;
+    });
+    const por=new Map();
+    for(const t of txs){
+      const cat=String(t.categoria||'Sem categoria');
+      const nome=String(t.razaoSocial||t.fornecedor||t.portador||t.lancamento||t.descricao||'Sem fornecedor');
+      const k=nome+'|'+cat;
+      if(!por.has(k)) por.set(k,{nome,categoria:cat,total:0,qtd:0});
+      const item=por.get(k); item.total+=Math.abs(Number(t.valor||0)); item.qtd++;
     }
-  });
+    const porCategoria=new Map();
+    for(const t of txs){
+      const cat=String(t.categoria||'Sem categoria');
+      if(!porCategoria.has(cat)) porCategoria.set(cat,{categoria:cat,total:0,qtd:0});
+      const item=porCategoria.get(cat); item.total+=Math.abs(Number(t.valor||0)); item.qtd++;
+    }
+    return {
+      top:[...por.values()].sort((a,b)=>b.total-a.total).slice(0,5),
+      categorias:[...porCategoria.values()].sort((a,b)=>b.total-a.total),
+    };
+  }
 
-  // ── GET /evolucao — evolução mensal dos últimos 6 meses (F2.5) ──────────
-  r.get('/evolucao', async (req, res) => {
-    try {
-      const { rows } = await pool.query(`
-        SELECT
-          mes,
-          COALESCE(SUM(valor) FILTER (WHERE valor > 0 AND ignorar=false),0) AS receitas,
-          COALESCE(SUM(ABS(valor)) FILTER (WHERE valor < 0 AND ignorar=false),0) AS despesas
-        FROM dre_lancamentos
-        WHERE mes IS NOT NULL
-        GROUP BY mes
-        ORDER BY
-          SPLIT_PART(mes,'/',2)::int DESC,
-          SPLIT_PART(mes,'/',1)::int DESC
-        LIMIT 12
-      `);
-      res.json({ ok: true, data: rows });
-    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
-  });
+  // ── GET /diagnostico/:mes — fonte única = dre_sessoes.res_* ──────────────
+  r.get('/diagnostico/:mes(*)', async (req,res)=>{
+    try{
+      const mes=decodeURIComponent(req.params.mes);
+      const [mm,yy]=mes.split('/').map(Number);
+      const mesAnt=mm===1?`12/${yy-1}`:`${String(mm-1).padStart(2,'0')}/${yy}`;
+      const lojaId=Number(req.user?.lojaId);
+      const [atual,anterior]=await Promise.all([ultimaSessaoDre(mes,lojaId),ultimaSessaoDre(mesAnt,lojaId)]);
+      if(!atual) return res.status(404).json({ok:false,erro:'Nenhuma sessão DRE encontrada para este mês'});
 
-  r.get('/relatorio/:mes', async (req, res) => {
-    try {
-      const mes = req.params.mes; // MM/YYYY
-      const { rows } = await pool.query(
-        `SELECT dados_json FROM dre_sessoes WHERE mes_ref = $1 ORDER BY atualizado_em DESC LIMIT 1`,
-        [mes]
-      );
-
-      if (!rows.length || !rows[0].dados_json) {
-        return res.status(404).json({ ok: false, erro: 'Nenhuma sessão encontrada para este mês' });
+      const rec=Number(atual.res_receitas||0), desp=Number(atual.res_despesas||0), resultado=Number(atual.res_final||0);
+      const recAnt=Number(anterior?.res_receitas||0), despAnt=Number(anterior?.res_despesas||0);
+      const margem=rec>0?(resultado/rec*100):0;
+      const detalhes=detalheDespesasSessao(atual,mes);
+      const pct=(a,b)=>b>0?((a-b)/b*100):null;
+      const varDesp=pct(desp,despAnt), varRec=pct(rec,recAnt);
+      const brl=v=>'R$ '+Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+      const alertas=[];
+      if(varDesp!=null&&varDesp>10) alertas.push({tipo:'alerta',msg:`Despesas aumentaram ${varDesp.toFixed(1)}% vs mês anterior (${brl(despAnt)} → ${brl(desp)})`});
+      if(varDesp!=null&&varDesp<-10) alertas.push({tipo:'ok',msg:`Despesas reduziram ${Math.abs(varDesp).toFixed(1)}% vs mês anterior`});
+      if(varRec!=null&&varRec>5) alertas.push({tipo:'ok',msg:`Receitas cresceram ${varRec.toFixed(1)}% vs mês anterior`});
+      if(varRec!=null&&varRec<-5) alertas.push({tipo:'alerta',msg:`Receitas caíram ${Math.abs(varRec).toFixed(1)}% vs mês anterior`});
+      if(resultado<0) alertas.push({tipo:'critico',msg:`Resultado negativo: ${brl(Math.abs(resultado))} de prejuízo (margem ${margem.toFixed(1)}%)`});
+      if(detalhes.top.length){
+        const top=detalhes.top[0], pctTop=desp>0?(top.total/desp*100):0;
+        if(pctTop>20) alertas.push({tipo:'info',msg:`${top.nome} representa ${pctTop.toFixed(0)}% das despesas oficiais do mês (${brl(top.total)})`});
       }
+      res.json({ok:true,data:{
+        mes,mes_ant:mesAnt,fonte:'dre_sessoes',modo_resultado:'competencia',
+        resumo:{receitas:rec,despesas:desp,resultado,margem:Number(margem.toFixed(1)),margem_fmt:margem.toFixed(1)+'%'},
+        comparativo:{var_receitas_pct:varRec==null?null:Number(varRec.toFixed(1)),var_despesas_pct:varDesp==null?null:Number(varDesp.toFixed(1))},
+        top_despesas:detalhes.top,por_categoria:detalhes.categorias,alertas,
+        atualizado_em:atual.atualizado_em
+      }});
+    }catch(e){console.error('[dre/diagnostico]',e.message);res.status(500).json({ok:false,erro:e.message});}
+  });
 
-      const dados   = rows[0].dados_json;
-      const txs     = (dados.transactions || []).filter(t => !t.ignorar);
+  // ── GET /evolucao — usa somente os resultados oficiais persistidos ─────────
+  r.get('/evolucao', async (req,res)=>{
+    try{
+      const lojaId=Number(req.user?.lojaId);
+      const {rows}=await pool.query(`
+        SELECT mes_ref AS mes,
+               COALESCE(res_receitas,0)::numeric AS receitas,
+               COALESCE(res_despesas,0)::numeric AS despesas,
+               COALESCE(res_final,0)::numeric AS resultado,
+               atualizado_em
+        FROM (
+          SELECT mes_ref,res_receitas,res_despesas,res_final,atualizado_em,
+                 ROW_NUMBER() OVER(PARTITION BY mes_ref ORDER BY atualizado_em DESC,id DESC) AS rn
+          FROM dre_sessoes
+          WHERE loja_id=$1 AND mes_ref ~ '^(0[1-9]|1[0-2])/[0-9]{4}$'
+        ) s
+        WHERE rn=1
+        ORDER BY SPLIT_PART(mes_ref,'/',2)::int DESC,SPLIT_PART(mes_ref,'/',1)::int DESC
+        LIMIT 12
+      `,[lojaId]);
+      res.json({ok:true,data:rows,fonte:'dre_sessoes',modo_resultado:'competencia'});
+    }catch(e){res.status(500).json({ok:false,erro:e.message});}
+  });
 
-      // Estrutura DRE padrão
-      const estrutura = buildDRE(txs);
-      res.json({ ok: true, mes, data: estrutura });
-    } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
+  // ── GET /relatorio/:mes — sessão/snapshot + totais oficiais ────────────────
+  r.get('/relatorio/:mes(*)', async (req,res)=>{
+    try{
+      const mes=decodeURIComponent(req.params.mes);
+      const lojaId=Number(req.user?.lojaId);
+      const fechamento=await estadoFechamento(mes,lojaId);
+      let dados=null, oficial=null, sessaoId=null, fonte='SESSAO_ATUAL', atualizadoEm=null;
+
+      if(fechamento?.status==='FECHADO' && fechamento.snapshot_json){
+        const snap=typeof fechamento.snapshot_json==='string'?JSON.parse(fechamento.snapshot_json):fechamento.snapshot_json;
+        dados=snap?.dados_json||null; oficial=snap?.resultado||null; sessaoId=snap?.sessao_id||fechamento.sessao_id;
+        fonte='FECHAMENTO'; atualizadoEm=fechamento.fechado_em;
+      } else {
+        const sessao=await ultimaSessaoDre(mes,lojaId);
+        if(sessao){
+          dados=sessao.dados_json;sessaoId=sessao.id;atualizadoEm=sessao.atualizado_em;
+          oficial={
+            receitas:Number(sessao.res_receitas||0),despesas:Number(sessao.res_despesas||0),cmv:Number(sessao.res_cmv||0),
+            lucroBruto:Number(sessao.res_lucro_bruto||0),lucroOp:Number(sessao.res_lucro_op||0),final:Number(sessao.res_final||0)
+          };
+        }
+      }
+      if(!dados) return res.status(404).json({ok:false,erro:'Nenhuma sessão encontrada para este mês'});
+      const txs=extrairTransacoes(dados).filter(t=>!t?.ignorar && !CATS_NEUTRAS_RELATORIO.has(String(t?.categoria||'')));
+      const estrutura=buildDRE(txs);
+      estrutura.totalReceitas=Number(oficial?.receitas||0);
+      estrutura.totalDespesas=Number(oficial?.despesas||0);
+      estrutura.resultado=Number(oficial?.final||0);
+      estrutura.cmv=Number(oficial?.cmv||0);
+      estrutura.lucroBruto=Number(oficial?.lucroBruto||0);
+      estrutura.lucroOperacional=Number(oficial?.lucroOp||0);
+      estrutura.margemBruta=estrutura.totalReceitas>0?((estrutura.resultado/estrutura.totalReceitas)*100).toFixed(2):'0.00';
+
+      res.json({ok:true,mes,fonte,modo_resultado:'competencia',sessao_id:sessaoId,atualizado_em:atualizadoEm,data:estrutura});
+    }catch(e){res.status(500).json({ok:false,erro:e.message});}
   });
 
   // ══════════════════════════════════════════════════════════════════════════

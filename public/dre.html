@@ -1622,7 +1622,7 @@ async function carregarSessao() {
         const meses = [...mesesSet];
         for (const m of meses) {
           let _res = null;
-          try { _res = calcResultadoDRE(m); } catch(_) {}
+          try { _res = calcResultadoDRE(m, 'comp'); } catch(_) {}
           if (!_res || (!_res.receitas && !_res.despesas)) continue;
           const sid = (window._sessoesPorMes && window._sessoesPorMes[m]) || (m === mesRef ? sessId : null);
           // CC: incluir também lançamentos cujo mesCaixa bate com m (fatura paga neste mês)
@@ -1639,6 +1639,8 @@ async function carregarSessao() {
               transactions: txsMes,
               loadedFiles: m === mesRef ? files : [],
               supplierMem: supMem,
+              estoquesMes: window._estoquesMes || {},
+              resultadoModo: 'competencia',
             },
             resultado: {
               receitas:   _res.receitas,
@@ -3355,7 +3357,7 @@ async function salvarMes(mes, silent=false) {
   }
   try {
     // Calcula resultado do mês para salvar junto (Dashboard usa esse valor)
-    const resultado = calcResultadoDRE(mes);
+    const resultado = calcResultadoDRE(mes, 'comp');
 
     const d = await api.post('/api/dre/salvar', {
       sessao_id: sid,
@@ -3367,6 +3369,7 @@ async function salvarMes(mes, silent=false) {
         loadedFiles: mes === mesRef ? files : [],
         supplierMem: supMem,
         estoquesMes: window._estoquesMes || {},
+        resultadoModo: 'competencia',
         _savedAt: new Date().toISOString()
       }
     });
@@ -6017,16 +6020,18 @@ function _buildDRE(el, full) {
 
 // Calcula resultado do DRE para um mês específico — mesma lógica do _buildDRE
 // Retorna { receitas, despesas, cmv, lucroBruto, lucroOp, final }
-function calcResultadoDRE(mesAlvo) {
+function calcResultadoDRE(mesAlvo, modoOverride) {
+  const modoCalc = modoOverride || getModo();
+  const mesTxCalc = t => modoCalc === 'caixa' ? (t.mesCaixa||t.mes||mesRef) : (t.mes||mesRef);
   const at = TXS.filter(t => !t.ignorar && t.categoria && !CATS_NAO_OPERACIONAIS.has(t.categoria));
   const data = {};
-  const fatCombinado = getModo() === 'comp'
+  const fatCombinado = modoCalc === 'comp'
     ? { ...(window._fatManualMes||{}), ...(window._fatPorMes||{}) }
     : {};
 
   for (const t of at) {
     const g = catGrupo(t.categoria) || 'OUTROS';
-    const m = getMesTx(t);
+    const m = mesTxCalc(t);
     if (m !== mesAlvo) continue;
     const v = parseFloat(t.valor||0);
     if (!data[g]) data[g] = {};
@@ -6035,7 +6040,7 @@ function calcResultadoDRE(mesAlvo) {
   }
 
   // Modo Competência: substitui receitas
-  if (getModo() === 'comp' && fatCombinado[mesAlvo] > 0) {
+  if (modoCalc === 'comp' && fatCombinado[mesAlvo] > 0) {
     data['RECEITAS'] = { 'VENDAS DE MERCADORIAS': { [mesAlvo]: fatCombinado[mesAlvo] } };
   }
 
@@ -6062,7 +6067,7 @@ function calcResultadoDRE(mesAlvo) {
   const pctDAS = parseFloat(localStorage.getItem('bb_pct_simples')||'8') / 100;
   const mesesComSimples = new Set(TXS.filter(t => !t.ignorar && t.categoria==='Simples Nacional').map(t => t.mes||mesRef));
   if (!mesesComSimples.has(mesAlvo)) {
-    const mRefDAS = getModo()==='comp' ? mesAlvo : mAnt;
+    const mRefDAS = modoCalc==='comp' ? mesAlvo : mAnt;
     const nfce = parseFloat((window._nfcePorMes||{})[mRefDAS]||0);
     if (nfce > 0) despOper -= Math.round(nfce * pctDAS * 100) / 100;
   }
@@ -7480,7 +7485,7 @@ async function salvar(silent=false, tentativa=1){
       // O backend já suporta os 6 campos res_* e usa COALESCE (não sobrescreve sessões antigas)
       // calcResultadoDRE usa o modo atual (caixa/comp), estoque e DAS — sem nenhuma alteração de lógica
       let _res = null;
-      try { _res = calcResultadoDRE(mes); } catch(_e) { console.warn('[salvar] calcResultadoDRE falhou:', _e.message); }
+      try { _res = calcResultadoDRE(mes, 'comp'); } catch(_e) { console.warn('[salvar] calcResultadoDRE falhou:', _e.message); }
 
       const d = await api.post('/api/dre/salvar', {
         sessao_id: sid,
@@ -7490,6 +7495,8 @@ async function salvar(silent=false, tentativa=1){
           transactions: txsMes,
           loadedFiles: mes === mesRef ? files : [],
           supplierMem: supMem,
+          estoquesMes: window._estoquesMes || {},
+          resultadoModo: 'competencia',
           _savedAt: new Date().toISOString()
         },
         resultado: _res ? {
