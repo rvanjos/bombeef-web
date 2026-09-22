@@ -61,7 +61,7 @@ async function carregar(force=false){
   if(!force&&st.mes===mes&&st.dados){nav();return;}
   st.carregando=true;
   try{
-    const d=await api.get('/api/dre/fechamento/'+encodeURIComponent(mes));
+    const d=await api.get('/api/dre/fechamento?mes='+encodeURIComponent(mes));
     if(d?.ok){st.mes=mes;st.dados=d.data||{};nav();}
   }catch(e){console.warn('[DRE fechamento]',e.message);}
   finally{st.carregando=false;}
@@ -87,7 +87,7 @@ async function abrir(){
 async function confirmar(){
   if(!st.mes)return;
   if(!confirm('Fechar o DRE de '+st.mes+'? Depois disso, o mês ficará bloqueado para alterações.'))return;
-  const r=await api.post('/api/dre/fechamento/'+encodeURIComponent(st.mes)+'/fechar',{});
+  const r=await api.post('/api/dre/fechamento/fechar',{mes_ref:st.mes});
   if(!r?.ok){
     const p=(r?.pendencias||[]).map(x=>x.label).join(', ');
     alert((r?.erro||'Não foi possível fechar o mês')+(p?'\n\nPendências: '+p:''));
@@ -100,7 +100,7 @@ async function reabrir(){
   if(!st.mes)return;
   const motivo=prompt('Informe o motivo da reabertura do mês:','');
   if(!motivo)return;
-  const r=await api.post('/api/dre/fechamento/'+encodeURIComponent(st.mes)+'/reabrir',{motivo});
+  const r=await api.post('/api/dre/fechamento/reabrir',{mes_ref:st.mes,motivo});
   if(!r?.ok){alert(r?.erro||'Não foi possível reabrir o mês');return;}
   if(typeof toast==='function')toast('↩ DRE reaberto');
   fecharModal();await carregar(true);
