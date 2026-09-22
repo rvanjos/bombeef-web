@@ -5554,9 +5554,10 @@ function _mapaGruposParcela(at) {
   return grupos;
 }
 
-function _valorParaDRE(t, grupos) {
+function _valorParaDRE(t, grupos, modoOverride) {
   const vBase = parseFloat(t.valor || 0);
-  if (getModo() !== 'comp') return vBase;              // Caixa: valor da parcela, sempre
+  const modoValor = modoOverride || getModo();
+  if (modoValor !== 'comp') return vBase;              // Caixa: valor da parcela, sempre
   if (t.fonte !== 'CC' || !t.parcela) return vBase;     // à vista, ou não é fatura de cartão
   const m = String(t.parcela).match(/^(\d+)\/(\d+)$/);
   if (!m) return vBase;
@@ -5568,79 +5569,119 @@ function _valorParaDRE(t, grupos) {
   return vBase * M;                                     // representante leva o valor cheio
 }
 
+function prepararBaseDRE(modoOverride) {
+  const modoBase = modoOverride || getModo();
+  const getMesBase = t => modoBase === 'caixa'
+    ? (t.mesCaixa || t.mes || mesRef)
+    : (t.mes || mesRef);
+  const REGEX_MES_VALIDO = /^(0[1-9]|1[0-2])\/\d{4}$/;
+  const at = _txsSemDuplicatas(TXS).filter(t => t.categoria);
+  const invalidos = at.filter(t => !REGEX_MES_VALIDO.test(getMesBase(t)));
+  const gruposParcela = _mapaGruposParcela(at);
+  const valorDre = t => _valorParaDRE(t, gruposParcela, modoBase);
+  const data = {};
+  const dataNaoOper = {};
+  const mesesSet = new Set(at.map(getMesBase).filter(m => REGEX_MES_VALIDO.test(m)));
+
+  for (const t of at) {
+    const m = getMesBase(t);
+    if (!REGEX_MES_VALIDO.test(m)) continue;
+    const v = valorDre(t);
+    if (CATS_NAO_OPERACIONAIS.has(t.categoria)) {
+      if (!dataNaoOper[t.categoria]) dataNaoOper[t.categoria] = {};
+      dataNaoOper[t.categoria][m] = (dataNaoOper[t.categoria][m] || 0) + v;
+      continue;
+    }
+    const g = catGrupo(t.categoria) || 'OUTROS';
+    if (!data[g]) data[g] = {};
+    if (!data[g][t.categoria]) data[g][t.categoria] = {};
+    data[g][t.categoria][m] = (data[g][t.categoria][m] || 0) + v;
+  }
+
+  if (modoBase === 'comp') {
+    let fatStorage = {};
+    try { fatStorage = JSON.parse(localStorage.getItem('bb_fat_por_mes') || '{}'); } catch(_) {}
+    const fatXMenu = { ...fatStorage, ...(window._fatPorMes || {}) };
+    const fatManual = window._fatManualMes || (() => { try { return JSON.parse(localStorage.getItem('bb_fat_manual_mes') || '{}'); } catch(_) { return {}; } })();
+    const fatCombinado = { ...fatManual, ...fatXMenu };
+    for (const [m, valor] of Object.entries(fatCombinado)) {
+      if (!(Number(valor) > 0) || !REGEX_MES_VALIDO.test(m)) continue;
+      mesesSet.add(m);
+      if (data.RECEITAS) {
+        for (const cat of Object.keys(data.RECEITAS)) delete data.RECEITAS[cat][m];
+      }
+      if (!data.RECEITAS) data.RECEITAS = {};
+      if (!data.RECEITAS['VENDAS DE MERCADORIAS']) data.RECEITAS['VENDAS DE MERCADORIAS'] = {};
+      data.RECEITAS['VENDAS DE MERCADORIAS'][m] = Number(valor);
+    }
+  }
+
+  const ordMes = s => { const [mm,yy]=String(s).split('/'); return (+yy)*12+(+mm); };
+  const meses = [...mesesSet].sort((a,b)=>ordMes(a)-ordMes(b));
+  const sg = (gk,m) => Object.values(data[gk]||{}).reduce((s,cat)=>s+(cat[m]||0),0);
+  const sgt = gk => meses.reduce((s,m)=>s+sg(gk,m),0);
+  return { modo:modoBase, at, invalidos, meses, data, dataNaoOper, sg, sgt, getMes:getMesBase, valorDre };
+}
+
+function calcularMotorDRE(mesAlvo, modoOverride) {
+  const base = prepararBaseDRE(modoOverride);
+  const modoCalc = base.modo;
+  const sg = gk => base.sg(gk, mesAlvo);
+  const receitas = sg('RECEITAS');
+
+  const [mm,yy] = String(mesAlvo).split('/');
+  const dtAnt = new Date(parseInt(yy), parseInt(mm)-2, 1);
+  const mAnt = `${String(dtAnt.getMonth()+1).padStart(2,'0')}/${dtAnt.getFullYear()}`;
+  const cmvBruto = sg('CMV');
+  let ajusteEstoque = 0;
+  if (modoCalc === 'comp') {
+    const estIni = parseFloat((window._estoquesMes||{})[mAnt]||0);
+    const estFin = parseFloat((window._estoquesMes||{})[mesAlvo]||0);
+    ajusteEstoque = estIni - estFin;
+  }
+  const cmv = cmvBruto + ajusteEstoque;
+  const lucroBruto = receitas + cmv;
+
+  const OPER = ['PESSOAL','VENDAS_CAT','CONSUMO','TERCEIROS','MATERIAL','OUTRAS','IMPOSTOS'];
+  let despOper = OPER.reduce((s,gk)=>s+sg(gk),0);
+
+  const mesesComSimples = new Set(
+    _txsSemDuplicatas(TXS).filter(t=>!t.ignorar&&t.categoria==='Simples Nacional').map(t=>t.mes||mesRef)
+  );
+  let dasEstimado = 0;
+  if (!mesesComSimples.has(mesAlvo)) {
+    const pctDAS = parseFloat(localStorage.getItem('bb_pct_simples')||'8')/100;
+    const mRefDAS = modoCalc === 'comp' ? mesAlvo : mAnt;
+    const nfce = parseFloat((window._nfcePorMes||{})[mRefDAS]||0);
+    if (nfce > 0) {
+      dasEstimado = Math.round(nfce*pctDAS*100)/100;
+      despOper -= dasEstimado;
+    }
+  }
+
+  const lucroOp = lucroBruto + despOper;
+  const financeiras = sg('FINANCEIRAS');
+  const antesRetiradas = lucroOp + financeiras;
+  const retiradas = sg('OUTROS');
+  const final = antesRetiradas + retiradas;
+  const despesas = Math.abs(cmv)+Math.abs(despOper)+Math.abs(financeiras)+Math.abs(retiradas);
+
+  return {receitas,despesas,cmv,cmvBruto,ajusteEstoque,lucroBruto,despOper,dasEstimado,lucroOp,financeiras,antesRetiradas,retiradas,final};
+}
+
 function _buildDRE(el, full) {
   if (!el) return;
-  const at = _txsSemDuplicatas(TXS).filter(t => t.categoria);
+  const baseDRE = prepararBaseDRE(getModo());
+  const {at,data,dataNaoOper,meses,sg,sgt} = baseDRE;
   if (!at.length) {
     el.innerHTML='<div style="padding:20px;text-align:center;color:var(--muted);font-size:12px">Classifique os lançamentos para ver o DRE</div>';
     return;
   }
-  const REGEX_MES_VALIDO = /^(0[1-9]|1[0-2])\/\d{4}$/;
-  const _invalidosDRE = at.filter(t => !REGEX_MES_VALIDO.test(getMesTx(t)));
-  if (_invalidosDRE.length) {
-    console.warn(`[DRE] ${_invalidosDRE.length} lançamento(s) com mês inválido (ignorados no DRE):`,
-      _invalidosDRE.map(t => ({ id: t.id, lancamento: t.lancamento, mes: t.mes, mesCaixa: t.mesCaixa, valor: t.valor })));
+  if (baseDRE.invalidos.length) {
+    console.warn(`[DRE] ${baseDRE.invalidos.length} lançamento(s) com mês inválido (ignorados no DRE):`,
+      baseDRE.invalidos.map(t=>({id:t.id,lancamento:t.lancamento,mes:t.mes,mesCaixa:t.mesCaixa,valor:t.valor})));
   }
-  const mesesSet=new Set(at.map(t=>getMesTx(t)).filter(m => REGEX_MES_VALIDO.test(m)));
-  // Modo Competência: inclui meses com faturamento mesmo sem lançamentos de despesa
-  if (getModo() === 'comp') {
-    try {
-      const fm = JSON.parse(localStorage.getItem('bb_fat_por_mes') || '{}');
-      Object.keys(fm).forEach(m => { if (fm[m] > 0) mesesSet.add(m); });
-    } catch(_) {}
-  }
-  const meses=[...mesesSet].sort((a,b)=>{const p=s=>{const[m,y]=s.split('/');return(+y)*12+(+m);};return p(a)-p(b);});
   const showTot=meses.length>1||full;
-
-  // ── Regra do Rafael: compra parcelada entra no DRE (Competência) pelo VALOR
-  // CHEIO no mês da compra; no Caixa, entra o valor de cada parcela no mês em
-  // que ela vem na fatura. Retroativo limitado aos últimos MESES_RETROATIVOS
-  // meses — meses mais antigos que isso já fechados não são tocados.
-  const _gruposParcela = _mapaGruposParcela(at);
-  const _v = t => _valorParaDRE(t, _gruposParcela);
-
-  const data={};
-  const dataNaoOper={}; // categorias que aparecem mas NÃO impactam resultado
-  for (const t of at) {
-    // Categorias não-operacionais: mostrar em bloco próprio, fora dos cálculos
-    if (CATS_NAO_OPERACIONAIS.has(t.categoria)) {
-      const m=getMesTx(t); const v=_v(t);
-      if(!dataNaoOper[t.categoria])dataNaoOper[t.categoria]={};
-      dataNaoOper[t.categoria][m]=(dataNaoOper[t.categoria][m]||0)+v;
-      continue;
-    }
-    const g=catGrupo(t.categoria)||'OUTROS';
-    const m=getMesTx(t);
-    const v=_v(t);
-    if(!data[g])data[g]={};
-    if(!data[g][t.categoria])data[g][t.categoria]={};
-    data[g][t.categoria][m]=(data[g][t.categoria][m]||0)+v;
-  }
-
-  // ── Modo Competência: substitui receitas do extrato pelo Faturamento real ──
-  // Usa XMenu quando disponível; faturamento manual para meses anteriores sem XMenu
-  if (getModo() === 'comp') {
-    try { window._fatPorMes = JSON.parse(localStorage.getItem('bb_fat_por_mes') || '{}'); } catch(_) { window._fatPorMes = {}; }
-    try { window._fatManualMes = JSON.parse(localStorage.getItem('bb_fat_manual_mes') || '{}'); } catch(_) { window._fatManualMes = {}; }
-    // Fonte combinada: XMenu tem prioridade; manual preenche meses sem XMenu
-    const fatCombinado = { ...(window._fatManualMes||{}), ...(window._fatPorMes||{}) };
-    const mesesFat = Object.keys(fatCombinado).filter(m => fatCombinado[m] > 0);
-    if (mesesFat.length > 0) {
-      for (const m of mesesFat) {
-        if (data['RECEITAS']) {
-          for (const cat of Object.keys(data['RECEITAS'])) {
-            delete data['RECEITAS'][cat][m];
-          }
-        }
-        if (!data['RECEITAS']) data['RECEITAS'] = {};
-        if (!data['RECEITAS']['VENDAS DE MERCADORIAS']) data['RECEITAS']['VENDAS DE MERCADORIAS'] = {};
-        data['RECEITAS']['VENDAS DE MERCADORIAS'][m] = fatCombinado[m];
-      }
-    }
-  }
-
-  const sg=(gk,m)=>Object.values(data[gk]||{}).reduce((s,c)=>s+(c[m]||0),0);
-  const sgt=(gk)=>meses.reduce((s,m)=>s+sg(gk,m),0);
   const recTotalMes=Object.fromEntries(meses.map(m=>[m,sg('RECEITAS',m)]));
 
   const pct=(v,base)=>{
@@ -5884,6 +5925,7 @@ function _buildDRE(el, full) {
     });
   }
   h += renderSubtotal('CMV', null);
+  meses.forEach(m=>{ lucBrutoMes[m]=calcularMotorDRE(m,getModo()).lucroBruto; });
   h += renderResultado('LUCRO BRUTO', '🟢', lucBrutoMes, '#e8f7ef', '#22c55e');
   meses.forEach(m=>{ lucOpMes[m]=lucBrutoMes[m]||0; });
 
@@ -5948,6 +5990,7 @@ function _buildDRE(el, full) {
   }
 
   // ── RESULTADO 2: LUCRO OPERACIONAL ────────────────────────────────────────
+  meses.forEach(m=>{ lucOpMes[m]=calcularMotorDRE(m,getModo()).lucroOp; });
   h += renderResultado('LUCRO OPERACIONAL', '🔵', lucOpMes, '#eff6ff', '#3b82f6');
   meses.forEach(m=>{ resFinMes[m]=lucOpMes[m]||0; });
 
@@ -5960,6 +6003,7 @@ function _buildDRE(el, full) {
   }
 
   // ── RESULTADO 3: RESULTADO ANTES DAS RETIRADAS ────────────────────────────
+  meses.forEach(m=>{ resFinMes[m]=calcularMotorDRE(m,getModo()).antesRetiradas; });
   h += renderResultado('RESULTADO ANTES DAS RETIRADAS', '🟡', resFinMes, '#fffbeb', '#f59e0b');
   meses.forEach(m=>{ resAntRetMes[m]=resFinMes[m]||0; });
 
@@ -5972,6 +6016,7 @@ function _buildDRE(el, full) {
   }
 
   // ── RESULTADO FINAL ───────────────────────────────────────────────────────
+  meses.forEach(m=>{ resAntRetMes[m]=calcularMotorDRE(m,getModo()).final; });
   const totFinal=meses.reduce((s,m)=>s+(resAntRetMes[m]||0),0);
   h+='<tr style="background:#1a1a1a;border-top:4px solid #374151">'
     +'<td style="padding:12px 14px;color:#fff;font-weight:800;font-size:14px">💰 RESULTADO FINAL (LUCRO / PREJUÍZO REAL)</td>'
@@ -6021,64 +6066,7 @@ function _buildDRE(el, full) {
 // Calcula resultado do DRE para um mês específico — mesma lógica do _buildDRE
 // Retorna { receitas, despesas, cmv, lucroBruto, lucroOp, final }
 function calcResultadoDRE(mesAlvo, modoOverride) {
-  const modoCalc = modoOverride || getModo();
-  const mesTxCalc = t => modoCalc === 'caixa' ? (t.mesCaixa||t.mes||mesRef) : (t.mes||mesRef);
-  const at = TXS.filter(t => !t.ignorar && t.categoria && !CATS_NAO_OPERACIONAIS.has(t.categoria));
-  const data = {};
-  const fatCombinado = modoCalc === 'comp'
-    ? { ...(window._fatManualMes||{}), ...(window._fatPorMes||{}) }
-    : {};
-
-  for (const t of at) {
-    const g = catGrupo(t.categoria) || 'OUTROS';
-    const m = mesTxCalc(t);
-    if (m !== mesAlvo) continue;
-    const v = parseFloat(t.valor||0);
-    if (!data[g]) data[g] = {};
-    if (!data[g][t.categoria]) data[g][t.categoria] = {};
-    data[g][t.categoria][mesAlvo] = (data[g][t.categoria][mesAlvo]||0) + v;
-  }
-
-  // Modo Competência: substitui receitas
-  if (modoCalc === 'comp' && fatCombinado[mesAlvo] > 0) {
-    data['RECEITAS'] = { 'VENDAS DE MERCADORIAS': { [mesAlvo]: fatCombinado[mesAlvo] } };
-  }
-
-  const sg = (gk) => Object.values(data[gk]||{}).reduce((s,c) => s+(c[mesAlvo]||0), 0);
-
-  const receitas = sg('RECEITAS');
-
-  // CMV + ajuste de estoque
-  const cmvBruto = sg('CMV');
-  const [mm, yy] = mesAlvo.split('/');
-  const dtAnt = new Date(parseInt(yy), parseInt(mm)-2, 1);
-  const mAnt = `${String(dtAnt.getMonth()+1).padStart(2,'0')}/${dtAnt.getFullYear()}`;
-  const estIni = parseFloat((window._estoquesMes||{})[mAnt]||0);
-  const estFin = parseFloat((window._estoquesMes||{})[mesAlvo]||0);
-  const cmv = cmvBruto + (estIni - estFin);
-
-  const lucroBruto = receitas + cmv; // cmv é negativo
-
-  // Despesas operacionais
-  const OPER = ['PESSOAL','VENDAS_CAT','CONSUMO','TERCEIROS','MATERIAL','OUTRAS','IMPOSTOS'];
-  let despOper = OPER.reduce((s, gk) => s + sg(gk), 0);
-
-  // DAS estimado
-  const pctDAS = parseFloat(localStorage.getItem('bb_pct_simples')||'8') / 100;
-  const mesesComSimples = new Set(TXS.filter(t => !t.ignorar && t.categoria==='Simples Nacional').map(t => t.mes||mesRef));
-  if (!mesesComSimples.has(mesAlvo)) {
-    const mRefDAS = modoCalc==='comp' ? mesAlvo : mAnt;
-    const nfce = parseFloat((window._nfcePorMes||{})[mRefDAS]||0);
-    if (nfce > 0) despOper -= Math.round(nfce * pctDAS * 100) / 100;
-  }
-
-  const lucroOp = lucroBruto + despOper;
-  const fin = sg('FINANCEIRAS');
-  const retiradas = sg('OUTROS');
-  const final = lucroOp + fin + retiradas;
-  const despesas = Math.abs(cmv) + Math.abs(despOper) + Math.abs(fin) + Math.abs(retiradas);
-
-  return { receitas, despesas, cmv, lucroBruto, lucroOp, final };
+  return calcularMotorDRE(mesAlvo, modoOverride);
 }
 
 // ─── MANUAL ───────────────────────────────────────────────────────────────────
@@ -6930,54 +6918,18 @@ function exportarLancamentosRaw() {
 
 function exportXLS(){
   if(!TXS.length){toast('Sem dados');return;}
-  // ── Excel com SheetJS + estilos XML ─────────────────────────────────────────
-  const at = _txsSemDuplicatas(TXS).filter(t=>t.categoria);
-  const REGEX_MES_VALIDO = /^(0[1-9]|1[0-2])\/\d{4}$/;
-  const mesesSet = new Set(at.map(t=>getMesTx(t)).filter(m => REGEX_MES_VALIDO.test(m)));
-  const meses = [...mesesSet].sort((a,b)=>{
-    const p=s=>{const[mm,yy]=s.split('/');return(+yy)*12+(+mm);}; return p(a)-p(b);
-  });
-  const MESES_PT={'01':'Jan','02':'Fev','03':'Mar','04':'Abr','05':'Mai','06':'Jun',
-                  '07':'Jul','08':'Ago','09':'Set','10':'Out','11':'Nov','12':'Dez'};
-  const nomeMes = m => { const [mm,yy]=m.split('/'); return (MESES_PT[mm]||mm)+'/'+yy; };
-
-  // Agrupa — mesmo do _buildDRE
-  const dataD={};
-  const dataNaoOperXLS={};
-  for (const t of at) {
-    // Não-operacionais: só para conferência
-    if (CATS_NAO_OPERACIONAIS.has(t.categoria)) {
-      const m=getMesTx(t); const v=parseFloat(t.valor||0);
-      if(!dataNaoOperXLS[t.categoria])dataNaoOperXLS[t.categoria]={};
-      dataNaoOperXLS[t.categoria][m]=(dataNaoOperXLS[t.categoria][m]||0)+v;
-      continue;
-    }
-    const gk=catGrupo(t.categoria)||'OUTROS';
-    const m=getMesTx(t); const v=parseFloat(t.valor||0);
-    if(!dataD[gk])dataD[gk]={};
-    if(!dataD[gk][t.categoria])dataD[gk][t.categoria]={};
-    dataD[gk][t.categoria][m]=(dataD[gk][t.categoria][m]||0)+v;
-  }
-
-  // Modo Competência: substitui receitas pelo Faturamento combinado (XMenu + manual)
-  if (getModo() === 'comp') {
-    const fatXMenuXLS  = window._fatPorMes    || {};
-    const fatManualXLS = window._fatManualMes || {};
-    const fatCombXLS   = { ...fatManualXLS, ...fatXMenuXLS }; // XMenu tem prioridade
-    Object.keys(fatCombXLS).filter(m => fatCombXLS[m] > 0).forEach(m => {
-      if (dataD['RECEITAS']) {
-        Object.keys(dataD['RECEITAS']).forEach(cat => { delete dataD['RECEITAS'][cat][m]; });
-      }
-      if (!dataD['RECEITAS']) dataD['RECEITAS'] = {};
-      if (!dataD['RECEITAS']['VENDAS DE MERCADORIAS']) dataD['RECEITAS']['VENDAS DE MERCADORIAS'] = {};
-      dataD['RECEITAS']['VENDAS DE MERCADORIAS'][m] = fatCombXLS[m];
-      mesesSet.add(m);
-    });
-  }
-  const sg=(gk,m)=>Object.values(dataD[gk]||{}).reduce((s,c)=>s+(c[m]||0),0);
-  const sgt=(gk)=>meses.reduce((s,m)=>s+sg(gk,m),0);
+  // A mesma base usada pelo Demonstrativo: categorias, parcelas, receitas e movimentos neutros.
+  const baseXLS=prepararBaseDRE(getModo());
+  const dataD=baseXLS.data;
+  const dataNaoOperXLS=baseXLS.dataNaoOper;
+  const meses=baseXLS.meses;
+  const sg=baseXLS.sg;
+  const sgt=baseXLS.sgt;
   const showTot=meses.length>1;
   const lastCol=meses.length+(showTot?2:1);
+  const MESES_PT={'01':'Jan','02':'Fev','03':'Mar','04':'Abr','05':'Mai','06':'Jun',
+                  '07':'Jul','08':'Ago','09':'Set','10':'Out','11':'Nov','12':'Dez'};
+  const nomeMes=m=>{const[mm,yy]=m.split('/');return(MESES_PT[mm]||mm)+'/'+yy;};
 
   // Gera HTML da tabela — o Excel abre HTML com formatação CSS
   const brl2 = v => {
@@ -7157,6 +7109,7 @@ function exportXLS(){
     lucBruto[m] = (lucBruto[m]||0) + sg('CMV',m) + ajuste;
   });
 
+  meses.forEach(m=>{lucBruto[m]=calcularMotorDRE(m,getModo()).lucroBruto;});
   addResultadoXLS('LUCRO BRUTO','🟢',lucBruto,'res-bruto','res-bruto');
   meses.forEach(m=>{ lucOp[m]=lucBruto[m]||0; });
 
@@ -7188,6 +7141,7 @@ function exportXLS(){
     }
   });
 
+  meses.forEach(m=>{lucOp[m]=calcularMotorDRE(m,getModo()).lucroOp;});
   addResultadoXLS('LUCRO OPERACIONAL','🔵',lucOp,'res-op','res-op');
   meses.forEach(m=>{ resFin[m]=lucOp[m]||0; });
 
@@ -7197,6 +7151,7 @@ function exportXLS(){
     meses.forEach(m=>{ resFin[m]=(resFin[m]||0)+sg('FINANCEIRAS',m); });
   }
 
+  meses.forEach(m=>{resFin[m]=calcularMotorDRE(m,getModo()).antesRetiradas;});
   addResultadoXLS('RESULTADO ANTES DAS RETIRADAS','🟡',resFin,'res-ant','res-ant');
   meses.forEach(m=>{ resAntRet[m]=resFin[m]||0; });
 
@@ -7206,6 +7161,7 @@ function exportXLS(){
     meses.forEach(m=>{ resAntRet[m]=(resAntRet[m]||0)+sg('OUTROS',m); });
   }
 
+  meses.forEach(m=>{resAntRet[m]=calcularMotorDRE(m,getModo()).final;});
   addResultadoXLS('RESULTADO FINAL (LUCRO / PREJUÍZO REAL)','💰',resAntRet,'res-fin','res-fin');
 
   // Bloco não-operacional (conferência)
@@ -7249,35 +7205,11 @@ async function gerarExcelDRE() {
 
   // Monta dados do DRE para um modo específico
   function montarDados(modo) {
-    const getMes = t => modo === 'comp' ? (t.mes || mesRef) : (t.mesCaixa || t.mes || mesRef);
-    const txs = _txsSemDuplicatas(TXS).filter(t => t.categoria && !CATS_NAO_OPERACIONAIS.has(t.categoria));
-    const mesesSet = new Set(txs.map(getMes));
-
-    // Adiciona meses com faturamento no modo competência
-    if (modo === 'comp') {
-      try {
-        const fm = JSON.parse(localStorage.getItem('bb_fat_por_mes') || '{}');
-        Object.keys(fm).forEach(m => { if (fm[m] > 0) mesesSet.add(m); });
-      } catch(_) {}
-    }
-
-    const meses = [...mesesSet].sort((a,b) => {
-      const p = s => { const [mm,yy] = s.split('/'); return (+yy)*12+(+mm); };
-      return p(a)-p(b);
-    });
-
-    const dataD = {};
-    for (const t of txs) {
-      const gk = catGrupo(t.categoria) || 'OUTROS';
-      const m = getMes(t);
-      const v = parseFloat(t.valor || 0);
-      if (!dataD[gk]) dataD[gk] = {};
-      if (!dataD[gk][t.categoria]) dataD[gk][t.categoria] = {};
-      dataD[gk][t.categoria][m] = (dataD[gk][t.categoria][m] || 0) + v;
-    }
-
-    const sg = (gk, m) => Object.values(dataD[gk] || {}).reduce((s, cats) => s + (cats[m] || 0), 0);
-    const nTotal = meses.length;
+    const baseExport=prepararBaseDRE(modo);
+    const dataD=baseExport.data;
+    const meses=baseExport.meses;
+    const sg=baseExport.sg;
+    const nTotal=meses.length;
 
     // Cabeçalhos
     const rows = [];
@@ -7329,8 +7261,12 @@ async function gerarExcelDRE() {
     addRow(['SUBTOTAL CMV', ...cmvTotais, cmvTotais.reduce((s, v) => s + v, 0)], 'subtotal');
     addRow([], 'blank');
 
-    // Lucro bruto
-    const lucBruto = meses.map((m, i) => recTotais[i] + cmvTotais[i]);
+    // Lucro bruto — mesmo motor usado pelo Demonstrativo
+    const ajustesEstoque = meses.map(m => calcularMotorDRE(m,modo).ajusteEstoque);
+    if (ajustesEstoque.some(v=>Math.abs(v)>0.005)) {
+      addRow(['  · Ajuste de Estoque (+Inicial − Final)', ...ajustesEstoque, ajustesEstoque.reduce((s,v)=>s+v,0)], 'cat');
+    }
+    const lucBruto = meses.map(m => calcularMotorDRE(m,modo).lucroBruto);
     addRow(['LUCRO BRUTO', ...lucBruto, lucBruto.reduce((s, v) => s + v, 0)], 'resultado_verde');
     addRow([], 'blank');
 
@@ -7355,6 +7291,11 @@ async function gerarExcelDRE() {
       addRow(['  Subtotal ' + (grpLabel[gk] || gk), ...subTot, subTot.reduce((s, v) => s + v, 0)], 'subtotal_small');
       lucOp = lucOp.map((v, i) => v + subTot[i]);
     });
+    const dasEstimado = meses.map(m => calcularMotorDRE(m,modo).dasEstimado);
+    if (dasEstimado.some(v=>v>0.005)) {
+      addRow(['  · DAS / Simples Nacional estimado', ...dasEstimado.map(v=>-Math.abs(v)), -dasEstimado.reduce((s,v)=>s+v,0)], 'cat');
+    }
+    lucOp = meses.map(m => calcularMotorDRE(m,modo).lucroOp);
     addRow([], 'blank');
     addRow(['LUCRO OPERACIONAL', ...lucOp, lucOp.reduce((s, v) => s + v, 0)], 'resultado_azul');
     addRow([], 'blank');
@@ -7367,7 +7308,7 @@ async function gerarExcelDRE() {
         addRow(['  · ' + cat, ...meses.map(m => porMes[m] || 0), total], 'cat');
       });
     }
-    const resFin = lucOp.map((v, i) => v + (dataD['FINANCEIRAS'] ? meses.map(m => sg('FINANCEIRAS', m))[i] : 0));
+    const resFin = meses.map(m => calcularMotorDRE(m,modo).antesRetiradas);
     addRow(['RESULTADO ANTES DAS RETIRADAS', ...resFin, resFin.reduce((s, v) => s + v, 0)], 'resultado_amarelo');
     addRow([], 'blank');
 
@@ -7379,7 +7320,7 @@ async function gerarExcelDRE() {
         addRow(['  · ' + cat, ...meses.map(m => porMes[m] || 0), total], 'cat');
       });
     }
-    const resFinal = resFin.map((v, i) => v + (dataD['OUTROS'] ? meses.map(m => sg('OUTROS', m))[i] : 0));
+    const resFinal = meses.map(m => calcularMotorDRE(m,modo).final);
     addRow(['RESULTADO FINAL (LUCRO / PREJUÍZO REAL)', ...resFinal, resFinal.reduce((s, v) => s + v, 0)], 'resultado_final');
 
     return { rows, styles, meses };
