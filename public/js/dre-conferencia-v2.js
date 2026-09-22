@@ -116,6 +116,8 @@ function instalar(){
     root.abrirConferenciaDRE=async function(){await carregar(true);return state.abrirBase.apply(this,arguments);};
   }
 }
+root.DREConfV2Decisao=function(chave){return state.decisoes.find(d=>d.chave===String(chave||'')&&['VALIDADO','CORRIGIDO'].includes(String(d.status||'').toUpperCase()))||null;};
+root.DREConfV2Recarregar=async function(){await carregar(true);return state.decisoes;};
 root.confV2Mostrar=function(m){state.mostrar=m;renderCategorias();};
 root.confV2Salvar=(chave,escopo)=>salvar(chave,escopo,'VALIDADO');
 root.confV2ToggleEditor=function(chave){const g=state.grupos.get(chave);if(!g)return;const id='confv2-ed-'+btoa(unescape(encodeURIComponent(chave))).replace(/=/g,'');const el=document.getElementById(id);if(el)el.style.display=el.style.display==='none'?'block':'none';};
