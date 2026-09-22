@@ -1625,7 +1625,7 @@ module.exports = function (pool, app) {
     try {
       const { rows } = await pool.query(`
         SELECT
-          cf.id, cf.cartao, cf.bandeira, cf.competencia,
+          cf.id, cf.cartao, cf.bandeira, cf.competencia, cf.fatura_id_ref,
           TO_CHAR(cf.vencimento, 'YYYY-MM-DD')             AS vencimento,
           cf.valor_total, cf.qtd_itens, cf.status, cf.arquivo_nome,
           cf.possivel_duplicidade, cf.situacao, cf.importado_em,
@@ -1941,6 +1941,73 @@ module.exports = function (pool, app) {
     }
   });
 
+
+  // GET /api/dre/cartao-faturas/itens-dre — ponte Agente Financeiro → DRE
+  // Retorna somente faturas importadas pelo agente. O frontend faz merge idempotente
+  // pelo cartaoItemRef/hash_item antes de persistir na sessão DRE.
+  r.get('/cartao-faturas/itens-dre', autenticar(), async (req, res) => {
+    try {
+      const meses = Math.max(1, Math.min(36, parseInt(req.query.meses || '24', 10) || 24));
+      const { rows } = await pool.query(`
+        SELECT
+          cfi.id AS item_id, cfi.hash_item, cfi.data_compra, cfi.descricao,
+          cfi.valor, cfi.categoria_dre, cfi.portador,
+          cf.id AS fatura_db_id, cf.fatura_id_ref, cf.cartao, cf.bandeira,
+          cf.competencia, cf.valor_total, cf.status,
+          TO_CHAR(cf.vencimento,'YYYY-MM-DD') AS vencimento
+        FROM cartao_fatura_itens cfi
+        JOIN cartao_faturas cf ON cf.id=cfi.fatura_id
+        WHERE cfi.removido=false
+          AND cf.situacao='AGENTE_DRIVE'
+          AND (
+            cf.competencia IS NULL OR
+            TO_DATE('01/'||cf.competencia,'DD/MM/YYYY') >=
+              DATE_TRUNC('month',CURRENT_DATE) - ($1::int * INTERVAL '1 month')
+          )
+        ORDER BY cf.competencia,cfi.data_compra,cfi.id
+      `,[meses]);
+
+      const mesData = (v, fallback) => {
+        const s=String(v||'').slice(0,10);
+        const m=s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        return m ? `${m[2]}/${m[1]}` : fallback;
+      };
+      const parcelaDesc = desc => {
+        const s=String(desc||'');
+        let m=s.match(/\b(\d{1,2})\s+DE\s+(\d{1,2})\b/i);
+        if(!m) m=s.match(/\b(\d{1,2})\s*\/\s*(\d{1,2})\b/);
+        return m ? `${Number(m[1])}/${Number(m[2])}` : null;
+      };
+
+      const data=rows.map(x=>({
+        id:`CFI_${x.item_id}`,
+        cartaoItemRef:String(x.item_id),
+        hash_item:x.hash_item||null,
+        faturaDbId:Number(x.fatura_db_id),
+        faturaCC:x.fatura_id_ref,
+        vinculadoFaturaCC:true,
+        bandeira:x.bandeira||x.cartao||'Cartão',
+        portador:x.portador||null,
+        lancamento:x.descricao||'Lançamento de cartão',
+        razaoSocial:x.descricao||'',
+        data:String(x.data_compra||'').slice(0,10)||null,
+        mes:mesData(x.data_compra,x.competencia),
+        mesCaixa:x.competencia,
+        valor:-Number(x.valor||0),
+        categoria:x.categoria_dre||'',
+        fonte:'CC',
+        parcela:parcelaDesc(x.descricao),
+        origemAgenteFinanceiro:true,
+        faturaStatus:x.status,
+        faturaValorTotal:Number(x.valor_total||0),
+        faturaVencimento:x.vencimento||null
+      }));
+      res.json({ok:true,data,total:data.length});
+    } catch(e) {
+      console.error('[dre/cartao-faturas/itens-dre]',e.message);
+      res.status(500).json({ok:false,erro:e.message});
+    }
+  });
 
   // GET /api/dre/cartao-faturas/:id/itens — itens de uma fatura específica
   r.get('/cartao-faturas/:id/itens', autenticar(), async (req, res) => {
