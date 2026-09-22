@@ -1258,13 +1258,13 @@ module.exports = function (pool, app) {
       const nome=nomeUsuario(req);
       const {rows}=await pool.query(`
         INSERT INTO dre_fechamentos(loja_id,mes_ref,status,sessao_id,snapshot_json,checklist_json,fechado_por,fechado_por_nome,fechado_em,atualizado_em)
-        VALUES(bb_loja_padrao(),$1,'FECHADO',$2,$3::jsonb,$4::jsonb,$5,$6,NOW(),NOW())
+        VALUES($7,$1,'FECHADO',$2,$3::jsonb,$4::jsonb,$5,$6,NOW(),NOW())
         ON CONFLICT(loja_id,mes_ref) DO UPDATE SET status='FECHADO',sessao_id=EXCLUDED.sessao_id,
           snapshot_json=EXCLUDED.snapshot_json,checklist_json=EXCLUDED.checklist_json,fechado_por=EXCLUDED.fechado_por,
           fechado_por_nome=EXCLUDED.fechado_por_nome,fechado_em=NOW(),reaberto_por=NULL,reaberto_por_nome=NULL,reaberto_em=NULL,
           motivo_reabertura=NULL,atualizado_em=NOW()
-        RETURNING *`,[mes,check.sessao.id,JSON.stringify(snapshot),JSON.stringify({itens:check.itens,pronto:check.pronto}),req.user?.id||null,nome]);
-      await pool.query(`INSERT INTO dre_fechamento_eventos(loja_id,mes_ref,evento,usuario_id,usuario_nome) VALUES(bb_loja_padrao(),$1,'FECHADO',$2,$3)`,[mes,req.user?.id||null,nome]);
+        RETURNING *`,[mes,check.sessao.id,JSON.stringify(snapshot),JSON.stringify({itens:check.itens,pronto:check.pronto}),req.user?.id||null,nome,Number(req.user?.lojaId)]);
+      await pool.query(`INSERT INTO dre_fechamento_eventos(loja_id,mes_ref,evento,usuario_id,usuario_nome) VALUES($4,$1,'FECHADO',$2,$3)`,[mes,req.user?.id||null,nome,Number(req.user?.lojaId)]);
       res.json({ok:true,data:rows[0],snapshot});
     }catch(e){res.status(500).json({ok:false,erro:e.message});}
   });
@@ -1280,7 +1280,7 @@ module.exports = function (pool, app) {
         UPDATE dre_fechamentos SET status='ABERTO',reaberto_por=$2,reaberto_por_nome=$3,reaberto_em=NOW(),
           motivo_reabertura=$4,atualizado_em=NOW() WHERE mes_ref=$1 RETURNING *`,[mes,req.user?.id||null,nome,motivo]);
       if(!rows.length) return res.status(404).json({ok:false,erro:'Fechamento não encontrado'});
-      await pool.query(`INSERT INTO dre_fechamento_eventos(loja_id,mes_ref,evento,usuario_id,usuario_nome,justificativa) VALUES(bb_loja_padrao(),$1,'REABERTO',$2,$3,$4)`,[mes,req.user?.id||null,nome,motivo]);
+      await pool.query(`INSERT INTO dre_fechamento_eventos(loja_id,mes_ref,evento,usuario_id,usuario_nome,justificativa) VALUES($5,$1,'REABERTO',$2,$3,$4)`,[mes,req.user?.id||null,nome,motivo,Number(req.user?.lojaId)]);
       res.json({ok:true,data:rows[0]});
     }catch(e){res.status(500).json({ok:false,erro:e.message});}
   });
