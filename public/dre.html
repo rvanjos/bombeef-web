@@ -1282,7 +1282,10 @@ window.addEventListener('message', e => {
   if (e.data?.type !== 'bb_data_changed') return;
   const t = e.data.evento?.type;
   if (t === 'boletos_atualizado') sincronizarBoletosAutomatico();
-  if (t === 'faturamento_atualizado') carregarFaturamentoMensal().then(() => renderDRE());
+  if (t === 'faturamento_atualizado') {
+    _fatCacheEm=0;
+    carregarFaturamentoMensal().then(() => { _fatCacheEm=Date.now(); renderDRE(); });
+  }
 });
 
 function atualizarStatusSyncBoletos(estado, texto) {
@@ -1367,6 +1370,7 @@ async function carregarFaturamentoMensal() {
       });
       window._fatPorMes  = fatMap;
       window._nfcePorMes = nfceMap;
+      _fatCacheEm = Date.now();
       try {
         localStorage.setItem('bb_fat_por_mes',  JSON.stringify(fatMap));
         localStorage.setItem('bb_nfce_por_mes', JSON.stringify(nfceMap));
@@ -1495,19 +1499,17 @@ function atualizarDatalist() {
 async function carregarSessao() {
   setSt('load');
   try {
-    // Carrega lista de todas as sessões disponíveis (últimos 24 meses)
-    const lista = await api.get('/api/dre/sessoes?limit=24');
-    if (!lista.ok || !lista.data?.length) {
+    // Carga única: traz as sessões completas em uma requisição.
+    // Antes eram 1 + N chamadas HTTP (até 25) a cada abertura/troca de mês.
+    const lote = await api.get('/api/dre/sessoes-completas?limit=24');
+    if (!lote.ok || !lote.data?.length) {
       TXS=[]; files=[]; supMem={}; sessId=null;
       setSt('ok'); updMesFiltro(); render(); updStats(); renderDRE();
       atualizarAvisoModo();
       return;
     }
-
-    // Carrega dados completos de cada sessão em paralelo
-    const sessoes = await Promise.all(
-      lista.data.map(s => api.get(`/api/dre/sessoes/${s.id}`))
-    );
+    const lista = { ok:true, data:lote.data.map(s=>({id:s.id,mes_ref:s.mes_ref,atualizado_em:s.atualizado_em})) };
+    const sessoes = lote.data.map(data => ({ok:true,data}));
 
     // Junta todos os TXS de todos os meses — deduplicando por fitid ou hash
     TXS = []; files = []; supMem = {};
@@ -1646,51 +1648,9 @@ async function carregarSessao() {
   atualizarAvisoModo();
   // Garante que a tabela esteja visível se há lançamentos
   if (TXS.length) showTable();
-  // Após carregar, salva res_final silenciosamente para Dashboard/Hub lerem valor correto
-  // Só executa se há lançamentos classificados (evita sobrescrever com zeros)
-  if (TXS.length) {
-    setTimeout(async () => {
-      try {
-        // Incluir mesCaixa dos CC como meses a salvar (Bug 6.7-F fix)
-        const mesesSet = new Set(TXS.map(t => t.mes || mesRef));
-        TXS.filter(t => t.faturaCC && t.mesCaixa).forEach(t => mesesSet.add(t.mesCaixa));
-        const meses = [...mesesSet];
-        for (const m of meses) {
-          let _res = null;
-          try { _res = calcResultadoDRE(m, 'comp'); } catch(_) {}
-          if (!_res || (!_res.receitas && !_res.despesas)) continue;
-          const sid = (window._sessoesPorMes && window._sessoesPorMes[m]) || (m === mesRef ? sessId : null);
-          // CC: incluir também lançamentos cujo mesCaixa bate com m (fatura paga neste mês)
-          const txsMes = TXS.filter(t => {
-            if ((t.mes||mesRef) === m) return true;
-            if (t.faturaCC && t.mesCaixa === m && (t.mes||mesRef) !== m) return true;
-            return false;
-          });
-          await api.post('/api/dre/salvar', {
-            sessao_id: sid,
-            mes_ref: m,
-            descricao: `Sessão ${m} — ${txsMes.length} lançamentos`,
-            dados_json: {
-              transactions: txsMes,
-              loadedFiles: m === mesRef ? files : [],
-              supplierMem: supMem,
-              estoquesMes: window._estoquesMes || {},
-              resultadoModo: 'competencia',
-            },
-            resultado: {
-              receitas:   _res.receitas,
-              despesas:   _res.despesas,
-              cmv:        _res.cmv,
-              lucroBruto: _res.lucroBruto,
-              lucroOp:    _res.lucroOp,
-              final:      _res.final,
-            },
-          });
-        }
-      } catch(_) {}
-    }, 1500);
-  }
-}
+  // Não grava sessões apenas por abrir o DRE.
+  // Resultados são persistidos somente quando há alteração real, evitando dezenas
+  // de POSTs e recálculos em segundo plano durante navegação.
 
 async function trocarMes() {
   if (_ignorarTrocarMes) return;
@@ -1703,7 +1663,24 @@ async function trocarMes() {
   });
   const [y,m] = v.split('-'); mesRef = `${m}/${y}`;
   document.getElementById('dre-mes-label').textContent = mesRef;
-  await carregarSessao();
+
+  // As 24 sessões já estão em memória. Não recarrega todo o histórico ao trocar mês.
+  sessId = (window._sessoesPorMes && window._sessoesPorMes[mesRef]) || null;
+  const temMesEmMemoria = TXS.some(t => (t.mes || '') === mesRef || (t.mesCaixa || '') === mesRef);
+  if (!temMesEmMemoria && !sessId) {
+    try {
+      const s = await api.get(`/api/dre/sessoes/${encodeURIComponent(mesRef)}`);
+      if (s.ok && s.data?.dados_json) {
+        if (!window._sessoesPorMes) window._sessoesPorMes = {};
+        window._sessoesPorMes[mesRef] = s.data.id;
+        sessId = s.data.id;
+        const novos = s.data.dados_json.transactions || [];
+        const ids = new Set(TXS.map(t=>String(t.id||'')));
+        novos.forEach(t=>{ if(!ids.has(String(t.id||''))) TXS.push(t); });
+      }
+    } catch(_) {}
+  }
+  updMesFiltro(); render(); updStats(); renderDRE();
   await sincronizarBoletosAutomatico();
 }
 
@@ -5274,25 +5251,31 @@ window.renderDREFull = function renderDREFull(){
 }
 
 // Garante que bb_fat_por_mes está carregado — busca da API se localStorage vazio
-async function _garantirFatPorMes() {
-  // Sempre busca da API para garantir valores corretos (sem cache desatualizado)
-  try {
-    const d = await api.get('/api/faturamento/resumo');
-    if (!d.ok || !d.data) return;
-    const fatMap = {};
-    d.data.forEach(m => {
-      const porForma = parseFloat(m.fat_nfce||0) + parseFloat(m.fat_mei||0);
-      const total = porForma > 0 ? porForma : parseFloat(m.fat_bruto||0);
-      if (total > 0) fatMap[m.mes] = total;
-    });
-    try { localStorage.setItem('bb_fat_por_mes', JSON.stringify(fatMap)); } catch(_) {}
-    window._fatPorMes = fatMap;
-  } catch(_) {
-    // Fallback: usa o que tem no localStorage
-    try { window._fatPorMes = JSON.parse(localStorage.getItem('bb_fat_por_mes') || '{}'); } catch(_) {}
-  }
+let _fatCacheEm=0;
+let _fatCachePromise=null;
+async function _garantirFatPorMes(forcar=false) {
+  const agora=Date.now();
+  if(!forcar && window._fatPorMes && Object.keys(window._fatPorMes).length && (agora-_fatCacheEm)<30000) return;
+  if(_fatCachePromise && !forcar) return _fatCachePromise;
+  _fatCachePromise=(async()=>{
+    try {
+      const d = await api.get('/api/faturamento/resumo');
+      if (!d.ok || !d.data) return;
+      const fatMap = {};
+      d.data.forEach(m => {
+        const porForma = parseFloat(m.fat_nfce||0) + parseFloat(m.fat_mei||0);
+        const total = porForma > 0 ? porForma : parseFloat(m.fat_bruto||0);
+        if (total > 0) fatMap[m.mes] = total;
+      });
+      window._fatPorMes = fatMap;
+      _fatCacheEm=Date.now();
+      try { localStorage.setItem('bb_fat_por_mes', JSON.stringify(fatMap)); } catch(_) {}
+    } finally {
+      _fatCachePromise=null;
+    }
+  })();
+  return _fatCachePromise;
 }
-
 function setEstoqueFinal(mesEnc, valor) {
   const mes = mesEnc.replace('_', '/');
   const val = parseFloat(valor) || 0;
