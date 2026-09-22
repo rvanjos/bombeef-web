@@ -9,6 +9,7 @@ const CNPJ_PROPRIO = '46237080000102';
 const CNPJ_PROPRIO_FMT = '46.237.080/0001-02';
 const NOME_PROPRIO = 'AR BOUTIQUE DE CARNES LTDA';
 const CAT_CREDITO_EXTRATO = 'Transferência entre contas';
+const CAT_RECEITA = 'VENDAS DE MERCADORIAS';
 
 async function existeTabela(client, tabela) {
   const { rows } = await client.query('SELECT to_regclass($1) AS tabela', [`public.${tabela}`]);
@@ -65,22 +66,21 @@ async function main() {
     }
 
     if (await existeTabela(client, 'dre_lancamentos')) {
-      // No modo competência, as receitas oficiais vêm do XMenu. Portanto crédito
-      // positivo do extrato é conferência/transferência bancária, não despesa a classificar.
-      const { rowCount: creditos } = await client.query(`
+      // Hotfix: versões anteriores marcaram TODO crédito positivo de extrato como
+      // ignorado para evitar duplicidade com o XMenu. Isso estava errado: o motor
+      // de Competência já substitui a receita pelo faturamento oficial, enquanto
+      // o modo Caixa precisa manter os recebimentos bancários ativos.
+      //
+      // Reativa apenas créditos já classificados explicitamente como receita,
+      // preservando transferências e demais créditos neutros/ignorados.
+      const { rowCount: receitasReativadas } = await client.query(`
         UPDATE dre_lancamentos
-        SET ignorar = true,
-            categoria = CASE
-              WHEN COALESCE(TRIM(categoria),'') = '' THEN $1
-              ELSE categoria
-            END
+        SET ignorar = false
         WHERE UPPER(COALESCE(fonte,''))='EXTRATO'
           AND valor > 0
-          AND (
-            COALESCE(ignorar,false)=false
-            OR COALESCE(TRIM(categoria),'')=''
-          )
-      `, [CAT_CREDITO_EXTRATO]);
+          AND categoria = $1
+          AND COALESCE(ignorar,false)=true
+      `, [CAT_RECEITA]);
 
       const { rowCount: nomes } = await client.query(`
         UPDATE dre_lancamentos
@@ -92,36 +92,15 @@ async function main() {
           )
       `, [NOME_PROPRIO]);
 
-      await client.query(`
-        CREATE OR REPLACE FUNCTION bb_dre_ignorar_credito_extrato()
-        RETURNS trigger AS $$
-        BEGIN
-          IF UPPER(COALESCE(NEW.fonte,''))='EXTRATO' AND NEW.valor > 0 THEN
-            NEW.ignorar := true;
-            IF COALESCE(TRIM(NEW.categoria),'') = '' THEN
-              NEW.categoria := '${CAT_CREDITO_EXTRATO}';
-            END IF;
-          END IF;
-          IF UPPER(COALESCE(NEW.razao_social,'')) IN ('ARTMILL ACESSORIOS LTDA EPP','B2B - HOME23 COMERCIO')
-             OR NEW.lancamento ILIKE 'PIX RECEBIDO AR BOUT%' THEN
-            NEW.razao_social := '${NOME_PROPRIO}';
-          END IF;
-          RETURN NEW;
-        END;
-        $$ LANGUAGE plpgsql
-      `);
+      // Remove a regra antiga que forçava ignorar=true em todo crédito positivo.
       await client.query('DROP TRIGGER IF EXISTS trg_bb_dre_ignorar_credito_extrato ON dre_lancamentos');
-      await client.query(`
-        CREATE TRIGGER trg_bb_dre_ignorar_credito_extrato
-        BEFORE INSERT OR UPDATE ON dre_lancamentos
-        FOR EACH ROW EXECUTE FUNCTION bb_dre_ignorar_credito_extrato()
-      `);
+      await client.query('DROP FUNCTION IF EXISTS bb_dre_ignorar_credito_extrato()');
 
-      console.log(`[dre/ofx-fix] créditos normalizados: ${creditos}; nomes corrigidos: ${nomes}`);
+      console.log(`[dre/ofx-fix] receitas reativadas: ${receitasReativadas}; nomes corrigidos: ${nomes}`);
     }
 
-    // Corrige as sessões já gravadas. Além de ignorar, preenche categoria não-operacional
-    // para retirar o crédito de telas legadas que contam "sem categoria" sem olhar ignorar.
+    // Corrige as sessões já gravadas. Reativa somente créditos positivos já
+    // classificados como VENDAS DE MERCADORIAS; transferências continuam neutras.
     if (await existeTabela(client, 'dre_sessoes')) {
       const { rows } = await client.query(`SELECT id, dados_json FROM dre_sessoes WHERE dados_json IS NOT NULL`);
       let sessoesAlteradas = 0;
@@ -135,9 +114,8 @@ async function main() {
           const fonte = fonteTx(t);
           let mudouTx = false;
 
-          if (fonte === 'EXTRATO' && valor > 0) {
-            if (t.ignorar !== true) { t.ignorar = true; mudouTx = true; }
-            if (!String(t.categoria || '').trim()) { t.categoria = CAT_CREDITO_EXTRATO; mudouTx = true; }
+          if (fonte === 'EXTRATO' && valor > 0 && String(t.categoria || '').trim() === CAT_RECEITA) {
+            if (t.ignorar === true) { t.ignorar = false; mudouTx = true; }
           }
 
           const cnpj = String(t.cnpjDoc ?? t.cnpj_doc ?? t.cnpj ?? '').replace(/\D/g, '');
@@ -158,7 +136,7 @@ async function main() {
           sessoesAlteradas++;
         }
       }
-      console.log(`[dre/ofx-fix] sessões reparadas: ${sessoesAlteradas}; transações reparadas: ${transacoesAlteradas}`);
+      console.log(`[dre/ofx-fix] sessões reparadas: ${sessoesAlteradas}; receitas reativadas nas sessões: ${transacoesAlteradas}`);
     }
 
     await client.query('COMMIT');
