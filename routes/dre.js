@@ -425,6 +425,65 @@ module.exports = function (pool, app) {
     ]) {
       await pool.query(`ALTER TABLE dre_sessoes ADD COLUMN IF NOT EXISTS ${col} ${def}`).catch(()=>{});
     }
+
+    // Fechamento mensal formal: uma fotografia imutável por loja/mês.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS dre_fechamentos (
+        id                BIGSERIAL PRIMARY KEY,
+        loja_id           INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id),
+        mes_ref           TEXT NOT NULL,
+        status            TEXT NOT NULL DEFAULT 'ABERTO',
+        sessao_id         INTEGER REFERENCES dre_sessoes(id),
+        snapshot_json     JSONB,
+        checklist_json    JSONB,
+        fechado_por       INTEGER,
+        fechado_por_nome  TEXT,
+        fechado_em        TIMESTAMPTZ,
+        reaberto_por      INTEGER,
+        reaberto_por_nome TEXT,
+        reaberto_em       TIMESTAMPTZ,
+        motivo_reabertura TEXT,
+        atualizado_em     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE(loja_id, mes_ref)
+      )
+    `).catch(()=>{});
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS dre_fechamento_eventos (
+        id            BIGSERIAL PRIMARY KEY,
+        loja_id       INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id),
+        mes_ref       TEXT NOT NULL,
+        evento        TEXT NOT NULL,
+        usuario_id    INTEGER,
+        usuario_nome  TEXT,
+        justificativa TEXT,
+        criado_em     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `).catch(()=>{});
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_dre_fech_loja_mes ON dre_fechamentos(loja_id,mes_ref)`).catch(()=>{});
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_dre_fech_evt_loja_mes ON dre_fechamento_eventos(loja_id,mes_ref,criado_em DESC)`).catch(()=>{});
+    for (const tabela of ['dre_fechamentos','dre_fechamento_eventos']) {
+      await pool.query(`ALTER TABLE ${tabela} ENABLE ROW LEVEL SECURITY`).catch(()=>{});
+      await pool.query(`ALTER TABLE ${tabela} FORCE ROW LEVEL SECURITY`).catch(()=>{});
+      await pool.query(`DROP POLICY IF EXISTS bb_isolamento_loja ON ${tabela}`).catch(()=>{});
+      await pool.query(`
+        CREATE POLICY bb_isolamento_loja ON ${tabela}
+        USING (
+          current_setting('app.bb_system', true)='1'
+          OR (
+            NULLIF(current_setting('app.loja_id', true),'') IS NOT NULL
+            AND loja_id = NULLIF(current_setting('app.loja_id', true),'')::INTEGER
+          )
+        )
+        WITH CHECK (
+          current_setting('app.bb_system', true)='1'
+          OR (
+            NULLIF(current_setting('app.loja_id', true),'') IS NOT NULL
+            AND loja_id = NULLIF(current_setting('app.loja_id', true),'')::INTEGER
+          )
+        )
+      `).catch(()=>{});
+    }
+
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_dre_lanc_fitid ON dre_lancamentos(fitid) WHERE fitid IS NOT NULL`).catch(()=>{});
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_dre_sessoes_mes  ON dre_sessoes(mes_ref)`).catch(()=>{});
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_dre_lanc_sessao  ON dre_lancamentos(sessao_id)`).catch(()=>{});
@@ -688,6 +747,172 @@ module.exports = function (pool, app) {
     return [];
   }
 
+
+  function nomeUsuario(req) {
+    return req.user?.nome || req.user?.usuario || req.user?.email || 'Usuário';
+  }
+
+  async function estadoFechamento(mes, lojaId) {
+    const { rows } = await pool.query(
+      `SELECT * FROM dre_fechamentos WHERE loja_id=$1 AND mes_ref=$2 LIMIT 1`, [Number(lojaId), mes]
+    );
+    return rows[0] || null;
+  }
+
+  async function bloquearSeFechado(mes, lojaId) {
+    const f = await estadoFechamento(mes, lojaId);
+    return !!(f && String(f.status).toUpperCase()==='FECHADO');
+  }
+
+  function dataIsoValida(v) {
+    const s=String(v||'').slice(0,10);
+    return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null;
+  }
+
+  function diffDias(a,b) {
+    const da=dataIsoValida(a), db=dataIsoValida(b);
+    if(!da||!db) return 9999;
+    return Math.abs((new Date(da+'T12:00:00')-new Date(db+'T12:00:00'))/86400000);
+  }
+
+  function fornecedorTx(t) {
+    return String(t?.razaoSocial||t?.fornecedor||t?.portador||t?.boletoFornecedor||'').trim().toUpperCase();
+  }
+
+  function normDre(v) {
+    return String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim().toUpperCase();
+  }
+
+  function chaveDuplicidadeGrupo(grupo) {
+    const lista=(Array.isArray(grupo)?grupo:[]).filter(Boolean);
+    const mes=lista.map(t=>t?.mes||t?.mesCaixa||'').find(Boolean)||'';
+    const ids=lista.map(t=>String(t?.id==null?'':t.id)).filter(Boolean).sort();
+    return ('DUP|'+mes+'|'+ids.join('~')).slice(0,220);
+  }
+
+  function analiseTransacoesSessao(txs) {
+    const ativos=(Array.isArray(txs)?txs:[]).filter(t=>!t?.ignorar);
+    const semCategoria=ativos.filter(t=>!String(t?.categoria||'').trim());
+    const extratos=ativos.filter(t=>['EXTRATO','OFX'].includes(String(t?.fonte||'').toUpperCase()));
+    const duplicidades=[];
+    const idsEmDuplicidade=new Set();
+    const assinaturas=new Set();
+
+    const registrarGrupo=(grupo,motivo,confianca)=>{
+      const unicos=Array.from(new Map(grupo.map(t=>[String(t?.id??''),t])).values()).filter(Boolean);
+      if(unicos.length<2) return;
+      const assinatura=unicos.map(t=>String(t?.id??'')).sort().join('|');
+      if(!assinatura||assinaturas.has(assinatura)) return;
+      assinaturas.add(assinatura);
+      unicos.forEach(t=>idsEmDuplicidade.add(String(t?.id??'')));
+      duplicidades.push({
+        chave:chaveDuplicidadeGrupo(unicos),motivo,confianca,
+        ids:unicos.map(t=>String(t?.id??'')),
+        valor:Math.abs(Number(unicos[0]?.valor||0))
+      });
+    };
+
+    const porFitid=new Map();
+    for(const t of extratos){
+      const fitid=normDre(t?.fitid);
+      if(!fitid) continue;
+      if(!porFitid.has(fitid)) porFitid.set(fitid,[]);
+      porFitid.get(fitid).push(t);
+    }
+    porFitid.forEach(g=>registrarGrupo(g,'Mesmo identificador bancário (FITID)','confirmada'));
+
+    const porExata=new Map();
+    for(const t of extratos){
+      const chave=[
+        dataIsoValida(t?.data)||String(t?.data||''),
+        Math.round(Number(t?.valor||0)*100),
+        normDre(t?.lancamento||t?.descricao||''),
+        fornecedorTx(t)
+      ].join('|');
+      if(!porExata.has(chave)) porExata.set(chave,[]);
+      porExata.get(chave).push(t);
+    }
+    porExata.forEach(g=>registrarGrupo(g,'Mesma data, valor, descrição e fornecedor','provável'));
+
+    let pagamentosParecidos=0;
+    for(let i=0;i<extratos.length;i++){
+      const a=extratos[i], av=Math.abs(Number(a?.valor||0)), af=fornecedorTx(a);
+      if(!av || idsEmDuplicidade.has(String(a?.id??''))) continue;
+      for(let j=i+1;j<extratos.length;j++){
+        const b=extratos[j], bv=Math.abs(Number(b?.valor||0)), bf=fornecedorTx(b);
+        if(idsEmDuplicidade.has(String(b?.id??''))) continue;
+        if(Math.abs(av-bv)>0.01 || af!==bf || diffDias(a?.data,b?.data)>3) continue;
+        pagamentosParecidos++;
+      }
+    }
+
+    const pagFaturaSemVinculo=ativos.filter(t=>{
+      const cat=String(t?.categoria||'').trim();
+      if(!['Pagamento de Fatura CC','Pagamento de Cartão'].includes(cat)) return false;
+      return !(t?.faturaCC||t?.vinculadoFaturaCC||t?.cartaoFaturaRef||t?.cartao_fatura_id);
+    });
+    return {
+      ativos,semCategoria,extratos,duplicidades,pagamentosParecidos,
+      valorSemCategoria:semCategoria.reduce((s,t)=>s+Math.abs(Number(t?.valor||0)),0),
+      pagFaturaSemVinculo,
+      valorPagFaturaSemVinculo:pagFaturaSemVinculo.reduce((s,t)=>s+Math.abs(Number(t?.valor||0)),0),
+    };
+  }
+
+  async function checklistFechamento(mes, lojaId) {
+    const lid=Number(lojaId);
+    const sessaoQ = await pool.query(
+      `SELECT id,dados_json,atualizado_em,res_receitas,res_despesas,res_cmv,res_lucro_bruto,res_lucro_op,res_final
+         FROM dre_sessoes WHERE loja_id=$1 AND mes_ref=$2 ORDER BY atualizado_em DESC LIMIT 1`, [lid,mes]
+    );
+    const sessao=sessaoQ.rows[0]||null;
+    const txs=sessao?extrairTransacoes(sessao.dados_json):[];
+    const a=analiseTransacoesSessao(txs);
+    let duplicidadesValidadas=new Set();
+    try {
+      const {rows:decisoes}=await pool.query(
+        `SELECT chave FROM dre_conferencia_decisoes
+          WHERE loja_id=$1 AND mes_ref=$2 AND tipo='DUPLICIDADE'
+            AND status IN ('VALIDADO','CORRIGIDO')`,[lid,mes]
+      );
+      duplicidadesValidadas=new Set(decisoes.map(d=>String(d.chave)));
+    } catch(e) {
+      // A tabela é criada pela Conferência v2. Se ainda não existir, não há decisões anteriores.
+      if(e.code!=='42P01') console.warn('[dre/checklist] decisões de duplicidade:',e.message);
+    }
+    const duplicidadesPendentes=a.duplicidades.filter(g=>!duplicidadesValidadas.has(String(g.chave)));
+
+    const [mmStr, yyyyStr] = String(mes).split('/');
+    const mm=parseInt(mmStr), yy=parseInt(yyyyStr);
+    const [faturamento, boletos, prevVencidos] = await Promise.all([
+      pool.query(`SELECT COUNT(*) AS n,COALESCE(SUM(fat_bruto),0) AS fat FROM faturamento_periodos WHERE loja_id=$1 AND TO_CHAR(data_inicio,'MM/YYYY')=$2`,[lid,mes]),
+      pool.query(`SELECT COUNT(*) AS n FROM boletos WHERE loja_id=$1 AND mes_competencia=$2 AND origem='nfe'`,[lid,mes]),
+      pool.query(`SELECT COUNT(*) AS n,COALESCE(SUM(ABS(valor)),0) AS total FROM boletos
+                   WHERE loja_id=$1 AND status='avencer' AND vencimento < CURRENT_DATE - INTERVAL '30 days'
+                     AND (mes_competencia=$2 OR TO_CHAR(vencimento::date,'MM/YYYY')=$2)`,[lid,mes]),
+    ]);
+    const nFat=Number(faturamento.rows[0]?.n||0), fat=Number(faturamento.rows[0]?.fat||0);
+    const nBol=Number(boletos.rows[0]?.n||0);
+    const nPrev=Number(prevVencidos.rows[0]?.n||0), vlPrev=Number(prevVencidos.rows[0]?.total||0);
+    const itens=[
+      {id:'sessao',label:'DRE salvo',ok:!!sessao,valor:sessao?'Atualizado '+new Date(sessao.atualizado_em).toLocaleString('pt-BR'):'Não salvo',urgente:!sessao},
+      {id:'extrato',label:'Extrato bancário importado',ok:a.extratos.length>0,valor:a.extratos.length+' lançamento(s)',urgente:a.extratos.length===0},
+      {id:'faturamento',label:'Faturamento importado',ok:nFat>0,valor:nFat?('R$ '+fat.toLocaleString('pt-BR',{minimumFractionDigits:2})):'Não importado',urgente:nFat===0},
+      {id:'nfe',label:'NF-e/Boletos do mês',ok:nBol>0,valor:nBol+' NF-e',urgente:false},
+      {id:'classificacao',label:'Lançamentos sem categoria',ok:a.semCategoria.length===0,valor:a.semCategoria.length?(`${a.semCategoria.length} · R$ ${a.valorSemCategoria.toLocaleString('pt-BR',{minimumFractionDigits:2})}`):'Todos classificados',urgente:a.semCategoria.length>0},
+      {id:'duplicatas',label:'Reimportações/duplicidades não resolvidas',ok:duplicidadesPendentes.length===0,
+       valor:duplicidadesPendentes.length
+         ? (duplicidadesPendentes.length+' grupo(s) · '+duplicidadesPendentes.filter(g=>g.confianca==='confirmada').length+' confirmado(s)')
+         : 'Nenhuma pendência',
+       urgente:duplicidadesPendentes.length>0},
+      {id:'parecidos',label:'Pagamentos parecidos para revisão',ok:a.pagamentosParecidos===0,
+       valor:a.pagamentosParecidos? a.pagamentosParecidos+' par(es) suspeito(s)':'Nenhum',urgente:false},
+      {id:'cartoes',label:'Pagamentos de cartão sem vínculo',ok:a.pagFaturaSemVinculo.length===0,valor:a.pagFaturaSemVinculo.length?(`${a.pagFaturaSemVinculo.length} · R$ ${a.valorPagFaturaSemVinculo.toLocaleString('pt-BR',{minimumFractionDigits:2})}`):'Todos vinculados',urgente:a.pagFaturaSemVinculo.length>0},
+      {id:'prev_vencidos',label:'Boletos vencidos >30 dias',ok:nPrev===0,valor:nPrev?(`${nPrev} · R$ ${vlPrev.toLocaleString('pt-BR',{minimumFractionDigits:2})}`):'Nenhum',urgente:nPrev>0},
+    ];
+    return {mes,sessao,txs,analise:a,itens,pronto:itens.filter(i=>i.urgente&&!i.ok).length===0};
+  }
+
   // ── Merge de transações — deduplicação por FITID ─────────────────────────
   // Preserva classificações existentes, adiciona novos lançamentos
   function mergeTransacoes(existentes, novos) {
@@ -761,6 +986,9 @@ module.exports = function (pool, app) {
     const { sessao_id, mes_ref, descricao, dados_json, resultado } = req.body;
     if (!mes_ref) return res.status(400).json({ ok: false, erro: 'mes_ref obrigatório' });
     try {
+      if (await bloquearSeFechado(mes_ref, req.user?.lojaId)) {
+        return res.status(423).json({ ok:false, erro:'Este mês está fechado. Reabra o mês antes de alterar o DRE.', codigo:'DRE_MES_FECHADO' });
+      }
       const uid  = req.user?.id || null;
       const desc = descricao || `Sessão ${mes_ref}`;
       const dadosStr = JSON.stringify(dados_json);
@@ -852,6 +1080,9 @@ module.exports = function (pool, app) {
   r.post('/recuperar/:mes', autoPublish('dre', 'dre_atualizado'), async (req, res) => {
     try {
       const mes = decodeURIComponent(req.params.mes);
+      if (await bloquearSeFechado(mes, req.user?.lojaId)) {
+        return res.status(423).json({ok:false,erro:'Este mês está fechado. Reabra antes de recuperar/alterar a sessão.',codigo:'DRE_MES_FECHADO'});
+      }
       // Busca sessão ou cria nova
       let sessao = await pool.query(
         `SELECT id, dados_json FROM dre_sessoes WHERE mes_ref=$1 ORDER BY atualizado_em DESC LIMIT 1`, [mes]
@@ -1076,130 +1307,90 @@ module.exports = function (pool, app) {
     }
   });
 
-  // ── GET /relatorio/:mes ────────────────────────────────────────────────────
-  // ── GET /checklist/:mes — fechamento guiado (F2.5) ─────────────────────────
-  r.get('/checklist/:mes(*)', async (req, res) => {
-    try {
-      const mes = decodeURIComponent(req.params.mes); // MM/YYYY
-      const [mmStr, yyyyStr] = mes.split('/');
-      const mm = parseInt(mmStr), yy = parseInt(yyyyStr);
-      const dataIni = `${yy}-${String(mm).padStart(2,'0')}-01`;
-      const dataFim = new Date(yy, mm, 0).toISOString().slice(0,10); // último dia do mês
-
-      const [sessao, lancSemCat, extrato, faturamento, boletos, duplicatas,
-             boletosPrevVencidos, lancSemCatValor, pagFaturasSemImport] = await Promise.all([
-        // Tem sessão DRE salva para o mês?
-        pool.query(`SELECT id, atualizado_em FROM dre_sessoes WHERE mes_ref=$1 ORDER BY atualizado_em DESC LIMIT 1`, [mes]),
-        // Lançamentos sem categoria
-        pool.query(`SELECT COUNT(*) AS n FROM dre_lancamentos WHERE mes=$1 AND (categoria IS NULL OR categoria='') AND ignorar=false`, [mes]),
-        // Extrato importado? (tem lançamentos com fonte EXTRATO)
-        pool.query(`SELECT COUNT(*) AS n FROM dre_lancamentos WHERE mes=$1 AND fonte='EXTRATO'`, [mes]),
-        // Faturamento importado?
-        pool.query(`SELECT COUNT(*) AS n, COALESCE(SUM(fat_bruto),0) AS fat FROM faturamento_periodos WHERE TO_CHAR(data_inicio,'MM/YYYY')=$1`, [mes]),
-        // Boletos NF-e importados para o mês?
-        pool.query(`SELECT COUNT(*) AS n FROM boletos WHERE mes_competencia=$1 AND origem='nfe'`, [mes]),
-        // Lançamentos suspeitos: mesmo valor + mesmo fornecedor em < 3 dias
-        pool.query(`
-          SELECT COUNT(*) AS n FROM (
-            SELECT a.id FROM dre_lancamentos a
-            JOIN dre_lancamentos b ON b.id != a.id
-              AND b.mes = a.mes
-              AND ABS(a.valor - b.valor) < 0.01
-              AND (a.razao_social = b.razao_social OR (a.razao_social IS NULL AND b.razao_social IS NULL))
-              AND ABS(a.data_lanc::date - b.data_lanc::date) <= 3
-            WHERE a.mes = $1 AND a.fonte='EXTRATO'
-            GROUP BY a.id HAVING COUNT(*) > 0
-          ) AS dup
-        `, [mes]),
-        // R3-1: Boletos PREV vencidos há mais de 30 dias sem baixa
-        pool.query(`
-          SELECT COUNT(*) AS n, COALESCE(SUM(ABS(valor)),0) AS total
-          FROM boletos
-          WHERE status = 'avencer'
-            AND vencimento < CURRENT_DATE - INTERVAL '30 days'
-            AND (mes_competencia = $1 OR TO_CHAR(vencimento::date,'MM/YYYY') = $1)
-        `, [mes]),
-        // R3-3: Valor total dos lançamentos sem categoria
-        pool.query(`
-          SELECT COALESCE(SUM(ABS(valor)),0) AS total
-          FROM dre_lancamentos
-          WHERE mes=$1 AND (categoria IS NULL OR categoria='') AND ignorar=false
-        `, [mes]),
-        // R3-2: Pagamentos de fatura de cartão no extrato sem fatura CC correspondente
-        // Detecta por padrão no nome do lançamento
-        pool.query(`
-          SELECT COUNT(*) AS n, COALESCE(SUM(ABS(valor)),0) AS total
-          FROM dre_lancamentos
-          WHERE mes=$1
-            AND fonte='EXTRATO'
-            AND valor < 0
-            AND (
-              lancamento ILIKE '%pag%fatura%'
-              OR lancamento ILIKE '%pagto%cart%'
-              OR lancamento ILIKE '%pagamento%cart%'
-              OR lancamento ILIKE '%fatura%cc%'
-              OR lancamento ILIKE '%pag%cartao%'
-            )
-            AND (categoria IS NULL OR categoria = '' OR categoria = 'Pagamento de Fatura CC' OR categoria = 'Pagamento de Cartão')
-            AND sessao_id IS NOT NULL
-        `, [mes]),
+  // ── Fechamento mensal seguro ───────────────────────────────────────────────
+  r.get('/fechamento', async (req,res)=>{
+    try{
+      const mes=String(req.query.mes||'').trim();
+      if(!/^\d{2}\/\d{4}$/.test(mes)) return res.status(400).json({ok:false,erro:'mes inválido'});
+      const lojaId=Number(req.user?.lojaId);
+      const [f,check,eventos]=await Promise.all([
+        estadoFechamento(mes,lojaId),
+        checklistFechamento(mes,lojaId),
+        pool.query(`SELECT evento,usuario_nome,justificativa,criado_em FROM dre_fechamento_eventos WHERE loja_id=$1 AND mes_ref=$2 ORDER BY criado_em DESC LIMIT 30`,[lojaId,mes]),
       ]);
-
-      const temSessao   = sessao.rows.length > 0;
-      const nSemCat     = parseInt(lancSemCat.rows[0]?.n || 0);
-      const nExtrato    = parseInt(extrato.rows[0]?.n || 0);
-      const nFaturamento= parseInt(faturamento.rows[0]?.n || 0);
-      const fatTotal    = parseFloat(faturamento.rows[0]?.fat || 0);
-      const nBoletos    = parseInt(boletos.rows[0]?.n || 0);
-      const nDuplicatas = parseInt(duplicatas.rows[0]?.n || 0);
-      // R3 — novos itens
-      const nPrevVencidos    = parseInt(boletosPrevVencidos.rows[0]?.n || 0);
-      const vlPrevVencidos   = parseFloat(boletosPrevVencidos.rows[0]?.total || 0);
-      const vlSemCat         = parseFloat(lancSemCatValor.rows[0]?.total || 0);
-      const nPagFaturaSemImp = parseInt(pagFaturasSemImport.rows[0]?.n || 0);
-      const vlPagFaturaSemImp= parseFloat(pagFaturasSemImport.rows[0]?.total || 0);
-
-      res.json({ ok: true, data: {
-        mes,
-        itens: [
-          { id:'extrato',     label:'Extrato bancário importado',  ok: nExtrato>0,     valor: nExtrato+' lançamentos',    acao: nExtrato===0?'Importar OFX ou XLSX no DRE':null },
-          { id:'nfe',         label:'NF-e/Boletos do mês',         ok: nBoletos>0,     valor: nBoletos+' NF-e',           acao: nBoletos===0?'Importar XML no módulo Boletos':null },
-          { id:'faturamento', label:'Faturamento importado',        ok: nFaturamento>0, valor: nFaturamento>0?'R$ '+parseFloat(fatTotal).toLocaleString('pt-BR',{minimumFractionDigits:2}):'—', acao: nFaturamento===0?'Importar relatório XMenu':null },
-          { id:'classificacao',label:'Classificações pendentes',   ok: nSemCat===0,    valor: nSemCat===0?'Todos classificados':nSemCat+' sem categoria', acao: nSemCat>0?'Abrir DRE e classificar lançamentos pendentes':null, urgente: nSemCat>0 },
-          { id:'duplicatas',  label:'Lançamentos suspeitos',        ok: nDuplicatas===0, valor: nDuplicatas===0?'Nenhum detectado':nDuplicatas+' possíveis duplicatas', acao: nDuplicatas>0?'Verificar manualmente no DRE':null },
-          { id:'sessao',      label:'DRE salvo',                    ok: temSessao,      valor: temSessao?(sessao.rows[0].atualizado_em?.toISOString().slice(0,16).replace('T',' ')):'Não salvo', acao: !temSessao?'Abrir DRE e salvar o mês':null },
-          // R3: 3 novos itens de confiabilidade
-          { id:'sem_categoria',   label:'Valor sem categoria',
-            ok: nSemCat === 0,
-            valor: nSemCat === 0
-              ? 'Todos classificados'
-              : `${nSemCat} lançamento(s) · R$ ${vlSemCat.toLocaleString('pt-BR',{minimumFractionDigits:2})} fora do resultado`,
-            acao: nSemCat > 0 ? 'Abrir DRE · filtrar "Pendentes" e classificar' : null,
-            urgente: nSemCat > 0,
-          },
-          { id:'prev_vencidos',   label:'Boletos PREV vencidos >30d',
-            ok: nPrevVencidos === 0,
-            valor: nPrevVencidos === 0
-              ? 'Nenhum'
-              : `${nPrevVencidos} boleto(s) · R$ ${vlPrevVencidos.toLocaleString('pt-BR',{minimumFractionDigits:2})} — confirmar se pagos ou negociados`,
-            acao: nPrevVencidos > 0 ? 'Verificar boletos vencidos no módulo Boletos' : null,
-            urgente: nPrevVencidos > 0,
-          },
-          { id:'pag_fatura_sem_import', label:'Pag. fatura CC sem fatura importada',
-            ok: nPagFaturaSemImp === 0,
-            valor: nPagFaturaSemImp === 0
-              ? 'Nenhum detectado'
-              : `${nPagFaturaSemImp} pagamento(s) de fatura · R$ ${vlPagFaturaSemImp.toLocaleString('pt-BR',{minimumFractionDigits:2})} — importar fatura CC correspondente`,
-            acao: nPagFaturaSemImp > 0 ? 'Importar fatura CC no DRE para evitar dupla contagem' : null,
-            urgente: nPagFaturaSemImp > 0,
-          },
-        ],
-        pronto: nSemCat===0 && nExtrato>0 && temSessao && nPrevVencidos===0 && nPagFaturaSemImp===0,
+      res.json({ok:true,data:{
+        mes,status:f?.status||'ABERTO',fechado_em:f?.fechado_em||null,fechado_por_nome:f?.fechado_por_nome||null,
+        reaberto_em:f?.reaberto_em||null,reaberto_por_nome:f?.reaberto_por_nome||null,motivo_reabertura:f?.motivo_reabertura||null,
+        checklist:{itens:check.itens,pronto:check.pronto},historico:eventos.rows
       }});
-    } catch(e) {
-      console.error('[dre/checklist]', e.message);
-      res.status(500).json({ ok: false, erro: e.message });
-    }
+    }catch(e){res.status(500).json({ok:false,erro:e.message});}
+  });
+
+  r.post('/fechamento/fechar', autoPublish('dre','dre_fechado'), async (req,res)=>{
+    const perfil=String(req.user?.perfil||'').toLowerCase();
+    if(!['admin','financeiro'].includes(perfil)) return res.status(403).json({ok:false,erro:'Sem permissão para fechar o DRE'});
+    try{
+      const mes=String(req.body?.mes_ref||'').trim();
+      if(!/^\d{2}\/\d{4}$/.test(mes)) return res.status(400).json({ok:false,erro:'mes_ref inválido'});
+      const lojaId=Number(req.user?.lojaId);
+      const atual=await estadoFechamento(mes,lojaId);
+      if(atual?.status==='FECHADO') return res.json({ok:true,data:atual,ja_fechado:true});
+      const check=await checklistFechamento(mes,lojaId);
+      if(!check.sessao) return res.status(409).json({ok:false,erro:'Não existe sessão salva para este mês'});
+      const bloqueios=check.itens.filter(i=>i.urgente&&!i.ok);
+      if(bloqueios.length) return res.status(409).json({ok:false,erro:'Existem pendências obrigatórias antes do fechamento',pendencias:bloqueios});
+      const snapshot={
+        mes_ref:mes,
+        sessao_id:check.sessao.id,
+        dados_json:check.sessao.dados_json,
+        resultado:{
+          receitas:Number(check.sessao.res_receitas||0),despesas:Number(check.sessao.res_despesas||0),
+          cmv:Number(check.sessao.res_cmv||0),lucroBruto:Number(check.sessao.res_lucro_bruto||0),
+          lucroOp:Number(check.sessao.res_lucro_op||0),final:Number(check.sessao.res_final||0)
+        },
+        total_lancamentos:check.txs.length,
+        criado_em:new Date().toISOString()
+      };
+      const nome=nomeUsuario(req);
+      const {rows}=await pool.query(`
+        INSERT INTO dre_fechamentos(loja_id,mes_ref,status,sessao_id,snapshot_json,checklist_json,fechado_por,fechado_por_nome,fechado_em,atualizado_em)
+        VALUES($7,$1,'FECHADO',$2,$3::jsonb,$4::jsonb,$5,$6,NOW(),NOW())
+        ON CONFLICT(loja_id,mes_ref) DO UPDATE SET status='FECHADO',sessao_id=EXCLUDED.sessao_id,
+          snapshot_json=EXCLUDED.snapshot_json,checklist_json=EXCLUDED.checklist_json,fechado_por=EXCLUDED.fechado_por,
+          fechado_por_nome=EXCLUDED.fechado_por_nome,fechado_em=NOW(),reaberto_por=NULL,reaberto_por_nome=NULL,reaberto_em=NULL,
+          motivo_reabertura=NULL,atualizado_em=NOW()
+        RETURNING *`,[mes,check.sessao.id,JSON.stringify(snapshot),JSON.stringify({itens:check.itens,pronto:check.pronto}),req.user?.id||null,nome,lojaId]);
+      await pool.query(`INSERT INTO dre_fechamento_eventos(loja_id,mes_ref,evento,usuario_id,usuario_nome) VALUES($4,$1,'FECHADO',$2,$3)`,[mes,req.user?.id||null,nome,lojaId]);
+      res.json({ok:true,data:rows[0],snapshot});
+    }catch(e){res.status(500).json({ok:false,erro:e.message});}
+  });
+
+  r.post('/fechamento/reabrir', autoPublish('dre','dre_reaberto'), async (req,res)=>{
+    if(String(req.user?.perfil||'').toLowerCase()!=='admin') return res.status(403).json({ok:false,erro:'Apenas administrador pode reabrir um mês fechado'});
+    try{
+      const mes=String(req.body?.mes_ref||'').trim();
+      if(!/^\d{2}\/\d{4}$/.test(mes)) return res.status(400).json({ok:false,erro:'mes_ref inválido'});
+      const motivo=String(req.body?.motivo||'').trim();
+      if(motivo.length<5) return res.status(400).json({ok:false,erro:'Informe o motivo da reabertura'});
+      const nome=nomeUsuario(req);
+      const lojaId=Number(req.user?.lojaId);
+      const {rows}=await pool.query(`
+        UPDATE dre_fechamentos SET status='ABERTO',reaberto_por=$3,reaberto_por_nome=$4,reaberto_em=NOW(),
+          motivo_reabertura=$5,atualizado_em=NOW() WHERE loja_id=$1 AND mes_ref=$2 RETURNING *`,[lojaId,mes,req.user?.id||null,nome,motivo]);
+      if(!rows.length) return res.status(404).json({ok:false,erro:'Fechamento não encontrado'});
+      await pool.query(`INSERT INTO dre_fechamento_eventos(loja_id,mes_ref,evento,usuario_id,usuario_nome,justificativa) VALUES($5,$1,'REABERTO',$2,$3,$4)`,[mes,req.user?.id||null,nome,motivo,lojaId]);
+      res.json({ok:true,data:rows[0]});
+    }catch(e){res.status(500).json({ok:false,erro:e.message});}
+  });
+
+  // ── GET /relatorio/:mes ────────────────────────────────────────────────────
+  // ── GET /checklist/:mes — fechamento guiado (fonte: sessão atual) ──────────
+  r.get('/checklist/:mes(*)', async (req,res)=>{
+    try{
+      const mes=decodeURIComponent(req.params.mes);
+      const check=await checklistFechamento(mes,req.user?.lojaId);
+      res.json({ok:true,data:{mes,itens:check.itens,pronto:check.pronto}});
+    }catch(e){res.status(500).json({ok:false,erro:e.message});}
   });
 
   // ── GET /diagnostico/:mes — análise automática (F2.5) ────────────────────
@@ -1347,6 +1538,9 @@ module.exports = function (pool, app) {
       );
       if (!rows.length) return res.status(404).json({ ok:false, erro:'Fatura não encontrada' });
       const fatura = rows[0];
+      if (fatura.competencia && await bloquearSeFechado(fatura.competencia, req.user?.lojaId)) {
+        return res.status(423).json({ok:false,erro:'A competência desta fatura está em um DRE fechado. Reabra o mês antes de excluir a fatura.',codigo:'DRE_MES_FECHADO'});
+      }
       const faturaCC = fatura.fatura_id_ref; // ex: "CC_04_2026_ItauNovo"
 
       let txsRemovidas = 0;
@@ -1355,9 +1549,16 @@ module.exports = function (pool, app) {
       if (faturaCC) {
         // Varrer todas as sessões DRE removendo transações desta fatura
         const { rows: sessoes } = await pool.query(
-          `SELECT id, dados_json FROM dre_sessoes`
+          `SELECT id, mes_ref, dados_json FROM dre_sessoes`
         );
         for (const s of sessoes) {
+          if (await bloquearSeFechado(s.mes_ref, req.user?.lojaId)) {
+            const txsFechados = s.dados_json?.transactions || [];
+            if (txsFechados.some(t => t.faturaCC === faturaCC)) {
+              return res.status(423).json({ok:false,erro:'Esta fatura possui lançamentos em mês fechado ('+s.mes_ref+'). Reabra o mês antes de excluir.',codigo:'DRE_MES_FECHADO'});
+            }
+            continue;
+          }
           const txs = s.dados_json?.transactions || [];
           const filtradas = txs.filter(t => t.faturaCC !== faturaCC);
           if (filtradas.length !== txs.length) {
