@@ -3,7 +3,7 @@
 
 const MONTHS=['01','02','03','04','05','06','07','08','09','10','11','12'];
 const MONTH_LABEL={'01':'Jan','02':'Fev','03':'Mar','04':'Abr','05':'Mai','06':'Jun','07':'Jul','08':'Ago','09':'Set','10':'Out','11':'Nov','12':'Dez'};
-const st={ano:new Date().getFullYear(),plan:{},obs:'',loading:false,fluxo:null,fluxoCalc:null,fluxoLoading:false};
+const st={ano:new Date().getFullYear(),plan:{},obs:'',loading:false,fluxo:null,fluxoCalc:null,fluxoLoading:false,fluxoCarregado:false};
 
 const esc=v=>String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const brl=v=>Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
@@ -23,7 +23,7 @@ async function carregarFluxo(){
     if(r?.ok){st.fluxo=r.data||null;st.fluxoCalc=r.calculo||null;}
     else throw new Error(r?.erro||'Erro ao carregar saldo do fluxo');
   }catch(e){console.warn('[DRE Fluxo]',e);st.fluxo=null;st.fluxoCalc=null;}
-  finally{st.fluxoLoading=false;renderConc();}
+  finally{st.fluxoLoading=false;st.fluxoCarregado=true;renderConc();}
 }
 function fluxoCard(){
   const f=st.fluxo||{},x=st.fluxoCalc||{};
@@ -229,7 +229,7 @@ root.dreFinanceViewRender=function(v){
   ensureAreas();
   if(v==='conciliacao'){
     renderConc();
-    if(st.fluxo===null&&!st.fluxoLoading)carregarFluxo();
+    if(!st.fluxoCarregado&&!st.fluxoLoading)carregarFluxo();
   }
   if(v==='planejamento'){if(!Object.keys(st.plan).length&&!st.loading)carregarPlano();else renderPlan();}
 };
@@ -248,7 +248,7 @@ root.dreFluxoSalvar=async function(){
     data_saldo_real:saldo_real===''?null:data_saldo_real
   });
   if(!r?.ok){root.toast?.('❌ '+(r?.erro||'Erro ao salvar saldo'));return;}
-  st.fluxo=r.data||null;st.fluxoCalc=r.calculo||null;
+  st.fluxo=r.data||null;st.fluxoCalc=r.calculo||null;st.fluxoCarregado=true;
   root.toast?.('✅ Saldo do fluxo atualizado');
   renderConc();
 };
