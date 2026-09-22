@@ -757,33 +757,80 @@ module.exports = function (pool, app) {
     return String(t?.razaoSocial||t?.fornecedor||t?.portador||t?.boletoFornecedor||'').trim().toUpperCase();
   }
 
+  function normDre(v) {
+    return String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim().toUpperCase();
+  }
+
+  function chaveDuplicidadeGrupo(grupo) {
+    const lista=(Array.isArray(grupo)?grupo:[]).filter(Boolean);
+    const mes=lista.map(t=>t?.mes||t?.mesCaixa||'').find(Boolean)||'';
+    const ids=lista.map(t=>String(t?.id==null?'':t.id)).filter(Boolean).sort();
+    return ('DUP|'+mes+'|'+ids.join('~')).slice(0,220);
+  }
+
   function analiseTransacoesSessao(txs) {
     const ativos=(Array.isArray(txs)?txs:[]).filter(t=>!t?.ignorar);
     const semCategoria=ativos.filter(t=>!String(t?.categoria||'').trim());
     const extratos=ativos.filter(t=>['EXTRATO','OFX'].includes(String(t?.fonte||'').toUpperCase()));
-    const suspeitos=new Set();
+    const duplicidades=[];
+    const idsEmDuplicidade=new Set();
+    const assinaturas=new Set();
+
+    const registrarGrupo=(grupo,motivo,confianca)=>{
+      const unicos=Array.from(new Map(grupo.map(t=>[String(t?.id??''),t])).values()).filter(Boolean);
+      if(unicos.length<2) return;
+      const assinatura=unicos.map(t=>String(t?.id??'')).sort().join('|');
+      if(!assinatura||assinaturas.has(assinatura)) return;
+      assinaturas.add(assinatura);
+      unicos.forEach(t=>idsEmDuplicidade.add(String(t?.id??'')));
+      duplicidades.push({
+        chave:chaveDuplicidadeGrupo(unicos),motivo,confianca,
+        ids:unicos.map(t=>String(t?.id??'')),
+        valor:Math.abs(Number(unicos[0]?.valor||0))
+      });
+    };
+
+    const porFitid=new Map();
+    for(const t of extratos){
+      const fitid=normDre(t?.fitid);
+      if(!fitid) continue;
+      if(!porFitid.has(fitid)) porFitid.set(fitid,[]);
+      porFitid.get(fitid).push(t);
+    }
+    porFitid.forEach(g=>registrarGrupo(g,'Mesmo identificador bancário (FITID)','confirmada'));
+
+    const porExata=new Map();
+    for(const t of extratos){
+      const chave=[
+        dataIsoValida(t?.data)||String(t?.data||''),
+        Math.round(Number(t?.valor||0)*100),
+        normDre(t?.lancamento||t?.descricao||''),
+        fornecedorTx(t)
+      ].join('|');
+      if(!porExata.has(chave)) porExata.set(chave,[]);
+      porExata.get(chave).push(t);
+    }
+    porExata.forEach(g=>registrarGrupo(g,'Mesma data, valor, descrição e fornecedor','provável'));
+
+    let pagamentosParecidos=0;
     for(let i=0;i<extratos.length;i++){
       const a=extratos[i], av=Math.abs(Number(a?.valor||0)), af=fornecedorTx(a);
-      if(!av) continue;
+      if(!av || idsEmDuplicidade.has(String(a?.id??''))) continue;
       for(let j=i+1;j<extratos.length;j++){
         const b=extratos[j], bv=Math.abs(Number(b?.valor||0)), bf=fornecedorTx(b);
-        if(Math.abs(av-bv)>0.01) continue;
-        if(af!==bf) continue;
-        if(diffDias(a?.data,b?.data)>3) continue;
-        suspeitos.add(String(a?.id||a?.fitid||i));
-        suspeitos.add(String(b?.id||b?.fitid||j));
+        if(idsEmDuplicidade.has(String(b?.id??''))) continue;
+        if(Math.abs(av-bv)>0.01 || af!==bf || diffDias(a?.data,b?.data)>3) continue;
+        pagamentosParecidos++;
       }
     }
+
     const pagFaturaSemVinculo=ativos.filter(t=>{
       const cat=String(t?.categoria||'').trim();
       if(!['Pagamento de Fatura CC','Pagamento de Cartão'].includes(cat)) return false;
       return !(t?.faturaCC||t?.vinculadoFaturaCC||t?.cartaoFaturaRef||t?.cartao_fatura_id);
     });
     return {
-      ativos,
-      semCategoria,
-      extratos,
-      duplicatas:suspeitos.size,
+      ativos,semCategoria,extratos,duplicidades,pagamentosParecidos,
       valorSemCategoria:semCategoria.reduce((s,t)=>s+Math.abs(Number(t?.valor||0)),0),
       pagFaturaSemVinculo,
       valorPagFaturaSemVinculo:pagFaturaSemVinculo.reduce((s,t)=>s+Math.abs(Number(t?.valor||0)),0),
@@ -799,6 +846,19 @@ module.exports = function (pool, app) {
     const sessao=sessaoQ.rows[0]||null;
     const txs=sessao?extrairTransacoes(sessao.dados_json):[];
     const a=analiseTransacoesSessao(txs);
+    let duplicidadesValidadas=new Set();
+    try {
+      const {rows:decisoes}=await pool.query(
+        `SELECT chave FROM dre_conferencia_decisoes
+          WHERE loja_id=$1 AND mes_ref=$2 AND tipo='DUPLICIDADE'
+            AND status IN ('VALIDADO','CORRIGIDO')`,[lid,mes]
+      );
+      duplicidadesValidadas=new Set(decisoes.map(d=>String(d.chave)));
+    } catch(e) {
+      // A tabela é criada pela Conferência v2. Se ainda não existir, não há decisões anteriores.
+      if(e.code!=='42P01') console.warn('[dre/checklist] decisões de duplicidade:',e.message);
+    }
+    const duplicidadesPendentes=a.duplicidades.filter(g=>!duplicidadesValidadas.has(String(g.chave)));
 
     const [mmStr, yyyyStr] = String(mes).split('/');
     const mm=parseInt(mmStr), yy=parseInt(yyyyStr);
@@ -818,7 +878,13 @@ module.exports = function (pool, app) {
       {id:'faturamento',label:'Faturamento importado',ok:nFat>0,valor:nFat?('R$ '+fat.toLocaleString('pt-BR',{minimumFractionDigits:2})):'Não importado',urgente:nFat===0},
       {id:'nfe',label:'NF-e/Boletos do mês',ok:nBol>0,valor:nBol+' NF-e',urgente:false},
       {id:'classificacao',label:'Lançamentos sem categoria',ok:a.semCategoria.length===0,valor:a.semCategoria.length?(`${a.semCategoria.length} · R$ ${a.valorSemCategoria.toLocaleString('pt-BR',{minimumFractionDigits:2})}`):'Todos classificados',urgente:a.semCategoria.length>0},
-      {id:'duplicatas',label:'Possíveis duplicidades',ok:a.duplicatas===0,valor:a.duplicatas? a.duplicatas+' lançamento(s) para revisar':'Nenhuma',urgente:a.duplicatas>0},
+      {id:'duplicatas',label:'Reimportações/duplicidades não resolvidas',ok:duplicidadesPendentes.length===0,
+       valor:duplicidadesPendentes.length
+         ? (duplicidadesPendentes.length+' grupo(s) · '+duplicidadesPendentes.filter(g=>g.confianca==='confirmada').length+' confirmado(s)')
+         : 'Nenhuma pendência',
+       urgente:duplicidadesPendentes.length>0},
+      {id:'parecidos',label:'Pagamentos parecidos para revisão',ok:a.pagamentosParecidos===0,
+       valor:a.pagamentosParecidos? a.pagamentosParecidos+' par(es) suspeito(s)':'Nenhum',urgente:false},
       {id:'cartoes',label:'Pagamentos de cartão sem vínculo',ok:a.pagFaturaSemVinculo.length===0,valor:a.pagFaturaSemVinculo.length?(`${a.pagFaturaSemVinculo.length} · R$ ${a.valorPagFaturaSemVinculo.toLocaleString('pt-BR',{minimumFractionDigits:2})}`):'Todos vinculados',urgente:a.pagFaturaSemVinculo.length>0},
       {id:'prev_vencidos',label:'Boletos vencidos >30 dias',ok:nPrev===0,valor:nPrev?(`${nPrev} · R$ ${vlPrev.toLocaleString('pt-BR',{minimumFractionDigits:2})}`):'Nenhum',urgente:nPrev>0},
     ];
