@@ -1411,9 +1411,15 @@ async function inicializar() {
       if (sel) sel.value = modoSalvo;
     }
   } catch(_) {}
-  await carregarCategorias();
-  await carregarFaturamentoMensal();
+  // Carrega dados essenciais primeiro. Categorias/faturamento são enriquecimentos
+  // e não podem impedir o DRE de recuperar as sessões e exibir os lançamentos.
+  const pCategorias = carregarCategorias().catch(e => console.warn('[DRE] categorias:', e));
+  const pFaturamento = carregarFaturamentoMensal().catch(e => console.warn('[DRE] faturamento:', e));
   await carregarSessao();
+  // Atualiza enriquecimentos quando estiverem prontos, sem segurar a carga principal.
+  Promise.allSettled([pCategorias, pFaturamento]).then(() => {
+    try { updMesFiltro(); render(); updStats(); renderDRE(); } catch(_) {}
+  });
   await sincronizarBoletosAutomatico();
   _inicializado = true; // só marca após carregar com sucesso
   // Só adiciona listener de troca de mês DEPOIS de carregar (evita loop)
@@ -1561,7 +1567,7 @@ async function carregarSessao() {
       if (dados.supplierMem) {
         const memFiltrada = {};
         for (const [k, v] of Object.entries(dados.supplierMem)) {
-          if (v && Object.values(CATS).some(g => g.s.includes(v))) {
+          if (v && (!Object.keys(CATS).length || Object.values(CATS).some(g => g.s.includes(v)))) {
             memFiltrada[k] = v;
           }
         }
