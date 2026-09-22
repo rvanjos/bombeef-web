@@ -1979,7 +1979,12 @@ module.exports = function (pool, app) {
         return m ? `${Number(m[1])}/${Number(m[2])}` : null;
       };
 
-      const data=rows.map(x=>({
+      const {rows:fechRows}=await pool.query(
+        `SELECT mes_ref FROM dre_fechamentos WHERE status='FECHADO'`
+      ).catch(()=>({rows:[]}));
+      const mesesFechados=new Set((fechRows||[]).map(r=>String(r.mes_ref)));
+
+      const todos=rows.map(x=>({
         id:`CFI_${x.item_id}`,
         cartaoItemRef:String(x.item_id),
         hash_item:x.hash_item||null,
@@ -2002,7 +2007,9 @@ module.exports = function (pool, app) {
         faturaValorTotal:Number(x.valor_total||0),
         faturaVencimento:x.vencimento||null
       }));
-      res.json({ok:true,data,total:data.length});
+      const bloqueados=todos.filter(x=>mesesFechados.has(String(x.mes)));
+      const data=todos.filter(x=>!mesesFechados.has(String(x.mes)));
+      res.json({ok:true,data,total:data.length,bloqueados_fechamento:bloqueados.length});
     } catch(e) {
       console.error('[dre/cartao-faturas/itens-dre]',e.message);
       res.status(500).json({ok:false,erro:e.message});
