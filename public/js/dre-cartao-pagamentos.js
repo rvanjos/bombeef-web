@@ -59,7 +59,10 @@
       const g=grupos.get(k);g.refs.push(...f.refs);g.dbIds.push(...f.dbIds);g.total+=f.total;g.itens+=f.itens;
       if(!g.bandeira&&f.bandeira)g.bandeira=f.bandeira;
     }
-    return [...individuais,...[...grupos.values()].filter(g=>g.refs.length>1).map(g=>({...g,total:Number(g.total.toFixed(2))))];
+    const agregadas=[...grupos.values()]
+      .filter(g=>g.refs.length>1)
+      .map(g=>({...g,total:Number(g.total.toFixed(2))}));
+    return [...individuais,...agregadas];
   }
   function combinarFaturas(txs,dbRows){
     const mapa=new Map();
