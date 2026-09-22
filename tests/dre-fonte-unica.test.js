@@ -32,3 +32,12 @@ test('relatório usa snapshot quando o mês está fechado',()=>{
   assert.match(rota,/snapshot_json/);
   assert.match(rota,/estrutura\.totalReceitas=Number\(oficial\?\.receitas/);
 });
+
+
+test('Demonstrativo abre em competência para preservar receitas do faturamento',()=>{
+  const dre=ler('public/dre.html');
+  assert.equal((dre.match(/<option value="comp" selected/g)||[]).length,2);
+  assert.match(dre,/document\.getElementById\('dre-modo'\)\?\.value\|\|'comp'/);
+  assert.match(dre,/bb_dre_modo_pref_v2/);
+  assert.match(dre,/const modoInicial = prefV2[\s\S]*?: 'comp';/);
+});
