@@ -28,15 +28,14 @@
     sessionStorage.removeItem('bb_token');
     localStorage.removeItem('bb_token');
     if (_emIframe) {
-      if (_bbReady) {
-        _logoutEmAndamento = true;
-        try { w.parent.postMessage({ type: 'bb_logout' }, '*'); } catch (_) {}
-      } else {
-        try { w.parent.postMessage({ type: 'bb_request_auth' }, '*'); } catch (_) {}
-      }
-    } else {
-      w.location.href = '/';
+      // Um módulo pode carregar com token antigo antes de o portal repassar o
+      // token atual. Isso não deve encerrar a sessão inteira do usuário.
+      // Pede nova autenticação ao portal e deixa somente esta requisição falhar.
+      try { w.parent.postMessage({ type: 'bb_request_auth' }, '*'); } catch (_) {}
+      return;
     }
+    _logoutEmAndamento = true;
+    w.location.href = '/';
   }
 
   let _refreshing = false;
