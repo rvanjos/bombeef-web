@@ -827,12 +827,15 @@ module.exports = function (pool, app) {
     // Para resolucao='vencimento', o status vira 'descartado' para entrar no histórico
     const novoStatus = motivo === 'vencimento' ? 'descartado' : motivo;
     const client = await pool.connect();
+    const alertasEstoque = [];
     try {
       await client.query('BEGIN');
       const result = await client.query(`
         UPDATE validade_items
         SET status=$1, resolucao=$2, dt_resolucao=CURRENT_DATE, atualizado_em=NOW()
         WHERE id=ANY($3::int[])
+          AND status NOT IN ('descartado','vendido','devolucao')
+          AND dt_resolucao IS NULL
         RETURNING id, status, resolucao, atualizado_em
       `, [novoStatus, motivo, idsNum]);
       console.log(`[validade] encerrar-multiplos: ids=${idsNum} motivo=${motivo} status=${novoStatus} rowCount=${result.rowCount}`);
@@ -840,6 +843,7 @@ module.exports = function (pool, app) {
         await client.query('ROLLBACK');
         return res.status(404).json({ ok: false, erro: 'Nenhum item encontrado com esses IDs' });
       }
+      const idsAtualizados = result.rows.map(item => item.id);
 
       // ── F1-07: se foi descarte por vencimento → gera perdas automaticamente
       if (novoStatus === 'descartado') {
@@ -851,7 +855,7 @@ module.exports = function (pool, app) {
             FROM validade_items vi
             LEFT JOIN produtos p ON p.id = vi.produto_id
             WHERE vi.id = ANY($1::int[])
-          `, [idsNum]);
+          `, [idsAtualizados]);
 
           for (const item of itensDesc) {
             const dtHoje = new Date().toISOString().slice(0, 10);
@@ -880,7 +884,21 @@ module.exports = function (pool, app) {
               const lock = await client.query('SELECT estoque FROM produtos WHERE id=$1 FOR UPDATE', [item.produto_id]);
               if (!lock.rows.length) throw new Error(`Produto não encontrado para o item de validade ${item.id}`);
               const disponivel = parseFloat(lock.rows[0].estoque || 0);
-              if (qtd > disponivel) throw new Error(`Estoque insuficiente no descarte. Produto ${item.codigo}: disponível ${disponivel}; descarte ${qtd}`);
+              // O controle de validade e o saldo do cadastro podem divergir (por
+              // exemplo, quando uma importação já deixou o estoque negativo).
+              // Essa divergência não pode impedir o registro real do descarte,
+              // nem autoriza agravar o saldo. Nessa situação preservamos o saldo,
+              // concluímos a perda e devolvemos um alerta explícito para conferência.
+              if (disponivel < qtd) {
+                alertasEstoque.push({
+                  itemId: item.id,
+                  codigo: item.codigo || null,
+                  disponivel,
+                  descarte: qtd,
+                  mensagem: `Produto ${item.codigo || item.id}: saldo ${disponivel}; descarte ${qtd}. Estoque não alterado.`,
+                });
+                continue;
+              }
               await client.query(`
                 INSERT INTO movimentos_estoque
                   (produto_id, produto_codigo, tipo_movimento, origem, origem_id,
@@ -905,7 +923,7 @@ module.exports = function (pool, app) {
       }
       await client.query('COMMIT');
       if (novoStatus === 'descartado') events.emit(app, 'VALIDADE_DESCARTADA', { ids:idsNum, motivo });
-      res.json({ ok: true, atualizados: result.rowCount, motivo });
+      res.json({ ok: true, atualizados: result.rowCount, motivo, alertasEstoque });
     } catch(e) {
       await client.query('ROLLBACK').catch(()=>{});
       const status = /Estoque insuficiente/.test(e.message) ? 409 : 500;
