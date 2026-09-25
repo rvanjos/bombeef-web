@@ -3,7 +3,7 @@
 
 const MONTHS=['01','02','03','04','05','06','07','08','09','10','11','12'];
 const MONTH_LABEL={'01':'Jan','02':'Fev','03':'Mar','04':'Abr','05':'Mai','06':'Jun','07':'Jul','08':'Ago','09':'Set','10':'Out','11':'Nov','12':'Dez'};
-const st={ano:new Date().getFullYear(),plan:{},obs:'',loading:false,fluxo:null,fluxoCalc:null,fluxoConfs:[],fluxoSuspeitas:{},fluxoLoading:false,fluxoCarregado:false};
+const st={ano:new Date().getFullYear(),plan:{},obs:'',loading:false,fluxo:null,fluxoCalc:null,fluxoConfs:[],fluxoSuspeitas:{},fluxoLoading:false,fluxoCarregado:false,diario:{contas:[],conta:null,de:null,ate:null,dias:[],resumo:{}},diarioLoading:false,diarioAbertos:new Set()};
 
 const esc=v=>String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const brl=v=>Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
@@ -39,8 +39,39 @@ async function carregarFluxo(){
     if(r?.ok)setFluxoPacote(r);
     else throw new Error(r?.erro||'Erro ao carregar conciliação do fluxo');
   }catch(e){console.warn('[DRE Fluxo]',e);st.fluxo=null;st.fluxoCalc=null;st.fluxoConfs=[];st.fluxoSuspeitas={};}
-  finally{st.fluxoLoading=false;st.fluxoCarregado=true;renderConc();}
+  finally{
+    st.fluxoLoading=false;st.fluxoCarregado=true;renderConc();
+    if(!st.diario.conta&&!st.diarioLoading)carregarFluxoDiario();
+  }
 }
+async function carregarFluxoDiario(conta){
+  if(st.diarioLoading)return;
+  st.diarioLoading=true;
+  try{
+    const qs=conta?'?conta='+encodeURIComponent(conta):'';
+    const r=await api.get('/api/dre/fluxo-diario'+qs);
+    if(r?.ok)st.diario={contas:r.contas||[],conta:r.conta||null,de:r.de||null,ate:r.ate||null,dias:r.dias||[],resumo:r.resumo||{}};
+    else throw new Error(r?.erro||'Erro ao carregar saldo diário');
+  }catch(e){console.warn('[DRE saldo diário]',e);st.diario={contas:[],conta:null,de:null,ate:null,dias:[],resumo:{}};}
+  finally{st.diarioLoading=false;renderConc();}
+}
+function fluxoDiario(){
+  const d=st.diario||{},dias=Array.isArray(d.dias)?d.dias:[];
+  if(st.diarioLoading&&!dias.length)return '<div class="dfv-empty">Carregando saldos diários...</div>';
+  const opts=(d.contas||[]).map(x=>'<option value="'+esc(x)+'" '+(x===d.conta?'selected':'')+'>'+esc(x)+'</option>').join('');
+  const rows=dias.map(x=>{
+    const aberto=st.diarioAbertos.has(x.data),ok=x.diferenca==null?null:Math.abs(Number(x.diferenca))<=0.05;
+    const det=(x.movimentos||[]).map(m=>'<tr class="fluxo-mov"><td></td><td colspan="2"><strong>'+esc(m.descricao||'Lançamento')+'</strong><small>'+esc(m.fornecedor||'')+(m.categoria?' · '+esc(m.categoria):'')+(m.transferencia_interna?' · transferência interna':'')+'</small></td><td colspan="2">'+(Number(m.valor||0)>=0?'Entrada':'Saída')+'</td><td class="'+(Number(m.valor||0)>=0?'fluxo-ok':'fluxo-bad')+'">'+brl(m.valor)+'</td><td colspan="3"></td></tr>').join('');
+    return '<tr class="fluxo-dia" onclick="dreFluxoToggleDia(\''+esc(x.data)+'\')"><td><button class="fluxo-expand">'+(aberto?'▾':'▸')+'</button><strong>'+dataBr(x.data)+'</strong><small>'+(x.movimentos?.length||0)+' lançamento(s)</small></td><td>'+ (x.saldo_abertura==null?'—':brl(x.saldo_abertura))+'</td><td>'+brl(x.entradas)+'</td><td>'+brl(x.saidas)+'</td><td>'+ (x.saldo_esperado==null?'—':brl(x.saldo_esperado))+'</td><td><strong>'+ (x.saldo_real==null?'—':brl(x.saldo_real))+'</strong></td><td class="'+(ok===null?'':ok?'fluxo-ok':'fluxo-bad')+'">'+(x.diferenca==null?'—':brl(x.diferenca))+'</td><td>'+(x.saldo_real==null?'<span class="dfv-status blue">Sem saldo OFX</span>':ok?'<span class="dfv-status ok">OK</span>':'<span class="dfv-status bad">Divergente</span>')+'</td></tr>'+(aberto?det:'');
+  }).join('');
+  return '<div class="dfv-card"><div class="dfv-card-h"><div><strong>📆 Saldo diário da conta</strong><div style="font-size:10px;color:var(--muted);margin-top:2px">Saldo de abertura + movimentos do dia = saldo esperado. O saldo real vem do OFX quando disponível.</div></div><div class="plan-toolbar"><select onchange="dreFluxoTrocarConta(this.value)">'+opts+'</select></div></div><div class="dfv-card-b">'+
+    '<div class="dfv-grid" style="margin-bottom:10px"><div class="dfv-field"><span>Conta</span><b>'+esc(d.conta||'—')+'</b></div><div class="dfv-field"><span>Dias com saldo real</span><b>'+Number(d.resumo?.com_saldo_real||0)+'</b></div><div class="dfv-field"><span>Dias divergentes</span><b>'+Number(d.resumo?.divergentes||0)+'</b></div><div class="dfv-field"><span>Última diferença</span><b class="'+(Math.abs(Number(d.resumo?.ultima_diferenca||0))<=0.05?'fluxo-ok':'fluxo-bad')+'">'+(d.resumo?.ultima_diferenca==null?'—':brl(d.resumo.ultima_diferenca))+'</b></div></div>'+
+    (dias.length?'<div class="fluxo-table-wrap"><table class="fluxo-table fluxo-diario-table"><thead><tr><th>Data</th><th>Saldo abertura</th><th>Entradas</th><th>Saídas</th><th>Saldo esperado</th><th>Saldo real</th><th>Diferença</th><th>Status</th></tr></thead><tbody>'+rows+'</tbody></table></div>':'<div class="dfv-empty">Não há movimentos bancários para esta conta.</div>')+
+    '</div></div>';
+}
+root.dreFluxoTrocarConta=v=>{st.diarioAbertos.clear();carregarFluxoDiario(v);};
+root.dreFluxoToggleDia=data=>{st.diarioAbertos.has(data)?st.diarioAbertos.delete(data):st.diarioAbertos.add(data);renderConc();};
+
 function fluxoDiagnostico(){
   const s=st.fluxoSuspeitas||{};
   const dups=Array.isArray(s.duplicidades)?s.duplicidades:[];
@@ -130,6 +161,7 @@ function fluxoCard(){
         </div>
       </div>
     </div>
+    ${fluxoDiario()}
     <div class="dfv-card">
       <div class="dfv-card-h"><div><strong>📅 Histórico de conferências</strong><div style="font-size:10px;color:var(--muted);margin-top:2px">A variação da diferença mostra em qual período nasceu um lançamento faltante, duplicado ou incorreto.</div></div></div>
       <div class="dfv-card-b">${fluxoHistorico()}</div>
@@ -154,7 +186,8 @@ function css(){
   .plan-toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.plan-toolbar select,.plan-toolbar textarea{border:1px solid var(--border);border-radius:7px;padding:7px 9px;background:#fff}
   .plan-table-wrap{overflow:auto;border:1px solid var(--border);border-radius:10px;background:#fff}.plan-table{border-collapse:collapse;min-width:1500px;width:100%}.plan-table th,.plan-table td{border-bottom:1px solid #eee;border-right:1px solid #f0ece8;padding:6px 7px;font-size:10px;text-align:right}.plan-table th{position:sticky;top:0;background:#f8f6f3;z-index:2;text-transform:uppercase;color:var(--muted);font-size:9px}.plan-table th:first-child,.plan-table td:first-child{text-align:left;position:sticky;left:0;background:#fff;z-index:1;min-width:220px}.plan-table th:first-child{z-index:3;background:#f8f6f3}.plan-table input{width:82px;border:1px solid var(--border);border-radius:5px;padding:5px;text-align:right;font-size:10px}.plan-table .real{display:block;font-size:9px;color:var(--muted);margin-top:3px}.plan-cat-group{display:block;font-size:8px;color:#9a928b;text-transform:uppercase}.plan-var.pos{color:#15803d}.plan-var.neg{color:#b91c1c}
   .plan-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px}.plan-sum{background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px 12px}.plan-sum span{font-size:9px;color:var(--muted);text-transform:uppercase;font-weight:800}.plan-sum b{display:block;font-size:16px;margin-top:2px}
-  .fluxo-label{font-size:10px;color:var(--muted);display:flex;align-items:center;gap:5px}.fluxo-label input{border:1px solid var(--border);border-radius:7px;padding:7px 9px;background:#fff}
+  .fluxo-expand{border:0;background:transparent;cursor:pointer;margin-right:4px}.fluxo-dia{cursor:pointer}.fluxo-dia:hover{background:#faf8f5}.fluxo-mov td{background:#fcfbf9!important;font-size:9px!important}.fluxo-mov strong{font-size:10px}.fluxo-mov small{display:block;color:var(--muted);margin-top:2px}.fluxo-diario-table{min-width:1250px}
+    .fluxo-label{font-size:10px;color:var(--muted);display:flex;align-items:center;gap:5px}.fluxo-label input{border:1px solid var(--border);border-radius:7px;padding:7px 9px;background:#fff}
   .fluxo-table-wrap{overflow:auto;border:1px solid var(--border);border-radius:9px}.fluxo-table{width:100%;min-width:1100px;border-collapse:collapse}.fluxo-table th,.fluxo-table td{padding:8px 9px;border-bottom:1px solid #eee;font-size:10px;text-align:right}.fluxo-table th{text-transform:uppercase;color:var(--muted);font-size:9px;background:#faf9f7}.fluxo-table th:first-child,.fluxo-table td:first-child{text-align:left}.fluxo-table td small{display:block;color:var(--muted);margin-top:2px}.fluxo-ok{color:#15803d!important}.fluxo-bad{color:#b91c1c!important;font-weight:800}
     @media(max-width:850px){.dfv-kpis,.plan-summary{grid-template-columns:1fr 1fr}.dfv-grid{grid-template-columns:1fr 1fr}.dfv-row{grid-template-columns:1fr auto}.dfv-row>*:nth-child(2),.dfv-row>*:nth-child(3),.dfv-row>*:nth-child(4){display:none}}
   `;document.head.appendChild(s);

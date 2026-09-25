@@ -857,6 +857,23 @@ module.exports = function (pool, app) {
       ignorar:!!t?.ignorar
     };
   }
+  function _contaFluxo(t) {
+    const conta=String(t?.contaBancaria||'').trim();
+    if(conta) return conta;
+    const banco=_normFluxo(t?.banco);
+    const bankId=String(t?.bankId||'').replace(/^0+/,'');
+    if(banco==='PAGBANK'||bankId==='290'||/^[0-9A-F]{8}-[0-9A-F]{4}-[1-5][0-9A-F]{3}-[89AB][0-9A-F]{3}-[0-9A-F]{12}$/.test(_normFluxo(t?.fitid))) {
+      return 'PagBank · '+String(t?.acctId||'43333819-1');
+    }
+    if(banco==='ITAU'||bankId==='341') return 'Itaú · '+String(t?.acctId||'conta principal');
+    return 'Itaú · conta principal';
+  }
+  function _ehSaldoInformativo(t) {
+    const txt=_normFluxo([t?.lancamento,t?.memo,t?.razaoSocial,t?.fornecedor].filter(Boolean).join(' '));
+    if(/SALDO TOTAL DISPONIVEL DIA/.test(txt)) return 'fechamento';
+    if(/SALDO ANTERIOR/.test(txt)) return 'abertura';
+    return null;
+  }
   async function _movimentosBanco(lojaId) {
     const {rows}=await pool.query(`
       SELECT dados_json
@@ -869,13 +886,22 @@ module.exports = function (pool, app) {
       WHERE rn=1
     `,[Number(lojaId)]);
 
-    const todos=[];
+    const todos=[],saldosReais=[];
     for(const row of rows){
       for(const t of extrairTransacoes(row.dados_json)){
         const fonte=String(t?.fonte||'').toUpperCase();
         if(!['EXTRATO','OFX'].includes(fonte)) continue;
         const valor=Number(t?.valor||0);
         if(!Number.isFinite(valor)||Math.abs(valor)<0.005) continue;
+        const tipoSaldo=_ehSaldoInformativo(t);
+        if(tipoSaldo){
+          const data=_dataTxIso(t);
+          if(data) saldosReais.push({
+            conta:_contaFluxo(t),data,saldo:Number(valor.toFixed(2)),tipo:tipoSaldo,
+            descricao:String(t?.lancamento||t?.memo||tipoSaldo)
+          });
+          continue;
+        }
         todos.push(t);
       }
     }
@@ -916,12 +942,60 @@ module.exports = function (pool, app) {
     canon.sort((a,b)=>String(_dataTxIso(a)||'9999').localeCompare(String(_dataTxIso(b)||'9999')));
     return {
       movimentos:canon,
+      saldosReais,
       duplicidades,
       invalidos:canon.filter(t=>!_dataTxIso(t)).map(_resumoTx),
       ignorados:canon.filter(t=>t?.ignorar).map(_resumoTx),
       semCategoria:canon.filter(t=>!String(t?.categoria||'').trim()).map(_resumoTx)
     };
   }
+  function _datasEntre(inicio,fim) {
+    const out=[],d=new Date(inicio+'T12:00:00Z'),f=new Date(fim+'T12:00:00Z');
+    while(d<=f){out.push(d.toISOString().slice(0,10));d.setUTCDate(d.getUTCDate()+1);}
+    return out;
+  }
+  function _montarDiarioConta(banco,conta,de,ate) {
+    const movs=banco.movimentos.filter(t=>_contaFluxo(t)===conta && _dataTxIso(t)>=de && _dataTxIso(t)<=ate);
+    const saldos=banco.saldosReais.filter(s=>s.conta===conta && s.data>=de && s.data<=ate);
+    const porDiaMov=new Map(),abertura=new Map(),fechamento=new Map();
+    for(const t of movs){
+      const d=_dataTxIso(t);if(!porDiaMov.has(d))porDiaMov.set(d,[]);porDiaMov.get(d).push(t);
+    }
+    for(const s of saldos){
+      if(s.tipo==='abertura') abertura.set(s.data,s.saldo);
+      else fechamento.set(s.data,s.saldo);
+    }
+    const dias=[];
+    let saldoBase=null;
+    for(const data of _datasEntre(de,ate)){
+      const itens=porDiaMov.get(data)||[];
+      if(abertura.has(data)) saldoBase=abertura.get(data);
+      let entradas=0,saidas=0;
+      const detalhes=itens.map(t=>{
+        const v=Number(t.valor||0);
+        if(v>0)entradas+=v; else saidas+=Math.abs(v);
+        return {..._resumoTx(t),conta:_contaFluxo(t),transferencia_interna:_normFluxo(t?.categoria)==='TRANSFERENCIA ENTRE CONTAS'};
+      });
+      const saldoAbertura=saldoBase;
+      const saldoEsperado=saldoBase==null?null:Number((saldoBase+entradas-saidas).toFixed(2));
+      const saldoReal=fechamento.has(data)?Number(fechamento.get(data)):null;
+      const diferenca=saldoReal==null||saldoEsperado==null?null:Number((saldoReal-saldoEsperado).toFixed(2));
+      dias.push({
+        data,
+        saldo_abertura:saldoAbertura,
+        entradas:Number(entradas.toFixed(2)),
+        saidas:Number(saidas.toFixed(2)),
+        saldo_esperado:saldoEsperado,
+        saldo_real:saldoReal,
+        diferenca,
+        movimentos:detalhes
+      });
+      // Um saldo real fecha o dia e é a base mais confiável para o próximo.
+      saldoBase=saldoReal!=null?saldoReal:saldoEsperado;
+    }
+    return dias;
+  }
+
   function _somarPeriodo(movs,inicio,fim,incluirInicio=true){
     let entradas=0,saidas=0,qtd=0;
     for(const t of movs){
@@ -1064,6 +1138,31 @@ module.exports = function (pool, app) {
       }
       const conc=await _montarConciliacaoFluxo(lojaId);
       res.json({ok:true,data:conc.config,calculo:conc.resumo,conciliacao:conc});
+    }catch(e){res.status(500).json({ok:false,erro:e.message});}
+  });
+
+  r.get('/fluxo-diario', async(req,res)=>{
+    try{
+      const banco=await _movimentosBanco(Number(req.user?.lojaId));
+      const contas=[...new Set([
+        ...banco.movimentos.map(_contaFluxo),
+        ...banco.saldosReais.map(s=>s.conta)
+      ])].filter(Boolean).sort();
+      if(!contas.length) return res.json({ok:true,contas:[],conta:null,de:null,ate:null,dias:[]});
+      const conta=contas.includes(String(req.query.conta||''))?String(req.query.conta):contas[0];
+      const datas=[
+        ...banco.movimentos.filter(t=>_contaFluxo(t)===conta).map(_dataTxIso),
+        ...banco.saldosReais.filter(s=>s.conta===conta).map(s=>s.data)
+      ].filter(Boolean).sort();
+      if(!datas.length) return res.json({ok:true,contas,conta,de:null,ate:null,dias:[]});
+      const deReq=_isoData(req.query.de),ateReq=_isoData(req.query.ate);
+      const de=deReq||datas[0],ate=ateReq||datas[datas.length-1];
+      const dias=_montarDiarioConta(banco,conta,de,ate);
+      const divergentes=dias.filter(d=>d.diferenca!=null&&Math.abs(d.diferenca)>0.05).length;
+      res.json({ok:true,contas,conta,de,ate,dias,resumo:{
+        dias:dias.length,com_saldo_real:dias.filter(d=>d.saldo_real!=null).length,
+        divergentes,ultima_diferenca:[...dias].reverse().find(d=>d.diferenca!=null)?.diferenca??null
+      }});
     }catch(e){res.status(500).json({ok:false,erro:e.message});}
   });
 
