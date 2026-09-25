@@ -94,3 +94,26 @@ test('saldo esperado usa extrato e aponta duplicidades sem apagar operacoes legi
   assert.match(rota,/tipo:'Mesmo dia, valor e descrição'/);
   assert.match(rota,/saldo_esperado/);
 });
+
+
+test('PagBank e Itaú não duplicam receita nas transferências internas',()=>{
+  const rota=ler('routes/dre.js');
+  const fix=ler('scripts/fix-dre-ofx-creditos.js');
+  assert.match(rota,/bankId === '290' \? 'PagBank'/);
+  assert.match(rota,/VENDAS - DISPONIVEL/);
+  assert.match(rota,/categoria = 'VENDAS DE MERCADORIAS'/);
+  assert.match(rota,/PIX ENVIADO - O ACOUGUE BOM BEEF VALINHOS/);
+  assert.match(rota,/Transferência entre contas/);
+  assert.match(rota,/if\(_normFluxo\(t\?\.categoria\)==='TRANSFERENCIA ENTRE CONTAS'\) continue/);
+  assert.match(fix,/transferências PagBank↔Itaú conciliadas/);
+  assert.match(fix,/diffDias\(dt,dataTx\(e\.t\)\)<=3/);
+  assert.match(fix,/transferenciaInterna=true/);
+});
+
+test('OFX guarda banco e conta e ignora linhas informativas de saldo',()=>{
+  const rota=ler('routes/dre.js');
+  assert.match(rota,/const bankId = getGlobal\('BANKID'\)/);
+  assert.match(rota,/const acctId = getGlobal\('ACCTID'\)/);
+  assert.match(rota,/contaBancaria/);
+  assert.match(rota,/SALDO ANTERIOR\|SALDO TOTAL DISPONIVEL DIA/);
+});
