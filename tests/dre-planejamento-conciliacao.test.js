@@ -176,3 +176,12 @@ test('OFX preserva saldo informativo sem virar receita ou despesa',()=>{
   assert.match(rota,/categoria: 'Saldo bancário informativo'/);
   assert.match(rota,/ignorar: true/);
 });
+
+
+test('saldo inicial usa a conta Itau real quando identificada no OFX',()=>{
+  const rota=ler('routes/dre.js');
+  assert.match(rota,/const contaItauReal=contas\.find/);
+  assert.match(rota,/const contaBase=contaItauReal \|\| 'Itaú · conta principal'/);
+  assert.match(rota,/const baseDaConta=\(cfg && conta===contaBase\)\?cfg:null/);
+  assert.match(rota,/const confDaConta=\(cfg && conta===contaBase\)\?confRows:\[\]/);
+});
