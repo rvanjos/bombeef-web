@@ -148,3 +148,31 @@ test('saldo informativo do OFX nao entra como movimento financeiro',()=>{
   assert.match(rota,/saldosReais\.push/);
   assert.match(rota,/continue;/);
 });
+
+
+test('saldo informado manualmente entra na grade diaria',()=>{
+  const rota=ler('routes/dre.js');
+  const fin=ler('public/js/dre-planejamento-conciliacao.js');
+  assert.match(rota,/SELECT id,data_ref,saldo_real,observacoes,atualizado_em/);
+  assert.match(rota,/for\(const cf of conferencias\)/);
+  assert.match(rota,/fonteFechamento\.set\(d,'Informado'\)/);
+  assert.match(rota,/saldo_real_fonte/);
+  assert.match(fin,/Sem saldo real/);
+  assert.match(fin,/saldo_real_fonte/);
+  assert.match(fin,/carregarFluxoDiario\(st\.diario\?\.conta\|\|undefined\)/);
+});
+
+test('grade diaria respeita data e saldo inicial configurados',()=>{
+  const rota=ler('routes/dre.js');
+  assert.match(rota,/const dataInicio=_isoData\(cfg\?\.data_inicio\)/);
+  assert.match(rota,/const de=deReq\|\|\(dataInicio\|\|datas\[0\]\)/);
+  assert.match(rota,/baseCfg\?\.saldo_inicial/);
+  assert.match(rota,/if\(dataBase===data && baseCfg\?\.saldo_inicial!=null\) saldoBase=Number\(baseCfg\.saldo_inicial\)/);
+});
+
+test('OFX preserva saldo informativo sem virar receita ou despesa',()=>{
+  const rota=ler('routes/dre.js');
+  assert.match(rota,/saldoInformativo: ehSaldoAnterior \? 'abertura' : 'fechamento'/);
+  assert.match(rota,/categoria: 'Saldo bancário informativo'/);
+  assert.match(rota,/ignorar: true/);
+});
