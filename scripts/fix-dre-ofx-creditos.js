@@ -168,6 +168,29 @@ async function main() {
           );
       });
 
+      // Cobertura efetiva do PagBank no banco: usada para não alterar períodos
+      // anteriores em que a conta de origem ainda não fazia parte da conciliação.
+      const datasPagBank=refs
+        .filter(r=>norm(r.t.banco)==='PAGBANK')
+        .map(r=>dataTx(r.t)).filter(Boolean).sort();
+      const inicioPagBank=datasPagBank[0]||'';
+      const fimPagBank=datasPagBank[datasPagBank.length-1]||'';
+
+      // Durante o período coberto pelo PagBank, qualquer crédito no Itaú vindo
+      // da própria empresa é transferência interna, mesmo quando a descrição
+      // histórica foi salva em formato diferente e não permitiu o pareamento 1:1.
+      let creditosPropriosPeriodo=0;
+      if(inicioPagBank&&fimPagBank){
+        for(const r of entradasItau){
+          const dt=dataTx(r.t);
+          if(!dt||dt<inicioPagBank||dt>fimPagBank) continue;
+          if(r.t.categoria!==CAT_CREDITO_EXTRATO){r.t.categoria=CAT_CREDITO_EXTRATO;r.s._mudou=true;}
+          if(r.t.ignorar===true){r.t.ignorar=false;r.s._mudou=true;}
+          if(r.t.transferenciaInterna!==true){r.t.transferenciaInterna=true;r.s._mudou=true;}
+          creditosPropriosPeriodo++;
+        }
+      }
+
       let paresTransferencia=0;
       const chaveRef=r=>String(r?.t?.fitid||'') || [dataTx(r?.t),Math.round(Math.abs(valorTx(r?.t))*100),norm(r?.t?.lancamento||'')].join('|');
       const uniqPorFitid=lista=>{
@@ -245,7 +268,7 @@ async function main() {
         `,[CAT_CREDITO_EXTRATO]).catch(()=>{});
       }
 
-      console.log(`[dre/ofx-fix] sessões reparadas: ${sessoesAlteradas}; ajustes: ${transacoesAlteradas}; saídas próprias PagBank: ${saidasProprias.length}/${saidasUnicas.length} únicas; entradas Itaú candidatas: ${entradasItau.length}/${entradasUnicas.length} únicas; transferências PagBank↔Itaú conciliadas: ${paresTransferencia}`);
+      console.log(`[dre/ofx-fix] sessões reparadas: ${sessoesAlteradas}; ajustes: ${transacoesAlteradas}; cobertura PagBank: ${inicioPagBank||'-'} a ${fimPagBank||'-'}; saídas próprias PagBank: ${saidasProprias.length}/${saidasUnicas.length} únicas; créditos próprios Itaú neutralizados no período: ${creditosPropriosPeriodo}; transferências PagBank↔Itaú conciliadas: ${paresTransferencia}`);
     }
 
     await client.query('COMMIT');
