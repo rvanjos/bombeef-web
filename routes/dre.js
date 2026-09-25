@@ -1179,10 +1179,20 @@ module.exports = function (pool, app) {
         ...banco.movimentos.map(_contaFluxo),
         ...banco.saldosReais.map(s=>s.conta)
       ])].filter(Boolean).sort();
-      // O controle legado de saldo pertence à conta principal Itaú.
-      if(cfg && !contas.includes('Itaú · conta principal')) contas.unshift('Itaú · conta principal');
+
+      // Vincula o saldo inicial legado à conta Itaú real identificada pelo OFX.
+      // Só usa a conta virtual "Itaú · conta principal" quando ainda não existe
+      // nenhuma conta Itaú identificada na base.
+      const contaItauReal=contas.find(x=>String(x).startsWith('Itaú · ') && x!=='Itaú · conta principal')||null;
+      const contaBase=contaItauReal || 'Itaú · conta principal';
+      if(cfg && !contas.includes(contaBase)) contas.unshift(contaBase);
+
       if(!contas.length) return res.json({ok:true,contas:[],conta:null,de:null,ate:null,dias:[]});
-      const conta=contas.includes(String(req.query.conta||''))?String(req.query.conta):contas[0];
+
+      const solicitada=String(req.query.conta||'');
+      const conta=contas.includes(solicitada)
+        ? solicitada
+        : (cfg && contas.includes(contaBase) ? contaBase : contas[0]);
       const datas=[
         ...banco.movimentos.filter(t=>_contaFluxo(t)===conta).map(_dataTxIso),
         ...banco.saldosReais.filter(s=>s.conta===conta).map(s=>s.data),
@@ -1193,8 +1203,8 @@ module.exports = function (pool, app) {
       const deReq=_isoData(req.query.de),ateReq=_isoData(req.query.ate);
       const de=deReq||(dataInicio||datas[0]);
       const ate=ateReq||datas[datas.length-1];
-      const baseDaConta=conta==='Itaú · conta principal'?cfg:null;
-      const confDaConta=conta==='Itaú · conta principal'?confRows:[];
+      const baseDaConta=(cfg && conta===contaBase)?cfg:null;
+      const confDaConta=(cfg && conta===contaBase)?confRows:[];
       const dias=_montarDiarioConta(banco,conta,de,ate,baseDaConta,confDaConta);
       const divergentes=dias.filter(d=>d.diferenca!=null&&Math.abs(d.diferenca)>0.05).length;
       res.json({ok:true,contas,conta,de,ate,dias,resumo:{
