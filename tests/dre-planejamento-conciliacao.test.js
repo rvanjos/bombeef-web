@@ -61,3 +61,36 @@ test('abertura e navegação do DRE evitam trabalho redundante',()=>{
   assert.match(lanc,/dreLancMais/);
   assert.match(lanc,/list="cats-dl"/);
 });
+
+
+test('linha do tempo de saldos reais localiza divergencias por intervalo',()=>{
+  const rota=ler('routes/dre.js');
+  const fin=ler('public/js/dre-planejamento-conciliacao.js');
+  assert.match(rota,/CREATE TABLE IF NOT EXISTS dre_fluxo_conferencias/);
+  assert.match(rota,/UNIQUE\(loja_id, data_ref\)/);
+  assert.match(rota,/r\.get\('\/fluxo-conciliacao'/);
+  assert.match(rota,/r\.post\('\/fluxo-conferencias'/);
+  assert.match(rota,/variacao_divergencia/);
+  assert.match(rota,/duplicidades_periodo/);
+  assert.match(fin,/Histórico de conferências/);
+  assert.match(fin,/Diagnóstico de divergências/);
+  assert.match(fin,/dreFluxoRegistrarConf/);
+});
+
+test('datas do PostgreSQL sao normalizadas antes do calculo do caixa',()=>{
+  const rota=ler('routes/dre.js');
+  const fin=ler('public/js/dre-planejamento-conciliacao.js');
+  assert.match(rota,/function _isoData\(v\)/);
+  assert.match(rota,/v instanceof Date/);
+  assert.doesNotMatch(rota,/String\(cfg\.data_inicio\)\.slice\(0,10\)/);
+  assert.match(fin,/function isoData\(v\)/);
+  assert.match(fin,/value="\$\{esc\(isoData\(f\.data_inicio\)\)\}"/);
+});
+
+test('saldo esperado usa extrato e aponta duplicidades sem apagar operacoes legitimas',()=>{
+  const rota=ler('routes/dre.js');
+  assert.match(rota,/FITID é identidade bancária forte/);
+  assert.match(rota,/Sem FITID não removemos do saldo/);
+  assert.match(rota,/tipo:'Mesmo dia, valor e descrição'/);
+  assert.match(rota,/saldo_esperado/);
+});
