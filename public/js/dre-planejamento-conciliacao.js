@@ -3,7 +3,7 @@
 
 const MONTHS=['01','02','03','04','05','06','07','08','09','10','11','12'];
 const MONTH_LABEL={'01':'Jan','02':'Fev','03':'Mar','04':'Abr','05':'Mai','06':'Jun','07':'Jul','08':'Ago','09':'Set','10':'Out','11':'Nov','12':'Dez'};
-const st={ano:new Date().getFullYear(),plan:{},obs:'',loading:false,fluxo:null,fluxoCalc:null,fluxoLoading:false,fluxoCarregado:false};
+const st={ano:new Date().getFullYear(),plan:{},obs:'',loading:false,fluxo:null,fluxoCalc:null,fluxoConfs:[],fluxoSuspeitas:{},fluxoLoading:false,fluxoCarregado:false};
 
 const esc=v=>String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const brl=v=>Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
@@ -15,52 +15,127 @@ const anoDeMes=m=>{const x=String(m||'').match(/^(\d{2})\/(\d{4})$/);return x?Nu
 const mmDeMes=m=>{const x=String(m||'').match(/^(\d{2})\/(\d{4})$/);return x?x[1]:null;};
 
 function isoHoje(){return new Date().toISOString().slice(0,10);}
+function isoData(v){
+  const s=String(v||'');
+  const m=s.match(/^(\d{4}-\d{2}-\d{2})/);
+  return m?m[1]:'';
+}
+function dataBr(v){
+  const s=isoData(v);if(!s)return'—';
+  const [y,m,d]=s.split('-');return `${d}/${m}/${y}`;
+}
+function setFluxoPacote(r){
+  st.fluxo=r?.config||r?.data||null;
+  st.fluxoCalc=r?.resumo||r?.calculo||null;
+  st.fluxoConfs=Array.isArray(r?.conferencias)?r.conferencias:[];
+  st.fluxoSuspeitas=r?.suspeitas||{};
+  st.fluxoCarregado=true;
+}
 async function carregarFluxo(){
   if(st.fluxoLoading)return;
   st.fluxoLoading=true;
   try{
-    const r=await api.get('/api/dre/fluxo-saldo');
-    if(r?.ok){st.fluxo=r.data||null;st.fluxoCalc=r.calculo||null;}
-    else throw new Error(r?.erro||'Erro ao carregar saldo do fluxo');
-  }catch(e){console.warn('[DRE Fluxo]',e);st.fluxo=null;st.fluxoCalc=null;}
+    const r=await api.get('/api/dre/fluxo-conciliacao');
+    if(r?.ok)setFluxoPacote(r);
+    else throw new Error(r?.erro||'Erro ao carregar conciliação do fluxo');
+  }catch(e){console.warn('[DRE Fluxo]',e);st.fluxo=null;st.fluxoCalc=null;st.fluxoConfs=[];st.fluxoSuspeitas={};}
   finally{st.fluxoLoading=false;st.fluxoCarregado=true;renderConc();}
+}
+function fluxoDiagnostico(){
+  const s=st.fluxoSuspeitas||{};
+  const dups=Array.isArray(s.duplicidades)?s.duplicidades:[];
+  const invalidos=Array.isArray(s.invalidos)?s.invalidos:[];
+  const ignorados=Array.isArray(s.ignorados)?s.ignorados:[];
+  const semCat=Array.isArray(s.sem_categoria)?s.sem_categoria:[];
+  const ult=st.fluxoConfs[st.fluxoConfs.length-1]||null;
+  const problema=ult&&Math.abs(Number(ult.diferenca||0))>0.05;
+  const destaque=problema
+    ? `A divergência acumulada é ${brl(ult.diferenca)}. No último intervalo (${dataBr(ult.intervalo_inicio)} a ${dataBr(ult.data_ref)}), ela variou ${brl(ult.variacao_divergencia)}.`
+    : ult?'O último saldo informado está conciliado com os movimentos bancários cadastrados.':'Registre um saldo real para começar a localizar divergências.';
+  return `
+    <div class="dfv-card">
+      <div class="dfv-card-h"><div><strong>🔎 Diagnóstico de divergências</strong><div style="font-size:10px;color:var(--muted);margin-top:2px">${esc(destaque)}</div></div><span class="dfv-status ${problema?'bad':ult?'ok':'blue'}">${problema?'Investigar intervalo':ult?'Conciliado':'Sem conferência'}</span></div>
+      <div class="dfv-card-b">
+        <div class="dfv-grid" style="margin-bottom:10px">
+          <div class="dfv-field"><span>Duplicidades suspeitas</span><b>${dups.length}</b></div>
+          <div class="dfv-field"><span>Movimentos sem data válida</span><b>${invalidos.length}</b></div>
+          <div class="dfv-field"><span>Movimentos bancários ignorados no DRE</span><b>${ignorados.length}</b></div>
+          <div class="dfv-field"><span>Movimentos sem categoria</span><b>${semCat.length}</b></div>
+        </div>
+        ${dups.length?`<div style="font-size:10px;font-weight:800;margin-bottom:6px">Possíveis duplicidades bancárias</div><div class="dfv-list">${dups.slice(0,6).map(g=>{
+          const a=g.itens?.[0]||{};
+          return `<div class="dfv-row"><div><strong>${esc(a.descricao||g.tipo)}</strong><small>${esc(g.tipo)} · ${g.itens?.length||0} ocorrência(s) · ${dataBr(a.data)}</small></div><span>${brl(a.valor)}</span><span>${esc(a.fornecedor||'')}</span><span>${esc(g.confianca||'')}</span><span></span></div>`;
+        }).join('')}</div>`:''}
+      </div>
+    </div>`;
+}
+function fluxoHistorico(){
+  if(!st.fluxoConfs.length)return '<div class="dfv-empty">Nenhum saldo real conferido ainda. Registre o primeiro saldo do banco abaixo.</div>';
+  return `
+    <div class="fluxo-table-wrap"><table class="fluxo-table">
+      <thead><tr><th>Data</th><th>Entradas no intervalo</th><th>Saídas no intervalo</th><th>Saldo esperado</th><th>Saldo real</th><th>Diferença</th><th>Variação da diferença</th><th>Alertas</th><th></th></tr></thead>
+      <tbody>${[...st.fluxoConfs].reverse().map(x=>{
+        const ok=Math.abs(Number(x.diferenca||0))<=0.05;
+        return `<tr>
+          <td><strong>${dataBr(x.data_ref)}</strong><small>${dataBr(x.intervalo_inicio)} → ${dataBr(x.data_ref)}</small></td>
+          <td>${brl(x.entradas_periodo)}</td><td>${brl(x.saidas_periodo)}</td>
+          <td>${brl(x.saldo_esperado)}</td><td><strong>${brl(x.saldo_real)}</strong></td>
+          <td class="${ok?'fluxo-ok':'fluxo-bad'}">${brl(x.diferenca)}</td>
+          <td class="${Math.abs(Number(x.variacao_divergencia||0))<=0.05?'fluxo-ok':'fluxo-bad'}">${brl(x.variacao_divergencia)}</td>
+          <td>${x.duplicidades_periodo?'<span class="dfv-status warn">'+x.duplicidades_periodo+' dup.</span>':ok?'<span class="dfv-status ok">OK</span>':'<span class="dfv-status bad">Revisar</span>'}</td>
+          <td><button class="btn bs" onclick="dreFluxoExcluirConf(${Number(x.id)})">Excluir</button></td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table></div>`;
 }
 function fluxoCard(){
   const f=st.fluxo||{},x=st.fluxoCalc||{};
   const tem=!!f.data_inicio;
-  const diff=x.diferenca;
+  const diff=x?.diferenca;
   const cls=diff==null?'blue':Math.abs(Number(diff))<=0.05?'ok':'bad';
   return `
     <div class="dfv-card">
       <div class="dfv-card-h">
-        <div><strong>🏦 Saldo real do fluxo de caixa</strong><div style="font-size:10px;color:var(--muted);margin-top:2px">Saldo patrimonial inicial + movimentos bancários = saldo esperado. Não entra como receita no DRE.</div></div>
-        <span class="dfv-status ${cls}">${diff==null?'Configure para conciliar':Math.abs(Number(diff))<=0.05?'Conta conciliada':'Diferença '+brl(diff)}</span>
+        <div><strong>🏦 Conciliação do saldo bancário</strong><div style="font-size:10px;color:var(--muted);margin-top:2px">Use saldos reais do banco como pontos de controle. O sistema mostra em qual intervalo o saldo esperado deixou de bater.</div></div>
+        <span class="dfv-status ${cls}">${diff==null?'Aguardando saldo real':Math.abs(Number(diff))<=0.05?'Saldo conciliado':'Diferença '+brl(diff)}</span>
       </div>
       <div class="dfv-card-b">
         <div class="dfv-grid" style="margin-bottom:10px">
-          <div class="dfv-field"><span>Saldo inicial</span><b>${tem?brl(x.saldo_inicial):'—'}</b></div>
-          <div class="dfv-field"><span>Entradas desde o início</span><b>${tem?brl(x.entradas):'—'}</b></div>
-          <div class="dfv-field"><span>Saídas desde o início</span><b>${tem?brl(x.saidas):'—'}</b></div>
-          <div class="dfv-field"><span>Saldo esperado</span><b>${tem?brl(x.saldo_esperado):'—'}</b></div>
+          <div class="dfv-field"><span>Saldo inicial</span><b>${tem?brl(f.saldo_inicial):'—'}</b></div>
+          <div class="dfv-field"><span>Entradas acumuladas</span><b>${tem?brl(x?.entradas):'—'}</b></div>
+          <div class="dfv-field"><span>Saídas acumuladas</span><b>${tem?brl(x?.saidas):'—'}</b></div>
+          <div class="dfv-field"><span>Saldo esperado</span><b>${tem?brl(x?.saldo_esperado):'—'}</b></div>
         </div>
-        <div class="dfv-grid" style="margin-bottom:10px">
-          <div class="dfv-field"><span>Saldo real informado</span><b>${f.saldo_real==null?'—':brl(f.saldo_real)}</b></div>
-          <div class="dfv-field"><span>Diferença</span><b style="color:${diff==null?'inherit':Math.abs(Number(diff))<=0.05?'#15803d':'#b91c1c'}">${diff==null?'—':brl(diff)}</b></div>
-          <div class="dfv-field"><span>Data inicial</span><b>${esc(f.data_inicio||'—')}</b></div>
-          <div class="dfv-field"><span>Conferido até</span><b>${esc(x.data_fim||f.data_saldo_real||'—')}</b></div>
+        <div class="dfv-grid" style="margin-bottom:12px">
+          <div class="dfv-field"><span>Último saldo real</span><b>${x?.saldo_real==null?'—':brl(x.saldo_real)}</b></div>
+          <div class="dfv-field"><span>Diferença atual</span><b class="${diff==null?'':Math.abs(Number(diff))<=0.05?'fluxo-ok':'fluxo-bad'}">${diff==null?'—':brl(diff)}</b></div>
+          <div class="dfv-field"><span>Data inicial</span><b>${dataBr(f.data_inicio)}</b></div>
+          <div class="dfv-field"><span>Última conferência</span><b>${dataBr(x?.ultima_conferencia)}</b></div>
         </div>
-        <div class="plan-toolbar">
-          <label style="font-size:10px;color:var(--muted)">Data inicial <input id="dre-fluxo-data" type="date" value="${esc(f.data_inicio||'')}" style="margin-left:4px"></label>
-          <label style="font-size:10px;color:var(--muted)">Saldo inicial <input id="dre-fluxo-inicial" type="number" step="0.01" value="${f.saldo_inicial==null?'':Number(f.saldo_inicial)}" placeholder="0,00" style="width:125px;margin-left:4px"></label>
-          <label style="font-size:10px;color:var(--muted)">Saldo real <input id="dre-fluxo-real" type="number" step="0.01" value="${f.saldo_real==null?'':Number(f.saldo_real)}" placeholder="opcional" style="width:125px;margin-left:4px"></label>
-          <label style="font-size:10px;color:var(--muted)">Data saldo real <input id="dre-fluxo-data-real" type="date" value="${esc(f.data_saldo_real||isoHoje())}" style="margin-left:4px"></label>
-          <button class="btn bg" onclick="dreFluxoSalvar()">💾 Salvar e recalcular</button>
-        </div>
-        <div style="font-size:10px;color:var(--muted);margin-top:8px">Informe o saldo que havia na conta antes dos primeiros movimentos da data inicial. O cálculo considera somente movimentos bancários EXTRATO/OFX e serve para conferência consolidada da empresa.</div>
-      </div>
-    </div>`;
-}
 
+        <div style="font-size:11px;font-weight:800;margin-bottom:6px">1. Base do controle</div>
+        <div class="plan-toolbar" style="margin-bottom:12px">
+          <label class="fluxo-label">Data inicial <input id="dre-fluxo-data" type="date" value="${esc(isoData(f.data_inicio))}"></label>
+          <label class="fluxo-label">Saldo inicial <input id="dre-fluxo-inicial" type="number" step="0.01" value="${f.saldo_inicial==null?'':Number(f.saldo_inicial)}" placeholder="0,00"></label>
+          <button class="btn bs" onclick="dreFluxoSalvarBase()">💾 Salvar base</button>
+          <span style="font-size:10px;color:var(--muted)">É o saldo existente antes dos movimentos da data inicial. Não entra como receita no DRE.</span>
+        </div>
+
+        <div style="font-size:11px;font-weight:800;margin-bottom:6px">2. Registrar uma conferência real do banco</div>
+        <div class="plan-toolbar">
+          <label class="fluxo-label">Data da conferência <input id="dre-fluxo-data-real" type="date" value="${isoHoje()}"></label>
+          <label class="fluxo-label">Saldo real <input id="dre-fluxo-real" type="number" step="0.01" placeholder="Ex.: -27152,43"></label>
+          <input id="dre-fluxo-obs" type="text" maxlength="200" placeholder="Observação opcional" style="min-width:220px;border:1px solid var(--border);border-radius:7px;padding:7px 9px">
+          <button class="btn bg" onclick="dreFluxoRegistrarConf()">✓ Registrar saldo e conciliar</button>
+        </div>
+      </div>
+    </div>
+    <div class="dfv-card">
+      <div class="dfv-card-h"><div><strong>📅 Histórico de conferências</strong><div style="font-size:10px;color:var(--muted);margin-top:2px">A variação da diferença mostra em qual período nasceu um lançamento faltante, duplicado ou incorreto.</div></div></div>
+      <div class="dfv-card-b">${fluxoHistorico()}</div>
+    </div>
+    ${fluxoDiagnostico()}`;
+}
 
 function css(){
   if(document.getElementById('dre-finance-views-style'))return;
@@ -79,7 +154,9 @@ function css(){
   .plan-toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.plan-toolbar select,.plan-toolbar textarea{border:1px solid var(--border);border-radius:7px;padding:7px 9px;background:#fff}
   .plan-table-wrap{overflow:auto;border:1px solid var(--border);border-radius:10px;background:#fff}.plan-table{border-collapse:collapse;min-width:1500px;width:100%}.plan-table th,.plan-table td{border-bottom:1px solid #eee;border-right:1px solid #f0ece8;padding:6px 7px;font-size:10px;text-align:right}.plan-table th{position:sticky;top:0;background:#f8f6f3;z-index:2;text-transform:uppercase;color:var(--muted);font-size:9px}.plan-table th:first-child,.plan-table td:first-child{text-align:left;position:sticky;left:0;background:#fff;z-index:1;min-width:220px}.plan-table th:first-child{z-index:3;background:#f8f6f3}.plan-table input{width:82px;border:1px solid var(--border);border-radius:5px;padding:5px;text-align:right;font-size:10px}.plan-table .real{display:block;font-size:9px;color:var(--muted);margin-top:3px}.plan-cat-group{display:block;font-size:8px;color:#9a928b;text-transform:uppercase}.plan-var.pos{color:#15803d}.plan-var.neg{color:#b91c1c}
   .plan-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px}.plan-sum{background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px 12px}.plan-sum span{font-size:9px;color:var(--muted);text-transform:uppercase;font-weight:800}.plan-sum b{display:block;font-size:16px;margin-top:2px}
-  @media(max-width:850px){.dfv-kpis,.plan-summary{grid-template-columns:1fr 1fr}.dfv-grid{grid-template-columns:1fr 1fr}.dfv-row{grid-template-columns:1fr auto}.dfv-row>*:nth-child(2),.dfv-row>*:nth-child(3),.dfv-row>*:nth-child(4){display:none}}
+  .fluxo-label{font-size:10px;color:var(--muted);display:flex;align-items:center;gap:5px}.fluxo-label input{border:1px solid var(--border);border-radius:7px;padding:7px 9px;background:#fff}
+  .fluxo-table-wrap{overflow:auto;border:1px solid var(--border);border-radius:9px}.fluxo-table{width:100%;min-width:1100px;border-collapse:collapse}.fluxo-table th,.fluxo-table td{padding:8px 9px;border-bottom:1px solid #eee;font-size:10px;text-align:right}.fluxo-table th{text-transform:uppercase;color:var(--muted);font-size:9px;background:#faf9f7}.fluxo-table th:first-child,.fluxo-table td:first-child{text-align:left}.fluxo-table td small{display:block;color:var(--muted);margin-top:2px}.fluxo-ok{color:#15803d!important}.fluxo-bad{color:#b91c1c!important;font-weight:800}
+    @media(max-width:850px){.dfv-kpis,.plan-summary{grid-template-columns:1fr 1fr}.dfv-grid{grid-template-columns:1fr 1fr}.dfv-row{grid-template-columns:1fr auto}.dfv-row>*:nth-child(2),.dfv-row>*:nth-child(3),.dfv-row>*:nth-child(4){display:none}}
   `;document.head.appendChild(s);
 }
 
@@ -234,22 +311,38 @@ root.dreFinanceViewRender=function(v){
   if(v==='planejamento'){if(!Object.keys(st.plan).length&&!st.loading)carregarPlano();else renderPlan();}
 };
 root.dreConcReprocessar=function(){try{root.reprocessarPagamentosCartaoDRE?.();}catch(_){}setTimeout(renderConc,120);};
-root.dreFluxoSalvar=async function(){
+root.dreFluxoSalvarBase=async function(){
   const data_inicio=document.getElementById('dre-fluxo-data')?.value||'';
   const saldo_inicial=document.getElementById('dre-fluxo-inicial')?.value;
-  const saldo_real=document.getElementById('dre-fluxo-real')?.value;
-  const data_saldo_real=document.getElementById('dre-fluxo-data-real')?.value||isoHoje();
   if(!data_inicio){root.toast?.('⚠️ Informe a data inicial do controle');return;}
   if(saldo_inicial===''||!Number.isFinite(Number(saldo_inicial))){root.toast?.('⚠️ Informe o saldo inicial');return;}
-  const r=await api.put('/api/dre/fluxo-saldo',{
-    data_inicio,
-    saldo_inicial:Number(saldo_inicial),
-    saldo_real:saldo_real===''?null:Number(saldo_real),
-    data_saldo_real:saldo_real===''?null:data_saldo_real
-  });
-  if(!r?.ok){root.toast?.('❌ '+(r?.erro||'Erro ao salvar saldo'));return;}
-  st.fluxo=r.data||null;st.fluxoCalc=r.calculo||null;st.fluxoCarregado=true;
-  root.toast?.('✅ Saldo do fluxo atualizado');
+  const r=await api.put('/api/dre/fluxo-saldo',{data_inicio,saldo_inicial:Number(saldo_inicial)});
+  if(!r?.ok){root.toast?.('❌ '+(r?.erro||'Erro ao salvar a base'));return;}
+  if(r.conciliacao)setFluxoPacote(r.conciliacao); else await carregarFluxo();
+  root.toast?.('✅ Base do fluxo salva');
+  renderConc();
+};
+
+root.dreFluxoRegistrarConf=async function(){
+  const data_ref=document.getElementById('dre-fluxo-data-real')?.value||'';
+  const saldo=document.getElementById('dre-fluxo-real')?.value;
+  const observacoes=document.getElementById('dre-fluxo-obs')?.value||'';
+  if(!st.fluxo?.data_inicio){root.toast?.('⚠️ Salve primeiro a data e o saldo inicial');return;}
+  if(!data_ref){root.toast?.('⚠️ Informe a data da conferência');return;}
+  if(saldo===''||!Number.isFinite(Number(saldo))){root.toast?.('⚠️ Informe o saldo real do banco');return;}
+  const r=await api.post('/api/dre/fluxo-conferencias',{data_ref,saldo_real:Number(saldo),observacoes});
+  if(!r?.ok){root.toast?.('❌ '+(r?.erro||'Erro ao registrar saldo'));return;}
+  setFluxoPacote(r);
+  root.toast?.('✅ Saldo real registrado e conciliado');
+  renderConc();
+};
+
+root.dreFluxoExcluirConf=async function(id){
+  if(!confirm('Excluir esta conferência de saldo?'))return;
+  const r=await api.delete('/api/dre/fluxo-conferencias/'+encodeURIComponent(id));
+  if(!r?.ok){root.toast?.('❌ '+(r?.erro||'Erro ao excluir conferência'));return;}
+  setFluxoPacote(r);
+  root.toast?.('✅ Conferência removida');
   renderConc();
 };
 
