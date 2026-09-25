@@ -461,6 +461,16 @@ module.exports = function (pool, app) {
       )
     `).catch(()=>{});
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_dre_fluxo_conf_loja_data ON dre_fluxo_conferencias(loja_id,data_ref)`).catch(()=>{});
+    // Migra primeiro o saldo real já informado no PR #123. Fazemos isso antes
+    // de forçar RLS porque a inicialização do módulo não roda em contexto de loja.
+    await pool.query(`
+      INSERT INTO dre_fluxo_conferencias
+        (loja_id,data_ref,saldo_real,observacoes,usuario_id,usuario_nome,criado_em,atualizado_em)
+      SELECT loja_id,data_saldo_real,saldo_real,'Migrado do controle inicial',usuario_id,usuario_nome,NOW(),NOW()
+      FROM dre_fluxo_saldo_controle
+      WHERE saldo_real IS NOT NULL AND data_saldo_real IS NOT NULL
+      ON CONFLICT(loja_id,data_ref) DO NOTHING
+    `).catch(()=>{});
     await pool.query(`ALTER TABLE dre_fluxo_conferencias ENABLE ROW LEVEL SECURITY`).catch(()=>{});
     await pool.query(`ALTER TABLE dre_fluxo_conferencias FORCE ROW LEVEL SECURITY`).catch(()=>{});
     await pool.query(`DROP POLICY IF EXISTS bb_isolamento_loja ON dre_fluxo_conferencias`).catch(()=>{});
@@ -480,16 +490,6 @@ module.exports = function (pool, app) {
           AND loja_id = NULLIF(current_setting('app.loja_id', true),'')::INTEGER
         )
       )
-    `).catch(()=>{});
-    // Migra o saldo real já informado no PR #123 para a linha do tempo,
-    // sem duplicar se a data já tiver sido registrada.
-    await pool.query(`
-      INSERT INTO dre_fluxo_conferencias
-        (loja_id,data_ref,saldo_real,observacoes,usuario_id,usuario_nome,criado_em,atualizado_em)
-      SELECT loja_id,data_saldo_real,saldo_real,'Migrado do controle inicial',usuario_id,usuario_nome,NOW(),NOW()
-      FROM dre_fluxo_saldo_controle
-      WHERE saldo_real IS NOT NULL AND data_saldo_real IS NOT NULL
-      ON CONFLICT(loja_id,data_ref) DO NOTHING
     `).catch(()=>{});
 
     // Garante colunas extras na dre_lancamentos
