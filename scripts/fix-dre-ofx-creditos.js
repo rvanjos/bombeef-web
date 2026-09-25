@@ -152,17 +152,19 @@ async function main() {
 
       const saidasProprias=refs.filter(r=>{
         const t=r.t;
+        const texto=norm([t.lancamento,t.memo,t.razaoSocial,t.razao_social].filter(Boolean).join(' '));
         return valorTx(t)<0
           && norm(t.banco)==='PAGBANK'
-          && /^PIX ENVIADO - O ACOUGUE BOM BEEF VALINHOS\b/.test(norm(t.lancamento ?? t.memo ?? ''));
+          && /PIX ENVIADO.*O ACOUGUE BOM BEEF VALINHOS/.test(texto);
       });
       const entradasItau=refs.filter(r=>{
         const t=r.t;
+        const texto=norm([t.lancamento,t.memo,t.razaoSocial,t.razao_social].filter(Boolean).join(' '));
         return valorTx(t)>0
           && !ehUuidFitid(t)
           && (
-            /^PIX RECEBIDO AR BOUT/.test(norm(t.lancamento ?? t.memo ?? ''))
-            || norm(t.razaoSocial ?? t.razao_social ?? '')===norm(NOME_PROPRIO)
+            /PIX RECEBIDO.*AR BOUT/.test(texto)
+            || texto.includes(norm(NOME_PROPRIO))
           );
       });
 
@@ -233,7 +235,7 @@ async function main() {
         `,[CAT_CREDITO_EXTRATO]).catch(()=>{});
       }
 
-      console.log(`[dre/ofx-fix] sessões reparadas: ${sessoesAlteradas}; ajustes: ${transacoesAlteradas}; transferências PagBank↔Itaú conciliadas: ${paresTransferencia}`);
+      console.log(`[dre/ofx-fix] sessões reparadas: ${sessoesAlteradas}; ajustes: ${transacoesAlteradas}; saídas próprias PagBank: ${saidasProprias.length}; entradas Itaú candidatas: ${entradasItau.length}; transferências PagBank↔Itaú conciliadas: ${paresTransferencia}`);
     }
 
     await client.query('COMMIT');
