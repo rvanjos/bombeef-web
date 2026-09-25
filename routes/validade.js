@@ -841,6 +841,7 @@ module.exports = function (pool, app) {
         return res.status(404).json({ ok: false, erro: 'Nenhum item encontrado com esses IDs' });
       }
 
+      const divergenciasEstoque = [];
       // ── F1-07: se foi descarte por vencimento → gera perdas automaticamente
       if (novoStatus === 'descartado') {
           // Busca dados dos itens encerrados para gerar as perdas
@@ -875,41 +876,77 @@ module.exports = function (pool, app) {
                   qtd, valor, dtHoje, mes, req.user?.id || null]);
             }
 
-            // Registra movimento de estoque
+            // Registra a baixa de estoque somente até o saldo cadastral disponível.
+            // A baixa da validade e a perda NÃO podem ser bloqueadas por divergência de estoque:
+            // o item físico foi descartado e precisa sair do controle mesmo quando o cadastro está zerado/negativo.
             if (item.produto_id && qtd > 0) {
               const lock = await client.query('SELECT estoque FROM produtos WHERE id=$1 FOR UPDATE', [item.produto_id]);
-              if (!lock.rows.length) throw new Error(`Produto não encontrado para o item de validade ${item.id}`);
-              const disponivel = parseFloat(lock.rows[0].estoque || 0);
-              if (qtd > disponivel) throw new Error(`Estoque insuficiente no descarte. Produto ${item.codigo}: disponível ${disponivel}; descarte ${qtd}`);
-              await client.query(`
-                INSERT INTO movimentos_estoque
-                  (produto_id, produto_codigo, tipo_movimento, origem, origem_id,
-                   quantidade, estoque_anterior, estoque_posterior, usuario_id, observacao)
-                SELECT p.id, p.codigo, 'VALIDADE', 'validade', $1,
-                       -$2::numeric,
-                       p.estoque,
-                       GREATEST(0, p.estoque - $2::numeric),
-                       $3, $4
-                FROM produtos p WHERE p.id = $5
-              `, [item.id, qtd, req.user?.id || null,
-                  'Vencimento: ' + (item.descricao || item.codigo), item.produto_id]);
+              if (!lock.rows.length) {
+                divergenciasEstoque.push({
+                  itemId: item.id,
+                  codigo: item.codigo,
+                  solicitado: qtd,
+                  disponivel: null,
+                  baixadoEstoque: 0,
+                  motivo: 'Produto não encontrado no cadastro de estoque'
+                });
+              } else {
+                const estoqueAtual = parseFloat(lock.rows[0].estoque || 0);
+                const disponivel = Math.max(0, estoqueAtual);
+                const baixaEstoque = Math.min(qtd, disponivel);
 
-              await client.query(`
-                UPDATE produtos
-                SET estoque = estoque - $1, atualizado_em = NOW()
-                WHERE id = $2
-              `, [qtd, item.produto_id]);
+                if (baixaEstoque > 0) {
+                  const parcial = baixaEstoque < qtd;
+                  const obs = 'Vencimento: ' + (item.descricao || item.codigo)
+                    + (parcial ? ` | Baixa parcial de estoque: ${baixaEstoque} de ${qtd}; divergência cadastral` : '');
+                  await client.query(`
+                    INSERT INTO movimentos_estoque
+                      (produto_id, produto_codigo, tipo_movimento, origem, origem_id,
+                       quantidade, estoque_anterior, estoque_posterior, usuario_id, observacao)
+                    SELECT p.id, p.codigo, 'VALIDADE', 'validade', $1,
+                           -$2::numeric,
+                           p.estoque,
+                           GREATEST(0, p.estoque - $2::numeric),
+                           $3, $4
+                    FROM produtos p WHERE p.id = $5
+                  `, [item.id, baixaEstoque, req.user?.id || null, obs, item.produto_id]);
+
+                  await client.query(`
+                    UPDATE produtos
+                    SET estoque = GREATEST(0, estoque - $1), atualizado_em = NOW()
+                    WHERE id = $2
+                  `, [baixaEstoque, item.produto_id]);
+                }
+
+                if (baixaEstoque < qtd) {
+                  divergenciasEstoque.push({
+                    itemId: item.id,
+                    codigo: item.codigo,
+                    solicitado: qtd,
+                    disponivel: estoqueAtual,
+                    baixadoEstoque: baixaEstoque,
+                    motivo: 'Estoque cadastral menor que a quantidade descartada'
+                  });
+                }
+              }
             }
           }
 
       }
       await client.query('COMMIT');
       if (novoStatus === 'descartado') events.emit(app, 'VALIDADE_DESCARTADA', { ids:idsNum, motivo });
-      res.json({ ok: true, atualizados: result.rowCount, motivo });
+      res.json({
+        ok: true,
+        atualizados: result.rowCount,
+        motivo,
+        divergenciasEstoque,
+        alerta: divergenciasEstoque.length
+          ? `Baixa concluída. ${divergenciasEstoque.length} item(ns) tinham divergência de estoque e não impediram o descarte.`
+          : null
+      });
     } catch(e) {
       await client.query('ROLLBACK').catch(()=>{});
-      const status = /Estoque insuficiente/.test(e.message) ? 409 : 500;
-      res.status(status).json({ ok: false, erro: e.message });
+      res.status(500).json({ ok: false, erro: e.message });
     } finally { client.release(); }
   });
 

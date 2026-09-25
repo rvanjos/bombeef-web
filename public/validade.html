@@ -1663,7 +1663,7 @@ async function encerrarSelecionadosVal(resolucao) {
   if (!confirm(`Marcar ${ids.length} item(s) como ${label}?`)) return;
   const d = await api.post('/api/validade/encerrar-multiplos', { ids, resolucao });
   if (!d.ok) { toast('❌ ' + d.erro); return; }
-  toast(`✅ ${ids.length} item(s) marcado(s) como ${label}`);
+  toast(d.alerta ? '⚠️ ' + d.alerta : `✅ ${ids.length} item(s) marcado(s) como ${label}`);
   limparSelecao();
   carregar();
 }
@@ -1676,7 +1676,7 @@ async function encerrarSelecionados(resolucao){
   try {
     const d = await api.post('/api/validade/encerrar-multiplos', { ids, resolucao });
     if(d.ok){
-      toast(`✅ ${d.atualizados} item(s) marcado(s) como ${label}`);
+      toast(d.alerta ? '⚠️ ' + d.alerta : `✅ ${d.atualizados} item(s) marcado(s) como ${label}`);
       valLimparSel();
       await new Promise(r => setTimeout(r, 300));
       await carregar(); carregarKPIs();
