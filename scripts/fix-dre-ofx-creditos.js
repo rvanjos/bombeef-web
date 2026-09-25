@@ -169,22 +169,32 @@ async function main() {
       });
 
       let paresTransferencia=0;
+      const chaveRef=r=>String(r?.t?.fitid||'') || [dataTx(r?.t),Math.round(Math.abs(valorTx(r?.t))*100),norm(r?.t?.lancamento||'')].join('|');
+      const uniqPorFitid=lista=>{
+        const m=new Map();
+        for(const r of lista){const k=chaveRef(r);if(!m.has(k))m.set(k,r);}
+        return [...m.values()];
+      };
+      const saidasUnicas=uniqPorFitid(saidasProprias);
+      const entradasUnicas=uniqPorFitid(entradasItau);
       const usados=new Set();
-      for(const s of saidasProprias){
+      for(const s of saidasUnicas){
         const val=Math.round(Math.abs(valorTx(s.t))*100);
         const dt=dataTx(s.t);
-        const candidatos=entradasItau
-          .filter(e=>!usados.has(e))
+        const candidatos=entradasUnicas
+          .filter(e=>!usados.has(chaveRef(e)))
           .filter(e=>Math.round(Math.abs(valorTx(e.t))*100)===val && diffDias(dt,dataTx(e.t))<=3)
           .sort((a,b)=>diffDias(dt,dataTx(a.t))-diffDias(dt,dataTx(b.t)));
         if(candidatos.length!==1) continue;
-        const e=candidatos[0]; usados.add(e);
-        for(const r of [s,e]){
+        const e=candidatos[0]; usados.add(chaveRef(e));
+        const sKey=chaveRef(s),eKey=chaveRef(e);
+        const refsPar=refs.filter(r=>chaveRef(r)===sKey || chaveRef(r)===eKey);
+        for(const r of refsPar){
+          const parFitid=chaveRef(r)===sKey ? String(e.t.fitid||'') : String(s.t.fitid||'');
           if(r.t.categoria!==CAT_CREDITO_EXTRATO){r.t.categoria=CAT_CREDITO_EXTRATO;r.s._mudou=true;}
           if(r.t.ignorar===true){r.t.ignorar=false;r.s._mudou=true;}
-          r.t.transferenciaInterna=true;
-          r.t.transferenciaParFitid=String((r===s?e.t:s.t).fitid||'');
-          r.s._mudou=true;
+          if(r.t.transferenciaInterna!==true){r.t.transferenciaInterna=true;r.s._mudou=true;}
+          if(r.t.transferenciaParFitid!==parFitid){r.t.transferenciaParFitid=parFitid;r.s._mudou=true;}
         }
         paresTransferencia++;
       }
@@ -235,7 +245,7 @@ async function main() {
         `,[CAT_CREDITO_EXTRATO]).catch(()=>{});
       }
 
-      console.log(`[dre/ofx-fix] sessões reparadas: ${sessoesAlteradas}; ajustes: ${transacoesAlteradas}; saídas próprias PagBank: ${saidasProprias.length}; entradas Itaú candidatas: ${entradasItau.length}; transferências PagBank↔Itaú conciliadas: ${paresTransferencia}`);
+      console.log(`[dre/ofx-fix] sessões reparadas: ${sessoesAlteradas}; ajustes: ${transacoesAlteradas}; saídas próprias PagBank: ${saidasProprias.length}/${saidasUnicas.length} únicas; entradas Itaú candidatas: ${entradasItau.length}/${entradasUnicas.length} únicas; transferências PagBank↔Itaú conciliadas: ${paresTransferencia}`);
     }
 
     await client.query('COMMIT');
