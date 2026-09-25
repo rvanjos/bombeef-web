@@ -28,6 +28,29 @@ function fonteTx(t) {
   return String(t?.fonte ?? t?.source ?? t?.origem ?? '').trim().toUpperCase();
 }
 
+function norm(v) {
+  return String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim().toUpperCase();
+}
+function dataTx(t) {
+  const s=String(t?.data ?? t?.date ?? t?.data_lanc ?? '').slice(0,10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : '';
+}
+function diffDias(a,b) {
+  if(!a||!b) return 999;
+  return Math.abs((new Date(a+'T12:00:00Z')-new Date(b+'T12:00:00Z'))/86400000);
+}
+function ehUuidFitid(t) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(t?.fitid||''));
+}
+function setContaPagBank(t) {
+  let mudou=false;
+  if(t.bankId!=='290'){t.bankId='290';mudou=true;}
+  if(t.banco!=='PagBank'){t.banco='PagBank';mudou=true;}
+  if(t.contaBancaria!=='PagBank · 43333819-1'){t.contaBancaria='PagBank · 43333819-1';mudou=true;}
+  if(!t.acctId){t.acctId='43333819-1';mudou=true;}
+  return mudou;
+}
+
 async function main() {
   let client;
   try {
@@ -99,44 +122,118 @@ async function main() {
       console.log(`[dre/ofx-fix] receitas reativadas: ${receitasReativadas}; nomes corrigidos: ${nomes}`);
     }
 
-    // Corrige as sessões já gravadas. Reativa somente créditos positivos já
-    // classificados como VENDAS DE MERCADORIAS; transferências continuam neutras.
+    // Corrige as sessões já gravadas e migra o OFX PagBank que já foi importado.
+    // Regra financeira:
+    // - Vendas - Disponível = entrada real da venda no PagBank.
+    // - Pix enviado - O Acougue Bom Beef Valinhos = transferência interna.
+    // - crédito correspondente no Itaú = mesma transferência interna, não nova receita.
     if (await existeTabela(client, 'dre_sessoes')) {
       const { rows } = await client.query(`SELECT id, dados_json FROM dre_sessoes WHERE dados_json IS NOT NULL`);
-      let sessoesAlteradas = 0;
-      let transacoesAlteradas = 0;
-      for (const s of rows) {
-        const dados = typeof s.dados_json === 'string' ? JSON.parse(s.dados_json) : s.dados_json;
-        const txs = Array.isArray(dados?.transactions) ? dados.transactions : [];
-        let mudou = false;
-        for (const t of txs) {
-          const valor = valorTx(t);
-          const fonte = fonteTx(t);
-          let mudouTx = false;
+      const sessoes = rows.map(s=>({
+        id:s.id,
+        dados:typeof s.dados_json === 'string' ? JSON.parse(s.dados_json) : s.dados_json
+      }));
+      const refs=[];
+      for(const s of sessoes){
+        const txs=Array.isArray(s.dados?.transactions)?s.dados.transactions:[];
+        for(const t of txs) refs.push({sessaoId:s.id,s,t});
+      }
 
-          if (fonte === 'EXTRATO' && valor > 0 && String(t.categoria || '').trim() === CAT_RECEITA) {
-            if (t.ignorar === true) { t.ignorar = false; mudouTx = true; }
+      // Identifica transações PagBank legadas pelo FITID UUID e pelos padrões exclusivos do arquivo.
+      for(const r of refs){
+        const t=r.t, lanc=norm(t.lancamento ?? t.memo ?? '');
+        if(ehUuidFitid(t) || /^VENDAS - DISPONIVEL\b/.test(lanc) || /^PIX ENVIADO - /.test(lanc)){
+          if(setContaPagBank(t)) r.s._mudou=true;
+          if(/^VENDAS - DISPONIVEL\b/.test(lanc) && !String(t.categoria||'').trim()){
+            t.categoria=CAT_RECEITA; r.s._mudou=true;
           }
-
-          const cnpj = String(t.cnpjDoc ?? t.cnpj_doc ?? t.cnpj ?? '').replace(/\D/g, '');
-          const lanc = String(t.lancamento ?? t.memo ?? '').toUpperCase();
-          const razao = String(t.razaoSocial ?? t.razao_social ?? '').toUpperCase();
-          const ehProprio = cnpj === CNPJ_PROPRIO || lanc.startsWith('PIX RECEBIDO AR BOUT') || razao === 'ARTMILL ACESSORIOS LTDA EPP' || razao === 'B2B - HOME23 COMERCIO';
-          if (ehProprio) {
-            if ('razaoSocial' in t || !('razao_social' in t)) {
-              if (t.razaoSocial !== NOME_PROPRIO) { t.razaoSocial = NOME_PROPRIO; mudouTx = true; }
-            }
-            if ('razao_social' in t && t.razao_social !== NOME_PROPRIO) { t.razao_social = NOME_PROPRIO; mudouTx = true; }
-          }
-
-          if (mudouTx) { mudou = true; transacoesAlteradas++; }
         }
-        if (mudou) {
-          await client.query('UPDATE dre_sessoes SET dados_json=$1::jsonb, atualizado_em=NOW() WHERE id=$2', [JSON.stringify(dados), s.id]);
+      }
+
+      const saidasProprias=refs.filter(r=>{
+        const t=r.t;
+        return valorTx(t)<0
+          && norm(t.banco)==='PAGBANK'
+          && /^PIX ENVIADO - O ACOUGUE BOM BEEF VALINHOS\b/.test(norm(t.lancamento ?? t.memo ?? ''));
+      });
+      const entradasItau=refs.filter(r=>{
+        const t=r.t;
+        return valorTx(t)>0
+          && !ehUuidFitid(t)
+          && (
+            /^PIX RECEBIDO AR BOUT/.test(norm(t.lancamento ?? t.memo ?? ''))
+            || norm(t.razaoSocial ?? t.razao_social ?? '')===norm(NOME_PROPRIO)
+          );
+      });
+
+      let paresTransferencia=0;
+      const usados=new Set();
+      for(const s of saidasProprias){
+        const val=Math.round(Math.abs(valorTx(s.t))*100);
+        const dt=dataTx(s.t);
+        const candidatos=entradasItau
+          .filter(e=>!usados.has(e))
+          .filter(e=>Math.round(Math.abs(valorTx(e.t))*100)===val && diffDias(dt,dataTx(e.t))<=3)
+          .sort((a,b)=>diffDias(dt,dataTx(a.t))-diffDias(dt,dataTx(b.t)));
+        if(candidatos.length!==1) continue;
+        const e=candidatos[0]; usados.add(e);
+        for(const r of [s,e]){
+          if(r.t.categoria!==CAT_CREDITO_EXTRATO){r.t.categoria=CAT_CREDITO_EXTRATO;r.s._mudou=true;}
+          if(r.t.ignorar===true){r.t.ignorar=false;r.s._mudou=true;}
+          r.t.transferenciaInterna=true;
+          r.t.transferenciaParFitid=String((r===s?e.t:s.t).fitid||'');
+          r.s._mudou=true;
+        }
+        paresTransferencia++;
+      }
+
+      let sessoesAlteradas=0,transacoesAlteradas=0;
+      for(const s of sessoes){
+        const txs=Array.isArray(s.dados?.transactions)?s.dados.transactions:[];
+        let mudou=!!s._mudou;
+        for(const t of txs){
+          const valor=valorTx(t),fonte=fonteTx(t);
+          if(fonte==='EXTRATO' && valor>0 && String(t.categoria||'').trim()===CAT_RECEITA && t.ignorar===true){
+            t.ignorar=false; mudou=true; transacoesAlteradas++;
+          }
+          const cnpj=String(t.cnpjDoc ?? t.cnpj_doc ?? t.cnpj ?? '').replace(/\D/g,'');
+          const lanc=norm(t.lancamento ?? t.memo ?? '');
+          const razao=norm(t.razaoSocial ?? t.razao_social ?? '');
+          const ehProprio=cnpj===CNPJ_PROPRIO || lanc.startsWith('PIX RECEBIDO AR BOUT') || razao==='ARTMILL ACESSORIOS LTDA EPP' || razao==='B2B - HOME23 COMERCIO';
+          if(ehProprio){
+            if('razaoSocial' in t || !('razao_social' in t)){
+              if(t.razaoSocial!==NOME_PROPRIO){t.razaoSocial=NOME_PROPRIO;mudou=true;transacoesAlteradas++;}
+            }
+            if('razao_social' in t && t.razao_social!==NOME_PROPRIO){t.razao_social=NOME_PROPRIO;mudou=true;transacoesAlteradas++;}
+          }
+        }
+        if(mudou){
+          delete s.dados._mudou;
+          await client.query('UPDATE dre_sessoes SET dados_json=$1::jsonb, atualizado_em=NOW() WHERE id=$2',[JSON.stringify(s.dados),s.id]);
           sessoesAlteradas++;
         }
       }
-      console.log(`[dre/ofx-fix] sessões reparadas: ${sessoesAlteradas}; receitas reativadas nas sessões: ${transacoesAlteradas}`);
+
+      // Espelho relacional: usa descrições inequívocas. A fonte canônica continua
+      // sendo dados_json; esta atualização mantém telas auxiliares coerentes.
+      if (await existeTabela(client, 'dre_lancamentos')) {
+        await client.query(`
+          UPDATE dre_lancamentos
+          SET categoria=$1, ignorar=false
+          WHERE valor<0
+            AND UPPER(COALESCE(fonte,''))='EXTRATO'
+            AND UPPER(COALESCE(lancamento,'')) LIKE 'PIX ENVIADO - O ACOUGUE BOM BEEF VALINHOS%'
+        `,[CAT_CREDITO_EXTRATO]).catch(()=>{});
+        await client.query(`
+          UPDATE dre_lancamentos
+          SET categoria=$1, ignorar=false
+          WHERE valor>0
+            AND UPPER(COALESCE(fonte,''))='EXTRATO'
+            AND UPPER(COALESCE(lancamento,'')) LIKE 'PIX RECEBIDO AR BOUT%'
+        `,[CAT_CREDITO_EXTRATO]).catch(()=>{});
+      }
+
+      console.log(`[dre/ofx-fix] sessões reparadas: ${sessoesAlteradas}; ajustes: ${transacoesAlteradas}; transferências PagBank↔Itaú conciliadas: ${paresTransferencia}`);
     }
 
     await client.query('COMMIT');

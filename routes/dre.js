@@ -852,6 +852,8 @@ module.exports = function (pool, app) {
       descricao:String(t?.lancamento||t?.descricao||'Sem descrição'),
       fornecedor:String(t?.razaoSocial||t?.fornecedor||t?.portador||''),
       categoria:String(t?.categoria||''),
+      banco:String(t?.banco||''),
+      contaBancaria:String(t?.contaBancaria||''),
       ignorar:!!t?.ignorar
     };
   }
@@ -927,6 +929,7 @@ module.exports = function (pool, app) {
       if(!data) continue;
       if(incluirInicio ? data<inicio : data<=inicio) continue;
       if(data>fim) continue;
+      if(_normFluxo(t?.categoria)==='TRANSFERENCIA ENTRE CONTAS') continue;
       const v=Number(t?.valor||0);
       qtd++;
       if(v>0) entradas+=v; else saidas+=Math.abs(v);
@@ -2607,6 +2610,14 @@ module.exports = function (pool, app) {
   // ── Helpers ────────────────────────────────────────────────────────────────
 
   function parseOFX(text) {
+    const getGlobal = tag => {
+      const r = String(text||'').match(new RegExp('<'+tag+'>([^<\\n\\r]+)','i'));
+      return r ? r[1].trim() : '';
+    };
+    const bankId = getGlobal('BANKID');
+    const acctId = getGlobal('ACCTID');
+    const bankName = bankId === '290' ? 'PagBank' : bankId === '0341' || bankId === '341' ? 'Itaú' : ('Banco '+(bankId||'não identificado'));
+    const contaBancaria = [bankName, acctId].filter(Boolean).join(' · ');
     // Prefixos de operação bancária — o que vem após é o favorecido
     const OFX_PREF = [
       'PAGAMENTOS PIX QR-CODE','PAGAMENTOS PIX','PAGAMENTOS TRANSF CC ITAU','PAGAMENTOS TRANSF CC',
@@ -2654,7 +2665,16 @@ module.exports = function (pool, app) {
       const mes = dt ? dt.slice(5,7) + '/' + dt.slice(0,4) : '';
       const { lancamento, razaoSocial, cnpjDoc } = splitMemo(memo);
       const fitid = get('FITID') || get('CHECKNUM') || '';
-      result.push({ lancamento, razaoSocial, cnpjDoc, valor: val, data: dt, mes, mesCaixa: mes, fonte: 'EXTRATO', categoria: '', fitid });
+      const upMemo = String(memo||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase();
+      const ehSaldoInformativo = /SALDO ANTERIOR|SALDO TOTAL DISPONIVEL DIA/.test(upMemo);
+      if (ehSaldoInformativo) continue;
+      let categoria = '';
+      if (bankId === '290' && /^VENDAS - DISPONIVEL\b/.test(upMemo)) categoria = 'VENDAS DE MERCADORIAS';
+      if (bankId === '290' && /^PIX ENVIADO - O ACOUGUE BOM BEEF VALINHOS\b/.test(upMemo)) categoria = 'Transferência entre contas';
+      result.push({
+        lancamento, razaoSocial, cnpjDoc, valor: val, data: dt, mes, mesCaixa: mes,
+        fonte: 'EXTRATO', categoria, fitid, bankId, acctId, banco: bankName, contaBancaria
+      });
     }
     return result;
   }
