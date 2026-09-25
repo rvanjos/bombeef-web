@@ -117,3 +117,34 @@ test('OFX guarda banco e conta e ignora linhas informativas de saldo',()=>{
   assert.match(rota,/contaBancaria/);
   assert.match(rota,/SALDO ANTERIOR\|SALDO TOTAL DISPONIVEL DIA/);
 });
+
+
+test('saldo diario mostra esperado real e lancamentos',()=>{
+  const rota=ler('routes/dre.js');
+  const fin=ler('public/js/dre-planejamento-conciliacao.js');
+  assert.match(rota,/r\.get\('\/fluxo-diario'/);
+  assert.match(rota,/SALDO TOTAL DISPONIVEL DIA/);
+  assert.match(rota,/SALDO ANTERIOR/);
+  assert.match(rota,/saldo_abertura/);
+  assert.match(rota,/saldo_esperado/);
+  assert.match(rota,/saldo_real/);
+  assert.match(fin,/Saldo diário da conta/);
+  assert.match(fin,/Saldo abertura/);
+  assert.match(fin,/Saldo esperado/);
+  assert.match(fin,/Saldo real/);
+  assert.match(fin,/dreFluxoToggleDia/);
+  assert.match(fin,/lançamento\(s\)/);
+});
+
+test('saldo real do dia vira base do dia seguinte',()=>{
+  const rota=ler('routes/dre.js');
+  assert.match(rota,/saldoBase=saldoReal!=null\?saldoReal:saldoEsperado/);
+  assert.match(rota,/Um saldo real fecha o dia e é a base mais confiável para o próximo/);
+});
+
+test('saldo informativo do OFX nao entra como movimento financeiro',()=>{
+  const rota=ler('routes/dre.js');
+  assert.match(rota,/if\(tipoSaldo\)\{/);
+  assert.match(rota,/saldosReais\.push/);
+  assert.match(rota,/continue;/);
+});
