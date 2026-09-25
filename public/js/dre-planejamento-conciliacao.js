@@ -62,10 +62,10 @@ function fluxoDiario(){
   const rows=dias.map(x=>{
     const aberto=st.diarioAbertos.has(x.data),ok=x.diferenca==null?null:Math.abs(Number(x.diferenca))<=0.05;
     const det=(x.movimentos||[]).map(m=>'<tr class="fluxo-mov"><td></td><td colspan="2"><strong>'+esc(m.descricao||'Lançamento')+'</strong><small>'+esc(m.fornecedor||'')+(m.categoria?' · '+esc(m.categoria):'')+(m.transferencia_interna?' · transferência interna':'')+'</small></td><td colspan="2">'+(Number(m.valor||0)>=0?'Entrada':'Saída')+'</td><td class="'+(Number(m.valor||0)>=0?'fluxo-ok':'fluxo-bad')+'">'+brl(m.valor)+'</td><td colspan="3"></td></tr>').join('');
-    return '<tr class="fluxo-dia" onclick="dreFluxoToggleDia(\''+esc(x.data)+'\')"><td><button class="fluxo-expand">'+(aberto?'▾':'▸')+'</button><strong>'+dataBr(x.data)+'</strong><small>'+(x.movimentos?.length||0)+' lançamento(s)</small></td><td>'+ (x.saldo_abertura==null?'—':brl(x.saldo_abertura))+'</td><td>'+brl(x.entradas)+'</td><td>'+brl(x.saidas)+'</td><td>'+ (x.saldo_esperado==null?'—':brl(x.saldo_esperado))+'</td><td><strong>'+ (x.saldo_real==null?'—':brl(x.saldo_real))+'</strong></td><td class="'+(ok===null?'':ok?'fluxo-ok':'fluxo-bad')+'">'+(x.diferenca==null?'—':brl(x.diferenca))+'</td><td>'+(x.saldo_real==null?'<span class="dfv-status blue">Sem saldo OFX</span>':ok?'<span class="dfv-status ok">OK</span>':'<span class="dfv-status bad">Divergente</span>')+'</td></tr>'+(aberto?det:'');
+    return '<tr class="fluxo-dia" onclick="dreFluxoToggleDia(\''+esc(x.data)+'\')"><td><button class="fluxo-expand">'+(aberto?'▾':'▸')+'</button><strong>'+dataBr(x.data)+'</strong><small>'+(x.movimentos?.length||0)+' lançamento(s)</small></td><td>'+ (x.saldo_abertura==null?'—':brl(x.saldo_abertura))+'</td><td>'+brl(x.entradas)+'</td><td>'+brl(x.saidas)+'</td><td>'+ (x.saldo_esperado==null?'—':brl(x.saldo_esperado))+'</td><td><strong>'+ (x.saldo_real==null?'—':brl(x.saldo_real))+'</strong><small>'+(x.saldo_real_fonte?esc(x.saldo_real_fonte):'')+'</small></td><td class="'+(ok===null?'':ok?'fluxo-ok':'fluxo-bad')+'">'+(x.diferenca==null?'—':brl(x.diferenca))+'</td><td>'+(x.saldo_real==null?'<span class="dfv-status blue">Sem saldo real</span>':ok?'<span class="dfv-status ok">OK</span>':'<span class="dfv-status bad">Divergente</span>')+'</td></tr>'+(aberto?det:'');
   }).join('');
-  return '<div class="dfv-card"><div class="dfv-card-h"><div><strong>📆 Saldo diário da conta</strong><div style="font-size:10px;color:var(--muted);margin-top:2px">Saldo de abertura + movimentos do dia = saldo esperado. O saldo real vem do OFX quando disponível.</div></div><div class="plan-toolbar"><select onchange="dreFluxoTrocarConta(this.value)">'+opts+'</select></div></div><div class="dfv-card-b">'+
-    '<div class="dfv-grid" style="margin-bottom:10px"><div class="dfv-field"><span>Conta</span><b>'+esc(d.conta||'—')+'</b></div><div class="dfv-field"><span>Dias com saldo real</span><b>'+Number(d.resumo?.com_saldo_real||0)+'</b></div><div class="dfv-field"><span>Dias divergentes</span><b>'+Number(d.resumo?.divergentes||0)+'</b></div><div class="dfv-field"><span>Última diferença</span><b class="'+(Math.abs(Number(d.resumo?.ultima_diferenca||0))<=0.05?'fluxo-ok':'fluxo-bad')+'">'+(d.resumo?.ultima_diferenca==null?'—':brl(d.resumo.ultima_diferenca))+'</b></div></div>'+
+  return '<div class="dfv-card"><div class="dfv-card-h"><div><strong>📆 Saldo diário da conta</strong><div style="font-size:10px;color:var(--muted);margin-top:2px">Saldo de abertura + movimentos do dia = saldo esperado. O saldo real pode vir do OFX ou de uma conferência informada por você.</div></div><div class="plan-toolbar"><select onchange="dreFluxoTrocarConta(this.value)">'+opts+'</select></div></div><div class="dfv-card-b">'+
+    '<div class="dfv-grid" style="margin-bottom:10px"><div class="dfv-field"><span>Conta</span><b>'+esc(d.conta||'—')+'</b></div><div class="dfv-field"><span>Dias com saldo real</span><b>'+Number(d.resumo?.com_saldo_real||0)+'</b><small>'+Number(d.resumo?.com_saldo_ofx||0)+' OFX · '+Number(d.resumo?.com_saldo_informado||0)+' informado(s)</small></div><div class="dfv-field"><span>Dias divergentes</span><b>'+Number(d.resumo?.divergentes||0)+'</b></div><div class="dfv-field"><span>Última diferença</span><b class="'+(Math.abs(Number(d.resumo?.ultima_diferenca||0))<=0.05?'fluxo-ok':'fluxo-bad')+'">'+(d.resumo?.ultima_diferenca==null?'—':brl(d.resumo.ultima_diferenca))+'</b></div></div>'+
     (dias.length?'<div class="fluxo-table-wrap"><table class="fluxo-table fluxo-diario-table"><thead><tr><th>Data</th><th>Saldo abertura</th><th>Entradas</th><th>Saídas</th><th>Saldo esperado</th><th>Saldo real</th><th>Diferença</th><th>Status</th></tr></thead><tbody>'+rows+'</tbody></table></div>':'<div class="dfv-empty">Não há movimentos bancários para esta conta.</div>')+
     '</div></div>';
 }
@@ -353,6 +353,7 @@ root.dreFluxoSalvarBase=async function(){
   if(!r?.ok){root.toast?.('❌ '+(r?.erro||'Erro ao salvar a base'));return;}
   if(r.conciliacao)setFluxoPacote(r.conciliacao); else await carregarFluxo();
   root.toast?.('✅ Base do fluxo salva');
+  await carregarFluxoDiario(st.diario?.conta||undefined);
   renderConc();
 };
 
@@ -367,6 +368,7 @@ root.dreFluxoRegistrarConf=async function(){
   if(!r?.ok){root.toast?.('❌ '+(r?.erro||'Erro ao registrar saldo'));return;}
   setFluxoPacote(r);
   root.toast?.('✅ Saldo real registrado e conciliado');
+  await carregarFluxoDiario(st.diario?.conta||undefined);
   renderConc();
 };
 
@@ -376,6 +378,7 @@ root.dreFluxoExcluirConf=async function(id){
   if(!r?.ok){root.toast?.('❌ '+(r?.erro||'Erro ao excluir conferência'));return;}
   setFluxoPacote(r);
   root.toast?.('✅ Conferência removida');
+  await carregarFluxoDiario(st.diario?.conta||undefined);
   renderConc();
 };
 
