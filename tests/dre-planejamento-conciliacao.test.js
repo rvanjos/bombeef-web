@@ -193,3 +193,23 @@ test('lancamentos Itau legados entram na conta real na grade diaria',()=>{
   assert.match(rota,/atual==='Itaú · conta principal'/);
   assert.match(rota,/banco\.movimentos\.filter\(t=>_pertenceContaDiaria\(t,conta\)/);
 });
+
+
+test('detalhe diario mostra saldo antes e depois de cada movimento',()=>{
+  const rota=ler('routes/dre.js');
+  const fin=ler('public/js/dre-planejamento-conciliacao.js');
+  assert.match(rota,/saldo_antes:antes/);
+  assert.match(rota,/saldo_depois:depois/);
+  assert.match(rota,/natureza:v>=0\?'ENTRADA':'SAIDA'/);
+  assert.match(fin,/Saldo esperado \/ antes/);
+  assert.match(fin,/Saldo real \/ depois/);
+});
+
+test('detalhe diario destaca sinal bancario suspeito sem alterar valor',()=>{
+  const rota=ler('routes/dre.js');
+  const fin=ler('public/js/dre-planejamento-conciliacao.js');
+  assert.match(rota,/const sinalSuspeito=\(v>0&&pareceSaida\)\|\|\(v<0&&pareceEntrada\)/);
+  assert.match(rota,/alerta_sinal/);
+  assert.match(fin,/Sinal suspeito/);
+  assert.match(fin,/fluxo-mov-warn/);
+});
