@@ -955,10 +955,20 @@ module.exports = function (pool, app) {
     while(d<=f){out.push(d.toISOString().slice(0,10));d.setUTCDate(d.getUTCDate()+1);}
     return out;
   }
+  function _pertenceContaDiaria(t,conta) {
+    const atual=_contaFluxo(t);
+    if(atual===conta) return true;
+    // Migração lógica: lançamentos Itaú importados antes de BANKID/ACCTID eram
+    // salvos como "Itaú · conta principal". Quando a conta real já foi
+    // identificada pelo OFX, esses lançamentos legados pertencem à mesma conta.
+    return String(conta).startsWith('Itaú · ')
+      && conta!=='Itaú · conta principal'
+      && atual==='Itaú · conta principal';
+  }
   function _montarDiarioConta(banco,conta,de,ate,baseCfg=null,conferencias=[]) {
     const dataBase=_isoData(baseCfg?.data_inicio);
     const inicioCalculo=dataBase && dataBase<de ? dataBase : de;
-    const movs=banco.movimentos.filter(t=>_contaFluxo(t)===conta && _dataTxIso(t)>=inicioCalculo && _dataTxIso(t)<=ate);
+    const movs=banco.movimentos.filter(t=>_pertenceContaDiaria(t,conta) && _dataTxIso(t)>=inicioCalculo && _dataTxIso(t)<=ate);
     const saldos=banco.saldosReais.filter(s=>s.conta===conta && s.data>=inicioCalculo && s.data<=ate);
     const porDiaMov=new Map(),abertura=new Map(),fechamento=new Map(),fonteFechamento=new Map();
 
@@ -1194,7 +1204,7 @@ module.exports = function (pool, app) {
         ? solicitada
         : (cfg && contas.includes(contaBase) ? contaBase : contas[0]);
       const datas=[
-        ...banco.movimentos.filter(t=>_contaFluxo(t)===conta).map(_dataTxIso),
+        ...banco.movimentos.filter(t=>_pertenceContaDiaria(t,conta)).map(_dataTxIso),
         ...banco.saldosReais.filter(s=>s.conta===conta).map(s=>s.data),
         ...confRows.map(r=>_isoData(r.data_ref)),
         dataInicio

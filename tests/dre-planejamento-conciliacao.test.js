@@ -185,3 +185,11 @@ test('saldo inicial usa a conta Itau real quando identificada no OFX',()=>{
   assert.match(rota,/const baseDaConta=\(cfg && conta===contaBase\)\?cfg:null/);
   assert.match(rota,/const confDaConta=\(cfg && conta===contaBase\)\?confRows:\[\]/);
 });
+
+
+test('lancamentos Itau legados entram na conta real na grade diaria',()=>{
+  const rota=ler('routes/dre.js');
+  assert.match(rota,/function _pertenceContaDiaria\(t,conta\)/);
+  assert.match(rota,/atual==='Itaú · conta principal'/);
+  assert.match(rota,/banco\.movimentos\.filter\(t=>_pertenceContaDiaria\(t,conta\)/);
+});
