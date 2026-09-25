@@ -869,6 +869,7 @@ module.exports = function (pool, app) {
     return 'Itaú · conta principal';
   }
   function _ehSaldoInformativo(t) {
+    if(t?.saldoInformativo==='abertura'||t?.saldoInformativo==='fechamento') return t.saldoInformativo;
     const txt=_normFluxo([t?.lancamento,t?.memo,t?.razaoSocial,t?.fornecedor].filter(Boolean).join(' '));
     if(/SALDO TOTAL DISPONIVEL DIA/.test(txt)) return 'fechamento';
     if(/SALDO ANTERIOR/.test(txt)) return 'abertura';
@@ -954,22 +955,38 @@ module.exports = function (pool, app) {
     while(d<=f){out.push(d.toISOString().slice(0,10));d.setUTCDate(d.getUTCDate()+1);}
     return out;
   }
-  function _montarDiarioConta(banco,conta,de,ate) {
-    const movs=banco.movimentos.filter(t=>_contaFluxo(t)===conta && _dataTxIso(t)>=de && _dataTxIso(t)<=ate);
-    const saldos=banco.saldosReais.filter(s=>s.conta===conta && s.data>=de && s.data<=ate);
-    const porDiaMov=new Map(),abertura=new Map(),fechamento=new Map();
+  function _montarDiarioConta(banco,conta,de,ate,baseCfg=null,conferencias=[]) {
+    const dataBase=_isoData(baseCfg?.data_inicio);
+    const inicioCalculo=dataBase && dataBase<de ? dataBase : de;
+    const movs=banco.movimentos.filter(t=>_contaFluxo(t)===conta && _dataTxIso(t)>=inicioCalculo && _dataTxIso(t)<=ate);
+    const saldos=banco.saldosReais.filter(s=>s.conta===conta && s.data>=inicioCalculo && s.data<=ate);
+    const porDiaMov=new Map(),abertura=new Map(),fechamento=new Map(),fonteFechamento=new Map();
+
     for(const t of movs){
       const d=_dataTxIso(t);if(!porDiaMov.has(d))porDiaMov.set(d,[]);porDiaMov.get(d).push(t);
     }
     for(const s of saldos){
       if(s.tipo==='abertura') abertura.set(s.data,s.saldo);
-      else fechamento.set(s.data,s.saldo);
+      else {fechamento.set(s.data,s.saldo);fonteFechamento.set(s.data,'OFX');}
     }
+    // Saldos reais informados manualmente também fecham o dia.
+    for(const cf of conferencias){
+      const d=_isoData(cf?.data_ref);
+      if(!d||d<inicioCalculo||d>ate) continue;
+      fechamento.set(d,Number(cf.saldo_real));
+      fonteFechamento.set(d,'Informado');
+    }
+
     const dias=[];
-    let saldoBase=null;
-    for(const data of _datasEntre(de,ate)){
+    let saldoBase=(dataBase===inicioCalculo && baseCfg?.saldo_inicial!=null)
+      ? Number(baseCfg.saldo_inicial) : null;
+
+    for(const data of _datasEntre(inicioCalculo,ate)){
       const itens=porDiaMov.get(data)||[];
-      if(abertura.has(data)) saldoBase=abertura.get(data);
+      if(abertura.has(data)) saldoBase=Number(abertura.get(data));
+      // A base cadastrada representa o saldo de abertura da data inicial.
+      if(dataBase===data && baseCfg?.saldo_inicial!=null) saldoBase=Number(baseCfg.saldo_inicial);
+
       let entradas=0,saidas=0;
       const detalhes=itens.map(t=>{
         const v=Number(t.valor||0);
@@ -980,17 +997,18 @@ module.exports = function (pool, app) {
       const saldoEsperado=saldoBase==null?null:Number((saldoBase+entradas-saidas).toFixed(2));
       const saldoReal=fechamento.has(data)?Number(fechamento.get(data)):null;
       const diferenca=saldoReal==null||saldoEsperado==null?null:Number((saldoReal-saldoEsperado).toFixed(2));
-      dias.push({
+      if(data>=de) dias.push({
         data,
         saldo_abertura:saldoAbertura,
         entradas:Number(entradas.toFixed(2)),
         saidas:Number(saidas.toFixed(2)),
         saldo_esperado:saldoEsperado,
         saldo_real:saldoReal,
+        saldo_real_fonte:saldoReal==null?null:fonteFechamento.get(data)||'OFX',
         diferenca,
         movimentos:detalhes
       });
-      // Um saldo real fecha o dia e é a base mais confiável para o próximo.
+      // O saldo real fecha o dia e é a base mais confiável para o próximo.
       saldoBase=saldoReal!=null?saldoReal:saldoEsperado;
     }
     return dias;
@@ -1143,25 +1161,49 @@ module.exports = function (pool, app) {
 
   r.get('/fluxo-diario', async(req,res)=>{
     try{
-      const banco=await _movimentosBanco(Number(req.user?.lojaId));
+      const lojaId=Number(req.user?.lojaId);
+      const [banco,{rows:cfgRows},{rows:confRows}]=await Promise.all([
+        _movimentosBanco(lojaId),
+        pool.query(`
+          SELECT data_inicio,saldo_inicial,observacoes,atualizado_em
+          FROM dre_fluxo_saldo_controle WHERE loja_id=$1 LIMIT 1
+        `,[lojaId]),
+        pool.query(`
+          SELECT id,data_ref,saldo_real,observacoes,atualizado_em
+          FROM dre_fluxo_conferencias WHERE loja_id=$1 ORDER BY data_ref ASC,id ASC
+        `,[lojaId])
+      ]);
+      const cfg=cfgRows[0]||null;
+      const dataInicio=_isoData(cfg?.data_inicio);
       const contas=[...new Set([
         ...banco.movimentos.map(_contaFluxo),
         ...banco.saldosReais.map(s=>s.conta)
       ])].filter(Boolean).sort();
+      // O controle legado de saldo pertence à conta principal Itaú.
+      if(cfg && !contas.includes('Itaú · conta principal')) contas.unshift('Itaú · conta principal');
       if(!contas.length) return res.json({ok:true,contas:[],conta:null,de:null,ate:null,dias:[]});
       const conta=contas.includes(String(req.query.conta||''))?String(req.query.conta):contas[0];
       const datas=[
         ...banco.movimentos.filter(t=>_contaFluxo(t)===conta).map(_dataTxIso),
-        ...banco.saldosReais.filter(s=>s.conta===conta).map(s=>s.data)
+        ...banco.saldosReais.filter(s=>s.conta===conta).map(s=>s.data),
+        ...confRows.map(r=>_isoData(r.data_ref)),
+        dataInicio
       ].filter(Boolean).sort();
       if(!datas.length) return res.json({ok:true,contas,conta,de:null,ate:null,dias:[]});
       const deReq=_isoData(req.query.de),ateReq=_isoData(req.query.ate);
-      const de=deReq||datas[0],ate=ateReq||datas[datas.length-1];
-      const dias=_montarDiarioConta(banco,conta,de,ate);
+      const de=deReq||(dataInicio||datas[0]);
+      const ate=ateReq||datas[datas.length-1];
+      const baseDaConta=conta==='Itaú · conta principal'?cfg:null;
+      const confDaConta=conta==='Itaú · conta principal'?confRows:[];
+      const dias=_montarDiarioConta(banco,conta,de,ate,baseDaConta,confDaConta);
       const divergentes=dias.filter(d=>d.diferenca!=null&&Math.abs(d.diferenca)>0.05).length;
       res.json({ok:true,contas,conta,de,ate,dias,resumo:{
-        dias:dias.length,com_saldo_real:dias.filter(d=>d.saldo_real!=null).length,
-        divergentes,ultima_diferenca:[...dias].reverse().find(d=>d.diferenca!=null)?.diferenca??null
+        dias:dias.length,
+        com_saldo_real:dias.filter(d=>d.saldo_real!=null).length,
+        com_saldo_ofx:dias.filter(d=>d.saldo_real_fonte==='OFX').length,
+        com_saldo_informado:dias.filter(d=>d.saldo_real_fonte==='Informado').length,
+        divergentes,
+        ultima_diferenca:[...dias].reverse().find(d=>d.diferenca!=null)?.diferenca??null
       }});
     }catch(e){res.status(500).json({ok:false,erro:e.message});}
   });
@@ -2765,8 +2807,29 @@ module.exports = function (pool, app) {
       const { lancamento, razaoSocial, cnpjDoc } = splitMemo(memo);
       const fitid = get('FITID') || get('CHECKNUM') || '';
       const upMemo = String(memo||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase();
-      const ehSaldoInformativo = /SALDO ANTERIOR|SALDO TOTAL DISPONIVEL DIA/.test(upMemo);
-      if (ehSaldoInformativo) continue;
+      const ehSaldoAnterior = /SALDO ANTERIOR/.test(upMemo);
+      const ehSaldoDia = /SALDO TOTAL DISPONIVEL DIA/.test(upMemo);
+      if (ehSaldoAnterior || ehSaldoDia) {
+        result.push({
+          lancamento: memo,
+          razaoSocial: '',
+          cnpjDoc: '',
+          valor: val,
+          data: dt,
+          mes,
+          mesCaixa: mes,
+          fonte: 'OFX',
+          categoria: 'Saldo bancário informativo',
+          ignorar: true,
+          saldoInformativo: ehSaldoAnterior ? 'abertura' : 'fechamento',
+          fitid,
+          bankId,
+          acctId,
+          banco: bankName,
+          contaBancaria
+        });
+        continue;
+      }
       let categoria = '';
       if (bankId === '290' && /^VENDAS - DISPONIVEL\b/.test(upMemo)) categoria = 'VENDAS DE MERCADORIAS';
       if (bankId === '290' && /^PIX ENVIADO - O ACOUGUE BOM BEEF VALINHOS\b/.test(upMemo)) categoria = 'Transferência entre contas';
