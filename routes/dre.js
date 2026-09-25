@@ -2671,6 +2671,13 @@ module.exports = function (pool, app) {
       let categoria = '';
       if (bankId === '290' && /^VENDAS - DISPONIVEL\b/.test(upMemo)) categoria = 'VENDAS DE MERCADORIAS';
       if (bankId === '290' && /^PIX ENVIADO - O ACOUGUE BOM BEEF VALINHOS\b/.test(upMemo)) categoria = 'Transferência entre contas';
+      const ehItau = bankId === '0341' || bankId === '341';
+      const ehCreditoProprioItau = ehItau && val > 0 && (
+        cnpjDoc === '46237080000102'
+        || /PIX RECEBIDO.*AR BOUT/.test(upMemo)
+        || /AR BOUTIQUE DE CARNES LTDA/.test(upMemo)
+      );
+      if (ehCreditoProprioItau) categoria = 'Transferência entre contas';
       result.push({
         lancamento, razaoSocial, cnpjDoc, valor: val, data: dt, mes, mesCaixa: mes,
         fonte: 'EXTRATO', categoria, fitid, bankId, acctId, banco: bankName, contaBancaria
