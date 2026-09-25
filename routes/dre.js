@@ -998,12 +998,31 @@ module.exports = function (pool, app) {
       if(dataBase===data && baseCfg?.saldo_inicial!=null) saldoBase=Number(baseCfg.saldo_inicial);
 
       let entradas=0,saidas=0;
+      const saldoAbertura=saldoBase;
+      let saldoCorrente=saldoBase;
       const detalhes=itens.map(t=>{
         const v=Number(t.valor||0);
         if(v>0)entradas+=v; else saidas+=Math.abs(v);
-        return {..._resumoTx(t),conta:_contaFluxo(t),transferencia_interna:_normFluxo(t?.categoria)==='TRANSFERENCIA ENTRE CONTAS'};
+        const texto=_normFluxo([t?.lancamento,t?.memo,t?.razaoSocial,t?.fornecedor].filter(Boolean).join(' '));
+        const pareceSaida=/\b(PAGAMENTO|PAGAMENTOS|PIX ENVIADO|TED ENVIADA|DOC ENVIADO|DEBITO|BOLETO|TARIFA|SAQUE)\b/.test(texto);
+        const pareceEntrada=/\b(PIX RECEBIDO|TED RECEBIDA|DOC RECEBIDO|RECEBIMENTO|RECEBIMENTOS|CREDITO)\b/.test(texto);
+        const sinalSuspeito=(v>0&&pareceSaida)||(v<0&&pareceEntrada);
+        const antes=saldoCorrente;
+        const depois=antes==null?null:Number((antes+v).toFixed(2));
+        saldoCorrente=depois;
+        return {
+          ..._resumoTx(t),
+          conta:_contaFluxo(t),
+          transferencia_interna:_normFluxo(t?.categoria)==='TRANSFERENCIA ENTRE CONTAS',
+          natureza:v>=0?'ENTRADA':'SAIDA',
+          saldo_antes:antes,
+          saldo_depois:depois,
+          sinal_suspeito:sinalSuspeito,
+          alerta_sinal:sinalSuspeito
+            ? (v>0?'Texto indica possível saída, mas valor está positivo':'Texto indica possível entrada, mas valor está negativo')
+            : null
+        };
       });
-      const saldoAbertura=saldoBase;
       const saldoEsperado=saldoBase==null?null:Number((saldoBase+entradas-saidas).toFixed(2));
       const saldoReal=fechamento.has(data)?Number(fechamento.get(data)):null;
       const diferenca=saldoReal==null||saldoEsperado==null?null:Number((saldoReal-saldoEsperado).toFixed(2));
