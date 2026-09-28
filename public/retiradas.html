@@ -299,11 +299,19 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
   </div>
 </div>
 
-<!-- Modal Relatório -->
+<!-- Modal Relatório / Termo de Conferência -->
 <div class="modal-bg" id="modal-rel">
-  <div class="modal" style="max-width:700px">
-    <div class="modal-head"><h3>Relatório de Retiradas</h3><button class="modal-close" onclick="document.getElementById('modal-rel').classList.remove('open')">×</button></div>
-    <div class="modal-body" id="rel-body">Carregando...</div>
+  <div class="modal" style="max-width:900px">
+    <div class="modal-head"><h3>Termo de Conferência de Retiradas</h3><button class="modal-close" onclick="document.getElementById('modal-rel').classList.remove('open')">×</button></div>
+    <div class="modal-body">
+      <div style="display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:10px;align-items:end;margin-bottom:14px">
+        <div class="fg" style="margin:0"><label>Funcionário</label><select id="rel-func" class="flt" style="width:100%"><option value="">— Selecione —</option></select></div>
+        <div class="fg" style="margin:0"><label>Data inicial</label><input type="date" id="rel-inicio" class="flt" style="width:100%"></div>
+        <div class="fg" style="margin:0"><label>Data final</label><input type="date" id="rel-fim" class="flt" style="width:100%"></div>
+        <button class="btn btn-p" onclick="gerarTermoRetiradas()">📋 Gerar termo</button>
+      </div>
+      <div id="rel-body" style="min-height:80px;color:var(--muted)">Selecione o funcionário e o período para gerar o termo.</div>
+    </div>
   </div>
 </div>
 
@@ -1213,7 +1221,8 @@ window.imprimirRetiradas = function imprimirRetiradas() {
     </table>
 
     <div class="footer">AR Boutique de Carnes LTDA · CNPJ 46.237.080/0001-02 · Bom Beef Valinhos</div>
-  </body></html>`;
+  <script src="/js/retiradas-termo.js"></script>
+</body></html>`;
 
   const win = window.open('', '_blank');
   win.document.write(html);
