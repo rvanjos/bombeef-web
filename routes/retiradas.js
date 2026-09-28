@@ -284,6 +284,76 @@ module.exports = function (pool, app) {
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
+  // ── GET /relatorio-periodo — termo individual para conferência/assinatura ──
+  r.get('/relatorio-periodo', async (req, res) => {
+    try {
+      const funcionarioId = req.funcionarioEscopo?.id || Number(req.query.funcionario_id);
+      const inicio = String(req.query.inicio || '').slice(0,10);
+      const fim = String(req.query.fim || '').slice(0,10);
+
+      if (!Number.isInteger(Number(funcionarioId)) || Number(funcionarioId) <= 0)
+        return res.status(400).json({ ok:false, erro:'Selecione o funcionário.' });
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(inicio) || !/^\d{4}-\d{2}-\d{2}$/.test(fim))
+        return res.status(400).json({ ok:false, erro:'Informe a data inicial e final.' });
+      if (fim < inicio)
+        return res.status(400).json({ ok:false, erro:'A data final não pode ser anterior à data inicial.' });
+
+      if (req.funcionarioEscopo && Number(funcionarioId) !== Number(req.funcionarioEscopo.id))
+        return res.status(403).json({ ok:false, erro:'Você só pode consultar suas próprias retiradas.' });
+
+      const { rows: func } = await pool.query(
+        `SELECT id,nome FROM funcionarios WHERE id=$1 LIMIT 1`, [Number(funcionarioId)]
+      );
+      if (!func.length) return res.status(404).json({ ok:false, erro:'Funcionário não encontrado.' });
+
+      const { rows } = await pool.query(`
+        SELECT ret.id,ret.dt_retirada,ret.descricao,ret.qtd,ret.preco_unitario,ret.valor_total,
+               ret.status,ret.saldo_restante,ret.dt_pagamento,ret.observacao,
+               p.descricao AS produto_descricao
+        FROM retiradas ret
+        LEFT JOIN produtos p ON p.id=ret.produto_id
+        WHERE ret.funcionario_id=$1
+          AND ret.dt_retirada BETWEEN $2::date AND $3::date
+        ORDER BY ret.dt_retirada ASC,ret.id ASC
+      `, [Number(funcionarioId), inicio, fim]);
+
+      const itens = rows.map(x => {
+        const total = Number(x.valor_total || 0);
+        const saldo = Number(x.saldo_restante ?? (x.status === 'pago' ? 0 : total) ?? 0);
+        const pago = Math.max(0, total - saldo);
+        return {
+          ...x,
+          qtd:Number(x.qtd||0),
+          preco_unitario:Number(x.preco_unitario||0),
+          valor_total:total,
+          valor_pago:pago,
+          saldo_restante:saldo
+        };
+      });
+      const totais = itens.reduce((a,x)=>{
+        a.total += x.valor_total;
+        a.pago += x.valor_pago;
+        a.aberto += x.saldo_restante;
+        return a;
+      },{total:0,pago:0,aberto:0});
+
+      res.json({
+        ok:true,
+        data:{
+          funcionario:func[0],
+          inicio,
+          fim,
+          itens,
+          totais:{
+            total:Number(totais.total.toFixed(2)),
+            pago:Number(totais.pago.toFixed(2)),
+            aberto:Number(totais.aberto.toFixed(2))
+          }
+        }
+      });
+    } catch (e) { res.status(500).json({ ok:false, erro:e.message }); }
+  });
+
   // ── GET / ──────────────────────────────────────────────────────────────────
   r.get('/', async (req, res) => {
     try {
