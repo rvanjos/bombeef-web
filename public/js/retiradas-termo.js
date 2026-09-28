@@ -24,7 +24,7 @@
     const sel=document.getElementById('rel-func');
     if(sel){
       while(sel.options.length>1) sel.remove(1);
-      (window.funcionarios||[]).forEach(f=>{
+      ((typeof funcionarios!=='undefined'&&Array.isArray(funcionarios))?funcionarios:[]).forEach(f=>{
         const o=document.createElement('option');
         o.value=f.id; o.textContent=f.nome; sel.appendChild(o);
       });
@@ -53,9 +53,9 @@
     const funcionarioId=document.getElementById('rel-func')?.value||'';
     const inicio=document.getElementById('rel-inicio')?.value||'';
     const fim=document.getElementById('rel-fim')?.value||'';
-    if(!funcionarioId){ window.toast?.('⚠️ Selecione o funcionário'); return; }
-    if(!inicio||!fim){ window.toast?.('⚠️ Informe o período'); return; }
-    if(fim<inicio){ window.toast?.('⚠️ A data final não pode ser anterior à inicial'); return; }
+    if(!funcionarioId){ window.BB?.toast?.('⚠️ Selecione o funcionário'); return; }
+    if(!inicio||!fim){ window.BB?.toast?.('⚠️ Informe o período'); return; }
+    if(fim<inicio){ window.BB?.toast?.('⚠️ A data final não pode ser anterior à inicial'); return; }
 
     const body=document.getElementById('rel-body');
     body.innerHTML='<div style="padding:20px;text-align:center">Carregando retiradas...</div>';
@@ -92,7 +92,7 @@
 
   window.imprimirTermoRetiradas = function(){
     const r=termoAtual;
-    if(!r){ window.toast?.('⚠️ Gere o termo primeiro'); return; }
+    if(!r){ window.BB?.toast?.('⚠️ Gere o termo primeiro'); return; }
 
     const linhas=(r.itens||[]).map(x=>'<tr>'+
       '<td>'+dataBR(x.dt_retirada)+'</td>'+
@@ -117,7 +117,7 @@
       '</body></html>';
 
     const w=window.open('','_blank','width=1000,height=760');
-    if(!w){ window.toast?.('⚠️ Permita pop-ups para imprimir o termo'); return; }
+    if(!w){ window.BB?.toast?.('⚠️ Permita pop-ups para imprimir o termo'); return; }
     w.document.open();w.document.write(html);w.document.close();
     w.onload=function(){w.focus();w.print();};
   };
