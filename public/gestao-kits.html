@@ -970,7 +970,7 @@ function renderizarCampanhas() {
   document.getElementById('camp-grid').innerHTML = campanhas.map(c => {
     const dispNum = c.disponivel ?? '—';
     const dispCls = c.disponivel===null?'':c.disponivel>10?'ok':c.disponivel>3?'warn':'crit';
-    const pct = c.limite_campanha>0 ? Math.min(100,Math.round((c.vendidos||0)/c.limite_campanha*100)) : null;
+    const pct = c.limite_campanha>0 ? Math.min(100,Math.round((c.entregues||0)/c.limite_campanha*100)) : null;
     const statusBg = {ativa:'b-verde',pausada:'b-laranja',encerrada:'b-cinza'}[c.status]||'b-cinza';
     return `<div class="camp-card" onclick="verCampanha(${c.id})">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">

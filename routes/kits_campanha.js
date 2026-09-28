@@ -246,7 +246,7 @@ module.exports = function (pool, app) {
     const { rows: camp } = await pool.query(
       `SELECT limite_campanha, status,
               (SELECT COUNT(*) FROM kit_pedidos
-               WHERE campanha_id=$1 AND status NOT IN ('cancelado','rascunho')) AS vendidos
+               WHERE campanha_id=$1 AND status NOT IN ('cancelado','rascunho')) AS comprometidos
        FROM kit_campanhas WHERE id=$1`, [campanhaId]
     );
     if (!camp.length) return { disponivel: 0, gargalo_slot: null, detalhes: [] };
@@ -288,13 +288,13 @@ module.exports = function (pool, app) {
     }
 
     // Respeitar limite da campanha
-    const vendidos = parseInt(camp[0].vendidos || 0);
+    const comprometidos = parseInt(camp[0].comprometidos || 0);
     const limite = parseInt(camp[0].limite_campanha || 0);
     let disponivel = minDisp === Infinity ? 0 : minDisp;
-    if (limite > 0) disponivel = Math.min(disponivel, limite - vendidos);
+    if (limite > 0) disponivel = Math.min(disponivel, limite - comprometidos);
     disponivel = Math.max(0, disponivel);
 
-    return { disponivel, gargalo_slot: gargalo, detalhes, vendidos, limite };
+    return { disponivel, gargalo_slot: gargalo, detalhes, comprometidos, limite };
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -305,8 +305,11 @@ module.exports = function (pool, app) {
     try {
       const { rows } = await pool.query(`
         SELECT c.*,
-          (SELECT COUNT(*) FROM kit_pedidos p WHERE p.campanha_id=c.id AND p.status NOT IN ('cancelado','rascunho')) AS vendidos,
+          (SELECT COUNT(*) FROM kit_pedidos p WHERE p.campanha_id=c.id AND p.status NOT IN ('cancelado','rascunho')) AS comprometidos,
           (SELECT COUNT(*) FROM kit_pedidos p WHERE p.campanha_id=c.id AND p.status='reservado') AS reservados,
+          (SELECT COUNT(*) FROM kit_pedidos p WHERE p.campanha_id=c.id AND p.status='separado') AS em_separacao,
+          (SELECT COUNT(*) FROM kit_pedidos p WHERE p.campanha_id=c.id AND p.status IN ('entregue','conciliado')) AS entregues,
+          (SELECT COUNT(*) FROM kit_pedidos p WHERE p.campanha_id=c.id AND COALESCE(p.pago,false)=true) AS pagos,
           (SELECT COUNT(*) FROM kit_campanha_slots s WHERE s.campanha_id=c.id) AS total_slots
         FROM kit_campanhas c ORDER BY c.status ASC, c.criado_em DESC
       `);
