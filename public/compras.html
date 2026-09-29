@@ -48,7 +48,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);fon
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
 .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
 .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
-.compra-decisao-grid{display:grid;grid-template-columns:1.2fr 1fr 1fr 1.1fr;gap:10px;align-items:stretch;}
+.compra-decisao-grid{display:grid;grid-template-columns:1.15fr 1fr .9fr 1.05fr 1.15fr;gap:10px;align-items:stretch;}
 
 .kpi-box{background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px 16px;box-shadow:0 1px 4px rgba(17,24,39,.05);border-left:3px solid var(--red);min-height:70px;}
 .kpi-box .kv{font-size:20px;font-weight:800;font-family:'DM Mono',monospace;margin-top:4px;;line-height:1.2;overflow-wrap:anywhere;}
@@ -249,6 +249,12 @@ if (window.self !== window.top) {
           <div class="kl">Comparação com última compra</div>
           <div class="kv" id="r-var-ult">—</div>
           <div id="r-var-ult-rs" style="font-size:12px;color:var(--muted);margin-top:4px">Informe a cotação atual</div>
+        </div>
+
+        <div class="kpi-box" id="fator18-box" style="background:#fff">
+          <div class="kl">Venda com fator 1,8</div>
+          <div class="kv" id="r-venda-18">—</div>
+          <div id="r-venda-18-comp" style="font-size:12px;color:var(--muted);margin-top:4px">Informe a cotação atual</div>
         </div>
       </div>
 
@@ -783,7 +789,13 @@ function calcularTudo() {
     $id('bloco-simulacao').style.display='none';
     setText('r-var-ult','—');
     setText('r-var-ult-rs','Informe a cotação atual');
+    setText('r-venda-18','—');
+    setText('r-venda-18-comp','Informe a cotação atual');
     setHTML('r-opp-badge','');
+    if ($id('fator18-box')) {
+      $id('fator18-box').style.background='#fff';
+      $id('fator18-box').style.borderColor='';
+    }
     if ($id('comp-var-box')) {
       $id('comp-var-box').style.background='#fff';
       $id('comp-var-box').style.borderColor='';
@@ -826,13 +838,40 @@ function calcularTudo() {
     $id('comp-var-box').style.borderColor = diffRs > 0 ? '#fecaca' : diffRs < 0 ? '#bbf7d0' : '';
   }
 
+  // Referência operacional usada para carnes: custo cotado x 1,8.
+  const precoFator18 = Number((cotado * 1.8).toFixed(2));
+  setText('r-venda-18', brl(precoFator18));
+  const precoAtualVenda = Number(d.preco_venda || 0);
+  const fatorBox = $id('fator18-box');
+  if (precoAtualVenda > 0) {
+    const difVenda = Number((precoFator18 - precoAtualVenda).toFixed(2));
+    const pctVenda = precoAtualVenda ? Math.abs(difVenda / precoAtualVenda * 100) : 0;
+    if (Math.abs(difVenda) < 0.005) {
+      setText('r-venda-18-comp','Igual ao preço atual '+brl(precoAtualVenda));
+      fatorBox.style.background='#f8fafc';
+      fatorBox.style.borderColor='#cbd5e1';
+    } else if (difVenda > 0) {
+      setText('r-venda-18-comp','Para manter 1,8: subir '+brl(difVenda)+' ('+pctVenda.toFixed(1)+'%)');
+      fatorBox.style.background='#fef2f2';
+      fatorBox.style.borderColor='#fecaca';
+    } else {
+      setText('r-venda-18-comp','Preço atual está '+brl(Math.abs(difVenda))+' acima da referência');
+      fatorBox.style.background='#ecfdf5';
+      fatorBox.style.borderColor='#bbf7d0';
+    }
+  } else {
+    setText('r-venda-18-comp','Sem preço de venda cadastrado para comparar');
+    fatorBox.style.background='#fff';
+    fatorBox.style.borderColor='';
+  }
+
   const opp = classifOportunidade(cotado, d);
   setHTML('r-opp-badge', `<span class="badge ${opp.cls}" style="font-size:14px">${opp.icon} ${opp.label}</span>`);
 
   const coberturaTxt = d.cobertura_dias != null ? d.cobertura_dias.toFixed(1)+' dias de cobertura' : 'cobertura sem dados';
   const ultimaTxt = custoRef ? 'última compra '+brl(custoRef) : 'sem última compra';
   setText('r-impacto',
-    'Cotação atual '+brl(cotado)+' · '+ultimaTxt+' · '+coberturaTxt+
+    'Cotação atual '+brl(cotado)+' · venda referência 1,8x '+brl(precoFator18)+' · '+ultimaTxt+' · '+coberturaTxt+
     (qtd ? ' · compra informada: '+qtd+' '+(d.unidade||'') : '')
   );
 

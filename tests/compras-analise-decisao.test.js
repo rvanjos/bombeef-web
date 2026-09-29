@@ -32,3 +32,13 @@ test('layout da decisao de compra e responsivo',()=>{
   assert.match(tela,/\.compra-decisao-grid\{display:grid/);
   assert.match(tela,/\.compra-decisao-grid\{grid-template-columns:1fr!important\}/);
 });
+
+
+test('analise de compra mostra referencia de venda pelo fator 1,8',()=>{
+  const tela=ler('public/compras.html');
+  assert.match(tela,/Venda com fator 1,8/);
+  assert.match(tela,/const precoFator18 = Number\(\(cotado \* 1\.8\)\.toFixed\(2\)\)/);
+  assert.match(tela,/Para manter 1,8: subir/);
+  assert.match(tela,/acima da referência/);
+  assert.match(tela,/venda referência 1,8x/);
+});
