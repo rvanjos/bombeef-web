@@ -674,6 +674,15 @@ module.exports = function(pool, app) {
         pool.query(`
           SELECT MIN(valor_unitario) AS menor_custo, MAX(valor_unitario) AS maior_custo,
                  COUNT(*) AS total_compras,
+                 (SELECT json_build_object(
+                    'valor_unitario', valor_unitario,
+                    'data_entrada', data_entrada,
+                    'quantidade', quantidade
+                  )
+                  FROM compras_produto
+                  WHERE produto_codigo=$1
+                  ORDER BY data_entrada DESC, id DESC
+                  LIMIT 1) AS ultima_compra,
                  (SELECT json_agg(sub ORDER BY sub.data_entrada ASC) FROM (
                    SELECT valor_unitario, data_entrada, fornecedor_nome
                    FROM compras_produto WHERE produto_codigo=$1
@@ -728,6 +737,7 @@ module.exports = function(pool, app) {
         menor_custo:        h.menor_custo ? parseFloat(h.menor_custo) : null,
         maior_custo:        h.maior_custo ? parseFloat(h.maior_custo) : null,
         total_compras:      parseInt(h.total_compras || 0),
+        ultima_compra:      h.ultima_compra || null,
         ultimas5_compras:   h.ultimas5 || [],
         ultimo_fornecedor:  p.ultimo_fornecedor,
         ultima_entrada_em:  p.ultima_entrada_em,
