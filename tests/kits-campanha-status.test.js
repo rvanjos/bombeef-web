@@ -21,3 +21,14 @@ test('disponibilidade usa comprometidos sem chamar reservado de entregue',()=>{
   assert.match(tela,/\$\{c\.entregues\|\|0\} entregues/);
   assert.doesNotMatch(tela,/\$\{c\.vendidos\|\|0\} entregues/);
 });
+
+
+test('estoque insuficiente nao bloqueia entrega de kits',()=>{
+  const rota=ler('routes/kits_campanha.js');
+  const tela=ler('public/gestao-kits.html');
+  assert.doesNotMatch(rota,/Estoque insuficiente para concluir a entrega\./);
+  assert.match(rota,/const avisosEstoque = insuficientes\.map/);
+  assert.match(rota,/Entrega concluída com estoque negativo/);
+  assert.match(rota,/UPDATE produtos SET estoque=estoque-\$1/);
+  assert.match(tela,/d\.aviso_estoque/);
+});

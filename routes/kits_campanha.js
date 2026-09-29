@@ -875,16 +875,14 @@ module.exports = function (pool, app) {
             [req.params.id]
           );
           const insuficientes = itensPed.filter(it => Number(it.estoque||0) < Number(it.quantidade||0));
-          if (insuficientes.length) {
-            await client.query('ROLLBACK');
-            return res.status(409).json({
-              ok:false,
-              erro:'Estoque insuficiente para concluir a entrega.',
-              itens:insuficientes.map(it => ({
-                produto:it.descricao, necessario:Number(it.quantidade), disponivel:Number(it.estoque||0)
-              }))
-            });
-          }
+          // Enquanto o estoque ainda não é uma base operacional confiável,
+          // saldo insuficiente gera aviso, mas nunca bloqueia a entrega.
+          const avisosEstoque = insuficientes.map(it => ({
+            produto:it.descricao,
+            necessario:Number(it.quantidade),
+            disponivel:Number(it.estoque||0),
+            saldo_posterior:Number(it.estoque||0)-Number(it.quantidade||0)
+          }));
           for (const it of itensPed) {
             const anterior = Number(it.estoque||0);
             const qtd = Number(it.quantidade||0);
@@ -924,7 +922,13 @@ module.exports = function (pool, app) {
         if (status === 'entregue') {
           events.emit(app, 'MOVIMENTO_ESTOQUE', { origem:'kits', origem_id:parseInt(req.params.id), tipo:'KIT_ENTREGA' });
         }
-        res.json({ ok: true });
+        res.json({
+          ok: true,
+          aviso_estoque: status==='entregue' && typeof avisosEstoque!=='undefined' && avisosEstoque.length
+            ? 'Entrega concluída com estoque negativo em '+avisosEstoque.length+' item(ns).'
+            : null,
+          itens_estoque: status==='entregue' && typeof avisosEstoque!=='undefined' ? avisosEstoque : []
+        });
 
       } catch(e) {
         await client.query('ROLLBACK'); throw e;

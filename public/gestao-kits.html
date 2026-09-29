@@ -1569,7 +1569,8 @@ async function verPedido(id) {
 async function mudarStatus(id, status) {
   const d = await api.post('/api/kits-campanha/pedidos/'+id+'/status', { status });
   if (!d.ok) { toast('Erro: '+d.erro,'err'); return; }
-  toast('✅ Status atualizado!');
+  if (d.aviso_estoque) toast('⚠️ '+d.aviso_estoque);
+  else toast('✅ Status atualizado!');
   fecharModal('modal-pedido');
   carregarPedidos(); carregarSeparacao();
 }
