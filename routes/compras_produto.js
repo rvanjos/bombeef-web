@@ -76,6 +76,14 @@ module.exports = function(pool, app) {
           loja_id            INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id)
         )
       `);
+      // Preserva a unidade comercial da compra (ex.: CX) separada da unidade-base
+      // usada no estoque/análise (ex.: KG).
+      for (const col of [
+        'ALTER TABLE compras_produto ADD COLUMN IF NOT EXISTS quantidade_compra NUMERIC(12,4)',
+        'ALTER TABLE compras_produto ADD COLUMN IF NOT EXISTS unidade_compra TEXT',
+        'ALTER TABLE compras_produto ADD COLUMN IF NOT EXISTS valor_unitario_compra NUMERIC(12,4)'
+      ]) { await c.query(col).catch(() => {}); }
+
       // Índices
       await c.query(`CREATE INDEX IF NOT EXISTS idx_cp_codigo  ON compras_produto(produto_codigo)`);
       await c.query(`CREATE INDEX IF NOT EXISTS idx_cp_entrada ON compras_produto(data_entrada)`);
@@ -275,36 +283,40 @@ module.exports = function(pool, app) {
     const iGrp  = ci(['grupo']);
     const iSub  = ci(['subgrupo']);
     const iCFOP = ci(['cfop']);
-    // Preferir 2ª ocorrência de "quantidade" (Entrada) — fallback para a 1ª (Saída, ok quando Fator=1)
-    const iQtd = (() => {
-      let count = 0;
-      for (let j = 0; j < hdrCombined.length; j++) {
-        const h = hdrCombined[j];
-        if (h && typeof h === 'string' && h.toLowerCase().trim() === 'quantidade') {
-          count++;
-          if (count === 2) return j; // Entrada
+    // O relatório do PDV traz duas unidades:
+    // 1ª ocorrência = unidade-base/saída (ex.: KG)
+    // 2ª ocorrência = unidade comercial de entrada (ex.: CX).
+    // Para custo, giro e preço de venda precisamos da unidade-base.
+    const nthExact = (nome, nth) => {
+      let count=0;
+      for(let j=0;j<hdrCombined.length;j++){
+        const h=hdrCombined[j];
+        if(h && typeof h==='string' && norm(h)===norm(nome)){
+          count++; if(count===nth) return j;
         }
       }
-      return ci(['quantidade']); // fallback 1ª ocorrência
-    })();
-    const iUn   = ci(['unidade']);      // coluna Entrada Unidade
-    const iVlUn = ci(['valor unitário','valor unitario']); // pega a 1ª — depois pega a 2ª
+      return -1;
+    };
+    const nthContains = (nome, nth) => {
+      let count=0;
+      for(let j=0;j<hdrCombined.length;j++){
+        const h=hdrCombined[j];
+        if(h && typeof h==='string' && norm(h).includes(norm(nome))){
+          count++; if(count===nth) return j;
+        }
+      }
+      return -1;
+    };
+
+    const iQtdBase   = nthExact('quantidade',1);
+    const iQtdCompra = nthExact('quantidade',2);
+    const iUnBase    = nthExact('unidade',1);
+    const iUnCompra  = nthExact('unidade',2);
+    const iVlUnBase  = nthContains('valor unit',1);
+    const iVlUnCompra= nthContains('valor unit',2);
     const iVlTot= ci(['valor total']);
     const iLiq  = ci(['total liquido','total líquido']);
     const iICMS = ci(['icmsst']);
-
-    // Para "Entrada Valor Unitário" precisamos do 2º match de "valor unitário"
-    const iVlUnEnt = (() => {
-      let count = 0;
-      for (let j = 0; j < hdrCombined.length; j++) {
-        const h = hdrCombined[j];
-        if (h && typeof h === 'string' && h.toLowerCase().includes('valor unit')) {
-          count++;
-          if (count === 2) return j; // 2ª ocorrência = Entrada
-        }
-      }
-      return iVlUn; // fallback
-    })();
 
     // Parsear linhas de dados
     let fornecedorAtual = null, dataBlocoAtual = null;
@@ -331,10 +343,18 @@ module.exports = function(pool, app) {
       const codProd = iCProd >= 0 ? String(row[iCProd] || '').trim() : null;
       if (!codProd) continue;
 
-      const vlUn = iVlUnEnt >= 0 && row[iVlUnEnt] != null
-        ? parseFloat(row[iVlUnEnt]) : (iVlUn >= 0 ? parseFloat(row[iVlUn]) : 0);
-      const qtd = iQtd >= 0 ? parseFloat(row[iQtd]) : 0;
-      if (!qtd || !vlUn) continue;
+      const qtdBase = iQtdBase >= 0 ? parseFloat(row[iQtdBase]) : 0;
+      const qtdCompra = iQtdCompra >= 0 ? parseFloat(row[iQtdCompra]) : qtdBase;
+      const vlUnCompra = iVlUnCompra >= 0 && row[iVlUnCompra] != null ? parseFloat(row[iVlUnCompra]) : null;
+      const valorTotalLinha = iVlTot>=0 && row[iVlTot] != null ? parseFloat(row[iVlTot]) : null;
+      let vlUnBase = iVlUnBase >= 0 && row[iVlUnBase] != null ? parseFloat(row[iVlUnBase]) : null;
+
+      // Se o relatório não trouxer explicitamente o custo unitário na unidade-base,
+      // deriva pelo total da linha / quantidade-base (ex.: valor da caixa / kg).
+      if ((!Number.isFinite(vlUnBase) || vlUnBase<=0) && Number.isFinite(valorTotalLinha) && qtdBase>0) {
+        vlUnBase = valorTotalLinha / qtdBase;
+      }
+      if (!qtdBase || !vlUnBase) continue;
 
       // Data entrada
       let dtEntry = null;
@@ -373,10 +393,13 @@ module.exports = function(pool, app) {
         id_entrada_pdv:    iID   >= 0 && row[iID] ? parseInt(row[iID]) : null,
         data_emissao:      dtEmit,
         data_entrada:      dtEntry,
-        quantidade:        parseFloat(qtd.toFixed(4)),
-        unidade:           iUn   >= 0 ? String(row[iUn]   || '').trim() : null,
-        valor_unitario:    parseFloat(parseFloat(vlUn).toFixed(4)),
-        valor_total:       iVlTot>= 0 && row[iVlTot] ? parseFloat(parseFloat(row[iVlTot]).toFixed(2)) : parseFloat((qtd * vlUn).toFixed(2)),
+        quantidade:        parseFloat(qtdBase.toFixed(4)),
+        unidade:           iUnBase >= 0 ? String(row[iUnBase] || '').trim() : null,
+        valor_unitario:    parseFloat(parseFloat(vlUnBase).toFixed(4)),
+        quantidade_compra: Number.isFinite(qtdCompra) ? parseFloat(qtdCompra.toFixed(4)) : null,
+        unidade_compra:    iUnCompra >= 0 ? String(row[iUnCompra] || '').trim() : null,
+        valor_unitario_compra: Number.isFinite(vlUnCompra) ? parseFloat(vlUnCompra.toFixed(4)) : null,
+        valor_total:       Number.isFinite(valorTotalLinha) ? parseFloat(valorTotalLinha.toFixed(2)) : parseFloat((qtdBase * vlUnBase).toFixed(2)),
         valor_total_liquido: iLiq >= 0 && row[iLiq] && typeof row[iLiq] === 'number' ? parseFloat(parseFloat(row[iLiq]).toFixed(2)) : null,
         icmsst:            iICMS >= 0 && row[iICMS] ? parseFloat(parseFloat(row[iICMS]).toFixed(2)) : null,
         arquivo_importado: req.file.originalname,
@@ -410,7 +433,7 @@ module.exports = function(pool, app) {
       const prodMap = {};
       prodRes.rows.forEach(p => { prodMap[p.codigo] = p.id; });
 
-      let importados = 0, ignorados = 0, semVinculo = 0;
+      let importados = 0, atualizados = 0, ignorados = 0, semVinculo = 0;
       const codigosAfetados = new Set();
       const semVinculoList = [];
 
@@ -418,23 +441,43 @@ module.exports = function(pool, app) {
         const prodId = prodMap[it.produto_codigo] || null;
         if (!prodId) { semVinculo++; semVinculoList.push({ codigo: it.produto_codigo, nome: it.produto_nome }); }
 
-        // Deduplicação P1
+        // Deduplicação + reparo seguro: ao reimportar a mesma NF/item,
+        // atualiza a conversão unidade-base/unidade de compra em vez de ignorar.
+        let dupId = null;
         if (it.numero_nfe && it.serie_nfe && it.fornecedor_cnpj && it.cod_item_nfe) {
           const dup = await client.query(`
             SELECT id FROM compras_produto
             WHERE numero_nfe=$1 AND serie_nfe=$2 AND fornecedor_cnpj=$3
               AND produto_codigo=$4 AND cod_item_nfe=$5 LIMIT 1
           `, [it.numero_nfe, it.serie_nfe, it.fornecedor_cnpj, it.produto_codigo, it.cod_item_nfe]);
-          if (dup.rows.length) { ignorados++; continue; }
+          dupId = dup.rows[0]?.id || null;
         } else {
-          // Deduplicação P2
           const dup2 = await client.query(`
             SELECT id FROM compras_produto
             WHERE data_entrada=$1 AND produto_codigo=$2
-              AND ROUND(valor_unitario::numeric,2)=ROUND($3::numeric,2)
-              AND ROUND(quantidade::numeric,3)=ROUND($4::numeric,3) LIMIT 1
-          `, [it.data_entrada, it.produto_codigo, it.valor_unitario, it.quantidade]);
-          if (dup2.rows.length) { ignorados++; continue; }
+              AND ROUND(COALESCE(valor_total,0)::numeric,2)=ROUND(COALESCE($3,0)::numeric,2)
+            ORDER BY id DESC LIMIT 1
+          `, [it.data_entrada, it.produto_codigo, it.valor_total]);
+          dupId = dup2.rows[0]?.id || null;
+        }
+
+        if (dupId) {
+          await client.query(`
+            UPDATE compras_produto SET
+              produto_id=$2, produto_nome=$3, grupo=$4, subgrupo=$5,
+              fornecedor_nome=$6, data_emissao=$7, data_entrada=$8,
+              quantidade=$9, unidade=$10, valor_unitario=$11,
+              quantidade_compra=$12, unidade_compra=$13, valor_unitario_compra=$14,
+              valor_total=$15, valor_total_liquido=$16, icmsst=$17,
+              arquivo_importado=$18
+            WHERE id=$1
+          `, [dupId,prodId,it.produto_nome,it.grupo,it.subgrupo,it.fornecedor_nome,
+              it.data_emissao,it.data_entrada,it.quantidade,it.unidade,it.valor_unitario,
+              it.quantidade_compra,it.unidade_compra,it.valor_unitario_compra,
+              it.valor_total,it.valor_total_liquido,it.icmsst,it.arquivo_importado]);
+          atualizados++;
+          if (prodId) codigosAfetados.add(it.produto_codigo);
+          continue;
         }
 
         // SAVEPOINT antes do INSERT para proteger a transação de erros de duplicate key.
@@ -447,13 +490,14 @@ module.exports = function(pool, app) {
               (importacao_id,produto_codigo,produto_id,produto_nome,grupo,subgrupo,
                fornecedor_nome,fornecedor_cnpj,fornecedor_codigo,numero_nfe,serie_nfe,
                cod_item_nfe,cfop,id_entrada_pdv,data_emissao,data_entrada,
-               quantidade,unidade,valor_unitario,valor_total,valor_total_liquido,
-               icmsst,origem,arquivo_importado)
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
+               quantidade,unidade,valor_unitario,quantidade_compra,unidade_compra,valor_unitario_compra,
+               valor_total,valor_total_liquido,icmsst,origem,arquivo_importado)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27)
           `, [impId,it.produto_codigo,prodId,it.produto_nome,it.grupo,it.subgrupo,
               it.fornecedor_nome,it.fornecedor_cnpj,it.fornecedor_codigo,it.numero_nfe,
               it.serie_nfe,it.cod_item_nfe,it.cfop,it.id_entrada_pdv,it.data_emissao,
-              it.data_entrada,it.quantidade,it.unidade,it.valor_unitario,it.valor_total,
+              it.data_entrada,it.quantidade,it.unidade,it.valor_unitario,
+              it.quantidade_compra,it.unidade_compra,it.valor_unitario_compra,it.valor_total,
               it.valor_total_liquido,it.icmsst,'pdv_xlsx',it.arquivo_importado]);
           await client.query('RELEASE SAVEPOINT sp_ins');
         } catch(eIns) {
@@ -474,7 +518,7 @@ module.exports = function(pool, app) {
         UPDATE compras_importacoes
         SET total_linhas=$2, total_ignorados=$3, total_sem_vinculo=$4
         WHERE id=$1
-      `, [impId, importados, ignorados, semVinculo]);
+      `, [impId, importados + atualizados, ignorados, semVinculo]);
 
       await client.query('COMMIT');
 
@@ -542,7 +586,7 @@ module.exports = function(pool, app) {
         }
       });
 
-      res.json({ ok: true, importacao_id: impId, importados, ignorados,
+      res.json({ ok: true, importacao_id: impId, importados, atualizados, ignorados,
         sem_vinculo: semVinculo, sem_vinculo_lista: semVinculoList.slice(0, 20) });
 
     } catch (e) {

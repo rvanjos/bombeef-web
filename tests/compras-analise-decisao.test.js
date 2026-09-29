@@ -42,3 +42,23 @@ test('analise de compra mostra referencia de venda pelo fator 1,8',()=>{
   assert.match(tela,/acima da referência/);
   assert.match(tela,/venda referência 1,8x/);
 });
+
+
+test('importacao de compras usa unidade base do produto e preserva unidade de compra',()=>{
+  const rota=ler('routes/compras_produto.js');
+  assert.match(rota,/const iQtdBase\s*=\s*nthExact\('quantidade',1\)/);
+  assert.match(rota,/const iQtdCompra\s*=\s*nthExact\('quantidade',2\)/);
+  assert.match(rota,/const iVlUnBase\s*=\s*nthContains\('valor unit',1\)/);
+  assert.match(rota,/const iVlUnCompra\s*=\s*nthContains\('valor unit',2\)/);
+  assert.match(rota,/quantidade_compra/);
+  assert.match(rota,/unidade_compra/);
+  assert.match(rota,/valor_unitario_compra/);
+});
+
+test('reimportacao da mesma compra corrige conversao em vez de ignorar',()=>{
+  const rota=ler('routes/compras_produto.js');
+  assert.match(rota,/let dupId = null/);
+  assert.match(rota,/UPDATE compras_produto SET/);
+  assert.match(rota,/atualizados\+\+/);
+  assert.match(rota,/importados \+ atualizados/);
+});
