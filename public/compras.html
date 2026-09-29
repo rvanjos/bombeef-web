@@ -48,6 +48,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);fon
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
 .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
 .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
+.compra-decisao-grid{display:grid;grid-template-columns:1.2fr 1fr 1fr 1.1fr;gap:10px;align-items:stretch;}
+
 .kpi-box{background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px 16px;box-shadow:0 1px 4px rgba(17,24,39,.05);border-left:3px solid var(--red);min-height:70px;}
 .kpi-box .kv{font-size:20px;font-weight:800;font-family:'DM Mono',monospace;margin-top:4px;;line-height:1.2;overflow-wrap:anywhere;}
 .kpi-box .kl{font-size:10px;text-transform:uppercase;letter-spacing:.5px;font-weight:700;color:var(--muted);}
@@ -95,7 +97,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);fon
   .sec { overflow-y: auto !important; -webkit-overflow-scrolling: touch; height: auto !important; max-height: none !important; }
   .tabs{padding:0 8px}
   .sec{padding:12px}
-  .grid2,.grid3,.grid4,.fg-row{grid-template-columns:1fr!important}
+  .grid2,.grid3,.grid4,.fg-row,.compra-decisao-grid{grid-template-columns:1fr!important}
   .import-card{max-width:none}
 }
 </style>
@@ -222,7 +224,7 @@ if (window.self !== window.top) {
         <span id="r-opp-badge" class="opp-badge"></span>
       </div>
 
-      <div style="display:grid;grid-template-columns:1.2fr 1fr 1fr 1.1fr;gap:10px;align-items:stretch">
+      <div class="compra-decisao-grid">
         <div class="kpi-box" style="background:#fff">
           <div class="kl">Última compra</div>
           <div class="kv" id="a-ult-custo">—</div>
