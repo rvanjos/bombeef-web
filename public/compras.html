@@ -48,6 +48,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);fon
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
 .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
 .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
+.compra-decisao-grid{display:grid;grid-template-columns:1.2fr 1fr 1fr 1.1fr;gap:10px;align-items:stretch;}
+
 .kpi-box{background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px 16px;box-shadow:0 1px 4px rgba(17,24,39,.05);border-left:3px solid var(--red);min-height:70px;}
 .kpi-box .kv{font-size:20px;font-weight:800;font-family:'DM Mono',monospace;margin-top:4px;;line-height:1.2;overflow-wrap:anywhere;}
 .kpi-box .kl{font-size:10px;text-transform:uppercase;letter-spacing:.5px;font-weight:700;color:var(--muted);}
@@ -95,7 +97,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);fon
   .sec { overflow-y: auto !important; -webkit-overflow-scrolling: touch; height: auto !important; max-height: none !important; }
   .tabs{padding:0 8px}
   .sec{padding:12px}
-  .grid2,.grid3,.grid4,.fg-row{grid-template-columns:1fr!important}
+  .grid2,.grid3,.grid4,.fg-row,.compra-decisao-grid{grid-template-columns:1fr!important}
   .import-card{max-width:none}
 }
 </style>
@@ -215,42 +217,76 @@ if (window.self !== window.top) {
   </div>
 
   <div id="analise-corpo" style="display:none">
-    <div class="grid2" style="margin-bottom:12px">
+    <!-- Decisão rápida -->
+    <div class="card" style="margin-bottom:12px;border:1px solid #e5d8d5;background:linear-gradient(180deg,#fff 0%,#fffaf8 100%)">
+      <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+        <span>🎯 Decisão de Compra</span>
+        <span id="r-opp-badge" class="opp-badge"></span>
+      </div>
 
-      <!-- Bloco A: Operacional -->
+      <div class="compra-decisao-grid">
+        <div class="kpi-box" style="background:#fff">
+          <div class="kl">Última compra</div>
+          <div class="kv" id="a-ult-custo">—</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:3px">
+            <span id="a-ult-data">—</span>
+          </div>
+        </div>
+
+        <div class="kpi-box" style="background:#fff7f5;border-color:#efc3bb">
+          <div class="kl">Preço cotado agora</div>
+          <input class="inp" id="cot-valor" type="number" step="0.01" placeholder="R$ 0,00"
+            oninput="calcularTudo()" style="font-size:18px;font-weight:800;margin-top:7px">
+        </div>
+
+        <div class="kpi-box" style="background:#fff">
+          <div class="kl">Quantidade</div>
+          <input class="inp" id="cot-qtd" type="number" step="0.1" placeholder="kg / un"
+            oninput="calcularTudo()" style="font-size:18px;font-weight:800;margin-top:7px">
+        </div>
+
+        <div class="kpi-box" id="comp-var-box" style="background:#fff">
+          <div class="kl">Comparação com última compra</div>
+          <div class="kv" id="r-var-ult">—</div>
+          <div id="r-var-ult-rs" style="font-size:12px;color:var(--muted);margin-top:4px">Informe a cotação atual</div>
+        </div>
+      </div>
+
+      <input id="cot-alvo" type="hidden" value="35">
+      <input id="cot-min" type="hidden" value="30">
+
+      <div id="r-impacto" style="margin-top:10px;font-size:13px;color:var(--muted)"></div>
+      <div id="a-ruptura-alert" style="display:none;margin-top:10px"></div>
+    </div>
+
+    <!-- Visão principal -->
+    <div class="grid2" style="margin-bottom:12px">
       <div class="card">
-        <div class="card-title">📦 Situação Operacional</div>
+        <div class="card-title">📦 Estoque e Giro</div>
         <div class="grid2">
           <div class="kpi-box"><div class="kl">Estoque Atual</div><div class="kv" id="a-estoque">—</div></div>
-          <div class="kpi-box"><div class="kl">Estoque Mínimo</div><div class="kv" id="a-estmin">—</div></div>
-          <div class="kpi-box"><div class="kl">Venda Média/Dia</div><div class="kv" id="a-venda-dia">—</div></div>
           <div class="kpi-box" id="a-cobertura-box"><div class="kl">Cobertura</div><div class="kv" id="a-cobertura">—</div></div>
+          <div class="kpi-box"><div class="kl">Venda Média/Dia</div><div class="kv" id="a-venda-dia">—</div></div>
+          <div class="kpi-box"><div class="kl">Estoque Mínimo</div><div class="kv" id="a-estmin">—</div></div>
         </div>
-        <div id="a-ruptura-alert" style="display:none;margin-top:10px"></div>
-        <div style="margin-top:8px;display:flex;gap:8px">
+        <div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <span id="a-abc-badge" class="badge bg-gray">—</span>
           <span id="a-categ" style="font-size:12px;color:var(--muted)"></span>
         </div>
       </div>
 
-      <!-- Bloco B: Histórico de Compras -->
       <div class="card">
-        <div class="card-title">🛒 Histórico de Compras</div>
-        <div class="grid2">
-          <div class="kpi-box"><div class="kl">Último Custo</div><div class="kv" id="a-ult-custo">—</div></div>
-          <div class="kpi-box"><div class="kl">CMP 3 Pedidos</div><div class="kv" id="a-cmp3">—</div></div>
+        <div class="card-title">🛒 Referências de Custo</div>
+        <div class="grid3">
+          <div class="kpi-box"><div class="kl">CMP 3 pedidos</div><div class="kv" id="a-cmp3">—</div></div>
           <div class="kpi-box"><div class="kl">CMP 90 dias</div><div class="kv" id="a-cmp90">—</div></div>
-          <div class="kpi-box"><div class="kl">CMP Histórico</div><div class="kv" id="a-cmptot">—</div></div>
+          <div class="kpi-box"><div class="kl">CMP histórico</div><div class="kv" id="a-cmptot">—</div></div>
         </div>
         <div style="margin-top:8px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
           <span style="font-size:12px;color:var(--muted)">Menor: <strong id="a-menor">—</strong></span>
           <span style="font-size:12px;color:var(--muted)">Maior: <strong id="a-maior">—</strong></span>
           <span id="a-tend-badge" style="font-size:13px;font-weight:700"></span>
         </div>
-        <div style="margin-top:6px;font-size:12px;color:var(--muted)">
-          Último fornecedor: <strong id="a-ult-forn">—</strong> · <span id="a-ult-data">—</span>
-        </div>
-        <!-- Mini gráfico de evolução -->
         <div id="a-evo-wrap" style="margin-top:10px;display:none">
           <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:4px">Evolução mensal de custo</div>
           <div class="evo-bar" id="a-evo-bars"></div>
@@ -259,45 +295,18 @@ if (window.self !== window.top) {
       </div>
     </div>
 
-    <!-- Bloco C: Preços praticados nas vendas -->
-    <div class="card" id="bloco-precos-vendas" style="margin-bottom:12px">
-      <div class="card-title">💰 Preços Praticados nas Vendas (últimos 90d)</div>
-      <div class="grid4">
-        <div class="kpi-box"><div class="kl">Preço Cadastrado</div><div class="kv" id="a-pv-cad">—</div></div>
-        <div class="kpi-box"><div class="kl">Última Venda</div><div class="kv" id="a-pv-ult">—</div><div style="font-size:10px;color:var(--muted)" id="a-pv-ult-data"></div></div>
-        <div class="kpi-box"><div class="kl">Máximo 90d</div><div class="kv" id="a-pv-max">—</div></div>
-        <div class="kpi-box"><div class="kl">Mínimo 90d</div><div class="kv" id="a-pv-min">—</div></div>
-      </div>
-    </div>
-
-    <!-- Bloco D: Cotação -->
-    <div class="card" style="margin-bottom:12px">
-      <div class="card-title">📝 Cotação</div>
-      <div class="fg-row" style="grid-template-columns:2fr 1fr 1fr 1fr auto">
-        <div class="fg"><label>Fornecedor</label><input class="inp" id="cot-forn" placeholder="Nome do fornecedor"></div>
-        <div class="fg"><label>Valor unitário (R$)</label><input class="inp" id="cot-valor" type="number" step="0.01" placeholder="0,00" oninput="calcularTudo()"></div>
-        <div class="fg"><label>Quantidade</label><input class="inp" id="cot-qtd" type="number" step="0.1" placeholder="kg / un" oninput="calcularTudo()"></div>
-        <div class="fg"><label>Margem alvo (%)</label><input class="inp" id="cot-alvo" type="number" value="35" step="0.5" oninput="calcularTudo()"></div>
-        <div class="fg"><label>Mín. (%)</label><input class="inp" id="cot-min" type="number" value="30" step="0.5" oninput="calcularTudo()"></div>
-      </div>
-    </div>
-
-    <!-- Bloco E: Resultado da Cotação -->
+    <!-- Análise da cotação -->
     <div id="bloco-resultado" style="display:none;margin-bottom:12px">
       <div class="card">
-        <div class="card-title">🎯 Resultado da Cotação</div>
+        <div class="card-title">📊 Como está esta cotação?</div>
         <div class="grid3">
-          <div class="kpi-box"><div class="kl">Variação vs Último</div><div class="kv" id="r-var-ult">—</div></div>
-          <div class="kpi-box"><div class="kl">Variação vs CMP-90d</div><div class="kv" id="r-var-90">—</div></div>
-          <div class="kpi-box"><div class="kl">Variação vs CMP-3ped</div><div class="kv" id="r-var-3p">—</div></div>
+          <div class="kpi-box"><div class="kl">Vs. última compra</div><div class="kv" id="r-var-ult-det">—</div></div>
+          <div class="kpi-box"><div class="kl">Vs. CMP 90 dias</div><div class="kv" id="r-var-90">—</div></div>
+          <div class="kpi-box"><div class="kl">Vs. CMP 3 pedidos</div><div class="kv" id="r-var-3p">—</div></div>
         </div>
-        <div style="margin-top:10px">
-          <span id="r-opp-badge" class="opp-badge"></span>
-        </div>
-        <div id="r-impacto" style="margin-top:8px;font-size:13px;color:var(--muted)"></div>
-        <!-- Lucro potencial -->
+
         <div id="r-lucro" style="display:none;margin-top:10px;background:var(--green-bg);border:1px solid var(--green-bdr);border-radius:8px;padding:10px 14px">
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--green);margin-bottom:6px">💰 Simulação de Lucro da Compra</div>
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--green);margin-bottom:6px">💰 Impacto da compra</div>
           <div class="grid3">
             <div><div style="font-size:10px;color:var(--muted)">Investimento</div><div class="mono" style="font-weight:700" id="r-invest">—</div></div>
             <div><div style="font-size:10px;color:var(--muted)">Receita potencial</div><div class="mono" style="font-weight:700" id="r-receita">—</div></div>
@@ -307,19 +316,29 @@ if (window.self !== window.top) {
       </div>
     </div>
 
-    <!-- Bloco F: Simulação de Preço -->
+    <!-- Preços de venda -->
+    <div class="card" id="bloco-precos-vendas" style="margin-bottom:12px">
+      <div class="card-title">💰 Preços praticados nas vendas</div>
+      <div class="grid4">
+        <div class="kpi-box"><div class="kl">Preço cadastrado</div><div class="kv" id="a-pv-cad">—</div></div>
+        <div class="kpi-box"><div class="kl">Última venda</div><div class="kv" id="a-pv-ult">—</div><div style="font-size:10px;color:var(--muted)" id="a-pv-ult-data"></div></div>
+        <div class="kpi-box"><div class="kl">Máximo 90d</div><div class="kv" id="a-pv-max">—</div></div>
+        <div class="kpi-box"><div class="kl">Mínimo 90d</div><div class="kv" id="a-pv-min">—</div></div>
+      </div>
+    </div>
+
+    <!-- Simulação de preço -->
     <div id="bloco-simulacao" style="display:none;margin-bottom:12px">
       <div class="card">
-        <div class="card-title">🏷️ Simulação de Preço de Venda</div>
+        <div class="card-title">🏷️ Se eu comprar por esse preço, como fica minha venda?</div>
         <div class="alert alert-info" style="margin-bottom:10px">
-          ℹ️ Apenas sugestão — nenhum preço é alterado automaticamente.
+          ℹ️ Simulação com margem alvo de 35% e mínima de 30%. Nenhum preço é alterado automaticamente.
         </div>
         <div id="sim-sem-hist" style="display:none" class="alert alert-warn">
           ⚠️ Sem histórico de vendas suficiente para análise de mercado. Preço sugerido pela margem alvo.
         </div>
 
         <div id="sim-cenarios">
-          <!-- Cenário 1: margem atual -->
           <div class="cenario-row" id="sim-c1">
             <div style="flex:1">
               <div style="font-size:11px;color:var(--muted)">Manter margem atual</div>
@@ -332,7 +351,7 @@ if (window.self !== window.top) {
             </div>
             <div id="sim-c1-risco" style="min-width:130px;text-align:right;font-size:12px;font-weight:600"></div>
           </div>
-          <!-- Cenário 2: margem alvo -->
+
           <div class="cenario-row" id="sim-c2">
             <div style="flex:1">
               <div style="font-size:11px;color:var(--muted)" id="sim-c2-label">Margem alvo (35%)</div>
@@ -344,7 +363,7 @@ if (window.self !== window.top) {
             </div>
             <div id="sim-c2-risco" style="min-width:130px;text-align:right;font-size:12px;font-weight:600"></div>
           </div>
-          <!-- Cenário 3: margem mínima -->
+
           <div class="cenario-row" id="sim-c3">
             <div style="flex:1">
               <div style="font-size:11px;color:var(--muted)" id="sim-c3-label">Margem mínima (30%)</div>
@@ -360,10 +379,9 @@ if (window.self !== window.top) {
 
         <div class="sep"></div>
         <div style="font-size:12px;color:var(--muted)">
-          Se preço <strong id="sim-preco-atual">—</strong> for mantido:
-          margem cai para <strong id="sim-margem-sem" style="color:#dc2626"></strong>
-          (<span id="sim-queda"></span> p.p.)
-          · markup: <strong id="sim-markup-sem"></strong>
+          Mantendo o preço atual <strong id="sim-preco-atual">—</strong>, a margem ficaria em
+          <strong id="sim-margem-sem" style="color:#dc2626"></strong>
+          (<span id="sim-queda"></span> p.p.) · markup: <strong id="sim-markup-sem"></strong>
         </div>
       </div>
     </div>
@@ -713,16 +731,18 @@ async function carregarAnalise() {
     setText('a-categ', d.categoria||'');
 
     // Bloco B: histórico compras
-    const custoRef = d.ultimo_custo || d.preco_custo_manual || 0;
-    setText('a-ult-custo', d.ultimo_custo ? brl(d.ultimo_custo) : '—');
+    const ultimaCompra = d.ultima_compra || null;
+    const ultimoValor = ultimaCompra?.valor_unitario != null ? Number(ultimaCompra.valor_unitario) : (d.ultimo_custo || null);
+    const ultimaData = ultimaCompra?.data_entrada || d.ultima_entrada_em || null;
+    const custoRef = ultimoValor || d.preco_custo_manual || 0;
+    setText('a-ult-custo', ultimoValor ? brl(ultimoValor) : '—');
     setText('a-cmp3',      d.custo_medio_3ped ? brl(d.custo_medio_3ped) : '—');
     setText('a-cmp90',     d.custo_medio_90d ? brl(d.custo_medio_90d) : '—');
     setText('a-cmptot',    d.custo_medio_total ? brl(d.custo_medio_total) : '—');
     setText('a-menor',     d.menor_custo ? brl(d.menor_custo) : '—');
     setText('a-maior',     d.maior_custo ? brl(d.maior_custo) : '—');
     setHTML('a-tend-badge', tendLabel(d.tendencia_custo));
-    setText('a-ult-forn',  d.ultimo_fornecedor||'—');
-    setText('a-ult-data',  d.ultima_entrada_em ? new Date(d.ultima_entrada_em+'T12:00').toLocaleDateString('pt-BR') : '—');
+    setText('a-ult-data', ultimaData ? new Date(String(ultimaData).slice(0,10)+'T12:00').toLocaleDateString('pt-BR') : '—');
 
     // Mini gráfico de evolução
     if (d.evolucao_mensal?.length > 1) {
@@ -761,12 +781,21 @@ function calcularTudo() {
   if (!cotado || cotado <= 0) {
     $id('bloco-resultado').style.display='none';
     $id('bloco-simulacao').style.display='none';
+    setText('r-var-ult','—');
+    setText('r-var-ult-rs','Informe a cotação atual');
+    setHTML('r-opp-badge','');
+    if ($id('comp-var-box')) {
+      $id('comp-var-box').style.background='#fff';
+      $id('comp-var-box').style.borderColor='';
+    }
     return;
   }
   const qtd = parseFloat($id('cot-qtd').value) || null;
   const margemAlvo = parseFloat($id('cot-alvo').value) || 35;
   const margemMin  = parseFloat($id('cot-min').value)  || 30;
-  const custoRef = d.ultimo_custo || d.preco_custo_manual || 0;
+  const custoRef = d.ultima_compra?.valor_unitario != null
+    ? Number(d.ultima_compra.valor_unitario)
+    : (d.ultimo_custo || d.preco_custo_manual || 0);
   const cmp90    = d.custo_medio_90d || d.custo_medio_total;
   const cmp3     = d.custo_medio_3ped;
 
@@ -782,16 +811,30 @@ function calcularTudo() {
     return `<span style="color:${c};font-weight:700">${v>0?'+':''}${v.toFixed(1)}%</span>`;
   }
   setHTML('r-var-ult', vStr(varUlt));
+  setHTML('r-var-ult-det', vStr(varUlt));
   setHTML('r-var-90',  vStr(var90));
   setHTML('r-var-3p',  vStr(var3p));
+
+  const diffRs = custoRef ? cotado - custoRef : null;
+  if (diffRs == null) {
+    setText('r-var-ult-rs','Sem última compra para comparar');
+    $id('comp-var-box').style.background='#fff';
+  } else {
+    const direcao = Math.abs(diffRs) < 0.005 ? 'Mesmo preço da última compra' : diffRs > 0 ? 'Subiu' : 'Baixou';
+    setText('r-var-ult-rs', direcao + ' ' + brl(Math.abs(diffRs)) + ' por unidade');
+    $id('comp-var-box').style.background = diffRs > 0 ? '#fef2f2' : diffRs < 0 ? '#ecfdf5' : '#fff';
+    $id('comp-var-box').style.borderColor = diffRs > 0 ? '#fecaca' : diffRs < 0 ? '#bbf7d0' : '';
+  }
 
   const opp = classifOportunidade(cotado, d);
   setHTML('r-opp-badge', `<span class="badge ${opp.cls}" style="font-size:14px">${opp.icon} ${opp.label}</span>`);
 
-  // Tendência como contexto
-  if (d.tendencia_custo && d.tendencia_custo !== 'sem_dados') {
-    setText('r-impacto', '');
-  }
+  const coberturaTxt = d.cobertura_dias != null ? d.cobertura_dias.toFixed(1)+' dias de cobertura' : 'cobertura sem dados';
+  const ultimaTxt = custoRef ? 'última compra '+brl(custoRef) : 'sem última compra';
+  setText('r-impacto',
+    'Cotação atual '+brl(cotado)+' · '+ultimaTxt+' · '+coberturaTxt+
+    (qtd ? ' · compra informada: '+qtd+' '+(d.unidade||'') : '')
+  );
 
   // Lucro potencial
   if (qtd && d.preco_venda > 0) {
