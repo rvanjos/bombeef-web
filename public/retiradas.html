@@ -301,23 +301,24 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
 
 <!-- Modal Relatório / Termo de Conferência -->
 <div class="modal-bg" id="modal-rel">
-  <div class="modal" style="max-width:900px">
-    <div class="modal-head"><h3>Relatório de Retiradas para Baixa</h3><button class="modal-close" onclick="document.getElementById('modal-rel').classList.remove('open')">×</button></div>
-    <div class="modal-body">
-      <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1.4fr auto;gap:10px;align-items:end;margin-bottom:14px">
-        <div class="fg" style="margin:0"><label>Funcionário</label><select id="rel-func" class="flt" style="width:100%"><option value="">— Selecione —</option></select></div>
-        <div class="fg" style="margin:0"><label>Data inicial</label><input type="date" id="rel-inicio" class="flt" style="width:100%"></div>
-        <div class="fg" style="margin:0"><label>Data final</label><input type="date" id="rel-fim" class="flt" style="width:100%"></div>
-        <div class="fg" style="margin:0"><label>Forma de pagamento</label>
-          <select id="rel-forma" class="flt" style="width:100%">
-            <option value="">— Selecione —</option>
-            <option value="vale">Desconto no Vale Alimentação</option>
-            <option value="pix">Pagamento via PIX</option>
-          </select>
-        </div>
-        <button class="btn btn-p" onclick="gerarTermoRetiradas()">📋 Gerar termo</button>
+  <div class="modal" style="max-width:980px">
+    <div class="modal-head">
+      <div>
+        <h3 style="margin:0">Relatório de Retiradas para Baixa</h3>
+        <div style="font-size:11px;opacity:.85;margin-top:2px">Imprima, colha a escolha de pagamento e a assinatura do funcionário. Depois confirme a baixa no sistema.</div>
       </div>
-      <div id="rel-body" style="min-height:80px;color:var(--muted)">Selecione o funcionário, o período e a forma de pagamento para gerar o relatório de baixa.</div>
+      <button class="modal-close" onclick="document.getElementById('modal-rel').classList.remove('open')">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="background:#faf7f4;border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:14px">
+        <div style="display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:10px;align-items:end">
+          <div class="fg" style="margin:0"><label>Funcionário</label><select id="rel-func" class="flt" style="width:100%"><option value="">— Selecione —</option></select></div>
+          <div class="fg" style="margin:0"><label>Data inicial</label><input type="date" id="rel-inicio" class="flt" style="width:100%"></div>
+          <div class="fg" style="margin:0"><label>Data final</label><input type="date" id="rel-fim" class="flt" style="width:100%"></div>
+          <button class="btn btn-p" onclick="gerarTermoRetiradas()">📋 Gerar relatório</button>
+        </div>
+      </div>
+      <div id="rel-body" style="min-height:110px;color:var(--muted)">Selecione o funcionário e o período para gerar o relatório de baixa.</div>
     </div>
   </div>
 </div>
@@ -1274,6 +1275,6 @@ window.imprimirRetiradas = function imprimirRetiradas() {
   });
 })();
 </script>
-<script src="/js/retiradas-termo.js"></script>
+<script src="/js/retiradas-termo.js?v=20260930-1521"></script>
 </body>
 </html>
