@@ -2,18 +2,14 @@
 
 const express = require('express');
 const crypto = require('crypto');
-const { Pool } = require('pg');
 const autenticar = require('../middleware/auth');
-const { protegerPoolPorLoja } = require('../lib/tenant-context');
 const { interpretarFatura } = require('../lib/cartao-fatura-parser');
 const { extrairTextosPdf } = require('../lib/pdf-layout-extractor');
 
 const r = express.Router();
 r.use(autenticar(['admin','financeiro','contabil']));
 
-const ssl = process.env.DATABASE_URL && !/localhost|127\.0\.0\.1/.test(process.env.DATABASE_URL)
-  ? { rejectUnauthorized:false } : false;
-const pool = protegerPoolPorLoja(new Pool({ connectionString:process.env.DATABASE_URL, ssl }));
+const pool = require('../lib/db');
 const colunasCache = new Map();
 let tokenCache = { token:null, exp:0 };
 
