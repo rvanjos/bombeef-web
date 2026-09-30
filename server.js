@@ -265,6 +265,21 @@ async function autoMigrate() {
     )
   `).catch(e => console.warn('[migrate] movimentos_estoque:', e.message));
 
+  // Atualiza o CHECK de tipos em bancos já existentes.
+  // CREATE TABLE IF NOT EXISTS não altera constraints antigas; por isso
+  // removemos apenas a constraint e recriamos sem tocar nos dados.
+  await pool.query(`
+    ALTER TABLE movimentos_estoque
+      DROP CONSTRAINT IF EXISTS movimentos_estoque_tipo_movimento_check;
+    ALTER TABLE movimentos_estoque
+      ADD CONSTRAINT movimentos_estoque_tipo_movimento_check
+      CHECK(tipo_movimento IN (
+        'ENTRADA_COMPRA','ENTRADA_AJUSTE','VENDA','VENDA_ANALYTICS','PERDA','VALIDADE',
+        'KIT_RESERVA','KIT_CANCELAMENTO','KIT_ENTREGA','RETIRADA_FUNCIONARIO',
+        'AJUSTE_INVENTARIO','IMPORTACAO_PDV'
+      )) NOT VALID;
+  `).catch(e => console.warn('[migrate] movimentos_estoque_tipo_movimento_check:', e.message));
+
   // Índices da nova tabela
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_mov_produto
     ON movimentos_estoque(produto_id, data_movimento DESC)`)
