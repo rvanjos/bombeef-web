@@ -1,6 +1,7 @@
 (function(){
   let termoAtual=null;
   let formaAtual='';
+  let validacaoBaixaAtual=null;
 
   function dataBR(v){
     const s=String(v||'').slice(0,10);
@@ -16,6 +17,34 @@
   function safe(v){
     return String(v==null?'':v).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
   }
+
+  function payloadRelatorio(){
+    if(!termoAtual) return null;
+    return {
+      funcionarioId:Number(termoAtual.funcionario.id),
+      formaPagamento:formaAtual,
+      itens:(termoAtual.itens||[]).map(x=>({id:Number(x.id),saldoEsperado:Number(x.saldo_restante||0)}))
+    };
+  }
+
+  async function validarBaixaRelatorio(renderizar=true){
+    const payload=payloadRelatorio();
+    if(!payload || !payload.itens.length) return {ok:false,apto:false,problemas:['Sem itens em aberto.']};
+    const d=await window.BB.api.post('/api/retiradas/relatorio-periodo/validar-baixa',payload);
+    validacaoBaixaAtual=d;
+    if(renderizar){
+      const el=document.getElementById('rel-baixa-status');
+      if(el){
+        if(!d.ok) el.innerHTML='<div class="alert danger">❌ '+safe(d.erro||'Não foi possível validar a baixa')+'</div>';
+        else if(d.apto) el.innerHTML='<div class="alert success">✅ Pronto para baixa: '+d.quantidade+' item(ns) · '+brl(d.total)+'. Todos continuam pendentes com os mesmos valores.</div>';
+        else el.innerHTML='<div class="alert warning">⚠️ Não é seguro dar baixa agora.<br>'+safe((d.problemas||[]).join(' | '))+'</div>';
+      }
+      const btn=document.getElementById('btn-confirmar-baixa-rel');
+      if(btn) btn.disabled=!(d.ok&&d.apto);
+    }
+    return d;
+  }
+
 
   window.abrirRelatorio = function(){
     const modal=document.getElementById('modal-rel');
@@ -48,7 +77,8 @@
     document.getElementById('rel-inicio').value=inicio;
     document.getElementById('rel-fim').value=fim;
     const forma=document.getElementById('rel-forma'); if(forma) forma.value='';
-    document.getElementById('rel-body').innerHTML='Selecione o funcionário, o período e a forma de pagamento para gerar o termo.';
+    termoAtual=null; formaAtual=''; validacaoBaixaAtual=null;
+    document.getElementById('rel-body').innerHTML='Selecione o funcionário, o período e a forma de pagamento para gerar o relatório de baixa.';
   };
 
   window.gerarTermoRetiradas = async function(){
@@ -92,8 +122,61 @@
       '</tbody></table>'+
       '<div style="margin-top:14px;background:#fff1f2;border:1px solid #fecdd3;border-radius:10px;padding:14px;display:flex;justify-content:space-between;align-items:center">'+
         '<b>TOTAL DO DESCONTO</b><span style="font-size:22px;font-weight:900;color:#b91c1c">'+brl(r.totais.desconto)+'</span>'+
+      '</div>'+
+      '<div id="rel-baixa-status" style="margin-top:12px"></div>'+
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">'+
+        '<button class="btn btn-s" onclick="validarBaixaRelatorioUI()">🔎 Conferir se pode dar baixa</button>'+
+        '<button class="btn btn-p" onclick="imprimirTermoRetiradas()">🖨️ Imprimir para baixa</button>'+
+        '<button class="btn btn-green" id="btn-confirmar-baixa-rel" onclick="confirmarBaixaRelatorio()" disabled>✅ Confirmar pagamento de todos</button>'+
       '</div>';
+    validarBaixaRelatorio(true);
   };
+
+  window.validarBaixaRelatorioUI = async function(){
+    await validarBaixaRelatorio(true);
+  };
+
+  window.confirmarBaixaRelatorio = async function(){
+    const payload=payloadRelatorio();
+    if(!payload || !payload.itens.length){ window.BB?.toast?.('⚠️ Gere um relatório com itens em aberto'); return; }
+
+    const conf=await validarBaixaRelatorio(true);
+    if(!conf.ok || !conf.apto){
+      window.BB?.toast?.('⚠️ O relatório não está apto para baixa. Gere novamente.');
+      return;
+    }
+
+    const formaLabel=formaAtual==='vale'?'Desconto no Vale Alimentação':'Pagamento via PIX';
+    const msg='Confirmar pagamento de TODOS os '+conf.quantidade+' itens deste relatório?\n\nTotal: '+brl(conf.total)+'\nForma: '+formaLabel+'\n\nEsta ação registrará a baixa financeira dos itens.';
+    if(!window.confirm(msg)) return;
+
+    const hoje=new Date().toISOString().slice(0,10);
+    const d=await window.BB.api.post('/api/retiradas/relatorio-periodo/confirmar-baixa',{
+      ...payload,
+      dataPagamento:hoje,
+      observacao:'Baixa integral confirmada pelo relatório de '+dataBR(termoAtual.inicio)+' a '+dataBR(termoAtual.fim)
+    });
+    if(!d.ok){
+      window.BB?.toast?.('❌ '+(d.erro||'Não foi possível confirmar a baixa'));
+      if(d.problemas?.length) {
+        const el=document.getElementById('rel-baixa-status');
+        if(el) el.innerHTML='<div class="alert danger">❌ '+safe(d.erro)+'<br>'+safe(d.problemas.join(' | '))+'</div>';
+      }
+      return;
+    }
+
+    window.BB?.toast?.('✅ Baixa confirmada: '+d.quantidade+' item(ns) · '+brl(d.total));
+    validacaoBaixaAtual={ok:true,apto:false,baixado:true};
+    const el=document.getElementById('rel-baixa-status');
+    if(el) el.innerHTML='<div class="alert success">✅ Pagamento confirmado. '+d.quantidade+' item(ns) quitados · '+brl(d.total)+'.</div>';
+    const btn=document.getElementById('btn-confirmar-baixa-rel');
+    if(btn){ btn.disabled=true; btn.textContent='✅ Pagamento confirmado'; }
+    try{
+      if(typeof carregar==='function') await carregar();
+      if(typeof carregarKPIs==='function') await carregarKPIs();
+    }catch(_){}
+  };
+
   window.imprimirTermoRetiradas = function(){
     const r=termoAtual;
     if(!r){ window.BB?.toast?.('⚠️ Gere o termo primeiro'); return; }
@@ -125,4 +208,7 @@
     w.document.open();w.document.write(html);w.document.close();
     w.onload=function(){w.focus();w.print();};
   };
+
+  // Compatibilidade: qualquer botão/atalho legado de "Imprimir" abre o relatório de baixa.
+  window.imprimirRetiradas = window.abrirRelatorio;
 })();
