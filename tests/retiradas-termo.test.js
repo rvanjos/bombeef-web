@@ -21,3 +21,24 @@ test('termo impresso possui assinatura e escolha de pagamento',()=>{
   assert.match(js,/Funcionário/);
   assert.match(js,/imprimirTermoRetiradas/);
 });
+
+
+test('termo simples usa apenas valores em aberto e total do desconto',()=>{
+  const js=ler('public/js/retiradas-termo.js');
+  assert.match(js,/filter\(x=>Number\(x\.saldo_restante\|\|0\)>0\.004\)/);
+  assert.match(js,/TOTAL DO DESCONTO/);
+  assert.match(js,/Valor a descontar/);
+  assert.doesNotMatch(js,/Total retirado/);
+  assert.doesNotMatch(js,/Já pago/);
+  assert.doesNotMatch(js,/Saldo para quitação/);
+});
+
+test('forma de pagamento e obrigatoria e sai impressa',()=>{
+  const html=ler('public/retiradas.html');
+  const js=ler('public/js/retiradas-termo.js');
+  assert.match(html,/id="rel-forma"/);
+  assert.match(js,/Selecione a forma de pagamento/);
+  assert.match(js,/Forma de pagamento escolhida/);
+  assert.match(js,/Desconto no Vale Alimentação/);
+  assert.match(js,/Pagamento via PIX/);
+});
