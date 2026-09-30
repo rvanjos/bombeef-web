@@ -59,3 +59,11 @@ test('edicao de validade recarrega observacao existente antes de salvar',()=>{
   assert.match(tela,/const obsVisivel = String\(v\?\.observacao\|\|''\)/);
   assert.match(tela,/getElementById\('v-obs'\)\.value = obsVisivel/);
 });
+
+
+test('botao editar validade permanece visivel na tabela e dashboard',()=>{
+  const tela=ler('public/validade.html');
+  assert.match(tela,/val-edit-btn/);
+  assert.match(tela,/✏️ Editar/);
+  assert.match(tela,/val-acoes\{position:sticky;right:0/);
+});
