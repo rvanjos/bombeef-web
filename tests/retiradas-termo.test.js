@@ -51,3 +51,22 @@ test('botoes de impressao abrem sempre o termo com assinatura',()=>{
   assert.equal((html.match(/onclick="abrirRelatorio\(\)"/g)||[]).length>=2,true);
   assert.doesNotMatch(html,/onclick="imprimirRetiradas\(\)">🖨️ Imprimir/);
 });
+
+
+test('relatorio valida e confirma baixa integral de todos os itens',()=>{
+  const rota=ler('routes/retiradas.js');
+  const js=ler('public/js/retiradas-termo.js');
+  assert.match(rota,/relatorio-periodo\/validar-baixa/);
+  assert.match(rota,/relatorio-periodo\/confirmar-baixa/);
+  assert.match(rota,/FOR UPDATE/);
+  assert.match(rota,/status='pago'/);
+  assert.match(rota,/INSERT INTO pagamento_retirada_itens/);
+  assert.match(js,/Conferir se pode dar baixa/);
+  assert.match(js,/Confirmar pagamento de todos/);
+  assert.match(js,/O relatório mudou desde a emissão/);
+});
+
+test('atalho legado de imprimir abre relatorio de baixa',()=>{
+  const js=ler('public/js/retiradas-termo.js');
+  assert.match(js,/window\.imprimirRetiradas = window\.abrirRelatorio/);
+});
