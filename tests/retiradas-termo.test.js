@@ -33,14 +33,15 @@ test('termo simples usa apenas valores em aberto e total do desconto',()=>{
   assert.doesNotMatch(js,/Saldo para quitação/);
 });
 
-test('forma de pagamento e obrigatoria e sai impressa',()=>{
+test('forma de pagamento e escolhida no impresso e confirmada depois',()=>{
   const html=ler('public/retiradas.html');
   const js=ler('public/js/retiradas-termo.js');
-  assert.match(html,/id="rel-forma"/);
-  assert.match(js,/Selecione a forma de pagamento/);
-  assert.match(js,/Forma de pagamento escolhida/);
+  assert.doesNotMatch(html,/id="rel-forma"/);
   assert.match(js,/Desconto no Vale Alimentação/);
   assert.match(js,/Pagamento via PIX/);
+  assert.match(js,/Forma de pagamento escolhida pelo funcionário/);
+  assert.match(js,/rel-baixa-forma/);
+  assert.match(js,/Selecione após a assinatura/);
 });
 
 
@@ -69,4 +70,19 @@ test('relatorio valida e confirma baixa integral de todos os itens',()=>{
 test('atalho legado de imprimir abre relatorio de baixa',()=>{
   const js=ler('public/js/retiradas-termo.js');
   assert.match(js,/window\.imprimirRetiradas = window\.abrirRelatorio/);
+});
+
+
+test('relatorio impresso possui assinatura explicita e layout proprio',()=>{
+  const js=ler('public/js/retiradas-termo.js');
+  assert.match(js,/RELATÓRIO PARA BAIXA/);
+  assert.match(js,/Assinatura do funcionário/);
+  assert.match(js,/TOTAL A PAGAR \/ DESCONTAR/);
+  assert.match(js,/Conferência e autorização do funcionário/);
+  assert.match(js,/baixa no sistema deve ser confirmada somente após/);
+});
+
+test('arquivo do termo usa cache busting',()=>{
+  const html=ler('public/retiradas.html');
+  assert.match(html,/retiradas-termo\.js\?v=20260930-1521/);
 });
