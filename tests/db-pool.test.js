@@ -51,3 +51,10 @@ test('startup normal nao executa reparos legados',()=>{
   assert.match(pkg.scripts['maintenance:legacy'],/fix-dre-ofx-creditos/);
   assert.match(pkg.scripts['maintenance:legacy'],/audit-multiloja/);
 });
+
+
+test('migracao operacional multiloja nao roda automaticamente',()=>{
+  const auth=ler('routes/auth.js');
+  assert.match(auth,/RUN_MULTILOJA_MIGRATIONS === '1'/);
+  assert.match(auth,/migração operacional automática desativada/);
+});
