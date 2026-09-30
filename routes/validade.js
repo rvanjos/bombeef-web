@@ -627,8 +627,9 @@ module.exports = function (pool, app) {
       const { rows } = await pool.query(`
         INSERT INTO validade_items
           (produto_id, codigo, descricao, data_validade, lote, acao_antes_vencer,
-           ultima_conferencia, responsavel, qtd_unidades, dias_alerta, localizacao, observacao, peso_total_kg, data_recebimento)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+           ultima_conferencia, responsavel, qtd_unidades, dias_alerta, localizacao, observacao,
+           peso_total_kg, data_recebimento, preco_custo)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
         RETURNING *
       `, [
         prodId, v.codigo?.trim() || null, v.descricao.trim(),
@@ -638,6 +639,7 @@ module.exports = function (pool, app) {
         v.localizacao || null, v.observacao || null,
         v.pesoTotalKg ? parseFloat(v.pesoTotalKg) : null,
         v.dataRecebimento || null,
+        v.precoCusto !== undefined && v.precoCusto !== null && v.precoCusto !== '' ? parseFloat(v.precoCusto) : 0,
       ]);
       res.json({ ok: true, data: rows[0] });
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
