@@ -24,3 +24,20 @@ test('tela informa divergencia sem transformar em erro',()=>{
   const html=ler('public/validade.html');
   assert.match(html,/d\.alerta \? '⚠️ ' \+ d\.alerta/);
 });
+
+
+test('validade nunca apaga fisicamente itens em dedup ou exclusao em lote',()=>{
+  const rota=ler('routes/validade.js');
+  assert.doesNotMatch(rota,/DELETE FROM validade_items/);
+  assert.match(rota,/status='arquivado'/);
+  assert.match(rota,/resolucao='duplicata'/);
+  assert.match(rota,/resolucao='exclusao_manual'/);
+  assert.match(rota,/resolucao='arquivamento_admin'/);
+});
+
+test('interface de validade informa arquivamento sem perda de dados',()=>{
+  const html=ler('public/validade.html');
+  assert.match(html,/Arquivar Duplicatas/);
+  assert.match(html,/mantendo todos os registros no banco/);
+  assert.match(html,/sem excluir dados/);
+});
