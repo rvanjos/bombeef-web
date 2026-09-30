@@ -33,3 +33,12 @@ test('limite do pool e conservador e configuravel',()=>{
   assert.match(db,/idleTimeoutMillis/);
   assert.match(db,/connectionTimeoutMillis/);
 });
+
+
+test('release nao executa rollback fora de transacao',()=>{
+  const tenant=ler('lib/tenant-context.js');
+  assert.match(tenant,/let emTransacao = false/);
+  assert.match(tenant,/emTransacao \? queryOriginal\('ROLLBACK'\) : null/);
+  assert.match(tenant,/\^\(BEGIN\|START TRANSACTION\)/);
+  assert.match(tenant,/\^\(COMMIT\|ROLLBACK\)/);
+});
