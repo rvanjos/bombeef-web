@@ -2375,6 +2375,8 @@ async function abrirModal(id){
   document.getElementById('v-conf').value  = v?.ultima_conferencia? fmt.dateInput(v.ultima_conferencia):'';
   document.getElementById('v-local').value = v?.localizacao||'';
   document.getElementById('v-alerta').value= v?.dias_alerta||7;
+  const obsVisivel = String(v?.observacao||'').replace(/\s*PESOS_KG:\[[\d.,]+\]/g,'').trim();
+  document.getElementById('v-obs').value = obsVisivel;
   document.getElementById('v-cod-info').textContent = '';
   document.getElementById('v-preco-wrap').style.display = 'none';
   document.getElementById('v-preco-custo-val').value = v?.preco_custo||0;
@@ -2522,6 +2524,39 @@ async function buscarProdVal(){
   }, 500); // aguarda 500ms após última tecla
 }
 
+function conferirPersistenciaValidade(body, salvo){
+  if(!salvo) return {ok:false, campo:'registro'};
+  const normDate=v=>v?String(v).slice(0,10):'';
+  const normText=v=>String(v??'').trim();
+  const normNum=v=>v===null||v===undefined||v===''?null:Number(v);
+  const checks=[
+    ['descricao', normText(body.descricao), normText(salvo.descricao)],
+    ['dataValidade', normDate(body.dataValidade), normDate(salvo.data_validade)],
+    ['dataRecebimento', normDate(body.dataRecebimento), normDate(salvo.data_recebimento)],
+    ['lote', normText(body.lote), normText(salvo.lote)],
+    ['acaoAntesVencer', normText(body.acaoAntesVencer), normText(salvo.acao_antes_vencer)],
+    ['responsavel', normText(body.responsavel), normText(salvo.responsavel)],
+    ['ultimaConferencia', normDate(body.ultimaConferencia), normDate(salvo.ultima_conferencia)],
+    ['localizacao', normText(body.localizacao), normText(salvo.localizacao)],
+    ['qtdUnidades', normNum(body.qtdUnidades), normNum(salvo.qtd_unidades)],
+    ['pesoTotalKg', normNum(body.pesoTotalKg), normNum(salvo.peso_total_kg)],
+    ['diasAlerta', normNum(body.diasAlerta), normNum(salvo.dias_alerta)],
+    ['precoCusto', normNum(body.precoCusto), normNum(salvo.preco_custo)],
+  ];
+  for(const [campo,a,b] of checks){
+    if(typeof a==='number' || typeof b==='number'){
+      if(a===null&&b===null) continue;
+      if(a===null||b===null||Math.abs(Number(a)-Number(b))>0.0009) return {ok:false,campo,esperado:a,salvo:b};
+    }else if(a!==b){
+      return {ok:false,campo,esperado:a,salvo:b};
+    }
+  }
+  const obsEsperada=normText(body.observacao).replace(/\s*PESOS_KG:\[[\d.,]+\]/g,'').trim();
+  const obsSalva=normText(salvo.observacao).replace(/\s*PESOS_KG:\[[\d.,]+\]/g,'').trim();
+  if(obsEsperada!==obsSalva) return {ok:false,campo:'observacao',esperado:obsEsperada,salvo:obsSalva};
+  return {ok:true};
+}
+
 async function salvarVal(){
   // Proteção anti-duplo-clique
   const btnSalvar = document.querySelector('#modal-val .btn-p');
@@ -2557,9 +2592,15 @@ async function salvarVal(){
   if(!body.descricao){ toast('Descrição obrigatória'); return; }
   const d = id ? await api.put(`/api/validade/${id}`,body) : await api.post('/api/validade',body);
   if(!d.ok){ toast('Erro: '+d.erro); return; }
-  toast(id?'✅ Item atualizado!':'✅ Item criado!');
+  const conf = conferirPersistenciaValidade(body,d.data);
+  if(!conf.ok){
+    console.error('[validade] divergência após salvar',conf,{enviado:body,retornado:d.data});
+    toast('❌ O banco não confirmou o campo "'+conf.campo+'". A tela permanecerá aberta para evitar perda de dados.');
+    return;
+  }
+  toast(id?'✅ Item atualizado e confirmado no banco!':'✅ Item criado e confirmado no banco!');
   _editandoId = null;
-  fecharModal('modal-val'); carregar(); carregarKPIs();
+  fecharModal('modal-val'); await carregar(); carregarKPIs();
   try { window.parent.postMessage({type:'bb_refresh_kpis'},'*'); } catch(_) {}
   } finally {
     // Sempre reabilita o botão (sucesso ou erro)
