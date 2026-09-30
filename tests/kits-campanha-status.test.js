@@ -32,3 +32,14 @@ test('estoque insuficiente nao bloqueia entrega de kits',()=>{
   assert.match(rota,/UPDATE produtos SET estoque=estoque-\$1/);
   assert.match(tela,/d\.aviso_estoque/);
 });
+
+
+test('constraint de movimentos aceita KIT_ENTREGA sem bloquear estoque',()=>{
+  const server=ler('server.js');
+  const mov=ler('routes/movimentos.js');
+  assert.match(server,/DROP CONSTRAINT IF EXISTS movimentos_estoque_tipo_movimento_check/);
+  assert.match(server,/KIT_ENTREGA/);
+  assert.match(server,/NOT VALID/);
+  assert.match(mov,/KIT_ENTREGA/);
+  assert.match(mov,/VENDA_ANALYTICS/);
+});
