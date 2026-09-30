@@ -1,17 +1,14 @@
 'use strict';
 
 const express = require('express');
-const { Pool } = require('pg');
 const autenticar = require('../middleware/auth');
-const { protegerPoolPorLoja, executarComoSistema } = require('../lib/tenant-context');
+const { executarComoSistema } = require('../lib/tenant-context');
 
 const r = express.Router();
 r.use(express.json({ limit:'200kb' }));
 r.use(autenticar(['admin','financeiro','contabil']));
 
-const ssl = process.env.DATABASE_URL && !/localhost|127\.0\.0\.1/.test(process.env.DATABASE_URL)
-  ? { rejectUnauthorized:false } : false;
-const pool = protegerPoolPorLoja(new Pool({ connectionString:process.env.DATABASE_URL, ssl }));
+const pool = require('../lib/db');
 
 let initPromise = null;
 function init(){
