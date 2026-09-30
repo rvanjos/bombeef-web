@@ -114,9 +114,13 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
     }
 
     await garantirEstruturaMultiloja(pool);
-    iniciarMigracaoOperacionalMultiloja(pool).catch(e => {
-      console.error('[multiloja] migração operacional em segundo plano:', e.message);
-    });
+    if (process.env.RUN_MULTILOJA_MIGRATIONS === '1') {
+      iniciarMigracaoOperacionalMultiloja(pool).catch(e => {
+        console.error('[multiloja] migração operacional em segundo plano:', e.message);
+      });
+    } else {
+      console.log('[multiloja] migração operacional automática desativada; execute apenas em manutenção controlada');
+    }
   }
   let initPromise = null;
   const garantirTabelas = () => {
