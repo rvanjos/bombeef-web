@@ -142,7 +142,7 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
   <div class="toolbar toolbar-card">
     <button class="btn btn-p" onclick="abrirModal()">＋ Nova Retirada</button>
     <button class="btn btn-green" id="btn-pagamento-lote" onclick="abrirPagamentoEmLote()">💸 Lançar pagamento</button>
-    <button class="btn btn-s" onclick="abrirRelatorio()">📊 Relatório</button>
+    <button class="btn btn-s" onclick="abrirRelatorio()">✍️ Relatório para assinatura</button>
     <select class="flt" id="flt-func" onchange="typeof carregar==='function'&&carregar()">
       <option value="">Todos os funcionários</option>
     </select>
@@ -150,7 +150,7 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
     <input class="search" id="flt-busca" placeholder="🔎 Buscar funcionário ou produto..." oninput="aplicarFiltros()">
     <select class="flt" id="flt-status" onchange="aplicarFiltros()"><option value="">Todos os status</option><option value="aberto">Pendentes e parciais</option><option value="pago">Pagos</option></select>
     <div class="col-menu"><button class="btn btn-s" onclick="document.getElementById('col-pop').classList.toggle('open')">⚙️ Colunas</button><div class="col-pop" id="col-pop"></div></div>
-      <button class="btn btn-s" onclick="imprimirRetiradas()">🖨️ Imprimir</button>
+      <button class="btn btn-s" onclick="abrirRelatorio()">✍️ Imprimir termo assinado</button>
   </div>
 
   <!-- Tabela -->

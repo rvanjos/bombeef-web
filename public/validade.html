@@ -484,7 +484,7 @@ body{font-size:14px;color:#111827}
     <div class="toolbar">
       <button class="btn btn-p" onclick="abrirModal()">＋ Novo Item</button>
       <button class="btn btn-s" onclick="abrirImport()">📥 Importar Planilha</button>
-      <button class="btn btn-s" onclick="limparDuplicatas()" id="btn-dedup" style="background:#fff3cd;color:#856404;border-color:#ffc107" title="Remove itens com mesma descrição e data de validade">🧹 Limpar Duplicatas</button>
+      <button class="btn btn-s" onclick="limparDuplicatas()" id="btn-dedup" style="background:#fff3cd;color:#856404;border-color:#ffc107" title="Arquiva duplicatas mantendo todos os registros no banco">🧹 Arquivar Duplicatas</button>
       <button class="btn btn-s" onclick="abrirRelVencimento()" style="background:#eff6ff;color:#1a5c8a;border-color:#93c5fd" title="Relatório de itens a vencer">🖨️ Rel. Vencimento</button>
       <div class="search-w"><input type="text" id="busca-val" placeholder="Buscar produto, código, lote..." oninput="filtrarVal()" style="min-width:0;flex:1;max-width:340px"></div>
       <select class="flt" id="flt-categoria" onchange="filtrarVal()" title="Filtrar por categoria ou setor">
@@ -536,7 +536,7 @@ body{font-size:14px;color:#111827}
         <button class="btn btn-g" style="padding:4px 10px;font-size:11px" onclick="encerrarSelecionados('vendido')">✅ Marcar vendido</button>
         <button class="btn" style="padding:4px 10px;font-size:11px;background:#dbeafe;color:#1e40af;border:1px solid #93c5fd" onclick="encerrarSelecionados('devolucao')">↩️ Devolução</button>
         <button class="btn btn-s" style="padding:4px 10px;font-size:11px" onclick="encerrarSelecionados('descartado')">🗑️ Marcar descartado</button>
-        <button class="btn btn-r" style="padding:4px 10px;font-size:11px" onclick="excluirSelecionadosVal()">✕ Excluir</button>
+        <button class="btn btn-r" style="padding:4px 10px;font-size:11px" onclick="excluirSelecionadosVal()">🗂️ Arquivar</button>
       </div>
       <div class="tbl-scroll-help">↔ Role para os lados quando houver mais colunas do que o espaço disponível.</div>
       <div class="bb-tbl-scroll" style="width:100%"><table class="tbl" id="tbl-val">
@@ -1486,7 +1486,7 @@ async function limparDuplicatas() {
     btn.disabled = true;
     const d = await BB.api.post('/api/validade/dedup', {});
     if (!d.ok) { BB.toast('❌ ' + d.erro); return; }
-    BB.toast(`✅ ${d.removidos} duplicata(s) removida(s)!`);
+    BB.toast(`✅ ${d.arquivados||0} duplicata(s) arquivada(s), sem excluir dados!`);
     carregar();
   } catch(e) {
     BB.toast('❌ Erro: ' + e.message);
@@ -1693,10 +1693,10 @@ async function encerrarSelecionados(resolucao){
 async function excluirSelecionadosVal(){
   const ids = [...valSelecionados].map(Number).filter(n => !isNaN(n) && n > 0);
   if(!ids.length){ toast('Selecione ao menos um item'); return; }
-  if(!confirm(`Excluir ${ids.length} item(s) selecionado(s)?`)) return;
+  if(!confirm(`Arquivar ${ids.length} item(s) selecionado(s)? Os registros serão mantidos no banco.`)) return;
   const d = await api.delete('/api/validade/multiplos', { ids });
   if(d.ok){
-    toast(`✅ ${d.removidos} item(s) excluído(s)`);
+    toast(`✅ ${d.arquivados||0} item(s) arquivado(s), sem excluir dados`);
     valLimparSel();
     carregar(); carregarKPIs();
   } else toast('❌ ' + (d.erro||'Erro ao excluir'));

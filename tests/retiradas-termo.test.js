@@ -42,3 +42,12 @@ test('forma de pagamento e obrigatoria e sai impressa',()=>{
   assert.match(js,/Desconto no Vale Alimentação/);
   assert.match(js,/Pagamento via PIX/);
 });
+
+
+test('botoes de impressao abrem sempre o termo com assinatura',()=>{
+  const html=ler('public/retiradas.html');
+  assert.match(html,/Relatório para assinatura/);
+  assert.match(html,/Imprimir termo assinado/);
+  assert.equal((html.match(/onclick="abrirRelatorio\(\)"/g)||[]).length>=2,true);
+  assert.doesNotMatch(html,/onclick="imprimirRetiradas\(\)">🖨️ Imprimir/);
+});

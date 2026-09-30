@@ -424,16 +424,25 @@ module.exports = function (pool, app) {
         HAVING COUNT(*) > 1
       `);
 
-      let removidos = 0;
+      let arquivados = 0;
       for (const dup of dups) {
-        // Manter o primeiro (menor id), remover os demais
-        const idsRemover = dup.ids.slice(1);
-        if (idsRemover.length) {
-          await pool.query(`DELETE FROM validade_items WHERE id = ANY($1::int[])`, [idsRemover]);
-          removidos += idsRemover.length;
+        // Mantém o primeiro ativo e arquiva os demais sem apagar do banco.
+        const idsArquivar = dup.ids.slice(1);
+        if (idsArquivar.length) {
+          const r = await pool.query(`
+            UPDATE validade_items SET
+              status='arquivado',
+              resolucao='duplicata',
+              obs_resolucao=COALESCE(obs_resolucao,'Arquivado automaticamente como duplicata'),
+              dt_resolucao=COALESCE(dt_resolucao,CURRENT_DATE),
+              encerrado_por=COALESCE(encerrado_por,'sistema'),
+              atualizado_em=NOW()
+            WHERE id = ANY($1::int[])
+          `, [idsArquivar]);
+          arquivados += r.rowCount;
         }
       }
-      res.json({ ok: true, duplicatas: dups.length, removidos });
+      res.json({ ok: true, duplicatas: dups.length, arquivados, removidos:0 });
     } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
@@ -957,9 +966,17 @@ module.exports = function (pool, app) {
     const ids = idsRaw.map(Number).filter(n => !isNaN(n) && n > 0);
     if (!ids.length) return res.status(400).json({ ok: false, erro: 'IDs inválidos' });
     try {
-      await pool.query(`UPDATE perdas SET validade_item_id=NULL WHERE validade_item_id=ANY($1::int[])`, [ids]);
-      const r = await pool.query(`DELETE FROM validade_items WHERE id=ANY($1::int[])`, [ids]);
-      res.json({ ok: true, removidos: r.rowCount });
+      const r = await pool.query(`
+        UPDATE validade_items SET
+          status='arquivado',
+          resolucao='exclusao_manual',
+          obs_resolucao=COALESCE(obs_resolucao,'Arquivado pela ação Excluir selecionados'),
+          dt_resolucao=COALESCE(dt_resolucao,CURRENT_DATE),
+          encerrado_por=COALESCE(encerrado_por,$2),
+          atualizado_em=NOW()
+        WHERE id=ANY($1::int[])
+      `, [ids, req.user?.nome || req.user?.email || 'usuario']);
+      res.json({ ok: true, arquivados: r.rowCount, removidos:0 });
     } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
@@ -968,9 +985,17 @@ module.exports = function (pool, app) {
     if (req.user?.perfil !== 'admin')
       return res.status(403).json({ ok: false, erro: 'Acesso restrito ao administrador' });
     try {
-      await pool.query(`UPDATE perdas SET validade_item_id=NULL WHERE validade_item_id IS NOT NULL`);
-      const r = await pool.query(`DELETE FROM validade_items`);
-      res.json({ ok: true, removidos: r.rowCount });
+      const r = await pool.query(`
+        UPDATE validade_items SET
+          status='arquivado',
+          resolucao='arquivamento_admin',
+          obs_resolucao=COALESCE(obs_resolucao,'Arquivado por limpeza administrativa'),
+          dt_resolucao=COALESCE(dt_resolucao,CURRENT_DATE),
+          encerrado_por=COALESCE(encerrado_por,$1),
+          atualizado_em=NOW()
+        WHERE dt_resolucao IS NULL
+      `, [req.user?.nome || req.user?.email || 'admin']);
+      res.json({ ok: true, arquivados: r.rowCount, removidos:0 });
     } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
