@@ -627,8 +627,9 @@ module.exports = function (pool, app) {
       const { rows } = await pool.query(`
         INSERT INTO validade_items
           (produto_id, codigo, descricao, data_validade, lote, acao_antes_vencer,
-           ultima_conferencia, responsavel, qtd_unidades, dias_alerta, localizacao, observacao, peso_total_kg, data_recebimento)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+           ultima_conferencia, responsavel, qtd_unidades, dias_alerta, localizacao, observacao,
+           peso_total_kg, data_recebimento, preco_custo)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
         RETURNING *
       `, [
         prodId, v.codigo?.trim() || null, v.descricao.trim(),
@@ -638,6 +639,7 @@ module.exports = function (pool, app) {
         v.localizacao || null, v.observacao || null,
         v.pesoTotalKg ? parseFloat(v.pesoTotalKg) : null,
         v.dataRecebimento || null,
+        v.precoCusto !== undefined && v.precoCusto !== null && v.precoCusto !== '' ? parseFloat(v.precoCusto) : 0,
       ]);
       res.json({ ok: true, data: rows[0] });
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
@@ -667,37 +669,46 @@ module.exports = function (pool, app) {
         }
       }
 
-      await pool.query(`
+      const id = parseInt(req.params.id);
+      const { rows, rowCount } = await pool.query(`
         UPDATE validade_items SET
           produto_id          = COALESCE($1, produto_id),
           codigo              = COALESCE($2, codigo),
           descricao           = COALESCE($3, descricao),
           desc_original       = COALESCE(desc_original, $15),
           data_validade       = COALESCE($4, data_validade),
-          lote                = COALESCE($5, lote),
-          acao_antes_vencer   = COALESCE($6, acao_antes_vencer),
-          ultima_conferencia  = COALESCE($7, ultima_conferencia),
-          responsavel         = COALESCE($8, responsavel),
+          lote                = $5,
+          acao_antes_vencer   = $6,
+          ultima_conferencia  = $7,
+          responsavel         = $8,
           qtd_unidades        = COALESCE($9, qtd_unidades),
           peso_total_kg       = $10,
           dias_alerta         = COALESCE($11, dias_alerta),
-          localizacao         = COALESCE($12, localizacao),
-          observacao          = COALESCE($13, observacao),
-          data_recebimento    = COALESCE($16, data_recebimento),
+          localizacao         = $12,
+          observacao          = $13,
+          preco_custo         = COALESCE($17, preco_custo),
+          data_recebimento    = $16,
           atualizado_em       = NOW()
         WHERE id = $14
+        RETURNING *
       `, [
         prodId, v.codigo?.trim() || null, descFinal,
-        v.dataValidade || null, v.lote || null, v.acaoAntesVencer || null,
-        v.ultimaConferencia || null, v.responsavel || null,
+        v.dataValidade || null,
+        v.lote === undefined ? null : (String(v.lote||'').trim() || null),
+        v.acaoAntesVencer === undefined ? null : (String(v.acaoAntesVencer||'').trim() || null),
+        v.ultimaConferencia || null,
+        v.responsavel === undefined ? null : (String(v.responsavel||'').trim() || null),
         v.qtdUnidades !== undefined ? parseInt(v.qtdUnidades) : null,
-        v.pesoTotalKg ? parseFloat(v.pesoTotalKg) : null,
+        v.pesoTotalKg === null || v.pesoTotalKg === '' || v.pesoTotalKg === undefined ? null : parseFloat(v.pesoTotalKg),
         v.diasAlerta !== undefined ? parseInt(v.diasAlerta) : null,
-        v.localizacao || null, v.observacao || null,
-        parseInt(req.params.id), descOriginal,
+        v.localizacao === undefined ? null : (String(v.localizacao||'').trim() || null),
+        v.observacao === undefined ? null : (String(v.observacao||'').trim() || null),
+        id, descOriginal,
         v.dataRecebimento || null,
+        v.precoCusto !== undefined && v.precoCusto !== null && v.precoCusto !== '' ? parseFloat(v.precoCusto) : null,
       ]);
-      res.json({ ok: true });
+      if (!rowCount) return res.status(404).json({ ok:false, erro:'Item de validade não encontrado para atualização' });
+      res.json({ ok: true, data: rows[0] });
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 

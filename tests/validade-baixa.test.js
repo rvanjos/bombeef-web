@@ -41,3 +41,21 @@ test('interface de validade informa arquivamento sem perda de dados',()=>{
   assert.match(html,/mantendo todos os registros no banco/);
   assert.match(html,/sem excluir dados/);
 });
+
+
+test('persistencia confirmada de validade grava e retorna campos editados',()=>{
+  const rota=ler('routes/validade.js');
+  const tela=ler('public/validade.html');
+  assert.match(rota,/preco_custo\s*=\s*COALESCE\(\$17, preco_custo\)/);
+  assert.match(rota,/RETURNING \*/);
+  assert.match(rota,/Item de validade não encontrado para atualização/);
+  assert.match(rota,/data_recebimento, preco_custo\)/);
+  assert.match(tela,/conferirPersistenciaValidade/);
+  assert.match(tela,/Item atualizado e confirmado no banco/);
+});
+
+test('edicao de validade recarrega observacao existente antes de salvar',()=>{
+  const tela=ler('public/validade.html');
+  assert.match(tela,/const obsVisivel = String\(v\?\.observacao\|\|''\)/);
+  assert.match(tela,/getElementById\('v-obs'\)\.value = obsVisivel/);
+});
