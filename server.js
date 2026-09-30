@@ -16,24 +16,7 @@ const helmet     = require('helmet');
 const rateLimit  = require('express-rate-limit');
 const morgan     = require('morgan');
 const path       = require('path');
-const { Pool }   = require('pg');
-
-// ── Pool PostgreSQL ────────────────────────────────────────────────────────────
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production'
-    ? { rejectUnauthorized: false }
-    : false,
-  max: 15,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 20000,
-});
-require('./lib/tenant-context').protegerPoolPorLoja(pool);
-
-pool.on('error', (err) => {
-  console.error('[pool] erro inesperado:', err.message);
-  // Não deixa o processo morrer por erro de pool
-});
+const pool        = require('./lib/db');
 
 // ── Auto-migração na inicialização ────────────────────────────────────────────
 // Roda sempre que o servidor inicia — ADD COLUMN IF NOT EXISTS é idempotente
