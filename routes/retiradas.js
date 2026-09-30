@@ -354,6 +354,114 @@ module.exports = function (pool, app) {
     } catch (e) { res.status(500).json({ ok:false, erro:e.message }); }
   });
 
+
+  // ── POST /relatorio-periodo/validar-baixa — confirma se relatório ainda pode ser quitado ──
+  r.post('/relatorio-periodo/validar-baixa', permitir('retiradas_pagamentos'), async (req, res) => {
+    const funcionarioId = Number(req.body.funcionarioId);
+    const itens = Array.isArray(req.body.itens) ? req.body.itens : [];
+    const ids = [...new Set(itens.map(x=>Number(x.id)).filter(Number.isInteger))];
+    if (!Number.isInteger(funcionarioId) || !ids.length)
+      return res.status(400).json({ ok:false, erro:'Relatório inválido para baixa.' });
+
+    try {
+      const { rows } = await pool.query(`
+        SELECT id, funcionario_id, dt_retirada, descricao, valor_total, status,
+               COALESCE(saldo_restante,CASE WHEN COALESCE(status,'pendente')='pago' THEN 0 ELSE valor_total END)::numeric AS saldo
+          FROM retiradas
+         WHERE id = ANY($1::int[])
+         ORDER BY dt_retirada,id
+      `,[ids]);
+
+      const mapaEsperado = new Map(itens.map(x=>[Number(x.id),Number(x.saldoEsperado)]));
+      const problemas = [];
+      if (rows.length !== ids.length) problemas.push('Um ou mais itens do relatório não existem mais.');
+      for (const r of rows) {
+        if (Number(r.funcionario_id) !== funcionarioId) problemas.push('Item '+r.id+' pertence a outro funcionário.');
+        const saldo = Number(r.saldo||0);
+        const esperado = mapaEsperado.get(Number(r.id));
+        if (r.status === 'pago' || saldo <= 0.005) problemas.push('Item '+r.id+' já está pago.');
+        if (!Number.isFinite(esperado) || Math.abs(saldo-esperado)>0.005)
+          problemas.push('Item '+r.id+' teve o saldo alterado de R$ '+Number(esperado||0).toFixed(2)+' para R$ '+saldo.toFixed(2)+'.');
+      }
+      const total = rows.reduce((s,r)=>s+Number(r.saldo||0),0);
+      res.json({ ok:true, apto:problemas.length===0, problemas, total:Number(total.toFixed(2)), quantidade:rows.length });
+    } catch(e) { res.status(500).json({ok:false,erro:e.message}); }
+  });
+
+  r.post('/relatorio-periodo/confirmar-baixa', permitir('retiradas_pagamentos'), async (req, res) => {
+    const funcionarioId = Number(req.body.funcionarioId);
+    const itens = Array.isArray(req.body.itens) ? req.body.itens : [];
+    const ids = [...new Set(itens.map(x=>Number(x.id)).filter(Number.isInteger))];
+    const formaPagamento = ['vale','pix'].includes(req.body.formaPagamento) ? req.body.formaPagamento : null;
+    if (!Number.isInteger(funcionarioId) || !ids.length || !formaPagamento)
+      return res.status(400).json({ok:false,erro:'Informe relatório e forma de pagamento válidos.'});
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const { rows } = await client.query(`
+        SELECT id, funcionario_id, dt_retirada, descricao, valor_total, status,
+               COALESCE(saldo_restante,CASE WHEN COALESCE(status,'pendente')='pago' THEN 0 ELSE valor_total END)::numeric AS saldo
+          FROM retiradas
+         WHERE id = ANY($1::int[])
+         ORDER BY dt_retirada,id
+         FOR UPDATE
+      `,[ids]);
+
+      const mapaEsperado = new Map(itens.map(x=>[Number(x.id),Number(x.saldoEsperado)]));
+      const problemas = [];
+      if (rows.length !== ids.length) problemas.push('Um ou mais itens do relatório não existem mais.');
+      for (const r of rows) {
+        if (Number(r.funcionario_id) !== funcionarioId) problemas.push('Item '+r.id+' pertence a outro funcionário.');
+        const saldo = Number(r.saldo||0);
+        const esperado = mapaEsperado.get(Number(r.id));
+        if (r.status === 'pago' || saldo <= 0.005) problemas.push('Item '+r.id+' já está pago.');
+        if (!Number.isFinite(esperado) || Math.abs(saldo-esperado)>0.005) problemas.push('Item '+r.id+' teve alteração de saldo.');
+      }
+      if (problemas.length) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ok:false,erro:'O relatório mudou desde a emissão. Gere-o novamente antes da baixa.',problemas});
+      }
+
+      const total = Number(rows.reduce((s,r)=>s+Number(r.saldo||0),0).toFixed(2));
+      if (total <= 0) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ok:false,erro:'O relatório não possui saldo para baixa.'});
+      }
+
+      const { rows:[pagamento] } = await client.query(`
+        INSERT INTO pagamentos_retiradas
+          (funcionario_id,data_pagamento,valor_pago,forma_pagamento,observacao,usuario_id)
+        VALUES ($1,COALESCE($2::date,CURRENT_DATE),$3,$4,$5,$6)
+        RETURNING *
+      `,[
+        funcionarioId, req.body.dataPagamento || null, total, formaPagamento,
+        req.body.observacao || 'Baixa integral por relatório assinado', req.user?.id || null
+      ]);
+
+      const abatimentos=[];
+      for(const r of rows){
+        const saldo=Number(r.saldo||0);
+        await client.query(`
+          UPDATE retiradas SET saldo_restante=0,status='pago',
+            dt_pagamento=COALESCE($1::date,CURRENT_DATE),pago_por=$2
+          WHERE id=$3
+        `,[req.body.dataPagamento||null,req.user?.id||null,r.id]);
+        await client.query(`
+          INSERT INTO pagamento_retirada_itens(pagamento_id,retirada_id,valor_abatido)
+          VALUES($1,$2,$3)
+        `,[pagamento.id,r.id,saldo.toFixed(2)]);
+        abatimentos.push({retirada_id:r.id,valor_abatido:saldo,saldo_restante:0});
+      }
+
+      await client.query('COMMIT');
+      res.json({ok:true,pagamento_id:pagamento.id,total,quantidade:rows.length,forma_pagamento:formaPagamento,abatimentos});
+    } catch(e) {
+      await client.query('ROLLBACK').catch(()=>{});
+      res.status(500).json({ok:false,erro:e.message});
+    } finally { client.release(); }
+  });
+
   // ── GET / ──────────────────────────────────────────────────────────────────
   r.get('/', async (req, res) => {
     try {

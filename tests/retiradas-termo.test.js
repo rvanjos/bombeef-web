@@ -14,7 +14,7 @@ test('relatorio de retiradas aceita periodo e funcionario',()=>{
 test('termo impresso possui assinatura e escolha de pagamento',()=>{
   const html=ler('public/retiradas.html');
   const js=ler('public/js/retiradas-termo.js');
-  assert.match(html,/Termo de Conferência de Retiradas/);
+  assert.match(html,/Relatório de Retiradas para Baixa/);
   assert.match(js,/Desconto no Vale Alimentação/);
   assert.match(js,/Pagamento via PIX/);
   assert.match(js,/Responsável Bom Beef/);
@@ -46,8 +46,27 @@ test('forma de pagamento e obrigatoria e sai impressa',()=>{
 
 test('botoes de impressao abrem sempre o termo com assinatura',()=>{
   const html=ler('public/retiradas.html');
-  assert.match(html,/Relatório para assinatura/);
-  assert.match(html,/Imprimir termo assinado/);
+  assert.match(html,/Relatório para baixa/);
+  assert.match(html,/Imprimir para baixa/);
   assert.equal((html.match(/onclick="abrirRelatorio\(\)"/g)||[]).length>=2,true);
   assert.doesNotMatch(html,/onclick="imprimirRetiradas\(\)">🖨️ Imprimir/);
+});
+
+
+test('relatorio valida e confirma baixa integral de todos os itens',()=>{
+  const rota=ler('routes/retiradas.js');
+  const js=ler('public/js/retiradas-termo.js');
+  assert.match(rota,/relatorio-periodo\/validar-baixa/);
+  assert.match(rota,/relatorio-periodo\/confirmar-baixa/);
+  assert.match(rota,/FOR UPDATE/);
+  assert.match(rota,/status='pago'/);
+  assert.match(rota,/INSERT INTO pagamento_retirada_itens/);
+  assert.match(js,/Conferir se pode dar baixa/);
+  assert.match(js,/Confirmar pagamento de todos/);
+  assert.match(rota,/O relatório mudou desde a emissão/);
+});
+
+test('atalho legado de imprimir abre relatorio de baixa',()=>{
+  const js=ler('public/js/retiradas-termo.js');
+  assert.match(js,/window\.imprimirRetiradas = window\.abrirRelatorio/);
 });
