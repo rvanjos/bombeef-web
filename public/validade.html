@@ -340,6 +340,9 @@ body{font-size:14px;color:#111827}
 .section-intro p{font-size:12px;color:var(--muted);margin-top:2px}
 @media(max-width:900px){.kpi-row{grid-template-columns:repeat(3,1fr)}.dash-kpi-grid{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:700px){.body{padding:12px}.body>.tabs{margin:-12px -12px 12px;padding:0 8px}.kpi-row,.dash-kpi-grid{grid-template-columns:1fr 1fr}.toolbar{padding:10px}.toolbar .search-w{order:2;flex-basis:100%}}
+.val-acoes{position:sticky;right:0;background:var(--white);z-index:2;box-shadow:-6px 0 8px -8px rgba(0,0,0,.35);}
+.val-edit-btn{display:inline-flex;align-items:center;gap:4px;padding:5px 8px!important;font-weight:700;color:#7f1d1d;background:#fff7f7;border:1px solid #fecaca;border-radius:6px;white-space:nowrap;}
+.val-edit-btn:hover{background:#fee2e2;}
 </style>
 </head>
 <body>
@@ -1384,7 +1387,7 @@ function _mkDashRow(v) {
     <td style="padding:7px 12px;font-size:11px;color:var(--muted)">${v.lote||'—'}</td>
     <td style="padding:7px 6px;text-align:center">
       <button onclick="event.stopPropagation();marcarVendidoRapido(${v.id})" style="background:#dcfce7;color:#166534;border:1px solid #86efac;padding:3px 8px;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer" title="Marcar como vendido — não entra como perda">✅ Vendido</button>
-      <button onclick="event.stopPropagation();abrirModal(${v.id})" class="act-btn" title="Editar">✏️</button>
+      <button onclick="event.stopPropagation();abrirModal(${v.id})" class="act-btn val-edit-btn" title="Editar validade">✏️ Editar</button>
       <button onclick="event.stopPropagation();perdaRapida(${v.id})" class="act-btn" style="color:var(--red-l)" title="Registrar perda">📉</button>
     </td>
   </tr>`;
@@ -1967,8 +1970,8 @@ function renderVal(lista){
         <td style="font-size:11px">${fmt.date(v.ultima_conferencia)||'—'}</td>
         <td style="font-size:12px;font-weight:600">${nomeResponsavel(v.responsavel)}</td>
         <td>${urgBadge}</td>
-        <td style="white-space:nowrap;padding:4px 6px" onclick="event.stopPropagation()" ondblclick="event.stopPropagation()">
-          <button class="act-btn" onclick="abrirModal(${v.id})" title="Editar" style="padding:3px 6px">✏️</button>
+        <td class="val-acoes" style="white-space:nowrap;padding:4px 6px" onclick="event.stopPropagation()" ondblclick="event.stopPropagation()">
+          <button class="act-btn val-edit-btn" onclick="abrirModal(${v.id})" title="Editar validade">✏️ Editar</button>
           ${!v.codigo?`<button class="act-btn" onclick="abrirVincular(${v.id})" title="Vincular código" style="padding:3px 6px">🔗</button>`:''}
           <button class="act-btn" onclick="marcarVendidoRapido(${v.id})" style="background:#dcfce7;color:#166534;border:1px solid #86efac;padding:3px 6px;border-radius:5px;font-size:13px" title="Marcar como vendido — não entra como perda">✅</button>
           ${v.status!=='descartado'?`<button class="act-btn" onclick="perdaRapida(${v.id})" style="color:var(--red-l);padding:3px 6px" title="Registrar como perda/descarte">📉</button>`:''}
