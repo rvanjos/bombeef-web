@@ -42,3 +42,12 @@ test('release nao executa rollback fora de transacao',()=>{
   assert.match(tenant,/\^\(BEGIN\|START TRANSACTION\)/);
   assert.match(tenant,/\^\(COMMIT\|ROLLBACK\)/);
 });
+
+
+test('startup normal nao executa reparos legados',()=>{
+  const pkg=JSON.parse(ler('package.json'));
+  assert.equal(pkg.scripts.start,'node scripts/start.js');
+  assert.match(pkg.scripts['maintenance:legacy'],/finalize-multiloja/);
+  assert.match(pkg.scripts['maintenance:legacy'],/fix-dre-ofx-creditos/);
+  assert.match(pkg.scripts['maintenance:legacy'],/audit-multiloja/);
+});
