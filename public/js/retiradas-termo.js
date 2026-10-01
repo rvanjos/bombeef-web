@@ -110,20 +110,22 @@
         '<div style="padding:14px 16px;background:#faf7f4;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;gap:12px;align-items:center">'+
           '<div><div style="font-size:16px;font-weight:800;color:var(--text)">'+safe(r.funcionario.nome)+'</div>'+
           '<div style="font-size:11px;color:var(--muted);margin-top:3px">Período: '+dataBR(r.inicio)+' a '+dataBR(r.fim)+' · '+(r.itens||[]).length+' item(ns) em aberto</div></div>'+
-          '<button class="btn btn-p" onclick="imprimirTermoRetiradas()">🖨️ Imprimir para assinatura</button>'+
+          '<button class="btn btn-p" onclick="imprimirTermoRetiradas()">🖨️ Abrir documento para impressão</button>'+
         '</div>'+
         '<div style="padding:14px 16px">'+
           '<div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:9px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:#9a3412">'+
             '✍️ No documento impresso, o funcionário deve marcar a forma de pagamento desejada e assinar antes da baixa.'+
           '</div>'+
-          '<table class="rel-table"><thead><tr><th>Data</th><th>Produto</th><th>Qtd.</th><th>Valor</th></tr></thead><tbody>'+
+          '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">'+
+            '<div style="border:1px solid var(--border);border-radius:9px;padding:10px;background:#fafafa"><div style="font-size:10px;color:var(--muted);font-weight:800">RETIRADO NO PERÍODO</div><div style="font-size:18px;font-weight:900;margin-top:3px">'+brl(r.totais.total)+'</div></div>'+
+            '<div style="border:1px solid #bbf7d0;border-radius:9px;padding:10px;background:#f0fdf4"><div style="font-size:10px;color:#166534;font-weight:800">JÁ PAGO NO PERÍODO</div><div style="font-size:18px;font-weight:900;color:#166534;margin-top:3px">'+brl(r.totais.pago)+'</div></div>'+
+            '<div style="border:2px solid #b91c1c;border-radius:9px;padding:10px;background:#fff1f2"><div style="font-size:10px;color:#9f1239;font-weight:900">VALOR A PAGAR DESTE PERÍODO</div><div style="font-size:22px;font-weight:900;color:#b91c1c;margin-top:3px">'+brl(r.totais.aberto)+'</div></div>'+
+          '</div>'+
+          '<table class="rel-table"><thead><tr><th>Data</th><th>Produto</th><th>Qtd.</th><th>Valor em aberto</th></tr></thead><tbody>'+
             (linhas||'<tr><td colspan="4">Nenhum valor em aberto neste período.</td></tr>')+
           '</tbody></table>'+
-          '<div style="margin-top:14px;background:#fff1f2;border:1px solid #fecdd3;border-radius:10px;padding:14px;display:flex;justify-content:space-between;align-items:center">'+
-            '<div><div style="font-size:10px;color:#9f1239;font-weight:800;letter-spacing:.5px">TOTAL A PAGAR / DESCONTAR</div>'+
-            '<div style="font-size:11px;color:#881337;margin-top:3px">Somente itens em aberto deste relatório</div></div>'+
-            '<span style="font-size:24px;font-weight:900;color:#b91c1c">'+brl(r.totais.desconto)+'</span>'+
-          '</div>'+
+          ((r.pendencias_anteriores?.valor||0)>0 ? '<div style="margin-top:12px;border:1px solid #d1d5db;border-radius:9px;padding:10px;background:#f9fafb;color:#4b5563"><b>Pendências de períodos anteriores:</b> '+brl(r.pendencias_anteriores.valor)+' · '+Number(r.pendencias_anteriores.quantidade||0)+' item(ns). <b>Não incluído</b> no valor a pagar deste período.</div>' : '')+
+          '<div style="margin-top:12px;background:#fff7ed;border:1px solid #fed7aa;border-radius:9px;padding:11px;font-size:12px;color:#9a3412"><b>Na impressão:</b> o funcionário escolherá ☐ Vale Alimentação ou ☐ PIX e assinará o documento.</div>'+
           '<div id="rel-baixa-status" style="margin-top:12px"></div>'+
           '<div style="margin-top:14px;border-top:1px solid var(--border);padding-top:14px">'+
             '<div style="font-size:12px;font-weight:800;margin-bottom:8px">Após receber o relatório assinado</div>'+
@@ -214,10 +216,16 @@
     const html='<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Relatório de Retiradas - '+safe(r.funcionario.nome)+'</title>'+
       '<style>@page{size:A4;margin:12mm}*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;color:#1f2937;font-size:10.5px;margin:0}.top{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #8B0000;padding-bottom:10px;margin-bottom:14px}.brand{font-size:20px;font-weight:900;color:#8B0000}.doc{font-size:13px;font-weight:800;text-align:right}.muted{color:#6b7280;font-size:9.5px}.info{display:grid;grid-template-columns:2fr 1fr;gap:8px;margin-bottom:12px}.box{border:1px solid #d1d5db;border-radius:6px;padding:8px;background:#fafafa}.box b{display:block;font-size:9px;text-transform:uppercase;color:#6b7280;margin-bottom:3px}table{width:100%;border-collapse:collapse;font-size:10px}thead{display:table-header-group}th{background:#8B0000;color:#fff;padding:7px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:.3px}td{padding:7px;border-bottom:1px solid #e5e7eb}.n{text-align:right}.total{margin-top:12px;border:2px solid #8B0000;border-radius:7px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center}.total .lbl{font-size:11px;font-weight:800}.total .val{font-size:21px;font-weight:900;color:#8B0000}.escolha{margin-top:16px;border:1.5px solid #9ca3af;border-radius:7px;padding:12px}.escolha h2{font-size:11px;margin:0 0 9px;text-transform:uppercase}.opcoes{display:grid;grid-template-columns:1fr 1fr;gap:12px}.opcao{border:1px solid #d1d5db;border-radius:6px;padding:11px;font-size:12px;font-weight:700}.check{display:inline-block;width:17px;height:17px;border:2px solid #111;margin-right:8px;vertical-align:-4px}.decl{margin-top:14px;line-height:1.45;text-align:justify}.data{margin-top:18px}.assinaturas{display:grid;grid-template-columns:1fr 1fr;gap:42px;margin-top:52px}.assinatura{border-top:1px solid #111;text-align:center;padding-top:6px;font-size:9.5px}.obs{margin-top:18px;border-top:1px solid #d1d5db;padding-top:8px;font-size:9px;color:#6b7280}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style></head><body>'+
       '<div class="top"><div><div class="brand">BOM BEEF</div><div class="muted">Gestão de Retiradas de Funcionários</div></div><div><div class="doc">RELATÓRIO PARA BAIXA</div><div class="muted">Conferência e autorização do funcionário</div></div></div>'+
-      '<div class="info"><div class="box"><b>Funcionário</b>'+safe(r.funcionario.nome)+'</div><div class="box"><b>Período</b>'+dataBR(r.inicio)+' a '+dataBR(r.fim)+'</div></div>'+
-      '<table><thead><tr><th>Data</th><th>Produto</th><th style="text-align:right">Qtd.</th><th style="text-align:right">Valor</th></tr></thead><tbody>'+linhas+'</tbody></table>'+
-      '<div class="total"><div><div class="lbl">TOTAL A PAGAR / DESCONTAR</div><div class="muted">'+(r.itens||[]).length+' item(ns) em aberto</div></div><div class="val">'+brl(r.totais.desconto)+'</div></div>'+
-      '<div class="escolha"><h2>Forma de pagamento escolhida pelo funcionário</h2><div class="opcoes">'+
+      '<div class="info"><div class="box"><b>Funcionário</b>'+safe(r.funcionario.nome)+'</div><div class="box"><b>Período solicitado</b>'+dataBR(r.inicio)+' a '+dataBR(r.fim)+'</div></div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr 1.15fr;gap:8px;margin-bottom:12px">'+
+        '<div class="box"><b>Retirado no período</b><strong style="font-size:14px">'+brl(r.totais.total)+'</strong></div>'+
+        '<div class="box"><b>Já pago no período</b><strong style="font-size:14px">'+brl(r.totais.pago)+'</strong></div>'+
+        '<div class="box" style="border:2px solid #8B0000;background:#fff5f5"><b style="color:#8B0000">Valor a pagar deste período</b><strong style="font-size:18px;color:#8B0000">'+brl(r.totais.aberto)+'</strong></div>'+
+      '</div>'+
+      '<table><thead><tr><th>Data</th><th>Produto</th><th style="text-align:right">Qtd.</th><th style="text-align:right">Valor em aberto</th></tr></thead><tbody>'+linhas+'</tbody></table>'+
+      '<div class="total"><div><div class="lbl">VALOR A PAGAR DESTE PERÍODO</div><div class="muted">'+(r.itens||[]).length+' item(ns) pendente(s) do período solicitado</div></div><div class="val">'+brl(r.totais.aberto)+'</div></div>'+
+      (((r.pendencias_anteriores?.valor||0)>0) ? '<div style="margin-top:10px;border:1px solid #d1d5db;border-radius:6px;padding:8px;background:#f9fafb;color:#4b5563"><b>Pendências anteriores:</b> '+brl(r.pendencias_anteriores.valor)+' em '+Number(r.pendencias_anteriores.quantidade||0)+' item(ns). <b>Este valor NÃO está incluído no total acima.</b></div>' : '')+
+      '<div class="escolha"><h2>FORMA DE PAGAMENTO — FUNCIONÁRIO DEVE ASSINALAR UMA OPÇÃO</h2><div class="opcoes">'+
         '<div class="opcao"><span class="check"></span> Desconto no Vale Alimentação</div>'+
         '<div class="opcao"><span class="check"></span> Pagamento via PIX</div>'+
       '</div></div>'+
@@ -235,4 +243,5 @@
 
   // Compatibilidade: qualquer botão/atalho legado de "Imprimir" abre o relatório de baixa.
   window.imprimirRetiradas = window.abrirRelatorio;
+  window.abrirModoImpressaoRetiradas = window.imprimirTermoRetiradas;
 })();
