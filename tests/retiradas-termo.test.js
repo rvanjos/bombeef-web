@@ -86,3 +86,30 @@ test('arquivo do termo usa cache busting',()=>{
   const html=ler('public/retiradas.html');
   assert.match(html,/retiradas-termo\.js\?v=20260930-1521/);
 });
+
+
+test('relatorio separa claramente valores do periodo e pendencias anteriores',()=>{
+  const rota=ler('routes/retiradas.js');
+  const js=ler('public/js/retiradas-termo.js');
+  assert.match(rota,/pendencias_anteriores/);
+  assert.match(js,/RETIRADO NO PERÍODO/);
+  assert.match(js,/JÁ PAGO NO PERÍODO/);
+  assert.match(js,/VALOR A PAGAR DESTE PERÍODO/);
+  assert.match(js,/Pendências de períodos anteriores/);
+  assert.match(js,/NÃO está incluído no total acima/);
+});
+
+test('impressao exige escolha no papel e assinatura',()=>{
+  const js=ler('public/js/retiradas-termo.js');
+  assert.match(js,/FUNCIONÁRIO DEVE ASSINALAR UMA OPÇÃO/);
+  assert.match(js,/Desconto no Vale Alimentação/);
+  assert.match(js,/Pagamento via PIX/);
+  assert.match(js,/Assinatura do funcionário/);
+});
+
+test('tela principal usa apenas gerador do relatorio para assinatura',()=>{
+  const html=ler('public/retiradas.html');
+  assert.match(html,/Gerar relatório para assinatura/);
+  assert.doesNotMatch(html,/🧾 Imprimir para baixa/);
+  assert.match(html,/retiradas-termo\.js\?v=20261001-1435/);
+});
