@@ -317,6 +317,25 @@ module.exports = function (pool, app) {
         ORDER BY ret.dt_retirada ASC,ret.id ASC
       `, [Number(funcionarioId), inicio, fim]);
 
+      const { rows: pendAntRows } = await pool.query(`
+        SELECT COUNT(*)::int AS quantidade,
+               COALESCE(SUM(
+                 COALESCE(saldo_restante,
+                   CASE WHEN COALESCE(status,'pendente')='pago' THEN 0 ELSE valor_total END
+                 )
+               ),0)::numeric AS valor
+          FROM retiradas
+         WHERE funcionario_id=$1
+           AND dt_retirada < $2::date
+           AND COALESCE(saldo_restante,
+                 CASE WHEN COALESCE(status,'pendente')='pago' THEN 0 ELSE valor_total END
+               ) > 0.005
+      `, [Number(funcionarioId), inicio]);
+      const pendenciasAnteriores = {
+        quantidade:Number(pendAntRows[0]?.quantidade||0),
+        valor:Number(Number(pendAntRows[0]?.valor||0).toFixed(2))
+      };
+
       const itens = rows.map(x => {
         const total = Number(x.valor_total || 0);
         const saldo = Number(x.saldo_restante ?? (x.status === 'pago' ? 0 : total) ?? 0);
@@ -348,7 +367,8 @@ module.exports = function (pool, app) {
             total:Number(totais.total.toFixed(2)),
             pago:Number(totais.pago.toFixed(2)),
             aberto:Number(totais.aberto.toFixed(2))
-          }
+          },
+          pendencias_anteriores: pendenciasAnteriores
         }
       });
     } catch (e) { res.status(500).json({ ok:false, erro:e.message }); }
