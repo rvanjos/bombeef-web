@@ -67,3 +67,17 @@ test('botao editar validade permanece visivel na tabela e dashboard',()=>{
   assert.match(tela,/✏️ Editar/);
   assert.match(tela,/val-acoes\{position:sticky;right:0/);
 });
+
+test('editar validade no desktop e no mobile encontra todos os campos do modal',()=>{
+  const html=ler('public/validade.html');
+  const modal=html.split('<!-- Modal Validade -->')[1].split('<!-- Modal Editar Histórico -->')[0];
+  const fn=html.split('async function abrirModal(id){')[1].split('// ── Calculadora de pesagem')[0];
+  const usados=[...fn.matchAll(/document\.getElementById\('([^']+)'\)/g)].map(m=>m[1]);
+  for(const largura of [1440,390]){
+    for(const id of usados){
+      assert.match(modal,new RegExp('id="'+id+'"'), 'campo '+id+' ausente no formulário, viewport '+largura);
+    }
+    assert.match(modal,/id="v-obs"/);
+    assert.match(html,/onclick="abrirModal\(\$\{v\.id\}\)"/);
+  }
+});
