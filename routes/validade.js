@@ -501,6 +501,36 @@ module.exports = function (pool, app) {
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
+  // ── GET /:id — carrega um item individual para edição ──────────────────────
+  r.get('/:id', async (req, res) => {
+    const id = parseInt(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ ok:false, erro:'ID inválido' });
+    try {
+      const { rows } = await pool.query(
+        `SELECT vi.*, p.descricao AS prod_descricao, p.preco_custo AS produto_preco_custo, p.categoria
+           FROM validade_items vi
+           LEFT JOIN produtos p ON p.id = vi.produto_id
+          WHERE vi.id=$1
+          LIMIT 1`,
+        [id]
+      );
+      if (!rows.length) return res.status(404).json({ ok:false, erro:'Item de validade não encontrado' });
+      const r0 = rows[0];
+      const fmt = v => v instanceof Date ? v.toISOString().slice(0,10) : v ? String(v).slice(0,10) : null;
+      res.json({
+        ok:true,
+        data:{
+          ...r0,
+          preco_custo: r0.preco_custo ?? r0.produto_preco_custo ?? 0,
+          data_recebimento: fmt(r0.data_recebimento),
+          data_validade: fmt(r0.data_validade),
+          ultima_conferencia: fmt(r0.ultima_conferencia),
+          dt_resolucao: fmt(r0.dt_resolucao),
+        }
+      });
+    } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
+  });
+
   // ── PUT /:id/reativar ────────────────────────────────────────────────────────
   r.put('/:id/reativar', async (req, res) => {
     const id = parseInt(req.params.id);
