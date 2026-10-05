@@ -2357,16 +2357,17 @@ function imprimirPerdas(mesIni, mesFim) {
 let _editandoId = null;
 
 async function abrirModal(id){
-  _editandoId = id || null;
-  let v = id ? itens.find(x=>x.id===id) : null;
-  // Nao esta na lista carregada (veio do dashboard, de um filtro diferente ou
-  // ja foi encerrado): busca no servidor em vez de abrir formulario vazio.
-  if (id && !v) {
-    const d = await api.get(`/api/validade/${id}`);
-    if (d.ok && d.data) v = d.data;
-    else { toast('Não foi possível carregar este item'); _editandoId = null; return; }
-  }
-  document.getElementById('val-title').textContent = v?'Editar Item':'Novo Item de Validade';
+  try {
+    _editandoId = id || null;
+    let v = id ? itens.find(x=>String(x.id)===String(id)) : null;
+    // Nao esta na lista carregada (veio do dashboard, de um filtro diferente ou
+    // ja foi encerrado): busca no servidor em vez de abrir formulario vazio.
+    if (id && !v) {
+      const d = await api.get(`/api/validade/${encodeURIComponent(id)}`);
+      if (d.ok && d.data) v = d.data;
+      else { toast('❌ Não foi possível carregar este item para edição'); _editandoId = null; return; }
+    }
+    document.getElementById('val-title').textContent = v?'Editar Item':'Novo Item de Validade';
   document.getElementById('v-id').value    = v?.id||'';
   document.getElementById('v-cod').value   = v?.codigo||'';
   document.getElementById('v-desc').value  = v?.descricao||'';
@@ -2416,8 +2417,13 @@ async function abrirModal(id){
     document.getElementById('pesagem-corpo').style.display = '';
     document.getElementById('pes-toggle-icon').textContent = '▲';
   }
-  document.getElementById('modal-val').classList.add('open');
-  if(v?.codigo) buscarProdVal();
+    document.getElementById('modal-val').classList.add('open');
+    if(v?.codigo) buscarProdVal();
+  } catch(e) {
+    console.error('[validade] erro ao abrir edição', e);
+    _editandoId = null;
+    toast('❌ Não foi possível abrir a edição: '+(e?.message||'erro inesperado'));
+  }
 }
 
 // ── Calculadora de pesagem ─────────────────────────────────────────────────────
