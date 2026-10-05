@@ -81,3 +81,14 @@ test('editar validade no desktop e no mobile encontra todos os campos do modal',
     assert.match(html,/onclick="abrirModal\(\$\{v\.id\}\)"/);
   }
 });
+
+
+test('editor de validade aceita id string e possui fallback por API',()=>{
+  const tela=ler('public/validade.html');
+  const rota=ler('routes/validade.js');
+  assert.match(tela,/String\(x\.id\)===String\(id\)/);
+  assert.match(tela,/\/api\/validade\/\$\{encodeURIComponent\(id\)\}/);
+  assert.match(tela,/erro ao abrir edição/);
+  assert.match(rota,/r\.get\('\/:id'/);
+  assert.match(rota,/Item de validade não encontrado/);
+});
