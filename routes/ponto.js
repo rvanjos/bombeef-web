@@ -727,6 +727,8 @@ module.exports = function(pool) {
             ) ORDER BY a.data_inicio)
             FROM ponto_ausencias a
             WHERE a.funcionario_id=f.id AND a.status='ativo'
+              AND (NULLIF(current_setting('app.loja_id',true),'') IS NULL
+                   OR a.loja_id=NULLIF(current_setting('app.loja_id',true),'')::int)
               AND a.data_inicio <= make_date($2,$1,1) + INTERVAL '1 month - 1 day'
               AND a.data_fim >= make_date($2,$1,1)
           ),'[]'::json) AS ausencias,
@@ -908,11 +910,37 @@ module.exports = function(pool) {
     } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
   });
 
+  // ── GET /jornada-config/:funcionario_id — dados completos para o RH ───────
+  r.get('/jornada-config/:funcionario_id', async (req,res)=>{
+    if(!['admin','gestor'].includes(req.user?.perfil)) return res.status(403).json({ok:false,erro:'Acesso restrito à gestão'});
+    try{
+      const {rows:[func]}=await pool.query(`
+        SELECT id,nome,cargo,horario_entrada,horario_saida,jornada_horas,intervalo_min,
+               COALESCE(dias_folga,ARRAY[]::TEXT[]) AS dias_folga,COALESCE(usa_ponto,true) AS usa_ponto
+        FROM funcionarios WHERE id=$1 AND ativo=true AND COALESCE(freelancer,false)=false
+        LIMIT 1
+      `,[Number(req.params.funcionario_id)]);
+      if(!func) return res.status(404).json({ok:false,erro:'Funcionário não encontrado'});
+      const {rows:dias}=await pool.query(`
+        SELECT * FROM ponto_jornada_dia
+        WHERE funcionario_id=$1
+          AND (NULLIF(current_setting('app.loja_id',true),'') IS NULL
+               OR loja_id=NULLIF(current_setting('app.loja_id',true),'')::int)
+        ORDER BY dia_semana
+      `,[func.id]);
+      res.json({ok:true,data:{funcionario:func,dias}});
+    }catch(e){res.status(500).json({ok:false,erro:e.message});}
+  });
+
   // ── GET /jornada-dia/:funcionario_id — jornada por dia da semana ──────────
   r.get('/jornada-dia/:funcionario_id', async (req, res) => {
     try {
       const { rows } = await pool.query(
-        `SELECT * FROM ponto_jornada_dia WHERE funcionario_id=$1 ORDER BY dia_semana`,
+        `SELECT * FROM ponto_jornada_dia
+         WHERE funcionario_id=$1
+           AND (NULLIF(current_setting('app.loja_id',true),'') IS NULL
+                OR loja_id=NULLIF(current_setting('app.loja_id',true),'')::int)
+         ORDER BY dia_semana`,
         [req.params.funcionario_id]
       );
       res.json({ ok:true, data:rows });
