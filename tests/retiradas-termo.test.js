@@ -113,7 +113,7 @@ test('tela principal usa apenas o gerador do relatorio para assinatura',()=>{
 
 test('documento impresso lista somente data produto quantidade e valor',()=>{
   const js=ler('public/js/retiradas-termo.js');
-  assert.match(js,/<th>Data<\/th><th>Produto<\/th><th style="text-align:right">Qtd\.<\/th><th style="text-align:right">Valor<\/th>/);
+  assert.match(js,/<th>Data<\/th><th>Produto<\/th><th style="text-align:right">Quantidade<\/th><th style="text-align:right">Valor<\/th>/);
   assert.doesNotMatch(js,/Preço Unit\./);
   assert.doesNotMatch(js,/PDV Marcado/);
 });
