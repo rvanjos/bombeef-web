@@ -14,12 +14,91 @@
  */
 
 const express = require('express');
+const multer = require('multer');
+const crypto = require('crypto');
 const autenticar = require('../middleware/auth');
 const { requireNivel } = autenticar;
 
 module.exports = function (pool, app) {
   const r = express.Router();
   r.use(autenticar());
+
+  const uploadDocumento = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 10 * 1024 * 1024 },
+    fileFilter: (_req,file,cb) => {
+      const permitidos=['application/pdf','image/jpeg','image/png'];
+      if(!permitidos.includes(file.mimetype)) return cb(new Error('Formato não permitido. Use PDF, JPG ou PNG.'));
+      cb(null,true);
+    }
+  });
+
+  function s3Config(){
+    const cfg={
+      endpoint:process.env.RH_DOCS_S3_ENDPOINT,
+      bucket:process.env.RH_DOCS_S3_BUCKET,
+      region:process.env.RH_DOCS_S3_REGION||'auto',
+      accessKey:process.env.RH_DOCS_S3_ACCESS_KEY_ID,
+      secretKey:process.env.RH_DOCS_S3_SECRET_ACCESS_KEY,
+      urlStyle:process.env.RH_DOCS_S3_URL_STYLE||'virtual-host'
+    };
+    if(!cfg.endpoint||!cfg.bucket||!cfg.accessKey||!cfg.secretKey) throw new Error('Armazenamento de documentos não configurado');
+    return cfg;
+  }
+  const hmac=(key,data)=>crypto.createHmac('sha256',key).update(data).digest();
+  const sha256=data=>crypto.createHash('sha256').update(data).digest('hex');
+  async function s3Request(method,key,{body=null,contentType='application/octet-stream'}={}){
+    const cfg=s3Config();
+    const endpoint=new URL(cfg.endpoint);
+    const encodedKey=String(key).split('/').map(encodeURIComponent).join('/');
+    const basePath=(endpoint.pathname||'/').replace(/\/$/,'');
+    let canonicalUri,url;
+    if(cfg.urlStyle==='virtual-host'){
+      canonicalUri=(basePath||'')+'/'+encodedKey;
+      url=new URL(endpoint.protocol+'//'+cfg.bucket+'.'+endpoint.host+canonicalUri);
+    }else{
+      canonicalUri=(basePath||'')+'/'+encodeURIComponent(cfg.bucket)+'/'+encodedKey;
+      url=new URL(endpoint.origin+canonicalUri);
+    }
+    const now=new Date();
+    const amzDate=now.toISOString().replace(/[:-]|\.\d{3}/g,'');
+    const dateStamp=amzDate.slice(0,8);
+    const payloadHash=sha256(body||Buffer.alloc(0));
+    const host=url.host;
+    const headers={
+      'host':host,
+      'x-amz-content-sha256':payloadHash,
+      'x-amz-date':amzDate
+    };
+    if(method==='PUT') headers['content-type']=contentType;
+    const signedHeaderNames=Object.keys(headers).sort();
+    const canonicalHeaders=signedHeaderNames.map(k=>k+':'+String(headers[k]).trim()+'\n').join('');
+    const signedHeaders=signedHeaderNames.join(';');
+    const canonicalRequest=[method,canonicalUri,'',canonicalHeaders,signedHeaders,payloadHash].join('\n');
+    const scope=`${dateStamp}/${cfg.region}/s3/aws4_request`;
+    const stringToSign=['AWS4-HMAC-SHA256',amzDate,scope,sha256(Buffer.from(canonicalRequest))].join('\n');
+    const kDate=hmac(Buffer.from('AWS4'+cfg.secretKey),dateStamp);
+    const kRegion=hmac(kDate,cfg.region);
+    const kService=hmac(kRegion,'s3');
+    const kSigning=hmac(kService,'aws4_request');
+    const signature=crypto.createHmac('sha256',kSigning).update(stringToSign).digest('hex');
+    const authorization=`AWS4-HMAC-SHA256 Credential=${cfg.accessKey}/${scope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
+    const fetchHeaders={Authorization:authorization,'x-amz-content-sha256':payloadHash,'x-amz-date':amzDate};
+    if(method==='PUT') fetchHeaders['Content-Type']=contentType;
+    const resp=await fetch(url,{method,headers:fetchHeaders,body:method==='PUT'?body:undefined});
+    if(!resp.ok) throw new Error('Falha no armazenamento ('+resp.status+')');
+    return resp;
+  }
+  async function funcionarioDoUsuario(userId){
+    if(!userId) return null;
+    const {rows}=await pool.query(`SELECT id,nome FROM funcionarios
+       WHERE usuario_id=$1 AND ativo=true AND COALESCE(freelancer,false)=false
+         AND (NULLIF(current_setting('app.loja_id',true),'') IS NULL
+              OR loja_id=NULLIF(current_setting('app.loja_id',true),'')::int)
+       LIMIT 1`,[userId]);
+    return rows[0]||null;
+  }
+  function gestorRH(req){ return ['admin','gestor'].includes(req.user?.perfil); }
   // BB-SSE-AUTOPUBLISH — avisa os outros modulos quando algo muda aqui.
   // Roda em todas as rotas, mas so publica em mutacao bem-sucedida.
   const _pub = (c, d) => { try { app?.locals?.ssePublish?.(c, d); } catch(_) {} };
@@ -332,7 +411,34 @@ module.exports = function (pool, app) {
       ['atualizado_em',    'TIMESTAMPTZ DEFAULT NOW()'],
     ]) await pool.query(`ALTER TABLE rh_pagamentos ADD COLUMN IF NOT EXISTS ${col} ${def}`).catch(() => {});
 
-    // Adiciona colunas extras em funcionarios se não existirem
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS rh_documentos_funcionario (
+        id SERIAL PRIMARY KEY,
+        funcionario_id INTEGER NOT NULL REFERENCES funcionarios(id),
+        tipo TEXT NOT NULL CHECK(tipo IN ('holerite','aviso_ferias','recibo_ferias','atestado','advertencia','outro')),
+        titulo TEXT NOT NULL,
+        competencia TEXT,
+        observacao TEXT,
+        arquivo_nome TEXT NOT NULL,
+        arquivo_mime TEXT NOT NULL,
+        arquivo_tamanho BIGINT NOT NULL DEFAULT 0,
+        arquivo_hash_sha256 TEXT NOT NULL,
+        storage_key TEXT NOT NULL UNIQUE,
+        exige_confirmacao BOOLEAN NOT NULL DEFAULT true,
+        publicado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        publicado_por INTEGER,
+        visualizado_em TIMESTAMPTZ,
+        confirmado_em TIMESTAMPTZ,
+        confirmado_por INTEGER,
+        confirmacao_ip TEXT,
+        confirmacao_user_agent TEXT,
+        status TEXT NOT NULL DEFAULT 'ativo' CHECK(status IN ('ativo','arquivado')),
+        loja_id INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id)
+      )
+    `).catch(e=>console.warn('[rh] rh_documentos_funcionario:',e.message));
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_rh_docs_func_status ON rh_documentos_funcionario(loja_id,funcionario_id,status,publicado_em DESC)`).catch(()=>{});
+
+        // Adiciona colunas extras em funcionarios se não existirem
     for (const [col, def] of [
       ['cargo', 'TEXT'],
       ['salario_base', 'NUMERIC(10,2) DEFAULT 0'],
@@ -364,6 +470,160 @@ module.exports = function (pool, app) {
 
   initTables().catch(e => console.error('[rh] initTables:', e.message));
   }, 2000);
+
+  // ── Documentos do funcionário ──────────────────────────────────────────────
+  r.get('/documentos', async (req,res)=>{
+    try{
+      let funcionarioId=null;
+      if(gestorRH(req)) funcionarioId=req.query.funcionario_id?Number(req.query.funcionario_id):null;
+      else {
+        const f=await funcionarioDoUsuario(req.user?.id);
+        if(!f) return res.status(403).json({ok:false,erro:'Usuário não vinculado a funcionário'});
+        funcionarioId=f.id;
+      }
+      const params=[funcionarioId];
+      const {rows}=await pool.query(`
+        SELECT d.id,d.funcionario_id,d.tipo,d.titulo,d.competencia,d.observacao,
+               d.arquivo_nome,d.arquivo_mime,d.arquivo_tamanho,d.exige_confirmacao,
+               d.publicado_em,d.visualizado_em,d.confirmado_em,d.status,
+               f.nome AS funcionario_nome,f.cargo,
+               CASE
+                 WHEN d.confirmado_em IS NOT NULL THEN 'confirmado'
+                 WHEN d.visualizado_em IS NOT NULL THEN 'visualizado'
+                 ELSE 'pendente'
+               END AS recebimento_status
+        FROM rh_documentos_funcionario d
+        JOIN funcionarios f ON f.id=d.funcionario_id
+        WHERE d.status='ativo'
+          AND ($1::int IS NULL OR d.funcionario_id=$1)
+          AND (NULLIF(current_setting('app.loja_id',true),'') IS NULL
+               OR d.loja_id=NULLIF(current_setting('app.loja_id',true),'')::int)
+        ORDER BY d.publicado_em DESC,d.id DESC
+        LIMIT 500
+      `,params);
+      res.json({ok:true,data:rows});
+    }catch(e){res.status(500).json({ok:false,erro:e.message});}
+  });
+
+  r.get('/documentos/pendentes/count', async (req,res)=>{
+    try{
+      let funcionarioId=null;
+      if(!gestorRH(req)){
+        const f=await funcionarioDoUsuario(req.user?.id);
+        if(!f) return res.json({ok:true,total:0});
+        funcionarioId=f.id;
+      }
+      const {rows:[x]}=await pool.query(`
+        SELECT COUNT(*)::int AS total
+        FROM rh_documentos_funcionario d
+        WHERE d.status='ativo' AND d.exige_confirmacao=true AND d.confirmado_em IS NULL
+          AND ($1::int IS NULL OR d.funcionario_id=$1)
+          AND (NULLIF(current_setting('app.loja_id',true),'') IS NULL
+               OR d.loja_id=NULLIF(current_setting('app.loja_id',true),'')::int)
+      `,[funcionarioId]);
+      res.json({ok:true,total:Number(x?.total||0)});
+    }catch(e){res.json({ok:false,total:0,erro:e.message});}
+  });
+
+  r.post('/documentos/upload', (req,res,next)=>{
+    if(!gestorRH(req)) return res.status(403).json({ok:false,erro:'Acesso restrito à gestão'});
+    uploadDocumento.single('arquivo')(req,res,err=>err?res.status(400).json({ok:false,erro:err.message}):next());
+  }, async (req,res)=>{
+    const funcionarioId=Number(req.body.funcionario_id);
+    const tipo=String(req.body.tipo||'outro');
+    const tipos=['holerite','aviso_ferias','recibo_ferias','atestado','advertencia','outro'];
+    if(!funcionarioId||!tipos.includes(tipo)||!req.file) return res.status(400).json({ok:false,erro:'Funcionário, tipo e arquivo são obrigatórios'});
+    const titulo=String(req.body.titulo||req.file.originalname||'Documento').trim();
+    const competencia=String(req.body.competencia||'').trim()||null;
+    const observacao=String(req.body.observacao||'').trim()||null;
+    const exigeConfirmacao=String(req.body.exige_confirmacao||'true')!=='false';
+    const hash=sha256(req.file.buffer);
+    const ext=(req.file.originalname.split('.').pop()||'bin').replace(/[^a-zA-Z0-9]/g,'').toLowerCase();
+    const key='rh/'+String(funcionarioId)+'/'+new Date().getFullYear()+'/'+crypto.randomUUID()+'.'+ext;
+    try{
+      const {rows:[func]}=await pool.query(`
+        SELECT id FROM funcionarios
+        WHERE id=$1 AND ativo=true AND COALESCE(freelancer,false)=false
+          AND (NULLIF(current_setting('app.loja_id',true),'') IS NULL
+               OR loja_id=NULLIF(current_setting('app.loja_id',true),'')::int)
+        LIMIT 1
+      `,[funcionarioId]);
+      if(!func) return res.status(404).json({ok:false,erro:'Funcionário não encontrado'});
+      await s3Request('PUT',key,{body:req.file.buffer,contentType:req.file.mimetype});
+      const {rows}=await pool.query(`
+        INSERT INTO rh_documentos_funcionario(
+          funcionario_id,tipo,titulo,competencia,observacao,arquivo_nome,arquivo_mime,
+          arquivo_tamanho,arquivo_hash_sha256,storage_key,exige_confirmacao,publicado_por
+        ) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+        RETURNING id,funcionario_id,tipo,titulo,competencia,arquivo_nome,arquivo_tamanho,exige_confirmacao,publicado_em
+      `,[funcionarioId,tipo,titulo,competencia,observacao,req.file.originalname,req.file.mimetype,
+          req.file.size,hash,key,exigeConfirmacao,req.user?.id||null]);
+      res.json({ok:true,data:rows[0]});
+    }catch(e){res.status(500).json({ok:false,erro:e.message});}
+  });
+
+  r.get('/documentos/:id/arquivo', async (req,res)=>{
+    try{
+      const {rows}=await pool.query(`
+        SELECT d.*,f.usuario_id
+        FROM rh_documentos_funcionario d
+        JOIN funcionarios f ON f.id=d.funcionario_id
+        WHERE d.id=$1 AND d.status='ativo'
+          AND (NULLIF(current_setting('app.loja_id',true),'') IS NULL
+               OR d.loja_id=NULLIF(current_setting('app.loja_id',true),'')::int)
+        LIMIT 1
+      `,[Number(req.params.id)]);
+      const doc=rows[0];
+      if(!doc) return res.status(404).json({ok:false,erro:'Documento não encontrado'});
+      if(!gestorRH(req) && Number(doc.usuario_id)!==Number(req.user?.id)) return res.status(403).json({ok:false,erro:'Acesso negado'});
+      const s3=await s3Request('GET',doc.storage_key);
+      const buf=Buffer.from(await s3.arrayBuffer());
+      if(!gestorRH(req) && !doc.visualizado_em){
+        await pool.query(`UPDATE rh_documentos_funcionario SET visualizado_em=NOW() WHERE id=$1 AND visualizado_em IS NULL`,[doc.id]);
+      }
+      res.setHeader('Content-Type',doc.arquivo_mime||'application/octet-stream');
+      res.setHeader('Content-Disposition',`inline; filename*=UTF-8''${encodeURIComponent(doc.arquivo_nome)}`);
+      res.setHeader('Cache-Control','private, no-store');
+      res.send(buf);
+    }catch(e){res.status(500).json({ok:false,erro:e.message});}
+  });
+
+  r.post('/documentos/:id/confirmar', async (req,res)=>{
+    try{
+      const f=await funcionarioDoUsuario(req.user?.id);
+      if(!f) return res.status(403).json({ok:false,erro:'Usuário não vinculado a funcionário'});
+      const ip=req.headers['x-forwarded-for']?.split(',')[0]?.trim()||req.socket?.remoteAddress||null;
+      const ua=String(req.headers['user-agent']||'').slice(0,300)||null;
+      const {rows}=await pool.query(`
+        UPDATE rh_documentos_funcionario
+        SET visualizado_em=COALESCE(visualizado_em,NOW()),
+            confirmado_em=COALESCE(confirmado_em,NOW()),
+            confirmado_por=$1,confirmacao_ip=$2,confirmacao_user_agent=$3
+        WHERE id=$4 AND funcionario_id=$5 AND status='ativo'
+          AND (visualizado_em IS NOT NULL OR exige_confirmacao=false)
+          AND (NULLIF(current_setting('app.loja_id',true),'') IS NULL
+               OR loja_id=NULLIF(current_setting('app.loja_id',true),'')::int)
+        RETURNING id,confirmado_em
+      `,[req.user?.id||null,ip,ua,Number(req.params.id),f.id]);
+      if(!rows.length) return res.status(409).json({ok:false,erro:'Abra o documento antes de confirmar o recebimento.'});
+      res.json({ok:true,data:rows[0],mensagem:'Recebimento confirmado. Esta confirmação registra somente o recebimento e acesso ao documento.'});
+    }catch(e){res.status(500).json({ok:false,erro:e.message});}
+  });
+
+  r.post('/documentos/:id/arquivar', async (req,res)=>{
+    if(!gestorRH(req)) return res.status(403).json({ok:false,erro:'Acesso restrito à gestão'});
+    try{
+      const {rows}=await pool.query(`
+        UPDATE rh_documentos_funcionario SET status='arquivado'
+        WHERE id=$1 AND status='ativo'
+          AND (NULLIF(current_setting('app.loja_id',true),'') IS NULL
+               OR loja_id=NULLIF(current_setting('app.loja_id',true),'')::int)
+        RETURNING id
+      `,[Number(req.params.id)]);
+      if(!rows.length) return res.status(404).json({ok:false,erro:'Documento não encontrado'});
+      res.json({ok:true});
+    }catch(e){res.status(500).json({ok:false,erro:e.message});}
+  });
 
   // ── GET /ficha?funcionario_id=X&mes=MM/YYYY ────────────────────────────────
   r.get('/ficha', async (req, res) => {

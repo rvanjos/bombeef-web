@@ -288,6 +288,7 @@ main{padding:16px;background:#f8f6f3}
     <button class="tab" onclick="showTab('relatorio')">📄 Relatório</button>
     <button class="tab" id="tab-btn-ponto" onclick="showTab('ponto')" style="display:none">⏱️ Ponto</button>
     <button class="tab" id="tab-btn-jornada" onclick="showTab('jornada')" style="display:none">🗓️ Jornada e Ausências</button>
+    <button class="tab" id="tab-btn-documentos" onclick="showTab('documentos')" style="display:none">📁 Documentos <span id="badge-docs" style="display:none;background:var(--red);color:#fff;border-radius:10px;padding:1px 6px;font-size:10px;margin-left:3px">0</span></button>
     <button class="tab" id="tab-btn-acessos" onclick="showTab('acessos')" style="display:none">🔐 Acessos</button>
   </div>
 
@@ -539,6 +540,69 @@ main{padding:16px;background:#f8f6f3}
           <div id="ja-aus-list"><div style="font-size:12px;color:var(--muted)">Selecione um funcionário.</div></div>
         </div>
       </section>
+    </div>
+  </div>
+
+  <!-- ── TAB DOCUMENTOS DO FUNCIONÁRIO ── -->
+  <div id="tab-documentos" class="tab-content">
+    <div class="ja-hero">
+      <div>
+        <h3>📁 Documentos do Funcionário</h3>
+        <p>Holerites, férias e outros documentos com histórico de visualização e confirmação de recebimento.</p>
+      </div>
+      <button id="docs-btn-novo" class="btn btn-red" onclick="abrirNovoDocumento()" style="display:none">＋ Enviar documento</button>
+    </div>
+
+    <div id="docs-gestao-filtros" style="display:none;background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:10px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <select id="docs-func-filtro" onchange="carregarDocumentos()" style="min-width:240px;padding:8px;border:1px solid var(--border);border-radius:7px">
+          <option value="">Todos os funcionários</option>
+        </select>
+        <select id="docs-status-filtro" onchange="renderDocumentos()" style="padding:8px;border:1px solid var(--border);border-radius:7px">
+          <option value="">Todos os status</option>
+          <option value="pendente">Pendentes</option>
+          <option value="visualizado">Visualizados</option>
+          <option value="confirmado">Confirmados</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="docs-lista"><div class="loading">Carregando...</div></div>
+  </div>
+
+  <div class="modal-bg" id="modal-doc-novo">
+    <div class="modal" style="max-width:620px">
+      <div class="modal-head">
+        <div><h2>📁 Enviar documento</h2><span>O arquivo ficará em armazenamento privado.</span></div>
+        <button class="modal-close" onclick="fecharModal('modal-doc-novo')">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="field"><label>Funcionário *</label><select id="doc-func"></select></div>
+        <div class="field-row">
+          <div class="field"><label>Tipo *</label>
+            <select id="doc-tipo">
+              <option value="holerite">Holerite</option>
+              <option value="aviso_ferias">Aviso de férias</option>
+              <option value="recibo_ferias">Recibo de férias</option>
+              <option value="atestado">Atestado</option>
+              <option value="advertencia">Advertência</option>
+              <option value="outro">Outro</option>
+            </select>
+          </div>
+          <div class="field"><label>Competência</label><input type="month" id="doc-competencia"></div>
+        </div>
+        <div class="field"><label>Título *</label><input type="text" id="doc-titulo" placeholder="Ex.: Holerite setembro/2026"></div>
+        <div class="field"><label>Arquivo *</label><input type="file" id="doc-arquivo" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"></div>
+        <div class="field"><label>Observação</label><textarea id="doc-observacao" rows="2"></textarea></div>
+        <label style="display:flex;gap:8px;align-items:flex-start;font-size:12px;padding:10px;background:#f8fafc;border-radius:8px">
+          <input type="checkbox" id="doc-confirmacao" checked style="margin-top:2px">
+          <span><strong>Exigir confirmação de recebimento</strong><br><span style="color:var(--muted)">A confirmação registra somente que o funcionário recebeu e teve acesso ao documento; não representa concordância ou quitação.</span></span>
+        </label>
+        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">
+          <button class="btn btn-gray" onclick="fecharModal('modal-doc-novo')">Cancelar</button>
+          <button class="btn btn-red" id="doc-btn-enviar" onclick="enviarDocumento()">Enviar</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -1499,6 +1563,7 @@ function fecharModal(id) {
 function showTab(t) {
   if (t === 'ponto') { setTimeout(inicializarAbaPonto, 50); }
   if (t === 'jornada') { setTimeout(inicializarJornadaRH, 50); }
+  if (t === 'documentos') { setTimeout(inicializarDocumentosRH, 50); }
   document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
   // Ativa o botão correto
   const btn = document.querySelector(`.tab[onclick="showTab('${t}')"]`);
@@ -1711,6 +1776,7 @@ async function init() {
   const btnAcessos = document.getElementById('tab-btn-acessos');
   const btnPonto = document.getElementById('tab-btn-ponto');
   const btnJornada = document.getElementById('tab-btn-jornada');
+  const btnDocumentos = document.getElementById('tab-btn-documentos');
   const btnMetaFds = document.getElementById('tab-btn-meta-fds');
 
   if (isAdmin) {
@@ -1723,6 +1789,7 @@ async function init() {
     if (btnAcessos) btnAcessos.style.display = '';
     if (btnPonto) btnPonto.style.display = '';
     if (btnJornada) btnJornada.style.display = '';
+    if (btnDocumentos) btnDocumentos.style.display = '';
     if (btnMetaFds) btnMetaFds.style.display = '';
     const hojeAcesso = new Date();
     const inicioAcesso = new Date(hojeAcesso); inicioAcesso.setDate(inicioAcesso.getDate() - 6);
@@ -1746,6 +1813,7 @@ async function init() {
     if (btnAcessos) btnAcessos.style.display = 'none';
     if (btnPonto) btnPonto.style.display = 'none';
     if (btnJornada) btnJornada.style.display = isGestor ? '' : 'none';
+    if (btnDocumentos) btnDocumentos.style.display = '';
     if (btnMetaFds) btnMetaFds.style.display = 'none';
     if (btnFolha)  btnFolha.style.display  = 'none';
     if (btnEscala) btnEscala.style.display = 'none';
@@ -1763,6 +1831,7 @@ async function init() {
     }
     if (isGestor) showTab('jornada'); else showTab('meus');
   }
+  atualizarBadgeDocumentos();
 }
 
 // ── Nav mês ─────────────────────────────────────────────────────────────────
@@ -2557,6 +2626,137 @@ function renderKPIsPonto(){
 }
 function abrirAjustePonto(id){document.getElementById('aj-id').value=id||'';if(id){const p=_pontoRegistros.find(x=>x.id===id);if(p){document.getElementById('aj-func').value=p.funcionario_id;document.getElementById('aj-data').value=p.data_ref?.slice(0,10)||'';const fT=ts=>ts?new Date(ts).toLocaleTimeString('pt-BR',{timeZone:'America/Sao_Paulo',hour:'2-digit',minute:'2-digit'}):'';document.getElementById('aj-entrada').value=fT(p.entrada);document.getElementById('aj-saidaint').value=fT(p.saida_intervalo);document.getElementById('aj-retorno').value=fT(p.retorno_intervalo);document.getElementById('aj-saida').value=fT(p.saida);document.getElementById('aj-just').value=p.justificativa||'';document.getElementById('aj-status').value=p.status||'ajustado';}}else{['aj-entrada','aj-saidaint','aj-retorno','aj-saida','aj-just'].forEach(i=>document.getElementById(i).value='');document.getElementById('aj-func').value='';document.getElementById('aj-status').value='ajustado';document.getElementById('aj-data').value=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());}document.getElementById('m-ponto-ajuste').classList.add('open');}
 async function salvarAjustePonto(){const id=document.getElementById('aj-id').value,fi=document.getElementById('aj-func').value,dt=document.getElementById('aj-data').value;if(!fi||!dt){toast('Selecione funcionário e data');return;}const tS=(t,d)=>t?`${d}T${t}:00`:null,body={funcionario_id:fi,data_ref:dt,entrada:tS(document.getElementById('aj-entrada').value,dt),saida_intervalo:tS(document.getElementById('aj-saidaint').value,dt),retorno_intervalo:tS(document.getElementById('aj-retorno').value,dt),saida:tS(document.getElementById('aj-saida').value,dt),justificativa:document.getElementById('aj-just').value,status:document.getElementById('aj-status').value};const d=id?await put(`/api/ponto/registros/${id}`,body):await post('/api/ponto/registros',body);if(!d.ok){toast('❌ '+d.erro);return;}toast('✅ Ponto ajustado!');document.getElementById('m-ponto-ajuste').classList.remove('open');carregarPonto();}
+let _docsDados=[];
+let _docsIniciado=false;
+
+async function atualizarBadgeDocumentos(){
+  const d=await get('/api/rh/documentos/pendentes/count');
+  const b=document.getElementById('badge-docs');
+  if(!b||!d.ok)return;
+  const n=Number(d.total||0);b.textContent=n;b.style.display=n>0?'':'none';
+}
+
+async function inicializarDocumentosRH(){
+  const gestao=['admin','gestor'].includes(_perfil);
+  document.getElementById('docs-btn-novo').style.display=gestao?'':'none';
+  document.getElementById('docs-gestao-filtros').style.display=gestao?'':'none';
+  if(gestao&&!_docsIniciado){
+    const funcs=(window._todasFuncs||[]).filter(f=>f.ativo!==false&&!f.freelancer);
+    const opts=funcs.map(f=>'<option value="'+f.id+'">'+f.nome+'</option>').join('');
+    document.getElementById('docs-func-filtro').innerHTML='<option value="">Todos os funcionários</option>'+opts;
+    document.getElementById('doc-func').innerHTML='<option value="">Selecione...</option>'+opts;
+    _docsIniciado=true;
+  }
+  await carregarDocumentos();
+}
+
+async function carregarDocumentos(){
+  const gestao=['admin','gestor'].includes(_perfil);
+  let url='/api/rh/documentos';
+  if(gestao){
+    const id=document.getElementById('docs-func-filtro')?.value;
+    if(id)url+='?funcionario_id='+encodeURIComponent(id);
+  }
+  const d=await get(url);
+  if(!d.ok){document.getElementById('docs-lista').innerHTML='<div class="empty">⚠️ '+(d.erro||'Erro ao carregar documentos')+'</div>';return;}
+  _docsDados=d.data||[];
+  renderDocumentos();
+  atualizarBadgeDocumentos();
+}
+
+function renderDocumentos(){
+  const gestao=['admin','gestor'].includes(_perfil);
+  const filtro=gestao?(document.getElementById('docs-status-filtro')?.value||''):'';
+  const itens=filtro?_docsDados.filter(x=>x.recebimento_status===filtro):_docsDados;
+  const el=document.getElementById('docs-lista');
+  if(!itens.length){el.innerHTML='<div class="empty"><div class="icon">📭</div><p>Nenhum documento encontrado.</p></div>';return;}
+  const tipoLabel={holerite:'💰 Holerite',aviso_ferias:'🏖️ Aviso de férias',recibo_ferias:'🧾 Recibo de férias',atestado:'📄 Atestado',advertencia:'⚠️ Advertência',outro:'📌 Outro'};
+  const statusLabel={pendente:'🟠 Aguardando recebimento',visualizado:'🔵 Visualizado',confirmado:'🟢 Recebimento confirmado'};
+  el.innerHTML=itens.map(d=>{
+    const data=new Date(d.publicado_em).toLocaleString('pt-BR');
+    const comp=d.competencia?String(d.competencia).replace(/^(\d{4})-(\d{2})$/,'$2/$1'):'';
+    const podeConfirmar=!gestao&&d.exige_confirmacao&&!d.confirmado_em&&!!d.visualizado_em;
+    return '<article style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:13px 14px;margin-bottom:9px">'+
+      '<div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap">'+
+        '<div style="min-width:0;flex:1">'+
+          '<div style="font-size:13px;font-weight:700">'+(tipoLabel[d.tipo]||d.tipo)+' · '+d.titulo+'</div>'+
+          (gestao?'<div style="font-size:12px;font-weight:600;margin-top:3px">'+d.funcionario_nome+'</div>':'')+
+          '<div style="font-size:11px;color:var(--muted);margin-top:4px">'+(comp?'Competência '+comp+' · ':'')+data+' · '+Math.max(1,Math.round(Number(d.arquivo_tamanho||0)/1024))+' KB</div>'+
+          (d.observacao?'<div style="font-size:11px;color:#475569;margin-top:5px">'+d.observacao+'</div>':'')+
+          '<div style="font-size:11px;margin-top:7px">'+(statusLabel[d.recebimento_status]||d.recebimento_status)+
+            (d.confirmado_em?' · '+new Date(d.confirmado_em).toLocaleString('pt-BR'):'')+'</div>'+
+        '</div>'+
+        '<div style="display:flex;gap:6px;flex-wrap:wrap">'+
+          '<button class="btn btn-gray btn-sm" onclick="abrirArquivoDocumento('+d.id+')">👁️ Visualizar</button>'+
+          (podeConfirmar?'<button class="btn btn-green btn-sm" onclick="confirmarDocumento('+d.id+')">✅ Confirmar recebimento</button>':'')+
+          (gestao?'<button class="btn btn-gray btn-sm" onclick="arquivarDocumento('+d.id+')">🗄️ Arquivar</button>':'')+
+        '</div>'+
+      '</div>'+
+      (!gestao&&d.exige_confirmacao&&!d.confirmado_em?'<div style="font-size:10px;color:#7c2d12;background:#fff7ed;border:1px solid #fed7aa;border-radius:7px;padding:7px 8px;margin-top:9px">'+(d.visualizado_em?'Você já visualizou o documento. Confirme o recebimento quando estiver pronto.':'Abra o documento primeiro para liberar a confirmação de recebimento.')+' A confirmação não significa concordância com valores ou quitação.</div>':'')+
+    '</article>';
+  }).join('');
+}
+
+async function abrirArquivoDocumento(id){
+  try{
+    const r=await fetch(BASE+'/api/rh/documentos/'+id+'/arquivo',{headers:{Authorization:'Bearer '+getToken()}});
+    if(!r.ok){
+      let msg='Não foi possível abrir o documento';
+      try{const e=await r.json();msg=e.erro||msg;}catch(_){}
+      toast('❌ '+msg);return;
+    }
+    const blob=await r.blob();
+    const url=URL.createObjectURL(blob);
+    window.open(url,'_blank','noopener');
+    setTimeout(()=>URL.revokeObjectURL(url),60000);
+    await carregarDocumentos();
+  }catch(e){toast('❌ Não foi possível abrir o documento');}
+}
+
+function abrirNovoDocumento(){
+  document.getElementById('doc-titulo').value='';
+  document.getElementById('doc-arquivo').value='';
+  document.getElementById('doc-observacao').value='';
+  document.getElementById('doc-confirmacao').checked=true;
+  document.getElementById('doc-competencia').value=new Date().toISOString().slice(0,7);
+  document.getElementById('modal-doc-novo').classList.add('open');
+}
+
+async function enviarDocumento(){
+  const arquivo=document.getElementById('doc-arquivo').files[0];
+  const funcionario=document.getElementById('doc-func').value;
+  const titulo=document.getElementById('doc-titulo').value.trim();
+  if(!funcionario||!titulo||!arquivo){toast('⚠️ Funcionário, título e arquivo são obrigatórios');return;}
+  if(arquivo.size>10*1024*1024){toast('⚠️ O arquivo deve ter no máximo 10 MB');return;}
+  const fd=new FormData();
+  fd.append('funcionario_id',funcionario);fd.append('tipo',document.getElementById('doc-tipo').value);
+  fd.append('competencia',document.getElementById('doc-competencia').value);
+  fd.append('titulo',titulo);fd.append('observacao',document.getElementById('doc-observacao').value);
+  fd.append('exige_confirmacao',document.getElementById('doc-confirmacao').checked?'true':'false');fd.append('arquivo',arquivo);
+  const btn=document.getElementById('doc-btn-enviar');btn.disabled=true;btn.textContent='⏳ Enviando...';
+  try{
+    const r=await fetch(BASE+'/api/rh/documentos/upload',{method:'POST',headers:{Authorization:'Bearer '+getToken()},body:fd});
+    const d=await r.json();
+    if(!d.ok){toast('❌ '+d.erro);return;}
+    fecharModal('modal-doc-novo');toast('✅ Documento disponibilizado ao funcionário.');await carregarDocumentos();
+  }catch(e){toast('❌ Falha ao enviar documento');}
+  finally{btn.disabled=false;btn.textContent='Enviar';}
+}
+
+async function confirmarDocumento(id){
+  if(!confirm('Confirmo que recebi e tive acesso a este documento.\n\nEsta confirmação não representa concordância com valores ou quitação.'))return;
+  const d=await post('/api/rh/documentos/'+id+'/confirmar',{});
+  if(!d.ok){toast('❌ '+d.erro);return;}
+  toast('✅ Recebimento confirmado.');await carregarDocumentos();
+}
+
+async function arquivarDocumento(id){
+  if(!confirm('Arquivar este documento? O registro e o arquivo serão preservados.'))return;
+  const d=await post('/api/rh/documentos/'+id+'/arquivar',{});
+  if(!d.ok){toast('❌ '+d.erro);return;}
+  toast('✅ Documento arquivado.');await carregarDocumentos();
+}
+
 let _jaIniciado=false;
 const _jaDiasNome=['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
 
