@@ -39,7 +39,8 @@ module.exports = function (pool, app) {
       bucket:process.env.RH_DOCS_S3_BUCKET,
       region:process.env.RH_DOCS_S3_REGION||'auto',
       accessKey:process.env.RH_DOCS_S3_ACCESS_KEY_ID,
-      secretKey:process.env.RH_DOCS_S3_SECRET_ACCESS_KEY
+      secretKey:process.env.RH_DOCS_S3_SECRET_ACCESS_KEY,
+      urlStyle:process.env.RH_DOCS_S3_URL_STYLE||'virtual-host'
     };
     if(!cfg.endpoint||!cfg.bucket||!cfg.accessKey||!cfg.secretKey) throw new Error('Armazenamento de documentos não configurado');
     return cfg;
@@ -51,8 +52,14 @@ module.exports = function (pool, app) {
     const endpoint=new URL(cfg.endpoint);
     const encodedKey=String(key).split('/').map(encodeURIComponent).join('/');
     const basePath=(endpoint.pathname||'/').replace(/\/$/,'');
-    const canonicalUri=(basePath||'')+'/'+encodeURIComponent(cfg.bucket)+'/'+encodedKey;
-    const url=new URL(endpoint.origin+canonicalUri);
+    let canonicalUri,url;
+    if(cfg.urlStyle==='virtual-host'){
+      canonicalUri=(basePath||'')+'/'+encodedKey;
+      url=new URL(endpoint.protocol+'//'+cfg.bucket+'.'+endpoint.host+canonicalUri);
+    }else{
+      canonicalUri=(basePath||'')+'/'+encodeURIComponent(cfg.bucket)+'/'+encodedKey;
+      url=new URL(endpoint.origin+canonicalUri);
+    }
     const now=new Date();
     const amzDate=now.toISOString().replace(/[:-]|\.\d{3}/g,'');
     const dateStamp=amzDate.slice(0,8);
@@ -84,7 +91,11 @@ module.exports = function (pool, app) {
   }
   async function funcionarioDoUsuario(userId){
     if(!userId) return null;
-    const {rows}=await pool.query(`SELECT id,nome FROM funcionarios WHERE usuario_id=$1 AND ativo=true AND COALESCE(freelancer,false)=false LIMIT 1`,[userId]);
+    const {rows}=await pool.query(`SELECT id,nome FROM funcionarios
+       WHERE usuario_id=$1 AND ativo=true AND COALESCE(freelancer,false)=false
+         AND (NULLIF(current_setting('app.loja_id',true),'') IS NULL
+              OR loja_id=NULLIF(current_setting('app.loja_id',true),'')::int)
+       LIMIT 1`,[userId]);
     return rows[0]||null;
   }
   function gestorRH(req){ return ['admin','gestor'].includes(req.user?.perfil); }
@@ -531,7 +542,10 @@ module.exports = function (pool, app) {
     const key='rh/'+String(funcionarioId)+'/'+new Date().getFullYear()+'/'+crypto.randomUUID()+'.'+ext;
     try{
       const {rows:[func]}=await pool.query(`
-        SELECT id FROM funcionarios WHERE id=$1 AND ativo=true AND COALESCE(freelancer,false)=false
+        SELECT id FROM funcionarios
+        WHERE id=$1 AND ativo=true AND COALESCE(freelancer,false)=false
+          AND (NULLIF(current_setting('app.loja_id',true),'') IS NULL
+               OR loja_id=NULLIF(current_setting('app.loja_id',true),'')::int)
         LIMIT 1
       `,[funcionarioId]);
       if(!func) return res.status(404).json({ok:false,erro:'Funcionário não encontrado'});
