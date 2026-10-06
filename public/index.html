@@ -214,7 +214,7 @@ body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var
 .dash-pendencias-admin{background:#fff;border:1px solid #fecaca;border-left:4px solid var(--red-l);border-radius:11px;padding:12px 14px;margin-bottom:14px;box-shadow:0 2px 8px rgba(127,29,29,.08)}
 .dash-pend-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
 .dash-pend-head strong{font-size:13px;color:#991b1b}.dash-pend-head span{margin-left:8px;background:#fee2e2;color:#991b1b;border-radius:12px;padding:2px 8px;font-size:11px}.dash-pend-head small{font-size:10px;color:var(--muted)}
-.dash-pend-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.dash-pend-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
 .dash-pend-card{border:1px solid #e5e7eb;background:#fff;border-radius:9px;padding:10px 12px;display:flex;align-items:center;gap:10px;text-align:left;cursor:pointer;font-family:inherit;transition:.15s;min-width:0}
 .dash-pend-card:hover{transform:translateY(-1px);border-color:#fca5a5;box-shadow:0 3px 10px rgba(17,24,39,.08)}
 .dash-pend-card .dpc-icon{font-size:22px}.dash-pend-card span:nth-child(2){display:flex;flex-direction:column;min-width:0}.dash-pend-card b{font-family:'DM Mono',monospace;font-size:20px;color:#991b1b;line-height:1.1}.dash-pend-card small{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.dash-pend-card i{margin-left:auto;color:#9ca3af;font-style:normal}.dash-pend-card[style*="display: none"]{display:none!important}
@@ -504,7 +504,7 @@ body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var
 
     <div class="pnav-section">Pessoas</div>
     <button class="pnav-tab" data-label="RH" onclick="showTab('rh')"          data-tab="rh"          data-perfil="admin,gestor,operador,caixa,estoque,financeiro,contabil"><span class="tab-icon">🧑‍💼</span><span class="tab-label">RH</span><span id="nav-badge-rh" style="display:none;background:#dc2626;color:#fff;border-radius:9px;padding:0 5px;font-size:10px;margin-left:3px;font-weight:700">0</span></button>
-    <button class="pnav-tab" data-label="Ponto" onclick="showTab('ponto')"       data-tab="ponto"       data-perfil="admin,gestor,operador,caixa"><span class="tab-icon">⏱️</span><span class="tab-label">Ponto</span></button>
+    <button class="pnav-tab" data-label="Ponto" onclick="showTab('ponto')" data-tab="ponto" data-perfil="admin,gestor,operador,caixa"><span class="tab-icon">⏱️</span><span class="tab-label">Ponto</span><span id="nav-badge-ponto" style="display:none;background:#dc2626;color:#fff;border-radius:9px;padding:0 5px;font-size:10px;margin-left:3px;font-weight:700">0</span></button>
     <button class="pnav-tab" data-label="Minha Conta" onclick="showTab('minha-conta')" data-tab="minha-conta" data-perfil="operador,caixa"><span class="tab-icon">💼</span><span class="tab-label">Minha Conta</span></button>
 
     <div class="pnav-section">Operacional</div>
@@ -549,6 +549,7 @@ body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var
           <button class="dash-pend-card rh" id="dash-pend-rh" onclick="abrirPendenciaAdmin('rh')"><span class="dpc-icon">🧑‍💼</span><span><b class="pend-count">0</b><small>Aprovações no RH</small></span><i>→</i></button>
           <button class="dash-pend-card retiradas" id="dash-pend-retiradas" onclick="abrirPendenciaAdmin('retiradas')"><span class="dpc-icon">💸</span><span><b class="pend-count">0</b><small>Retiradas pendentes</small></span><i>→</i></button>
           <button class="dash-pend-card fiado" id="dash-pend-fiado" onclick="abrirPendenciaAdmin('fiado')"><span class="dpc-icon">💳</span><span><b class="pend-count">0</b><small>Aprovações de Fiado</small></span><i>→</i></button>
+          <button class="dash-pend-card ponto" id="dash-pend-ponto" onclick="abrirPendenciaAdmin('ponto')"><span class="dpc-icon">⏱️</span><span><b class="pend-count">0</b><small>Horas extras / ponto</small></span><i>→</i></button>
         </div>
       </div>
 
@@ -1743,17 +1744,19 @@ async function carregarPendentesAprovacao() {
     return;
   }
   try {
-    const [rh, retiradas, fiado] = await Promise.all([
+    const [rh, retiradas, fiado, ponto] = await Promise.all([
       apiFetch('/api/rh/lancamentos-pendentes/count').catch(()=>({total:0})),
       apiFetch('/api/retiradas/pendentes/count').catch(()=>({total:0})),
       apiFetch('/api/fiado/pendentes-aprovacao/count').catch(()=>({total:0})),
+      apiFetch('/api/ponto/pendentes-aprovacao/count').catch(()=>({total:0})),
     ]);
     const dados = {
       rh: parseInt(rh.total||0),
       retiradas: parseInt(retiradas.total||0),
       fiado: parseInt(fiado.total||0),
+      ponto: parseInt(ponto.total||0),
     };
-    const navs = {rh:'nav-badge-rh',retiradas:'nav-badge-retiradas-pend',fiado:'nav-badge-fiado'};
+    const navs = {rh:'nav-badge-rh',retiradas:'nav-badge-retiradas-pend',fiado:'nav-badge-fiado',ponto:'nav-badge-ponto'};
     Object.entries(dados).forEach(([tipo,n])=>{
       const card=document.getElementById('dash-pend-'+tipo);
       if(card){card.style.display=n>0?'':'none';const c=card.querySelector('.pend-count');if(c)c.textContent=n;}
@@ -1771,6 +1774,10 @@ function abrirPendenciaAdmin(tipo){
   showTab(tipo);
   if(tipo==='rh'){
     const enviar=()=>{try{document.getElementById('iframe-rh')?.contentWindow?.postMessage({type:'bb_open_rh_aprovacoes'},window.location.origin)}catch(_){}};
+    setTimeout(enviar,350);setTimeout(enviar,1100);
+  }
+  if(tipo==='ponto'){
+    const enviar=()=>{try{document.getElementById('iframe-ponto')?.contentWindow?.postMessage({type:'bb_open_ponto_aprovacoes'},window.location.origin)}catch(_){}};
     setTimeout(enviar,350);setTimeout(enviar,1100);
   }
 }

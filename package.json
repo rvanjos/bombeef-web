@@ -7,7 +7,7 @@
     "start": "node scripts/start.js",
     "dev": "node scripts/start.js",
     "seed": "node seed.js",
-    "test": "node tests/multiloja.test.js && node tests/dre-conferencia.test.js && node tests/dre-cartao-pagamentos.test.js && node tests/agente-financeiro-drive.test.js && node tests/cartao-fatura-parser.test.js && node tests/openai-pdf-extractor.test.js && node tests/dre-planejamento-conciliacao.test.js && node tests/validade-baixa.test.js && node tests/kits-campanha-status.test.js && node tests/retiradas-termo.test.js && node tests/compras-analise-decisao.test.js && node tests/db-pool.test.js",
+    "test": "node tests/multiloja.test.js && node tests/dre-conferencia.test.js && node tests/dre-cartao-pagamentos.test.js && node tests/agente-financeiro-drive.test.js && node tests/cartao-fatura-parser.test.js && node tests/openai-pdf-extractor.test.js && node tests/dre-planejamento-conciliacao.test.js && node tests/validade-baixa.test.js && node tests/kits-campanha-status.test.js && node tests/retiradas-termo.test.js && node tests/ponto-aprovacao.test.js && node tests/compras-analise-decisao.test.js && node tests/db-pool.test.js",
     "maintenance:legacy": "node scripts/finalize-multiloja.js && node scripts/ensure-validade-documentos.js && node scripts/fix-ponto-multiloja.js && node scripts/seed-fornecedores-dre.js && node scripts/fix-dre-ofx-creditos.js && node scripts/audit-multiloja.js",
     "audit:multiloja": "node scripts/audit-multiloja.js"
   },
