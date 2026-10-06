@@ -870,7 +870,7 @@ module.exports = function(pool) {
 
   // ── Jornada do funcionário (configurar) ───────────────────────────────────
   r.put('/jornada/:id', async (req, res) => {
-    if (req.user?.perfil !== 'admin') return res.status(403).json({ ok:false, erro:'Apenas administradores podem alterar jornadas' });
+    if (!['admin','gestor'].includes(req.user?.perfil)) return res.status(403).json({ ok:false, erro:'Apenas a gestão pode alterar jornadas' });
     const { horario_entrada, horario_saida, intervalo_min, jornada_horas, tolerancia_min, dias_folga, usa_ponto } = req.body;
     try {
       await pool.query(`
@@ -898,7 +898,7 @@ module.exports = function(pool) {
 
   // ── PUT /jornada-dia/:funcionario_id — salva jornada por dia (upsert) ─────
   r.put('/jornada-dia/:funcionario_id', async (req, res) => {
-    if (req.user?.perfil !== 'admin') return res.status(403).json({ ok:false, erro:'Apenas administradores' });
+    if (!['admin','gestor'].includes(req.user?.perfil)) return res.status(403).json({ ok:false, erro:'Apenas a gestão pode alterar jornadas' });
     const dias = req.body.dias; // array de {dia_semana, folga, horario_entrada, horario_saida, jornada_horas, intervalo_min}
     if (!Array.isArray(dias)) return res.status(400).json({ ok:false, erro:'dias obrigatório' });
     try {
