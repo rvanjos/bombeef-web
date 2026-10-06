@@ -502,7 +502,7 @@ module.exports = function (pool, app) {
   });
 
   // ── GET /:id — carrega um item individual para edição ──────────────────────
-  r.get('/:id', async (req, res) => {
+  r.get('/:id(\\d+)', async (req, res) => {
     const id = parseInt(req.params.id);
     if (!Number.isInteger(id)) return res.status(400).json({ ok:false, erro:'ID inválido' });
     try {
