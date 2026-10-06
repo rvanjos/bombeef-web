@@ -137,3 +137,14 @@ test('cartao ponto mensal nao depende de dias_folga legado e mostra erro real na
   assert.doesNotMatch(trecho,/f\.dias_folga/);
   assert.match(rh,/Erro ao carregar dados do cartão ponto/);
 });
+
+
+test('cartao ponto mensal nao usa make_date e filtra por intervalo de datas',()=>{
+  const rota=ler('routes/ponto.js');
+  const trecho=rota.slice(rota.indexOf("r.get('/resumo-mensal'"),rota.indexOf("// ── Férias e afastamentos"));
+  assert.doesNotMatch(trecho,/make_date\(/);
+  assert.match(trecho,/a\.data_inicio < \$4::date/);
+  assert.match(trecho,/a\.data_fim >= \$3::date/);
+  assert.match(trecho,/p\.data_ref >= \$3::date/);
+  assert.match(trecho,/p\.data_ref < \$4::date/);
+});
