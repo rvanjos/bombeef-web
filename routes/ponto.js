@@ -290,7 +290,9 @@ module.exports = function(pool) {
     if(!p) return null;
     const horas=calcHoras(p.entrada,p.saida,p.saida_intervalo,p.retorno_intervalo,p.intervalo_min);
     const extra=calcularExtraMinutos(horas,p.jornada_horas,p.troca_folga,p.entrada,p.saida,p.horario_entrada,p.horario_saida);
-    const intervalo=calcularIntervaloSuprimido(p.saida_intervalo,p.retorno_intervalo,p.intervalo_min);
+    const intervalo=p.almoco_corrido_confirmado
+      ? Number(p.intervalo_min||60)
+      : calcularIntervaloSuprimido(p.saida_intervalo,p.retorno_intervalo,p.intervalo_min);
     const precisaAprovacao=!p.troca_folga && (extra>0 || intervalo>0 || p.almoco_corrido_confirmado);
     const novoStatus=precisaAprovacao
       ? (['aprovado','rejeitado'].includes(p.aprovacao_status) ? 'pendente' : 'pendente')
@@ -376,7 +378,9 @@ module.exports = function(pool) {
 
       if (tipo === 'saida') {
         const { rows:[atual] } = await pool.query(`
-          SELECT p.saida_intervalo,p.retorno_intervalo,COALESCE(f.intervalo_min,60) AS intervalo_min
+          SELECT p.*,COALESCE(f.intervalo_min,60) AS intervalo_min,
+                 COALESCE(f.jornada_horas,8) AS jornada_horas,
+                 f.horario_entrada,f.horario_saida
           FROM ponto_registros p JOIN funcionarios f ON f.id=p.funcionario_id
           WHERE p.funcionario_id=$1 AND p.data_ref=$2 LIMIT 1
         `,[funcionario_id,dataRef]);
@@ -391,6 +395,18 @@ module.exports = function(pool) {
           }
           if (!String(req.body.justificativa_almoco_corrido||'').trim()) {
             return res.status(400).json({ok:false,erro:'Informe a justificativa do almoço corrido antes de registrar a saída.'});
+          }
+        }
+
+        if (atual?.entrada) {
+          const horasProjetadas=calcHoras(atual.entrada,agora,atual.saida_intervalo,atual.retorno_intervalo,atual.intervalo_min);
+          const extraProjetada=calcularExtraMinutos(horasProjetadas,atual.jornada_horas,false,atual.entrada,agora,atual.horario_entrada,atual.horario_saida);
+          if (extraProjetada>0 && !String(req.body.justificativa_hora_extra||'').trim()) {
+            return res.status(409).json({
+              ok:false,confirmacao_necessaria:true,tipo:'hora_extra_saida',
+              extra_minutos:extraProjetada,
+              aviso:'Esta saída gera '+extraProjetada+' minuto(s) de hora extra. Informe o motivo para enviar à aprovação.'
+            });
           }
         }
       }
@@ -454,6 +470,13 @@ module.exports = function(pool) {
               justificativa=COALESCE(NULLIF(justificativa,''),$1), atualizado_em=NOW()
           WHERE id=$2
         `,[String(req.body.justificativa_almoco_corrido||'').trim(),rows[0].id]);
+      }
+      if (tipo === 'saida' && String(req.body.justificativa_hora_extra||'').trim()) {
+        await pool.query(`
+          UPDATE ponto_registros
+          SET justificativa=$1, atualizado_em=NOW()
+          WHERE id=$2
+        `,[String(req.body.justificativa_hora_extra).trim(),rows[0].id]);
       }
       const pontoApurado = await atualizarApuracaoPonto(rows[0].id);
 
@@ -643,7 +666,7 @@ module.exports = function(pool) {
 
   // ── Ajuste manual (admin) ─────────────────────────────────────────────────
   r.put('/registros/:id', async (req, res) => {
-    if (req.user?.perfil !== 'admin') return res.status(403).json({ ok:false, erro:'Acesso restrito ao administrador' });
+    if (!['admin','gestor'].includes(req.user?.perfil)) return res.status(403).json({ ok:false, erro:'Acesso restrito à gestão' });
     const { entrada, saida_intervalo, retorno_intervalo, saida, justificativa, status } = req.body;
     try {
       const { rows } = await pool.query(`
