@@ -2572,12 +2572,13 @@ async function carregarJornadaAusencias(){
   const id=document.getElementById('ja-func').value;
   const box=document.getElementById('ja-dias');
   if(!id){box.innerHTML='<div class="empty">Selecione um funcionário para configurar a jornada.</div>';document.getElementById('ja-aus-list').innerHTML='';return;}
-  const func=(window._todasFuncs||[]).find(f=>String(f.id)===String(id))||{};
-  const [jd,aus]=await Promise.all([
-    get('/api/ponto/jornada-dia/'+id),
+  const [cfg,aus]=await Promise.all([
+    get('/api/ponto/jornada-config/'+id),
     get('/api/ponto/ausencias?funcionario_id='+encodeURIComponent(id))
   ]);
-  const mapa=new Map((jd.data||[]).map(x=>[Number(x.dia_semana),x]));
+  if(!cfg.ok){box.innerHTML='<div class="empty">Não foi possível carregar a jornada.</div>';return;}
+  const func=cfg.data?.funcionario||{};
+  const mapa=new Map((cfg.data?.dias||[]).map(x=>[Number(x.dia_semana),x]));
   box.innerHTML=_jaDiasNome.map((nome,dia)=>{
     const j=mapa.get(dia);
     const folga=j?!!j.folga:false;
