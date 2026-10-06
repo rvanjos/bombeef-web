@@ -69,3 +69,43 @@ test('gestor pode visualizar e aprovar pendencias do ponto',()=>{
   assert.match(rota,/\['admin','gestor'\]\.includes\(req\.user\?\.perfil\)/);
   assert.match(tela,/\['admin','gestor'\]\.includes\(me\.data\.perfil\)/);
 });
+
+
+test('ponto exige justificativa para almoco corrido e hora extra na saida',()=>{
+  const rota=ler('routes/ponto.js');
+  const tela=ler('public/ponto.html');
+  assert.match(rota,/tipo:'intervalo_nao_registrado'/);
+  assert.match(rota,/justificativa_almoco_corrido/);
+  assert.match(rota,/tipo:'hora_extra_saida'/);
+  assert.match(rota,/justificativa_hora_extra/);
+  assert.match(tela,/A justificativa da hora extra é obrigatória/);
+  assert.match(tela,/almoço corrido\/sem intervalo registrado/);
+});
+
+test('aprovacao do ponto mostra origem, marcacoes, justificativas e ajuste',()=>{
+  const rota=ler('routes/ponto.js');
+  const tela=ler('public/ponto.html');
+  assert.match(rota,/horario_entrada_previsto/);
+  assert.match(rota,/almoco_corrido_justificativa/);
+  assert.match(tela,/Entrada antecipada/);
+  assert.match(tela,/Saída após horário/);
+  assert.match(tela,/Justificativa do funcionário/);
+  assert.match(tela,/Ajustar ponto/);
+});
+
+test('rh centraliza jornada ferias e afastamentos',()=>{
+  const rota=ler('routes/ponto.js');
+  const rh=ler('public/rh.html');
+  assert.match(rota,/CREATE TABLE IF NOT EXISTS ponto_ausencias/);
+  assert.match(rota,/r\.post\('\/ausencias'/);
+  assert.match(rota,/r\.post\('\/ausencias\/:id\/cancelar'/);
+  assert.match(rota,/r\.get\('\/jornada-config\/:funcionario_id'/);
+  assert.match(rh,/Jornada, Férias e Afastamentos/);
+  assert.match(rh,/Registrar período/);
+  assert.match(rh,/salvarJornadaRH/);
+});
+
+test('configuracao de jornada saiu da barra principal do ponto',()=>{
+  const ponto=ler('public/ponto.html');
+  assert.doesNotMatch(ponto,/id="btn-admin-ponto"/);
+});
