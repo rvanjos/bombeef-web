@@ -91,14 +91,29 @@ module.exports = function (pool, app) {
   }
   async function funcionarioDoUsuario(userId){
     if(!userId) return null;
-    const {rows}=await pool.query(`SELECT id,nome FROM funcionarios
-       WHERE usuario_id=$1 AND ativo=true AND COALESCE(freelancer,false)=false
-         AND (NULLIF(current_setting('app.loja_id',true),'') IS NULL
-              OR loja_id=NULLIF(current_setting('app.loja_id',true),'')::int)
-       LIMIT 1`,[userId]);
-    return rows[0]||null;
+    const {rows}=await pool.query(`
+      SELECT f.id,f.nome,f.usuario_id
+      FROM funcionarios f
+      LEFT JOIN usuarios u ON u.id=$1
+      WHERE f.ativo=true AND COALESCE(f.freelancer,false)=false
+        AND (f.usuario_id=$1 OR (f.usuario_id IS NULL AND u.email IS NOT NULL AND LOWER(f.email)=LOWER(u.email)))
+        AND (NULLIF(current_setting('app.loja_id',true),'') IS NULL
+             OR f.loja_id=NULLIF(current_setting('app.loja_id',true),'')::int)
+      ORDER BY CASE WHEN f.usuario_id=$1 THEN 0 ELSE 1 END,f.id
+      LIMIT 1
+    `,[userId]);
+    const func=rows[0]||null;
+    if(func && !func.usuario_id){
+      await pool.query(`
+        UPDATE funcionarios SET usuario_id=$1,atualizado_em=NOW()
+        WHERE id=$2 AND usuario_id IS NULL
+      `,[userId,func.id]).catch(()=>{});
+    }
+    return func;
   }
-  function gestorRH(req){ return ['admin','gestor'].includes(req.user?.perfil); }
+  // Documentos trabalhistas são sensíveis: somente admin gerencia o conjunto.
+  // Qualquer outro perfil, inclusive gestor operacional, acessa apenas o próprio vínculo.
+  function gestorRH(req){ return req.user?.perfil==='admin'; }
   // BB-SSE-AUTOPUBLISH — avisa os outros modulos quando algo muda aqui.
   // Roda em todas as rotas, mas so publica em mutacao bem-sucedida.
   const _pub = (c, d) => { try { app?.locals?.ssePublish?.(c, d); } catch(_) {} };
@@ -575,7 +590,10 @@ module.exports = function (pool, app) {
       `,[Number(req.params.id)]);
       const doc=rows[0];
       if(!doc) return res.status(404).json({ok:false,erro:'Documento não encontrado'});
-      if(!gestorRH(req) && Number(doc.usuario_id)!==Number(req.user?.id)) return res.status(403).json({ok:false,erro:'Acesso negado'});
+      if(!gestorRH(req)){
+        const proprio=await funcionarioDoUsuario(req.user?.id);
+        if(!proprio || Number(proprio.id)!==Number(doc.funcionario_id)) return res.status(403).json({ok:false,erro:'Acesso negado'});
+      }
       const s3=await s3Request('GET',doc.storage_key);
       const buf=Buffer.from(await s3.arrayBuffer());
       if(!gestorRH(req) && !doc.visualizado_em){
@@ -959,7 +977,7 @@ module.exports = function (pool, app) {
         }
       }
       const datas = sabados.flatMap(x => [x.sabado,x.domingo]);
-      const [{rows:fatRows},{rows:funcs},{rows:cfgRows}] = await Promise.all([
+      const [{rows:fatRows},{rows:funcs},{rows:cfgRows},{rows:ausRows}] = await Promise.all([
         pool.query(`
           SELECT data_inicio::text AS data, COALESCE(SUM(fat_liquido),0)::numeric AS valor
           FROM faturamento_periodos
@@ -971,22 +989,46 @@ module.exports = function (pool, app) {
           FROM funcionarios f LEFT JOIN rh_escalas e ON e.funcionario_id=f.id
           WHERE f.ativo=true AND COALESCE(f.freelancer,false)=false ORDER BY f.nome
         `),
-        pool.query(`SELECT faixas,modo_rateio FROM rh_meta_fds_config WHERE id=1`)
+        pool.query(`SELECT faixas,modo_rateio FROM rh_meta_fds_config WHERE id=1`),
+        pool.query(`
+          SELECT funcionario_id,tipo,data_inicio::text,data_fim::text
+          FROM ponto_ausencias
+          WHERE status='ativo'
+            AND data_inicio <= $2::date
+            AND data_fim >= $1::date
+            AND (NULLIF(current_setting('app.loja_id',true),'') IS NULL
+                 OR loja_id=NULLIF(current_setting('app.loja_id',true),'')::int)
+        `,[dataIsoLocal(inicio),dataIsoLocal(new Date(ano,mesNum,0,12))])
       ]);
       const cfg = cfgRows[0] || {faixas:[{meta:18000,premio:75},{meta:24000,premio:100}],modo_rateio:'todos'};
       const faixas = [...(cfg.faixas||[])].sort((a,b)=>Number(a.meta)-Number(b.meta));
       const fat = Object.fromEntries(fatRows.map(x => [String(x.data).slice(0,10),Number(x.valor)]));
+      const ausenciaNoDia=(funcId,data)=>{
+        const a=ausRows.find(x=>Number(x.funcionario_id)===Number(funcId)
+          && data>=String(x.data_inicio).slice(0,10)
+          && data<=String(x.data_fim).slice(0,10));
+        return a||null;
+      };
       const finais = sabados.map(fds => {
         const fatSab=Number(fat[fds.sabado]||0), fatDom=Number(fat[fds.domingo]||0), total=fatSab+fatDom;
         const faixa=[...faixas].reverse().find(f=>total>=Number(f.meta));
         const premio=faixa?Number(faixa.premio):0;
         const pessoas=funcs.map(f => {
-          const sab=trabalhaNoDia(f,fds.sabado), dom=trabalhaNoDia(f,fds.domingo);
+          const ausSab=ausenciaNoDia(f.id,fds.sabado), ausDom=ausenciaNoDia(f.id,fds.domingo);
+          const sab=ausSab?false:trabalhaNoDia(f,fds.sabado);
+          const dom=ausDom?false:trabalhaNoDia(f,fds.domingo);
           const dias=[sab,dom].filter(Boolean).length;
-          let fator=cfg.modo_rateio==='todos' ? 1 : cfg.modo_rateio==='participou' ? (dias>0?1:0) : dias/2;
+          const afastadoFimSemana=!!ausSab&&!!ausDom;
+          let fator=cfg.modo_rateio==='todos'
+            ? (afastadoFimSemana?0:1)
+            : cfg.modo_rateio==='participou' ? (dias>0?1:0) : dias/2;
           if (!premio) fator=0;
-          return {id:f.id,nome:f.nome,cargo:f.cargo||'',trabalhou_sabado:sab,trabalhou_domingo:dom,
-            sem_escala:sab===null&&dom===null,fator,valor:Number((premio*fator).toFixed(2))};
+          return {
+            id:f.id,nome:f.nome,cargo:f.cargo||'',trabalhou_sabado:sab,trabalhou_domingo:dom,
+            ausente_sabado:ausSab?ausSab.tipo:null,ausente_domingo:ausDom?ausDom.tipo:null,
+            afastado_fim_semana:afastadoFimSemana,
+            sem_escala:sab===null&&dom===null,fator,valor:Number((premio*fator).toFixed(2))
+          };
         });
         return {...fds,faturamento_sabado:fatSab,faturamento_domingo:fatDom,total,
           meta_atingida:faixa?Number(faixa.meta):null,premio_base:premio,
