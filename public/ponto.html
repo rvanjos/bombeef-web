@@ -140,7 +140,6 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
     <span style="font-size:22px">⏱️</span>
     <h2>Ponto Eletrônico</h2>
     <div style="display:flex;align-items:center;gap:8px">
-      <button id="btn-admin-ponto" onclick="abrirAdminPonto()" style="display:none;padding:6px 12px;background:rgba(255,255,255,.2);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif">⚙️ Admin</button>
       <button id="btn-aprov-ponto" onclick="abrirAprovacoesPonto()" style="display:none;padding:6px 12px;background:#fff;color:#8B0000;border:1px solid rgba(255,255,255,.6);border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif">✅ Aprovações <span id="badge-aprov-ponto"></span></button>
       <button id="btn-relatorio" onclick="abrirRelatorio()" style="display:none;padding:6px 12px;background:rgba(255,255,255,.2);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif">📊 Relatório</button>
     </div>
@@ -412,10 +411,6 @@ window.onBBReady = async () => {
         const btnRel = document.getElementById('btn-relatorio');
         if (btnRel) btnRel.style.display = '';
       }
-      if (me.data.perfil === 'admin') {
-        const btnAdm = document.getElementById('btn-admin-ponto');
-        if (btnAdm) btnAdm.style.display = '';
-      }
       if (['admin','gestor'].includes(me.data.perfil)) {
         const btnAprov = document.getElementById('btn-aprov-ponto');
         if (btnAprov) btnAprov.style.display = '';
@@ -633,6 +628,30 @@ async function confirmar() {
   btn.textContent = '⏳ Registrando...';
 
   let d = await api.post('/api/ponto/bater', { funcionario_id:_func.id, tipo:_tipo });
+  if (!d.ok && d.confirmacao_necessaria && d.tipo==='intervalo_nao_registrado') {
+    const corrido = window.confirm(
+      'Não há marcação de saída e retorno do almoço hoje.\n\n'+
+      'OK = você trabalhou no horário de almoço e irá justificar.\n'+
+      'Cancelar = você esqueceu de marcar o almoço e deve corrigir o ponto antes de registrar a saída.'
+    );
+    if (!corrido) {
+      btn.disabled=false; btn.textContent='✅ Confirmar Registro';
+      fecharConf();
+      showToast('⚠️ Corrija as marcações do almoço antes de registrar a saída.');
+      return;
+    }
+    const justificativa = window.prompt('Explique por que o almoço foi corrido/sem intervalo registrado:','');
+    if (!justificativa || !justificativa.trim()) {
+      btn.disabled=false; btn.textContent='✅ Confirmar Registro';
+      showToast('⚠️ A justificativa é obrigatória para almoço corrido.');
+      return;
+    }
+    d = await api.post('/api/ponto/bater', {
+      funcionario_id:_func.id, tipo:_tipo,
+      confirmar_almoco_corrido:true,
+      justificativa_almoco_corrido:justificativa.trim()
+    });
+  }
   if (!d.ok && d.confirmacao_necessaria && d.tipo==='intervalo_curto') {
     const certo = window.confirm(
       'Seu intervalo foi de '+d.intervalo_realizado_min+' minutos e ainda faltam '+d.minutos_faltantes+' minutos para completar '+d.intervalo_minimo_min+' minutos.\n\n'+
@@ -863,16 +882,63 @@ async function abrirAprovacoesPonto(){
   document.getElementById('aprov-ponto-resumo').textContent=itens.length+' pendência(s)';
   lista.innerHTML=itens.length?itens.map(x=>{
     const extra=Number(x.extra_minutos||0), inter=Number(x.intervalo_suprimido_min||0);
-    return '<div style="border:1px solid var(--border);border-radius:10px;padding:11px;margin-bottom:8px;background:#fff">'+
+    const h=t=>t?new Date(t).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',timeZone:'America/Sao_Paulo'}):'—';
+    const previstos=(x.horario_entrada_previsto||'').slice(0,5)+'–'+(x.horario_saida_previsto||'').slice(0,5);
+    const motivos=[];
+    if(extra) motivos.push('⏫ Excedente de jornada: '+extra+' min');
+    if(inter) motivos.push('🍽️ Intervalo menor que o previsto: '+inter+' min');
+    if(x.almoco_corrido_confirmado) motivos.push('🥪 Almoço corrido/sem marcação');
+    if(x.entrada_manual||x.saida_manual) motivos.push('✏️ Registro manual/ajustado');
+    const justificativas=[
+      x.almoco_corrido_justificativa?'<b>Justificativa do almoço:</b> '+x.almoco_corrido_justificativa:'',
+      x.intervalo_curto_motivo?'<b>Justificativa do intervalo:</b> '+x.intervalo_curto_motivo:'',
+      x.justificativa?'<b>Justificativa do funcionário:</b> '+x.justificativa:'',
+      x.observacao?'<b>Observação:</b> '+x.observacao:''
+    ].filter(Boolean).join('<br>');
+    return '<div style="border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:10px;background:#fff">'+
       '<div style="display:flex;gap:10px;align-items:flex-start">'+
-        '<input type="checkbox" class="aprov-ponto-check" value="'+x.id+'" style="width:18px;height:18px;margin-top:2px">'+
-        '<div style="flex:1"><div style="font-weight:700">'+x.funcionario_nome+' · '+String(x.data_ref).slice(0,10).split('-').reverse().join('/')+'</div>'+
-        '<div style="font-size:12px;margin-top:4px">'+(extra?'<b>Hora extra:</b> '+extra+' min ':'')+(inter?'<b>Intervalo suprimido:</b> '+inter+' min':'')+'</div>'+
-        (x.intervalo_curto_motivo?'<div style="font-size:11px;color:var(--muted);margin-top:4px">Motivo do retorno antecipado: '+x.intervalo_curto_motivo+'</div>':'')+
+        '<input type="checkbox" class="aprov-ponto-check" value="'+x.id+'" style="width:18px;height:18px;margin-top:3px">'+
+        '<div style="flex:1;min-width:0">'+
+          '<div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><div style="font-weight:700">'+x.funcionario_nome+' · '+String(x.data_ref).slice(0,10).split('-').reverse().join('/')+'</div><div style="font-size:11px;color:var(--muted)">Previsto '+previstos+' · '+(x.jornada_prevista_horas||8)+'h</div></div>'+
+          '<div style="display:grid;grid-template-columns:repeat(4,minmax(85px,1fr));gap:6px;margin-top:8px">'+
+            '<div style="background:#f8fafc;border-radius:7px;padding:6px"><small>Entrada</small><div style="font-weight:700">'+h(x.entrada)+'</div></div>'+
+            '<div style="background:#f8fafc;border-radius:7px;padding:6px"><small>Saída almoço</small><div style="font-weight:700">'+h(x.saida_intervalo)+'</div></div>'+
+            '<div style="background:#f8fafc;border-radius:7px;padding:6px"><small>Retorno</small><div style="font-weight:700">'+h(x.retorno_intervalo)+'</div></div>'+
+            '<div style="background:#f8fafc;border-radius:7px;padding:6px"><small>Saída</small><div style="font-weight:700">'+h(x.saida)+'</div></div>'+
+          '</div>'+
+          '<div style="font-size:12px;margin-top:8px"><b>Por que está pendente:</b> '+(motivos.join(' · ')||'Conferência de jornada')+'</div>'+
+          (justificativas?'<div style="font-size:11px;color:#475569;background:#f8fafc;border:1px solid #e2e8f0;border-radius:7px;padding:7px 9px;margin-top:7px">'+justificativas+'</div>':'<div style="font-size:11px;color:#991b1b;margin-top:7px">⚠️ Sem justificativa informada pelo funcionário.</div>')+
+          '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">'+
+            '<button onclick="abrirAjusteAprovacaoPonto('+x.id+')" style="border:1px solid #d1d5db;background:#fff;border-radius:7px;padding:6px 8px;cursor:pointer;font-size:11px">✏️ Ajustar ponto</button>'+
+            '<button onclick="marcarTrocaFolga('+x.id+')" style="border:1px solid #93c5fd;background:#eff6ff;color:#1e40af;border-radius:7px;padding:6px 8px;cursor:pointer;font-size:11px">🔄 Troca de folga</button>'+
+          '</div>'+
         '</div>'+
-        '<button onclick="marcarTrocaFolga('+x.id+')" style="border:1px solid #93c5fd;background:#eff6ff;color:#1e40af;border-radius:7px;padding:6px 8px;cursor:pointer;font-size:11px">🔄 Troca de folga</button>'+
       '</div></div>';
   }).join(''):'<div style="padding:24px;text-align:center;color:var(--muted)">✅ Nenhuma aprovação pendente.</div>';
+}
+async function abrirAjusteAprovacaoPonto(id){
+  const d=await api.get('/api/ponto/aprovacoes?status=pendente');
+  const x=(d.data||[]).find(r=>Number(r.id)===Number(id));
+  if(!x){showToast('❌ Lançamento não encontrado');return;}
+  const h=t=>t?new Date(t).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',timeZone:'America/Sao_Paulo'}):'';
+  const dt=String(x.data_ref).slice(0,10);
+  const entrada=window.prompt('Entrada (HH:MM):',h(x.entrada));
+  if(entrada===null)return;
+  const saidaInt=window.prompt('Saída para almoço (HH:MM, deixe vazio se não houve):',h(x.saida_intervalo));
+  if(saidaInt===null)return;
+  const retorno=window.prompt('Retorno do almoço (HH:MM, deixe vazio se não houve):',h(x.retorno_intervalo));
+  if(retorno===null)return;
+  const saida=window.prompt('Saída (HH:MM):',h(x.saida));
+  if(saida===null)return;
+  const justificativa=window.prompt('Justificativa do ajuste:',x.justificativa||'')||'';
+  const ts=t=>t&&t.trim()?dt+'T'+t.trim()+':00':null;
+  const r=await api.put('/api/ponto/registros/'+id,{
+    entrada:ts(entrada),saida_intervalo:ts(saidaInt),retorno_intervalo:ts(retorno),saida:ts(saida),
+    justificativa,status:'ajustado'
+  });
+  if(!r.ok){showToast('❌ '+r.erro);return;}
+  showToast('✅ Ponto ajustado e reenviado para conferência.');
+  await abrirAprovacoesPonto(); await atualizarBadgeAprovacoesPonto();
 }
 function fecharAprovacoesPonto(){document.getElementById('m-aprov-ponto').classList.remove('open');}
 function selecionarTodasAprovacoes(v){document.querySelectorAll('.aprov-ponto-check').forEach(x=>x.checked=v);}
@@ -1068,7 +1134,7 @@ window.addEventListener('message', function(e){
     <div class="md-body">
       <div class="ret-titulo">✅ Aprovação de Jornada</div>
       <div style="font-size:11px;color:var(--muted);margin-bottom:12px">
-        Pequenas variações até o limite legal não entram como hora extra. Retorno antecipado do intervalo aparece separado como intervalo suprimido.
+        Pequenas variações até o limite legal não entram como hora extra. Veja as marcações, o motivo da pendência e a justificativa antes de decidir. A configuração de jornada foi centralizada no RH.
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
         <button onclick="selecionarTodasAprovacoes(true)" class="btn-confirmar" style="padding:7px 10px">Selecionar todas</button>
