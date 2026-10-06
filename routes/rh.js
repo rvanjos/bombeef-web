@@ -586,11 +586,12 @@ module.exports = function (pool, app) {
             confirmado_em=COALESCE(confirmado_em,NOW()),
             confirmado_por=$1,confirmacao_ip=$2,confirmacao_user_agent=$3
         WHERE id=$4 AND funcionario_id=$5 AND status='ativo'
+          AND (visualizado_em IS NOT NULL OR exige_confirmacao=false)
           AND (NULLIF(current_setting('app.loja_id',true),'') IS NULL
                OR loja_id=NULLIF(current_setting('app.loja_id',true),'')::int)
         RETURNING id,confirmado_em
       `,[req.user?.id||null,ip,ua,Number(req.params.id),f.id]);
-      if(!rows.length) return res.status(404).json({ok:false,erro:'Documento não encontrado'});
+      if(!rows.length) return res.status(409).json({ok:false,erro:'Abra o documento antes de confirmar o recebimento.'});
       res.json({ok:true,data:rows[0],mensagem:'Recebimento confirmado. Esta confirmação registra somente o recebimento e acesso ao documento.'});
     }catch(e){res.status(500).json({ok:false,erro:e.message});}
   });
