@@ -82,21 +82,15 @@ test('relatorio impresso possui assinatura explicita e layout proprio',()=>{
   assert.match(js,/baixa no sistema deve ser confirmada somente após/);
 });
 
-test('arquivo do termo usa cache busting',()=>{
-  const html=ler('public/retiradas.html');
-  assert.match(html,/retiradas-termo\.js\?v=20260930-1521/);
-});
-
-
-test('relatorio separa claramente valores do periodo e pendencias anteriores',()=>{
+test('relatorio separa total do periodo, saldo anterior e total geral',()=>{
   const rota=ler('routes/retiradas.js');
   const js=ler('public/js/retiradas-termo.js');
   assert.match(rota,/pendencias_anteriores/);
-  assert.match(js,/RETIRADO NO PERÍODO/);
-  assert.match(js,/JÁ PAGO NO PERÍODO/);
-  assert.match(js,/VALOR A PAGAR DESTE PERÍODO/);
-  assert.match(js,/Pendências de períodos anteriores/);
-  assert.match(js,/NÃO está incluído no total acima/);
+  assert.match(js,/TOTAL DO PERÍODO/);
+  assert.match(js,/SALDO ANTERIOR/);
+  assert.match(js,/TOTAL GERAL EM ABERTO/);
+  assert.match(js,/totalGeralAberto/);
+  assert.match(js,/Não incluído no total do período/);
 });
 
 test('impressao exige escolha no papel e assinatura',()=>{
@@ -107,9 +101,30 @@ test('impressao exige escolha no papel e assinatura',()=>{
   assert.match(js,/Assinatura do funcionário/);
 });
 
-test('tela principal usa apenas gerador do relatorio para assinatura',()=>{
+test('tela principal usa apenas o gerador do relatorio para assinatura',()=>{
   const html=ler('public/retiradas.html');
+  assert.equal((html.match(/onclick="abrirRelatorio\(\)"/g)||[]).length,1);
   assert.match(html,/Gerar relatório para assinatura/);
+  assert.doesNotMatch(html,/window\.imprimirRetiradas = function imprimirRetiradas/);
   assert.doesNotMatch(html,/🧾 Imprimir para baixa/);
-  assert.match(html,/retiradas-termo\.js\?v=20261001-1435/);
+  assert.match(html,/retiradas-termo\.js\?v=20261006-1200/);
+});
+
+
+test('documento impresso lista somente data produto quantidade e valor',()=>{
+  const js=ler('public/js/retiradas-termo.js');
+  assert.match(js,/<th>Data<\/th><th>Produto<\/th><th style="text-align:right">Qtd\.<\/th><th style="text-align:right">Valor<\/th>/);
+  assert.doesNotMatch(js,/Preço Unit\./);
+  assert.doesNotMatch(js,/PDV Marcado/);
+});
+
+test('baixa do relatorio usa texto explicito e preserva validacao transacional',()=>{
+  const js=ler('public/js/retiradas-termo.js');
+  const rota=ler('routes/retiradas.js');
+  assert.match(js,/Confirmar baixa de todos os itens deste relatório/);
+  assert.match(rota,/BEGIN/);
+  assert.match(rota,/FOR UPDATE/);
+  assert.match(rota,/ROLLBACK/);
+  assert.match(rota,/COMMIT/);
+  assert.match(rota,/O relatório mudou desde a emissão\. Gere-o novamente antes da baixa\./);
 });
