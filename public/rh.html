@@ -2535,9 +2535,12 @@ function situacaoPonto(p){
   if(!p.saida)return{tipo:'incompleto',html:'<span class="ponto-status" style="background:#fee2e2;color:#991b1b">⚠ Incompleto</span>'};
   if(p.status==='justificado')return{tipo:'ajustado',html:'<span class="ponto-status" style="background:#ede9fe;color:#5b21b6">📋 Justificado</span>'};
   if(p.status==='ajustado')return{tipo:'ajustado',html:'<span class="ponto-status" style="background:#dbeafe;color:#1e40af">✏ Ajustado</span>'};
-  const t=calcHorasTrab(p),j=parseFloat(p.jornada_horas||8),tol=parseInt(p.tolerancia_min||10),e=new Date(p.entrada),[hh,mm]=String(p.horario_entrada||'08:00').split(':').map(Number),atr=(e.getHours()*60+e.getMinutes())-(hh*60+mm);
+  const tol=parseInt(p.tolerancia_min||10),e=new Date(p.entrada),[hh,mm]=String(p.horario_entrada||'08:00').split(':').map(Number);
+  const em=e.toLocaleTimeString('pt-BR',{timeZone:'America/Sao_Paulo',hour:'2-digit',minute:'2-digit'}).split(':').map(Number);
+  const atr=(em[0]*60+em[1])-(hh*60+mm);
   if(atr>tol)return{tipo:'atraso',html:`<span class="ponto-status" style="background:#fef3c7;color:#92400e">⚠ Atraso ${atr}min</span>`};
-  if(t!==null&&t>j+0.1)return{tipo:'extra',html:`<span class="ponto-status" style="background:#dcfce7;color:#166534">⏫ Extra ${fmtHorasPonto(t-j)}</span>`};
+  const extraMin=Math.max(0,Number(p.extra_minutos||0));
+  if(extraMin>0)return{tipo:'extra',html:`<span class="ponto-status" style="background:#dcfce7;color:#166534">⏫ Extra ${fmtHorasPonto(extraMin/60)}</span>`};
   return{tipo:'normal',html:'<span class="ponto-status" style="background:#f0fdf4;color:#166534">✓ Normal</span>'};
 }
 function badgePonto(p){return situacaoPonto(p).html;}
