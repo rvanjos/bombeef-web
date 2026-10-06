@@ -2675,7 +2675,7 @@ function renderDocumentos(){
   el.innerHTML=itens.map(d=>{
     const data=new Date(d.publicado_em).toLocaleString('pt-BR');
     const comp=d.competencia?String(d.competencia).replace(/^(\d{4})-(\d{2})$/,'$2/$1'):'';
-    const podeConfirmar=!gestao&&d.exige_confirmacao&&!d.confirmado_em;
+    const podeConfirmar=!gestao&&d.exige_confirmacao&&!d.confirmado_em&&!!d.visualizado_em;
     return '<article style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:13px 14px;margin-bottom:9px">'+
       '<div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap">'+
         '<div style="min-width:0;flex:1">'+
@@ -2692,13 +2692,25 @@ function renderDocumentos(){
           (gestao?'<button class="btn btn-gray btn-sm" onclick="arquivarDocumento('+d.id+')">🗄️ Arquivar</button>':'')+
         '</div>'+
       '</div>'+
-      (!gestao&&d.exige_confirmacao&&!d.confirmado_em?'<div style="font-size:10px;color:#7c2d12;background:#fff7ed;border:1px solid #fed7aa;border-radius:7px;padding:7px 8px;margin-top:9px">A confirmação declara apenas que você recebeu e teve acesso ao documento. Não significa concordância com valores ou quitação.</div>':'')+
+      (!gestao&&d.exige_confirmacao&&!d.confirmado_em?'<div style="font-size:10px;color:#7c2d12;background:#fff7ed;border:1px solid #fed7aa;border-radius:7px;padding:7px 8px;margin-top:9px">'+(d.visualizado_em?'Você já visualizou o documento. Confirme o recebimento quando estiver pronto.':'Abra o documento primeiro para liberar a confirmação de recebimento.')+' A confirmação não significa concordância com valores ou quitação.</div>':'')+
     '</article>';
   }).join('');
 }
 
-function abrirArquivoDocumento(id){
-  window.open('/api/rh/documentos/'+id+'/arquivo?token='+encodeURIComponent(getToken()),'_blank','noopener');
+async function abrirArquivoDocumento(id){
+  try{
+    const r=await fetch(BASE+'/api/rh/documentos/'+id+'/arquivo',{headers:{Authorization:'Bearer '+getToken()}});
+    if(!r.ok){
+      let msg='Não foi possível abrir o documento';
+      try{const e=await r.json();msg=e.erro||msg;}catch(_){}
+      toast('❌ '+msg);return;
+    }
+    const blob=await r.blob();
+    const url=URL.createObjectURL(blob);
+    window.open(url,'_blank','noopener');
+    setTimeout(()=>URL.revokeObjectURL(url),60000);
+    await carregarDocumentos();
+  }catch(e){toast('❌ Não foi possível abrir o documento');}
 }
 
 function abrirNovoDocumento(){
