@@ -1034,6 +1034,18 @@ body{font-size:14px;color:#111827}
 let api, fmt, toast;
 let itens=[], perdas=[], funcionarios=[], internos=[], internosModelos=[], documentos=[];
 
+// Edição de validade: listener delegado evita dependência de onclick inline e funciona
+// igualmente em desktop/mobile mesmo quando a tabela é remontada por filtros/SSE.
+document.addEventListener('click', (event) => {
+  const btn = event.target.closest?.('[data-validade-edit]');
+  if (!btn) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const id = btn.getAttribute('data-validade-edit');
+  if (!id) { toast?.('❌ Item de validade sem identificador'); return; }
+  abrirModal(id);
+});
+
 BB.modulo({
   nome: 'validade',
   init: () => {
@@ -1391,7 +1403,7 @@ function _mkDashRow(v) {
     <td style="padding:7px 12px;font-size:11px;color:var(--muted)">${v.lote||'—'}</td>
     <td style="padding:7px 6px;text-align:center">
       <button onclick="event.stopPropagation();marcarVendidoRapido(${v.id})" style="background:#dcfce7;color:#166534;border:1px solid #86efac;padding:3px 8px;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer" title="Marcar como vendido — não entra como perda">✅ Vendido</button>
-      <button onclick="event.stopPropagation();abrirModal(${v.id})" class="act-btn val-edit-btn" title="Editar validade">✏️ Editar</button>
+      <button type="button" data-validade-edit="${v.id}" class="act-btn val-edit-btn" title="Editar validade">✏️ Editar</button>
       <button onclick="event.stopPropagation();perdaRapida(${v.id})" class="act-btn" style="color:var(--red-l)" title="Registrar perda">📉</button>
     </td>
   </tr>`;
@@ -1926,7 +1938,7 @@ function renderVal(lista){
           </div>
           <!-- Linha 4: ações -->
           <div style="display:flex;gap:8px">
-            <button onclick="abrirModal(${v.id})" style="flex:1;padding:8px;background:rgba(255,255,255,.92);border:none;border-radius:8px;font-size:13px;cursor:pointer;font-weight:600">✏️ Editar</button>
+            <button type="button" data-validade-edit="${v.id}" style="flex:1;padding:8px;background:rgba(255,255,255,.92);border:none;border-radius:8px;font-size:13px;cursor:pointer;font-weight:600">✏️ Editar</button>
             ${!v.codigo?`<button onclick="abrirVincular(${v.id})" style="flex:1;padding:8px;background:rgba(255,255,255,.75);border:none;border-radius:8px;font-size:13px;cursor:pointer;font-weight:600">🔗 Vincular</button>`:''}
             ${v.status!=='descartado'?`<button onclick="perdaRapida(${v.id})" style="padding:8px 12px;background:rgba(255,255,255,.75);border:none;border-radius:8px;font-size:13px;cursor:pointer">📉</button>`:''}
           </div>
@@ -1975,7 +1987,7 @@ function renderVal(lista){
         <td style="font-size:12px;font-weight:600">${nomeResponsavel(v.responsavel)}</td>
         <td>${urgBadge}</td>
         <td class="val-acoes" style="white-space:nowrap;padding:4px 6px" onclick="event.stopPropagation()" ondblclick="event.stopPropagation()">
-          <button class="act-btn val-edit-btn" onclick="abrirModal(${v.id})" title="Editar validade">✏️ Editar</button>
+          <button type="button" class="act-btn val-edit-btn" data-validade-edit="${v.id}" title="Editar validade">✏️ Editar</button>
           ${!v.codigo?`<button class="act-btn" onclick="abrirVincular(${v.id})" title="Vincular código" style="padding:3px 6px">🔗</button>`:''}
           <button class="act-btn" onclick="marcarVendidoRapido(${v.id})" style="background:#dcfce7;color:#166534;border:1px solid #86efac;padding:3px 6px;border-radius:5px;font-size:13px" title="Marcar como vendido — não entra como perda">✅</button>
           ${v.status!=='descartado'?`<button class="act-btn" onclick="perdaRapida(${v.id})" style="color:var(--red-l);padding:3px 6px" title="Registrar como perda/descarte">📉</button>`:''}
