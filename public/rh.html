@@ -2637,7 +2637,7 @@ async function atualizarBadgeDocumentos(){
 }
 
 async function inicializarDocumentosRH(){
-  const gestao=['admin','gestor'].includes(_perfil);
+  const gestao=_perfil==='admin';
   document.getElementById('docs-btn-novo').style.display=gestao?'':'none';
   document.getElementById('docs-gestao-filtros').style.display=gestao?'':'none';
   if(gestao&&!_docsIniciado){
@@ -2651,21 +2651,26 @@ async function inicializarDocumentosRH(){
 }
 
 async function carregarDocumentos(){
-  const gestao=['admin','gestor'].includes(_perfil);
+  const gestao=_perfil==='admin';
   let url='/api/rh/documentos';
   if(gestao){
     const id=document.getElementById('docs-func-filtro')?.value;
     if(id)url+='?funcionario_id='+encodeURIComponent(id);
   }
   const d=await get(url);
-  if(!d.ok){document.getElementById('docs-lista').innerHTML='<div class="empty">⚠️ '+(d.erro||'Erro ao carregar documentos')+'</div>';return;}
+  if(!d.ok){
+    const msg=d.erro==='Usuário não vinculado a funcionário'
+      ? 'Seu login ainda não está vinculado ao seu cadastro de funcionário. Solicite ao administrador a vinculação do usuário ou confira se o e-mail do login é o mesmo do cadastro.'
+      : (d.erro||'Erro ao carregar documentos');
+    document.getElementById('docs-lista').innerHTML='<div class="empty">⚠️ '+msg+'</div>';return;
+  }
   _docsDados=d.data||[];
   renderDocumentos();
   atualizarBadgeDocumentos();
 }
 
 function renderDocumentos(){
-  const gestao=['admin','gestor'].includes(_perfil);
+  const gestao=_perfil==='admin';
   const filtro=gestao?(document.getElementById('docs-status-filtro')?.value||''):'';
   const itens=filtro?_docsDados.filter(x=>x.recebimento_status===filtro):_docsDados;
   const el=document.getElementById('docs-lista');
@@ -2841,7 +2846,8 @@ async function exportarPonto(){
   const mes=Number(document.getElementById('pt-mes').value);
   const ano=Number(document.getElementById('pt-ano').value);
   const resposta=await get(`/api/ponto/resumo-mensal?mes=${mes}&ano=${ano}`);
-  if(!resposta.ok||!resposta.data?.length){toast('Sem funcionários para gerar o cartão ponto');return;}
+  if(!resposta.ok){toast('❌ '+(resposta.erro||'Erro ao carregar dados do cartão ponto'));return;}
+  if(!resposta.data?.length){toast('Sem funcionários ativos nesta loja para gerar o cartão ponto');return;}
 
   const meses=['','Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
   const diasSemana=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
@@ -2873,7 +2879,9 @@ async function exportarPonto(){
       const ausLabel=ausencia?({ferias:'Férias',afastamento:'Afastamento',atestado:'Atestado',licenca:'Licença',outro:'Ausência'}[ausencia.tipo]||'Ausência'):null;
       let trabalhadoMin=0,extraMin=0,descontoMin=0,ocorrencia=ausLabel||(folga?'Folga':'Normal');
 
-      if(registro?.entrada&&registro?.saida){
+      if(ausencia&&!registro){
+        ocorrencia=ausLabel;
+      }else if(registro?.entrada&&registro?.saida){
         trabalhadoMin=Math.max(0,Math.round((new Date(registro.saida)-new Date(registro.entrada))/60000));
         if(registro.saida_intervalo&&registro.retorno_intervalo){
           trabalhadoMin-=Math.max(0,Math.round((new Date(registro.retorno_intervalo)-new Date(registro.saida_intervalo))/60000));
@@ -2885,9 +2893,9 @@ async function exportarPonto(){
           incompletos++;
         }
         const saldo=trabalhadoMin-previstoMin;
-        extraMin=saldo>10?saldo:0;
+        extraMin=Math.max(0,Number(registro.extra_minutos||0));
         descontoMin=saldo<0?Math.abs(saldo):0;
-        if(folga&&trabalhadoMin>10){extraMin=trabalhadoMin;ocorrencia='Trabalho em folga';}
+        if(folga&&trabalhadoMin>10){extraMin=Math.max(extraMin,trabalhadoMin);ocorrencia='Trabalho em folga';}
       }else if(registro){
         ocorrencia='Marcação incompleta';
         incompletos++;
