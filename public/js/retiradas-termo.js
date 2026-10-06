@@ -11,6 +11,9 @@
   function brl(v){
     return 'R$ '+Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
   }
+  function totalGeralAberto(r){
+    return Number(r?.totais?.aberto||0)+Number(r?.pendencias_anteriores?.valor||0);
+  }
   function qtd(v){
     return Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:3,maximumFractionDigits:3});
   }
@@ -116,15 +119,15 @@
           '<div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:9px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:#9a3412">'+
             '✍️ No documento impresso, o funcionário deve marcar a forma de pagamento desejada e assinar antes da baixa.'+
           '</div>'+
-          '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">'+
-            '<div style="border:1px solid var(--border);border-radius:9px;padding:10px;background:#fafafa"><div style="font-size:10px;color:var(--muted);font-weight:800">RETIRADO NO PERÍODO</div><div style="font-size:18px;font-weight:900;margin-top:3px">'+brl(r.totais.total)+'</div></div>'+
-            '<div style="border:1px solid #bbf7d0;border-radius:9px;padding:10px;background:#f0fdf4"><div style="font-size:10px;color:#166534;font-weight:800">JÁ PAGO NO PERÍODO</div><div style="font-size:18px;font-weight:900;color:#166534;margin-top:3px">'+brl(r.totais.pago)+'</div></div>'+
-            '<div style="border:2px solid #b91c1c;border-radius:9px;padding:10px;background:#fff1f2"><div style="font-size:10px;color:#9f1239;font-weight:900">VALOR A PAGAR DESTE PERÍODO</div><div style="font-size:22px;font-weight:900;color:#b91c1c;margin-top:3px">'+brl(r.totais.aberto)+'</div></div>'+
+          '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:8px">'+
+            '<div style="border:2px solid #8B0000;border-radius:9px;padding:10px;background:#fff5f5"><div style="font-size:10px;color:#8B0000;font-weight:900">TOTAL DO PERÍODO</div><div style="font-size:22px;font-weight:900;color:#8B0000;margin-top:3px">'+brl(r.totais.aberto)+'</div><div style="font-size:10px;color:#7f1d1d;margin-top:3px">Valor a pagar/descontar referente somente ao período selecionado</div></div>'+
+            '<div style="border:1px solid #d1d5db;border-radius:9px;padding:10px;background:#f9fafb"><div style="font-size:10px;color:#4b5563;font-weight:900">SALDO ANTERIOR</div><div style="font-size:18px;font-weight:900;color:#374151;margin-top:3px">'+brl(r.pendencias_anteriores?.valor||0)+'</div><div style="font-size:10px;color:#6b7280;margin-top:3px">Não incluído no total do período</div></div>'+
+            '<div style="border:2px solid #111827;border-radius:9px;padding:10px;background:#f3f4f6"><div style="font-size:10px;color:#111827;font-weight:900">TOTAL GERAL EM ABERTO</div><div style="font-size:22px;font-weight:900;color:#111827;margin-top:3px">'+brl(totalGeralAberto(r))+'</div><div style="font-size:10px;color:#4b5563;margin-top:3px">Total do período + saldo anterior</div></div>'+
           '</div>'+
-          '<table class="rel-table"><thead><tr><th>Data</th><th>Produto</th><th>Qtd.</th><th>Valor em aberto</th></tr></thead><tbody>'+
+          '<div style="font-size:10px;color:var(--muted);margin-bottom:12px">Informativo: retirado no período '+brl(r.totais.total)+' · já pago no período '+brl(r.totais.pago)+'.</div>'+
+          '<table class="rel-table"><thead><tr><th>Data</th><th>Produto</th><th>Qtd.</th><th>Valor</th></tr></thead><tbody>'+
             (linhas||'<tr><td colspan="4">Nenhum valor em aberto neste período.</td></tr>')+
           '</tbody></table>'+
-          ((r.pendencias_anteriores?.valor||0)>0 ? '<div style="margin-top:12px;border:1px solid #d1d5db;border-radius:9px;padding:10px;background:#f9fafb;color:#4b5563"><b>Pendências de períodos anteriores:</b> '+brl(r.pendencias_anteriores.valor)+' · '+Number(r.pendencias_anteriores.quantidade||0)+' item(ns). <b>Não incluído</b> no valor a pagar deste período.</div>' : '')+
           '<div style="margin-top:12px;background:#fff7ed;border:1px solid #fed7aa;border-radius:9px;padding:11px;font-size:12px;color:#9a3412"><b>Na impressão:</b> o funcionário escolherá ☐ Vale Alimentação ou ☐ PIX e assinará o documento.</div>'+
           '<div id="rel-baixa-status" style="margin-top:12px"></div>'+
           '<div style="margin-top:14px;border-top:1px solid var(--border);padding-top:14px">'+
@@ -138,7 +141,7 @@
                 '</select></div>'+
               '<div><label style="font-size:10px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px">DATA DA BAIXA</label>'+
                 '<input id="rel-baixa-data" type="date" class="flt" style="width:100%" value="'+new Date().toISOString().slice(0,10)+'"></div>'+
-              '<button class="btn btn-green" id="btn-confirmar-baixa-rel" onclick="confirmarBaixaRelatorio()" disabled>✅ Confirmar baixa de todos</button>'+
+              '<button class="btn btn-green" id="btn-confirmar-baixa-rel" onclick="confirmarBaixaRelatorio()" disabled>✅ Confirmar baixa de todos os itens deste relatório</button>'+
             '</div>'+
           '</div>'+
         '</div>'+
@@ -218,13 +221,12 @@
       '<div class="top"><div><div class="brand">BOM BEEF</div><div class="muted">Gestão de Retiradas de Funcionários</div></div><div><div class="doc">RELATÓRIO PARA BAIXA</div><div class="muted">Conferência e autorização do funcionário</div></div></div>'+
       '<div class="info"><div class="box"><b>Funcionário</b>'+safe(r.funcionario.nome)+'</div><div class="box"><b>Período solicitado</b>'+dataBR(r.inicio)+' a '+dataBR(r.fim)+'</div></div>'+
       '<div style="display:grid;grid-template-columns:1fr 1fr 1.15fr;gap:8px;margin-bottom:12px">'+
-        '<div class="box"><b>Retirado no período</b><strong style="font-size:14px">'+brl(r.totais.total)+'</strong></div>'+
-        '<div class="box"><b>Já pago no período</b><strong style="font-size:14px">'+brl(r.totais.pago)+'</strong></div>'+
-        '<div class="box" style="border:2px solid #8B0000;background:#fff5f5"><b style="color:#8B0000">Valor a pagar deste período</b><strong style="font-size:18px;color:#8B0000">'+brl(r.totais.aberto)+'</strong></div>'+
+        '<div class="box" style="border:2px solid #8B0000;background:#fff5f5"><b style="color:#8B0000">TOTAL DO PERÍODO</b><strong style="font-size:18px;color:#8B0000">'+brl(r.totais.aberto)+'</strong><div class="muted" style="margin-top:3px">Valor a pagar/descontar referente somente ao período selecionado</div></div>'+
+        '<div class="box"><b>SALDO ANTERIOR</b><strong style="font-size:15px">'+brl(r.pendencias_anteriores?.valor||0)+'</strong><div class="muted" style="margin-top:3px">Não incluído no total do período</div></div>'+
+        '<div class="box" style="border:2px solid #111827;background:#f3f4f6"><b style="color:#111827">TOTAL GERAL EM ABERTO</b><strong style="font-size:18px;color:#111827">'+brl(totalGeralAberto(r))+'</strong><div class="muted" style="margin-top:3px">Total do período + saldo anterior</div></div>'+
       '</div>'+
       '<table><thead><tr><th>Data</th><th>Produto</th><th style="text-align:right">Qtd.</th><th style="text-align:right">Valor em aberto</th></tr></thead><tbody>'+linhas+'</tbody></table>'+
-      '<div class="total"><div><div class="lbl">VALOR A PAGAR DESTE PERÍODO</div><div class="muted">'+(r.itens||[]).length+' item(ns) pendente(s) do período solicitado</div></div><div class="val">'+brl(r.totais.aberto)+'</div></div>'+
-      (((r.pendencias_anteriores?.valor||0)>0) ? '<div style="margin-top:10px;border:1px solid #d1d5db;border-radius:6px;padding:8px;background:#f9fafb;color:#4b5563"><b>Pendências anteriores:</b> '+brl(r.pendencias_anteriores.valor)+' em '+Number(r.pendencias_anteriores.quantidade||0)+' item(ns). <b>Este valor NÃO está incluído no total acima.</b></div>' : '')+
+      '<div class="total"><div><div class="lbl">TOTAL DO PERÍODO</div><div class="muted">Valor a pagar/descontar das retiradas em aberto do período selecionado · '+(r.itens||[]).length+' item(ns)</div></div><div class="val">'+brl(r.totais.aberto)+'</div></div>'+
       '<div class="escolha"><h2>FORMA DE PAGAMENTO — FUNCIONÁRIO DEVE ASSINALAR UMA OPÇÃO</h2><div class="opcoes">'+
         '<div class="opcao"><span class="check"></span> Desconto no Vale Alimentação</div>'+
         '<div class="opcao"><span class="check"></span> Pagamento via PIX</div>'+
