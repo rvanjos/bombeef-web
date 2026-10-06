@@ -650,8 +650,10 @@ module.exports = function(pool) {
     if(req.user?.perfil!=='admin') return res.json({ok:true,total:0});
     try{
       const {rows:[x]}=await pool.query(`
-        SELECT COUNT(*)::int AS total FROM ponto_registros
-        WHERE aprovacao_status='pendente'
+        SELECT COUNT(*)::int AS total FROM ponto_registros p
+        WHERE p.aprovacao_status='pendente'
+          AND (NULLIF(current_setting('app.loja_id',true),'') IS NULL
+               OR p.loja_id=NULLIF(current_setting('app.loja_id',true),'')::int)
       `);
       res.json({ok:true,total:Number(x?.total||0)});
     }catch(e){res.json({ok:false,total:0,erro:e.message});}
@@ -668,6 +670,8 @@ module.exports = function(pool) {
                f.nome AS funcionario_nome
         FROM ponto_registros p JOIN funcionarios f ON f.id=p.funcionario_id
         WHERE ($1='todos' OR p.aprovacao_status=$1)
+          AND (NULLIF(current_setting('app.loja_id',true),'') IS NULL
+               OR p.loja_id=NULLIF(current_setting('app.loja_id',true),'')::int)
         ORDER BY p.data_ref DESC,f.nome
         LIMIT 300
       `,[status]);
@@ -684,6 +688,8 @@ module.exports = function(pool) {
       UPDATE ponto_registros SET aprovacao_status=$1,aprovacao_por=$2,aprovacao_em=NOW(),
         aprovacao_obs=$3,atualizado_em=NOW()
       WHERE id=ANY($4::int[]) AND aprovacao_status='pendente'
+        AND (NULLIF(current_setting('app.loja_id',true),'') IS NULL
+             OR loja_id=NULLIF(current_setting('app.loja_id',true),'')::int)
       RETURNING id
     `,[decisao,req.user?.id||null,String(req.body.observacao||'').trim()||null,ids]);
     res.json({ok:true,quantidade:rows.length,decisao});
@@ -696,7 +702,10 @@ module.exports = function(pool) {
       UPDATE ponto_registros SET troca_folga=$1,troca_folga_data=$2,troca_folga_obs=$3,
         aprovacao_status=CASE WHEN $1 THEN 'nao_aplicavel' ELSE aprovacao_status END,
         extra_minutos=CASE WHEN $1 THEN 0 ELSE extra_minutos END,atualizado_em=NOW()
-      WHERE id=$4 RETURNING *
+      WHERE id=$4
+        AND (NULLIF(current_setting('app.loja_id',true),'') IS NULL
+             OR loja_id=NULLIF(current_setting('app.loja_id',true),'')::int)
+      RETURNING *
     `,[ativa,req.body.data_compensada||null,String(req.body.observacao||'').trim()||null,req.params.id]);
     if(!rows.length) return res.status(404).json({ok:false,erro:'Registro de ponto não encontrado'});
     const apurado=ativa?rows[0]:await atualizarApuracaoPonto(rows[0].id);
