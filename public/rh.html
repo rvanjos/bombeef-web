@@ -1761,7 +1761,7 @@ async function init() {
       const qeData = document.getElementById('qe-data');
       if (qeData) qeData.value = hoje;
     }
-    if (!isGestor) showTab('meus');
+    if (isGestor) showTab('jornada'); else showTab('meus');
   }
 }
 
