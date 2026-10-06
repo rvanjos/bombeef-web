@@ -23,14 +23,12 @@ test('termo impresso possui assinatura e escolha de pagamento',()=>{
 });
 
 
-test('termo simples usa apenas valores em aberto e total do desconto',()=>{
+test('termo usa apenas itens em aberto e destaca o total do periodo',()=>{
   const js=ler('public/js/retiradas-termo.js');
   assert.match(js,/filter\(x=>Number\(x\.saldo_restante\|\|0\)>0\.004\)/);
-  assert.match(js,/TOTAL DO DESCONTO/);
-  assert.match(js,/Valor a descontar/);
-  assert.doesNotMatch(js,/Total retirado/);
-  assert.doesNotMatch(js,/Já pago/);
-  assert.doesNotMatch(js,/Saldo para quitação/);
+  assert.match(js,/TOTAL DO PERÍODO/);
+  assert.match(js,/Valor a pagar\/descontar referente somente ao período selecionado/);
+  assert.match(js,/saldo_restante/);
 });
 
 test('forma de pagamento e escolhida no impresso e confirmada depois',()=>{
@@ -39,17 +37,18 @@ test('forma de pagamento e escolhida no impresso e confirmada depois',()=>{
   assert.doesNotMatch(html,/id="rel-forma"/);
   assert.match(js,/Desconto no Vale Alimentação/);
   assert.match(js,/Pagamento via PIX/);
-  assert.match(js,/Forma de pagamento escolhida pelo funcionário/);
+  assert.match(js,/FORMA ESCOLHIDA PELO FUNCIONÁRIO/);
   assert.match(js,/rel-baixa-forma/);
   assert.match(js,/Selecione após a assinatura/);
 });
 
 
-test('botoes de impressao abrem sempre o termo com assinatura',()=>{
+test('botao de relatorio abre sempre o fluxo unico com assinatura',()=>{
   const html=ler('public/retiradas.html');
-  assert.match(html,/Relatório para baixa/);
-  assert.match(html,/Imprimir para baixa/);
-  assert.equal((html.match(/onclick="abrirRelatorio\(\)"/g)||[]).length>=2,true);
+  const js=ler('public/js/retiradas-termo.js');
+  assert.match(html,/Gerar relatório para assinatura/);
+  assert.equal((html.match(/onclick="abrirRelatorio\(\)"/g)||[]).length,1);
+  assert.match(js,/imprimirTermoRetiradas/);
   assert.doesNotMatch(html,/onclick="imprimirRetiradas\(\)">🖨️ Imprimir/);
 });
 
@@ -62,8 +61,8 @@ test('relatorio valida e confirma baixa integral de todos os itens',()=>{
   assert.match(rota,/FOR UPDATE/);
   assert.match(rota,/status='pago'/);
   assert.match(rota,/INSERT INTO pagamento_retirada_itens/);
-  assert.match(js,/Conferir se pode dar baixa/);
-  assert.match(js,/Confirmar pagamento de todos/);
+  assert.match(js,/validarBaixaRelatorio/);
+  assert.match(js,/Confirmar baixa de todos os itens deste relatório/);
   assert.match(rota,/O relatório mudou desde a emissão/);
 });
 
@@ -77,7 +76,8 @@ test('relatorio impresso possui assinatura explicita e layout proprio',()=>{
   const js=ler('public/js/retiradas-termo.js');
   assert.match(js,/RELATÓRIO PARA BAIXA/);
   assert.match(js,/Assinatura do funcionário/);
-  assert.match(js,/TOTAL A PAGAR \/ DESCONTAR/);
+  assert.match(js,/TOTAL DO PERÍODO/);
+  assert.match(js,/TOTAL GERAL EM ABERTO/);
   assert.match(js,/Conferência e autorização do funcionário/);
   assert.match(js,/baixa no sistema deve ser confirmada somente após/);
 });
