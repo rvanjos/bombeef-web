@@ -1585,7 +1585,11 @@ function fmtDataCurtaMetaFds(data) {
   return `${d}/${m}/${a}`;
 }
 
-function metaFdsStatus(valor, semEscala=false) {
+function metaFdsStatus(valor, semEscala=false, ausencia=null) {
+  if (ausencia) {
+    const labels={ferias:'🏖️ Férias',afastamento:'🩺 Afastado',atestado:'📄 Atestado',licenca:'📋 Licença',outro:'📌 Ausente'};
+    return '<span class="meta-fds-status indef">'+(labels[ausencia]||'📌 Ausente')+'</span>';
+  }
   if (valor === null || semEscala) return '<span class="meta-fds-status indef">⚠ Sem escala</span>';
   return valor
     ? '<span class="meta-fds-status sim">✓ Trabalhou</span>'
@@ -1639,7 +1643,7 @@ async function carregarMetaFds() {
       <details ${idx === 0 ? 'open' : ''}>
         <summary style="cursor:pointer;padding:9px 14px;font-size:12px;font-weight:700;color:var(--blue)">Ver cálculo por funcionário · ${descricaoModoMetaFds(dados.config.modo_rateio)}</summary>
         <div class="meta-fds-table"><table><thead><tr><th>Funcionário</th><th>Sábado</th><th>Domingo</th><th>Participação</th><th>Valor</th></tr></thead><tbody>
-          ${f.pessoas.map(p => `<tr><td><strong>${p.nome}</strong><div style="font-size:10px;color:var(--muted)">${p.cargo || ''}</div></td><td>${metaFdsStatus(p.trabalhou_sabado,p.sem_escala)}</td><td>${metaFdsStatus(p.trabalhou_domingo,p.sem_escala)}</td><td>${Math.round(p.fator*100)}%</td><td><strong>${brl(p.valor)}</strong></td></tr>`).join('')}
+          ${f.pessoas.map(p => `<tr><td><strong>${p.nome}</strong><div style="font-size:10px;color:var(--muted)">${p.cargo || ''}</div></td><td>${metaFdsStatus(p.trabalhou_sabado,p.sem_escala,p.ausente_sabado)}</td><td>${metaFdsStatus(p.trabalhou_domingo,p.sem_escala,p.ausente_domingo)}</td><td>${Math.round(p.fator*100)}%</td><td><strong>${brl(p.valor)}</strong></td></tr>`).join('')}
         </tbody></table></div>
       </details>
     </article>`;
