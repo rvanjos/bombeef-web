@@ -781,8 +781,8 @@ module.exports = function(pool) {
             WHERE a.funcionario_id=f.id AND a.status='ativo'
               AND (NULLIF(current_setting('app.loja_id',true),'') IS NULL
                    OR a.loja_id=NULLIF(current_setting('app.loja_id',true),'')::int)
-              AND a.data_inicio < $4::date
-              AND a.data_fim >= $3::date
+              AND a.data_inicio < $2::date
+              AND a.data_fim >= $1::date
           ),'[]'::json) AS ausencias,
           COUNT(p.id) AS dias_registrados,
           COUNT(CASE WHEN p.entrada IS NOT NULL AND p.saida IS NOT NULL THEN 1 END) AS dias_completos,
@@ -810,8 +810,8 @@ module.exports = function(pool) {
           ) FILTER (WHERE p.id IS NOT NULL) AS registros
         FROM funcionarios f
         LEFT JOIN ponto_registros p ON p.funcionario_id=f.id
-          AND p.data_ref >= $3::date
-          AND p.data_ref < $4::date
+          AND p.data_ref >= $1::date
+          AND p.data_ref < $2::date
           AND (NULLIF(current_setting('app.loja_id',true),'') IS NULL
                OR p.loja_id=NULLIF(current_setting('app.loja_id',true),'')::int)
         WHERE f.ativo=true AND COALESCE(f.freelancer,false)=false
@@ -820,7 +820,7 @@ module.exports = function(pool) {
         GROUP BY f.id, f.nome, f.cargo, f.horario_entrada, f.horario_saida,
                  f.jornada_horas, f.tolerancia_min, f.intervalo_min
         ORDER BY f.nome
-      `, [mesNum, anoNum, inicioMes, inicioProximoMes]);
+      `, [inicioMes, inicioProximoMes]);
       res.json({ ok:true, data:rows });
     } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
   });
