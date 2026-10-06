@@ -801,8 +801,8 @@ async function carregarRelatorio() {
     }).length;
     const faltas   = regs.filter(r => r.status==='falta').length;
     const extras   = regs.filter(r => Number(r.extra_minutos||0)>0 && !r.troca_folga).length;
-    const extrasMin= regs.reduce((s,r)=>s+Number(r.extra_minutos||0),0);
-    const intervaloMin=regs.reduce((s,r)=>s+Number(r.intervalo_suprimido_min||0),0);
+    const extrasMin= regs.filter(r=>r.aprovacao_status==='aprovado').reduce((s,r)=>s+Number(r.extra_minutos||0),0);
+    const intervaloMin=regs.filter(r=>r.aprovacao_status==='aprovado').reduce((s,r)=>s+Number(r.intervalo_suprimido_min||0),0);
     const pendentes=regs.filter(r=>r.aprovacao_status==='pendente').length;
     const atrasados= regs.filter(r => r.status==='atraso').length;
     const horasTot = regs.reduce((s,r) => s + parseFloat(r.horas_trabalhadas||0), 0);
@@ -831,8 +831,8 @@ async function carregarRelatorio() {
           <div class="rel-stat-v">${fmt(saldo)}</div><div class="rel-stat-k">Saldo</div>
         </div>
         <div class="rel-stat"><div class="rel-stat-v">${faltas}</div><div class="rel-stat-k">Faltas</div></div>
-        <div class="rel-stat"><div class="rel-stat-v">${extrasMin}m</div><div class="rel-stat-k">Horas extras</div></div>
-        <div class="rel-stat"><div class="rel-stat-v">${intervaloMin}m</div><div class="rel-stat-k">Intervalo suprimido</div></div>
+        <div class="rel-stat"><div class="rel-stat-v">${extrasMin}m</div><div class="rel-stat-k">Extras aprovadas</div></div>
+        <div class="rel-stat"><div class="rel-stat-v">${intervaloMin}m</div><div class="rel-stat-k">Intervalo aprovado</div></div>
         <div class="rel-stat"><div class="rel-stat-v">${pendentes}</div><div class="rel-stat-k">Pendentes aprovação</div></div>
         <div class="rel-stat"><div class="rel-stat-v">${atrasados}</div><div class="rel-stat-k">Atrasos</div></div>
         <div class="rel-stat"><div class="rel-stat-v">${regs.length}</div><div class="rel-stat-k">Dias registrados</div></div>
