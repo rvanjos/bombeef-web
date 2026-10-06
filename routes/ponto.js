@@ -69,6 +69,18 @@ module.exports = function(pool) {
       ['saida_por', 'TEXT'],
       ['entrada_em', 'TIMESTAMPTZ'],
       ['saida_em', 'TIMESTAMPTZ'],
+      // Apuração/approval de jornada — colunas aditivas, sem apagar histórico.
+      ['extra_minutos', 'INTEGER NOT NULL DEFAULT 0'],
+      ['intervalo_suprimido_min', 'INTEGER NOT NULL DEFAULT 0'],
+      ['aprovacao_status', "TEXT NOT NULL DEFAULT 'nao_aplicavel'"],
+      ['aprovacao_por', 'INTEGER'],
+      ['aprovacao_em', 'TIMESTAMPTZ'],
+      ['aprovacao_obs', 'TEXT'],
+      ['troca_folga', 'BOOLEAN NOT NULL DEFAULT false'],
+      ['troca_folga_data', 'DATE'],
+      ['troca_folga_obs', 'TEXT'],
+      ['intervalo_curto_confirmado', 'BOOLEAN NOT NULL DEFAULT false'],
+      ['intervalo_curto_motivo', 'TEXT'],
     ];
     for (const [col, tipo] of audCols) {
       await pool.query(`ALTER TABLE ponto_registros ADD COLUMN IF NOT EXISTS ${col} ${tipo}`)
@@ -216,6 +228,51 @@ module.exports = function(pool) {
     return 'ok';
   }
 
+  // CLT art. 58, §1º: variações de até 5 min por marcação, observado máximo de 10 min/dia,
+  // não geram desconto/acréscimo. Se o excedente diário ultrapassar 10 min, ele entra na apuração.
+  function calcularExtraMinutos(horasTrab, jornadaHoras, trocaFolga=false) {
+    if (trocaFolga || horasTrab === null || horasTrab === undefined) return 0;
+    const excedente = Math.max(0, Math.round(Number(horasTrab)*60 - Number(jornadaHoras||8)*60));
+    return excedente > 10 ? excedente : 0;
+  }
+
+  function calcularIntervaloSuprimido(saidaInt, retornoInt, intervaloMin) {
+    if (!saidaInt || !retornoInt) return 0;
+    const realizado = Math.max(0, Math.round((new Date(retornoInt)-new Date(saidaInt))/60000));
+    return Math.max(0, Number(intervaloMin||60) - realizado);
+  }
+
+  async function atualizarApuracaoPonto(pontoId) {
+    const { rows } = await pool.query(`
+      SELECT p.*, f.jornada_horas, f.intervalo_min
+      FROM ponto_registros p
+      JOIN funcionarios f ON f.id=p.funcionario_id
+      WHERE p.id=$1
+      LIMIT 1
+    `, [pontoId]);
+    const p=rows[0];
+    if(!p) return null;
+    const horas=calcHoras(p.entrada,p.saida,p.saida_intervalo,p.retorno_intervalo,p.intervalo_min);
+    const extra=calcularExtraMinutos(horas,p.jornada_horas,p.troca_folga);
+    const intervalo=calcularIntervaloSuprimido(p.saida_intervalo,p.retorno_intervalo,p.intervalo_min);
+    const precisaAprovacao=!p.troca_folga && (extra>0 || intervalo>0);
+    const novoStatus=precisaAprovacao
+      ? (['aprovado','rejeitado'].includes(p.aprovacao_status) ? 'pendente' : 'pendente')
+      : 'nao_aplicavel';
+    const { rows: upd } = await pool.query(`
+      UPDATE ponto_registros SET
+        extra_minutos=$1,
+        intervalo_suprimido_min=$2,
+        aprovacao_status=$3,
+        aprovacao_por=CASE WHEN $3='pendente' THEN NULL ELSE aprovacao_por END,
+        aprovacao_em=CASE WHEN $3='pendente' THEN NULL ELSE aprovacao_em END,
+        atualizado_em=NOW()
+      WHERE id=$4
+      RETURNING *
+    `,[extra,intervalo,novoStatus,pontoId]);
+    return upd[0];
+  }
+
   async function podeRegistrarPara(req, funcionarioId) {
     if (req.user?.perfil === 'admin') return true;
     const { rows } = await pool.query(
@@ -245,6 +302,36 @@ module.exports = function(pool) {
       if (!(await podeRegistrarPara(req, funcionario_id))) {
         return res.status(403).json({ ok:false, erro:'Você só pode registrar o próprio ponto' });
       }
+
+      if (tipo === 'retorno_intervalo') {
+        const { rows:[atual] } = await pool.query(`
+          SELECT p.saida_intervalo, COALESCE(f.intervalo_min,60) AS intervalo_min
+          FROM ponto_registros p
+          JOIN funcionarios f ON f.id=p.funcionario_id
+          WHERE p.funcionario_id=$1 AND p.data_ref=$2
+          LIMIT 1
+        `,[funcionario_id,dataRef]);
+        if (atual?.saida_intervalo) {
+          const realizado=Math.max(0,Math.floor((agora-new Date(atual.saida_intervalo))/60000));
+          const minimo=Number(atual.intervalo_min||60);
+          if (realizado < minimo) {
+            if (req.body.confirmar_intervalo_curto !== true) {
+              return res.status(409).json({
+                ok:false,
+                confirmacao_necessaria:true,
+                tipo:'intervalo_curto',
+                intervalo_realizado_min:realizado,
+                intervalo_minimo_min:minimo,
+                minutos_faltantes:minimo-realizado,
+                aviso:'Seu intervalo ainda não completou o tempo previsto. O período suprimido pode gerar pagamento adicional e ficará pendente de aprovação.'
+              });
+            }
+            if (!String(req.body.motivo_intervalo||'').trim()) {
+              return res.status(400).json({ok:false,erro:'Informe o motivo para confirmar o retorno antecipado do intervalo.'});
+            }
+          }
+        }
+      }
       // Colunas extras de auditoria por tipo
       const colPor = tipo === 'entrada' ? 'entrada_por' : tipo === 'saida' ? 'saida_por' : null;
       const colEm  = tipo === 'entrada' ? 'entrada_em'  : tipo === 'saida' ? 'saida_em'  : null;
@@ -261,6 +348,15 @@ module.exports = function(pool) {
         RETURNING *
       `, [funcionario_id, dataRef, agora, usuario]);
 
+      if (tipo === 'retorno_intervalo' && req.body.confirmar_intervalo_curto === true) {
+        await pool.query(`
+          UPDATE ponto_registros
+          SET intervalo_curto_confirmado=true, intervalo_curto_motivo=$1, atualizado_em=NOW()
+          WHERE id=$2
+        `,[String(req.body.motivo_intervalo||'').trim()||null,rows[0].id]);
+      }
+      const pontoApurado = await atualizarApuracaoPonto(rows[0].id);
+
       // Grava log de auditoria
       await pool.query(`
         INSERT INTO ponto_auditoria(ponto_id, funcionario_id, tipo, horario_batida, usuario_login, usuario_nome, usuario_perfil, ip_address, user_agent)
@@ -269,7 +365,7 @@ module.exports = function(pool) {
 
       res.json({
         ok: true,
-        data: rows[0],
+        data: pontoApurado || rows[0],
         horario: horaSaoPaulo(agora),
         auditoria: { usuario, login, horario: agora.toISOString(), ip }
       });
@@ -458,7 +554,8 @@ module.exports = function(pool) {
         WHERE id=$7 RETURNING *
       `, [timestampSaoPaulo(entrada), timestampSaoPaulo(saida_intervalo), timestampSaoPaulo(retorno_intervalo), timestampSaoPaulo(saida),
           justificativa||null, status||'ajustado', req.params.id]);
-      res.json({ ok:true, data:rows[0] });
+      const apurado=rows[0] ? await atualizarApuracaoPonto(rows[0].id) : null;
+      res.json({ ok:true, data:apurado||rows[0] });
     } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
   });
 
@@ -476,7 +573,8 @@ module.exports = function(pool) {
         RETURNING *
       `, [funcionario_id, data_ref, timestampSaoPaulo(entrada), timestampSaoPaulo(saida_intervalo), timestampSaoPaulo(retorno_intervalo),
           timestampSaoPaulo(saida), justificativa||null, status||'ajustado', req.user?.nome]);
-      res.json({ ok:true, data:rows[0] });
+      const apurado=rows[0] ? await atualizarApuracaoPonto(rows[0].id) : null;
+      res.json({ ok:true, data:apurado||rows[0] });
     } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
   });
 
@@ -509,6 +607,10 @@ module.exports = function(pool) {
               'saida', p.saida, 'status', p.status, 'justificativa', p.justificativa,
               'entrada_manual', p.entrada_manual, 'saida_manual', p.saida_manual,
               'data_ref', p.data_ref,
+              'extra_minutos', COALESCE(p.extra_minutos,0),
+              'intervalo_suprimido_min', COALESCE(p.intervalo_suprimido_min,0),
+              'aprovacao_status', COALESCE(p.aprovacao_status,'nao_aplicavel'),
+              'troca_folga', COALESCE(p.troca_folga,false),
               'horas_trabalhadas', CASE WHEN p.entrada IS NOT NULL AND p.saida IS NOT NULL
                 THEN EXTRACT(EPOCH FROM (p.saida - p.entrada))/3600 - COALESCE(
                   CASE WHEN p.saida_intervalo IS NOT NULL AND p.retorno_intervalo IS NOT NULL
@@ -530,6 +632,64 @@ module.exports = function(pool) {
     } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
   });
 
+  // ── Aprovação de horas extras / intervalo suprimido ───────────────────────
+  r.get('/pendentes-aprovacao/count', async (req,res)=>{
+    if(req.user?.perfil!=='admin') return res.json({ok:true,total:0});
+    try{
+      const {rows:[x]}=await pool.query(`
+        SELECT COUNT(*)::int AS total FROM ponto_registros
+        WHERE aprovacao_status='pendente'
+      `);
+      res.json({ok:true,total:Number(x?.total||0)});
+    }catch(e){res.json({ok:false,total:0,erro:e.message});}
+  });
+
+  r.get('/aprovacoes', async (req,res)=>{
+    if(req.user?.perfil!=='admin') return res.status(403).json({ok:false,erro:'Acesso restrito ao administrador'});
+    try{
+      const status=req.query.status||'pendente';
+      const {rows}=await pool.query(`
+        SELECT p.id,p.data_ref,p.entrada,p.saida_intervalo,p.retorno_intervalo,p.saida,
+               p.extra_minutos,p.intervalo_suprimido_min,p.aprovacao_status,p.aprovacao_obs,
+               p.troca_folga,p.troca_folga_data,p.troca_folga_obs,p.intervalo_curto_motivo,
+               f.nome AS funcionario_nome
+        FROM ponto_registros p JOIN funcionarios f ON f.id=p.funcionario_id
+        WHERE ($1='todos' OR p.aprovacao_status=$1)
+        ORDER BY p.data_ref DESC,f.nome
+        LIMIT 300
+      `,[status]);
+      res.json({ok:true,data:rows});
+    }catch(e){res.status(500).json({ok:false,erro:e.message});}
+  });
+
+  r.post('/aprovacoes/decidir-lote', async (req,res)=>{
+    if(req.user?.perfil!=='admin') return res.status(403).json({ok:false,erro:'Acesso restrito ao administrador'});
+    const ids=[...new Set((req.body.ids||[]).map(Number).filter(Number.isInteger))];
+    const decisao=req.body.decisao==='rejeitado'?'rejeitado':'aprovado';
+    if(!ids.length) return res.status(400).json({ok:false,erro:'Selecione ao menos um lançamento'});
+    const {rows}=await pool.query(`
+      UPDATE ponto_registros SET aprovacao_status=$1,aprovacao_por=$2,aprovacao_em=NOW(),
+        aprovacao_obs=$3,atualizado_em=NOW()
+      WHERE id=ANY($4::int[]) AND aprovacao_status='pendente'
+      RETURNING id
+    `,[decisao,req.user?.id||null,String(req.body.observacao||'').trim()||null,ids]);
+    res.json({ok:true,quantidade:rows.length,decisao});
+  });
+
+  r.post('/registros/:id/troca-folga', async (req,res)=>{
+    if(req.user?.perfil!=='admin') return res.status(403).json({ok:false,erro:'Acesso restrito ao administrador'});
+    const ativa=req.body.troca_folga===true;
+    const {rows}=await pool.query(`
+      UPDATE ponto_registros SET troca_folga=$1,troca_folga_data=$2,troca_folga_obs=$3,
+        aprovacao_status=CASE WHEN $1 THEN 'nao_aplicavel' ELSE aprovacao_status END,
+        extra_minutos=CASE WHEN $1 THEN 0 ELSE extra_minutos END,atualizado_em=NOW()
+      WHERE id=$4 RETURNING *
+    `,[ativa,req.body.data_compensada||null,String(req.body.observacao||'').trim()||null,req.params.id]);
+    if(!rows.length) return res.status(404).json({ok:false,erro:'Registro de ponto não encontrado'});
+    const apurado=ativa?rows[0]:await atualizarApuracaoPonto(rows[0].id);
+    res.json({ok:true,data:apurado});
+  });
+
   // ── Jornada do funcionário (configurar) ───────────────────────────────────
   r.put('/jornada/:id', async (req, res) => {
     if (req.user?.perfil !== 'admin') return res.status(403).json({ ok:false, erro:'Apenas administradores podem alterar jornadas' });
@@ -541,7 +701,7 @@ module.exports = function(pool) {
           jornada_horas=$4, tolerancia_min=$5, dias_folga=$6, usa_ponto=$7
         WHERE id=$8
       `, [horario_entrada||'08:00', horario_saida||'18:00', parseInt(intervalo_min)||60,
-          parseFloat(jornada_horas)||8, parseInt(tolerancia_min)||10,
+          parseFloat(jornada_horas)||8, 10,
           dias_folga||[], usa_ponto !== false, req.params.id]);
       res.json({ ok:true });
     } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
