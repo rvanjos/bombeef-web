@@ -230,10 +230,23 @@ module.exports = function(pool) {
 
   // CLT art. 58, §1º: variações de até 5 min por marcação, observado máximo de 10 min/dia,
   // não geram desconto/acréscimo. Se o excedente diário ultrapassar 10 min, ele entra na apuração.
-  function calcularExtraMinutos(horasTrab, jornadaHoras, trocaFolga=false) {
+  function calcularExtraMinutos(horasTrab, jornadaHoras, trocaFolga=false, entrada=null, saida=null, horarioEntrada=null, horarioSaida=null) {
     if (trocaFolga || horasTrab === null || horasTrab === undefined) return 0;
     const excedente = Math.max(0, Math.round(Number(horasTrab)*60 - Number(jornadaHoras||8)*60));
-    return excedente > 10 ? excedente : 0;
+    if (!excedente) return 0;
+
+    // Art. 58, §1º: cada marcação tem margem de até 5 min, com teto diário de 10 min.
+    // Se uma marcação isolada ultrapassa 5 min, a tolerância deixa de protegê-la.
+    let entradaAntecipada=0, saidaPosterior=0;
+    if (entrada && horarioEntrada) {
+      const previsto=String(horarioEntrada).slice(0,5).split(':').map(Number);
+      entradaAntecipada=Math.max(0,(previsto[0]*60+previsto[1])-minutosSaoPaulo(entrada));
+    }
+    if (saida && horarioSaida) {
+      const previsto=String(horarioSaida).slice(0,5).split(':').map(Number);
+      saidaPosterior=Math.max(0,minutosSaoPaulo(saida)-(previsto[0]*60+previsto[1]));
+    }
+    return (excedente>10 || entradaAntecipada>5 || saidaPosterior>5) ? excedente : 0;
   }
 
   function calcularIntervaloSuprimido(saidaInt, retornoInt, intervaloMin) {
@@ -244,7 +257,7 @@ module.exports = function(pool) {
 
   async function atualizarApuracaoPonto(pontoId) {
     const { rows } = await pool.query(`
-      SELECT p.*, f.jornada_horas, f.intervalo_min
+      SELECT p.*, f.jornada_horas, f.intervalo_min, f.horario_entrada, f.horario_saida
       FROM ponto_registros p
       JOIN funcionarios f ON f.id=p.funcionario_id
       WHERE p.id=$1
@@ -253,7 +266,7 @@ module.exports = function(pool) {
     const p=rows[0];
     if(!p) return null;
     const horas=calcHoras(p.entrada,p.saida,p.saida_intervalo,p.retorno_intervalo,p.intervalo_min);
-    const extra=calcularExtraMinutos(horas,p.jornada_horas,p.troca_folga);
+    const extra=calcularExtraMinutos(horas,p.jornada_horas,p.troca_folga,p.entrada,p.saida,p.horario_entrada,p.horario_saida);
     const intervalo=calcularIntervaloSuprimido(p.saida_intervalo,p.retorno_intervalo,p.intervalo_min);
     const precisaAprovacao=!p.troca_folga && (extra>0 || intervalo>0);
     const novoStatus=precisaAprovacao
