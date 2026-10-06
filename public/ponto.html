@@ -141,6 +141,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
     <h2>Ponto Eletrônico</h2>
     <div style="display:flex;align-items:center;gap:8px">
       <button id="btn-admin-ponto" onclick="abrirAdminPonto()" style="display:none;padding:6px 12px;background:rgba(255,255,255,.2);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif">⚙️ Admin</button>
+      <button id="btn-aprov-ponto" onclick="abrirAprovacoesPonto()" style="display:none;padding:6px 12px;background:#fff;color:#8B0000;border:1px solid rgba(255,255,255,.6);border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif">✅ Aprovações <span id="badge-aprov-ponto"></span></button>
       <button id="btn-relatorio" onclick="abrirRelatorio()" style="display:none;padding:6px 12px;background:rgba(255,255,255,.2);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif">📊 Relatório</button>
     </div>
     <div class="ph-user" id="ph-user">
@@ -248,9 +249,9 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
           <input type="number" id="jor-intervalo" value="60" min="0" max="120" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:8px;font-size:14px;font-family:'DM Sans',sans-serif;margin-top:4px">
         </div>
       </div>
-      <div style="margin-bottom:12px">
-        <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;display:block;margin-bottom:6px">Tolerância de atraso (minutos)</label>
-        <input type="number" id="jor-tolerancia" value="10" min="0" max="60" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:8px;font-size:14px;font-family:'DM Sans',sans-serif">
+      <div style="margin-bottom:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:9px 11px;font-size:11px;color:#475569">
+        <b>Tolerância legal de marcação:</b> até 5 minutos por marcação, observado o limite máximo de 10 minutos no dia. Essa regra não é configurável.
+        <input type="hidden" id="jor-tolerancia" value="10">
       </div>
       <div>
         <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;display:block;margin-bottom:8px">Dias de Folga</label>
@@ -414,6 +415,9 @@ window.onBBReady = async () => {
       if (me.data.perfil === 'admin') {
         const btnAdm = document.getElementById('btn-admin-ponto');
         if (btnAdm) btnAdm.style.display = '';
+        const btnAprov = document.getElementById('btn-aprov-ponto');
+        if (btnAprov) btnAprov.style.display = '';
+        atualizarBadgeAprovacoesPonto();
         const btnRel = document.getElementById('btn-relatorio');
         if (btnRel) btnRel.style.display = '';
       }
@@ -540,12 +544,19 @@ function renderStatus() {
     document.getElementById('r-trab').textContent = fmtH(trabH);
     document.getElementById('r-prev').textContent = fmtH(prevH);
     const sit = document.getElementById('r-sit');
-    if (atrasoMin > (_func.tolerancia_min||10)) {
+    const extraMin=Number(p.extra_minutos||0);
+    const intSup=Number(p.intervalo_suprimido_min||0);
+    if (p.troca_folga) {
+      sit.innerHTML = '<span style="color:#1a5c8a">🔄 Troca de folga — sem hora extra</span>';
+    } else if (extraMin>0 || intSup>0) {
+      const partes=[];
+      if(extraMin>0) partes.push('⏫ Extra: '+extraMin+'min');
+      if(intSup>0) partes.push('🍽️ Intervalo suprimido: '+intSup+'min');
+      sit.innerHTML = '<span style="color:#92400e">'+partes.join(' · ')+' · '+(p.aprovacao_status==='aprovado'?'✅ aprovado':'⏳ pendente de aprovação')+'</span>';
+    } else if (atrasoMin > 5) {
       sit.innerHTML = `<span style="color:#92400e">⚠️ Atraso de ${atrasoMin}min</span>`;
-    } else if (trabH > prevH+0.5) {
-      sit.innerHTML = `<span style="color:var(--green)">⏫ Hora extra: ${fmtH(trabH-prevH)}</span>`;
     } else {
-      sit.innerHTML = `<span style="color:var(--green)">✅ Normal</span>`;
+      sit.innerHTML = '<span style="color:var(--green)">✅ Normal</span>';
     }
     document.getElementById('resumo-dia').style.display = '';
   } else {
@@ -619,7 +630,28 @@ async function confirmar() {
   btn.disabled = true;
   btn.textContent = '⏳ Registrando...';
 
-  const d = await api.post('/api/ponto/bater', { funcionario_id:_func.id, tipo:_tipo });
+  let d = await api.post('/api/ponto/bater', { funcionario_id:_func.id, tipo:_tipo });
+  if (!d.ok && d.confirmacao_necessaria && d.tipo==='intervalo_curto') {
+    const certo = window.confirm(
+      'Seu intervalo foi de '+d.intervalo_realizado_min+' minutos e ainda faltam '+d.minutos_faltantes+' minutos para completar '+d.intervalo_minimo_min+' minutos.\n\n'+
+      'Tem certeza que deseja retornar agora? O período reduzido ficará registrado e passará por aprovação.'
+    );
+    if (!certo) {
+      btn.disabled=false; btn.textContent='✅ Confirmar Registro';
+      return;
+    }
+    const motivo = window.prompt('Informe por que está retornando antes de completar o intervalo:','');
+    if (!motivo || !motivo.trim()) {
+      btn.disabled=false; btn.textContent='✅ Confirmar Registro';
+      showToast('⚠️ O motivo é obrigatório para retorno antecipado.');
+      return;
+    }
+    d = await api.post('/api/ponto/bater', {
+      funcionario_id:_func.id, tipo:_tipo,
+      confirmar_intervalo_curto:true,
+      motivo_intervalo:motivo.trim()
+    });
+  }
   btn.disabled = false;
   btn.textContent = '✅ Confirmar Registro';
   fecharConf();
@@ -803,6 +835,58 @@ async function carregarRelatorio() {
   }).join('');
 }
 
+// ── Aprovação de jornada ─────────────────────────────────────────────────────
+async function atualizarBadgeAprovacoesPonto(){
+  if(_user?.perfil!=='admin') return;
+  const d=await api.get('/api/ponto/pendentes-aprovacao/count');
+  const n=Number(d.total||0);
+  const b=document.getElementById('badge-aprov-ponto');
+  if(b) b.textContent=n>0?'('+n+')':'';
+}
+
+async function abrirAprovacoesPonto(){
+  const m=document.getElementById('m-aprov-ponto');
+  m.classList.add('open');
+  const lista=document.getElementById('aprov-ponto-lista');
+  lista.innerHTML='<div style="padding:18px;text-align:center;color:var(--muted)">Carregando...</div>';
+  const d=await api.get('/api/ponto/aprovacoes?status=pendente');
+  if(!d.ok){lista.innerHTML='<div style="padding:18px;color:#991b1b">Erro: '+(d.erro||'não foi possível carregar')+'</div>';return;}
+  const itens=d.data||[];
+  document.getElementById('aprov-ponto-resumo').textContent=itens.length+' pendência(s)';
+  lista.innerHTML=itens.length?itens.map(x=>{
+    const extra=Number(x.extra_minutos||0), inter=Number(x.intervalo_suprimido_min||0);
+    return '<div style="border:1px solid var(--border);border-radius:10px;padding:11px;margin-bottom:8px;background:#fff">'+
+      '<div style="display:flex;gap:10px;align-items:flex-start">'+
+        '<input type="checkbox" class="aprov-ponto-check" value="'+x.id+'" style="width:18px;height:18px;margin-top:2px">'+
+        '<div style="flex:1"><div style="font-weight:700">'+x.funcionario_nome+' · '+String(x.data_ref).slice(0,10).split('-').reverse().join('/')+'</div>'+
+        '<div style="font-size:12px;margin-top:4px">'+(extra?'<b>Hora extra:</b> '+extra+' min ':'')+(inter?'<b>Intervalo suprimido:</b> '+inter+' min':'')+'</div>'+
+        (x.intervalo_curto_motivo?'<div style="font-size:11px;color:var(--muted);margin-top:4px">Motivo do retorno antecipado: '+x.intervalo_curto_motivo+'</div>':'')+
+        '</div>'+
+        '<button onclick="marcarTrocaFolga('+x.id+')" style="border:1px solid #93c5fd;background:#eff6ff;color:#1e40af;border-radius:7px;padding:6px 8px;cursor:pointer;font-size:11px">🔄 Troca de folga</button>'+
+      '</div></div>';
+  }).join(''):'<div style="padding:24px;text-align:center;color:var(--muted)">✅ Nenhuma aprovação pendente.</div>';
+}
+function fecharAprovacoesPonto(){document.getElementById('m-aprov-ponto').classList.remove('open');}
+function selecionarTodasAprovacoes(v){document.querySelectorAll('.aprov-ponto-check').forEach(x=>x.checked=v);}
+async function decidirAprovacoesPonto(decisao){
+  const ids=[...document.querySelectorAll('.aprov-ponto-check:checked')].map(x=>Number(x.value));
+  if(!ids.length){showToast('⚠️ Selecione ao menos um lançamento');return;}
+  const obs=window.prompt(decisao==='aprovado'?'Observação da aprovação (opcional):':'Motivo da rejeição (opcional):','')||'';
+  const d=await api.post('/api/ponto/aprovacoes/decidir-lote',{ids,decisao,observacao:obs});
+  if(!d.ok){showToast('❌ '+d.erro);return;}
+  showToast('✅ '+d.quantidade+' lançamento(s) '+(decisao==='aprovado'?'aprovado(s)':'rejeitado(s)'));
+  await abrirAprovacoesPonto(); await atualizarBadgeAprovacoesPonto();
+}
+async function marcarTrocaFolga(id){
+  const data=window.prompt('Qual foi a data da folga compensada? (AAAA-MM-DD)','');
+  if(!data) return;
+  const obs=window.prompt('Observação sobre a troca de folga:','')||'';
+  const d=await api.post('/api/ponto/registros/'+id+'/troca-folga',{troca_folga:true,data_compensada:data,observacao:obs});
+  if(!d.ok){showToast('❌ '+d.erro);return;}
+  showToast('🔄 Dia marcado como troca de folga. Não será contado como hora extra.');
+  await abrirAprovacoesPonto(); await atualizarBadgeAprovacoesPonto();
+}
+
 // ── Admin Ponto ───────────────────────────────────────────────────────────────
 const DIAS_SEMANA = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
 
@@ -963,6 +1047,30 @@ h3{color:#444;margin:12px 0 6px;font-size:13px}
   win.onload = () => win.print();
 }
 </script>
+
+<!-- Modal Aprovação de Horas Extras -->
+<div class="mbg2" id="m-aprov-ponto" onclick="if(event.target===this)fecharAprovacoesPonto()">
+  <div class="md" style="max-height:92vh;overflow-y:auto;max-width:760px">
+    <div class="md-pull"></div>
+    <div class="md-body">
+      <div class="ret-titulo">✅ Aprovação de Jornada</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:12px">
+        Pequenas variações até o limite legal não entram como hora extra. Retorno antecipado do intervalo aparece separado como intervalo suprimido.
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+        <button onclick="selecionarTodasAprovacoes(true)" class="btn-confirmar" style="padding:7px 10px">Selecionar todas</button>
+        <button onclick="selecionarTodasAprovacoes(false)" class="btn-cancelar" style="padding:7px 10px">Limpar seleção</button>
+        <span id="aprov-ponto-resumo" style="font-size:12px;color:var(--muted);align-self:center"></span>
+      </div>
+      <div id="aprov-ponto-lista"></div>
+    </div>
+    <div class="md-btns" style="flex-wrap:wrap">
+      <button class="btn-cancelar" onclick="fecharAprovacoesPonto()">Fechar</button>
+      <button class="btn-cancelar" onclick="decidirAprovacoesPonto('rejeitado')" style="color:#991b1b">✕ Rejeitar selecionadas</button>
+      <button class="btn-confirmar" onclick="decidirAprovacoesPonto('aprovado')">✓ Aprovar selecionadas</button>
+    </div>
+  </div>
+</div>
 
 <!-- Modal Admin Ponto -->
 <div class="mbg2" id="m-admin-ponto" onclick="if(event.target===this)document.getElementById('m-admin-ponto').classList.remove('open')">
