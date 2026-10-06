@@ -286,6 +286,20 @@ module.exports = function(pool) {
     return upd[0];
   }
 
+  async function recalcularPendenciasRecentes() {
+    const { rows } = await pool.query(`
+      SELECT id FROM ponto_registros
+      WHERE COALESCE(aprovacao_status,'nao_aplicavel')='nao_aplicavel'
+        AND data_ref >= CURRENT_DATE - INTERVAL '62 days'
+        AND (entrada IS NOT NULL OR saida_intervalo IS NOT NULL OR retorno_intervalo IS NOT NULL OR saida IS NOT NULL)
+        AND (NULLIF(current_setting('app.loja_id',true),'') IS NULL
+             OR loja_id=NULLIF(current_setting('app.loja_id',true),'')::int)
+      ORDER BY data_ref DESC
+      LIMIT 500
+    `);
+    for (const x of rows) await atualizarApuracaoPonto(x.id);
+  }
+
   async function podeRegistrarPara(req, funcionarioId) {
     if (req.user?.perfil === 'admin') return true;
     const { rows } = await pool.query(
@@ -649,6 +663,7 @@ module.exports = function(pool) {
   r.get('/pendentes-aprovacao/count', async (req,res)=>{
     if(req.user?.perfil!=='admin') return res.json({ok:true,total:0});
     try{
+      await recalcularPendenciasRecentes();
       const {rows:[x]}=await pool.query(`
         SELECT COUNT(*)::int AS total FROM ponto_registros p
         WHERE p.aprovacao_status='pendente'
@@ -662,6 +677,7 @@ module.exports = function(pool) {
   r.get('/aprovacoes', async (req,res)=>{
     if(req.user?.perfil!=='admin') return res.status(403).json({ok:false,erro:'Acesso restrito ao administrador'});
     try{
+      await recalcularPendenciasRecentes();
       const status=req.query.status||'pendente';
       const {rows}=await pool.query(`
         SELECT p.id,p.data_ref,p.entrada,p.saida_intervalo,p.retorno_intervalo,p.saida,
