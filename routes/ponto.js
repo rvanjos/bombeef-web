@@ -748,7 +748,7 @@ module.exports = function(pool) {
 
   // ── Resumo mensal por funcionário (para relatório) ────────────────────────
   r.get('/resumo-mensal', async (req, res) => {
-    if (!['admin','gestor'].includes(req.user?.perfil)) return res.status(403).json({ ok:false, erro:'Acesso restrito à gestão' });
+    if (req.user?.perfil !== 'admin') return res.status(403).json({ ok:false, erro:'Acesso restrito ao administrador' });
     const { mes, ano } = req.query;
     if (!mes || !ano) return res.status(400).json({ ok:false, erro:'mes e ano obrigatórios' });
     try {
@@ -756,7 +756,7 @@ module.exports = function(pool) {
         SELECT
           f.id, f.nome, f.cargo, f.horario_entrada, f.horario_saida,
           f.jornada_horas, f.tolerancia_min, f.intervalo_min,
-          COALESCE(f.dias_folga, ARRAY[]::TEXT[]) AS dias_folga,
+          ARRAY[]::TEXT[] AS dias_folga,
           COALESCE((
             SELECT JSON_AGG(JSON_BUILD_OBJECT(
               'dia_semana',jd.dia_semana,'folga',jd.folga,
@@ -814,7 +814,7 @@ module.exports = function(pool) {
           AND (NULLIF(current_setting('app.loja_id',true),'') IS NULL
                OR f.loja_id=NULLIF(current_setting('app.loja_id',true),'')::int)
         GROUP BY f.id, f.nome, f.cargo, f.horario_entrada, f.horario_saida,
-                 f.jornada_horas, f.tolerancia_min, f.intervalo_min, f.dias_folga
+                 f.jornada_horas, f.tolerancia_min, f.intervalo_min
         ORDER BY f.nome
       `, [parseInt(mes), parseInt(ano)]);
       res.json({ ok:true, data:rows });
