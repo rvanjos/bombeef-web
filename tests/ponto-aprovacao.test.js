@@ -127,3 +127,13 @@ test('listagem do ponto recalcula pendencias recentes antes de renderizar',()=>{
   const trecho=rota.slice(rota.indexOf("r.get('/registros'"),rota.indexOf("r.put('/registros/:id'"));
   assert.match(trecho,/await recalcularPendenciasRecentes\(\)/);
 });
+
+
+test('cartao ponto mensal nao depende de dias_folga legado e mostra erro real na tela',()=>{
+  const rota=ler('routes/ponto.js');
+  const rh=ler('public/rh.html');
+  const trecho=rota.slice(rota.indexOf("r.get('/resumo-mensal'"),rota.indexOf("// ── Férias e afastamentos"));
+  assert.match(trecho,/ARRAY\[\]::TEXT\[\] AS dias_folga/);
+  assert.doesNotMatch(trecho,/f\.dias_folga/);
+  assert.match(rh,/Erro ao carregar dados do cartão ponto/);
+});

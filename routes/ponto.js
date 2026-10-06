@@ -756,14 +756,17 @@ module.exports = function(pool) {
         SELECT
           f.id, f.nome, f.cargo, f.horario_entrada, f.horario_saida,
           f.jornada_horas, f.tolerancia_min, f.intervalo_min,
-          COALESCE(f.dias_folga, ARRAY[]::TEXT[]) AS dias_folga,
+          ARRAY[]::TEXT[] AS dias_folga,
           COALESCE((
             SELECT JSON_AGG(JSON_BUILD_OBJECT(
               'dia_semana',jd.dia_semana,'folga',jd.folga,
               'horario_entrada',jd.horario_entrada,'horario_saida',jd.horario_saida,
               'jornada_horas',jd.jornada_horas,'intervalo_min',jd.intervalo_min
             ) ORDER BY jd.dia_semana)
-            FROM ponto_jornada_dia jd WHERE jd.funcionario_id=f.id
+            FROM ponto_jornada_dia jd
+            WHERE jd.funcionario_id=f.id
+              AND (NULLIF(current_setting('app.loja_id',true),'') IS NULL
+                   OR jd.loja_id=NULLIF(current_setting('app.loja_id',true),'')::int)
           ),'[]'::json) AS jornadas_dia,
           COALESCE((
             SELECT JSON_AGG(JSON_BUILD_OBJECT(
@@ -805,9 +808,13 @@ module.exports = function(pool) {
         LEFT JOIN ponto_registros p ON p.funcionario_id=f.id
           AND EXTRACT(MONTH FROM p.data_ref)=$1
           AND EXTRACT(YEAR FROM p.data_ref)=$2
+          AND (NULLIF(current_setting('app.loja_id',true),'') IS NULL
+               OR p.loja_id=NULLIF(current_setting('app.loja_id',true),'')::int)
         WHERE f.ativo=true AND COALESCE(f.freelancer,false)=false
+          AND (NULLIF(current_setting('app.loja_id',true),'') IS NULL
+               OR f.loja_id=NULLIF(current_setting('app.loja_id',true),'')::int)
         GROUP BY f.id, f.nome, f.cargo, f.horario_entrada, f.horario_saida,
-                 f.jornada_horas, f.tolerancia_min, f.intervalo_min, f.dias_folga
+                 f.jornada_horas, f.tolerancia_min, f.intervalo_min
         ORDER BY f.nome
       `, [parseInt(mes), parseInt(ano)]);
       res.json({ ok:true, data:rows });
