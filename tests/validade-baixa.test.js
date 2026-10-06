@@ -78,7 +78,7 @@ test('editar validade no desktop e no mobile encontra todos os campos do modal',
       assert.match(modal,new RegExp('id="'+id+'"'), 'campo '+id+' ausente no formulário, viewport '+largura);
     }
     assert.match(modal,/id="v-obs"/);
-    assert.match(html,/onclick="abrirModal\(\$\{v\.id\}\)"/);
+    assert.match(html,/data-validade-edit="\$\{v\.id\}"/);
   }
 });
 
@@ -91,4 +91,14 @@ test('editor de validade aceita id string e possui fallback por API',()=>{
   assert.match(tela,/erro ao abrir edição/);
   assert.match(rota,/r\.get\('\/:id'/);
   assert.match(rota,/Item de validade não encontrado/);
+});
+
+
+test('editar validade usa evento delegado e nao depende de onclick inline',()=>{
+  const html=ler('public/validade.html');
+  assert.match(html,/document\.addEventListener\('click',[\s\S]*data-validade-edit/);
+  assert.match(html,/event\.preventDefault\(\)/);
+  assert.match(html,/event\.stopPropagation\(\)/);
+  assert.match(html,/abrirModal\(id\)/);
+  assert.doesNotMatch(html,/onclick="(?:event\.stopPropagation\(\);)?abrirModal\(\$\{v\.id\}\)"/);
 });
