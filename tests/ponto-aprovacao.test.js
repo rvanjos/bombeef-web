@@ -109,3 +109,21 @@ test('configuracao de jornada saiu da barra principal do ponto',()=>{
   const ponto=ler('public/ponto.html');
   assert.doesNotMatch(ponto,/id="btn-admin-ponto"/);
 });
+
+
+test('hora extra usa jornada efetiva do dia e nao jornada fixa do funcionario',()=>{
+  const rota=ler('routes/ponto.js');
+  const rh=ler('public/rh.html');
+  assert.match(rota,/LEFT JOIN ponto_jornada_dia jd/);
+  assert.match(rota,/jornada_horas_efetiva/);
+  assert.match(rota,/EXTRACT\(DOW FROM p\.data_ref\)::int/);
+  assert.match(rota,/COALESCE\(jd\.horario_entrada,f\.horario_entrada\)/);
+  assert.match(rota,/COALESCE\(aprovacao_status,'nao_aplicavel'\) IN \('nao_aplicavel','pendente'\)/);
+  assert.match(rh,/const extraMin=Math\.max\(0,Number\(p\.extra_minutos\|\|0\)\)/);
+});
+
+test('listagem do ponto recalcula pendencias recentes antes de renderizar',()=>{
+  const rota=ler('routes/ponto.js');
+  const trecho=rota.slice(rota.indexOf("r.get('/registros'"),rota.indexOf("r.put('/registros/:id'"));
+  assert.match(trecho,/await recalcularPendenciasRecentes\(\)/);
+});
