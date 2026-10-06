@@ -81,6 +81,8 @@ module.exports = function(pool) {
       ['troca_folga_obs', 'TEXT'],
       ['intervalo_curto_confirmado', 'BOOLEAN NOT NULL DEFAULT false'],
       ['intervalo_curto_motivo', 'TEXT'],
+      ['almoco_corrido_confirmado', 'BOOLEAN NOT NULL DEFAULT false'],
+      ['almoco_corrido_justificativa', 'TEXT'],
     ];
     for (const [col, tipo] of audCols) {
       await pool.query(`ALTER TABLE ponto_registros ADD COLUMN IF NOT EXISTS ${col} ${tipo}`)
@@ -105,6 +107,27 @@ module.exports = function(pool) {
         UNIQUE(loja_id, funcionario_id, dia_semana)
       )
     `).catch(()=>{});
+
+    // Períodos de férias e afastamentos vinculados ao ponto/RH.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS ponto_ausencias (
+        id SERIAL PRIMARY KEY,
+        funcionario_id INTEGER NOT NULL REFERENCES funcionarios(id),
+        tipo TEXT NOT NULL CHECK(tipo IN ('ferias','afastamento','licenca','atestado','outro')),
+        data_inicio DATE NOT NULL,
+        data_fim DATE NOT NULL,
+        motivo TEXT,
+        observacao TEXT,
+        status TEXT NOT NULL DEFAULT 'ativo' CHECK(status IN ('ativo','cancelado')),
+        criado_por INTEGER,
+        criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        cancelado_por INTEGER,
+        cancelado_em TIMESTAMPTZ,
+        loja_id INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id),
+        CHECK(data_fim >= data_inicio)
+      )
+    `).catch(e=>console.warn('[ponto] criar ponto_ausencias:',e.message));
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_ponto_ausencias_func_periodo ON ponto_ausencias(funcionario_id,data_inicio,data_fim)`).catch(()=>{});
 
     // Corrige FK diretamente: drop qualquer FK em funcionario_id e recria apontando para funcionarios
     try {
@@ -268,7 +291,7 @@ module.exports = function(pool) {
     const horas=calcHoras(p.entrada,p.saida,p.saida_intervalo,p.retorno_intervalo,p.intervalo_min);
     const extra=calcularExtraMinutos(horas,p.jornada_horas,p.troca_folga,p.entrada,p.saida,p.horario_entrada,p.horario_saida);
     const intervalo=calcularIntervaloSuprimido(p.saida_intervalo,p.retorno_intervalo,p.intervalo_min);
-    const precisaAprovacao=!p.troca_folga && (extra>0 || intervalo>0);
+    const precisaAprovacao=!p.troca_folga && (extra>0 || intervalo>0 || p.almoco_corrido_confirmado);
     const novoStatus=precisaAprovacao
       ? (['aprovado','rejeitado'].includes(p.aprovacao_status) ? 'pendente' : 'pendente')
       : 'nao_aplicavel';
@@ -300,6 +323,19 @@ module.exports = function(pool) {
     for (const x of rows) await atualizarApuracaoPonto(x.id);
   }
 
+  async function ausenciaAtiva(funcionarioId, dataRef) {
+    const { rows } = await pool.query(`
+      SELECT id,tipo,data_inicio,data_fim,motivo,observacao
+      FROM ponto_ausencias
+      WHERE funcionario_id=$1 AND status='ativo'
+        AND $2::date BETWEEN data_inicio AND data_fim
+        AND (NULLIF(current_setting('app.loja_id',true),'') IS NULL
+             OR loja_id=NULLIF(current_setting('app.loja_id',true),'')::int)
+      ORDER BY data_inicio DESC LIMIT 1
+    `,[funcionarioId,dataRef]);
+    return rows[0]||null;
+  }
+
   async function podeRegistrarPara(req, funcionarioId) {
     if (req.user?.perfil === 'admin') return true;
     const { rows } = await pool.query(
@@ -328,6 +364,35 @@ module.exports = function(pool) {
     try {
       if (!(await podeRegistrarPara(req, funcionario_id))) {
         return res.status(403).json({ ok:false, erro:'Você só pode registrar o próprio ponto' });
+      }
+
+      const ausencia = await ausenciaAtiva(funcionario_id,dataRef);
+      if (ausencia) {
+        return res.status(409).json({
+          ok:false, afastamento_ativo:true, tipo_afastamento:ausencia.tipo,
+          erro:'Há um período de '+ausencia.tipo+' ativo para esta data. O ponto não precisa ser registrado enquanto durar esse período.'
+        });
+      }
+
+      if (tipo === 'saida') {
+        const { rows:[atual] } = await pool.query(`
+          SELECT p.saida_intervalo,p.retorno_intervalo,COALESCE(f.intervalo_min,60) AS intervalo_min
+          FROM ponto_registros p JOIN funcionarios f ON f.id=p.funcionario_id
+          WHERE p.funcionario_id=$1 AND p.data_ref=$2 LIMIT 1
+        `,[funcionario_id,dataRef]);
+        const exigeIntervalo=Number(atual?.intervalo_min||0)>0;
+        const semMarcacao=exigeIntervalo && !atual?.saida_intervalo && !atual?.retorno_intervalo;
+        if (semMarcacao) {
+          if (req.body.confirmar_almoco_corrido !== true) {
+            return res.status(409).json({
+              ok:false,confirmacao_necessaria:true,tipo:'intervalo_nao_registrado',
+              aviso:'Não há registro de saída e retorno do almoço hoje. Confirme se você trabalhou no horário de almoço ou corrija o ponto se esqueceu de registrar o intervalo.'
+            });
+          }
+          if (!String(req.body.justificativa_almoco_corrido||'').trim()) {
+            return res.status(400).json({ok:false,erro:'Informe a justificativa do almoço corrido antes de registrar a saída.'});
+          }
+        }
       }
 
       if (tipo === 'retorno_intervalo') {
@@ -381,6 +446,14 @@ module.exports = function(pool) {
           SET intervalo_curto_confirmado=true, intervalo_curto_motivo=$1, atualizado_em=NOW()
           WHERE id=$2
         `,[String(req.body.motivo_intervalo||'').trim()||null,rows[0].id]);
+      }
+      if (tipo === 'saida' && req.body.confirmar_almoco_corrido === true) {
+        await pool.query(`
+          UPDATE ponto_registros
+          SET almoco_corrido_confirmado=true, almoco_corrido_justificativa=$1,
+              justificativa=COALESCE(NULLIF(justificativa,''),$1), atualizado_em=NOW()
+          WHERE id=$2
+        `,[String(req.body.justificativa_almoco_corrido||'').trim(),rows[0].id]);
       }
       const pontoApurado = await atualizarApuracaoPonto(rows[0].id);
 
@@ -624,6 +697,16 @@ module.exports = function(pool) {
             ) ORDER BY jd.dia_semana)
             FROM ponto_jornada_dia jd WHERE jd.funcionario_id=f.id
           ),'[]'::json) AS jornadas_dia,
+          COALESCE((
+            SELECT JSON_AGG(JSON_BUILD_OBJECT(
+              'id',a.id,'tipo',a.tipo,'data_inicio',a.data_inicio,'data_fim',a.data_fim,
+              'motivo',a.motivo,'observacao',a.observacao
+            ) ORDER BY a.data_inicio)
+            FROM ponto_ausencias a
+            WHERE a.funcionario_id=f.id AND a.status='ativo'
+              AND a.data_inicio <= make_date($2,$1,1) + INTERVAL '1 month - 1 day'
+              AND a.data_fim >= make_date($2,$1,1)
+          ),'[]'::json) AS ausencias,
           COUNT(p.id) AS dias_registrados,
           COUNT(CASE WHEN p.entrada IS NOT NULL AND p.saida IS NOT NULL THEN 1 END) AS dias_completos,
           COUNT(CASE WHEN p.status='falta' OR (p.data_ref::date <= CURRENT_DATE AND p.entrada IS NULL) THEN 1 END) AS faltas,
@@ -638,6 +721,8 @@ module.exports = function(pool) {
               'intervalo_suprimido_min', COALESCE(p.intervalo_suprimido_min,0),
               'aprovacao_status', COALESCE(p.aprovacao_status,'nao_aplicavel'),
               'troca_folga', COALESCE(p.troca_folga,false),
+              'almoco_corrido_confirmado', COALESCE(p.almoco_corrido_confirmado,false),
+              'almoco_corrido_justificativa', p.almoco_corrido_justificativa,
               'horas_trabalhadas', CASE WHEN p.entrada IS NOT NULL AND p.saida IS NOT NULL
                 THEN EXTRACT(EPOCH FROM (p.saida - p.entrada))/3600 - COALESCE(
                   CASE WHEN p.saida_intervalo IS NOT NULL AND p.retorno_intervalo IS NOT NULL
@@ -657,6 +742,55 @@ module.exports = function(pool) {
       `, [parseInt(mes), parseInt(ano)]);
       res.json({ ok:true, data:rows });
     } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
+  });
+
+  // ── Férias e afastamentos ─────────────────────────────────────────────────
+  r.get('/ausencias', async (req,res)=>{
+    if(!['admin','gestor'].includes(req.user?.perfil)) return res.status(403).json({ok:false,erro:'Acesso restrito à gestão'});
+    const funcionarioId=req.query.funcionario_id?Number(req.query.funcionario_id):null;
+    try{
+      const {rows}=await pool.query(`
+        SELECT a.*,f.nome AS funcionario_nome
+        FROM ponto_ausencias a JOIN funcionarios f ON f.id=a.funcionario_id
+        WHERE a.status='ativo'
+          AND ($1::int IS NULL OR a.funcionario_id=$1)
+          AND (NULLIF(current_setting('app.loja_id',true),'') IS NULL
+               OR a.loja_id=NULLIF(current_setting('app.loja_id',true),'')::int)
+        ORDER BY a.data_inicio DESC,a.id DESC
+        LIMIT 300
+      `,[funcionarioId]);
+      res.json({ok:true,data:rows});
+    }catch(e){res.status(500).json({ok:false,erro:e.message});}
+  });
+
+  r.post('/ausencias', async (req,res)=>{
+    if(!['admin','gestor'].includes(req.user?.perfil)) return res.status(403).json({ok:false,erro:'Acesso restrito à gestão'});
+    const {funcionario_id,tipo,data_inicio,data_fim,motivo,observacao}=req.body;
+    const tipos=['ferias','afastamento','licenca','atestado','outro'];
+    if(!funcionario_id||!tipos.includes(tipo)||!data_inicio||!data_fim) return res.status(400).json({ok:false,erro:'Funcionário, tipo e período são obrigatórios'});
+    try{
+      const {rows}=await pool.query(`
+        INSERT INTO ponto_ausencias(funcionario_id,tipo,data_inicio,data_fim,motivo,observacao,criado_por)
+        VALUES($1,$2,$3,$4,$5,$6,$7)
+        RETURNING *
+      `,[Number(funcionario_id),tipo,data_inicio,data_fim,String(motivo||'').trim()||null,String(observacao||'').trim()||null,req.user?.id||null]);
+      res.json({ok:true,data:rows[0]});
+    }catch(e){res.status(500).json({ok:false,erro:e.message});}
+  });
+
+  r.post('/ausencias/:id/cancelar', async (req,res)=>{
+    if(!['admin','gestor'].includes(req.user?.perfil)) return res.status(403).json({ok:false,erro:'Acesso restrito à gestão'});
+    try{
+      const {rows}=await pool.query(`
+        UPDATE ponto_ausencias SET status='cancelado',cancelado_por=$1,cancelado_em=NOW()
+        WHERE id=$2 AND status='ativo'
+          AND (NULLIF(current_setting('app.loja_id',true),'') IS NULL
+               OR loja_id=NULLIF(current_setting('app.loja_id',true),'')::int)
+        RETURNING *
+      `,[req.user?.id||null,Number(req.params.id)]);
+      if(!rows.length) return res.status(404).json({ok:false,erro:'Período não encontrado ou já cancelado'});
+      res.json({ok:true,data:rows[0]});
+    }catch(e){res.status(500).json({ok:false,erro:e.message});}
   });
 
   // ── Aprovação de horas extras / intervalo suprimido ───────────────────────
@@ -682,8 +816,14 @@ module.exports = function(pool) {
       const {rows}=await pool.query(`
         SELECT p.id,p.data_ref,p.entrada,p.saida_intervalo,p.retorno_intervalo,p.saida,
                p.extra_minutos,p.intervalo_suprimido_min,p.aprovacao_status,p.aprovacao_obs,
+               p.justificativa,p.observacao,p.entrada_manual,p.saida_manual,
                p.troca_folga,p.troca_folga_data,p.troca_folga_obs,p.intervalo_curto_motivo,
-               f.nome AS funcionario_nome
+               p.almoco_corrido_confirmado,p.almoco_corrido_justificativa,
+               f.nome AS funcionario_nome,f.cargo,
+               f.horario_entrada AS horario_entrada_previsto,
+               f.horario_saida AS horario_saida_previsto,
+               f.intervalo_min AS intervalo_previsto_min,
+               f.jornada_horas AS jornada_prevista_horas
         FROM ponto_registros p JOIN funcionarios f ON f.id=p.funcionario_id
         WHERE ($1='todos' OR p.aprovacao_status=$1)
           AND (NULLIF(current_setting('app.loja_id',true),'') IS NULL
