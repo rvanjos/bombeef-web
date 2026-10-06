@@ -661,7 +661,7 @@ module.exports = function(pool) {
 
   // ── Aprovação de horas extras / intervalo suprimido ───────────────────────
   r.get('/pendentes-aprovacao/count', async (req,res)=>{
-    if(req.user?.perfil!=='admin') return res.json({ok:true,total:0});
+    if(!['admin','gestor'].includes(req.user?.perfil)) return res.json({ok:true,total:0});
     try{
       await recalcularPendenciasRecentes();
       const {rows:[x]}=await pool.query(`
@@ -675,7 +675,7 @@ module.exports = function(pool) {
   });
 
   r.get('/aprovacoes', async (req,res)=>{
-    if(req.user?.perfil!=='admin') return res.status(403).json({ok:false,erro:'Acesso restrito ao administrador'});
+    if(!['admin','gestor'].includes(req.user?.perfil)) return res.status(403).json({ok:false,erro:'Acesso restrito à gestão'});
     try{
       await recalcularPendenciasRecentes();
       const status=req.query.status||'pendente';
@@ -696,7 +696,7 @@ module.exports = function(pool) {
   });
 
   r.post('/aprovacoes/decidir-lote', async (req,res)=>{
-    if(req.user?.perfil!=='admin') return res.status(403).json({ok:false,erro:'Acesso restrito ao administrador'});
+    if(!['admin','gestor'].includes(req.user?.perfil)) return res.status(403).json({ok:false,erro:'Acesso restrito à gestão'});
     const ids=[...new Set((req.body.ids||[]).map(Number).filter(Number.isInteger))];
     const decisao=req.body.decisao==='rejeitado'?'rejeitado':'aprovado';
     if(!ids.length) return res.status(400).json({ok:false,erro:'Selecione ao menos um lançamento'});
@@ -712,7 +712,7 @@ module.exports = function(pool) {
   });
 
   r.post('/registros/:id/troca-folga', async (req,res)=>{
-    if(req.user?.perfil!=='admin') return res.status(403).json({ok:false,erro:'Acesso restrito ao administrador'});
+    if(!['admin','gestor'].includes(req.user?.perfil)) return res.status(403).json({ok:false,erro:'Acesso restrito à gestão'});
     const ativa=req.body.troca_folga===true;
     const {rows}=await pool.query(`
       UPDATE ponto_registros SET troca_folga=$1,troca_folga_data=$2,troca_folga_obs=$3,

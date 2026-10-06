@@ -47,3 +47,25 @@ test('aprovacao em lote existe na interface e backend',()=>{
   assert.match(tela,/Troca de folga/);
   assert.match(rota,/WHERE id=ANY\(\$4::int\[\]\) AND aprovacao_status='pendente'/);
 });
+
+
+test('dashboard mantém ponto e fiado visíveis e soma ponto no total',()=>{
+  const html=ler('public/index.html');
+  assert.match(html,/sempreVisivel = tipo==='ponto' \|\| tipo==='fiado'/);
+  assert.match(html,/dados\.rh\+dados\.retiradas\+dados\.fiado\+dados\.ponto/);
+  assert.match(html,/\['admin','gestor'\]\.includes\(usuario\?\.perfil\)/);
+});
+
+test('rotas estáticas de alertas de validade não são capturadas pelo GET de item',()=>{
+  const rota=ler('routes/validade.js');
+  assert.match(rota,/r\.get\('\/:id\(\\\\d\+\)'/);
+  assert.match(rota,/r\.get\('\/alertas-confirmacao'/);
+  assert.match(rota,/r\.get\('\/alertas-dashboard'/);
+});
+
+test('gestor pode visualizar e aprovar pendencias do ponto',()=>{
+  const rota=ler('routes/ponto.js');
+  const tela=ler('public/ponto.html');
+  assert.match(rota,/\['admin','gestor'\]\.includes\(req\.user\?\.perfil\)/);
+  assert.match(tela,/\['admin','gestor'\]\.includes\(me\.data\.perfil\)/);
+});
