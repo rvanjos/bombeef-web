@@ -39,3 +39,24 @@ test('interface diferencia recebimento de concordancia',()=>{
   assert.match(tela,/FormData/);
   assert.match(tela,/Authorization:'Bearer '/);
 });
+
+
+test('documentos de funcionario usam vinculo por login ou email e gestor nao ve todos',()=>{
+  const rota=ler('routes/rh.js');
+  const tela=ler('public/rh.html');
+  assert.match(rota,/f\.usuario_id=\$1 OR \(f\.usuario_id IS NULL AND u\.email IS NOT NULL AND LOWER\(f\.email\)=LOWER\(u\.email\)\)/);
+  assert.match(rota,/function gestorRH\(req\)\{ return req\.user\?\.perfil==='admin'; \}/);
+  assert.match(rota,/Number\(proprio\.id\)!==Number\(doc\.funcionario_id\)/);
+  assert.match(tela,/const gestao=_perfil==='admin';/);
+});
+
+test('premiacao de fim de semana considera ferias e afastamentos',()=>{
+  const rota=ler('routes/rh.js');
+  const tela=ler('public/rh.html');
+  assert.match(rota,/FROM ponto_ausencias/);
+  assert.match(rota,/ausente_sabado/);
+  assert.match(rota,/ausente_domingo/);
+  assert.match(rota,/afastado_fim_semana/);
+  assert.match(tela,/🏖️ Férias/);
+  assert.match(tela,/🩺 Afastado/);
+});
