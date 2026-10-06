@@ -749,8 +749,12 @@ module.exports = function(pool) {
   // ── Resumo mensal por funcionário (para relatório) ────────────────────────
   r.get('/resumo-mensal', async (req, res) => {
     if (req.user?.perfil !== 'admin') return res.status(403).json({ ok:false, erro:'Acesso restrito ao administrador' });
-    const { mes, ano } = req.query;
-    if (!mes || !ano) return res.status(400).json({ ok:false, erro:'mes e ano obrigatórios' });
+    const mesNum=Number(req.query.mes), anoNum=Number(req.query.ano);
+    if (!Number.isInteger(mesNum) || mesNum<1 || mesNum>12 || !Number.isInteger(anoNum) || anoNum<2000 || anoNum>2100)
+      return res.status(400).json({ ok:false, erro:'mes e ano inválidos' });
+    const inicioMes=`${anoNum}-${String(mesNum).padStart(2,'0')}-01`;
+    const proximo=new Date(anoNum,mesNum,1,12);
+    const inicioProximoMes=`${proximo.getFullYear()}-${String(proximo.getMonth()+1).padStart(2,'0')}-01`;
     try {
       const { rows } = await pool.query(`
         SELECT
@@ -777,8 +781,8 @@ module.exports = function(pool) {
             WHERE a.funcionario_id=f.id AND a.status='ativo'
               AND (NULLIF(current_setting('app.loja_id',true),'') IS NULL
                    OR a.loja_id=NULLIF(current_setting('app.loja_id',true),'')::int)
-              AND a.data_inicio <= make_date($2,$1,1) + INTERVAL '1 month - 1 day'
-              AND a.data_fim >= make_date($2,$1,1)
+              AND a.data_inicio < $4::date
+              AND a.data_fim >= $3::date
           ),'[]'::json) AS ausencias,
           COUNT(p.id) AS dias_registrados,
           COUNT(CASE WHEN p.entrada IS NOT NULL AND p.saida IS NOT NULL THEN 1 END) AS dias_completos,
@@ -806,8 +810,8 @@ module.exports = function(pool) {
           ) FILTER (WHERE p.id IS NOT NULL) AS registros
         FROM funcionarios f
         LEFT JOIN ponto_registros p ON p.funcionario_id=f.id
-          AND EXTRACT(MONTH FROM p.data_ref)=$1
-          AND EXTRACT(YEAR FROM p.data_ref)=$2
+          AND p.data_ref >= $3::date
+          AND p.data_ref < $4::date
           AND (NULLIF(current_setting('app.loja_id',true),'') IS NULL
                OR p.loja_id=NULLIF(current_setting('app.loja_id',true),'')::int)
         WHERE f.ativo=true AND COALESCE(f.freelancer,false)=false
@@ -816,7 +820,7 @@ module.exports = function(pool) {
         GROUP BY f.id, f.nome, f.cargo, f.horario_entrada, f.horario_saida,
                  f.jornada_horas, f.tolerancia_min, f.intervalo_min
         ORDER BY f.nome
-      `, [parseInt(mes), parseInt(ano)]);
+      `, [mesNum, anoNum, inicioMes, inicioProximoMes]);
       res.json({ ok:true, data:rows });
     } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
   });
