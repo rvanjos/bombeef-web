@@ -251,6 +251,17 @@ main{padding:16px;background:#f8f6f3}
 .tabs{scrollbar-width:thin}.tab{white-space:nowrap}.toolbar{box-shadow:0 1px 4px rgba(17,24,39,.04)}
 @media(max-width:1000px){main{padding:12px}.resumo-grid{grid-template-columns:repeat(2,minmax(0,1fr))}#quick-extra-wrap>div[style*="grid-template-columns"]{grid-template-columns:1fr 1fr!important}.rh-table-scroll{max-height:calc(100vh - 300px)}}
 @media(max-width:700px){main{padding:10px}.tabs{position:static;padding:0 4px}.resumo-grid{grid-template-columns:1fr}#quick-extra-wrap>div[style*="grid-template-columns"]{grid-template-columns:1fr!important}.rh-table-scroll{max-height:none}.rh-table-help{display:none}.cal-day{min-height:64px}.toolbar{padding:9px}.rh-section-toolbar{align-items:stretch}.rh-filter-group,.rh-action-group{width:100%}.rh-filter-group select{flex:1;min-width:120px}.rh-action-group .btn{flex:1}.field-row,.form-row{grid-template-columns:1fr!important}.modal-body{padding:14px}}
+.ja-hero{background:linear-gradient(135deg,#fff,#faf7f3);border:1px solid #e5e7eb;border-radius:14px;padding:16px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.ja-hero h3{font-size:16px;margin-bottom:3px}.ja-hero p{font-size:11px;color:var(--muted)}
+.ja-grid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(320px,.65fr);gap:12px}
+.ja-card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;box-shadow:0 1px 4px rgba(17,24,39,.05);overflow:hidden}
+.ja-card-head{padding:12px 14px;border-bottom:1px solid #eee7e1;display:flex;justify-content:space-between;gap:10px;align-items:center}.ja-card-head h4{font-size:13px}.ja-card-body{padding:14px}
+.ja-day{display:grid;grid-template-columns:110px 72px 1fr 1fr 100px;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid #f3f0ed}.ja-day:last-child{border-bottom:0}
+.ja-day input[type=time],.ja-day input[type=number],.ja-form input,.ja-form select,.ja-form textarea{width:100%;padding:8px;border:1px solid var(--border);border-radius:7px;font:inherit;font-size:12px;background:#fff}
+.ja-switch{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted)}
+.ja-aus-item{border:1px solid #e5e7eb;border-radius:9px;padding:9px 10px;margin-bottom:7px;background:#fafafa}.ja-aus-item strong{font-size:12px}.ja-aus-item small{display:block;color:var(--muted);margin-top:2px}
+@media(max-width:900px){.ja-grid{grid-template-columns:1fr}.ja-day{grid-template-columns:90px 65px 1fr 1fr 82px}}
+@media(max-width:600px){.ja-day{grid-template-columns:1fr 70px}.ja-day .ja-time,.ja-day .ja-int{grid-column:span 1}.ja-grid{display:block}.ja-card{margin-bottom:10px}}
 </style>
 </head>
 <body>
@@ -276,6 +287,7 @@ main{padding:16px;background:#f8f6f3}
     <button class="tab" id="tab-btn-meta-fds" onclick="showTab('meta-fds')" style="display:none">🎯 Premiação FDS</button>
     <button class="tab" onclick="showTab('relatorio')">📄 Relatório</button>
     <button class="tab" id="tab-btn-ponto" onclick="showTab('ponto')" style="display:none">⏱️ Ponto</button>
+    <button class="tab" id="tab-btn-jornada" onclick="showTab('jornada')" style="display:none">🗓️ Jornada e Ausências</button>
     <button class="tab" id="tab-btn-acessos" onclick="showTab('acessos')" style="display:none">🔐 Acessos</button>
   </div>
 
@@ -473,7 +485,6 @@ main{padding:16px;background:#f8f6f3}
       <div class="rh-action-group">
         <button class="btn btn-green" onclick="exportarPonto()">🕐 Cartão Ponto</button>
         <button class="btn btn-gray" onclick="abrirAjustePonto(null)">✏️ Ajuste Manual</button>
-        <button class="btn btn-gray" onclick="abrirConfJornada()">⚙️ Jornadas</button>
         <button class="rh-cols-btn" id="rh-cols-ponto-btn" onclick="rhColunas.abrir()">⚙️ Colunas</button>
       </div>
     </div>
@@ -488,6 +499,48 @@ main{padding:16px;background:#f8f6f3}
       <div class="rh-table-help">↔ Role para os lados ou use “Colunas” para recolher informações que não estiver usando.</div>
     </div>
   </div></div>
+
+  <!-- ── TAB JORNADA E AUSÊNCIAS (gestão) ── -->
+  <div id="tab-jornada" class="tab-content">
+    <div class="ja-hero">
+      <div><h3>🗓️ Jornada, Férias e Afastamentos</h3><p>Centralize a jornada semanal e os períodos em que o funcionário não deve gerar falta ou hora extra.</p></div>
+      <select id="ja-func" onchange="carregarJornadaAusencias()" style="min-width:260px;padding:9px 10px;border:1px solid var(--border);border-radius:8px;background:#fff;font:inherit">
+        <option value="">Selecione um funcionário...</option>
+      </select>
+    </div>
+    <div class="ja-grid">
+      <section class="ja-card">
+        <div class="ja-card-head"><div><h4>⏱️ Jornada semanal</h4><small style="color:var(--muted)">Defina trabalho, folga, horários e intervalo por dia.</small></div><button class="btn btn-red" onclick="salvarJornadaRH()">💾 Salvar jornada</button></div>
+        <div class="ja-card-body">
+          <div id="ja-dias"><div class="empty">Selecione um funcionário para configurar a jornada.</div></div>
+          <div style="margin-top:10px;padding:9px 10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;font-size:11px;color:#475569">
+            A tolerância legal de marcação é tratada automaticamente pelo Ponto e não é configurável por funcionário.
+          </div>
+        </div>
+      </section>
+      <section class="ja-card">
+        <div class="ja-card-head"><div><h4>🏖️ Férias e afastamentos</h4><small style="color:var(--muted)">O período deixa de ser tratado como falta no ponto.</small></div></div>
+        <div class="ja-card-body">
+          <div class="ja-form" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <select id="ja-aus-tipo">
+              <option value="ferias">🏖️ Férias</option>
+              <option value="afastamento">🩺 Afastamento</option>
+              <option value="atestado">📄 Atestado</option>
+              <option value="licenca">📋 Licença</option>
+              <option value="outro">📌 Outro</option>
+            </select>
+            <input type="text" id="ja-aus-motivo" placeholder="Motivo / referência">
+            <input type="date" id="ja-aus-ini">
+            <input type="date" id="ja-aus-fim">
+            <textarea id="ja-aus-obs" rows="2" placeholder="Observação (opcional)" style="grid-column:1/-1"></textarea>
+            <button class="btn btn-red" onclick="salvarAusenciaRH()" style="grid-column:1/-1">＋ Registrar período</button>
+          </div>
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted);margin:14px 0 7px">Períodos ativos</div>
+          <div id="ja-aus-list"><div style="font-size:12px;color:var(--muted)">Selecione um funcionário.</div></div>
+        </div>
+      </section>
+    </div>
+  </div>
 
   <!-- ── TAB ACESSOS (somente admin) ── -->
   <div id="tab-acessos" class="tab-content">
@@ -1445,6 +1498,7 @@ function fecharModal(id) {
 }
 function showTab(t) {
   if (t === 'ponto') { setTimeout(inicializarAbaPonto, 50); }
+  if (t === 'jornada') { setTimeout(inicializarJornadaRH, 50); }
   document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
   // Ativa o botão correto
   const btn = document.querySelector(`.tab[onclick="showTab('${t}')"]`);
@@ -1656,6 +1710,7 @@ async function init() {
   const btnMeus   = document.getElementById('tab-btn-meus');
   const btnAcessos = document.getElementById('tab-btn-acessos');
   const btnPonto = document.getElementById('tab-btn-ponto');
+  const btnJornada = document.getElementById('tab-btn-jornada');
   const btnMetaFds = document.getElementById('tab-btn-meta-fds');
 
   if (isAdmin) {
@@ -1667,6 +1722,7 @@ async function init() {
     if (btnMeus)   btnMeus.style.display   = '';
     if (btnAcessos) btnAcessos.style.display = '';
     if (btnPonto) btnPonto.style.display = '';
+    if (btnJornada) btnJornada.style.display = '';
     if (btnMetaFds) btnMetaFds.style.display = '';
     const hojeAcesso = new Date();
     const inicioAcesso = new Date(hojeAcesso); inicioAcesso.setDate(inicioAcesso.getDate() - 6);
@@ -1685,9 +1741,11 @@ async function init() {
     });
 
   } else {
-    // Perfis não administrativos (inclusive gestor): somente dados próprios.
+    // Gestor recebe a gestão de jornada/ausências; demais perfis veem apenas dados próprios.
+    const isGestor = _perfil === 'gestor';
     if (btnAcessos) btnAcessos.style.display = 'none';
     if (btnPonto) btnPonto.style.display = 'none';
+    if (btnJornada) btnJornada.style.display = isGestor ? '' : 'none';
     if (btnMetaFds) btnMetaFds.style.display = 'none';
     if (btnFolha)  btnFolha.style.display  = 'none';
     if (btnEscala) btnEscala.style.display = 'none';
@@ -1703,7 +1761,7 @@ async function init() {
       const qeData = document.getElementById('qe-data');
       if (qeData) qeData.value = hoje;
     }
-    showTab('meus');
+    if (isGestor) showTab('jornada'); else showTab('meus');
   }
 }
 
@@ -2496,6 +2554,81 @@ function renderKPIsPonto(){
 }
 function abrirAjustePonto(id){document.getElementById('aj-id').value=id||'';if(id){const p=_pontoRegistros.find(x=>x.id===id);if(p){document.getElementById('aj-func').value=p.funcionario_id;document.getElementById('aj-data').value=p.data_ref?.slice(0,10)||'';const fT=ts=>ts?new Date(ts).toLocaleTimeString('pt-BR',{timeZone:'America/Sao_Paulo',hour:'2-digit',minute:'2-digit'}):'';document.getElementById('aj-entrada').value=fT(p.entrada);document.getElementById('aj-saidaint').value=fT(p.saida_intervalo);document.getElementById('aj-retorno').value=fT(p.retorno_intervalo);document.getElementById('aj-saida').value=fT(p.saida);document.getElementById('aj-just').value=p.justificativa||'';document.getElementById('aj-status').value=p.status||'ajustado';}}else{['aj-entrada','aj-saidaint','aj-retorno','aj-saida','aj-just'].forEach(i=>document.getElementById(i).value='');document.getElementById('aj-func').value='';document.getElementById('aj-status').value='ajustado';document.getElementById('aj-data').value=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());}document.getElementById('m-ponto-ajuste').classList.add('open');}
 async function salvarAjustePonto(){const id=document.getElementById('aj-id').value,fi=document.getElementById('aj-func').value,dt=document.getElementById('aj-data').value;if(!fi||!dt){toast('Selecione funcionário e data');return;}const tS=(t,d)=>t?`${d}T${t}:00`:null,body={funcionario_id:fi,data_ref:dt,entrada:tS(document.getElementById('aj-entrada').value,dt),saida_intervalo:tS(document.getElementById('aj-saidaint').value,dt),retorno_intervalo:tS(document.getElementById('aj-retorno').value,dt),saida:tS(document.getElementById('aj-saida').value,dt),justificativa:document.getElementById('aj-just').value,status:document.getElementById('aj-status').value};const d=id?await put(`/api/ponto/registros/${id}`,body):await post('/api/ponto/registros',body);if(!d.ok){toast('❌ '+d.erro);return;}toast('✅ Ponto ajustado!');document.getElementById('m-ponto-ajuste').classList.remove('open');carregarPonto();}
+let _jaIniciado=false;
+const _jaDiasNome=['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
+
+async function inicializarJornadaRH(){
+  if(!['admin','gestor'].includes(_perfil)) return;
+  const sel=document.getElementById('ja-func');
+  const funcs=window._todasFuncs||[];
+  if(!_jaIniciado){
+    sel.innerHTML='<option value="">Selecione um funcionário...</option>'+funcs.filter(f=>f.ativo!==false&&!f.freelancer).map(f=>'<option value="'+f.id+'">'+f.nome+' · '+(f.cargo||'')+'</option>').join('');
+    _jaIniciado=true;
+  }
+  if(sel.value) await carregarJornadaAusencias();
+}
+
+async function carregarJornadaAusencias(){
+  const id=document.getElementById('ja-func').value;
+  const box=document.getElementById('ja-dias');
+  if(!id){box.innerHTML='<div class="empty">Selecione um funcionário para configurar a jornada.</div>';document.getElementById('ja-aus-list').innerHTML='';return;}
+  const [cfg,aus]=await Promise.all([
+    get('/api/ponto/jornada-config/'+id),
+    get('/api/ponto/ausencias?funcionario_id='+encodeURIComponent(id))
+  ]);
+  if(!cfg.ok){box.innerHTML='<div class="empty">Não foi possível carregar a jornada.</div>';return;}
+  const func=cfg.data?.funcionario||{};
+  const mapa=new Map((cfg.data?.dias||[]).map(x=>[Number(x.dia_semana),x]));
+  box.innerHTML=_jaDiasNome.map((nome,dia)=>{
+    const j=mapa.get(dia);
+    const folga=j?!!j.folga:false;
+    const ent=(j?.horario_entrada||func.horario_entrada||'08:00').slice(0,5);
+    const sai=(j?.horario_saida||func.horario_saida||'18:00').slice(0,5);
+    const inte=Number(j?.intervalo_min??func.intervalo_min??60);
+    return '<div class="ja-day" data-dia="'+dia+'">'+
+      '<strong style="font-size:12px">'+nome+'</strong>'+
+      '<label class="ja-switch"><input type="checkbox" class="ja-folga" '+(folga?'checked':'')+' onchange="jaAtualizarDia(this)"> Folga</label>'+
+      '<input class="ja-time ja-ent" type="time" value="'+ent+'" '+(folga?'disabled':'')+'>'+
+      '<input class="ja-time ja-sai" type="time" value="'+sai+'" '+(folga?'disabled':'')+'>'+
+      '<input class="ja-int" type="number" min="0" max="180" value="'+inte+'" title="Intervalo em minutos" '+(folga?'disabled':'')+'>'+
+    '</div>';
+  }).join('');
+  renderAusenciasRH(aus.data||[]);
+}
+function jaAtualizarDia(chk){const row=chk.closest('.ja-day');row.querySelectorAll('input:not(.ja-folga)').forEach(i=>i.disabled=chk.checked);}
+async function salvarJornadaRH(){
+  const id=document.getElementById('ja-func').value;if(!id){toast('Selecione um funcionário');return;}
+  const dias=[...document.querySelectorAll('#ja-dias .ja-day')].map(row=>({
+    dia_semana:Number(row.dataset.dia),folga:row.querySelector('.ja-folga').checked,
+    horario_entrada:row.querySelector('.ja-ent').value,horario_saida:row.querySelector('.ja-sai').value,
+    intervalo_min:Number(row.querySelector('.ja-int').value||60),
+    jornada_horas:Math.max(0,((()=>{const a=row.querySelector('.ja-ent').value.split(':').map(Number),b=row.querySelector('.ja-sai').value.split(':').map(Number);return ((b[0]*60+b[1])-(a[0]*60+a[1])-Number(row.querySelector('.ja-int').value||0))/60;})()))
+  }));
+  const d=await put('/api/ponto/jornada-dia/'+id,{dias});
+  if(!d.ok){toast('❌ '+d.erro);return;}toast('✅ Jornada semanal salva no RH.');
+}
+async function salvarAusenciaRH(){
+  const funcionario_id=document.getElementById('ja-func').value;
+  const tipo=document.getElementById('ja-aus-tipo').value,data_inicio=document.getElementById('ja-aus-ini').value,data_fim=document.getElementById('ja-aus-fim').value;
+  if(!funcionario_id||!data_inicio||!data_fim){toast('⚠️ Selecione funcionário e período');return;}
+  const d=await post('/api/ponto/ausencias',{funcionario_id,tipo,data_inicio,data_fim,motivo:document.getElementById('ja-aus-motivo').value,observacao:document.getElementById('ja-aus-obs').value});
+  if(!d.ok){toast('❌ '+d.erro);return;}
+  document.getElementById('ja-aus-motivo').value='';document.getElementById('ja-aus-obs').value='';
+  toast('✅ Período registrado. O ponto não cobrará jornada nessas datas.');
+  await carregarJornadaAusencias();
+}
+function renderAusenciasRH(lista){
+  const el=document.getElementById('ja-aus-list');
+  if(!lista.length){el.innerHTML='<div style="font-size:12px;color:var(--green)">✅ Nenhum período ativo.</div>';return;}
+  const labels={ferias:'🏖️ Férias',afastamento:'🩺 Afastamento',atestado:'📄 Atestado',licenca:'📋 Licença',outro:'📌 Outro'};
+  el.innerHTML=lista.map(a=>'<div class="ja-aus-item"><div style="display:flex;justify-content:space-between;gap:8px"><div><strong>'+labels[a.tipo]+'</strong><small>'+String(a.data_inicio).slice(0,10).split('-').reverse().join('/')+' a '+String(a.data_fim).slice(0,10).split('-').reverse().join('/')+'</small>'+(a.motivo?'<small>'+a.motivo+'</small>':'')+'</div><button class="btn btn-gray btn-sm" onclick="cancelarAusenciaRH('+a.id+')">Cancelar período</button></div></div>').join('');
+}
+async function cancelarAusenciaRH(id){
+  if(!confirm('Cancelar este período? O histórico será preservado.'))return;
+  const d=await post('/api/ponto/ausencias/'+id+'/cancelar',{});
+  if(!d.ok){toast('❌ '+d.erro);return;}toast('✅ Período cancelado, histórico preservado.');await carregarJornadaAusencias();
+}
+
 function abrirConfJornada(){document.getElementById('m-jornada').classList.add('open');}
 function carregarJornadaFunc(){const f=(window._pontoFuncionarios||[]).find(x=>x.id==document.getElementById('jor-func').value);if(f){document.getElementById('jor-entrada').value=(f.horario_entrada||'08:00').slice(0,5);document.getElementById('jor-saida').value=(f.horario_saida||'18:00').slice(0,5);document.getElementById('jor-intervalo').value=f.intervalo_min||60;document.getElementById('jor-horas').value=f.jornada_horas||8;document.getElementById('jor-tolerancia').value=f.tolerancia_min||10;}}
 async function salvarJornada(){const id=document.getElementById('jor-func').value;if(!id){toast('Selecione um funcionário');return;}const body={horario_entrada:document.getElementById('jor-entrada').value,horario_saida:document.getElementById('jor-saida').value,intervalo_min:parseInt(document.getElementById('jor-intervalo').value),jornada_horas:parseFloat(document.getElementById('jor-horas').value),tolerancia_min:parseInt(document.getElementById('jor-tolerancia').value)};const d=await put(`/api/ponto/jornada/${id}`,body);if(!d.ok){toast('❌ '+d.erro);return;}toast('✅ Jornada atualizada!');document.getElementById('m-jornada').classList.remove('open');const f=(window._pontoFuncionarios||[]).find(x=>x.id==id);if(f)Object.assign(f,body);}
@@ -2530,10 +2663,12 @@ async function exportarPonto(){
       const data=chaveData(ano,mes,dia),dataLocal=new Date(ano,mes-1,dia,12),semana=dataLocal.getDay();
       const registro=registros.get(data);
       const jornadaDia=jornadas.get(semana);
+      const ausencia=(func.ausencias||[]).find(a=>data>=String(a.data_inicio).slice(0,10)&&data<=String(a.data_fim).slice(0,10));
       const folga=jornadaDia?!!jornadaDia.folga:folgas.includes(nomesFolga[semana]);
-      const jornadaHoras=folga?0:Number(jornadaDia?.jornada_horas??func.jornada_horas??8);
+      const jornadaHoras=(folga||ausencia)?0:Number(jornadaDia?.jornada_horas??func.jornada_horas??8);
       const previstoMin=Math.round(jornadaHoras*60);
-      let trabalhadoMin=0,extraMin=0,descontoMin=0,ocorrencia=folga?'Folga':'Normal';
+      const ausLabel=ausencia?({ferias:'Férias',afastamento:'Afastamento',atestado:'Atestado',licenca:'Licença',outro:'Ausência'}[ausencia.tipo]||'Ausência'):null;
+      let trabalhadoMin=0,extraMin=0,descontoMin=0,ocorrencia=ausLabel||(folga?'Folga':'Normal');
 
       if(registro?.entrada&&registro?.saida){
         trabalhadoMin=Math.max(0,Math.round((new Date(registro.saida)-new Date(registro.entrada))/60000));
