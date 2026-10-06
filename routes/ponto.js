@@ -748,7 +748,7 @@ module.exports = function(pool) {
 
   // ── Resumo mensal por funcionário (para relatório) ────────────────────────
   r.get('/resumo-mensal', async (req, res) => {
-    if (req.user?.perfil !== 'admin') return res.status(403).json({ ok:false, erro:'Acesso restrito ao administrador' });
+    if (!['admin','gestor'].includes(req.user?.perfil)) return res.status(403).json({ ok:false, erro:'Acesso restrito à gestão' });
     const { mes, ano } = req.query;
     if (!mes || !ano) return res.status(400).json({ ok:false, erro:'mes e ano obrigatórios' });
     try {
@@ -763,7 +763,10 @@ module.exports = function(pool) {
               'horario_entrada',jd.horario_entrada,'horario_saida',jd.horario_saida,
               'jornada_horas',jd.jornada_horas,'intervalo_min',jd.intervalo_min
             ) ORDER BY jd.dia_semana)
-            FROM ponto_jornada_dia jd WHERE jd.funcionario_id=f.id
+            FROM ponto_jornada_dia jd
+            WHERE jd.funcionario_id=f.id
+              AND (NULLIF(current_setting('app.loja_id',true),'') IS NULL
+                   OR jd.loja_id=NULLIF(current_setting('app.loja_id',true),'')::int)
           ),'[]'::json) AS jornadas_dia,
           COALESCE((
             SELECT JSON_AGG(JSON_BUILD_OBJECT(
@@ -805,7 +808,11 @@ module.exports = function(pool) {
         LEFT JOIN ponto_registros p ON p.funcionario_id=f.id
           AND EXTRACT(MONTH FROM p.data_ref)=$1
           AND EXTRACT(YEAR FROM p.data_ref)=$2
+          AND (NULLIF(current_setting('app.loja_id',true),'') IS NULL
+               OR p.loja_id=NULLIF(current_setting('app.loja_id',true),'')::int)
         WHERE f.ativo=true AND COALESCE(f.freelancer,false)=false
+          AND (NULLIF(current_setting('app.loja_id',true),'') IS NULL
+               OR f.loja_id=NULLIF(current_setting('app.loja_id',true),'')::int)
         GROUP BY f.id, f.nome, f.cargo, f.horario_entrada, f.horario_saida,
                  f.jornada_horas, f.tolerancia_min, f.intervalo_min, f.dias_folga
         ORDER BY f.nome
