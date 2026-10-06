@@ -673,6 +673,7 @@ module.exports = function(pool) {
     if (req.user?.perfil !== 'admin') return res.status(403).json({ ok:false, erro:'Acesso restrito ao administrador' });
     const { funcionario_id, mes, ano } = req.query;
     try {
+      await recalcularPendenciasRecentes();
       let where = `WHERE 1=1`;
       const params = [];
       if (funcionario_id) { params.push(funcionario_id); where += ` AND p.funcionario_id=$${params.length}`; }
