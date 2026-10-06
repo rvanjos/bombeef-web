@@ -623,11 +623,14 @@ function fecharConf() {
 
 async function confirmar() {
   if (!_func || !_tipo) return;
+  const tipoAtual=_tipo;
   const btn = document.getElementById('conf-btn');
   btn.disabled = true;
   btn.textContent = '⏳ Registrando...';
 
-  let d = await api.post('/api/ponto/bater', { funcionario_id:_func.id, tipo:_tipo });
+  const payload={funcionario_id:_func.id,tipo:tipoAtual};
+  let d = await api.post('/api/ponto/bater', payload);
+
   if (!d.ok && d.confirmacao_necessaria && d.tipo==='intervalo_nao_registrado') {
     const corrido = window.confirm(
       'Não há marcação de saída e retorno do almoço hoje.\n\n'+
@@ -646,12 +649,25 @@ async function confirmar() {
       showToast('⚠️ A justificativa é obrigatória para almoço corrido.');
       return;
     }
-    d = await api.post('/api/ponto/bater', {
-      funcionario_id:_func.id, tipo:_tipo,
-      confirmar_almoco_corrido:true,
-      justificativa_almoco_corrido:justificativa.trim()
-    });
+    payload.confirmar_almoco_corrido=true;
+    payload.justificativa_almoco_corrido=justificativa.trim();
+    d = await api.post('/api/ponto/bater', payload);
   }
+
+  if (!d.ok && d.confirmacao_necessaria && d.tipo==='hora_extra_saida') {
+    const motivo = window.prompt(
+      'Esta saída gera '+d.extra_minutos+' minuto(s) de hora extra.\nInforme o motivo para enviar à aprovação:',
+      ''
+    );
+    if (!motivo || !motivo.trim()) {
+      btn.disabled=false; btn.textContent='✅ Confirmar Registro';
+      showToast('⚠️ A justificativa da hora extra é obrigatória.');
+      return;
+    }
+    payload.justificativa_hora_extra=motivo.trim();
+    d = await api.post('/api/ponto/bater', payload);
+  }
+
   if (!d.ok && d.confirmacao_necessaria && d.tipo==='intervalo_curto') {
     const certo = window.confirm(
       'Seu intervalo foi de '+d.intervalo_realizado_min+' minutos e ainda faltam '+d.minutos_faltantes+' minutos para completar '+d.intervalo_minimo_min+' minutos.\n\n'+
@@ -667,18 +683,17 @@ async function confirmar() {
       showToast('⚠️ O motivo é obrigatório para retorno antecipado.');
       return;
     }
-    d = await api.post('/api/ponto/bater', {
-      funcionario_id:_func.id, tipo:_tipo,
-      confirmar_intervalo_curto:true,
-      motivo_intervalo:motivo.trim()
-    });
+    payload.confirmar_intervalo_curto=true;
+    payload.motivo_intervalo=motivo.trim();
+    d = await api.post('/api/ponto/bater', payload);
   }
+
   btn.disabled = false;
   btn.textContent = '✅ Confirmar Registro';
-  fecharConf();
+  if (!d.ok) { showToast('❌ '+(d.erro||d.aviso||'Não foi possível registrar')); return; }
 
-  if (!d.ok) { showToast('❌ '+d.erro); return; }
-  showToast(`✅ ${TIPO_LABEL[_tipo]?.label} — ${d.horario}`);
+  fecharConf();
+  showToast(`✅ ${TIPO_LABEL[tipoAtual]?.label} — ${d.horario}`);
   await carregarPontoHoje();
 }
 
@@ -885,8 +900,14 @@ async function abrirAprovacoesPonto(){
     const h=t=>t?new Date(t).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',timeZone:'America/Sao_Paulo'}):'—';
     const previstos=(x.horario_entrada_previsto||'').slice(0,5)+'–'+(x.horario_saida_previsto||'').slice(0,5);
     const motivos=[];
-    if(extra) motivos.push('⏫ Excedente de jornada: '+extra+' min');
-    if(inter) motivos.push('🍽️ Intervalo menor que o previsto: '+inter+' min');
+    const hm=t=>t?Number(h(t).slice(0,2))*60+Number(h(t).slice(3,5)):null;
+    const hp=s=>s?Number(String(s).slice(0,2))*60+Number(String(s).slice(3,5)):null;
+    const entDif=(hm(x.entrada)!==null&&hp(x.horario_entrada_previsto)!==null)?hp(x.horario_entrada_previsto)-hm(x.entrada):0;
+    const saiDif=(hm(x.saida)!==null&&hp(x.horario_saida_previsto)!==null)?hm(x.saida)-hp(x.horario_saida_previsto):0;
+    if(entDif>5) motivos.push('🟢 Entrada antecipada: '+entDif+' min');
+    if(saiDif>5) motivos.push('🔴 Saída após horário: '+saiDif+' min');
+    if(extra && entDif<=5 && saiDif<=5) motivos.push('⏫ Excedente de jornada: '+extra+' min');
+    if(inter) motivos.push('🍽️ Intervalo/almoço: '+inter+' min');
     if(x.almoco_corrido_confirmado) motivos.push('🥪 Almoço corrido/sem marcação');
     if(x.entrada_manual||x.saida_manual) motivos.push('✏️ Registro manual/ajustado');
     const justificativas=[
