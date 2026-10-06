@@ -280,19 +280,37 @@ module.exports = function(pool) {
 
   async function atualizarApuracaoPonto(pontoId) {
     const { rows } = await pool.query(`
-      SELECT p.*, f.jornada_horas, f.intervalo_min, f.horario_entrada, f.horario_saida
+      SELECT p.*,
+        COALESCE(jd.horario_entrada,f.horario_entrada) AS horario_entrada_efetivo,
+        COALESCE(jd.horario_saida,f.horario_saida) AS horario_saida_efetivo,
+        COALESCE(jd.intervalo_min,f.intervalo_min,60) AS intervalo_min_efetivo,
+        CASE
+          WHEN jd.id IS NOT NULL THEN
+            CASE WHEN COALESCE(jd.folga,false) THEN 0
+                 ELSE COALESCE(jd.jornada_horas,f.jornada_horas,8) END
+          WHEN f.horario_entrada IS NOT NULL AND f.horario_saida IS NOT NULL THEN
+            GREATEST(0,
+              EXTRACT(EPOCH FROM (f.horario_saida-f.horario_entrada))/3600.0
+              - COALESCE(f.intervalo_min,60)/60.0
+            )
+          ELSE COALESCE(f.jornada_horas,8)
+        END AS jornada_horas_efetiva
       FROM ponto_registros p
       JOIN funcionarios f ON f.id=p.funcionario_id
+      LEFT JOIN ponto_jornada_dia jd
+        ON jd.funcionario_id=p.funcionario_id
+       AND jd.dia_semana=EXTRACT(DOW FROM p.data_ref)::int
+       AND jd.loja_id=p.loja_id
       WHERE p.id=$1
       LIMIT 1
     `, [pontoId]);
     const p=rows[0];
     if(!p) return null;
-    const horas=calcHoras(p.entrada,p.saida,p.saida_intervalo,p.retorno_intervalo,p.intervalo_min);
-    const extra=calcularExtraMinutos(horas,p.jornada_horas,p.troca_folga,p.entrada,p.saida,p.horario_entrada,p.horario_saida);
+    const horas=calcHoras(p.entrada,p.saida,p.saida_intervalo,p.retorno_intervalo,p.intervalo_min_efetivo);
+    const extra=calcularExtraMinutos(horas,p.jornada_horas_efetiva,p.troca_folga,p.entrada,p.saida,p.horario_entrada_efetivo,p.horario_saida_efetivo);
     const intervalo=p.almoco_corrido_confirmado
-      ? Number(p.intervalo_min||60)
-      : calcularIntervaloSuprimido(p.saida_intervalo,p.retorno_intervalo,p.intervalo_min);
+      ? Number(p.intervalo_min_efetivo||60)
+      : calcularIntervaloSuprimido(p.saida_intervalo,p.retorno_intervalo,p.intervalo_min_efetivo);
     const precisaAprovacao=!p.troca_folga && (extra>0 || intervalo>0 || p.almoco_corrido_confirmado);
     const novoStatus=precisaAprovacao
       ? (['aprovado','rejeitado'].includes(p.aprovacao_status) ? 'pendente' : 'pendente')
@@ -314,7 +332,7 @@ module.exports = function(pool) {
   async function recalcularPendenciasRecentes() {
     const { rows } = await pool.query(`
       SELECT id FROM ponto_registros
-      WHERE COALESCE(aprovacao_status,'nao_aplicavel')='nao_aplicavel'
+      WHERE COALESCE(aprovacao_status,'nao_aplicavel') IN ('nao_aplicavel','pendente')
         AND data_ref >= CURRENT_DATE - INTERVAL '62 days'
         AND (entrada IS NOT NULL OR saida_intervalo IS NOT NULL OR retorno_intervalo IS NOT NULL OR saida IS NOT NULL)
         AND (NULLIF(current_setting('app.loja_id',true),'') IS NULL
@@ -378,10 +396,22 @@ module.exports = function(pool) {
 
       if (tipo === 'saida') {
         const { rows:[atual] } = await pool.query(`
-          SELECT p.*,COALESCE(f.intervalo_min,60) AS intervalo_min,
-                 COALESCE(f.jornada_horas,8) AS jornada_horas,
-                 f.horario_entrada,f.horario_saida
-          FROM ponto_registros p JOIN funcionarios f ON f.id=p.funcionario_id
+          SELECT p.*,
+                 COALESCE(jd.intervalo_min,f.intervalo_min,60) AS intervalo_min,
+                 COALESCE(jd.horario_entrada,f.horario_entrada) AS horario_entrada,
+                 COALESCE(jd.horario_saida,f.horario_saida) AS horario_saida,
+                 CASE
+                   WHEN jd.id IS NOT NULL THEN CASE WHEN COALESCE(jd.folga,false) THEN 0 ELSE COALESCE(jd.jornada_horas,f.jornada_horas,8) END
+                   WHEN f.horario_entrada IS NOT NULL AND f.horario_saida IS NOT NULL THEN
+                     GREATEST(0,EXTRACT(EPOCH FROM (f.horario_saida-f.horario_entrada))/3600.0-COALESCE(f.intervalo_min,60)/60.0)
+                   ELSE COALESCE(f.jornada_horas,8)
+                 END AS jornada_horas
+          FROM ponto_registros p
+          JOIN funcionarios f ON f.id=p.funcionario_id
+          LEFT JOIN ponto_jornada_dia jd
+            ON jd.funcionario_id=p.funcionario_id
+           AND jd.dia_semana=EXTRACT(DOW FROM p.data_ref)::int
+           AND jd.loja_id=p.loja_id
           WHERE p.funcionario_id=$1 AND p.data_ref=$2 LIMIT 1
         `,[funcionario_id,dataRef]);
         const exigeIntervalo=Number(atual?.intervalo_min||0)>0;
@@ -654,10 +684,24 @@ module.exports = function(pool) {
       }
       const { rows } = await pool.query(`
         SELECT p.*,
-          f.nome AS func_nome, f.cargo, f.horario_entrada, f.horario_saida,
-          f.jornada_horas, f.tolerancia_min, f.intervalo_min
+          f.nome AS func_nome, f.cargo,
+          COALESCE(jd.horario_entrada,f.horario_entrada) AS horario_entrada,
+          COALESCE(jd.horario_saida,f.horario_saida) AS horario_saida,
+          CASE
+            WHEN jd.id IS NOT NULL THEN CASE WHEN COALESCE(jd.folga,false) THEN 0 ELSE COALESCE(jd.jornada_horas,f.jornada_horas,8) END
+            WHEN f.horario_entrada IS NOT NULL AND f.horario_saida IS NOT NULL THEN
+              GREATEST(0,EXTRACT(EPOCH FROM (f.horario_saida-f.horario_entrada))/3600.0-COALESCE(f.intervalo_min,60)/60.0)
+            ELSE COALESCE(f.jornada_horas,8)
+          END AS jornada_horas,
+          f.tolerancia_min,
+          COALESCE(jd.intervalo_min,f.intervalo_min,60) AS intervalo_min,
+          COALESCE(jd.folga,false) AS folga_jornada_dia
         FROM ponto_registros p
         JOIN funcionarios f ON f.id=p.funcionario_id AND COALESCE(f.freelancer,false)=false
+        LEFT JOIN ponto_jornada_dia jd
+          ON jd.funcionario_id=p.funcionario_id
+         AND jd.dia_semana=EXTRACT(DOW FROM p.data_ref)::int
+         AND jd.loja_id=p.loja_id
         ${where} ORDER BY p.data_ref DESC, f.nome ASC
       `, params);
       res.json({ ok:true, data:rows });
@@ -845,11 +889,21 @@ module.exports = function(pool) {
                p.troca_folga,p.troca_folga_data,p.troca_folga_obs,p.intervalo_curto_motivo,
                p.almoco_corrido_confirmado,p.almoco_corrido_justificativa,
                f.nome AS funcionario_nome,f.cargo,
-               f.horario_entrada AS horario_entrada_previsto,
-               f.horario_saida AS horario_saida_previsto,
-               f.intervalo_min AS intervalo_previsto_min,
-               f.jornada_horas AS jornada_prevista_horas
-        FROM ponto_registros p JOIN funcionarios f ON f.id=p.funcionario_id
+               COALESCE(jd.horario_entrada,f.horario_entrada) AS horario_entrada_previsto,
+               COALESCE(jd.horario_saida,f.horario_saida) AS horario_saida_previsto,
+               COALESCE(jd.intervalo_min,f.intervalo_min,60) AS intervalo_previsto_min,
+               CASE
+                 WHEN jd.id IS NOT NULL THEN CASE WHEN COALESCE(jd.folga,false) THEN 0 ELSE COALESCE(jd.jornada_horas,f.jornada_horas,8) END
+                 WHEN f.horario_entrada IS NOT NULL AND f.horario_saida IS NOT NULL THEN
+                   GREATEST(0,EXTRACT(EPOCH FROM (f.horario_saida-f.horario_entrada))/3600.0-COALESCE(f.intervalo_min,60)/60.0)
+                 ELSE COALESCE(f.jornada_horas,8)
+               END AS jornada_prevista_horas
+        FROM ponto_registros p
+        JOIN funcionarios f ON f.id=p.funcionario_id
+        LEFT JOIN ponto_jornada_dia jd
+          ON jd.funcionario_id=p.funcionario_id
+         AND jd.dia_semana=EXTRACT(DOW FROM p.data_ref)::int
+         AND jd.loja_id=p.loja_id
         WHERE ($1='todos' OR p.aprovacao_status=$1)
           AND (NULLIF(current_setting('app.loja_id',true),'') IS NULL
                OR p.loja_id=NULLIF(current_setting('app.loja_id',true),'')::int)
