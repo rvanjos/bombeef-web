@@ -225,7 +225,7 @@
         '<div class="box"><b>SALDO ANTERIOR</b><strong style="font-size:15px">'+brl(r.pendencias_anteriores?.valor||0)+'</strong><div class="muted" style="margin-top:3px">Não incluído no total do período</div></div>'+
         '<div class="box" style="border:2px solid #111827;background:#f3f4f6"><b style="color:#111827">TOTAL GERAL EM ABERTO</b><strong style="font-size:18px;color:#111827">'+brl(totalGeralAberto(r))+'</strong><div class="muted" style="margin-top:3px">Total do período + saldo anterior</div></div>'+
       '</div>'+
-      '<table><thead><tr><th>Data</th><th>Produto</th><th style="text-align:right">Qtd.</th><th style="text-align:right">Valor em aberto</th></tr></thead><tbody>'+linhas+'</tbody></table>'+
+      '<table><thead><tr><th>Data</th><th>Produto</th><th style="text-align:right">Qtd.</th><th style="text-align:right">Valor</th></tr></thead><tbody>'+linhas+'</tbody></table>'+
       '<div class="total"><div><div class="lbl">TOTAL DO PERÍODO</div><div class="muted">Valor a pagar/descontar das retiradas em aberto do período selecionado · '+(r.itens||[]).length+' item(ns)</div></div><div class="val">'+brl(r.totais.aberto)+'</div></div>'+
       '<div class="escolha"><h2>FORMA DE PAGAMENTO — FUNCIONÁRIO DEVE ASSINALAR UMA OPÇÃO</h2><div class="opcoes">'+
         '<div class="opcao"><span class="check"></span> Desconto no Vale Alimentação</div>'+
