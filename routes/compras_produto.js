@@ -107,6 +107,21 @@ module.exports = function(pool, app) {
       `).catch(()=>({rows:[]}));
       console.log('[compras] schema compras_produto:', JSON.stringify(tiposCompra));
 
+      const { rows: triggersCompra } = await c.query(`
+        SELECT
+          t.tgname AS trigger_name,
+          pg_get_triggerdef(t.oid, true) AS trigger_def,
+          p.proname AS function_name,
+          pg_get_functiondef(p.oid) AS function_def
+        FROM pg_trigger t
+        JOIN pg_class cl ON cl.oid=t.tgrelid
+        JOIN pg_namespace n ON n.oid=cl.relnamespace
+        JOIN pg_proc p ON p.oid=t.tgfoid
+        WHERE n.nspname='public' AND cl.relname='compras_produto' AND NOT t.tgisinternal
+        ORDER BY t.tgname
+      `).catch(()=>({rows:[]}));
+      console.log('[compras] triggers compras_produto:', JSON.stringify(triggersCompra));
+
       // Preserva a unidade comercial da compra (ex.: CX) separada da unidade-base
       // usada no estoque/análise (ex.: KG).
       for (const col of [
