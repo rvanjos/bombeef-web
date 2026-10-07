@@ -89,6 +89,10 @@ module.exports = function (pool) {
               SELECT COUNT(*)::int AS total
               FROM ponto_registros
               WHERE aprovacao_status='pendente'
+                 OR (
+                   (COALESCE(extra_minutos,0)>0 OR COALESCE(intervalo_suprimido_min,0)>0)
+                   AND COALESCE(aprovacao_status,'nao_aplicavel') NOT IN ('aprovado','rejeitado')
+                 )
             `)
           : Promise.resolve({ total: 0 }),
       ]);
