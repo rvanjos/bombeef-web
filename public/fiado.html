@@ -428,7 +428,7 @@ document.addEventListener('DOMContentLoaded',restaurarColunasFiado);
       </div>
       <div class="fg-row">
         <div class="fg"><label>Forma de Pagamento</label>
-          <select id="pag-forma">
+          <select id="pag-forma" onchange="atualizarTotalPag()"><option value="saldo_cliente">💰 Usar crédito do cliente</option>
             <option value="dinheiro">💵 Dinheiro</option>
             <option value="pix">📱 Pix</option>
             <option value="debito">💳 Cartão Débito</option>
@@ -438,7 +438,7 @@ document.addEventListener('DOMContentLoaded',restaurarColunasFiado);
           </select>
         </div>
         <div class="fg"><label>Venda Específica (opcional)</label>
-          <select id="pag-venda-id"><option value="">— Abater nas mais antigas —</option></select>
+          <select id="pag-venda-id" onchange="atualizarTotalPag()"><option value="">— Abater nas mais antigas —</option></select>
         </div>
       </div>
       <div class="fg"><label>Observações</label><input id="pag-obs" placeholder="Opcional"></div>
@@ -573,6 +573,7 @@ document.addEventListener('DOMContentLoaded',restaurarColunasFiado);
 
 <script>
 const {api, fmt, toast} = BB;
+let _pagChave=null, _pagEnviando=false;
 let _clientes=[], _vendas=[], _pagamentos=[], _clienteDetalhe=null;
 let _itemIdx=0;
 
@@ -734,7 +735,7 @@ function renderTabelaClientes() {
       <td class="mono" style="font-size:11px">${limite>0?fmt.brl(limite):'—'}</td>
       <td class="mono" style="text-align:right">${fmt.brl(parseFloat(c.comprado_mes||0))}</td>
       <td style="font-size:11px;color:var(--muted)">${c.ultimo_pagamento?c.ultimo_pagamento.slice(0,10).split('-').reverse().join('/'):'—'}</td>
-      <td>${badgeSaldo}</td>
+      <td>${badgeSaldo}${Number(c.credito_saldo||0)>0?`<br><small style="color:var(--green)">Crédito: ${fmt.brl(Number(c.credito_saldo))}</small>`:""}</td>
       <td style="white-space:nowrap">
         <button class="btn btn-gray btn-sm" onclick="verExtratoCli(${c.id})" title="Ver extrato">📋</button>
         <button class="btn btn-gray btn-sm" onclick="abrirDetalhe(${c.id})" title="Ver detalhes">👁</button>
@@ -823,7 +824,7 @@ function renderVendas() {
 // ── Pagamentos ──────────────────────────────────────────────────────────────
 function renderPagamentos() {
   const q = (document.getElementById('busca-pag').value||'').toLowerCase();
-  const FORMA_LABEL = {dinheiro:'💵 Dinheiro',pix:'📱 Pix',debito:'💳 Débito',credito:'💳 Crédito',transferencia:'🏦 Transf.',outro:'📌 Outro'};
+  const FORMA_LABEL = {saldo_cliente:'💰 Crédito do cliente',dinheiro:'💵 Dinheiro',pix:'📱 Pix',debito:'💳 Débito',credito:'💳 Crédito',transferencia:'🏦 Transf.',outro:'📌 Outro'};
   const lista = _pagamentos.filter(p => !q || (_clientes.find(c=>c.id===p.cliente_id)?.nome||'').toLowerCase().includes(q));
   const tbody = document.getElementById('tbody-pag');
   tbody.innerHTML = lista.map(p => {
@@ -834,7 +835,7 @@ function renderPagamentos() {
       <td style="font-weight:600">${cli?.nome||'—'}</td>
       <td class="mono" style="font-weight:700;color:var(--green)">${fmt.brl(parseFloat(p.valor_pago))}</td>
       <td>${FORMA_LABEL[p.forma_pagamento]||p.forma_pagamento}</td>
-      <td style="font-size:11px;color:var(--muted)">${abatidas} venda(s)</td>
+      <td style="font-size:11px;color:var(--muted)">${abatidas} venda(s)<br>Aplicado: ${fmt.brl((p.vendas_abatidas||[]).reduce((n,a)=>n+Number(a.valor_abatido||0),0))}<br>Crédito gerado: ${fmt.brl(Number(p.credito_gerado||0))}<br>Crédito usado: ${fmt.brl(Number(p.credito_utilizado||0))}</td>
       <td style="font-size:11px;color:var(--muted)">${p.observacoes||'—'}</td>
     </tr>`;
   }).join('') || `<tr><td colspan="6" class="empty">Nenhum pagamento registrado</td></tr>`;
@@ -1176,11 +1177,15 @@ function abrirPagamentoVenda(vid, cid) {
   resetPag();
   const c=_clientes.find(x=>x.id===cid);
   if(c) selecionarClientePag(c);
-  setTimeout(()=>{ document.getElementById('pag-venda-id').value=vid; },100);
+  setTimeout(()=>{ document.getElementById('pag-venda-id').value=vid; atualizarTotalPag(); },100);
   document.getElementById('m-pag').classList.add('open');
 }
 
 function resetPag() {
+  _pagChave=crypto.randomUUID();
+  _cliPagAtual=null;
+  document.getElementById('pag-forma').value='dinheiro';
+  document.getElementById('pag-venda-id').innerHTML='<option value="">— Abater nas mais antigas —</option>';
   document.getElementById('pag-cli-busca').value='';
   document.getElementById('pag-cli-id').value='';
   document.getElementById('pag-valor').value='';
@@ -1218,21 +1223,26 @@ function atualizarTotalPag() {
   const val = parseFloat(document.getElementById('pag-valor').value)||0;
   const prev = document.getElementById('pag-preview');
   if (val>0 && _cliPagAtual) {
-    const saldo = parseFloat(_cliPagAtual.saldo_aberto||0);
+    const vid=Number(document.getElementById('pag-venda-id').value);
+    const saldo = vid ? Number(_vendas.find(v=>v.id===vid)?.saldo_restante||0) : Number(_cliPagAtual.saldo_aberto||0);
     const credito = Math.max(0, val-saldo);
     document.getElementById('pag-preview-txt').textContent = val>=saldo
       ? `Quita saldo de ${fmt.brl(saldo)}${credito>0?` + crédito de ${fmt.brl(credito)}`:''}`
       : `Abate ${fmt.brl(val)} do saldo de ${fmt.brl(saldo)}. Restante: ${fmt.brl(saldo-val)}`;
+    if(document.getElementById('pag-forma').value==='saldo_cliente') document.getElementById('pag-preview-txt').textContent=`Usar ${fmt.brl(val)} do crédito disponível de ${fmt.brl(Number(_cliPagAtual.credito_saldo||0))} na dívida de ${fmt.brl(saldo)}`;
     prev.style.display='';
   } else prev.style.display='none';
 }
 
 async function confirmarPagamento() {
+  if (_pagEnviando) return;
   const cli_id = parseInt(document.getElementById('pag-cli-id').value);
   const valor  = parseFloat(document.getElementById('pag-valor').value)||0;
   if (!cli_id) { toast('⚠️ Selecione o cliente'); return; }
   if (!valor||valor<=0) { toast('⚠️ Informe o valor'); return; }
   const body = {
+    idempotencia: _pagChave,
+    saldo_esperado: document.getElementById('pag-venda-id').value ? Number(_vendas.find(v=>v.id===Number(document.getElementById('pag-venda-id').value))?.saldo_restante||0) : Number(_cliPagAtual?.saldo_aberto||0),
     cliente_id:      cli_id,
     data_pagamento:  document.getElementById('pag-data').value,
     valor_pago:      valor,
@@ -1240,7 +1250,11 @@ async function confirmarPagamento() {
     observacoes:     document.getElementById('pag-obs').value,
     venda_id:        parseInt(document.getElementById('pag-venda-id').value)||null,
   };
-  const d = await api.post('/api/fiado/pagamentos', body);
+  _pagEnviando=true;
+  let d;
+  try { d = await api.post('/api/fiado/pagamentos', body); }
+  catch(e) { toast('❌ Falha de conexão. Tente novamente para consultar o mesmo pagamento.'); return; }
+  finally { _pagEnviando=false; }
   if (!d.ok) { toast('❌ '+d.erro); return; }
   const msg = d.credito_gerado>0 ? `✅ Pagamento registrado! Crédito gerado: ${fmt.brl(d.credito_gerado)}` : '✅ Pagamento registrado!';
   toast(msg);
@@ -1311,6 +1325,7 @@ async function abrirDetalhe(id) {
   document.getElementById('det-body').innerHTML = `
     <!-- KPIs do cliente -->
     <div class="det-kpis">
+      <div class="det-kpi"><div class="lbl">Crédito disponível</div><div class="val" style="color:var(--green)">${fmt.brl(Number(dc.credito_saldo||0))}</div></div>
       <div class="det-kpi"><div class="lbl">Saldo Aberto</div><div class="val" style="color:${saldo>0?'var(--red-l)':'var(--green)'}">${fmt.brl(saldo)}</div></div>
       <div class="det-kpi"><div class="lbl">Limite</div><div class="val">${limite>0?fmt.brl(limite):'Sem limite'}</div></div>
       <div class="det-kpi"><div class="lbl">Total Comprado</div><div class="val">${fmt.brl(parseFloat(dc.total_comprado||0))}</div></div>
@@ -1347,7 +1362,7 @@ async function abrirDetalhe(id) {
         <thead><tr><th>Data</th><th>Valor</th><th>Forma</th><th>Obs</th></tr></thead>
         <tbody>${pagsCli.map(p=>`<tr>
           <td>${p.data_pagamento?.slice(0,10).split('-').reverse().join('/')}</td>
-          <td class="mono" style="color:var(--green);font-weight:700">${fmt.brl(parseFloat(p.valor_pago||0))}</td>
+          <td class="mono" style="color:var(--green);font-weight:700">${fmt.brl(Number(p.valor_pago||0)+Number(p.credito_utilizado||0))}</td>
           <td>${p.forma_pagamento}</td>
           <td style="font-size:11px;color:var(--muted)">${p.observacoes||'—'}</td>
         </tr>`).join('')}</tbody>
@@ -1452,7 +1467,7 @@ function renderExtrato(clienteId) {
   ].sort((a,b)=> a.data < b.data ? -1 : a.data > b.data ? 1 : a.tipo==='venda' ? -1 : 1);
 
   let saldoAcum = 0;
-  const FORMA = {dinheiro:'💵 Dinheiro',pix:'📱 Pix',debito:'💳 Débito',credito:'💳 Crédito',transferencia:'🏦 Transf.',outro:'📌 Outro'};
+  const FORMA = {saldo_cliente:'💰 Crédito do cliente',dinheiro:'💵 Dinheiro',pix:'📱 Pix',debito:'💳 Débito',credito:'💳 Crédito',transferencia:'🏦 Transf.',outro:'📌 Outro'};
   const mesFiltroAtivo = tipoFiltro === 'mes' && mesFiltro;
 
   const linhas = eventos.map(ev => {
@@ -1510,7 +1525,7 @@ function renderExtrato(clienteId) {
     } else {
       // Pagamento
       const p = ev.obj;
-      saldoAcum -= parseFloat(p.valor_pago||0);
+      saldoAcum -= (p.vendas_abatidas||[]).reduce((n,a)=>n+Number(a.valor_abatido||0),0);
 
       // Detalhamento: quais compras esse pagamento abateu (rastreabilidade FIFO)
       const abatidas = p.vendas_abatidas || [];
@@ -1536,9 +1551,9 @@ function renderExtrato(clienteId) {
             ${detalheAbatimento}
           </td>
           <td colspan="2" style="padding:8px 12px;font-size:11px;color:var(--muted);vertical-align:top">${FORMA[p.forma_pagamento]||p.forma_pagamento}</td>
-          <td style="padding:8px 12px;font-size:11px;color:var(--muted);vertical-align:top">${p.observacoes||''}</td>
+          <td style="padding:8px 12px;font-size:11px;color:var(--muted);vertical-align:top">${p.observacoes||''}<br>Recebido: ${fmt.brl(Number(p.valor_pago||0))}<br>Crédito gerado: ${fmt.brl(Number(p.credito_gerado||0))}<br>Crédito usado: ${fmt.brl(Number(p.credito_utilizado||0))}</td>
           <td style="padding:8px 12px;text-align:right;font-size:13px;font-weight:700;font-family:'DM Mono',monospace;color:var(--green);vertical-align:top">
-            -${fmt.brl(parseFloat(p.valor_pago||0))}
+            -${fmt.brl(Number(p.valor_pago||0)+Number(p.credito_utilizado||0))}
           </td>
           <td style="padding:8px 12px;text-align:right;font-size:12px;font-weight:700;font-family:'DM Mono',monospace;color:${saldoAcum>0.005?'var(--red-l)':'var(--green)'};vertical-align:top">
             ${fmt.brl(Math.max(0,saldoAcum))}
@@ -1550,9 +1565,10 @@ function renderExtrato(clienteId) {
   const vendasDoperiodo = mesFiltroAtivo ? vendasCli.filter(v => v.data_compra.startsWith(mesFiltro)) : vendasCli;
   const totalComprado = vendasDoperiodo.reduce((s,v)=>s+parseFloat(v.total_final||0),0);
   const totalPago     = pagsCli.reduce((s,p)=>s+parseFloat(p.valor_pago||0),0);
-  const saldoFinal    = totalComprado - totalPago;
+  const saldoFinal = vendasDoperiodo.filter(v=>['aberto','parcial'].includes(v.status)).reduce((n,v)=>n+Number(v.saldo_restante||0),0);
 
   document.getElementById('ext-body').innerHTML = `
+    <div style="padding:12px;color:var(--green)">Crédito disponível atual: <b>${fmt.brl(Number(_clientes.find(c=>c.id===clienteId)?.credito_saldo||0))}</b></div>
     <!-- Totalizadores no topo -->
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0;border-bottom:2px solid var(--border)">
       <div style="padding:12px 16px;border-right:1px solid var(--border)">
@@ -1739,7 +1755,7 @@ function imprimirExtrato() {
   const pagsCli = _pagamentos?.filter(p => p.cliente_id === cliId) || [];
   const totalComprado = vendasPrint.reduce((s,v) => s + parseFloat(v.total_final||0), 0);
   const totalPago     = pagsCli.reduce((s,p) => s + parseFloat(p.valor_pago||0), 0);
-  const saldoFinal    = totalComprado - totalPago;
+  const saldoFinal = vendasPrint.filter(v=>['aberto','parcial'].includes(v.status)).reduce((n,v)=>n+Number(v.saldo_restante||0),0);
   const saldoTotal    = parseFloat(cli.saldo_aberto || 0); // saldo real (todas as compras)
   const hoje = new Date().toLocaleDateString('pt-BR');
 
@@ -1772,11 +1788,11 @@ function imprimirExtrato() {
   }
   // Pagamentos intercalados (por data)
   for (const p of pagsCli) {
-    const pVal = parseFloat(p.valor_pago||0);
+    const pVal = (p.vendas_abatidas||[]).filter(a=>vendasPrint.some(v=>v.id===a.venda_id)).reduce((n,a)=>n+Number(a.valor_abatido||0),0);
     saldoAcum -= pVal;
     const dtPag = p.data_pagamento?.slice(0,10).split('-').reverse().join('/') || '—';
     linhasHtml += `<tr class="row-pagamento">
-      <td colspan="4"><strong>✅ Pagamento — ${dtPag}</strong>
+      <td colspan="4"><strong>✅ Pagamento — ${dtPag}</strong><br>Recebido: ${fmt.brl(Number(p.valor_pago||0))} · Crédito gerado: ${fmt.brl(Number(p.credito_gerado||0))} · Crédito usado: ${fmt.brl(Number(p.credito_utilizado||0))}
         <span style="margin-left:8px;padding:1px 6px;background:#d4edda;color:#155724;border-radius:3px;font-size:10px">${p.forma_pagamento||'—'}</span>
       </td>
       <td style="text-align:right;color:#155724;font-weight:700">-${fmt.brl(pVal)}</td>
@@ -1833,6 +1849,7 @@ function imprimirExtrato() {
   </style></head>
   <body><div class="page">
 
+    <div style="margin-bottom:12px;color:#155724">Crédito disponível atual: <b>${fmt.brl(Number(cli.credito_saldo||0))}</b></div>
     <!-- Cabeçalho profissional -->
     <div class="header">
       <div>
@@ -2131,6 +2148,7 @@ async function gerarRelatorio() {
       <div class="kc g"><div class="kc-l">Vendas</div><div class="kc-v">${lista.length}</div></div>
       <div class="kc r"><div class="kc-l">Total Vendido</div><div class="kc-v mono">${fmt.brl(totalVendido)}</div></div>
       <div class="kc o"><div class="kc-l">Em Aberto</div><div class="kc-v mono">${fmt.brl(totalAberto)}</div></div>
+      <div class="kc g"><div class="kc-l">Crédito disponível atual</div><div class="kc-v mono">${fmt.brl(_clientes.filter(c=>(!cli||c.id===Number(cli))&&(!tipo||c.tipo_cliente===tipo)).reduce((n,c)=>n+Number(c.credito_saldo||0),0))}</div></div>
     </div>
     ${!st ? `<div style="font-size:11px;color:var(--muted);margin-bottom:10px">ℹ️ Vendas canceladas/reprovadas não entram neste total. Selecione o status para incluí-las.</div>` : ''}
     <div style="overflow-x:auto"><table class="tbl">
@@ -2140,11 +2158,11 @@ async function gerarRelatorio() {
 }
 
 function exportarRelatorio() {
-  const linhas = [['Cliente','Tipo','Data','Produtos','Total','Saldo','Status']];
+  const linhas = [['Cliente','Tipo','Data','Produtos','Total','Saldo','Status','Credito disponivel do cliente']];
   _vendas.forEach(v => {
     const c=_clientes.find(x=>x.id===v.cliente_id);
     const produtos = (v.itens||[]).map(i=>`${i.nome_produto}${i.quantidade?' x'+i.quantidade:''}`).join(' | ');
-    linhas.push([c?.nome||'',c?.tipo_cliente||'',v.data_compra?.slice(0,10)||'',produtos,parseFloat(v.total_final||0).toFixed(2),parseFloat(v.saldo_restante||0).toFixed(2),v.status]);
+    linhas.push([c?.nome||'',c?.tipo_cliente||'',v.data_compra?.slice(0,10)||'',produtos,parseFloat(v.total_final||0).toFixed(2),parseFloat(v.saldo_restante||0).toFixed(2),v.status,Number(c?.credito_saldo||0).toFixed(2)]);
   });
   const csv = linhas.map(l=>l.join(';')).join('\n');
   const a=document.createElement('a');
