@@ -527,13 +527,13 @@ module.exports = function(pool, app) {
           etapaImport='atualizar_compra_existente';
           await client.query(`
             UPDATE compras_produto SET
-              produto_id=$2, produto_nome=$3, grupo=$4, subgrupo=$5,
-              fornecedor_nome=$6, data_emissao=$7, data_entrada=$8,
-              quantidade=$9, unidade=$10, valor_unitario=$11,
-              quantidade_compra=$12, unidade_compra=$13, valor_unitario_compra=$14,
-              valor_total=$15, valor_total_liquido=$16, icmsst=$17,
-              arquivo_importado=$18
-            WHERE id=$1
+              produto_id=$2::integer, produto_nome=$3::text, grupo=$4::text, subgrupo=$5::text,
+              fornecedor_nome=$6::text, data_emissao=$7::date, data_entrada=$8::date,
+              quantidade=$9::numeric, unidade=$10::text, valor_unitario=$11::numeric,
+              quantidade_compra=$12::numeric, unidade_compra=$13::text, valor_unitario_compra=$14::numeric,
+              valor_total=$15::numeric, valor_total_liquido=$16::numeric, icmsst=$17::numeric,
+              arquivo_importado=$18::text
+            WHERE id=$1::integer
           `, [dupId,prodId,it.produto_nome,it.grupo,it.subgrupo,it.fornecedor_nome,
               it.data_emissao,it.data_entrada,it.quantidade,it.unidade,it.valor_unitario,
               it.quantidade_compra,it.unidade_compra,it.valor_unitario_compra,

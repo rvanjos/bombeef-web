@@ -92,3 +92,12 @@ test('schema completo de compras aceita valores decimais em bases legadas',()=>{
   assert.match(rota,/USING \$\{col\}::numeric/);
   assert.match(rota,/schema compras_produto/);
 });
+
+
+test('update de compra existente tipa parametros explicitamente',()=>{
+  const rota=ler('routes/compras_produto.js');
+  assert.match(rota,/produto_id=\$2::integer/);
+  assert.match(rota,/produto_nome=\$3::text/);
+  assert.match(rota,/valor_total=\$15::numeric/);
+  assert.match(rota,/WHERE id=\$1::integer/);
+});
