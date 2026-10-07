@@ -1570,6 +1570,7 @@ module.exports = function (pool, app) {
         return res.status(423).json({ ok:false, erro:'Este mês está fechado. Reabra o mês antes de alterar o DRE.', codigo:'DRE_MES_FECHADO' });
       }
       const uid  = req.user?.id || null;
+      const lojaId = Number(req.user?.lojaId);
       const desc = descricao || `Sessão ${mes_ref}`;
       const dadosStr = JSON.stringify(dados_json);
 
@@ -1606,10 +1607,10 @@ module.exports = function (pool, app) {
       if (sessao_id) {
         const sql = `UPDATE dre_sessoes SET descricao=$1, dados_json=$2, atualizado_em=NOW()
           ${resultado ? `,res_receitas=$4,res_despesas=$5,res_cmv=$6,res_lucro_bruto=$7,res_lucro_op=$8,res_final=$9` : ''}
-          WHERE id=$3 RETURNING id`;
+          ${resultado ? 'WHERE id=$3 AND loja_id=$10 RETURNING id' : 'WHERE id=$3 AND loja_id=$4 RETURNING id'}`;
         const params = resultado
-          ? [desc, dadosStr, sessao_id, res_receitas, res_despesas, res_cmv, res_lucro_bruto, res_lucro_op, res_final]
-          : [desc, dadosStr, sessao_id];
+          ? [desc, dadosStr, sessao_id, res_receitas, res_despesas, res_cmv, res_lucro_bruto, res_lucro_op, res_final, lojaId]
+          : [desc, dadosStr, sessao_id, lojaId];
         const upd = await pool.query(sql, params);
         if (upd.rows.length) {
           sid = upd.rows[0].id;
@@ -1622,28 +1623,28 @@ module.exports = function (pool, app) {
       // 2) Busca por mes_ref e atualiza
       if (!sid) {
         const existing = await pool.query(
-          `SELECT id FROM dre_sessoes WHERE mes_ref=$1 ORDER BY atualizado_em DESC LIMIT 1`,
-          [mes_ref]
+          `SELECT id FROM dre_sessoes WHERE mes_ref=$1 AND loja_id=$2 ORDER BY atualizado_em DESC LIMIT 1`,
+          [mes_ref, lojaId]
         );
         if (existing.rows.length) {
           const sql = resultado
             ? `UPDATE dre_sessoes SET descricao=$1,dados_json=$2,usuario_id=COALESCE($3,usuario_id),atualizado_em=NOW(),
-               res_receitas=$5,res_despesas=$6,res_cmv=$7,res_lucro_bruto=$8,res_lucro_op=$9,res_final=$10 WHERE id=$4`
-            : `UPDATE dre_sessoes SET descricao=$1,dados_json=$2,usuario_id=COALESCE($3,usuario_id),atualizado_em=NOW() WHERE id=$4`;
+               res_receitas=$5,res_despesas=$6,res_cmv=$7,res_lucro_bruto=$8,res_lucro_op=$9,res_final=$10 WHERE id=$4 AND loja_id=$11`
+            : `UPDATE dre_sessoes SET descricao=$1,dados_json=$2,usuario_id=COALESCE($3,usuario_id),atualizado_em=NOW() WHERE id=$4 AND loja_id=$5`;
           const params = resultado
-            ? [desc, dadosStr, uid, existing.rows[0].id, res_receitas, res_despesas, res_cmv, res_lucro_bruto, res_lucro_op, res_final]
-            : [desc, dadosStr, uid, existing.rows[0].id];
+            ? [desc, dadosStr, uid, existing.rows[0].id, res_receitas, res_despesas, res_cmv, res_lucro_bruto, res_lucro_op, res_final, lojaId]
+            : [desc, dadosStr, uid, existing.rows[0].id, lojaId];
           await pool.query(sql, params);
           sid = existing.rows[0].id;
         } else {
           // 3) Cria nova sessão
           const sql = resultado
-            ? `INSERT INTO dre_sessoes (mes_ref,descricao,dados_json,usuario_id,res_receitas,res_despesas,res_cmv,res_lucro_bruto,res_lucro_op,res_final)
-               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`
-            : `INSERT INTO dre_sessoes (mes_ref,descricao,dados_json,usuario_id) VALUES ($1,$2,$3,$4) RETURNING id`;
+            ? `INSERT INTO dre_sessoes (mes_ref,descricao,dados_json,usuario_id,res_receitas,res_despesas,res_cmv,res_lucro_bruto,res_lucro_op,res_final,loja_id)
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`
+            : `INSERT INTO dre_sessoes (mes_ref,descricao,dados_json,usuario_id,loja_id) VALUES ($1,$2,$3,$4,$5) RETURNING id`;
           const params = resultado
-            ? [mes_ref, desc, dadosStr, uid, res_receitas, res_despesas, res_cmv, res_lucro_bruto, res_lucro_op, res_final]
-            : [mes_ref, desc, dadosStr, uid];
+            ? [mes_ref, desc, dadosStr, uid, res_receitas, res_despesas, res_cmv, res_lucro_bruto, res_lucro_op, res_final, lojaId]
+            : [mes_ref, desc, dadosStr, uid, lojaId];
           const ins = await pool.query(sql, params);
           sid = ins.rows[0]?.id;
         }
