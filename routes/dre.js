@@ -2483,24 +2483,38 @@ module.exports = function (pool, app) {
           }
         }
         if (!faturaId) continue;
-        // Atualizar apenas categoria_dre — não mexer em status PAGA nem outros campos
+        const lojaId=Number(req.user?.lojaId);
+        const itemQ=await pool.query(`
+          SELECT cfi.id,cfi.descricao
+          FROM cartao_fatura_itens cfi
+          JOIN cartao_faturas cf ON cf.id=cfi.fatura_id
+          WHERE cfi.fatura_id=$1 AND cfi.hash_item=$2 AND COALESCE(cfi.removido,false)=false
+            AND cfi.loja_id=$3 AND cf.loja_id=$3
+          LIMIT 1
+        `,[faturaId,it.hash_item,lojaId]);
+        const descricaoItem=itemQ.rows[0]?.descricao||'';
+        const chaveNorm=_normalizarDescricaoCartao(descricaoItem);
+        // Atualizar somente o item da loja atual.
         const upd = await pool.query(
-          `UPDATE cartao_fatura_itens SET categoria_dre=$1
-           WHERE fatura_id=$2 AND hash_item=$3 AND removido=false`,
-          [it.categoria, faturaId, it.hash_item]
+          `UPDATE cartao_fatura_itens SET categoria_dre=$1,descricao_norm=$4
+           WHERE fatura_id=$2 AND hash_item=$3 AND COALESCE(removido,false)=false AND loja_id=$5`,
+          [it.categoria, faturaId, it.hash_item, chaveNorm||null, lojaId]
         );
         atualizados += upd.rowCount;
+        if(upd.rowCount && descricaoItem){
+          await _aprenderRegraCartao(lojaId,descricaoItem,it.categoria);
+        }
         // Recalcular status da fatura após atualizar categoria
         const { rows: cnt } = await pool.query(`
           SELECT COUNT(*) FILTER (WHERE categoria_dre IS NOT NULL AND categoria_dre <> '') AS cls,
                  COUNT(*) AS tot
-          FROM cartao_fatura_itens WHERE fatura_id=$1 AND removido=false`, [faturaId]);
+          FROM cartao_fatura_itens WHERE fatura_id=$1 AND loja_id=$2 AND COALESCE(removido,false)=false`, [faturaId,Number(req.user?.lojaId)]);
         if (cnt.length) {
           const cls2 = parseInt(cnt[0].cls), tot2 = parseInt(cnt[0].tot);
           const newStatus = tot2 === 0 ? 'IMPORTADA' : cls2 >= tot2 ? 'CLASSIFICADA' : 'CLASSIFICANDO';
           await pool.query(
-            `UPDATE cartao_faturas SET status=$1 WHERE id=$2 AND status != 'PAGA'`,
-            [newStatus, faturaId]
+            `UPDATE cartao_faturas SET status=$1 WHERE id=$2 AND loja_id=$3 AND status != 'PAGA'`,
+            [newStatus, faturaId, Number(req.user?.lojaId)]
           ).catch(()=>{});
         }
       }
