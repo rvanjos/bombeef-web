@@ -71,3 +71,12 @@ test('importacao de compras compara codigo como texto e exige cabecalho exato',(
   assert.match(rota,/const iCProdExact/);
   assert.match(rota,/Coluna exata de código do produto não encontrada/);
 });
+
+
+test('schema legado de compras converte identificadores para texto sem apagar dados',()=>{
+  const rota=ler('routes/compras_produto.js');
+  assert.match(rota,/ALTER TABLE compras_produto ALTER COLUMN \$\{col\} TYPE TEXT USING \$\{col\}::text/);
+  assert.match(rota,/produto_codigo','fornecedor_codigo','numero_nfe','serie_nfe','cod_item_nfe','cfop/);
+  assert.match(rota,/tipos compras_produto/);
+  assert.match(rota,/etapaImport/);
+});
