@@ -41,3 +41,14 @@ test('sessão DRE e memória de cartão respeitam loja',()=>{
   assert.match(rota,/WHERE id=\$3 AND loja_id=\$10 RETURNING id/);
   assert.match(rota,/DELETE FROM fornecedores_lookup WHERE cnpj_num='46237080000102'/);
 });
+
+
+test('auditoria permite selecionar mês independente do mês aberto no DRE',()=>{
+  const dre=ler('public/dre.html');
+  assert.match(dre,/id="audit-franq-mes"/);
+  assert.match(dre,/type="month"/);
+  assert.match(dre,/function abrirAuditoriaDREFranquia/);
+  assert.match(dre,/function executarAuditoriaDREFranquia/);
+  assert.match(dre,/const mesAuditoria=\`\$\{mm\}\/\$\{yyyy\}\`/);
+  assert.match(dre,/auditoria-franquia\/'\+encodeURIComponent\(mesAuditoria\)/);
+});

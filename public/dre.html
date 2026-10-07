@@ -593,7 +593,7 @@ thead th{padding:6px 9px;}
         <button class="btn bs" style="padding:6px 10px;font-size:11px" onclick="abrirConferenciaDRE()" title="Conferir reimportações, pagamentos parecidos e vínculos">
           🔎 Conferência <span id="dre-conf-badge" style="display:none;background:#dc2626;color:#fff;border-radius:10px;padding:1px 6px;font-size:9px;margin-left:3px">0</span>
         </button>
-        <button class="btn bs" style="padding:6px 10px;font-size:11px;border-color:#0f766e;color:#0f766e" onclick="auditarDREFranquia()" title="Auditoria completa antes de enviar o DRE à franquia">
+        <button class="btn bs" style="padding:6px 10px;font-size:11px;border-color:#0f766e;color:#0f766e" onclick="abrirAuditoriaDREFranquia()" title="Auditoria completa antes de enviar o DRE à franquia">
           🛡️ Auditar envio
         </button>
         <button class="btn bs" style="padding:6px 10px;font-size:11px" onclick="toggleSidebar()" id="toggle-sidebar-btn">☰ Filtros</button>
@@ -767,11 +767,21 @@ thead th{padding:6px 9px;}
     <div class="mdh">
       <div>
         <h3>🛡️ Auditoria do DRE para envio</h3>
-        <div id="audit-franq-sub" style="font-size:10px;color:var(--muted);margin-top:2px">Verificando dados do mês...</div>
+        <div id="audit-franq-sub" style="font-size:10px;color:var(--muted);margin-top:2px">Escolha o mês que será enviado à franquia</div>
       </div>
       <button class="mdx" onclick="fecharModal('m-auditoria-franquia')">×</button>
     </div>
-    <div class="mdb" id="audit-franq-body" style="overflow-y:auto;flex:1;padding:16px"></div>
+    <div style="padding:12px 16px;border-bottom:1px solid var(--border);background:#f8fafc;display:flex;gap:10px;align-items:end;flex-wrap:wrap">
+      <label style="display:flex;flex-direction:column;gap:4px;font-size:10px;font-weight:700;color:var(--muted)">
+        MÊS A AUDITAR
+        <input type="month" id="audit-franq-mes" style="min-width:170px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:#fff">
+      </label>
+      <button class="btn bg" onclick="executarAuditoriaDREFranquia()">🛡️ Analisar mês selecionado</button>
+      <span style="font-size:10px;color:var(--muted)">O mês da auditoria é independente do mês aberto no DRE.</span>
+    </div>
+    <div class="mdb" id="audit-franq-body" style="overflow-y:auto;flex:1;padding:16px">
+      <div style="padding:22px;text-align:center;color:var(--muted)">Selecione o mês e clique em <b>Analisar mês selecionado</b>.</div>
+    </div>
     <div class="mdf" style="justify-content:space-between;align-items:center">
       <span style="font-size:10px;color:var(--muted)">Auditoria somente leitura. Nenhum lançamento é alterado.</span>
       <button class="btn bn" onclick="fecharModal('m-auditoria-franquia')">Fechar</button>
@@ -1753,13 +1763,29 @@ async function trocarMes() {
   await sincronizarBoletosAutomatico();
 }
 
-async function auditarDREFranquia() {
-  if(!mesRef){ toast('Selecione um mês do DRE'); return; }
-  document.getElementById('m-auditoria-franquia').style.display='flex';
-  document.getElementById('audit-franq-sub').textContent='Mês '+mesRef+' · auditoria somente leitura';
+function abrirAuditoriaDREFranquia() {
+  const modal=document.getElementById('m-auditoria-franquia');
+  const input=document.getElementById('audit-franq-mes');
+  if(input){
+    const [mm,yyyy]=String(mesRef||'').split('/');
+    if(mm&&yyyy) input.value=`${yyyy}-${mm}`;
+  }
+  document.getElementById('audit-franq-sub').textContent='Escolha o mês que será enviado à franquia';
   const body=document.getElementById('audit-franq-body');
+  body.innerHTML='<div style="padding:22px;text-align:center;color:var(--muted)">Selecione o mês e clique em <b>Analisar mês selecionado</b>.</div>';
+  modal.style.display='flex';
+}
+
+async function executarAuditoriaDREFranquia() {
+  const input=document.getElementById('audit-franq-mes');
+  const ym=String(input?.value||'');
+  if(!/^\d{4}-\d{2}$/.test(ym)){ toast('Selecione o mês que deseja auditar'); return; }
+  const [yyyy,mm]=ym.split('-');
+  const mesAuditoria=`${mm}/${yyyy}`;
+  document.getElementById('audit-franq-sub').textContent='Mês '+mesAuditoria+' · auditoria somente leitura';
+    const body=document.getElementById('audit-franq-body');
   body.innerHTML='<div style="padding:28px;text-align:center;color:var(--muted)">⏳ Auditando sessão, faturamento, cartões, duplicidades, categorias e CMV...</div>';
-  const d=await api.get('/api/dre/auditoria-franquia/'+encodeURIComponent(mesRef));
+  const d=await api.get('/api/dre/auditoria-franquia/'+encodeURIComponent(mesAuditoria));
   if(!d.ok){
     body.innerHTML='<div style="padding:16px;border:1px solid #fecaca;background:#fff1f2;border-radius:10px;color:#991b1b"><b>❌ Não foi possível concluir a auditoria</b><div style="margin-top:6px">'+esc(d.erro||'Erro desconhecido')+'</div></div>';
     return;
