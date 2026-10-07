@@ -542,6 +542,17 @@ body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var
       <!-- Painel de ações de validade (mantido para compatibilidade) -->
       <div id="dash-acoes-validade" style="display:none;margin-bottom:14px"></div>
 
+      <button id="dash-alerta-ponto" onclick="abrirPendenciaAdmin('ponto')" style="display:none;width:100%;margin:0 0 14px;padding:14px 16px;border:1px solid #fecaca;border-left:5px solid #b91c1c;border-radius:12px;background:#fff1f2;color:#7f1d1d;text-align:left;cursor:pointer;font-family:inherit;box-shadow:0 2px 10px rgba(127,29,29,.08)">
+        <div style="display:flex;align-items:center;gap:12px">
+          <span style="font-size:25px">⏱️</span>
+          <span style="flex:1">
+            <strong style="display:block;font-size:13px">Aprovação de ponto pendente</strong>
+            <small id="dash-alerta-ponto-texto" style="display:block;margin-top:3px;color:#991b1b">Há lançamentos aguardando sua análise.</small>
+          </span>
+          <strong>ANALISAR →</strong>
+        </div>
+      </button>
+
       <!-- Central de aprovações e pendências — admin e gestor -->
       <div id="dash-pendencias-admin" class="dash-pendencias-admin" style="display:none">
         <div class="dash-pend-head"><div><strong>🔔 Aprovações e pendências</strong><span id="dash-pend-total"></span></div><small>Selecione um módulo para analisar</small></div>
@@ -1827,6 +1838,36 @@ async function carregarKPIs() {
     }
 
     const d = data.data;
+
+    // Aprovações de ponto vêm na própria API de KPIs, que sempre é carregada
+    // no dashboard. Isso evita depender de uma chamada paralela silenciosa.
+    if(usuario?.perfil==='admin'){
+      const pontoPend=Math.max(0,parseInt(d.pontoAprovacoesPendentes||0));
+      const cardPonto=document.getElementById('dash-pend-ponto');
+      const badgePonto=document.getElementById('nav-badge-ponto');
+      const alertaPonto=document.getElementById('dash-alerta-ponto');
+      const alertaTexto=document.getElementById('dash-alerta-ponto-texto');
+      const painelPend=document.getElementById('dash-pendencias-admin');
+      if(cardPonto){
+        cardPonto.style.display='';
+        const cnt=cardPonto.querySelector('.pend-count');
+        if(cnt) cnt.textContent=pontoPend;
+      }
+      if(badgePonto){
+        badgePonto.textContent=pontoPend;
+        badgePonto.style.display=pontoPend>0?'':'none';
+      }
+      if(alertaPonto){
+        alertaPonto.style.display=pontoPend>0?'':'none';
+        if(alertaTexto && pontoPend>0){
+          alertaTexto.textContent=pontoPend===1
+            ? 'Existe 1 lançamento aguardando sua aprovação.'
+            : 'Existem '+pontoPend+' lançamentos aguardando sua aprovação.';
+        }
+      }
+      if(painelPend) painelPend.style.display='';
+    }
+
     const mesTxt = data.mes || mes;
     $('dash-sub').textContent = `Referência: ${mesTxt} · Atualizado: ${new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`;
 

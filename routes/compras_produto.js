@@ -76,6 +76,23 @@ module.exports = function(pool, app) {
           loja_id            INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id)
         )
       `);
+      // Compatibilidade com bases antigas: identificadores de compras devem ser TEXT.
+      // TYPE ... USING ::text preserva integralmente os valores existentes.
+      for (const col of ['produto_codigo','fornecedor_codigo','numero_nfe','serie_nfe','cod_item_nfe','cfop']) {
+        await c.query(`ALTER TABLE compras_produto ALTER COLUMN ${col} TYPE TEXT USING ${col}::text`).catch(e =>
+          console.warn('[compras] migrate '+col+' -> TEXT:', e.message)
+        );
+      }
+
+      const { rows: tiposCompra } = await c.query(`
+        SELECT column_name,data_type
+        FROM information_schema.columns
+        WHERE table_schema='public' AND table_name='compras_produto'
+          AND column_name IN ('produto_codigo','fornecedor_codigo','numero_nfe','serie_nfe','cod_item_nfe','cfop','id_entrada_pdv')
+        ORDER BY ordinal_position
+      `).catch(()=>({rows:[]}));
+      console.log('[compras] tipos compras_produto:', JSON.stringify(tiposCompra));
+
       // Preserva a unidade comercial da compra (ex.: CX) separada da unidade-base
       // usada no estoque/análise (ex.: KG).
       for (const col of [
@@ -420,7 +437,9 @@ module.exports = function(pool, app) {
 
     // Inserir no banco
     const client = await pool.connect();
+    let etapaImport = 'inicio';
     try {
+      etapaImport='begin';
       await client.query('BEGIN');
 
       // Criar importação
@@ -428,6 +447,7 @@ module.exports = function(pool, app) {
       const fornSeen = [...new Set(itens.map(it => it.fornecedor_nome).filter(Boolean))];
       const totalValor = itens.reduce((s, it) => s + (it.valor_total || 0), 0);
 
+      etapaImport='criar_importacao';
       const impRes = await client.query(`
         INSERT INTO compras_importacoes
           (nome_arquivo, periodo_ini, periodo_fim, total_valor, fornecedores_json, usuario_id)
@@ -438,6 +458,7 @@ module.exports = function(pool, app) {
 
       // Verificar produtos existentes
       const codigos = [...new Set(itens.map(it => it.produto_codigo))];
+      etapaImport='vincular_produtos';
       const prodRes = await client.query(
         `SELECT id, codigo::text AS codigo
            FROM produtos
@@ -474,6 +495,7 @@ module.exports = function(pool, app) {
         }
 
         if (dupId) {
+          etapaImport='atualizar_compra_existente';
           await client.query(`
             UPDATE compras_produto SET
               produto_id=$2, produto_nome=$3, grupo=$4, subgrupo=$5,
@@ -495,6 +517,7 @@ module.exports = function(pool, app) {
         // SAVEPOINT antes do INSERT para proteger a transação de erros de duplicate key.
         // No PostgreSQL, qualquer erro dentro de uma transação a marca como "aborted".
         // Com SAVEPOINT podemos fazer ROLLBACK parcial sem abortar a transação toda.
+        etapaImport='inserir_compra';
         await client.query('SAVEPOINT sp_ins');
         try {
           await client.query(`
@@ -526,6 +549,7 @@ module.exports = function(pool, app) {
       }
 
       // Atualizar totais da importação
+      etapaImport='atualizar_totais_importacao';
       await client.query(`
         UPDATE compras_importacoes
         SET total_linhas=$2, total_ignorados=$3, total_sem_vinculo=$4
@@ -603,7 +627,9 @@ module.exports = function(pool, app) {
 
     } catch (e) {
       await client.query('ROLLBACK').catch(() => {});
-      console.error('[compras/importar]', e.message);
+      console.error('[compras/importar]', etapaImport, e.message, JSON.stringify({
+        code:e.code,detail:e.detail,where:e.where,table:e.table,column:e.column,constraint:e.constraint,routine:e.routine
+      }));
       res.status(500).json({ ok: false, erro: e.message });
     } finally { client.release(); }
   });

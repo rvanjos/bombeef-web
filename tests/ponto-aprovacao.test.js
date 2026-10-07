@@ -165,3 +165,15 @@ test('aprovacao de ponto e exclusiva do admin',()=>{
   assert.match(index,/tipo==='ponto' && usuario\?\.perfil!=='admin'/);
   assert.match(index,/tipo==='ponto' && usuario\?\.perfil==='admin'/);
 });
+
+
+test('dashboard recebe pendencias de ponto pela API principal de KPIs',()=>{
+  const dash=ler('routes/dashboard.js');
+  const index=ler('public/index.html');
+  assert.match(dash,/pontoAprovacoesPendentes/);
+  assert.match(dash,/COALESCE\(extra_minutos,0\)>0/);
+  assert.match(dash,/COALESCE\(intervalo_suprimido_min,0\)>0/);
+  assert.match(index,/dash-alerta-ponto/);
+  assert.match(index,/pontoAprovacoesPendentes/);
+  assert.match(index,/Aprovação de ponto pendente/);
+});

@@ -40,7 +40,7 @@ module.exports = function (pool) {
         catch (e) { console.warn('[dashboard] query falhou:', e.message); return {}; }
       };
 
-      const [bRow, vRow, pRow, rRow, dreRow, metaRow, fatRow] = await Promise.all([
+      const [bRow, vRow, pRow, rRow, dreRow, metaRow, fatRow, pontoPendRow] = await Promise.all([
         // M1: Boletos
         safeQuery(`
           SELECT
@@ -82,6 +82,19 @@ module.exports = function (pool) {
           FROM faturamento_periodos
           WHERE TO_CHAR(data_inicio,'MM/YYYY') = $1 AND tipo_periodo = 'dia'
         `, [mes]),
+        // Ponto: contagem persistida para o dashboard. Não depende da rotina
+        // de recalcular registros, evitando esconder pendências reais.
+        req.user?.perfil === 'admin'
+          ? safeQuery(`
+              SELECT COUNT(*)::int AS total
+              FROM ponto_registros
+              WHERE aprovacao_status='pendente'
+                 OR (
+                   (COALESCE(extra_minutos,0)>0 OR COALESCE(intervalo_suprimido_min,0)>0)
+                   AND COALESCE(aprovacao_status,'nao_aplicavel') NOT IN ('aprovado','rejeitado')
+                 )
+            `)
+          : Promise.resolve({ total: 0 }),
       ]);
 
       // Usa resultado calculado e salvo pelo DRE quando disponível (opção 2)
@@ -137,6 +150,7 @@ module.exports = function (pool) {
           perdasDentroMeta:    metaPerdasValor>0 ? totalPerdas<=metaPerdasValor : null,
           retiradasMes:        totalRetiradas,
           faturamentoMeta, faturamentoReal,
+          pontoAprovacoesPendentes: parseInt(pontoPendRow.total||0),
           faturamentoPct: faturamentoMeta>0
             ? parseFloat(((faturamentoReal/faturamentoMeta)*100).toFixed(1)) : 0,
         }
