@@ -731,40 +731,6 @@ module.exports = function (pool, app) {
         ).catch(()=>{});
       }
     }
-    // Aprende regras apenas a partir do histórico já classificado.
-    // Se a mesma descrição teve categorias diferentes, a regra nasce ambígua
-    // e nunca é aplicada automaticamente.
-    try {
-      const {rows:hist}=await pool.query(`
-        SELECT cfi.loja_id,cfi.descricao,cfi.categoria_dre
-        FROM cartao_fatura_itens cfi
-        WHERE COALESCE(cfi.removido,false)=false
-          AND COALESCE(TRIM(cfi.descricao),'')<>''
-          AND COALESCE(TRIM(cfi.categoria_dre),'')<>''
-        ORDER BY cfi.id DESC
-        LIMIT 5000
-      `);
-      const grupos=new Map();
-      for(const h of hist){
-        const chave=_normalizarDescricaoCartao(h.descricao);
-        if(!chave) continue;
-        const k=String(h.loja_id)+'|'+chave;
-        if(!grupos.has(k)) grupos.set(k,{loja_id:Number(h.loja_id),chave,descricao:h.descricao,cats:new Set()});
-        grupos.get(k).cats.add(String(h.categoria_dre));
-      }
-      for(const g of grupos.values()){
-        const cats=[...g.cats];
-        await pool.query(`
-          INSERT INTO cartao_classificacao_regras
-            (loja_id,chave_norm,descricao_exemplo,categoria_dre,ambiguo,usos)
-          VALUES($1,$2,$3,$4,$5,1)
-          ON CONFLICT(loja_id,chave_norm) DO NOTHING
-        `,[g.loja_id,g.chave,String(g.descricao||'').slice(0,240),cats.length===1?cats[0]:null,cats.length!==1]);
-      }
-    } catch(e) {
-      console.warn('[dre] backfill regras cartão:',e.message);
-    }
-
     // Não excluir sessões automaticamente durante a inicialização. Versões antigas
     // podem pertencer a usuários diferentes e servem como histórico de recuperação.
   }
@@ -784,6 +750,7 @@ module.exports = function (pool, app) {
   r.get('/cartao-classificacao/regras', async (req,res)=>{
     try{
       const lojaId=Number(req.user?.lojaId);
+      await _backfillRegrasCartaoLoja(lojaId);
       const {rows}=await pool.query(`
         SELECT chave_norm,descricao_exemplo,categoria_dre,ambiguo,usos,atualizado_em
         FROM cartao_classificacao_regras
@@ -2607,6 +2574,7 @@ module.exports = function (pool, app) {
       const uid  = req.user?.id || null;
       const lojaId = Number(req.user?.lojaId);
       const agora = new Date().toISOString();
+      await _backfillRegrasCartaoLoja(lojaId);
       const regrasCartao = await _regrasCartaoMap(lojaId);
 
       // ── REPROCESSAMENTO ────────────────────────────────────────────────────
@@ -3025,6 +2993,33 @@ module.exports = function (pool, app) {
       .replace(/\s+/g,' ')
       .trim()
       .slice(0,160);
+  }
+
+  async function _backfillRegrasCartaoLoja(lojaId) {
+    const lid=Number(lojaId);
+    const {rows:hist}=await pool.query(`
+      SELECT descricao,categoria_dre
+      FROM cartao_fatura_itens
+      WHERE loja_id=$1 AND COALESCE(removido,false)=false
+        AND COALESCE(TRIM(descricao),'')<>'' AND COALESCE(TRIM(categoria_dre),'')<>''
+      ORDER BY id DESC LIMIT 5000
+    `,[lid]);
+    const grupos=new Map();
+    for(const h of hist){
+      const chave=_normalizarDescricaoCartao(h.descricao);
+      if(!chave) continue;
+      if(!grupos.has(chave)) grupos.set(chave,{descricao:h.descricao,cats:new Set()});
+      grupos.get(chave).cats.add(String(h.categoria_dre));
+    }
+    for(const [chave,g] of grupos){
+      const cats=[...g.cats];
+      await pool.query(`
+        INSERT INTO cartao_classificacao_regras
+          (loja_id,chave_norm,descricao_exemplo,categoria_dre,ambiguo,usos)
+        VALUES($1,$2,$3,$4,$5,1)
+        ON CONFLICT(loja_id,chave_norm) DO NOTHING
+      `,[lid,chave,String(g.descricao||'').slice(0,240),cats.length===1?cats[0]:null,cats.length!==1]);
+    }
   }
 
   async function _regrasCartaoMap(lojaId) {
