@@ -149,3 +149,19 @@ test('cartao ponto mensal nao usa make_date e filtra por intervalo de datas',()=
   assert.match(trecho,/p\.data_ref < \$2::date/);
   assert.match(trecho,/\[inicioMes, inicioProximoMes\]/);
 });
+
+
+test('aprovacao de ponto e exclusiva do admin',()=>{
+  const rota=ler('routes/ponto.js');
+  const ponto=ler('public/ponto.html');
+  const index=ler('public/index.html');
+  const ini=rota.indexOf("// ── Aprovação de horas extras");
+  const fim=rota.indexOf("// ── Jornada do funcionário",ini);
+  const trecho=rota.slice(ini,fim);
+  assert.doesNotMatch(trecho,/\['admin','gestor'\]/);
+  assert.match(trecho,/req\.user\?\.perfil!=='admin'/);
+  assert.match(ponto,/if \(me\.data\.perfil === 'admin'\)/);
+  assert.match(ponto,/if\(_user\?\.perfil!=='admin'\) return;/);
+  assert.match(index,/tipo==='ponto' && usuario\?\.perfil!=='admin'/);
+  assert.match(index,/tipo==='ponto' && usuario\?\.perfil==='admin'/);
+});

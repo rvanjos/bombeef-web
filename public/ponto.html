@@ -411,7 +411,7 @@ window.onBBReady = async () => {
         const btnRel = document.getElementById('btn-relatorio');
         if (btnRel) btnRel.style.display = '';
       }
-      if (['admin','gestor'].includes(me.data.perfil)) {
+      if (me.data.perfil === 'admin') {
         const btnAprov = document.getElementById('btn-aprov-ponto');
         if (btnAprov) btnAprov.style.display = '';
         atualizarBadgeAprovacoesPonto();
@@ -879,7 +879,7 @@ async function carregarRelatorio() {
 
 // ── Aprovação de jornada ─────────────────────────────────────────────────────
 async function atualizarBadgeAprovacoesPonto(){
-  if(!['admin','gestor'].includes(_user?.perfil)) return;
+  if(_user?.perfil!=='admin') return;
   const d=await api.get('/api/ponto/pendentes-aprovacao/count');
   const n=Number(d.total||0);
   const b=document.getElementById('badge-aprov-ponto');
@@ -1144,7 +1144,7 @@ h3{color:#444;margin:12px 0 6px;font-size:13px}
 
 window.addEventListener('message', function(e){
   if(!e.data || e.data.type!=='bb_open_ponto_aprovacoes') return;
-  if(['admin','gestor'].includes(_user?.perfil)) abrirAprovacoesPonto();
+  if(_user?.perfil==='admin') abrirAprovacoesPonto();
 });
 </script>
 

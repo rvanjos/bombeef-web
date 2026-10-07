@@ -1748,7 +1748,9 @@ async function carregarPendentesAprovacao() {
       apiFetch('/api/rh/lancamentos-pendentes/count').catch(()=>({total:0})),
       apiFetch('/api/retiradas/pendentes/count').catch(()=>({total:0})),
       apiFetch('/api/fiado/pendentes-aprovacao/count').catch(()=>({total:0})),
-      apiFetch('/api/ponto/pendentes-aprovacao/count').catch(()=>({total:0})),
+      usuario?.perfil==='admin'
+        ? apiFetch('/api/ponto/pendentes-aprovacao/count').catch(()=>({total:0}))
+        : Promise.resolve({total:0}),
     ]);
     const dados = {
       rh: parseInt(rh.total||0),
@@ -1760,8 +1762,12 @@ async function carregarPendentesAprovacao() {
     Object.entries(dados).forEach(([tipo,n])=>{
       const card=document.getElementById('dash-pend-'+tipo);
       if(card){
-        const sempreVisivel = tipo==='ponto' || tipo==='fiado';
-        card.style.display=(sempreVisivel || n>0)?'':'none';
+        if(tipo==='ponto' && usuario?.perfil!=='admin'){
+          card.style.display='none';
+        }else{
+          const sempreVisivel = tipo==='ponto' || tipo==='fiado';
+          card.style.display=(sempreVisivel || n>0)?'':'none';
+        }
         const c=card.querySelector('.pend-count'); if(c)c.textContent=n;
       }
       const badge=document.getElementById(navs[tipo]);
@@ -1780,7 +1786,7 @@ function abrirPendenciaAdmin(tipo){
     const enviar=()=>{try{document.getElementById('iframe-rh')?.contentWindow?.postMessage({type:'bb_open_rh_aprovacoes'},window.location.origin)}catch(_){}};
     setTimeout(enviar,350);setTimeout(enviar,1100);
   }
-  if(tipo==='ponto'){
+  if(tipo==='ponto' && usuario?.perfil==='admin'){
     const enviar=()=>{try{document.getElementById('iframe-ponto')?.contentWindow?.postMessage({type:'bb_open_ponto_aprovacoes'},window.location.origin)}catch(_){}};
     setTimeout(enviar,350);setTimeout(enviar,1100);
   }
