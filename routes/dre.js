@@ -632,6 +632,22 @@ module.exports = function (pool, app) {
     await pool.query(`ALTER TABLE cartao_fatura_itens ADD COLUMN IF NOT EXISTS removido BOOLEAN DEFAULT false`).catch(()=>{});
     await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_cf_hash_loja ON cartao_faturas(loja_id,hash_fatura) WHERE hash_fatura IS NOT NULL`).catch(()=>{});
     await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_cfi_hash ON cartao_fatura_itens(fatura_id, hash_item) WHERE hash_item IS NOT NULL`).catch(()=>{});
+    await pool.query(`ALTER TABLE cartao_fatura_itens ADD COLUMN IF NOT EXISTS descricao_norm TEXT`).catch(()=>{});
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS cartao_classificacao_regras (
+        id BIGSERIAL PRIMARY KEY,
+        loja_id INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id),
+        chave_norm TEXT NOT NULL,
+        descricao_exemplo TEXT,
+        categoria_dre TEXT,
+        ambiguo BOOLEAN NOT NULL DEFAULT false,
+        usos INTEGER NOT NULL DEFAULT 0,
+        criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE(loja_id,chave_norm)
+      )
+    `).catch(()=>{});
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_cartao_regras_loja_cat ON cartao_classificacao_regras(loja_id,categoria_dre)`).catch(()=>{});
 
     // Agrupamento manual de cartão: cartões adicionais (corporativo — cada
     // pessoa tem o próprio número, mas cai numa fatura única com vencimento
@@ -2894,6 +2910,89 @@ module.exports = function (pool, app) {
     else if (up.includes('ITA')) banco = 'Itaú';
     else if (/XXXX\.XXXX\.\d{4}/.test(p)) banco = 'Itaú'; // formato mascarado do Itaú Empresas
     return { banco, final, chave: `${banco}_${final}` };
+  }
+
+  function _normalizarDescricaoCartao(v) {
+    return String(v||'')
+      .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+      .toUpperCase()
+      .replace(/\b(PARC|PARCELA)\s*\d+\s*(?:\/|DE)\s*\d+\b/g,' ')
+      .replace(/\b\d{1,2}\s*\/\s*\d{1,2}\b/g,' ')
+      .replace(/\b\d{2}\/\d{2}(?:\/\d{2,4})?\b/g,' ')
+      .replace(/\s+-\s+[A-Z]{2}\b$/g,' ')
+      .replace(/[^A-Z0-9 ]/g,' ')
+      .replace(/\s+/g,' ')
+      .trim()
+      .slice(0,160);
+  }
+
+  async function _regrasCartaoMap(lojaId) {
+    const {rows}=await pool.query(`
+      SELECT chave_norm,categoria_dre,ambiguo
+      FROM cartao_classificacao_regras
+      WHERE loja_id=$1 AND ambiguo=false AND COALESCE(categoria_dre,'')<>''
+    `,[Number(lojaId)]);
+    return new Map(rows.map(r=>[String(r.chave_norm),String(r.categoria_dre)]));
+  }
+
+  async function _aprenderRegraCartao(lojaId, descricao, categoria) {
+    const chave=_normalizarDescricaoCartao(descricao);
+    if(!chave || !categoria) return {chave:null,ambiguo:false,aplicados:0};
+    const {rows}=await pool.query(`
+      SELECT id,categoria_dre,ambiguo FROM cartao_classificacao_regras
+      WHERE loja_id=$1 AND chave_norm=$2 LIMIT 1
+    `,[Number(lojaId),chave]);
+    let ambiguo=false;
+    if(!rows.length){
+      await pool.query(`
+        INSERT INTO cartao_classificacao_regras(loja_id,chave_norm,descricao_exemplo,categoria_dre,ambiguo,usos)
+        VALUES($1,$2,$3,$4,false,1)
+      `,[Number(lojaId),chave,String(descricao||'').slice(0,240),categoria]);
+    } else if(rows[0].ambiguo || (rows[0].categoria_dre && rows[0].categoria_dre!==categoria)){
+      ambiguo=true;
+      await pool.query(`
+        UPDATE cartao_classificacao_regras
+        SET ambiguo=true,categoria_dre=NULL,usos=usos+1,descricao_exemplo=$3,atualizado_em=NOW()
+        WHERE loja_id=$1 AND chave_norm=$2
+      `,[Number(lojaId),chave,String(descricao||'').slice(0,240)]);
+    } else {
+      await pool.query(`
+        UPDATE cartao_classificacao_regras
+        SET categoria_dre=$3,ambiguo=false,usos=usos+1,descricao_exemplo=$4,atualizado_em=NOW()
+        WHERE loja_id=$1 AND chave_norm=$2
+      `,[Number(lojaId),chave,categoria,String(descricao||'').slice(0,240)]);
+    }
+    if(ambiguo) return {chave,ambiguo:true,aplicados:0};
+
+    const {rows:pendentes}=await pool.query(`
+      SELECT cfi.id,cfi.fatura_id,cfi.descricao
+      FROM cartao_fatura_itens cfi
+      JOIN cartao_faturas cf ON cf.id=cfi.fatura_id
+      WHERE cf.loja_id=$1 AND cfi.loja_id=$1
+        AND COALESCE(cfi.removido,false)=false
+        AND COALESCE(TRIM(cfi.categoria_dre),'')=''
+      LIMIT 1000
+    `,[Number(lojaId)]);
+    const ids=pendentes.filter(x=>_normalizarDescricaoCartao(x.descricao)===chave).map(x=>Number(x.id));
+    if(ids.length){
+      await pool.query(`
+        UPDATE cartao_fatura_itens
+        SET categoria_dre=$2,descricao_norm=$3
+        WHERE loja_id=$1 AND id = ANY($4::bigint[])
+      `,[Number(lojaId),categoria,chave,ids]);
+      const faturas=[...new Set(pendentes.filter(x=>ids.includes(Number(x.id))).map(x=>Number(x.fatura_id)))];
+      for(const fid of faturas){
+        await pool.query(`
+          UPDATE cartao_faturas cf SET status=CASE
+            WHEN cf.status='PAGA' THEN 'PAGA'
+            WHEN NOT EXISTS (SELECT 1 FROM cartao_fatura_itens i WHERE i.fatura_id=cf.id AND COALESCE(i.removido,false)=false AND COALESCE(TRIM(i.categoria_dre),'')='') THEN 'CLASSIFICADA'
+            ELSE 'CLASSIFICANDO' END,
+            atualizado_em=NOW()
+          WHERE cf.id=$1 AND cf.loja_id=$2
+        `,[fid,Number(lojaId)]).catch(()=>{});
+      }
+    }
+    return {chave,ambiguo:false,aplicados:ids.length};
   }
 
   // ── Helper: hash de item de fatura ──────────────────────────────────────────
