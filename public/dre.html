@@ -593,6 +593,9 @@ thead th{padding:6px 9px;}
         <button class="btn bs" style="padding:6px 10px;font-size:11px" onclick="abrirConferenciaDRE()" title="Conferir reimportações, pagamentos parecidos e vínculos">
           🔎 Conferência <span id="dre-conf-badge" style="display:none;background:#dc2626;color:#fff;border-radius:10px;padding:1px 6px;font-size:9px;margin-left:3px">0</span>
         </button>
+        <button class="btn bs" style="padding:6px 10px;font-size:11px;border-color:#0f766e;color:#0f766e" onclick="auditarDREFranquia()" title="Auditoria completa antes de enviar o DRE à franquia">
+          🛡️ Auditar envio
+        </button>
         <button class="btn bs" style="padding:6px 10px;font-size:11px" onclick="toggleSidebar()" id="toggle-sidebar-btn">☰ Filtros</button>
         <button class="btn bg" style="padding:6px 11px;font-size:11px" onclick="salvarTodos()">💾 Salvar</button>
         <div class="dre-more">
@@ -757,6 +760,24 @@ thead th{padding:6px 9px;}
 <!-- Inputs ocultos -->
 <input type="file" id="f-ofx" accept=".ofx,.ofc,.xlsx,.xls,.csv" style="display:none" onchange="loadFile(this,'ext')">
 <input type="file" id="f-cc" accept=".csv,.xlsx,.xls,.pdf" style="display:none" onchange="loadFile(this,'cc')">
+
+<!-- Auditoria final para envio à franquia -->
+<div class="mbg" id="m-auditoria-franquia">
+  <div class="md md-lg md-flex" style="max-height:92vh">
+    <div class="mdh">
+      <div>
+        <h3>🛡️ Auditoria do DRE para envio</h3>
+        <div id="audit-franq-sub" style="font-size:10px;color:var(--muted);margin-top:2px">Verificando dados do mês...</div>
+      </div>
+      <button class="mdx" onclick="fecharModal('m-auditoria-franquia')">×</button>
+    </div>
+    <div class="mdb" id="audit-franq-body" style="overflow-y:auto;flex:1;padding:16px"></div>
+    <div class="mdf" style="justify-content:space-between;align-items:center">
+      <span style="font-size:10px;color:var(--muted)">Auditoria somente leitura. Nenhum lançamento é alterado.</span>
+      <button class="btn bn" onclick="fecharModal('m-auditoria-franquia')">Fechar</button>
+    </div>
+  </div>
+</div>
 
 <!-- Conferência do DRE: diagnóstico e tratamento assistido -->
 <div class="mbg" id="m-conferencia-dre">
@@ -1043,6 +1064,7 @@ let TXS=[], sessId=null, mesRef='', files=[], supMem={}, selIds=new Set(), _sv;
 // lexical deste script e, portanto, não existe automaticamente em window.TXS.
 window.getDreTransactions = () => TXS;
 let _taxaRoyalties = 4.88; // Sprint 3.1-B: carregada do backend em carregarCategorias()
+let _cartaoRegras = new Map(); // descrição normalizada → categoria DRE aprendida
 let _filtroRapido = 'todos'; // Sprint 3.1-F: filtro rápido ativo
 let _estoquesMes = {}; // { 'MM/YYYY': valorEstoqueFinal }
 try { _estoquesMes = JSON.parse(localStorage.getItem('bb_estoques_mes') || '{}'); window._estoquesMes = _estoquesMes; } catch(_) {}
@@ -1170,6 +1192,34 @@ const MAPPINGS=[
   ['RECEITA FEDERAL','Simples Nacional'],['PREFEITURA','IPTU'],
   ['CEF MATRIZ','Simples Nacional'],
 ];
+
+function normalizarDescricaoCartao(v) {
+  return String(v||'')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .toUpperCase()
+    .replace(/\b(PARC|PARCELA)\s*\d+\s*(?:\/|DE)\s*\d+\b/g,' ')
+    .replace(/\b\d{1,2}\s*\/\s*\d{1,2}\b/g,' ')
+    .replace(/\b\d{2}\/\d{2}(?:\/\d{2,4})?\b/g,' ')
+    .replace(/\s+-\s+[A-Z]{2}\b$/g,' ')
+    .replace(/[^A-Z0-9 ]/g,' ')
+    .replace(/\s+/g,' ')
+    .trim()
+    .slice(0,160);
+}
+function aplicarRegrasRecorrentesCartao(lancs) {
+  let aplicadas=0;
+  for(const t of (Array.isArray(lancs)?lancs:[])){
+    if(String(t.fonte||'').toUpperCase()!=='CC') continue;
+    const chave=normalizarDescricaoCartao(t.razaoSocial||t.descricao||t.lancamento||'');
+    const cat=_cartaoRegras.get(chave);
+    if(cat && !String(t.categoria||'').trim()){
+      t.categoria=cat;
+      t.classificacaoRecorrente=true;
+      aplicadas++;
+    }
+  }
+  return aplicadas;
+}
 
 function autoClassificar(lancamento, razaoSocial='') {
   if (!lancamento) return '';
@@ -1429,7 +1479,15 @@ async function inicializar() {
   await carregarSessao();
   // Atualiza enriquecimentos quando estiverem prontos, sem segurar a carga principal.
   Promise.allSettled([pCategorias, pFaturamento]).then(() => {
-    try { updMesFiltro(); render(); updStats(); renderDRE(); } catch(_) {}
+    try {
+      const aplicadas=aplicarRegrasRecorrentesCartao(TXS);
+      if(aplicadas){
+        const meses=[...new Set(TXS.filter(t=>t.classificacaoRecorrente).map(t=>t.mes||mesRef).filter(Boolean))];
+        meses.forEach(m=>salvarMesDebounce(m));
+        toast('🧠 '+aplicadas+' compra(s) de cartão recuperada(s) pela recorrência');
+      }
+      updMesFiltro(); render(); updStats(); renderDRE();
+    } catch(_) {}
   });
   await sincronizarBoletosAutomatico();
   _inicializado = true; // só marca após carregar com sucesso
@@ -1467,6 +1525,16 @@ async function carregarCategorias() {
     console.warn('[DRE] usando categorias fallback:', e.message);
     CATS = CATS_FALLBACK;
   }
+  // Memória persistente das compras recorrentes no cartão.
+  try {
+    const rr=await api.get('/api/dre/cartao-classificacao/regras');
+    _cartaoRegras=new Map((rr.ok?rr.data:[])
+      .filter(r=>!r.ambiguo && r.categoria_dre && r.chave_norm)
+      .map(r=>[String(r.chave_norm),String(r.categoria_dre)]));
+  } catch(_) {
+    _cartaoRegras=new Map();
+  }
+
   // ── Sprint 3.1-B: carregar taxa de royalties do backend ─────────────────
   try {
     const cfg = await api.get('/api/config/sistema');
@@ -1685,6 +1753,42 @@ async function trocarMes() {
   await sincronizarBoletosAutomatico();
 }
 
+async function auditarDREFranquia() {
+  if(!mesRef){ toast('Selecione um mês do DRE'); return; }
+  document.getElementById('m-auditoria-franquia').style.display='flex';
+  document.getElementById('audit-franq-sub').textContent='Mês '+mesRef+' · auditoria somente leitura';
+  const body=document.getElementById('audit-franq-body');
+  body.innerHTML='<div style="padding:28px;text-align:center;color:var(--muted)">⏳ Auditando sessão, faturamento, cartões, duplicidades, categorias e CMV...</div>';
+  const d=await api.get('/api/dre/auditoria-franquia/'+encodeURIComponent(mesRef));
+  if(!d.ok){
+    body.innerHTML='<div style="padding:16px;border:1px solid #fecaca;background:#fff1f2;border-radius:10px;color:#991b1b"><b>❌ Não foi possível concluir a auditoria</b><div style="margin-top:6px">'+esc(d.erro||'Erro desconhecido')+'</div></div>';
+    return;
+  }
+  const a=d.data||{}, r=a.resumo||{};
+  const brl=v=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(Number(v||0));
+  const status=a.apto
+    ? '<div style="padding:15px;border:2px solid #16a34a;background:#f0fdf4;border-radius:12px;color:#166534;margin-bottom:14px"><div style="font-size:18px;font-weight:800">✅ APTO PARA ENVIO</div><div style="font-size:11px;margin-top:4px">Nenhum bloqueio crítico encontrado pela auditoria automática.</div></div>'
+    : '<div style="padding:15px;border:2px solid #dc2626;background:#fff1f2;border-radius:12px;color:#991b1b;margin-bottom:14px"><div style="font-size:18px;font-weight:800">⛔ NÃO ENVIAR AINDA</div><div style="font-size:11px;margin-top:4px">'+(a.bloqueios||[]).length+' bloqueio(s) precisam ser resolvidos antes do envio.</div></div>';
+  const card=(x,bg,border,icon)=>'<div style="padding:11px 12px;border:1px solid '+border+';background:'+bg+';border-radius:9px;margin-bottom:7px"><div style="font-weight:700;font-size:12px">'+icon+' '+esc(x.label)+'</div><div style="font-size:11px;color:#555;margin-top:3px">'+esc(x.detalhe||'')+'</div></div>';
+  const resumo='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:16px">'
+    +[['Receitas',brl(r.receitas_oficiais)],['Despesas',brl(r.despesas_oficiais)],['CMV',brl(r.cmv_oficial)],['Resultado final',brl(r.resultado_final)],['Faturamento',brl(r.faturamento)],['Dif. faturamento',brl(r.diferenca_faturamento)]]
+      .map(([l,v])=>'<div style="border:1px solid var(--border);border-radius:9px;padding:10px;background:#fff"><div style="font-size:9px;text-transform:uppercase;color:var(--muted);font-weight:700">'+l+'</div><div style="font-size:14px;font-weight:800;margin-top:3px">'+v+'</div></div>').join('')
+    +'</div>';
+  const estoque='<div style="font-size:11px;color:var(--muted);margin:0 0 14px">Sessão #'+(r.sessao_id||'—')+' · '+(r.lancamentos_mes||0)+' lançamentos · '+(r.sessoes_mes||0)+' sessão(ões) no mês'
+    +(r.taxa_royalties_pct!=null?' · Royalties configurado: '+Number(r.taxa_royalties_pct).toFixed(2)+'%':'')+'</div>';
+  let html=status+resumo+estoque;
+  if((a.bloqueios||[]).length){
+    html+='<h4 style="margin:10px 0 8px;color:#991b1b">Bloqueios</h4>'+(a.bloqueios||[]).map(x=>card(x,'#fff1f2','#fecaca','⛔')).join('');
+  }
+  if((a.avisos||[]).length){
+    html+='<h4 style="margin:15px 0 8px;color:#92400e">Revisões recomendadas</h4>'+(a.avisos||[]).map(x=>card(x,'#fffbeb','#fde68a','⚠️')).join('');
+  }
+  if((a.ok_itens||[]).length){
+    html+='<h4 style="margin:15px 0 8px;color:#166534">Conferências aprovadas</h4>'+(a.ok_itens||[]).map(x=>card(x,'#f0fdf4','#bbf7d0','✅')).join('');
+  }
+  body.innerHTML=html;
+}
+
 // ─── CARREGAR ARQUIVOS ────────────────────────────────────────────────────────
 function abrirDZ() { document.getElementById('f-ofx').click(); }
 
@@ -1850,6 +1954,8 @@ async function confirmarImportCC() {
         if (!l.data || !l.mes || l.mes === mesRef) l.mes = mesCC;
         l.mesCaixa = mesCC;
       });
+      const regrasAplicadas=aplicarRegrasRecorrentesCartao(lancs);
+      if(regrasAplicadas) toast('🧠 '+regrasAplicadas+' compra(s) classificada(s) pela recorrência');
       abrirRevisaoCC(lancs, mesCC, bandeira, file.name);
     } catch(e) {
       console.error('[procCC PDF]', e);
@@ -1909,6 +2015,8 @@ async function confirmarImportCC() {
     // mesCaixa = mês do PAGAMENTO da fatura (sempre o mês confirmado pelo usuário)
     l.mesCaixa = mesCC;
   });
+  const regrasAplicadas=aplicarRegrasRecorrentesCartao(lancs);
+  if(regrasAplicadas) toast('🧠 '+regrasAplicadas+' compra(s) classificada(s) pela recorrência');
 
   // ATENÇÃO: abrirRevisaoCC recebe o mês da FATURA (mesCC, sempre único — é
   // o que o usuário confirmou ao importar), NUNCA o texto de exibição. Já foi
