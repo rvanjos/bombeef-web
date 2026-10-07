@@ -2536,13 +2536,15 @@ module.exports = function (pool, app) {
 
     try {
       const uid  = req.user?.id || null;
+      const lojaId = Number(req.user?.lojaId);
       const agora = new Date().toISOString();
+      const regrasCartao = await _regrasCartaoMap(lojaId);
 
       // ── REPROCESSAMENTO ────────────────────────────────────────────────────
       if (reprocessar && fatura_existente_id) {
         const existRes = await pool.query(
-          `SELECT id, log_json, valor_total FROM cartao_faturas WHERE id = $1`,
-          [fatura_existente_id]
+          `SELECT id, log_json, valor_total FROM cartao_faturas WHERE id = $1 AND loja_id=$2`,
+          [fatura_existente_id,lojaId]
         );
         if (!existRes.rows.length)
           return res.status(404).json({ ok: false, erro: 'Fatura não encontrada' });
@@ -2560,11 +2562,11 @@ module.exports = function (pool, app) {
             situacao      = 'REPROCESSADA',
             log_json      = $5::jsonb,
             atualizado_em = NOW()
-          WHERE id = $6
+          WHERE id = $6 AND loja_id=$7
         `, [parseFloat(valor_total || 0), parseInt(qtd_itens || 0),
             arquivo_nome || null, hash_fatura || null,
             JSON.stringify([...logAtual, { acao:'REPROCESSADA', em: agora, usuario_id: uid, arquivo: arquivo_nome || null }]),
-            faturaId]);
+            faturaId, lojaId]);
 
         // Reconciliar itens: preservar categorias dos existentes, inserir novos, marcar removidos
         let novos = 0, mantidos = 0, removidos = 0;
@@ -2573,8 +2575,8 @@ module.exports = function (pool, app) {
           // Itens existentes com hash
           const existItems = await pool.query(
             `SELECT id, hash_item, categoria_dre FROM cartao_fatura_itens
-             WHERE fatura_id = $1 AND removido = false`,
-            [faturaId]
+             WHERE fatura_id = $1 AND loja_id=$2 AND COALESCE(removido,false)=false`,
+            [faturaId,lojaId]
           );
           const existMap = new Map(existItems.rows.map(r => [r.hash_item, r]));
           const novosHashes = new Set();
@@ -2585,19 +2587,22 @@ module.exports = function (pool, app) {
             if (existMap.has(h)) {
               mantidos++;
             } else {
-              // Item novo — inserir preservando categoria se houver
-              const catExist = existMap.get(h)?.categoria_dre || it.categoria || null;
+              // Item novo: regra recorrente aprendida pelo usuário tem prioridade
+              // sobre heurísticas do parser.
+              const descricao = it.descricao || it.lancamento || '';
+              const chaveNorm = _normalizarDescricaoCartao(descricao);
+              const catExist = regrasCartao.get(chaveNorm) || it.categoria || null;
               await pool.query(`
                 INSERT INTO cartao_fatura_itens
-                  (fatura_id, data_compra, descricao, valor, categoria_dre, portador, hash_item)
-                VALUES ($1,$2,$3,$4,$5,$6,$7)
+                  (fatura_id, data_compra, descricao, valor, categoria_dre, portador, hash_item,loja_id,descricao_norm)
+                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
                 ON CONFLICT (fatura_id, hash_item) WHERE hash_item IS NOT NULL DO UPDATE
                   SET removido = false,
+                      descricao_norm = COALESCE(cartao_fatura_itens.descricao_norm, EXCLUDED.descricao_norm),
                       categoria_dre = COALESCE(cartao_fatura_itens.categoria_dre, EXCLUDED.categoria_dre)
-              `, [faturaId, it.data || null,
-                  it.descricao || it.lancamento || null,
+              `, [faturaId, it.data || null, descricao,
                   parseFloat(it.valor || 0),
-                  catExist, it.portador || null, h]);
+                  catExist, it.portador || null, h, lojaId, chaveNorm||null]);
               novos++;
             }
           }
@@ -2606,8 +2611,8 @@ module.exports = function (pool, app) {
           for (const [h, row] of existMap) {
             if (!novosHashes.has(h)) {
               await pool.query(
-                `UPDATE cartao_fatura_itens SET removido=true WHERE id=$1`,
-                [row.id]
+                `UPDATE cartao_fatura_itens SET removido=true WHERE id=$1 AND loja_id=$2`,
+                [row.id,lojaId]
               );
               removidos++;
             }
@@ -2616,8 +2621,8 @@ module.exports = function (pool, app) {
           // Atualizar situação se houve diferenças
           if (novos > 0 || removidos > 0) {
             await pool.query(
-              `UPDATE cartao_faturas SET situacao='COM_DIFERENCAS' WHERE id=$1`,
-              [faturaId]
+              `UPDATE cartao_faturas SET situacao='COM_DIFERENCAS' WHERE id=$1 AND loja_id=$2`,
+              [faturaId,lojaId]
             );
           }
         }
@@ -2634,33 +2639,46 @@ module.exports = function (pool, app) {
         INSERT INTO cartao_faturas
           (cartao, bandeira, competencia, valor_total, qtd_itens,
            arquivo_nome, hash_fatura, fatura_id_ref, possivel_duplicidade,
-           sessao_id, usuario_id, status, situacao, log_json)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,false,$9,$10,'IMPORTADA','NORMAL',$11)
+           sessao_id, usuario_id, status, situacao, log_json,loja_id)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,false,$9,$10,'IMPORTADA','NORMAL',$11,$12)
         RETURNING id
       `, [cartao, bandeira || null, competencia,
           parseFloat(valor_total || 0), parseInt(qtd_itens || 0),
           arquivo_nome || null, hash_fatura || null, fatura_id_ref || null,
           sessao_id || null, uid,
-          JSON.stringify([{ acao:'IMPORTADA', em: agora, usuario_id: uid, arquivo: arquivo_nome || null }])]);
+          JSON.stringify([{ acao:'IMPORTADA', em: agora, usuario_id: uid, arquivo: arquivo_nome || null }]), lojaId]);
 
       const faturaDbId = rows[0].id;
 
       if (itens && itens.length) {
         for (const it of itens.slice(0, 500)) {
           const h = _hashItem(it);
+          const descricao=it.descricao || it.lancamento || '';
+          const chaveNorm=_normalizarDescricaoCartao(descricao);
+          const catRecorrente=regrasCartao.get(chaveNorm) || it.categoria || null;
           await pool.query(`
             INSERT INTO cartao_fatura_itens
-              (fatura_id, data_compra, descricao, valor, categoria_dre, portador, hash_item)
-            VALUES ($1,$2,$3,$4,$5,$6,$7)
+              (fatura_id, data_compra, descricao, valor, categoria_dre, portador, hash_item,loja_id,descricao_norm)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
             ON CONFLICT (fatura_id, hash_item) WHERE hash_item IS NOT NULL DO NOTHING
-          `, [faturaDbId, it.data || null,
-              it.descricao || it.lancamento || null,
+          `, [faturaDbId, it.data || null, descricao,
               parseFloat(it.valor || 0),
-              it.categoria || null, it.portador || null, h]);
+              catRecorrente, it.portador || null, h, lojaId, chaveNorm||null]);
         }
       }
 
-      res.json({ ok: true, id: faturaDbId, reprocessado: false });
+      const pendentesClassificacao=await pool.query(`
+        SELECT COUNT(*)::int AS n FROM cartao_fatura_itens
+        WHERE fatura_id=$1 AND loja_id=$2 AND COALESCE(removido,false)=false
+          AND COALESCE(TRIM(categoria_dre),'')=''
+      `,[faturaDbId,lojaId]);
+      const nPend=Number(pendentesClassificacao.rows[0]?.n||0);
+      if(nPend===0 && itens?.length){
+        await pool.query(`UPDATE cartao_faturas SET status='CLASSIFICADA',atualizado_em=NOW() WHERE id=$1 AND loja_id=$2`,[faturaDbId,lojaId]);
+      } else if(nPend>0){
+        await pool.query(`UPDATE cartao_faturas SET status='CLASSIFICANDO',atualizado_em=NOW() WHERE id=$1 AND loja_id=$2`,[faturaDbId,lojaId]);
+      }
+      res.json({ ok: true, id: faturaDbId, reprocessado: false, pendentes_classificacao:nPend });
     } catch(e) {
       console.error('[dre/cartao-faturas POST]', e.message);
       res.status(500).json({ ok: false, erro: e.message });
