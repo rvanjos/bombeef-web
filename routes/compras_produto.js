@@ -76,6 +76,14 @@ module.exports = function(pool, app) {
           loja_id            INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id)
         )
       `);
+      // Compatibilidade com bases antigas: identificadores de compras devem ser TEXT.
+      // TYPE ... USING ::text preserva integralmente os valores existentes.
+      for (const col of ['produto_codigo','fornecedor_codigo','numero_nfe','serie_nfe','cod_item_nfe','cfop']) {
+        await c.query(`ALTER TABLE compras_produto ALTER COLUMN ${col} TYPE TEXT USING ${col}::text`).catch(e =>
+          console.warn('[compras] migrate '+col+' -> TEXT:', e.message)
+        );
+      }
+
       // Preserva a unidade comercial da compra (ex.: CX) separada da unidade-base
       // usada no estoque/análise (ex.: KG).
       for (const col of [
