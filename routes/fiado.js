@@ -4,6 +4,7 @@
  */
 const express = require('express');
 const autenticar = require('../middleware/auth');
+const { distribuirPagamento, centavos } = require('../lib/fiado-pagamento');
 
 module.exports = function(pool, app) {
   const r = express.Router();
@@ -111,8 +112,13 @@ module.exports = function(pool, app) {
         loja_id           INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id)
       )`).catch(()=>{});
 
-    await pool.query(`ALTER TABLE clientes_fiado ADD COLUMN IF NOT EXISTS credito_saldo NUMERIC(12,2) NOT NULL DEFAULT 0`).catch(()=>{});
-    await pool.query(`ALTER TABLE pagamentos_fiado ADD COLUMN IF NOT EXISTS credito_gerado NUMERIC(12,2) NOT NULL DEFAULT 0`).catch(()=>{});
+    await pool.query(`ALTER TABLE clientes_fiado ADD COLUMN IF NOT EXISTS credito_saldo NUMERIC(12,2) NOT NULL DEFAULT 0`);
+    await pool.query(`ALTER TABLE pagamentos_fiado ADD COLUMN IF NOT EXISTS credito_gerado NUMERIC(12,2) NOT NULL DEFAULT 0`);
+    await pool.query(`ALTER TABLE pagamentos_fiado ADD COLUMN IF NOT EXISTS credito_utilizado NUMERIC(12,2) NOT NULL DEFAULT 0`);
+    await pool.query(`ALTER TABLE pagamentos_fiado ADD COLUMN IF NOT EXISTS usuario_id INTEGER`);
+    await pool.query(`ALTER TABLE pagamentos_fiado ADD COLUMN IF NOT EXISTS idempotencia TEXT`);
+    await pool.query(`ALTER TABLE pagamentos_fiado ADD COLUMN IF NOT EXISTS requisicao JSONB`);
+    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS uq_fiado_pagamento_requisicao ON pagamentos_fiado(loja_id,idempotencia) WHERE idempotencia IS NOT NULL`);
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS historico_fiado (
@@ -127,7 +133,12 @@ module.exports = function(pool, app) {
         loja_id           INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id)
       )`).catch(()=>{});
   }
-  initTables();
+  const estruturaPronta = initTables().then(() => null, e => e);
+  r.use(async (req,res,next) => {
+    const erro = await estruturaPronta;
+    if (erro) return res.status(503).json({ok:false,erro:'Estrutura de crédito indisponível. Tente novamente após a atualização.'});
+    next();
+  });
 
   // Helper: registrar histórico
   async function log(cliente_id, tipo, desc, usuario, venda_id=null, pag_id=null) {
@@ -555,104 +566,56 @@ module.exports = function(pool, app) {
 
   // ── PAGAMENTOS ─────────────────────────────────────────────────────────────
   r.post('/pagamentos', permitir('fiado_pagamentos',['gestor']), async (req, res) => {
-    const { cliente_id, data_pagamento, valor_pago, forma_pagamento='dinheiro', observacoes, venda_id } = req.body;
-    const valorNumerico = Number(valor_pago);
-    if (!cliente_id || !Number.isFinite(valorNumerico) || valorNumerico <= 0)
-      return res.status(400).json({ ok:false, erro:'Informe um pagamento maior que zero.' });
+    const { cliente_id, data_pagamento, valor_pago, forma_pagamento='dinheiro', observacoes, venda_id, saldo_esperado, idempotencia } = req.body;
+    const loja = req.user?.lojaId;
+    const valor = centavos(valor_pago);
+    const usarCredito = forma_pagamento === 'saldo_cliente';
+    if (!loja || !Number.isInteger(Number(cliente_id)) || !Number.isSafeInteger(valor) || valor <= 0 || valor > 999999999999 ||
+        !['dinheiro','pix','debito','credito','transferencia','outro','saldo_cliente'].includes(forma_pagamento) ||
+        !idempotencia || !/^[a-zA-Z0-9-]{16,80}$/.test(idempotencia) ||
+        (venda_id && !Number.isInteger(Number(venda_id))))
+      return res.status(400).json({ok:false,erro:'Informe cliente, valor válido e identificador do pagamento.'});
     const usuario = req.user?.nome || 'Sistema';
+    const requisicao = {cliente_id:Number(cliente_id),data_pagamento:data_pagamento||null,valor,forma_pagamento,observacoes:observacoes||null,venda_id:Number(venda_id)||null};
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
-      const clienteExterno = await client.query(
-        `SELECT id FROM clientes_fiado WHERE id=$1 AND tipo_cliente <> 'funcionario' FOR UPDATE`,
-        [cliente_id]
-      );
-      if (!clienteExterno.rows.length) {
+      const {rows:[cliente]} = await client.query(
+        `SELECT * FROM clientes_fiado WHERE id=$1 AND loja_id=$2 AND tipo_cliente <> 'funcionario' FOR UPDATE`, [cliente_id,loja]);
+      if (!cliente) { await client.query('ROLLBACK'); return res.status(404).json({ok:false,erro:'Cliente não encontrado nesta loja.'}); }
+      const {rows:[anterior]} = await client.query(`SELECT * FROM pagamentos_fiado WHERE loja_id=$1 AND idempotencia=$2`,[loja,idempotencia]);
+      if (anterior) {
+        const igual = Object.keys(requisicao).every(k=>anterior.requisicao?.[k]===requisicao[k]);
         await client.query('ROLLBACK');
-        return res.status(409).json({ ok:false, erro:'Pagamentos de funcionários devem ser registrados no módulo Retiradas.' });
+        return res.status(igual?200:409).json(igual?{ok:true,data:anterior,repetido:true,credito_gerado:Number(anterior.credito_gerado)}:{ok:false,erro:'Identificador já utilizado para outro pagamento.'});
       }
-      const alvo = venda_id
-        ? await client.query(
-            `SELECT * FROM vendas_fiado WHERE id=$1 AND cliente_id=$2 AND status IN('aberto','parcial') FOR UPDATE`,
-            [venda_id,cliente_id])
-        : await client.query(
-            `SELECT * FROM vendas_fiado WHERE cliente_id=$1 AND status IN('aberto','parcial') ORDER BY data_compra,id FOR UPDATE`,
-            [cliente_id]);
-      const saldoDisponivel = alvo.rows.reduce((s,v)=>s+Number(v.saldo_restante||0),0);
-      if (!alvo.rows.length) {
-        await client.query('ROLLBACK');
-        return res.status(409).json({ok:false,erro:'Não existem vendas em aberto para este pagamento.'});
+      const alvo = await client.query(
+        `SELECT * FROM vendas_fiado WHERE cliente_id=$1 AND loja_id=$2 AND status IN('aberto','parcial')
+         AND ($3::int IS NULL OR id=$3) ORDER BY data_compra,id FOR UPDATE`,[cliente_id,loja,venda_id||null]);
+      const saldo = alvo.rows.reduce((n,v)=>n+centavos(v.saldo_restante),0);
+      if ((venda_id && !alvo.rows.length) || (saldo_esperado != null && centavos(saldo_esperado)!==saldo)) {
+        await client.query('ROLLBACK'); return res.status(409).json({ok:false,erro:'O saldo mudou. Atualize a tela e confira o pagamento antes de confirmar.',saldo_atual:saldo/100});
       }
-      const creditoGerado = Math.max(0, Number((valorNumerico - saldoDisponivel).toFixed(2)));
-      const { rows: [pag] } = await client.query(
-        `INSERT INTO pagamentos_fiado(cliente_id,data_pagamento,valor_pago,forma_pagamento,observacoes,usuario_resp,credito_gerado)
-         VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-        [cliente_id, data_pagamento||new Date().toISOString().slice(0,10),
-         valorNumerico, forma_pagamento, observacoes||null, usuario, creditoGerado]
-      );
-
-      // Abater nas vendas
-      let restante = valorNumerico;
-      let vendasAbatidas = [];
-
-      if (venda_id) {
-        // Pagamento para venda específica
-        const v = alvo.rows[0];
-        if (v) {
-          const abater = Math.min(restante, parseFloat(v.saldo_restante));
-          const novoSaldo = parseFloat(v.saldo_restante) - abater;
-          const novoStatus = novoSaldo <= 0.005 ? 'pago' : 'parcial';
-          await client.query(
-            `UPDATE vendas_fiado SET saldo_restante=$1, status=$2, updated_at=NOW() WHERE id=$3`,
-            [novoSaldo.toFixed(2), novoStatus, v.id]
-          );
-          await client.query(
-            `INSERT INTO pagamento_venda_fiado(pagamento_id,venda_id,valor_abatido) VALUES($1,$2,$3)`,
-            [pag.id, v.id, abater.toFixed(2)]
-          );
-          vendasAbatidas.push({ venda_id: v.id, abatido: abater });
-          restante -= abater;
-        }
-      } else {
-        // Abater nas mais antigas em aberto
-        const vendas = alvo.rows;
-        for (const v of vendas) {
-          if (restante <= 0.005) break;
-          const abater = Math.min(restante, parseFloat(v.saldo_restante));
-          const novoSaldo = parseFloat(v.saldo_restante) - abater;
-          const novoStatus = novoSaldo <= 0.005 ? 'pago' : 'parcial';
-          await client.query(
-            `UPDATE vendas_fiado SET saldo_restante=$1, status=$2, updated_at=NOW() WHERE id=$3`,
-            [novoSaldo.toFixed(2), novoStatus, v.id]
-          );
-          await client.query(
-            `INSERT INTO pagamento_venda_fiado(pagamento_id,venda_id,valor_abatido) VALUES($1,$2,$3)`,
-            [pag.id, v.id, abater.toFixed(2)]
-          );
-          vendasAbatidas.push({ venda_id: v.id, abatido: abater });
-          restante -= abater;
-        }
+      if (usarCredito && (valor>centavos(cliente.credito_saldo) || valor>saldo)) {
+        await client.query('ROLLBACK'); return res.status(409).json({ok:false,erro:'Crédito insuficiente ou valor superior à dívida selecionada.'});
       }
-
-      if (creditoGerado > 0) {
-        await client.query(
-          `UPDATE clientes_fiado
-           SET credito_saldo=COALESCE(credito_saldo,0)+$2, updated_at=NOW()
-           WHERE id=$1`,
-          [cliente_id, creditoGerado]
-        );
+      const plano = distribuirPagamento(valor,alvo.rows);
+      const creditoGerado = usarCredito ? 0 : plano.credito/100;
+      const {rows:[pag]} = await client.query(
+        `INSERT INTO pagamentos_fiado(cliente_id,data_pagamento,valor_pago,forma_pagamento,observacoes,usuario_resp,credito_gerado,credito_utilizado,usuario_id,idempotencia,requisicao,loja_id)
+         VALUES($1,COALESCE($2::date,CURRENT_DATE),$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
+        [cliente_id,data_pagamento||null,usarCredito?0:valor/100,forma_pagamento,observacoes||null,usuario,creditoGerado,usarCredito?valor/100:0,req.user?.id,idempotencia,JSON.stringify(requisicao),loja]);
+      for (const v of plano.vendas) {
+        await client.query(`UPDATE vendas_fiado SET saldo_restante=$1,status=$2,updated_at=NOW() WHERE id=$3 AND loja_id=$4`,[v.saldo/100,v.saldo===0?'pago':'parcial',v.id,loja]);
+        await client.query(`INSERT INTO pagamento_venda_fiado(pagamento_id,venda_id,valor_abatido,loja_id) VALUES($1,$2,$3,$4)`,[pag.id,v.id,v.abatido/100,loja]);
       }
-
-      await client.query(
-        `INSERT INTO historico_fiado(cliente_id,pagamento_id,tipo_evento,descricao,usuario)
-         VALUES($1,$2,'pagamento_registrado',$3,$4)`,
-        [cliente_id,pag.id,
-         `Pagamento R$ ${valorNumerico.toFixed(2)} via ${forma_pagamento}${creditoGerado>0?` · crédito gerado R$ ${creditoGerado.toFixed(2)}`:''}`,
-         usuario]
-      );
+      await client.query(`UPDATE clientes_fiado SET credito_saldo=credito_saldo+$2-$3,updated_at=NOW() WHERE id=$1 AND loja_id=$4`,[cliente_id,creditoGerado,usarCredito?valor/100:0,loja]);
+      await client.query(`INSERT INTO historico_fiado(cliente_id,pagamento_id,tipo_evento,descricao,usuario,loja_id) VALUES($1,$2,$3,$4,$5,$6)`,
+        [cliente_id,pag.id,usarCredito?'credito_utilizado':'pagamento_registrado',
+         `Recebido R$ ${(usarCredito?0:valor/100).toFixed(2)} · aplicado R$ ${(plano.aplicado/100).toFixed(2)} · crédito gerado R$ ${creditoGerado.toFixed(2)} · crédito utilizado R$ ${(usarCredito?valor/100:0).toFixed(2)} · ${forma_pagamento}`,usuario,loja]);
       await client.query('COMMIT');
-      res.json({ ok:true, data:pag, vendas_abatidas:vendasAbatidas, credito_gerado:creditoGerado });
-    } catch(e) { await client.query('ROLLBACK'); res.status(500).json({ ok:false, erro:e.message }); }
+      res.json({ok:true,data:pag,valor_aplicado:plano.aplicado/100,credito_gerado:creditoGerado,vendas_abatidas:plano.vendas.map(v=>({venda_id:v.id,abatido:v.abatido/100}))});
+    } catch(e) { await client.query('ROLLBACK'); res.status(500).json({ok:false,erro:e.message}); }
     finally { client.release(); }
   });
 
