@@ -121,7 +121,7 @@ module.exports = function (pool) {
       await pool.query(`
         INSERT INTO vld_config (chave, valor_json, atualizado_em)
         VALUES ($1, $2, NOW())
-        ON CONFLICT (chave) DO UPDATE
+        ON CONFLICT (loja_id, chave) DO UPDATE
           SET valor_json = $2, atualizado_em = NOW()
       `, [req.params.chave, JSON.stringify(req.body.valor)]);
       res.json({ ok: true });
@@ -334,7 +334,7 @@ module.exports = function (pool) {
       await pool.query(`
         INSERT INTO vld_faturamento (mes_ref, real, previsto, manual, atualizado_em)
         VALUES ($1, $2, $3, $2, NOW())
-        ON CONFLICT (mes_ref) DO UPDATE SET
+        ON CONFLICT (loja_id, mes_ref) DO UPDATE SET
           real      = COALESCE($2, vld_faturamento.real),
           previsto  = COALESCE($3, vld_faturamento.previsto),
           manual    = COALESCE($2, vld_faturamento.manual),
@@ -603,7 +603,7 @@ module.exports = function (pool) {
       await client.query(`
         INSERT INTO produtos_mestre (codigo_produto, descricao_produto, unidade, controla_validade, ativo)
         VALUES ($1,$2,$3,true,true)
-        ON CONFLICT (codigo_produto) DO UPDATE SET
+        ON CONFLICT (loja_id, codigo_produto) DO UPDATE SET
           descricao_produto = COALESCE(EXCLUDED.descricao_produto, produtos_mestre.descricao_produto),
           controla_validade = true
       `, [codigo_produto, nome_produto||codigo_produto, unidade||'KG']);

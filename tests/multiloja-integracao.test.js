@@ -66,3 +66,21 @@ test('PostgreSQL: referência incoerente aborta e preserva chave e dados',{skip:
   assert.equal((await db.query("SELECT COUNT(*)::int n FROM pg_constraint WHERE conname='fornecedores_pkey'")).rows[0].n,1);
  }finally{await db.close();}
 });
+test('PostgreSQL: chaves legadas de catálogo, configuração e mês são independentes por loja',{skip:!modulo},async()=>{
+ const {PGlite}=require(modulo),db=new PGlite();const {migrarChavesLegadas}=require('../lib/multiloja-legados');
+ const c={query:async(s,p)=>{const r=await db.query(s,p);return {...r,rowCount:r.affectedRows??r.rows.length}}};
+ try{
+  await db.exec(`CREATE TABLE produtos_mestre(id serial PRIMARY KEY,codigo_produto text UNIQUE,loja_id int NOT NULL);INSERT INTO produtos_mestre(codigo_produto,loja_id) VALUES('CARNE',1);
+   CREATE TABLE lotes_estoque(id serial PRIMARY KEY,codigo_produto text REFERENCES produtos_mestre(codigo_produto),loja_id int NOT NULL);INSERT INTO lotes_estoque(codigo_produto,loja_id) VALUES('CARNE',1);
+   CREATE TABLE vld_config(chave text PRIMARY KEY,valor_json jsonb,loja_id int NOT NULL);INSERT INTO vld_config VALUES('metas','{}',1);
+   CREATE TABLE vld_faturamento(mes_ref text PRIMARY KEY,loja_id int NOT NULL);INSERT INTO vld_faturamento VALUES('10/2026',1);`);
+  await db.exec('BEGIN');await migrarChavesLegadas(c);await db.exec('COMMIT');
+  await db.exec(`INSERT INTO produtos_mestre(codigo_produto,loja_id) VALUES('CARNE',2);INSERT INTO lotes_estoque(codigo_produto,loja_id) VALUES('CARNE',2);
+   INSERT INTO vld_config VALUES('metas','{"meta":1}',2) ON CONFLICT(loja_id,chave) DO UPDATE SET valor_json=EXCLUDED.valor_json;
+   INSERT INTO vld_faturamento VALUES('10/2026',2);`);
+  assert.equal((await db.query('SELECT COUNT(*)::int n FROM produtos_mestre')).rows[0].n,2);
+  assert.equal((await db.query('SELECT COUNT(*)::int n FROM vld_config')).rows[0].n,2);
+  await assert.rejects(db.exec("INSERT INTO lotes_estoque(codigo_produto,loja_id) VALUES('CARNE',3)"),/foreign key/i);
+  await db.exec('BEGIN');await migrarChavesLegadas(c);await db.exec('COMMIT');assert.equal((await db.query('SELECT id FROM produtos_mestre WHERE loja_id=1')).rows[0].id,1);
+ }finally{await db.close();}
+});

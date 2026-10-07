@@ -3,6 +3,7 @@ require('dotenv').config();
 const {Pool}=require('pg');
 const {garantirEstruturaMultiloja}=require('../lib/multiloja');
 const {auditarSegurancaMultiloja}=require('../lib/multiloja-security');
+const {migrarChavesLegadas}=require('../lib/multiloja-legados');
 const {executarComoSistema}=require('../lib/tenant-context');
 const pool=new Pool({connectionString:process.env.DATABASE_URL,ssl:process.env.NODE_ENV==='production'?{rejectUnauthorized:false}:false,max:2,connectionTimeoutMillis:10000});
 async function contarHistorico(tabelas){
@@ -19,10 +20,15 @@ async function contarHistorico(tabelas){
   try{
     console.log('[multiloja/manutencao] iniciando validação controlada; sem exclusão de registros');
     const antes=await contarHistorico();
+    console.log('[multiloja/manutencao] histórico inventariado',Object.keys(antes).length+' tabelas');
     await executarComoSistema(()=>garantirEstruturaMultiloja(pool,{operacional:true}));
+    console.log('[multiloja/manutencao] migração estrutural concluída');
     const auditoria=await auditarSegurancaMultiloja(pool,{aplicarPoliticas:true});
     console.log('[multiloja/manutencao] auditoria',JSON.stringify({tabelas:auditoria.tabelas.length,criticos:auditoria.criticos,avisos:auditoria.avisos}));
     if(!auditoria.ok)throw Error('Auditoria multi-loja pendente. Deploy interrompido antes de substituir produção.');
+    const legado=await pool.connect();
+    try{await legado.query('BEGIN');await legado.query("SET LOCAL lock_timeout='10s'");await legado.query("SET LOCAL statement_timeout='120s'");await legado.query("SELECT set_config('app.bb_system','1',true)");await migrarChavesLegadas(legado);await legado.query('COMMIT');}
+    catch(e){await legado.query('ROLLBACK');throw e;}finally{legado.release();}
     const {rows:modulos}=await pool.query('SELECT modulo,isolado FROM multiloja_modulos ORDER BY ordem');
     console.log('[multiloja/manutencao] módulos',JSON.stringify(modulos));
     if(!modulos.length||modulos.some(m=>!m.isolado))throw Error('Módulos ainda pendentes de implantação');

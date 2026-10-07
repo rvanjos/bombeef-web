@@ -445,8 +445,8 @@ module.exports = (pool) => {
       let protecaoAtiva = true;
       try {
         await pool.query(`
-          CREATE UNIQUE INDEX IF NOT EXISTS uq_fornecedores_cnpj_normalizado
-          ON fornecedores ((REGEXP_REPLACE(cnpj_fornecedor, '[^0-9]', '', 'g')))
+          CREATE UNIQUE INDEX IF NOT EXISTS uq_fornecedores_loja_cnpj_normalizado
+          ON fornecedores (loja_id, (REGEXP_REPLACE(cnpj_fornecedor, '[^0-9]', '', 'g')))
           WHERE cnpj_fornecedor IS NOT NULL
             AND REGEXP_REPLACE(cnpj_fornecedor, '[^0-9]', '', 'g') <> ''
         `);

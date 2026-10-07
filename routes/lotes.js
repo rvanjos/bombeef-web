@@ -27,7 +27,7 @@ module.exports = (pool) => {
                 p.perecivel, p.controla_validade,
                 l.data_validade - CURRENT_DATE AS dias_para_vencer
          FROM lotes_estoque l
-         JOIN produtos_mestre p ON p.codigo_produto = l.codigo_produto
+         JOIN produtos_mestre p ON p.codigo_produto = l.codigo_produto AND p.loja_id=l.loja_id
          WHERE ${where.join(' AND ')}
          ORDER BY l.data_validade ASC NULLS LAST, l.criado_em DESC`,
         params
@@ -60,7 +60,7 @@ module.exports = (pool) => {
       const { rows } = await pool.query(
         `SELECT l.*, p.descricao_produto, p.categoria, p.preco_custo AS custo_ref
          FROM lotes_estoque l
-         JOIN produtos_mestre p ON p.codigo_produto = l.codigo_produto
+         JOIN produtos_mestre p ON p.codigo_produto = l.codigo_produto AND p.loja_id=l.loja_id
          WHERE l.id = $1`,
         [req.params.id]
       );

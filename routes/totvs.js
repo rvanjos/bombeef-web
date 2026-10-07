@@ -197,7 +197,7 @@ module.exports = (pool) => {
                (codigo_produto, descricao_produto, descricao_reduzida, categoria, unidade,
                 preco_custo, preco_venda, origem_dados, id_importacao_origem, data_ultima_importacao)
              VALUES ($1,$2,$3,$4,$5,$6,$7,'TOTVS',$8,NOW())
-             ON CONFLICT (codigo_produto) DO UPDATE SET
+             ON CONFLICT (loja_id, codigo_produto) DO UPDATE SET
                descricao_produto      = EXCLUDED.descricao_produto,
                descricao_reduzida     = COALESCE(EXCLUDED.descricao_reduzida, produtos_mestre.descricao_reduzida),
                categoria              = COALESCE(EXCLUDED.categoria, produtos_mestre.categoria),
