@@ -648,6 +648,26 @@ module.exports = function (pool, app) {
       )
     `).catch(()=>{});
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_cartao_regras_loja_cat ON cartao_classificacao_regras(loja_id,categoria_dre)`).catch(()=>{});
+    await pool.query(`ALTER TABLE cartao_classificacao_regras ENABLE ROW LEVEL SECURITY`).catch(()=>{});
+    await pool.query(`ALTER TABLE cartao_classificacao_regras FORCE ROW LEVEL SECURITY`).catch(()=>{});
+    await pool.query(`DROP POLICY IF EXISTS bb_isolamento_loja ON cartao_classificacao_regras`).catch(()=>{});
+    await pool.query(`
+      CREATE POLICY bb_isolamento_loja ON cartao_classificacao_regras
+      USING (
+        current_setting('app.bb_system', true)='1'
+        OR (
+          NULLIF(current_setting('app.loja_id', true),'') IS NOT NULL
+          AND loja_id = NULLIF(current_setting('app.loja_id', true),'')::INTEGER
+        )
+      )
+      WITH CHECK (
+        current_setting('app.bb_system', true)='1'
+        OR (
+          NULLIF(current_setting('app.loja_id', true),'') IS NOT NULL
+          AND loja_id = NULLIF(current_setting('app.loja_id', true),'')::INTEGER
+        )
+      )
+    `).catch(()=>{});
 
     // Agrupamento manual de cartão: cartões adicionais (corporativo — cada
     // pessoa tem o próprio número, mas cai numa fatura única com vencimento
