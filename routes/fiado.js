@@ -111,6 +111,9 @@ module.exports = function(pool, app) {
         loja_id           INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id)
       )`).catch(()=>{});
 
+    await pool.query(`ALTER TABLE clientes_fiado ADD COLUMN IF NOT EXISTS credito_saldo NUMERIC(12,2) NOT NULL DEFAULT 0`).catch(()=>{});
+    await pool.query(`ALTER TABLE pagamentos_fiado ADD COLUMN IF NOT EXISTS credito_gerado NUMERIC(12,2) NOT NULL DEFAULT 0`).catch(()=>{});
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS historico_fiado (
         id                SERIAL PRIMARY KEY,
@@ -580,19 +583,12 @@ module.exports = function(pool, app) {
         await client.query('ROLLBACK');
         return res.status(409).json({ok:false,erro:'Não existem vendas em aberto para este pagamento.'});
       }
-      if (valorNumerico > saldoDisponivel + 0.005) {
-        await client.query('ROLLBACK');
-        return res.status(409).json({
-          ok:false,
-          erro:`Pagamento maior que o saldo aberto (R$ ${saldoDisponivel.toFixed(2)}). Registre somente o valor devido.`,
-          saldo_aberto:saldoDisponivel
-        });
-      }
+      const creditoGerado = Math.max(0, Number((valorNumerico - saldoDisponivel).toFixed(2)));
       const { rows: [pag] } = await client.query(
-        `INSERT INTO pagamentos_fiado(cliente_id,data_pagamento,valor_pago,forma_pagamento,observacoes,usuario_resp)
-         VALUES($1,$2,$3,$4,$5,$6) RETURNING *`,
+        `INSERT INTO pagamentos_fiado(cliente_id,data_pagamento,valor_pago,forma_pagamento,observacoes,usuario_resp,credito_gerado)
+         VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
         [cliente_id, data_pagamento||new Date().toISOString().slice(0,10),
-         valorNumerico, forma_pagamento, observacoes||null, usuario]
+         valorNumerico, forma_pagamento, observacoes||null, usuario, creditoGerado]
       );
 
       // Abater nas vendas
@@ -638,13 +634,24 @@ module.exports = function(pool, app) {
         }
       }
 
+      if (creditoGerado > 0) {
+        await client.query(
+          `UPDATE clientes_fiado
+           SET credito_saldo=COALESCE(credito_saldo,0)+$2, updated_at=NOW()
+           WHERE id=$1`,
+          [cliente_id, creditoGerado]
+        );
+      }
+
       await client.query(
         `INSERT INTO historico_fiado(cliente_id,pagamento_id,tipo_evento,descricao,usuario)
          VALUES($1,$2,'pagamento_registrado',$3,$4)`,
-        [cliente_id,pag.id,`Pagamento R$ ${valorNumerico.toFixed(2)} via ${forma_pagamento}`,usuario]
+        [cliente_id,pag.id,
+         `Pagamento R$ ${valorNumerico.toFixed(2)} via ${forma_pagamento}${creditoGerado>0?` · crédito gerado R$ ${creditoGerado.toFixed(2)}`:''}`,
+         usuario]
       );
       await client.query('COMMIT');
-      res.json({ ok:true, data:pag, vendas_abatidas:vendasAbatidas, credito_gerado:0 });
+      res.json({ ok:true, data:pag, vendas_abatidas:vendasAbatidas, credito_gerado:creditoGerado });
     } catch(e) { await client.query('ROLLBACK'); res.status(500).json({ ok:false, erro:e.message }); }
     finally { client.release(); }
   });
