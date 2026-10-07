@@ -18,6 +18,8 @@ const express  = require('express');
 const bcrypt   = require('bcryptjs');
 const jwt      = require('jsonwebtoken');
 const autenticar = require('../middleware/auth');
+const {executarComoSistema}=require('../lib/tenant-context');
+const {auditarSegurancaMultiloja}=require('../lib/multiloja-security');
 const {
   garantirEstruturaMultiloja,
   iniciarMigracaoOperacionalMultiloja,
@@ -28,6 +30,7 @@ const {
 } = require('../lib/multiloja');
 
 module.exports = function (pool) {
+  autenticar.configurarPool(pool);
   const r = express.Router();
 
   // Helper: executa query com retry automático para ECONNRESET/banco reiniciando
@@ -168,6 +171,11 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
       if (!rows.length) return res.status(401).json({ ok: false, erro: 'Usuário inativo' });
       const loja = await resolverLojaDoUsuario(pool, rows[0].id, payload.lojaId || null);
       if (!loja) return res.status(403).json({ ok: false, erro: 'Usuário sem acesso a uma loja ativa' });
+      if(payload.sessaoId){
+        const {rows:sessoes}=await executarComoSistema(()=>pool.query(`SELECT id FROM login_sessoes
+          WHERE id=$1 AND usuario_id=$2 AND loja_id=$3 AND encerrado_em IS NULL`,[payload.sessaoId,rows[0].id,loja.loja_id]));
+        if(!sessoes.length)return res.status(401).json({ok:false,erro:'Sessão encerrada. Entre novamente.'});
+      }
       const sessaoId = payload.sessaoId || await abrirSessao(rows[0].id, req, loja.loja_id);
       const newToken = jwt.sign(
         payloadComLoja(rows[0], sessaoId, loja),
@@ -338,15 +346,9 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
       const loja = await resolverLojaDoUsuario(pool, req.user.id, lojaId);
       if (!loja) return res.status(403).json({ ok:false, erro:'Acesso à loja não autorizado' });
 
-      if (req.user.sessaoId) {
-        await pool.query(
-          `UPDATE login_sessoes SET loja_id=$1, ultima_atividade=NOW()
-           WHERE id=$2 AND usuario_id=$3 AND encerrado_em IS NULL`,
-          [loja.loja_id, req.user.sessaoId, req.user.id]
-        );
-      }
+      const sessaoLojaId=await executarComoSistema(()=>abrirSessao(req.user.id,req,loja.loja_id));
       const token = jwt.sign(
-        payloadComLoja(rows[0], req.user.sessaoId, loja),
+        payloadComLoja(rows[0], sessaoLojaId, loja),
         process.env.JWT_SECRET,
         { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
       );
@@ -368,8 +370,8 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
           (SELECT COUNT(*)::int FROM empresas WHERE ativa=true) AS empresas_ativas,
           (SELECT COUNT(*)::int FROM lojas WHERE ativa=true) AS lojas_ativas,
           (SELECT COUNT(*)::int FROM usuarios WHERE ativo=true) AS usuarios_ativos,
-          (SELECT COUNT(DISTINCT usuario_id)::int FROM usuario_lojas WHERE ativo=true) AS usuarios_vinculados,
-          (SELECT COUNT(*)::int FROM login_sessoes WHERE loja_id IS NULL) AS sessoes_sem_loja,
+          (SELECT COUNT(DISTINCT ul.usuario_id)::int FROM usuario_lojas ul JOIN usuarios u ON u.id=ul.usuario_id AND u.ativo=true JOIN lojas l ON l.id=ul.loja_id AND l.ativa=true AND l.pronta_operacao=true WHERE ul.ativo=true) AS usuarios_vinculados,
+          (SELECT COUNT(*)::int FROM login_sessoes WHERE loja_id IS NULL AND encerrado_em IS NULL) AS sessoes_sem_loja,
           (SELECT COUNT(*)::int FROM multiloja_modulos WHERE isolado=false) AS modulos_pendentes
       `);
       const status = rows[0];
@@ -410,12 +412,13 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
         FROM usuario_lojas ORDER BY loja_id,usuario_id
       `);
       const { rows: modulos } = await pool.query(`SELECT modulo,nome,ordem,isolado,atualizado_em FROM multiloja_modulos ORDER BY ordem`);
+      const {rows:auditoria}=await pool.query('SELECT tabela,modulo,nivel,problemas,verificado_em FROM multiloja_auditoria_status ORDER BY nivel,tabela').catch(()=>({rows:[]}));
       res.json({ok:true,data:{
         empresas:empresas.rows,
         lojas:lojas.rows,
         usuarios:usuarios.rows,
         vinculos,
-        modulos,
+        modulos,auditoria,
       }});
     } catch (e) {
       console.error('[auth/multiloja/admin]', e.message);
@@ -447,12 +450,12 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
       for(const usuarioId of ids){
         await client.query(`
           INSERT INTO usuario_lojas(usuario_id,loja_id,perfil,permissoes,principal)
-          SELECT u.id,$1,u.perfil,COALESCE(u.permissoes,'{}'::jsonb),false FROM usuarios u WHERE u.id=$2
+          SELECT u.id,$1,u.perfil,COALESCE(u.permissoes,'{}'::jsonb),false FROM usuarios u WHERE u.id=$2 AND u.ativo=true
           ON CONFLICT(usuario_id,loja_id) DO UPDATE SET ativo=true,atualizado_em=NOW()
         `,[rows[0].id,usuarioId]);
       }
       await client.query('COMMIT');
-      res.status(201).json({ok:true,data:rows[0],aviso:'Loja criada em preparação. Os módulos ainda não foram liberados.'});
+      res.status(201).json({ok:true,data:rows[0],aviso:'Loja criada em preparação. Vincule usuários ativos e confira o checklist para ativar.'});
     } catch(e){
       await client.query('ROLLBACK').catch(()=>{});
       if(e.code==='23505') return res.status(409).json({ok:false,erro:'Já existe uma loja com esse código'});
@@ -485,9 +488,8 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
         for(const usuarioId of ids){
           await client.query(`
             INSERT INTO usuario_lojas(usuario_id,loja_id,perfil,permissoes,principal)
-            SELECT u.id,$1,u.perfil,COALESCE(u.permissoes,'{}'::jsonb),false FROM usuarios u WHERE u.id=$2
-            ON CONFLICT(usuario_id,loja_id) DO UPDATE SET ativo=true,perfil=EXCLUDED.perfil,
-              permissoes=EXCLUDED.permissoes,atualizado_em=NOW()
+            SELECT u.id,$1,u.perfil,COALESCE(u.permissoes,'{}'::jsonb),false FROM usuarios u WHERE u.id=$2 AND u.ativo=true
+            ON CONFLICT(usuario_id,loja_id) DO UPDATE SET ativo=true,atualizado_em=NOW()
           `,[lojaId,usuarioId]);
         }
       }
@@ -497,28 +499,31 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
     }finally{client.release();}
   });
 
-  r.post('/multiloja/lojas/:id/ativar', autenticar('admin'), async (req,res)=>{
+  r.post('/multiloja/lojas/:id/ativar', autenticar('admin'), async(req,res)=>{
     const lojaId=Number(req.params.id);
-    if(!Number.isInteger(lojaId)) return res.status(400).json({ok:false,erro:'Loja inválida'});
+    if(!Number.isSafeInteger(lojaId)||lojaId<=0)return res.status(400).json({ok:false,erro:'Loja inválida'});
     try{
       await garantirTabelas();
-      const {rows:pendentes}=await pool.query(`SELECT nome FROM multiloja_modulos WHERE isolado=false ORDER BY ordem`);
-      if(pendentes.length) return res.status(409).json({
-        ok:false,
-        erro:`Aguarde a conclusão dos módulos: ${pendentes.map(m=>m.nome).join(', ')}`
+      const auditoria=await auditarSegurancaMultiloja(pool);
+      if(!auditoria.ok)return res.status(409).json({ok:false,erro:'Isolamento ainda pendente. Consulte a auditoria multi-loja.',pendencias:[...auditoria.criticos,...auditoria.avisos]});
+      const resultado=await executarComoSistema(async()=>{
+        const client=await pool.connect();
+        try{
+          await client.query('BEGIN');
+          await client.query("SELECT pg_advisory_xact_lock(hashtext('bb.multiloja.manutencao'))");
+          const {rows:pendentes}=await client.query('SELECT nome FROM multiloja_modulos WHERE isolado=false ORDER BY ordem');
+          if(pendentes.length)throw Object.assign(Error('Módulos pendentes: '+pendentes.map(m=>m.nome).join(', ')),{status:409});
+          const {rows:lojas}=await client.query(`SELECT l.id FROM lojas l JOIN empresas e ON e.id=l.empresa_id AND e.ativa=true WHERE l.id=$1 FOR UPDATE OF l`,[lojaId]);
+          if(!lojas.length)throw Object.assign(Error('Loja ou empresa indisponível'),{status:404});
+          const {rows:vinculos}=await client.query(`SELECT ul.id FROM usuario_lojas ul JOIN usuarios u ON u.id=ul.usuario_id AND u.ativo=true
+            WHERE ul.loja_id=$1 AND ul.ativo=true FOR SHARE OF ul,u`,[lojaId]);
+          if(!vinculos.length)throw Object.assign(Error('Vincule pelo menos um usuário ativo antes de ativar a loja'),{status:400});
+          const {rows}=await client.query('UPDATE lojas SET pronta_operacao=true,ativa=true,atualizado_em=NOW() WHERE id=$1 RETURNING *',[lojaId]);
+          await client.query('COMMIT');return rows[0];
+        }catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}
       });
-      const {rows:vinculos}=await pool.query(`SELECT COUNT(*)::int total FROM usuario_lojas WHERE loja_id=$1 AND ativo=true`,[lojaId]);
-      if(!vinculos[0].total) return res.status(400).json({ok:false,erro:'Vincule pelo menos um usuário antes de ativar a loja'});
-      const {rows}=await pool.query(`
-        UPDATE lojas SET pronta_operacao=true,ativa=true,atualizado_em=NOW()
-        WHERE id=$1 RETURNING *
-      `,[lojaId]);
-      if(!rows.length) return res.status(404).json({ok:false,erro:'Loja não encontrada'});
-      res.json({ok:true,data:rows[0]});
-    }catch(e){
-      console.error('[auth/multiloja/lojas ativar]',e.message);
-      res.status(500).json({ok:false,erro:'Não foi possível ativar a loja'});
-    }
+      res.json({ok:true,data:resultado});
+    }catch(e){console.error('[auth/multiloja/ativar]',e.message);res.status(e.status||500).json({ok:false,erro:e.status?e.message:'Não foi possível ativar a loja'});}
   });
 
   // ── GET /usuarios ──────────────────────────────────────────────────────────

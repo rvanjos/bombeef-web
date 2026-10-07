@@ -185,11 +185,11 @@ if(window.self !== window.top){
     <div class="page" id="page-lojas">
       <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start">
         <div><div class="pg-title">Empresas e Lojas</div><div class="pg-sub">Cadastre unidades e defina quais usuários poderão acessá-las</div></div>
-        <button class="btn btn-p" onclick="abrirLoja()">＋ Nova Loja</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap"><a class="btn btn-s" href="/admin-implantacao-loja.html" target="_blank">Implantar / ativar loja</a><button class="btn btn-p" onclick="abrirLoja()">＋ Nova Loja</button></div>
       </div>
       <div class="card" style="background:#eef6ff;border-color:#b9d8fa;color:#184f82;font-size:12px"><b>Implantação segura:</b> novas lojas são criadas como <b>Em preparação</b>. Elas só aparecem no seletor do portal depois que os dados operacionais estiverem isolados por unidade.</div>
       <div class="card"><div class="card-title">Progresso da implantação</div><div id="multiloja-modulos" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:9px"></div></div>
-      <div id="lista-lojas"></div>
+      <div id="multiloja-auditoria" class="card"></div><div id="lista-lojas"></div>
     </div>
 
     <!-- USUÁRIOS -->
@@ -468,6 +468,9 @@ async function carregarLojas(){
   lojas=d.data.lojas||[]; usuarios=d.data.usuarios||[]; vinculosLojas=d.data.vinculos||[];
   const modulos=d.data.modulos||[];
   multilojaLiberada=modulos.length>0&&modulos.every(m=>m.isolado);
+  const pendencias=(d.data.auditoria||[]).filter(a=>a.nivel!=='ok');
+  document.getElementById('multiloja-auditoria').innerHTML='<b>'+ (multilojaLiberada&&!pendencias.length?'✅ Estrutura pronta para ativação':'⚠️ Preparação pendente')+'</b><p style="margin-top:8px;font-size:12px">'+(pendencias.length?pendencias.map(a=>escLoja(a.tabela)+': '+escLoja((a.problemas||[]).join(', '))).join('<br>'):'Vincule usuários ativos e use Implantar / ativar loja. A ativação confere novamente o isolamento do banco.')+'</p>';
+  multilojaLiberada=multilojaLiberada&&!pendencias.length;
   document.getElementById('multiloja-modulos').innerHTML=modulos.map(m=>`<div style="padding:10px;border:1px solid var(--border);border-radius:9px;background:${m.isolado?'#f0faf4':'#faf7f4'}"><b style="font-size:12px">${m.isolado?'✅':'⏳'} ${escLoja(m.nome)}</b><div style="font-size:10px;color:var(--muted);margin-top:3px">${m.isolado?'Isolamento concluído':'Em implantação'}</div></div>`).join('');
   document.getElementById('lista-lojas').innerHTML=lojas.map(l=>`<div class="card" style="display:grid;grid-template-columns:minmax(220px,1.6fr) 1fr auto;gap:18px;align-items:center">
     <div><div style="font-size:16px;font-weight:700">🏢 ${escLoja(l.nome)}</div><div style="font-size:11px;color:var(--muted);margin-top:4px">${escLoja(l.empresa_nome)} · ${escLoja(l.cidade||'Cidade não informada')}${l.uf?' / '+escLoja(l.uf):''}</div></div>
