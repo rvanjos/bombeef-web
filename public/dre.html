@@ -1064,6 +1064,7 @@ let TXS=[], sessId=null, mesRef='', files=[], supMem={}, selIds=new Set(), _sv;
 // lexical deste script e, portanto, não existe automaticamente em window.TXS.
 window.getDreTransactions = () => TXS;
 let _taxaRoyalties = 4.88; // Sprint 3.1-B: carregada do backend em carregarCategorias()
+let _cartaoRegras = new Map(); // descrição normalizada → categoria DRE aprendida
 let _filtroRapido = 'todos'; // Sprint 3.1-F: filtro rápido ativo
 let _estoquesMes = {}; // { 'MM/YYYY': valorEstoqueFinal }
 try { _estoquesMes = JSON.parse(localStorage.getItem('bb_estoques_mes') || '{}'); window._estoquesMes = _estoquesMes; } catch(_) {}
@@ -1191,6 +1192,34 @@ const MAPPINGS=[
   ['RECEITA FEDERAL','Simples Nacional'],['PREFEITURA','IPTU'],
   ['CEF MATRIZ','Simples Nacional'],
 ];
+
+function normalizarDescricaoCartao(v) {
+  return String(v||'')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .toUpperCase()
+    .replace(/\b(PARC|PARCELA)\s*\d+\s*(?:\/|DE)\s*\d+\b/g,' ')
+    .replace(/\b\d{1,2}\s*\/\s*\d{1,2}\b/g,' ')
+    .replace(/\b\d{2}\/\d{2}(?:\/\d{2,4})?\b/g,' ')
+    .replace(/\s+-\s+[A-Z]{2}\b$/g,' ')
+    .replace(/[^A-Z0-9 ]/g,' ')
+    .replace(/\s+/g,' ')
+    .trim()
+    .slice(0,160);
+}
+function aplicarRegrasRecorrentesCartao(lancs) {
+  let aplicadas=0;
+  for(const t of (Array.isArray(lancs)?lancs:[])){
+    if(String(t.fonte||'').toUpperCase()!=='CC') continue;
+    const chave=normalizarDescricaoCartao(t.razaoSocial||t.descricao||t.lancamento||'');
+    const cat=_cartaoRegras.get(chave);
+    if(cat){
+      t.categoria=cat;
+      t.classificacaoRecorrente=true;
+      aplicadas++;
+    }
+  }
+  return aplicadas;
+}
 
 function autoClassificar(lancamento, razaoSocial='') {
   if (!lancamento) return '';
@@ -1488,6 +1517,16 @@ async function carregarCategorias() {
     console.warn('[DRE] usando categorias fallback:', e.message);
     CATS = CATS_FALLBACK;
   }
+  // Memória persistente das compras recorrentes no cartão.
+  try {
+    const rr=await api.get('/api/dre/cartao-classificacao/regras');
+    _cartaoRegras=new Map((rr.ok?rr.data:[])
+      .filter(r=>!r.ambiguo && r.categoria_dre && r.chave_norm)
+      .map(r=>[String(r.chave_norm),String(r.categoria_dre)]));
+  } catch(_) {
+    _cartaoRegras=new Map();
+  }
+
   // ── Sprint 3.1-B: carregar taxa de royalties do backend ─────────────────
   try {
     const cfg = await api.get('/api/config/sistema');
@@ -1907,6 +1946,8 @@ async function confirmarImportCC() {
         if (!l.data || !l.mes || l.mes === mesRef) l.mes = mesCC;
         l.mesCaixa = mesCC;
       });
+      const regrasAplicadas=aplicarRegrasRecorrentesCartao(lancs);
+      if(regrasAplicadas) toast('🧠 '+regrasAplicadas+' compra(s) classificada(s) pela recorrência');
       abrirRevisaoCC(lancs, mesCC, bandeira, file.name);
     } catch(e) {
       console.error('[procCC PDF]', e);
@@ -1966,6 +2007,8 @@ async function confirmarImportCC() {
     // mesCaixa = mês do PAGAMENTO da fatura (sempre o mês confirmado pelo usuário)
     l.mesCaixa = mesCC;
   });
+  const regrasAplicadas=aplicarRegrasRecorrentesCartao(lancs);
+  if(regrasAplicadas) toast('🧠 '+regrasAplicadas+' compra(s) classificada(s) pela recorrência');
 
   // ATENÇÃO: abrirRevisaoCC recebe o mês da FATURA (mesCC, sempre único — é
   // o que o usuário confirmou ao importar), NUNCA o texto de exibição. Já foi
