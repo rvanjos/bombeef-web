@@ -62,3 +62,12 @@ test('reimportacao da mesma compra corrige conversao em vez de ignorar',()=>{
   assert.match(rota,/atualizados\+\+/);
   assert.match(rota,/importados \+ atualizados/);
 });
+
+
+test('importacao de compras compara codigo como texto e exige cabecalho exato',()=>{
+  const rota=ler('routes/compras_produto.js');
+  assert.match(rota,/codigo::text = ANY\(\$1::text\[\]\)/);
+  assert.match(rota,/codigos\.map\(String\)/);
+  assert.match(rota,/const iCProdExact/);
+  assert.match(rota,/Coluna exata de código do produto não encontrada/);
+});
