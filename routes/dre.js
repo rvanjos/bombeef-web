@@ -2509,11 +2509,12 @@ module.exports = function (pool, app) {
           if (mMatch) {
             const comp = `${mMatch[1]}/${mMatch[2]}`;
             const band = (mMatch[3] || '').replace(/_/g,' ');
+            const lojaId=Number(req.user?.lojaId);
             const fRes = await pool.query(
-              `SELECT id FROM cartao_faturas WHERE competencia=$1
-               ${band ? "AND (bandeira ILIKE $2 OR cartao ILIKE $2)" : ''}
+              `SELECT id FROM cartao_faturas WHERE competencia=$1 AND loja_id=$2
+               ${band ? "AND (bandeira ILIKE $3 OR cartao ILIKE $3)" : ''}
                ORDER BY importado_em DESC LIMIT 1`,
-              band ? [comp, `%${band}%`] : [comp]
+              band ? [comp,lojaId,`%${band}%`] : [comp,lojaId]
             );
             if (fRes.rows.length) faturaId = fRes.rows[0].id;
           }
@@ -2726,12 +2727,14 @@ module.exports = function (pool, app) {
   // GET /api/dre/cartao-faturas/:id/itens — itens de uma fatura específica
   r.get('/cartao-faturas/:id/itens', autenticar(), async (req, res) => {
     try {
+      const lojaId=Number(req.user?.lojaId);
       const { rows } = await pool.query(`
-        SELECT id, data_compra, descricao, valor, categoria_dre, portador
-        FROM cartao_fatura_itens
-        WHERE fatura_id = $1
-        ORDER BY data_compra, id
-      `, [req.params.id]);
+        SELECT cfi.id, cfi.data_compra, cfi.descricao, cfi.valor, cfi.categoria_dre, cfi.portador
+        FROM cartao_fatura_itens cfi
+        JOIN cartao_faturas cf ON cf.id=cfi.fatura_id
+        WHERE cfi.fatura_id = $1 AND cfi.loja_id=$2 AND cf.loja_id=$2
+        ORDER BY cfi.data_compra, cfi.id
+      `, [req.params.id,lojaId]);
       res.json({ ok: true, data: rows });
     } catch(e) {
       res.status(500).json({ ok: false, erro: e.message });
