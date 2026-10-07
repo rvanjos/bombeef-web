@@ -721,6 +721,28 @@ module.exports = function (pool, app) {
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
+  // Marcação em lote: valida todos os IDs na loja antes de alterar qualquer linha.
+  r.patch('/baixa-pdv-lote', permitir('retiradas_pdv'), async (req,res) => {
+    const ids = Array.isArray(req.body.ids) ? [...new Set(req.body.ids.map(Number))] : [];
+    const lojaId = Number(req.user?.lojaId);
+    if (!lojaId || !ids.length || ids.length>500 || ids.some(id=>!Number.isSafeInteger(id)||id<=0))
+      return res.status(400).json({ok:false,erro:'Selecione de 1 a 500 retiradas válidas.'});
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const {rows} = await client.query(`SELECT id FROM retiradas WHERE loja_id=$1 AND id=ANY($2::int[]) ORDER BY id FOR UPDATE`,[lojaId,ids]);
+      if(rows.length!==ids.length){
+        await client.query('ROLLBACK');
+        return res.status(409).json({ok:false,erro:'Uma retirada não está disponível nesta loja. Atualize a lista.'});
+      }
+      const result = await client.query(`UPDATE retiradas SET baixa_pdv=true,dt_baixa_pdv=CURRENT_DATE,baixa_pdv_por=$3
+        WHERE loja_id=$1 AND id=ANY($2::int[]) AND COALESCE(baixa_pdv,false)=false RETURNING id`,[lojaId,ids,req.user?.id]);
+      await client.query('COMMIT');
+      res.json({ok:true,marcados:result.rowCount,ja_marcados:ids.length-result.rowCount,ids:result.rows.map(r=>r.id)});
+    } catch(e){await client.query('ROLLBACK');res.status(500).json({ok:false,erro:e.message});}
+    finally{client.release();}
+  });
+
   // ── PATCH /:id/baixa-pdv — marca que a baixa foi feita no PDV ───────────────
   r.patch('/:id/baixa-pdv', permitir('retiradas_pdv'), async (req, res) => {
     const { desfazer } = req.body;
