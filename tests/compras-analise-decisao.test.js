@@ -101,3 +101,10 @@ test('update de compra existente tipa parametros explicitamente',()=>{
   assert.match(rota,/valor_total=\$15::numeric/);
   assert.match(rota,/WHERE id=\$1::integer/);
 });
+
+
+test('comparacao de duplicidade tipa valor total como numeric antes do coalesce',()=>{
+  const rota=ler('routes/compras_produto.js');
+  assert.match(rota,/COALESCE\(\$3::numeric,0::numeric\)/);
+  assert.match(rota,/etapaImport='verificar_duplicidade'/);
+});
