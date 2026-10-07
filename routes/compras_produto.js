@@ -277,7 +277,10 @@ module.exports = function(pool, app) {
     const iDSai = ci(['data saida','data saída','data sai']);
     const iSer  = ci(['serie','série']);
     const iNF   = ci(['notafiscal','nota fiscal','nf']);
-    const iCProd= ci(['cód. produto','cod. produto','cod produto','código produto']);
+    const iCProdExact = ['cód. produto','cod. produto','cod produto','código produto']
+      .map(nm => hdrCombined.findIndex(h => h && typeof h === 'string' && norm(h) === norm(nm)))
+      .find(idx => idx >= 0);
+    const iCProd = Number.isInteger(iCProdExact) ? iCProdExact : -1;
     const iCPForn=ci(['cód. produto fornecedor','cod. produto fornecedor','cod produto forn']);
     const iProd = ci(['produto']);
     const iGrp  = ci(['grupo']);
@@ -317,6 +320,13 @@ module.exports = function(pool, app) {
     const iVlTot= ci(['valor total']);
     const iLiq  = ci(['total liquido','total líquido']);
     const iICMS = ci(['icmsst']);
+
+    if (iCProd < 0) {
+      return res.status(400).json({
+        ok:false,
+        erro:'Coluna exata de código do produto não encontrada. Verifique se o relatório contém “Cód. Produto”.'
+      });
+    }
 
     // Parsear linhas de dados
     let fornecedorAtual = null, dataBlocoAtual = null;
@@ -429,7 +439,9 @@ module.exports = function(pool, app) {
       // Verificar produtos existentes
       const codigos = [...new Set(itens.map(it => it.produto_codigo))];
       const prodRes = await client.query(
-        `SELECT id, codigo FROM produtos WHERE codigo = ANY($1)`, [codigos]);
+        `SELECT id, codigo::text AS codigo
+           FROM produtos
+          WHERE codigo::text = ANY($1::text[])`, [codigos.map(String)]);
       const prodMap = {};
       prodRes.rows.forEach(p => { prodMap[p.codigo] = p.id; });
 
