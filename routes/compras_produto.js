@@ -505,6 +505,7 @@ module.exports = function(pool, app) {
 
         // Deduplicação + reparo seguro: ao reimportar a mesma NF/item,
         // atualiza a conversão unidade-base/unidade de compra em vez de ignorar.
+        etapaImport='verificar_duplicidade';
         let dupId = null;
         if (it.numero_nfe && it.serie_nfe && it.fornecedor_cnpj && it.cod_item_nfe) {
           const dup = await client.query(`
@@ -517,7 +518,7 @@ module.exports = function(pool, app) {
           const dup2 = await client.query(`
             SELECT id FROM compras_produto
             WHERE data_entrada=$1 AND produto_codigo=$2
-              AND ROUND(COALESCE(valor_total,0)::numeric,2)=ROUND(COALESCE($3,0)::numeric,2)
+              AND ROUND(COALESCE(valor_total,0)::numeric,2)=ROUND(COALESCE($3::numeric,0::numeric),2)
             ORDER BY id DESC LIMIT 1
           `, [it.data_entrada, it.produto_codigo, it.valor_total]);
           dupId = dup2.rows[0]?.id || null;
