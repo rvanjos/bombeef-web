@@ -1974,6 +1974,121 @@ module.exports = function (pool, app) {
     }catch(e){res.status(500).json({ok:false,erro:e.message});}
   });
 
+  // ── GET /auditoria-franquia/:mes — auditoria somente leitura antes de exportar ──
+  r.get('/auditoria-franquia/:mes(*)', async (req,res)=>{
+    try{
+      const mes=decodeURIComponent(req.params.mes);
+      if(!/^\d{2}\/\d{4}$/.test(mes)) return res.status(400).json({ok:false,erro:'Mês inválido'});
+      const lojaId=Number(req.user?.lojaId);
+      const check=await checklistFechamento(mes,lojaId);
+
+      const {rows:sessoes}=await pool.query(`
+        SELECT id,usuario_id,atualizado_em,res_receitas,res_despesas,res_cmv,res_lucro_bruto,res_lucro_op,res_final,dados_json
+        FROM dre_sessoes
+        WHERE loja_id=$1 AND mes_ref=$2
+        ORDER BY atualizado_em DESC,id DESC
+      `,[lojaId,mes]);
+      const sessao=sessoes[0]||null;
+      const txs=sessao?extrairTransacoes(sessao.dados_json):[];
+      const ativosMes=txs.filter(t=>!t?.ignorar && String(t?.mes||mes)===mes);
+      const analise=analiseTransacoesSessao(ativosMes);
+
+      const [fatQ,ccPendQ,ccDupQ,royQ]=await Promise.all([
+        pool.query(`SELECT COUNT(*)::int AS n,COALESCE(SUM(fat_bruto),0)::numeric AS total
+          FROM faturamento_periodos WHERE loja_id=$1 AND TO_CHAR(data_inicio,'MM/YYYY')=$2`,[lojaId,mes]),
+        pool.query(`SELECT COUNT(*)::int AS n,COALESCE(SUM(ABS(cfi.valor)),0)::numeric AS total
+          FROM cartao_fatura_itens cfi
+          JOIN cartao_faturas cf ON cf.id=cfi.fatura_id
+          WHERE cf.loja_id=$1 AND cfi.loja_id=$1 AND cf.competencia=$2
+            AND COALESCE(cfi.removido,false)=false
+            AND COALESCE(TRIM(cfi.categoria_dre),'')=''`,[lojaId,mes]).catch(()=>({rows:[{n:0,total:0}]})),
+        pool.query(`SELECT COUNT(*)::int AS n,COALESCE(SUM(ABS(valor_total)),0)::numeric AS total
+          FROM cartao_faturas
+          WHERE loja_id=$1 AND competencia=$2
+            AND (COALESCE(possivel_duplicidade,false)=true OR UPPER(COALESCE(situacao,'')) IN ('DUPLICADA','DUPLICIDADE'))`,[lojaId,mes]).catch(()=>({rows:[{n:0,total:0}]})),
+        pool.query(`SELECT valor FROM config_sistema WHERE loja_id=$1 AND chave='taxa_royalties_pct' LIMIT 1`,[lojaId]).catch(()=>({rows:[]}))
+      ]);
+
+      const faturamento=Number(fatQ.rows[0]?.total||0);
+      const receitas=Number(sessao?.res_receitas||0);
+      const diffFat=Math.abs(receitas-faturamento);
+      const semCatMes=ativosMes.filter(t=>!String(t?.categoria||'').trim());
+      const ownCnpj=ativosMes.filter(t=>String(t?.cnpjDoc||t?.cnpj||'').replace(/\D/g,'')==='46237080000102'
+        && !['Transferência entre contas'].includes(String(t?.categoria||'')));
+      const mesInvalido=txs.filter(t=>!t?.ignorar && !/^\d{2}\/\d{4}$/.test(String(t?.mes||'')));
+      const neutras=new Set(['Transferência entre contas','Pagamento de Cartão','Pagamento de Fatura CC']);
+      const neutrasAtivas=ativosMes.filter(t=>neutras.has(String(t?.categoria||'')));
+
+      const [mm,yy]=mes.split('/').map(Number);
+      const prevDate=new Date(yy,mm-2,1);
+      const mesAnt=String(prevDate.getMonth()+1).padStart(2,'0')+'/'+prevDate.getFullYear();
+      const estoques=(sessao?.dados_json && typeof sessao.dados_json==='object' ? sessao.dados_json.estoquesMes : null)||{};
+      const temEstoqueAnt=Number.isFinite(Number(estoques[mesAnt]));
+      const temEstoqueAtual=Number.isFinite(Number(estoques[mes]));
+
+      const bloqueios=[];
+      const avisos=[];
+      const ok=(id,label,detalhe)=>({id,nivel:'ok',label,detalhe});
+      const fail=(id,label,detalhe)=>{bloqueios.push({id,nivel:'bloqueio',label,detalhe});};
+      const warn=(id,label,detalhe)=>{avisos.push({id,nivel:'aviso',label,detalhe});};
+
+      if(!sessao) fail('sessao','Sessão oficial do DRE','Nenhuma sessão salva para '+mes);
+      if(sessoes.length>1){
+        const assinaturas=new Set(sessoes.map(s=>[
+          Number(s.res_receitas||0).toFixed(2),Number(s.res_despesas||0).toFixed(2),Number(s.res_final||0).toFixed(2)
+        ].join('|')));
+        (assinaturas.size>1?fail:warn)('sessoes_multiplas','Mais de uma sessão no mês',
+          sessoes.length+' sessões encontradas; '+(assinaturas.size>1?'os resultados são diferentes':'os totais coincidem'));
+      }
+      if(sessao && [sessao.res_receitas,sessao.res_despesas,sessao.res_cmv,sessao.res_lucro_bruto,sessao.res_lucro_op,sessao.res_final].some(v=>v==null))
+        fail('totais','Totais oficiais não persistidos','Salve/recalcule o DRE antes de exportar');
+      if(!fatQ.rows[0]?.n) fail('faturamento','Faturamento não importado','Não existe faturamento para '+mes);
+      else if(diffFat>0.01) fail('faturamento_diverge','Receita do DRE diferente do faturamento',
+        'DRE R$ '+receitas.toFixed(2)+' × Faturamento R$ '+faturamento.toFixed(2)+' · diferença R$ '+diffFat.toFixed(2));
+      if(semCatMes.length) fail('sem_categoria','Lançamentos sem categoria',semCatMes.length+' lançamento(s) · R$ '+semCatMes.reduce((s,t)=>s+Math.abs(Number(t.valor||0)),0).toFixed(2));
+      if(analise.duplicidades.length) fail('duplicidades','Possíveis duplicidades no mês',analise.duplicidades.length+' grupo(s) encontrados');
+      if(analise.pagFaturaSemVinculo.length) fail('cartao_pagamento','Pagamento de cartão sem vínculo',
+        analise.pagFaturaSemVinculo.length+' lançamento(s) · R$ '+analise.valorPagFaturaSemVinculo.toFixed(2));
+      const ccPend=Number(ccPendQ.rows[0]?.n||0);
+      if(ccPend) fail('cc_sem_categoria','Itens de cartão sem categoria',ccPend+' item(ns) · R$ '+Number(ccPendQ.rows[0]?.total||0).toFixed(2));
+      const ccDup=Number(ccDupQ.rows[0]?.n||0);
+      if(ccDup) fail('cc_duplicada','Faturas de cartão marcadas como possível duplicidade',ccDup+' fatura(s) · R$ '+Number(ccDupQ.rows[0]?.total||0).toFixed(2));
+      if(mesInvalido.length) fail('mes_invalido','Lançamentos com competência inválida',mesInvalido.length+' lançamento(s)');
+      if(ownCnpj.length) fail('cnpj_proprio','CNPJ próprio classificado como fornecedor/receita',
+        ownCnpj.length+' lançamento(s) precisam ser tratados como transferência própria');
+      if(!temEstoqueAnt || !temEstoqueAtual) fail('estoque','Estoque para cálculo do CMV incompleto',
+        'Necessário estoque final de '+mesAnt+' e '+mes+' para o DRE por competência');
+      if(analise.pagamentosParecidos) warn('pagamentos_parecidos','Pagamentos parecidos',analise.pagamentosParecidos+' par(es) para revisão manual');
+      const checklistAvisos=(check.itens||[]).filter(i=>!i.ok && !i.urgente);
+      checklistAvisos.forEach(i=>warn('check_'+i.id,i.label,i.valor||'Revisar'));
+      if(neutrasAtivas.length) avisos.push({id:'neutras',nivel:'info',label:'Movimentos neutros excluídos do resultado',detalhe:neutrasAtivas.length+' lançamento(s)'});
+
+      const itensOk=[];
+      if(sessao) itensOk.push(ok('sessao_ok','Sessão encontrada','#'+sessao.id+' · atualizada '+new Date(sessao.atualizado_em).toLocaleString('pt-BR')));
+      if(fatQ.rows[0]?.n && diffFat<=0.01) itensOk.push(ok('fat_ok','Receita confere com faturamento','R$ '+faturamento.toFixed(2)));
+      if(!semCatMes.length) itensOk.push(ok('cat_ok','Classificação','Todos os lançamentos do mês classificados'));
+      if(!ccPend) itensOk.push(ok('cc_ok','Cartão de crédito','Todos os itens da competência classificados'));
+      if(temEstoqueAnt&&temEstoqueAtual) itensOk.push(ok('estoque_ok','Estoques para CMV','Base '+mesAnt+' e '+mes+' disponível'));
+
+      const taxaRoy=royQ.rows[0]?.valor==null?null:Number(royQ.rows[0].valor);
+      res.json({ok:true,data:{
+        mes,apto:bloqueios.length===0,status:bloqueios.length===0?'APTO_PARA_ENVIO':'NAO_APTO',
+        bloqueios,avisos,ok_itens:itensOk,
+        resumo:{
+          sessao_id:sessao?.id||null,sessoes_mes:sessoes.length,lancamentos_mes:ativosMes.length,
+          receitas_oficiais:receitas,despesas_oficiais:Number(sessao?.res_despesas||0),
+          cmv_oficial:Number(sessao?.res_cmv||0),resultado_final:Number(sessao?.res_final||0),
+          faturamento,diferenca_faturamento:diffFat,taxa_royalties_pct:taxaRoy,
+          estoque_anterior:temEstoqueAnt?Number(estoques[mesAnt]):null,
+          estoque_atual:temEstoqueAtual?Number(estoques[mes]):null
+        }
+      }});
+    }catch(e){
+      console.error('[dre/auditoria-franquia]',e.message);
+      res.status(500).json({ok:false,erro:e.message});
+    }
+  });
+
   // ── Leituras consolidadas do DRE: usam a mesma sessão/resultados da tela ──
   const CATS_NEUTRAS_RELATORIO = new Set(['Transferência entre contas','Pagamento de Cartão','Pagamento de Fatura CC']);
 
