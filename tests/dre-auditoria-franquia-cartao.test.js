@@ -38,7 +38,7 @@ test('sessão DRE e memória de cartão respeitam loja',()=>{
   const rota=ler('routes/dre.js');
   assert.match(rota,/SELECT \* FROM dre_sessoes WHERE id = \$1 AND loja_id=\$2/);
   assert.match(rota,/SELECT \* FROM dre_sessoes WHERE mes_ref = \$1 AND loja_id=\$2/);
-  assert.match(rota,/WHERE id=\$3 AND loja_id=\$10 RETURNING id/);
+  assert.match(rota,/WHERE id=\$3 AND loja_id=\$10 AND mes_ref=\$11 RETURNING id/);
   assert.match(rota,/DELETE FROM fornecedores_lookup WHERE cnpj_num='46237080000102'/);
 });
 
