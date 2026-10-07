@@ -9,6 +9,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="/js/api.js"></script>
 <script src="/js/dre-conferencia.js?v=7"></script>
+<script src="/js/dre-fluxo.js?v=1"></script>
 <script>
   if (typeof pdfjsLib !== 'undefined') {
     pdfjsLib.GlobalWorkerOptions.workerSrc =
@@ -460,7 +461,7 @@ thead th{padding:6px 9px;}
            onmouseover="this.style.borderColor='#d97706'" onmouseout="this.style.borderColor=document.getElementById('pp-card-semcat').dataset.sel==='1'?'#d97706':'#e5e7eb'">
         <div style="font-size:10px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">⚠️ Sem categoria</div>
         <div style="font-size:18px;font-weight:800;font-family:'DM Mono',monospace;color:#111827" id="pp-n-semcat">0</div>
-        <div style="font-size:11px;color:#6b7280;margin-top:2px" id="pp-v-semcat">R$ 0,00 fora do resultado</div>
+        <div style="font-size:11px;color:#6b7280;margin-top:2px" id="pp-v-semcat">R$ 0,00 em A CLASSIFICAR</div>
       </div>
 
       <!-- Card: boletos PREV vencidos -->
@@ -589,6 +590,8 @@ thead th{padding:6px 9px;}
         <div id="dre-sync-status" class="dre-sync-status"><b>✓</b><span>Boletos atualizados automaticamente</span></div>
         <button class="btn br" style="padding:6px 11px;font-size:11px" onclick="abrirManual()">＋ Lançamento</button>
         <button class="btn bs bb-desktop-only" style="padding:6px 10px;font-size:11px" onclick="abrirProvisao()">📅 Provisão</button>
+        <button class="btn bp" style="padding:6px 11px;font-size:11px" onclick="document.getElementById('f-cc').click()">💳 Enviar fatura</button>
+        <button class="btn bs" style="padding:6px 10px;font-size:11px" onclick="toggleStatusCartoes()">Pendências de cartões</button>
         <div class="dre-toolbar-spacer"></div>
         <button class="btn bs" style="padding:6px 10px;font-size:11px" onclick="abrirConferenciaDRE()" title="Conferir reimportações, pagamentos parecidos e vínculos">
           🔎 Conferência <span id="dre-conf-badge" style="display:none;background:#dc2626;color:#fff;border-radius:10px;padding:1px 6px;font-size:9px;margin-left:3px">0</span>
@@ -828,7 +831,7 @@ thead th{padding:6px 9px;}
   <div class="md" style="max-width:420px">
     <div class="mdh"><h3>💳 Importar Fatura CC</h3><button class="mdx" onclick="fecharModal('m-cc-mes')">×</button></div>
     <div class="mdb">
-      <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Selecione o cartão e o mês de vencimento da fatura. Compras parceladas de meses anteriores entrarão neste mês como competência.</p>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Envie o arquivo do banco e confirme o cartão e o mês de pagamento. As categorias recorrentes são reaproveitadas. Você pode revisar apenas as pendências depois.</p>
       <div class="fg">
         <label>Cartão *</label>
         <select id="cc-cartao-select" onchange="ccOnSelectCartao()" style="width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:8px;font-size:14px;background:#fff">
@@ -847,10 +850,11 @@ thead th{padding:6px 9px;}
         <input type="month" id="cc-mes-input" style="width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:8px;font-size:14px">
         <div style="font-size:11px;color:var(--muted);margin-top:4px">⚠️ Use o mês que você vai <strong>pagar</strong> a fatura, não o mês das compras.</div>
       </div>
+      <label style="display:flex;gap:8px;font-size:12px;margin-top:12px"><input id="cc-salvar-direto" type="checkbox" checked>Salvar agora e classificar só as pendências depois</label>
     </div>
     <div class="mdf" style="gap:10px">
       <button class="btn bn" onclick="fecharModal('m-cc-mes')">Cancelar</button>
-      <button class="btn bp" onclick="confirmarImportCC()">Próximo: Classificar →</button>
+      <button class="btn bp" onclick="confirmarImportCC()">Salvar fatura →</button>
     </div>
   </div>
 </div>
@@ -1487,6 +1491,7 @@ async function inicializar() {
   const pCategorias = carregarCategorias().catch(e => console.warn('[DRE] categorias:', e));
   const pFaturamento = carregarFaturamentoMensal().catch(e => console.warn('[DRE] faturamento:', e));
   await carregarSessao();
+  await recuperarFaturasDoBanco();
   // Atualiza enriquecimentos quando estiverem prontos, sem segurar a carga principal.
   Promise.allSettled([pCategorias, pFaturamento]).then(() => {
     try {
@@ -1592,63 +1597,23 @@ async function carregarSessao() {
     // Junta todos os TXS de todos os meses — deduplicando por fitid ou hash
     TXS = []; files = []; supMem = {};
     window._sessoesPorMes = {};
-    const _seenFitid  = new Set();
-    const _seenHash   = new Set();
-    const _seenBoleto = new Set();
-    function _hashTx(t) { return `${t.data||''}_${t.valor||''}_${(t.lancamento||'').slice(0,30)}_${t.mes||''}`; }
-
+    const vistos = new Map();
     for (const r of sessoes) {
       if (!r.ok || !r.data?.dados_json) continue;
-      const dados = r.data.dados_json;
-      const txs = (typeof dados === 'object' && !Array.isArray(dados))
-        ? (dados.transactions || [])
-        : (Array.isArray(dados) ? dados : []);
-
-      // Deduplicação: por fitid, boletoId, ou hash
-      for (const t of txs) {
-        // Por boletoId — se já existe lançamento com mesmo boletoId, pega o mais completo
-        if (t.boletoId) {
-          const bid = String(t.boletoId);
-          if (_seenBoleto.has(bid)) {
-            const existing = TXS.find(x => String(x.boletoId) === bid);
-            if (existing) {
-              if (t.fonte === 'BOLETO' && existing.fonte === 'BOLETO_PREV') {
-                // Promove PREV → pago
-                existing.fonte      = 'BOLETO';
-                existing.data       = t.data || existing.data;
-                existing.mesCaixa   = t.mesCaixa || existing.mesCaixa;
-                existing.vinculadoA = t.vinculadoA || existing.vinculadoA;
-                existing.categoria  = t.categoria || existing.categoria;
-              } else if (t.fonte === 'BOLETO_PREV' && existing.fonte === 'BOLETO_PREV') {
-                // Dois PREV com mesmo boletoId — mantém o que tem nome mais completo
-                if ((t.lancamento||'').length > (existing.lancamento||'').length) {
-                  existing.lancamento  = t.lancamento;
-                  existing.razaoSocial = t.razaoSocial || existing.razaoSocial;
-                  existing.categoria   = t.categoria   || existing.categoria;
-                  existing.data        = t.data        || existing.data;
-                  existing.mesCaixa    = t.mesCaixa    || existing.mesCaixa;
-                }
-              }
-            }
-            continue;
-          }
-          _seenBoleto.add(bid);
+      const dados=r.data.dados_json;
+      const txs=Array.isArray(dados)?dados:(dados.transactions||[]);
+      for(const t of txs){
+        const chave=DREFluxo.identidade(t),existente=vistos.get(chave);
+        if(existente){
+          if(t.fonte==='BOLETO'&&existente.fonte==='BOLETO_PREV')Object.assign(existente,{...t,categoria:t.categoria||existente.categoria});
+          else if(!existente.categoria&&t.categoria)existente.categoria=t.categoria;
+          continue;
         }
-        if (t.fitid) {
-          if (_seenFitid.has(t.fitid)) continue;
-          _seenFitid.add(t.fitid);
-        } else {
-          const h = _hashTx(t);
-          if (_seenHash.has(h)) continue;
-          _seenHash.add(h);
-        }
-        TXS.push(t);
+        vistos.set(chave,t);TXS.push(t);
       }
       // Remove projeções persistidas por engano — são sempre recalculadas dinamicamente
       TXS = TXS.filter(t => t.fonte !== 'PREV_RECEITA');
-      // Limpar CC com data inválida de imports antigos (serial Excel não convertido)
-      TXS = TXS.filter(t => t.fonte !== 'CC' ||
-        (t.data && !t.data.startsWith('undefined')));
+      // Lançamentos antigos permanecem disponíveis para correção e histórico.
 
       if (dados.loadedFiles?.length) files = [...files, ...dados.loadedFiles];
       if (dados.supplierMem) {
@@ -1860,6 +1825,7 @@ async function procExt(file) {
 
 // Armazena o arquivo CC enquanto o usuário confirma o mês
 let _ccFilePendente = null;
+let _ccrEditarId=null, _ccrEnviando=false;
 
 async function procCC(file) {
   // Pede confirmação do mês antes de processar
@@ -1912,7 +1878,6 @@ async function ccOnSelectCartao() {
 async function confirmarImportCC() {
   fecharModal('m-cc-mes');
   const file = _ccFilePendente;
-  _ccFilePendente = null;
   if (!file) return;
 
   // Mês confirmado pelo usuário
@@ -1921,12 +1886,14 @@ async function confirmarImportCC() {
   const bandeiraResolvida = sel && sel.value && sel.value !== '__outro__'
     ? sel.value
     : (document.getElementById('cc-bandeira-input')?.value || '').trim();
-  if (!bandeiraResolvida) { toast('⚠️ Selecione o cartão'); return; }
+  if (!bandeiraResolvida) { toast('⚠️ Selecione o cartão');document.getElementById('m-cc-mes').classList.add('open');return; }
   // Sobrescrever o valor do input de bandeira para que o restante do fluxo funcione igual
   const bInput = document.getElementById('cc-bandeira-input');
   if (bInput) bInput.value = bandeiraResolvida;
 
   const ymVal = document.getElementById('cc-mes-input').value;
+  if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(ymVal)){toast('Selecione o mês da fatura');document.getElementById('m-cc-mes').classList.add('open');return;}
+  _ccFilePendente=null;
   const [yyyy, mm] = ymVal.split('-');
   const mesCC = `${mm}/${yyyy}`; // ex: "02/2026"
   const bandeira = (document.getElementById('cc-bandeira-input')?.value || '').trim();
@@ -1982,7 +1949,7 @@ async function confirmarImportCC() {
       });
       const regrasAplicadas=aplicarRegrasRecorrentesCartao(lancs);
       if(regrasAplicadas) toast('🧠 '+regrasAplicadas+' compra(s) classificada(s) pela recorrência');
-      abrirRevisaoCC(lancs, mesCC, bandeira, file.name);
+      abrirRevisaoCC(lancs, mesCC, bandeira, file.name,document.getElementById('cc-salvar-direto')?.checked);
     } catch(e) {
       console.error('[procCC PDF]', e);
       toast('❌ Erro ao ler PDF: ' + e.message);
@@ -2052,7 +2019,7 @@ async function confirmarImportCC() {
   // corrompia cartao_faturas.competencia com um texto composto em vez de um
   // mês — quebrando a grade de Status Cartões (que indexa por mês único) e
   // fazendo o botão "Excluir Fatura" nunca achar os itens certos.
-  abrirRevisaoCC(lancs, mesCC, bandeira, file.name);
+  abrirRevisaoCC(lancs, mesCC, bandeira, file.name,document.getElementById('cc-salvar-direto')?.checked);
 }
 
 // ─── PARSER PDF FATURAS ───────────────────────────────────────────────────────
@@ -2875,145 +2842,25 @@ function parseCCRows(rows) {
 }
 
 function addLancs(novos, fileName) {
-  // Limpar CC com data inválida antes de adicionar (evita duplicatas de reimport)
-  const novosCC = novos.filter(l => l.fonte === 'CC' && l.data && !l.data.includes('undef'));
-  if (novosCC.length) {
-    const novosKey = new Set(novosCC.map(l => `${String(l.valor)}|${(l.lancamento||'').slice(0,40)}`));
-    TXS = TXS.filter(t => {
-      if (t.fonte !== 'CC') return true;
-      if (t.data && !t.data.includes('undef')) return true;
-      return !novosKey.has(`${String(t.valor)}|${(t.lancamento||'').slice(0,40)}`);
-    });
-  }
-  // Chaves de dedup: preferência para fitid ou boletoId, depois data|lancamento|valor
-  const exFitid   = new Set(TXS.filter(t=>t.fitid).map(t=>t.fitid));
-  const exBoleto  = new Set(TXS.filter(t=>t.boletoId).map(t=>String(t.boletoId)));
-  const exHash    = new Set(TXS.map(t=>`${t.data}|${String(t.valor)}|${(t.lancamento||'').slice(0,40)}`));
-
-  let n = 0, dup = 0, atualiz = 0;
-  for (const l of novos) {
-    // Se boleto já existe → atualiza data/valor/lancamento (pode ter sido editado)
-    if (l.boletoId && exBoleto.has(String(l.boletoId))) {
-      const existing = TXS.find(t => String(t.boletoId) === String(l.boletoId));
-      if (existing) {
-        existing.data     = l.data;
-        existing.mes      = l.mes;
-        existing.mesCaixa = l.mesCaixa;
-        existing.valor    = l.valor;
-        existing.lancamento = l.lancamento;
-        existing.needsReview = l.needsReview;
-        existing.fonte    = l.fonte;
-        atualiz++;
-      }
+  const existentes=new Map(TXS.map(t=>[DREFluxo.identidade(t),t]));
+  let n=0,dup=0,atualiz=0;
+  for(const l of novos){
+    const chave=DREFluxo.identidade(l),existing=existentes.get(chave);
+    if(existing){
+      if(String(l.fonte||'').startsWith('BOLETO')){
+        const categoria=existing.categoria||l.categoria;
+        Object.assign(existing,l,{id:existing.id||l.id,categoria});atualiz++;
+      }else{dup++;}
       continue;
     }
-    // Verifica duplicata por fitid ou hash
-    if (l.fitid && exFitid.has(l.fitid))       { dup++; continue; }
-    const h = `${l.data}|${String(l.valor)}|${(l.lancamento||'').slice(0,40)}`;
-    if (exHash.has(h))                          { dup++; continue; }
-    // CC: verificar se já existe lançamento com mesmo valor+desc
-    if (l.fonte === 'CC') {
-      const hCC = `${String(l.valor)}|${(l.lancamento||'').slice(0,40)}`;
-      const existing = TXS.find(t => t.fonte === 'CC' &&
-        `${String(t.valor)}|${(t.lancamento||'').slice(0,40)}` === hCC);
-      if (existing) {
-        // Se já tem faturaCC → duplicata real → bloquear
-        if (existing.faturaCC && l.faturaCC && existing.faturaCC === l.faturaCC) {
-          dup++; continue;
-        }
-        // Se não tem faturaCC ou bandeira → atualizar (lançamento de import antigo)
-        if (!existing.faturaCC && l.faturaCC) {
-          existing.faturaCC = l.faturaCC;
-          existing.bandeira = l.bandeira || existing.bandeira;
-          existing.data     = l.data || existing.data; // corrigir data inválida
-          existing.mes      = l.mes  || existing.mes;
-          atualiz++; continue;
-        }
-        // Mesmo faturaCC → bloquear duplicata
-        if (existing.faturaCC === l.faturaCC) { dup++; continue; }
-      }
+    // Nota e movimento bancário são preservados separadamente. O motor usa vínculos explícitos.
+    if(!l.categoria&&l.lancamento){
+      const ch=_chaveFornecedor(l)||l.lancamento.toUpperCase().slice(0,30);
+      l.categoria=supMem[ch]||autoClassificar(l.lancamento,l.razaoSocial||'');
     }
-
-    // Dedup adicional: verifica se já existe lançamento com mesmo boletoId (qualquer fonte)
-    if (l.boletoId) {
-      const jaExiste = TXS.find(t => String(t.boletoId) === String(l.boletoId));
-      if (jaExiste) {
-        // Se o novo é BOLETO (pago) e o existente é BOLETO_PREV, atualiza
-        if (l.fonte === 'BOLETO' && jaExiste.fonte === 'BOLETO_PREV') {
-          jaExiste.fonte = 'BOLETO';
-          jaExiste.data = l.data || jaExiste.data;
-          jaExiste.vinculadoA = l.vinculadoA || jaExiste.vinculadoA;
-          atualiz++;
-        } else {
-          dup++;
-        }
-        continue;
-      }
-    }
-
-    // Se é lançamento do extrato (EXTRATO/OFX), verifica se já existe BOLETO_PREV com mesmo valor e data próxima
-    // Se sim, vincula e atualiza em vez de criar duplicata
-    if ((l.fonte === 'EXTRATO' || l.fonte === 'OFX') && parseFloat(l.valor||0) < 0) {
-      const valCents = Math.round(Math.abs(parseFloat(l.valor||0)) * 100);
-      const dtL = l.data ? new Date(l.data) : null;
-      // Tenta vincular a BOLETO_PREV ou BOLETO com mesmo boletoId/valor
-      const prevMatch = TXS.find(t => {
-        if (!t.fonte?.startsWith('BOLETO')) return false;
-        if (Math.round(Math.abs(parseFloat(t.valor||0)) * 100) !== valCents) return false;
-        if (!dtL || !t.data) return true;
-        const dtT = new Date(t.data);
-        return Math.abs(dtL - dtT) <= 5 * 86400000; // ±5 dias
-      });
-      if (prevMatch) {
-        prevMatch.fonte     = 'BOLETO';
-        prevMatch.data      = l.data;
-        prevMatch.mesCaixa  = l.mesCaixa || prevMatch.mesCaixa;
-        prevMatch.fitid     = l.fitid || prevMatch.fitid;
-        prevMatch.vinculadoA = l.lancamento;
-        if (l.fitid) exFitid.add(l.fitid);
-        atualiz++;
-        continue;
-      }
-    }
-
-    // Se é BOLETO pago importado do DB, verifica se já existe EXTRATO com mesmo valor+data
-    // (evita duplicar boleto pago + extrato do mesmo pagamento)
-    if (l.fonte === 'BOLETO' && l.boletoId) {
-      const valCents = Math.round(Math.abs(parseFloat(l.valor||0)) * 100);
-      const dtL = l.data ? new Date(l.data) : null;
-      const extratoExiste = TXS.find(t => {
-        if (t.fonte !== 'EXTRATO' && t.fonte !== 'OFX') return false;
-        if (Math.round(Math.abs(parseFloat(t.valor||0)) * 100) !== valCents) return false;
-        if (!dtL || !t.data) return false;
-        const dtT = new Date(t.data);
-        return Math.abs(dtL - dtT) <= 5 * 86400000;
-      });
-      if (extratoExiste) {
-        // Extrato já está presente — apenas transfere boletoId e vinculadoA para o extrato
-        if (!extratoExiste.boletoId) extratoExiste.boletoId = l.boletoId;
-        if (!extratoExiste.vinculadoA) extratoExiste.vinculadoA = l.lancamento;
-        if (!extratoExiste.boletoFornecedor) extratoExiste.boletoFornecedor = l.fornecedor || (l.lancamento||'').replace(/BOLETO PAGO[^-]*-\s*/i,'').replace(/\s*\(NF[^)]*\)/gi,'').replace(/\s*Parc\..*$/i,'').trim();
-        if (!extratoExiste.categoria && l.categoria) extratoExiste.categoria = l.categoria;
-        atualiz++;
-        continue;
-      }
-    }
-
-    // Auto-classifica se não tiver categoria
-    if (!l.categoria && l.lancamento) {
-      const ch = _chaveFornecedor(l) || l.lancamento.toUpperCase().slice(0,30);
-      l.categoria = supMem[ch] || autoClassificar(l.lancamento, l.razaoSocial||'');
-    }
-    const novoTx = {...l, id: l.id || (Date.now()+'_'+Math.random())};
-    TXS.push(novoTx);
-    exFitid.add(l.fitid);
-    exBoleto.add(String(l.boletoId));
-    exHash.add(h);
-    n++;
-    // Sprint 3.1-D: tentar vincular automaticamente se for EXTRATO
-    if (novoTx.fonte === 'EXTRATO' || novoTx.fonte === 'OFX') {
-      tentarVincularFaturaAuto(novoTx);
-    }
+    const novoTx={...l,id:l.id||(Date.now()+'_'+Math.random())};
+    TXS.push(novoTx);existentes.set(chave,novoTx);n++;
+    if(novoTx.fonte==='EXTRATO'||novoTx.fonte==='OFX')tentarVincularFaturaAuto(novoTx);
   }
   if (!files.includes(fileName)) files.push(fileName);
   const msg = n > 0 || atualiz > 0
@@ -3070,60 +2917,8 @@ function render() {
   const fonte = document.getElementById('f-fonte').value;
   const pend  = document.getElementById('f-pend').checked;
 
-  // Boletos PREV/BOLETO que já foram quitados pelo extrato → ocultar
-  // Regra 1a: por boletoId — o EXTRATO tem boletoId = boleto.boletoId
-  const boletosQuitadosPorId = new Set(
-    TXS.filter(t => t.fonte === 'EXTRATO' && t.boletoId).map(t => String(t.boletoId))
-  );
-  // Regra 1b: por id inverso — o BOLETO/BOLETO_PREV tem vinculadoA = extrato.lancamento
-  // OU o extrato aponta para o id do boleto via campo boletoId
-  const boletosQuitadosPorVinculo = new Set(
-    TXS.filter(t => t.fonte?.startsWith('BOLETO') && t.vinculadoA).map(t => t.id)
-  );
-
-  // Regra 2: por valor+DATA (mais preciso que valor+mês)
-  const extratoHashVlrData = new Set(
-    TXS.filter(t => (t.fonte==='EXTRATO'||t.fonte==='OFX') && parseFloat(t.valor||0) < 0 && t.data)
-       .map(t => `${Math.round(Math.abs(parseFloat(t.valor||0))*100)}|${t.data}`)
-  );
-  // Regra 3: fallback valor+mês
-  const extratoHashVlrMes = new Set(
-    TXS
-      .filter(t => (t.fonte === 'EXTRATO'||t.fonte==='OFX') && parseFloat(t.valor||0) < 0)
-      .map(t => `${Math.round(Math.abs(parseFloat(t.valor||0))*100)}|${t.mesCaixa||t.mes}`)
-  );
-
+  // Todas as origens continuam visíveis; a deduplicação contábil pertence ao motor do DRE.
   const lista = TXS.filter(t => {
-    // Esconde BOLETO_PREV se já existe EXTRATO vinculado por boletoId
-    if (t.fonte === 'BOLETO_PREV' && t.boletoId && boletosQuitadosPorId.has(String(t.boletoId))) return false;
-    // Esconde BOLETO_PREV se o próprio boleto já tem vinculadoA (foi quitado)
-    if (t.fonte === 'BOLETO_PREV' && boletosQuitadosPorVinculo.has(t.id)) return false;
-    // Esconde BOLETO_PREV/BOLETO se existe EXTRATO com mesmo valor+DATA
-    if ((t.fonte === 'BOLETO_PREV' || t.fonte === 'BOLETO') && t.data) {
-      const hd = `${Math.round(Math.abs(parseFloat(t.valor||0))*100)}|${t.data}`;
-      if (extratoHashVlrData.has(hd)) return false;
-    }
-    // Esconde BOLETO se já existe EXTRATO com mesmo boletoId (não duplicar)
-    if (t.fonte === 'BOLETO' && t.boletoId && boletosQuitadosPorId.has(String(t.boletoId))) {
-      const extratoExiste = TXS.some(x => (x.fonte === 'EXTRATO' || x.fonte === 'OFX') && String(x.boletoId) === String(t.boletoId));
-      if (extratoExiste) return false;
-    }
-    // Esconde BOLETO pago se já existe EXTRATO com mesmo valor+mês
-    if (t.fonte === 'BOLETO' && t.vinculadoA) {
-      const valCents = Math.round(Math.abs(parseFloat(t.valor||0)) * 100);
-      const mesT = t.mesCaixa || t.mes;
-      const extratoExiste = TXS.some(x =>
-        (x.fonte === 'EXTRATO' || x.fonte === 'OFX') &&
-        Math.round(Math.abs(parseFloat(x.valor||0)) * 100) === valCents &&
-        (x.mesCaixa || x.mes) === mesT
-      );
-      if (extratoExiste) return false;
-    }
-    // Esconde BOLETO/BOLETO_PREV sem boletoId se EXTRATO tem mesmo valor+mês
-    if ((t.fonte === 'BOLETO_PREV' || t.fonte === 'BOLETO') && !t.boletoId) {
-      const hash = `${Math.round(Math.abs(parseFloat(t.valor||0))*100)}|${t.mesCaixa||t.mes}`;
-      if (extratoHashVlrMes.has(hash)) return false;
-    }
     // PREV_RECEITA nunca é ocultada
     if (t.fonte === 'PREV_RECEITA') return true;
     if (q && !t.lancamento.toLowerCase().includes(q) && !(t.razaoSocial||'').toLowerCase().includes(q)) return false;
@@ -3525,14 +3320,14 @@ async function salvarMes(mes, silent=false) {
       window._sessoesPorMes[mes] = d.sessao_id;
       if (mes === mesRef) sessId = d.sessao_id;
       if (!silent) toast(`💾 Salvo! ${txsMes.length} lançamentos de ${mes}`);
-      setSt('ok');
+      setSt('ok');return true;
     } else {
       console.error('[salvarMes]', mes, d.erro);
-      setSt('err');
+      setSt('err');return false;
     }
   } catch(e) {
     console.error('[salvarMes] exception:', e);
-    setSt('err');
+    setSt('err');return false;
   }
 }
 
@@ -3877,7 +3672,8 @@ function ccrAgrupar(lancs) {
 }
 
 // Abre o modal de revisão com os lançamentos da fatura
-function abrirRevisaoCC(lancs, mesCC, bandeira, fileName) {
+function abrirRevisaoCC(lancs, mesCC, bandeira, fileName, salvarDireto=false, editarId=null) {
+  _ccrEditarId=editarId;
   _ccrLancs    = lancs.map(l => ({...l, categoria: l.categoria || autoClassificar(l.lancamento, l.razaoSocial||'')}));
   _ccrMesCC    = mesCC;
   _ccrBandeira = bandeira;
@@ -3917,6 +3713,8 @@ function abrirRevisaoCC(lancs, mesCC, bandeira, fileName) {
     dlWrap.innerHTML = ccrCatDatalistHTML();
     document.getElementById('m-cc-revisao').appendChild(dlWrap.firstChild);
   }
+  document.getElementById('ccr-btn-enviar').textContent=editarId?'💾 Salvar classificações':'💾 Salvar fatura';
+  if(salvarDireto){ccrEnviarParaDRE();return;}
   document.getElementById('m-cc-revisao').classList.add('open');
 }
 
@@ -4114,15 +3912,22 @@ function ccrFiltrar(tipo) {
 
 // Sprint 6.7-I: verificar duplicidade ANTES de addLancs()
 async function ccrEnviarParaDRE() {
-  const nPend = _ccrLancs.filter(l => !l.categoria).length;
-  if (nPend > 0) {
-    const ok = confirm(`⚠️ ${nPend} lançamento(s) ainda sem categoria. Enviar assim mesmo?`);
-    if (!ok) return;
+  if(_ccrEnviando)return;
+  if(_ccrEditarId){
+    _ccrEnviando=true;
+    try{
+      const itens=_ccrLancs.map(l=>({fatura_id:_ccrEditarId,faturaCC:l.faturaCC,hash_item:l.hash_item_persistido||_hashItemCC(l),categoria:l.categoria||null}));
+      const d=await api.patch('/api/dre/cartao-faturas/sincronizar-categorias',{itens});
+      if(!d.ok||d.atualizados!==itens.length){toast('❌ Classificações não sincronizadas. Confira as pendências antes de fechar.');return;}
+      for(const l of _ccrLancs){const t=TXS.find(t=>String(t.id)===String(l.id));if(t)t.categoria=l.categoria;else TXS.push(l);}
+      if(!await salvarTodos(true))return;fecharModal('m-cc-revisao');render();renderDRE();updStats();
+      toast('✅ Classificações salvas');renderStatusCartoes();carregarCartaoFaturas();
+    }finally{_ccrEnviando=false;}
+    return;
   }
-
   const faturaId    = `CC_${_ccrMesCC.replace('/','_')}${_ccrBandeira ? '_' + _ccrBandeira.replace(/\s+/g,'') : ''}`;
   const cartaoNome  = _ccrBandeira || 'Cartão';
-  const valorTotal  = _ccrLancs.reduce((s,l) => s + Math.abs(parseFloat(l.valor||0)), 0);
+  const valorTotal = Math.abs(_ccrLancs.reduce((s,l)=>s+parseFloat(l.valor||0),0));
   const itensPayload = _ccrLancs.map(l => ({
     data:       l.data       || null,
     descricao:  l.lancamento || l.razaoSocial || '',
@@ -4130,6 +3935,8 @@ async function ccrEnviarParaDRE() {
     valor:      l.valor,
     categoria:  l.categoria  || null,
     portador:   l.portador   || null,
+    parcela: l.parcela||null,
+    transacao: {...l},
   }));
   const hashFatura = _cfHashFatura(cartaoNome, _ccrMesCC, valorTotal, _ccrFileName, _ccrVencimento || null, itensPayload.length);
 
@@ -4154,7 +3961,8 @@ async function ccrEnviarParaDRE() {
       competencia: _ccrMesCC, valor_total: valorTotal, qtd_itens: itensPayload.length,
     });
     if (vRes.ok && vRes.duplicata) duplicataDb = vRes.fatura;
-  } catch(e) { /* falha silenciosa — não bloqueia */ }
+    if(!vRes.ok){toast('❌ Não foi possível verificar a fatura: '+(vRes.erro||'Tente novamente'));return;}
+  } catch(e) {toast('❌ Não foi possível verificar duplicidade. Tente novamente.');return;}
 
   if (jaEmTXS || duplicataDb) {
     // Guardar contexto para as opções do modal
@@ -4172,34 +3980,28 @@ async function ccrEnviarParaDRE() {
   }
 
   // ── Fatura nova — enviar normalmente ────────────────────────────────────
-  _ccrExecutarEnvioNovo(faturaId, cartaoNome, valorTotal, itensPayload, hashFatura);
+  await _ccrExecutarEnvioNovo(faturaId, cartaoNome, valorTotal, itensPayload, hashFatura);
 }
 
 // Envia fatura nova ao DRE sem verificação (chamado após confirmar que não é duplicata)
 async function _ccrExecutarEnvioNovo(faturaId, cartaoNome, valorTotal, itensPayload, hashFatura) {
-  _ccrLancs.forEach(l => { l.faturaCC = faturaId; l.bandeira = _ccrBandeira || l.bandeira || ''; });
-  addLancs(_ccrLancs, _ccrFileName);
-  fecharModal('m-cc-revisao');
-  toast(`✅ ${_ccrLancs.length} lançamentos enviados para o DRE`);
-  setTimeout(_revinculateCC, 200);
-  ccrAlertarPagamentoSemFatura(faturaId, _ccrMesCC, _ccrBandeira);
-
-  try {
-    const reg = await api.post('/api/dre/cartao-faturas', {
-      cartao: cartaoNome, bandeira: _ccrBandeira || null,
-      competencia: _ccrMesCC, valor_total: valorTotal,
-      qtd_itens: _ccrLancs.length, arquivo_nome: _ccrFileName || null,
-      hash_fatura: hashFatura, fatura_id_ref: faturaId, itens: itensPayload,
+  if(_ccrEnviando)return;
+  _ccrEnviando=true;
+  try{
+    const reg=await api.post('/api/dre/cartao-faturas',{
+      cartao:cartaoNome,bandeira:_ccrBandeira||null,competencia:_ccrMesCC,valor_total:valorTotal,
+      qtd_itens:_ccrLancs.length,arquivo_nome:_ccrFileName||null,hash_fatura:hashFatura,fatura_id_ref:faturaId,itens:itensPayload
     });
-    if (reg?.ok) {
-      if (typeof carregarCartaoFaturas === 'function') carregarCartaoFaturas();
-      // Atualizar painel inline se estiver aberto
-      const painel = document.getElementById('painel-cartoes');
-      if (painel && painel.style.display !== 'none') renderStatusCartoes();
-    }
-  } catch(e) {}
-
-  _sincronizarCategoriesCC(_ccrLancs, faturaId);
+    if(!reg?.ok){toast('❌ Fatura não salva: '+(reg?.erro||'Tente novamente'));document.getElementById('m-cc-revisao').classList.add('open');return;}
+    _ccrLancs.forEach(l=>{l.faturaCC=faturaId;l.fatura_db_id=reg.id;l.bandeira=_ccrBandeira||l.bandeira||'';});
+    addLancs(_ccrLancs,_ccrFileName);
+    const sessaoSalva=await salvarTodos(true);
+    fecharModal('m-cc-revisao');
+    toast(sessaoSalva?`✅ Fatura salva · ${reg.pendentes_classificacao||0} item(ns) para classificar depois`:'⚠️ Fatura salva no banco. Atualize a tela para recuperar os itens no DRE.');
+    _revinculateCC();renderDRE();autoSv();
+    carregarCartaoFaturas();renderStatusCartoes();
+  }catch(e){toast('❌ Falha ao salvar a fatura. Tente novamente.');document.getElementById('m-cc-revisao').classList.add('open');}
+  finally{_ccrEnviando=false;}
 }
 
 // Variáveis de contexto para modal de duplicata de lançamentos
@@ -4227,7 +4029,7 @@ function ccrAlertarPagamentoSemFatura(faturaId, mesCC, bandeira) {
 // Lista faturas CC já importadas (agrupa por faturaId único)
 function ccrFaturasImportadas() {
   const map = {};
-  TXS.filter(t => t.faturaCC).forEach(t => {
+  TXS.filter(t => t.fonte==='CC' && t.faturaCC).forEach(t => {
     if (!map[t.faturaCC]) {
       // Extrair mês do faturaId: CC_05_2026_Caixa → 05/2026
       const mMatch = t.faturaCC.match(/CC_(\d{2})_(\d{4})/);
@@ -4240,7 +4042,7 @@ function ccrFaturasImportadas() {
         n: 0
       };
     }
-    map[t.faturaCC].total += Math.abs(parseFloat(t.valor||0));
+    map[t.faturaCC].total -= parseFloat(t.valor||0);
     map[t.faturaCC].n++;
   });
   return Object.values(map);
@@ -4620,7 +4422,7 @@ function _buildGradeCartoes(faturas, elId) {
            <div style="font-size:9px;color:${st.tx};margin-top:2px">${pct}%</div>` : '';
       const valTxt = f ? `<div style="font-size:9px;color:${st.tx};margin-top:2px;font-family:'DM Mono',monospace">${brl(f.valor_total)}</div>` : '';
       const vencBadge = vencida ? `<div style="font-size:9px;color:#dc2626;font-weight:700;margin-top:2px">⚠️ Vencida</div>` : '';
-      const cNome = (f.cartao||f.bandeira||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');
+      const cNome = (f?.cartao||f?.bandeira||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');
       const onclick = f ? `onclick="cfFiltrarCartaoMes('${cNome}','${m}')" style="cursor:pointer"` : '';
       const title = f ? `title="${brl(f.valor_total)} · ${f.qtd_itens||0} itens · ${f.arquivo_nome||'sem arquivo'}"` : 'title="Não importada ainda"';
       const isCur = m === mesAtual;
@@ -4631,7 +4433,7 @@ function _buildGradeCartoes(faturas, elId) {
           ${isCur&&f?'box-shadow:0 0 0 2px rgba(139,0,0,.15)':''}">
           <div style="font-size:12px;line-height:1">${st.ic}</div>
           <div style="font-size:10px;font-weight:700;color:${st.tx};margin-top:2px;white-space:nowrap">${st.lb}</div>
-          ${valTxt}${vencBadge}${bar}
+          ${valTxt}${vencBadge}${bar}${f&&Number(f.itens_total)>Number(f.itens_classificados)?`<button class="btn bs" style="font-size:9px;padding:4px;margin-top:4px" onclick="event.stopPropagation();abrirPendenciasFatura(${f.id})">Classificar ${Number(f.itens_total)-Number(f.itens_classificados)}</button>`:""}
         </div>
       </td>`;
     }).join('');
@@ -4841,6 +4643,7 @@ async function vincularItemCCDocumento(ccId,boletoId) {
   if(!r.ok){toast('❌ '+(r.erro||'Não foi possível vincular'));return;}
   cc.documentoStatus='boleto'; cc.documentoBoletoId=bol.boletoId;
   cc.faturaCC=cc.faturaCC||faturaRef;
+  if(!cc.categoria&&bol.categoria){cc.categoria=bol.categoria;await _sincronizarCategoriesCC([cc],faturaRef);}
   bol.cartaoItemRef=String(cc.id); bol.cartaoFaturaRef=faturaRef; bol.cartaoCredito=cc.bandeira||''; bol.fonte='BOLETO'; bol.mesCaixa=mesCaixa;
   render();renderDRE();autoSv();renderConciliacaoCartao();toast('✅ Nota vinculada ao item do cartão sem duplicar a despesa');
 }
@@ -5215,7 +5018,7 @@ function updStats() {
       const t = document.getElementById('bsc-titulo');
       const d = document.getElementById('bsc-texto');
       if (t) t.textContent = `ATENÇÃO: ${semCat.length} lançamento(s) sem categoria`;
-      if (d) d.textContent = ` — R$ ${fmt.brl(semCatVal)} fora do resultado do DRE.`;
+      if (d) d.textContent = ` — R$ ${fmt.brl(semCatVal)} incluídos provisoriamente em A CLASSIFICAR.`;
     } else {
       bannerSC.style.display = 'none';
     }
@@ -5277,7 +5080,7 @@ function atualizarPainelPendencias() {
   const mesFiltro = mesRef || mesAtual;
 
   // Calc 1: sem categoria
-  const semCat = TXS.filter(t => !t.categoria && !t.ignorar && t.fonte !== 'PREV_RECEITA');
+  const semCat = DREFluxo.resolver(TXS,getModo()).linhas.filter(t=>t._pendenciaClassificacao&&t.fonte!=='PREV_RECEITA');
   const semCatMes = semCat.filter(t => (t.mesCaixa||t.mes||'') === mesFiltro);
   const semCatVal = semCatMes.reduce((s,t) => s + Math.abs(parseFloat(t.valor||0)), 0);
 
@@ -5310,7 +5113,7 @@ function atualizarPainelPendencias() {
 
   const $id = id => document.getElementById(id);
   if ($id('pp-n-semcat'))  $id('pp-n-semcat').textContent  = nSemCat;
-  if ($id('pp-v-semcat'))  $id('pp-v-semcat').textContent  = `R$ ${fmt.brl(semCatVal)} fora do resultado`;
+  if ($id('pp-v-semcat'))  $id('pp-v-semcat').textContent  = `R$ ${fmt.brl(semCatVal)} em A CLASSIFICAR`;
   if ($id('pp-n-prevvenc'))$id('pp-n-prevvenc').textContent = nPrev;
   if ($id('pp-n-ccpend'))  $id('pp-n-ccpend').textContent  = nCC;
 
@@ -5549,6 +5352,11 @@ function _revinculateBoletosPrev() {
       const dateStr = dt.toISOString().slice(0,10);
       const extrato = extratoIdx.get(`${valCents}|${dateStr}`);
       if (extrato) {
+        const mesmoBoleto=t.boletoId&&String(extrato.boletoId||'')===String(t.boletoId);
+        if(extrato.boletoId&&!mesmoBoleto)continue;
+        const fornecedor=(t.razaoSocial||t.lancamento||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().trim();
+        const descricaoBanco=(extrato.razaoSocial||extrato.lancamento||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().trim();
+        if(!mesmoBoleto&&(!fornecedor||fornecedor.length<6||!descricaoBanco.includes(fornecedor)))continue;
         t.vinculadoA = extrato.lancamento || extrato.razaoSocial || 'extrato';
         if (!extrato.boletoId) extrato.boletoId = t.boletoId || t.id;
         if (!extrato.vinculadoA) extrato.vinculadoA = t.lancamento;
@@ -5562,100 +5370,12 @@ function _revinculateBoletosPrev() {
 }
 
 // ── Deduplicação de boletos vs extrato ───────────────────────────────────────
-function _txsSemDuplicatas(txs) {
-  // Quando um item da fatura representa uma NF/boleto já existente, o boleto
-  // é a fonte contábil oficial e a linha CC fica apenas como prova/auditoria.
-  const itensCCComDocumento = new Set(
-    txs.filter(t => t.fonte?.startsWith('BOLETO') && t.cartaoItemRef).map(t => String(t.cartaoItemRef))
-  );
-  // Regra 1: por boletoId — mais confiável
-  const extratoPorBoletoId = new Set(
-    txs.filter(t => (t.fonte==='EXTRATO'||t.fonte==='OFX') && t.boletoId).map(t => String(t.boletoId))
-  );
-  const boletosComVinculo = new Set(
-    txs.filter(t => t.fonte?.startsWith('BOLETO') && t.vinculadoA).map(t => t.id)
-  );
-
-  // Regra 2: EXTRATO com mesmo valor+DATA (não mês) — cobre casos sem boletoId
-  // Chave: |valor_cents|data_iso|
-  const extratoHashVlrData = new Set(
-    txs.filter(t => (t.fonte==='EXTRATO'||t.fonte==='OFX') && parseFloat(t.valor||0) < 0 && t.data)
-       .map(t => `${Math.round(Math.abs(parseFloat(t.valor||0))*100)}|${t.data}`)
-  );
-
-  // Regra 3: fallback valor+mês (quando não há data no boleto)
-  const extratoHashVlrMes = new Set(
-    txs.filter(t => (t.fonte==='EXTRATO'||t.fonte==='OFX') && parseFloat(t.valor||0) < 0)
-       .map(t => `${Math.round(Math.abs(parseFloat(t.valor||0))*100)}|${t.mesCaixa||t.mes}`)
-  );
-
-  // Dedup de extrato somente por identidade bancária estável. Mesmo valor,
-  // data e estabelecimento pode ser uma compra legítima repetida.
-  const extratoVistos = new Set();
-
-  // Registro de tudo que a dedup suprimiu, para nada sumir em silêncio.
-  // Inspecionável no console com: _dedupLog()
-  const _suprimidos = [];
-  const _drop = (t, motivo) => { _suprimidos.push({ motivo, lancamento: t.lancamento,
-    fornecedor: t.razaoSocial||'', valor: t.valor, data: t.data, fonte: t.fonte, id: t.id }); return false; };
-  window._dedupLog = () => {
-    if (!_suprimidos.length) { console.log('[DRE] nenhum lançamento suprimido pela dedup'); return []; }
-    console.table(_suprimidos);
-    return _suprimidos;
-  };
-  window._dedupCount = () => _suprimidos.length;
-
-  return txs.filter(t => {
-    if (t.ignorar) return false;
-    if (t.fonte === 'CC' && (t.documentoStatus === 'boleto' || itensCCComDocumento.has(String(t.id)))) {
-      return _drop(t, 'item CC representado por nota/boleto vinculado');
-    }
-
-    // Dedup EXTRATO duplicado: somente FITID/id bancário exatamente repetido.
-    if ((t.fonte === 'EXTRATO' || t.fonte === 'OFX') && t.data && parseFloat(t.valor||0) < 0) {
-      const identidade = t.fitid ? `fitid:${t.fitid}` : null;
-      if (identidade && extratoVistos.has(identidade)) return _drop(t,'FITID bancário repetido');
-      if (identidade) extratoVistos.add(identidade);
-    }
-
-    // BOLETO_PREV: oculta se extrato já tem o boletoId ou se tem vinculadoA
-    if (t.fonte === 'BOLETO_PREV') {
-      if (t.boletoId && extratoPorBoletoId.has(String(t.boletoId))) return _drop(t,'boletoId já no extrato');
-      if (boletosComVinculo.has(t.id)) return _drop(t,'boleto tem vinculadoA');
-      // Oculta se existe extrato com mesmo valor+data
-      if (t.data) {
-        const hd = `${Math.round(Math.abs(parseFloat(t.valor||0))*100)}|${t.data}`;
-        if (extratoHashVlrData.has(hd)) return _drop(t,'extrato com mesmo valor+data');
-      } else {
-        // Fallback valor+mês — SÓ quando o boleto não tem data (era a intenção
-        // original, mas rodava sempre). Rodando sempre, uma NF com data que NÃO
-        // casou com nenhum extrato ainda era apagada do DRE só porque o valor
-        // coincidia com algum débito qualquer do mesmo mês — caso típico de NF
-        // paga no cartão, que some antes de ser vinculada à fatura.
-        const hm = `${Math.round(Math.abs(parseFloat(t.valor||0))*100)}|${t.mesCaixa||t.mes}`;
-        if (extratoHashVlrMes.has(hm)) return _drop(t,'sem data — extrato com mesmo valor+mês');
-      }
-    }
-
-    // BOLETO pago: oculta se extrato já cobre
-    if (t.fonte === 'BOLETO') {
-      if (t.boletoId && extratoPorBoletoId.has(String(t.boletoId))) return false;
-      if (boletosComVinculo.has(t.id)) return false;
-      // Mesmo valor+data → duplicata
-      if (t.data) {
-        const hd = `${Math.round(Math.abs(parseFloat(t.valor||0))*100)}|${t.data}`;
-        if (extratoHashVlrData.has(hd)) return false;
-      }
-      // valor+mês só vale como duplicata quando há vínculo explícito E o boleto
-      // não tem data própria para conferir — senão apaga NF legítima por acaso
-      if (t.vinculadoA && !t.data) {
-        const hm = `${Math.round(Math.abs(parseFloat(t.valor||0))*100)}|${t.mesCaixa||t.mes}`;
-        if (extratoHashVlrMes.has(hm)) return false;
-      }
-    }
-
-    return true;
-  });
+function _txsSemDuplicatas(txs,modoOverride) {
+  const fluxo=DREFluxo.resolver(txs,modoOverride||getModo());
+  window._drePendenciasFluxo=fluxo.pendencias;
+  window._dedupLog=()=>fluxo.suprimidos;
+  window._dedupCount=()=>fluxo.suprimidos.length;
+  return fluxo.linhas;
 }
 
 // ── Valor de compra parcelada no cartão: cheio na competência, parcela no caixa ──
@@ -5731,7 +5451,7 @@ function prepararBaseDRE(modoOverride) {
     ? (t.mesCaixa || t.mes || mesRef)
     : (t.mes || mesRef);
   const REGEX_MES_VALIDO = /^(0[1-9]|1[0-2])\/\d{4}$/;
-  const at = _txsSemDuplicatas(TXS).filter(t => t.categoria);
+  const at = _txsSemDuplicatas(TXS,modoBase);
   const invalidos = at.filter(t => !REGEX_MES_VALIDO.test(getMesBase(t)));
   const gruposParcela = _mapaGruposParcela(at);
   const valorDre = t => _valorParaDRE(t, gruposParcela, modoBase);
@@ -5748,7 +5468,7 @@ function prepararBaseDRE(modoOverride) {
       dataNaoOper[t.categoria][m] = (dataNaoOper[t.categoria][m] || 0) + v;
       continue;
     }
-    const g = catGrupo(t.categoria) || 'OUTROS';
+    const g = t._pendenciaClassificacao ? 'OUTRAS' : (catGrupo(t.categoria) || 'OUTROS');
     if (!data[g]) data[g] = {};
     if (!data[g][t.categoria]) data[g][t.categoria] = {};
     data[g][t.categoria][m] = (data[g][t.categoria][m] || 0) + v;
@@ -5829,6 +5549,7 @@ function _buildDRE(el, full) {
   if (!el) return;
   const baseDRE = prepararBaseDRE(getModo());
   const {at,data,dataNaoOper,meses,sg,sgt} = baseDRE;
+  const pendenciasFluxo=(window._drePendenciasFluxo||[]);
   if (!at.length) {
     el.innerHTML='<div style="padding:20px;text-align:center;color:var(--muted);font-size:12px">Classifique os lançamentos para ver o DRE</div>';
     return;
@@ -5838,6 +5559,7 @@ function _buildDRE(el, full) {
       baseDRE.invalidos.map(t=>({id:t.id,lancamento:t.lancamento,mes:t.mes,mesCaixa:t.mesCaixa,valor:t.valor})));
   }
   const showTot=meses.length>1||full;
+  const avisoPendencias=pendenciasFluxo.length?'<div style="padding:10px;background:#fff3cd;color:#854d0e;border:1px solid #facc15"><b>DRE provisório</b> — Valores pendentes incluídos em A CLASSIFICAR. Resolva a classificação e o detalhamento das faturas antes do fechamento.</div>':'';
   const recTotalMes=Object.fromEntries(meses.map(m=>[m,sg('RECEITAS',m)]));
 
   const pct=(v,base)=>{
@@ -6203,7 +5925,7 @@ function _buildDRE(el, full) {
   h+='</tbody></table>';
 
   document.getElementById('dre-mes-label').textContent=meses.map(fmtMes).join(' · ');
-  el.innerHTML=h;
+  el.innerHTML=avisoPendencias+h;
 
   // Fix sticky: aguardar browser calcular layout e medir thead real
   function _ajustarStickyDRE() {
@@ -6904,7 +6626,7 @@ function _drillCategoriasOptions(atual) {
 
 function _drillDados() {
   const {cat, mes, modo} = _drillContext;
-  const todosMes = TXS.filter(t => !t.ignorar && _drillMesTx(t, modo) === mes);
+  const todosMes = _txsSemDuplicatas(TXS,modo).filter(t => _drillMesTx(t, modo) === mes);
   const lancs = todosMes.filter(t => t.categoria === cat);
   const alertas = new Map();
   const add = (id, texto, tipo='warn') => {
@@ -7551,10 +7273,10 @@ async function salvarTodos(silent=false) {
     porMes[m].push(t);
   });
   for (const mes of Object.keys(porMes)) {
-    await salvarMes(mes, true);
+    if(!await salvarMes(mes,true)){toast('⚠️ Não foi possível atualizar o DRE. A fatura salva pode ser recuperada ao atualizar a tela.');return false;}
   }
   if (!silent) toast('💾 Salvo! ' + TXS.length + ' lançamentos');
-  setSt('ok');
+  setSt('ok');return true;
 }
 
 async function salvar(silent=false, tentativa=1){
@@ -8159,10 +7881,48 @@ window.excluirFaturaCC = async function excluirFaturaCC() {
   } catch(e) { toast('❌ Erro: ' + e.message); }
 };
 
+function lancamentoItemFatura(i){
+  const base=i.dados_json&&typeof i.dados_json==='object'?i.dados_json:{};
+  const data=String(i.data_compra||'').slice(0,10);
+  return {...base,id:base.id||'ccdb_'+i.id,data,mes:base.mes||(/^\d{4}-\d{2}/.test(data)?data.slice(5,7)+'/'+data.slice(0,4):i.competencia),
+    mesCaixa:base.mesCaixa||i.competencia,fonte:'CC',valor:Number(i.valor),lancamento:i.descricao||'',razaoSocial:base.razaoSocial||i.descricao||'',
+    categoria:i.categoria_dre||base.categoria||null,portador:i.portador,faturaCC:i.fatura_id_ref||base.faturaCC,
+    fatura_db_id:i.fatura_id,hash_item_persistido:i.hash_item,bandeira:i.bandeira||base.bandeira};
+}
+function buscarItemFaturaNaSessao(l,i){
+  const candidatos=TXS.filter(t=>t.fonte==='CC'&&(String(t.id)===String(l.id)||
+    ((t.faturaCC===l.faturaCC||t.fatura_db_id===i.fatura_id)&&(_hashItemCC(t)===i.hash_item||
+     _hashItemCC(t).split('|').slice(0,3).join('|')===String(i.hash_item||'').split('|').slice(0,3).join('|')))));
+  return candidatos.length===1?candidatos[0]:null;
+}
+async function recuperarFaturasDoBanco(){
+  const r=await api.get('/api/dre/cartao-faturas/lancamentos');
+  if(!r.ok){toast('⚠️ Não foi possível conferir as faturas salvas. Tente atualizar antes do fechamento.');return;}
+  for(const i of r.data||[]){
+    const l=lancamentoItemFatura(i);
+    const t=buscarItemFaturaNaSessao(l,i);
+    if(t){t.fatura_db_id=i.fatura_id;t.hash_item_persistido=i.hash_item;if(!t.categoria&&i.categoria_dre)t.categoria=i.categoria_dre;}
+    else if(i.dados_json){TXS.push(l);}
+  }
+  updMesFiltro();render();updStats();renderDRE();
+}
+async function abrirPendenciasFatura(id){
+  const r=await api.get(`/api/dre/cartao-faturas/${id}/itens`);
+  if(!r.ok){toast('❌ '+(r.erro||'Não foi possível carregar'));return;}
+  const lancs=(r.data||[]).map(i=>{
+    const l=lancamentoItemFatura({...i,fatura_id:id});
+    const t=buscarItemFaturaNaSessao(l,{...i,fatura_id:id});
+    return {...l,...(t||{}),fatura_db_id:id,hash_item_persistido:i.hash_item};
+  });
+  if(!lancs.length){toast('Nenhum item ativo nesta fatura');return;}
+  abrirRevisaoCC(lancs,r.data[0].competencia,lancs[0].bandeira||'Cartão','Fatura salva',false,id);
+  ccrFiltrar('pendentes');
+}
 let _cfItensFaturaIdAtual = null;
 
 async function verItensFatura(faturaId, titulo) {
   _cfItensFaturaIdAtual = faturaId;
+  document.getElementById('cf-classificar-pendentes').onclick=()=>{document.getElementById('m-cf-itens').style.display='none';abrirPendenciasFatura(faturaId);};
   document.getElementById('cf-itens-titulo').textContent = '📋 ' + titulo;
   document.getElementById('m-cf-itens').style.display = 'flex';
   const tbody = document.getElementById('cf-itens-tbody');
@@ -8411,7 +8171,7 @@ function corrigirMesesCC() {
 // ── 6.7-F: Sincronizar categorias CC → cartao_fatura_itens ──────────────────
 function _hashItemCC(l) {
   // Mesmo algoritmo do backend _hashItem
-  const desc  = (l.razaoSocial || l.lancamento || '').toUpperCase()
+  const desc  = (l.lancamento || l.razaoSocial || '').toUpperCase()
                   .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
                   .replace(/[^A-Z0-9 ]/g,'').replace(/\s+/g,' ').trim();
   const data  = (l.data || '').slice(0,10);
@@ -8428,12 +8188,13 @@ async function _sincronizarCategoriesCC(lancs, faturaIdRef) {
     .map(l => ({
       faturaCC:   l.faturaCC,
       fatura_id:  l.fatura_db_id || null,  // Fix 6.7-J: id direto quando disponível
-      hash_item:  _hashItemCC(l),
+      hash_item: l.hash_item_persistido || _hashItemCC(l),
       categoria:  l.categoria,
     }));
   if (!itens.length) return;
   try {
-    await api.post('/api/dre/cartao-faturas/sincronizar-categorias', { itens });
+    const d=await api.patch('/api/dre/cartao-faturas/sincronizar-categorias', { itens });
+    if(!d.ok || d.atualizados!==itens.length)toast('⚠️ Categoria não sincronizada na fatura. Abra as pendências para conferir.');
   } catch(e) {
     console.warn('[sincronizarCategoriesCC]', e.message);
   }
@@ -8807,7 +8568,7 @@ function localizarConferencia(id) {
 <div class="modal-overlay" id="m-cf-itens" onclick="if(event.target===this)this.style.display='none'" style="z-index:700">
   <div style="background:#fff;border-radius:14px;width:100%;max-width:700px;max-height:85vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.3)">
     <div style="background:var(--red);padding:12px 18px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
-      <div id="cf-itens-titulo" style="color:#fff;font-size:14px;font-weight:700">Itens da Fatura</div>
+      <button id="cf-classificar-pendentes" class="btn bp" style="margin-right:8px">Classificar pendências</button><div id="cf-itens-titulo" style="color:#fff;font-size:14px;font-weight:700">Itens da Fatura</div>
       <button onclick="document.getElementById('m-cf-itens').style.display='none'" style="background:none;border:none;color:rgba(255,255,255,.8);font-size:20px;cursor:pointer">×</button>
     </div>
     <div style="overflow-y:auto;flex:1;min-height:0">

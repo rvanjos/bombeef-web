@@ -22,6 +22,7 @@ const express  = require('express');
 const multer   = require('multer');
 const XLSX     = require('xlsx');
 const autenticar = require('../middleware/auth');
+const DREFluxo = require('../public/js/dre-fluxo');
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -633,6 +634,7 @@ module.exports = function (pool, app) {
     await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_cf_hash_loja ON cartao_faturas(loja_id,hash_fatura) WHERE hash_fatura IS NOT NULL`).catch(()=>{});
     await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_cfi_hash ON cartao_fatura_itens(fatura_id, hash_item) WHERE hash_item IS NOT NULL`).catch(()=>{});
     await pool.query(`ALTER TABLE cartao_fatura_itens ADD COLUMN IF NOT EXISTS descricao_norm TEXT`).catch(()=>{});
+    await pool.query(`ALTER TABLE cartao_fatura_itens ADD COLUMN IF NOT EXISTS dados_json JSONB`);
     await pool.query(`
       CREATE TABLE IF NOT EXISTS cartao_classificacao_regras (
         id BIGSERIAL PRIMARY KEY,
@@ -1491,6 +1493,16 @@ module.exports = function (pool, app) {
     };
   }
 
+  async function pendenciasFluxoMes(txs,lojaId,mes){
+    // Uma compra parcelada e o pagamento da fatura podem estar em sessões distintas.
+    const {rows}=await pool.query(`SELECT DISTINCT ON (mes_ref) dados_json FROM dre_sessoes
+      WHERE loja_id=$1 ORDER BY mes_ref,atualizado_em DESC,id DESC`,[Number(lojaId)]);
+    const porId=new Map();
+    for(const sessao of rows)for(const t of extrairTransacoes(sessao.dados_json))porId.set(DREFluxo.identidade(t),t);
+    for(const t of txs)porId.set(DREFluxo.identidade(t),t);
+    return DREFluxo.resolver([...porId.values()],'comp').pendencias.filter(p=>p.mes===mes||p.mesCaixa===mes);
+  }
+
   async function checklistFechamento(mes, lojaId) {
     const lid=Number(lojaId);
     const sessaoQ = await pool.query(
@@ -1512,6 +1524,7 @@ module.exports = function (pool, app) {
       // A tabela é criada pela Conferência v2. Se ainda não existir, não há decisões anteriores.
       if(e.code!=='42P01') console.warn('[dre/checklist] decisões de duplicidade:',e.message);
     }
+    const fluxoPendencias=await pendenciasFluxoMes(txs,lid,mes);
     const duplicidadesPendentes=a.duplicidades.filter(g=>!duplicidadesValidadas.has(String(g.chave)));
 
     const [mmStr, yyyyStr] = String(mes).split('/');
@@ -1531,6 +1544,7 @@ module.exports = function (pool, app) {
       {id:'extrato',label:'Extrato bancário importado',ok:a.extratos.length>0,valor:a.extratos.length+' lançamento(s)',urgente:a.extratos.length===0},
       {id:'faturamento',label:'Faturamento importado',ok:nFat>0,valor:nFat?('R$ '+fat.toLocaleString('pt-BR',{minimumFractionDigits:2})):'Não importado',urgente:nFat===0},
       {id:'nfe',label:'NF-e/Boletos do mês',ok:nBol>0,valor:nBol+' NF-e',urgente:false},
+      {id:'fluxo_cartao',label:'Classificação e detalhamento das faturas',ok:fluxoPendencias.length===0,valor:fluxoPendencias.length+' pendência(s)',urgente:fluxoPendencias.length>0},
       {id:'classificacao',label:'Lançamentos sem categoria',ok:a.semCategoria.length===0,valor:a.semCategoria.length?(`${a.semCategoria.length} · R$ ${a.valorSemCategoria.toLocaleString('pt-BR',{minimumFractionDigits:2})}`):'Todos classificados',urgente:a.semCategoria.length>0},
       {id:'duplicatas',label:'Reimportações/duplicidades não resolvidas',ok:duplicidadesPendentes.length===0,
        valor:duplicidadesPendentes.length
@@ -1554,12 +1568,12 @@ module.exports = function (pool, app) {
     // Índice dos existentes por FITID
     const porFitid = {};
     for (const t of existentes) {
-      if (t.fitid) porFitid[t.fitid] = t;
+      if (['EXTRATO','OFX'].includes(t.fonte)&&t.fitid) porFitid[DREFluxo.identidade(t)] = t;
     }
 
     // Hash para lançamentos sem FITID
     function hashSemFitid(t) {
-      return `${t.data||''}_${t.valor||''}_${(t.lancamento||'').slice(0,30)}`;
+      return DREFluxo.identidade(t);
     }
     const porHash = {};
     for (const t of existentes) {
@@ -1572,8 +1586,8 @@ module.exports = function (pool, app) {
     let novosAdicionados = 0, atualizados = 0, duplicatasIgnoradas = 0;
 
     for (const t of novos) {
-      if (t.fitid) {
-        const idx = resultado.findIndex(x => x.fitid === t.fitid);
+      if (['EXTRATO','OFX'].includes(t.fonte)&&t.fitid) {
+        const idx = resultado.findIndex(x => DREFluxo.identidade(x) === DREFluxo.identidade(t));
         if (idx >= 0) {
           // Já existe — atualiza categoria/ignorar se o novo tiver classificação
           if (t.categoria && !resultado[idx].categoria) {
@@ -2084,6 +2098,8 @@ module.exports = function (pool, app) {
       const fail=(id,label,detalhe)=>{bloqueios.push({id,nivel:'bloqueio',label,detalhe});};
       const warn=(id,label,detalhe)=>{avisos.push({id,nivel:'aviso',label,detalhe});};
 
+      const pendenciasFluxo=await pendenciasFluxoMes(txs,lojaId,mes);
+      if(pendenciasFluxo.length) fail('fluxo_cartao','Valores ainda a classificar ou detalhar',pendenciasFluxo.length+' pendência(s). O DRE é provisório até a conciliação.');
       if(!sessao) fail('sessao','Sessão oficial do DRE','Nenhuma sessão salva para '+mes);
       if(sessoes.length>1){
         const assinaturas=new Set(sessoes.map(s=>[
@@ -2266,7 +2282,8 @@ module.exports = function (pool, app) {
         }
       }
       if(!dados) return res.status(404).json({ok:false,erro:'Nenhuma sessão encontrada para este mês'});
-      const txs=extrairTransacoes(dados).filter(t=>!t?.ignorar && !CATS_NEUTRAS_RELATORIO.has(String(t?.categoria||'')));
+      const fluxo=DREFluxo.resolver(extrairTransacoes(dados),'comp');
+      const txs=fluxo.linhas.filter(t=>!CATS_NEUTRAS_RELATORIO.has(String(t?.categoria||'')));
       const estrutura=buildDRE(txs);
       estrutura.totalReceitas=Number(oficial?.receitas||0);
       estrutura.totalDespesas=Number(oficial?.despesas||0);
@@ -2276,7 +2293,7 @@ module.exports = function (pool, app) {
       estrutura.lucroOperacional=Number(oficial?.lucroOp||0);
       estrutura.margemBruta=estrutura.totalReceitas>0?((estrutura.resultado/estrutura.totalReceitas)*100).toFixed(2):'0.00';
 
-      res.json({ok:true,mes,fonte,modo_resultado:'competencia',sessao_id:sessaoId,atualizado_em:atualizadoEm,data:estrutura});
+      res.json({ok:true,mes,fonte,modo_resultado:'competencia',sessao_id:sessaoId,atualizado_em:atualizadoEm,provisorio:fonte!=='FECHAMENTO'&&fluxo.pendencias.length>0,pendencias:fluxo.pendencias,data:estrutura});
     }catch(e){res.status(500).json({ok:false,erro:e.message});}
   });
 
@@ -2375,7 +2392,7 @@ module.exports = function (pool, app) {
         SELECT
           cf.id, cf.cartao, cf.bandeira, cf.competencia,
           TO_CHAR(cf.vencimento, 'YYYY-MM-DD')             AS vencimento,
-          cf.valor_total, cf.qtd_itens, cf.status, cf.arquivo_nome,
+          cf.valor_total, cf.qtd_itens, cf.status, cf.arquivo_nome, cf.fatura_id_ref,
           cf.possivel_duplicidade, cf.situacao, cf.importado_em,
           TO_CHAR(cf.importado_em, 'YYYY-MM-DD HH24:MI')   AS importado_fmt,
           TO_CHAR(cf.data_pagamento, 'YYYY-MM-DD')          AS data_pagamento,
@@ -2501,7 +2518,7 @@ module.exports = function (pool, app) {
     try {
       let atualizados = 0;
       for (const it of itens) {
-        if (!it.hash_item || !it.categoria) continue;
+        if (!it.hash_item || it.categoria===undefined) continue;
         // Fix 6.7-J: aceitar fatura_id direta (mais preciso que busca por faturaCC)
         let faturaId = it.fatura_id ? parseInt(it.fatura_id) : null;
         if (it.faturaCC && !faturaId) {
@@ -2522,13 +2539,14 @@ module.exports = function (pool, app) {
         if (!faturaId) continue;
         const lojaId=Number(req.user?.lojaId);
         const itemQ=await pool.query(`
-          SELECT cfi.id,cfi.descricao
+          SELECT cfi.id,cfi.descricao,cf.competencia
           FROM cartao_fatura_itens cfi
           JOIN cartao_faturas cf ON cf.id=cfi.fatura_id
           WHERE cfi.fatura_id=$1 AND cfi.hash_item=$2 AND COALESCE(cfi.removido,false)=false
             AND cfi.loja_id=$3 AND cf.loja_id=$3
           LIMIT 1
         `,[faturaId,it.hash_item,lojaId]);
+        if(itemQ.rows[0]&&await bloquearSeFechado(itemQ.rows[0].competencia,lojaId))return res.status(423).json({ok:false,erro:'Reabra o mês da fatura antes de reclassificar.'});
         const descricaoItem=itemQ.rows[0]?.descricao||'';
         const chaveNorm=_normalizarDescricaoCartao(descricaoItem);
         // Atualizar somente o item da loja atual.
@@ -2538,7 +2556,7 @@ module.exports = function (pool, app) {
           [it.categoria, faturaId, it.hash_item, chaveNorm||null, lojaId]
         );
         atualizados += upd.rowCount;
-        if(upd.rowCount && descricaoItem){
+        if(upd.rowCount && descricaoItem && it.categoria){
           await _aprenderRegraCartao(lojaId,descricaoItem,it.categoria);
         }
         // Recalcular status da fatura após atualizar categoria
@@ -2568,30 +2586,34 @@ module.exports = function (pool, app) {
             arquivo_nome, hash_fatura, fatura_id_ref, itens, sessao_id,
             reprocessar, fatura_existente_id } = req.body;
 
-    if (!cartao || !competencia)
+    if (!cartao || !/^(0[1-9]|1[0-2])\/\d{4}$/.test(String(competencia)) || !Array.isArray(itens) || !itens.length || itens.length>500 || itens.some(it=>!Number.isFinite(Number(it.valor))))
       return res.status(400).json({ ok: false, erro: 'cartao e competencia são obrigatórios' });
 
+    let client;
     try {
       const uid  = req.user?.id || null;
       const lojaId = Number(req.user?.lojaId);
       const agora = new Date().toISOString();
+      const mesesImportados=new Set([competencia,...itens.map(it=>it.transacao?.mes).filter(Boolean)]);
+      for(const m of mesesImportados)if(await bloquearSeFechado(m,lojaId))return res.status(423).json({ok:false,erro:'Reabra o mês '+m+' antes de importar a fatura.'});
       await _backfillRegrasCartaoLoja(lojaId);
       const regrasCartao = await _regrasCartaoMap(lojaId);
+      client=await pool.connect();
+      await client.query('BEGIN');
 
       // ── REPROCESSAMENTO ────────────────────────────────────────────────────
       if (reprocessar && fatura_existente_id) {
-        const existRes = await pool.query(
-          `SELECT id, log_json, valor_total FROM cartao_faturas WHERE id = $1 AND loja_id=$2`,
+        const existRes = await client.query(
+          `SELECT id, log_json, valor_total FROM cartao_faturas WHERE id = $1 AND loja_id=$2 FOR UPDATE`,
           [fatura_existente_id,lojaId]
         );
-        if (!existRes.rows.length)
-          return res.status(404).json({ ok: false, erro: 'Fatura não encontrada' });
+        if (!existRes.rows.length) {await client.query('ROLLBACK');return res.status(404).json({ ok: false, erro: 'Fatura não encontrada' });}
 
         const faturaId   = fatura_existente_id;
         const logAtual   = existRes.rows[0].log_json || [];
 
         // Atualizar fatura (preserva status e vínculos)
-        await pool.query(`
+        await client.query(`
           UPDATE cartao_faturas SET
             valor_total   = $1,
             qtd_itens     = $2,
@@ -2611,7 +2633,7 @@ module.exports = function (pool, app) {
 
         if (itens && itens.length) {
           // Itens existentes com hash
-          const existItems = await pool.query(
+          const existItems = await client.query(
             `SELECT id, hash_item, categoria_dre FROM cartao_fatura_itens
              WHERE fatura_id = $1 AND loja_id=$2 AND COALESCE(removido,false)=false`,
             [faturaId,lojaId]
@@ -2630,17 +2652,17 @@ module.exports = function (pool, app) {
               const descricao = it.descricao || it.lancamento || '';
               const chaveNorm = _normalizarDescricaoCartao(descricao);
               const catExist = regrasCartao.get(chaveNorm) || it.categoria || null;
-              await pool.query(`
+              await client.query(`
                 INSERT INTO cartao_fatura_itens
-                  (fatura_id, data_compra, descricao, valor, categoria_dre, portador, hash_item,loja_id,descricao_norm)
-                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+                  (fatura_id, data_compra, descricao, valor, categoria_dre, portador, hash_item,loja_id,descricao_norm,dados_json)
+                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
                 ON CONFLICT (fatura_id, hash_item) WHERE hash_item IS NOT NULL DO UPDATE
                   SET removido = false,
                       descricao_norm = COALESCE(cartao_fatura_itens.descricao_norm, EXCLUDED.descricao_norm),
                       categoria_dre = COALESCE(cartao_fatura_itens.categoria_dre, EXCLUDED.categoria_dre)
               `, [faturaId, it.data || null, descricao,
                   parseFloat(it.valor || 0),
-                  catExist, it.portador || null, h, lojaId, chaveNorm||null]);
+                  catExist, it.portador || null, h, lojaId, chaveNorm||null,JSON.stringify(it.transacao||null)]);
               novos++;
             }
           }
@@ -2648,7 +2670,7 @@ module.exports = function (pool, app) {
           // Marcar removidos (itens que não vieram na nova importação)
           for (const [h, row] of existMap) {
             if (!novosHashes.has(h)) {
-              await pool.query(
+              await client.query(
                 `UPDATE cartao_fatura_itens SET removido=true WHERE id=$1 AND loja_id=$2`,
                 [row.id,lojaId]
               );
@@ -2658,13 +2680,14 @@ module.exports = function (pool, app) {
 
           // Atualizar situação se houve diferenças
           if (novos > 0 || removidos > 0) {
-            await pool.query(
+            await client.query(
               `UPDATE cartao_faturas SET situacao='COM_DIFERENCAS' WHERE id=$1 AND loja_id=$2`,
               [faturaId,lojaId]
             );
           }
         }
 
+        await client.query('COMMIT');
         return res.json({
           ok: true, id: faturaId, reprocessado: true,
           novos, mantidos, removidos,
@@ -2673,7 +2696,7 @@ module.exports = function (pool, app) {
       }
 
       // ── NOVA IMPORTAÇÃO ────────────────────────────────────────────────────
-      const { rows } = await pool.query(`
+      const { rows } = await client.query(`
         INSERT INTO cartao_faturas
           (cartao, bandeira, competencia, valor_total, qtd_itens,
            arquivo_nome, hash_fatura, fatura_id_ref, possivel_duplicidade,
@@ -2694,45 +2717,58 @@ module.exports = function (pool, app) {
           const descricao=it.descricao || it.lancamento || '';
           const chaveNorm=_normalizarDescricaoCartao(descricao);
           const catRecorrente=regrasCartao.get(chaveNorm) || it.categoria || null;
-          await pool.query(`
+          await client.query(`
             INSERT INTO cartao_fatura_itens
-              (fatura_id, data_compra, descricao, valor, categoria_dre, portador, hash_item,loja_id,descricao_norm)
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+              (fatura_id, data_compra, descricao, valor, categoria_dre, portador, hash_item,loja_id,descricao_norm,dados_json)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
             ON CONFLICT (fatura_id, hash_item) WHERE hash_item IS NOT NULL DO NOTHING
           `, [faturaDbId, it.data || null, descricao,
               parseFloat(it.valor || 0),
-              catRecorrente, it.portador || null, h, lojaId, chaveNorm||null]);
+              catRecorrente, it.portador || null, h, lojaId, chaveNorm||null,JSON.stringify(it.transacao||null)]);
         }
       }
 
-      const pendentesClassificacao=await pool.query(`
+      const pendentesClassificacao=await client.query(`
         SELECT COUNT(*)::int AS n FROM cartao_fatura_itens
         WHERE fatura_id=$1 AND loja_id=$2 AND COALESCE(removido,false)=false
           AND COALESCE(TRIM(categoria_dre),'')=''
       `,[faturaDbId,lojaId]);
       const nPend=Number(pendentesClassificacao.rows[0]?.n||0);
       if(nPend===0 && itens?.length){
-        await pool.query(`UPDATE cartao_faturas SET status='CLASSIFICADA',atualizado_em=NOW() WHERE id=$1 AND loja_id=$2`,[faturaDbId,lojaId]);
+        await client.query(`UPDATE cartao_faturas SET status='CLASSIFICADA',atualizado_em=NOW() WHERE id=$1 AND loja_id=$2`,[faturaDbId,lojaId]);
       } else if(nPend>0){
-        await pool.query(`UPDATE cartao_faturas SET status='CLASSIFICANDO',atualizado_em=NOW() WHERE id=$1 AND loja_id=$2`,[faturaDbId,lojaId]);
+        await client.query(`UPDATE cartao_faturas SET status='CLASSIFICANDO',atualizado_em=NOW() WHERE id=$1 AND loja_id=$2`,[faturaDbId,lojaId]);
       }
+      await client.query('COMMIT');
       res.json({ ok: true, id: faturaDbId, reprocessado: false, pendentes_classificacao:nPend });
     } catch(e) {
+      if(client) await client.query('ROLLBACK');
       console.error('[dre/cartao-faturas POST]', e.message);
-      res.status(500).json({ ok: false, erro: e.message });
-    }
+      res.status(e.code==='23505'?409:500).json({ ok: false, erro:e.code==='23505'?'Esta fatura já foi importada. Abra as pendências da fatura existente.':e.message });
+    } finally {if(client)client.release();}
   });
 
+
+  r.get('/cartao-faturas/lancamentos', async(req,res)=>{
+    try {
+      const lojaId=Number(req.user?.lojaId);
+      const {rows}=await pool.query(`SELECT i.*,f.fatura_id_ref,f.bandeira,f.competencia,f.arquivo_nome
+        FROM cartao_fatura_itens i JOIN cartao_faturas f ON f.id=i.fatura_id
+        WHERE i.loja_id=$1 AND f.loja_id=$1 AND COALESCE(i.removido,false)=false
+        ORDER BY f.importado_em,i.id`,[lojaId]);
+      res.json({ok:true,data:rows});
+    }catch(e){res.status(500).json({ok:false,erro:e.message});}
+  });
 
   // GET /api/dre/cartao-faturas/:id/itens — itens de uma fatura específica
   r.get('/cartao-faturas/:id/itens', autenticar(), async (req, res) => {
     try {
       const lojaId=Number(req.user?.lojaId);
       const { rows } = await pool.query(`
-        SELECT cfi.id, cfi.data_compra, cfi.descricao, cfi.valor, cfi.categoria_dre, cfi.portador
+        SELECT cfi.id, cfi.data_compra, cfi.descricao, cfi.valor, cfi.categoria_dre, cfi.portador, cfi.hash_item, cfi.removido, cfi.dados_json, cf.fatura_id_ref, cf.competencia
         FROM cartao_fatura_itens cfi
         JOIN cartao_faturas cf ON cf.id=cfi.fatura_id
-        WHERE cfi.fatura_id = $1 AND cfi.loja_id=$2 AND cf.loja_id=$2
+        WHERE cfi.fatura_id = $1 AND cfi.loja_id=$2 AND cf.loja_id=$2 AND COALESCE(cfi.removido,false)=false
         ORDER BY cfi.data_compra, cfi.id
       `, [req.params.id,lojaId]);
       res.json({ ok: true, data: rows });
