@@ -372,6 +372,10 @@ module.exports = function (pool, app) {
       await seedFornecedores(pool);
     }
 
+    // O CNPJ da própria loja não é fornecedor. Movimentos com este documento
+    // são tratados como transferência/movimentação própria.
+    await pool.query(`DELETE FROM fornecedores_lookup WHERE cnpj_num='46237080000102'`).catch(()=>{});
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS dre_sessoes (
         id            SERIAL PRIMARY KEY,
@@ -1296,10 +1300,11 @@ module.exports = function (pool, app) {
     try {
       const raw = decodeURIComponent(req.params.id);
       const isNum = /^\d+$/.test(raw);
+      const lojaId=Number(req.user?.lojaId);
       const query = isNum
-        ? `SELECT * FROM dre_sessoes WHERE id = $1`
-        : `SELECT * FROM dre_sessoes WHERE mes_ref = $1 ORDER BY atualizado_em DESC LIMIT 1`;
-      const { rows } = await pool.query(query, [isNum ? parseInt(raw) : raw]);
+        ? `SELECT * FROM dre_sessoes WHERE id = $1 AND loja_id=$2`
+        : `SELECT * FROM dre_sessoes WHERE mes_ref = $1 AND loja_id=$2 ORDER BY atualizado_em DESC LIMIT 1`;
+      const { rows } = await pool.query(query, [isNum ? parseInt(raw) : raw, lojaId]);
       if (!rows.length) return res.status(404).json({ ok: false, erro: 'Sessão não encontrada' });
       res.json({ ok: true, data: rows[0] });
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
