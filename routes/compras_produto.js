@@ -76,22 +76,36 @@ module.exports = function(pool, app) {
           loja_id            INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id)
         )
       `);
-      // Compatibilidade com bases antigas: identificadores de compras devem ser TEXT.
-      // TYPE ... USING ::text preserva integralmente os valores existentes.
-      for (const col of ['produto_codigo','fornecedor_codigo','numero_nfe','serie_nfe','cod_item_nfe','cfop']) {
+      // Compatibilidade com bases antigas: normaliza toda a estrutura da compra
+      // sem apagar dados. Identificadores/descritivos viram TEXT e valores viram NUMERIC.
+      const colunasTexto = [
+        'produto_codigo','produto_nome','grupo','subgrupo','fornecedor_nome','fornecedor_cnpj',
+        'fornecedor_codigo','numero_nfe','serie_nfe','cod_item_nfe','cfop','unidade',
+        'unidade_compra','origem','arquivo_importado'
+      ];
+      for (const col of colunasTexto) {
         await c.query(`ALTER TABLE compras_produto ALTER COLUMN ${col} TYPE TEXT USING ${col}::text`).catch(e =>
           console.warn('[compras] migrate '+col+' -> TEXT:', e.message)
         );
       }
+      const colunasNumericas = [
+        ['quantidade','NUMERIC(12,4)'],['valor_unitario','NUMERIC(12,4)'],
+        ['quantidade_compra','NUMERIC(12,4)'],['valor_unitario_compra','NUMERIC(12,4)'],
+        ['valor_total','NUMERIC(14,2)'],['valor_total_liquido','NUMERIC(14,2)'],['icmsst','NUMERIC(12,2)']
+      ];
+      for (const [col,tipo] of colunasNumericas) {
+        await c.query(`ALTER TABLE compras_produto ALTER COLUMN ${col} TYPE ${tipo} USING ${col}::numeric`).catch(e =>
+          console.warn('[compras] migrate '+col+' -> '+tipo+':', e.message)
+        );
+      }
 
       const { rows: tiposCompra } = await c.query(`
-        SELECT column_name,data_type
+        SELECT column_name,data_type,numeric_precision,numeric_scale
         FROM information_schema.columns
         WHERE table_schema='public' AND table_name='compras_produto'
-          AND column_name IN ('produto_codigo','fornecedor_codigo','numero_nfe','serie_nfe','cod_item_nfe','cfop','id_entrada_pdv')
         ORDER BY ordinal_position
       `).catch(()=>({rows:[]}));
-      console.log('[compras] tipos compras_produto:', JSON.stringify(tiposCompra));
+      console.log('[compras] schema compras_produto:', JSON.stringify(tiposCompra));
 
       // Preserva a unidade comercial da compra (ex.: CX) separada da unidade-base
       // usada no estoque/análise (ex.: KG).
