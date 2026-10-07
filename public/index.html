@@ -968,7 +968,8 @@ function renderLojaAtiva(){
   const sel=$('ph-store');
   if(!sel) return;
   const lojas=Array.isArray(usuario?.lojas)?usuario.lojas:[];
-  if(lojas.length<2){sel.style.display='none';return;}
+  if(!lojas.length){sel.style.display='none';return;}
+  sel.title=lojas.length===1?'Loja ativa. Outras unidades aparecem após ativação e vínculo do usuário.':'Trocar loja ativa';
   sel.innerHTML=lojas.map(l=>`<option value="${l.id}" ${Number(l.id)===Number(usuario?.loja?.id)?'selected':''}>${String(l.nome||'Loja').replace(/</g,'&lt;')}</option>`).join('');
   sel.style.display='block';
 }

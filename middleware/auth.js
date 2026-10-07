@@ -12,10 +12,13 @@
 const jwt = require('jsonwebtoken');
 const { executarNaLoja } = require('../lib/tenant-context');
 
+let poolAutenticacao=null;
+function configurarPool(pool){poolAutenticacao=pool;}
+
 const PERFIS_ORDEM = ['contabil', 'caixa', 'estoque', 'financeiro', 'gestor', 'admin'];
 
 function autenticar(perfisPermitidos = null) {
-  return (req, res, next) => {
+  return async (req, res, next) => {
     const header = req.headers['authorization'] || '';
     const token  = header.startsWith('Bearer ') ? header.slice(7) : null;
 
@@ -30,7 +33,7 @@ function autenticar(perfisPermitidos = null) {
       const msg = e.name === 'TokenExpiredError' ? 'Token expirado' : 'Token inválido';
       return res.status(401).json({ ok: false, erro: msg });
     }
-    if (!payload.lojaId) {
+    if (!Number.isSafeInteger(Number(payload.lojaId)) || Number(payload.lojaId)<=0) {
       return res.status(401).json({ ok: false, erro: 'Sessão anterior à implantação multi-loja. Renove o acesso.' });
     }
 
@@ -48,21 +51,27 @@ function autenticar(perfisPermitidos = null) {
     };
     req.usuario = req.user; // alias — algumas rotas usam req.usuario
 
-    // Verifica perfil se exigido
-    if (perfisPermitidos) {
-      const permitidos = Array.isArray(perfisPermitidos)
-        ? perfisPermitidos
-        : [perfisPermitidos];
-
-      if (!permitidos.includes(req.user.perfil)) {
-        return res.status(403).json({
-          ok: false,
-          erro: `Acesso negado. Perfil necessário: ${permitidos.join(' ou ')}`,
-        });
-      }
-    }
-
-    executarNaLoja(req.user.lojaId, next);
+    return executarNaLoja(req.user.lojaId,async()=>{
+      if(!poolAutenticacao)return res.status(503).json({ok:false,erro:'Autenticação inicializando. Tente novamente.'});
+      try{
+        const {rows}=await poolAutenticacao.query(`SELECT ul.perfil,ul.permissoes
+          FROM usuario_lojas ul JOIN usuarios u ON u.id=ul.usuario_id AND u.ativo=true
+          JOIN lojas l ON l.id=ul.loja_id AND l.ativa=true AND l.pronta_operacao=true
+          JOIN empresas e ON e.id=l.empresa_id AND e.ativa=true
+          WHERE ul.usuario_id=$1 AND ul.loja_id=$2 AND ul.ativo=true
+            AND ($3::bigint IS NULL OR ul.id=$3)
+            AND ($4::bigint IS NULL OR EXISTS(SELECT 1 FROM login_sessoes s
+              WHERE s.id=$4 AND s.usuario_id=u.id AND s.loja_id=l.id AND s.encerrado_em IS NULL))`,
+          [req.user.id,req.user.lojaId,req.user.vinculoLojaId,req.user.sessaoId]);
+        if(!rows.length)return res.status(401).json({ok:false,erro:'Acesso à loja ou sessão encerrado. Entre novamente.'});
+        req.user.perfil=rows[0].perfil;req.user.permissoes=rows[0].permissoes||{};
+        if(perfisPermitidos){
+          const permitidos=Array.isArray(perfisPermitidos)?perfisPermitidos:[perfisPermitidos];
+          if(!permitidos.includes(req.user.perfil))return res.status(403).json({ok:false,erro:'Acesso negado. Perfil necessário: '+permitidos.join(' ou ')});
+        }
+        return next();
+      }catch(e){return res.status(503).json({ok:false,erro:'Não foi possível validar o acesso à loja. Tente novamente.'});}
+    });
   };
 }
 
@@ -87,3 +96,5 @@ function requireNivel(nivelMinimo) {
 
 module.exports = autenticar;
 module.exports.requireNivel = requireNivel;
+
+module.exports.configurarPool=configurarPool;
