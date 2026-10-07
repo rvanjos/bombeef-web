@@ -1212,7 +1212,7 @@ function aplicarRegrasRecorrentesCartao(lancs) {
     if(String(t.fonte||'').toUpperCase()!=='CC') continue;
     const chave=normalizarDescricaoCartao(t.razaoSocial||t.descricao||t.lancamento||'');
     const cat=_cartaoRegras.get(chave);
-    if(cat){
+    if(cat && !String(t.categoria||'').trim()){
       t.categoria=cat;
       t.classificacaoRecorrente=true;
       aplicadas++;
@@ -1479,7 +1479,15 @@ async function inicializar() {
   await carregarSessao();
   // Atualiza enriquecimentos quando estiverem prontos, sem segurar a carga principal.
   Promise.allSettled([pCategorias, pFaturamento]).then(() => {
-    try { updMesFiltro(); render(); updStats(); renderDRE(); } catch(_) {}
+    try {
+      const aplicadas=aplicarRegrasRecorrentesCartao(TXS);
+      if(aplicadas){
+        const meses=[...new Set(TXS.filter(t=>t.classificacaoRecorrente).map(t=>t.mes||mesRef).filter(Boolean))];
+        meses.forEach(m=>salvarMesDebounce(m));
+        toast('🧠 '+aplicadas+' compra(s) de cartão recuperada(s) pela recorrência');
+      }
+      updMesFiltro(); render(); updStats(); renderDRE();
+    } catch(_) {}
   });
   await sincronizarBoletosAutomatico();
   _inicializado = true; // só marca após carregar com sucesso
