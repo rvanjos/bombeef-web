@@ -15,18 +15,37 @@
     return;
   }
 
+  // Iframes compartilham sessionStorage com o portal. Cada módulo mantém a
+  // sessão com que abriu para não apagar/trocar o acesso das outras telas.
+  let _frameToken = _emIframe ? (sessionStorage.getItem('bb_token') || '') : '';
+  let _lojaAlterada = false;
+  function lojaDoToken(tk) {
+    try { return JSON.parse(atob(tk.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))).lojaId; }
+    catch (_) { return null; }
+  }
   function getToken() {
-    return sessionStorage.getItem('bb_token') || localStorage.getItem('bb_token') || '';
+    return _emIframe ? _frameToken : (sessionStorage.getItem('bb_token') || localStorage.getItem('bb_token') || '');
   }
   function setToken(tk) {
-    if (tk) sessionStorage.setItem('bb_token', tk);
+    if (!tk) return;
+    if (_emIframe) {
+      if (_frameToken && lojaDoToken(_frameToken) !== lojaDoToken(tk)) {
+        _lojaAlterada = true;
+        return;
+      }
+      _frameToken = tk;
+    } else sessionStorage.setItem('bb_token', tk);
+  }
+  function acessoDisponivel() {
+    if (_lojaAlterada) return false;
+    if (getToken()) return true;
+    if (_emIframe) { try { w.parent.postMessage({ type:'bb_request_auth' }, w.location.origin); } catch (_) {} }
+    return false;
   }
 
   let _logoutEmAndamento = false;
   function handle401() {
     if (_logoutEmAndamento) return;
-    sessionStorage.removeItem('bb_token');
-    localStorage.removeItem('bb_token');
     if (_emIframe) {
       // Um módulo pode carregar com token antigo antes de o portal repassar o
       // token atual. Isso não deve encerrar a sessão inteira do usuário.
@@ -34,6 +53,8 @@
       try { w.parent.postMessage({ type: 'bb_request_auth' }, '*'); } catch (_) {}
       return;
     }
+    sessionStorage.removeItem('bb_token');
+    localStorage.removeItem('bb_token');
     _logoutEmAndamento = true;
     w.location.href = '/';
   }
@@ -43,16 +64,19 @@
   async function tryRefresh() {
     if (!_refreshing) {
       _refreshing = true;
+      const tk = getToken();
       _refreshProm = fetch('/auth/refresh', {
         method: 'POST',
-        headers: { 'Authorization': 'Bearer ' + getToken() }
-      }).then(r => r.json()).catch(() => ({ ok: false }))
+        headers: { 'Authorization': 'Bearer ' + tk }
+      }).then(r => r.json()).then(r => getToken() === tk ? r : ({ok:false,alterado:true})).catch(() => ({ ok: false }))
         .finally(() => { _refreshing = false; });
     }
     return _refreshProm;
   }
 
   async function apiFetch(path, opts = {}) {
+    if (!acessoDisponivel()) return {ok:false,erro:'Aguardando acesso à loja'};
+    const tkInicial = getToken();
     const makeHeaders = () => ({
       'Content-Type': 'application/json',
       'Authorization': 'Bearer ' + getToken(),
@@ -64,9 +88,11 @@
     } catch (_) {
       return { ok: false, erro: 'Sem conexão com o servidor' };
     }
+    if (getToken() !== tkInicial || _lojaAlterada) return {ok:false,erro:'Acesso atualizado. Recarregue o módulo'};
     if (res.status === 401) {
       try {
         const ref = await tryRefresh();
+        if (ref?.alterado || getToken() !== tkInicial || _lojaAlterada) return {ok:false,erro:'Acesso atualizado. Recarregue o módulo'};
         if (ref && ref.ok && ref.token) {
           setToken(ref.token);
           res = await fetch(path, { cache: 'no-store', ...opts, headers: makeHeaders() });
@@ -84,6 +110,8 @@
   }
 
   async function apiUpload(path, formData, method = 'POST') {
+    if (!acessoDisponivel()) return {ok:false,erro:'Aguardando acesso à loja'};
+    const tkInicial = getToken();
     let res;
     try {
       res = await fetch(path, {
@@ -92,9 +120,11 @@
         body: formData,
       });
     } catch (_) { return { ok: false, erro: 'Sem conexão com o servidor' }; }
+    if (getToken() !== tkInicial || _lojaAlterada) return {ok:false,erro:'Acesso atualizado. Recarregue o módulo'};
     if (res.status === 401) {
       try {
         const ref = await tryRefresh();
+        if (ref?.alterado || getToken() !== tkInicial || _lojaAlterada) return {ok:false,erro:'Acesso atualizado. Recarregue o módulo'};
         if (ref && ref.ok && ref.token) {
           setToken(ref.token);
           res = await fetch(path, {
@@ -277,8 +307,10 @@
   }
 
   window.addEventListener('message', e => {
+    if (e.origin !== w.location.origin || (_emIframe && e.source !== w.parent)) return;
     if (e.data?.type === 'bb_token' && e.data.token) {
       setToken(e.data.token);
+      if (_lojaAlterada) return;
       w.__bbUsuario = e.data.usuario || _usuarioDoToken();
       _dispararReady(w.__bbUsuario);
     }

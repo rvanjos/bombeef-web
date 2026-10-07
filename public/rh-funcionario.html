@@ -266,6 +266,7 @@ header{background:var(--red);color:#fff;padding:14px 16px 12px;display:flex;alig
 
 <div id="toast" class="toast"></div>
 
+<script src="/js/api.js"></script>
 <script>
 const BASE  = window.location.origin;
 const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
@@ -276,22 +277,17 @@ let _lancs=[];   // lancamentos do mes — alimentam as sugestoes de valor
 let _escalaMes={ano:new Date().getFullYear(),mes:new Date().getMonth()};
 let _escalasConfig=[];
 
-function getToken(){ return _token||sessionStorage.getItem('bb_token')||localStorage.getItem('bb_token')||''; }
+function getToken(){ return BB.api.token(); }
 
 window.addEventListener('message', e => {
+  if(e.origin!==location.origin || e.source!==window.parent)return;
   if(e.data?.type==='bb_token' && e.data.token){
-    _token=e.data.token; sessionStorage.setItem('bb_token',e.data.token);
+    BB.api.setToken(e.data.token);
     if(!_inited){ _inited=true; init(); }
   }
 });
 
-async function req(method,path,body){
-  try{
-    const r=await fetch(BASE+path,{method,headers:{'Content-Type':'application/json','Authorization':'Bearer '+getToken()},body:body?JSON.stringify(body):undefined});
-    if(r.status===401){ sessionStorage.removeItem('bb_token'); try{window.parent.postMessage({type:'bb_logout'},'*')}catch(_){} return{ok:false,erro:'Sessão expirada'}; }
-    return r.json().catch(()=>({ok:false,erro:'Erro de comunicação'}));
-  }catch(e){ return{ok:false,erro:'Sem conexão'}; }
-}
+async function req(method,path,body){ try { return await BB.api[method.toLowerCase()](path,body); } catch(e) { return {ok:false,erro:e.message}; } }
 const get =(p)=>req('GET',p);
 const post=(p,b)=>req('POST',p,b);
 

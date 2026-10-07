@@ -6,7 +6,7 @@ test('PostgreSQL: migração legada preserva histórico, aceita CNPJ em duas loj
  const pool={query:async(sql,p)=>{const r=await db.query(sql,p);return {...r,rowCount:r.affectedRows??r.rows.length};},connect:async()=>({...pool,release(){}})};
  const {garantirEstruturaMultiloja}=require('../lib/multiloja');const {auditarSegurancaMultiloja}=require('../lib/multiloja-security');
  try{
-  await db.exec(`CREATE TABLE usuarios(id SERIAL PRIMARY KEY,nome text,email text,senha_hash text,perfil text,ativo boolean DEFAULT true,permissoes jsonb,ultimo_login timestamptz,atualizado_em timestamptz);
+  await db.exec(`CREATE TABLE usuarios(id SERIAL PRIMARY KEY,nome text,email text,senha_hash text,perfil text,ativo boolean DEFAULT true,permissoes jsonb,ultimo_login timestamptz,atualizado_em timestamptz,criado_em timestamptz DEFAULT now());
    INSERT INTO usuarios(nome,perfil) VALUES('Administrador','admin');
    CREATE TABLE login_sessoes(id bigserial PRIMARY KEY,usuario_id int REFERENCES usuarios(id),iniciado_em timestamptz DEFAULT now(),ultima_atividade timestamptz DEFAULT now(),encerrado_em timestamptz,encerramento text,ip text,user_agent text);
    CREATE TABLE fornecedores(cnpj_fornecedor text PRIMARY KEY,razao_social text);
@@ -48,7 +48,14 @@ test('PostgreSQL: migração legada preserva histórico, aceita CNPJ em duas loj
   try{
     const url='http://127.0.0.1:'+server.address().port;
     let resposta=await fetch(url+'/auth/multiloja/lojas/2/ativar',{method:'POST',headers:{authorization:'Bearer '+token}});assert.equal(resposta.status,200,await resposta.text());
-    await db.exec("UPDATE lojas SET pronta_operacao=false WHERE id=2;UPDATE usuarios SET ativo=false WHERE id=2");
+    await db.exec("INSERT INTO usuario_lojas(usuario_id,loja_id,perfil) VALUES(1,2,'admin')");
+    resposta=await fetch(url+'/auth/loja-ativa',{method:'POST',headers:{authorization:'Bearer '+token,'content-type':'application/json'},body:JSON.stringify({loja_id:2})});
+    assert.equal(resposta.status,200);const troca=await resposta.json(),payload=jwt.verify(troca.token,process.env.JWT_SECRET);
+    assert.equal(payload.lojaId,2);assert.notEqual(String(payload.sessaoId),String(sessao));
+    resposta=await fetch(url+'/auth/me',{headers:{authorization:'Bearer '+troca.token}});assert.equal(resposta.status,200);assert.equal((await resposta.json()).data.loja.id,2);
+    resposta=await fetch(url+'/auth/me',{headers:{authorization:'Bearer '+token}});assert.equal((await resposta.json()).data.loja.id,1);
+    resposta=await fetch(url+'/auth/refresh',{method:'POST',headers:{authorization:'Bearer '+troca.token}});assert.equal(resposta.status,200);assert.equal(jwt.verify((await resposta.json()).token,process.env.JWT_SECRET).lojaId,2);
+    await db.exec("UPDATE lojas SET pronta_operacao=false WHERE id=2;UPDATE usuarios SET ativo=false WHERE id=2;UPDATE usuario_lojas SET ativo=false WHERE usuario_id=1 AND loja_id=2");
     resposta=await fetch(url+'/auth/multiloja/lojas/2/ativar',{method:'POST',headers:{authorization:'Bearer '+token}});assert.equal(resposta.status,400,await resposta.text());
     assert.equal((await db.query('SELECT pronta_operacao FROM lojas WHERE id=2')).rows[0].pronta_operacao,false);
   }finally{await new Promise(r=>server.close(r));}
