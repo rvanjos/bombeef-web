@@ -123,6 +123,10 @@ module.exports = function (pool) {
         }
       }
 
+      if (req.user?.perfil === 'admin') {
+        console.log('[dashboard] aprovacoes_ponto_pendentes=', Number(pontoPendRow.total||0));
+      }
+
       const faturamentoMeta = parseFloat(metaRow.faturamento_meta||0);
       const fatRealModulo = parseFloat(fatRow.total||0);
       const faturamentoReal = fatRealModulo > 0 ? fatRealModulo : dreReceitas;
