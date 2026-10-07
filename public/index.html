@@ -880,10 +880,12 @@ function toast(msg, ms=2500) {
 function token() { return sessionStorage.getItem('bb_token'); }
 
 // Controle de renovação de token (evita loop)
+let _trocandoLoja = false;
 let _refreshEmAndamento = false;
 let _refreshPromise     = null;
 
 async function apiFetch(path, opts={}) {
+  const tkInicial = token();
   try {
     const res = await fetch(API + path, {
       ...opts,
@@ -893,6 +895,7 @@ async function apiFetch(path, opts={}) {
         ...(opts.headers||{})
       }
     });
+    if (tkInicial !== token()) return {ok:false,erro:'Acesso atualizado'};
     if (res.status === 401) {
       // Evita múltiplos refreshes simultâneos — reutiliza a promise em andamento
       if (!_refreshEmAndamento) {
@@ -905,6 +908,7 @@ async function apiFetch(path, opts={}) {
       }
       try {
         const r = await _refreshPromise;
+        if (tkInicial !== token() || _trocandoLoja) return {ok:false,erro:'Troca de loja em andamento'};
         if (r && r.ok && r.token) {
           sessionStorage.setItem('bb_token', r.token);
           broadcastToken();
@@ -957,6 +961,7 @@ async function fazerLogin() {
 
 // broadcastToken global — envia token para todos os iframes
 function broadcastToken() {
+  if (_trocandoLoja) return;
   const tk = token();
   if (!tk || !usuario) return;
   document.querySelectorAll('iframe').forEach(iframe => {
@@ -975,14 +980,17 @@ function renderLojaAtiva(){
 }
 
 async function trocarLojaAtiva(lojaId){
+  if (_trocandoLoja) return;
+  _trocandoLoja=true;
   const sel=$('ph-store'); sel.disabled=true;
   try{
     const d=await apiFetch('/auth/loja-ativa',{method:'POST',body:JSON.stringify({loja_id:Number(lojaId)})});
     if(!d.ok) throw new Error(d.erro||'Não foi possível trocar de loja');
     sessionStorage.setItem('bb_token',d.token); usuario=d.usuario;
-    const me=await apiFetch('/auth/me'); if(me.ok) usuario=me.data;
-    broadcastToken(); location.reload();
-  }catch(e){alert(e.message);renderLojaAtiva();sel.disabled=false;}
+    // Não entregar a nova sessão às telas que ainda contêm dados da loja antiga.
+    // A nova página carrega todos os módulos com a unidade selecionada.
+    location.reload();
+  }catch(e){_trocandoLoja=false;alert(e.message);renderLojaAtiva();sel.disabled=false;}
 }
 
 function entrarNoPortal() {
@@ -1053,7 +1061,7 @@ async function enviarHeartbeatSessao() {
       body:'{}'
     });
     const data = await res.json().catch(() => null);
-    if (data?.token) {
+    if (data?.token && token()===tk && !_trocandoLoja) {
       sessionStorage.setItem('bb_token', data.token);
       broadcastToken();
     }
@@ -1291,7 +1299,7 @@ async function renovarTokenSeNecessario() {
         method: 'POST',
         headers: { 'Authorization': 'Bearer ' + tk }
       }).then(r => r.json());
-      if (r.ok && r.token) {
+      if (r.ok && r.token && token()===tk && !_trocandoLoja) {
         sessionStorage.setItem('bb_token', r.token);
         broadcastToken();
         console.log('[auth] Token renovado automaticamente');
@@ -2101,7 +2109,7 @@ window.addEventListener('DOMContentLoaded', async () => {
         method: 'POST',
         headers: { 'Authorization': 'Bearer ' + tk }
       }).then(r => r.json()).catch(() => ({ ok: false }));
-      if (r.ok && r.token) {
+      if (r.ok && r.token && token()===tk && !_trocandoLoja) {
         sessionStorage.setItem('bb_token', r.token);
         console.log('[auth] Token renovado na inicialização');
       } else if (payload.exp < agora) {
@@ -2261,6 +2269,7 @@ window.addEventListener('message', e => {
 
   // Iframe pedindo token — responde a todos os iframes imediatamente
   if (e.data.type === 'bb_request_auth') {
+    if (_trocandoLoja) return;
     const tk = token();
     if (tk && usuario) {
       document.querySelectorAll('iframe').forEach(iframe => {

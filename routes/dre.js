@@ -1673,16 +1673,16 @@ module.exports = function (pool, app) {
       if (sessao_id) {
         const sql = `UPDATE dre_sessoes SET descricao=$1, dados_json=$2, atualizado_em=NOW()
           ${resultado ? `,res_receitas=$4,res_despesas=$5,res_cmv=$6,res_lucro_bruto=$7,res_lucro_op=$8,res_final=$9` : ''}
-          ${resultado ? 'WHERE id=$3 AND loja_id=$10 RETURNING id' : 'WHERE id=$3 AND loja_id=$4 RETURNING id'}`;
+          ${resultado ? 'WHERE id=$3 AND loja_id=$10 AND mes_ref=$11 RETURNING id' : 'WHERE id=$3 AND loja_id=$4 AND mes_ref=$5 RETURNING id'}`;
         const params = resultado
-          ? [desc, dadosStr, sessao_id, res_receitas, res_despesas, res_cmv, res_lucro_bruto, res_lucro_op, res_final, lojaId]
-          : [desc, dadosStr, sessao_id, lojaId];
+          ? [desc, dadosStr, sessao_id, res_receitas, res_despesas, res_cmv, res_lucro_bruto, res_lucro_op, res_final, lojaId, mes_ref]
+          : [desc, dadosStr, sessao_id, lojaId, mes_ref];
         const upd = await pool.query(sql, params);
         if (upd.rows.length) {
           sid = upd.rows[0].id;
           console.log(`[dre/salvar] UPDATE by id: mes=${mes_ref} sid=${sid} txs=${(dados_json?.transactions||[]).length} resultado=${JSON.stringify(resultado)}`);
         } else {
-          console.warn(`[dre/salvar] sessao_id=${sessao_id} não encontrada para mes=${mes_ref}`);
+          return res.status(409).json({ok:false,codigo:'DRE_SESSAO_INCOMPATIVEL',erro:'Sessão DRE não pertence à loja e ao mês ativos. Recarregue a tela.'});
         }
       }
 
