@@ -1044,7 +1044,7 @@ document.addEventListener('click', (event) => {
   const id = btn.getAttribute('data-validade-edit');
   if (!id) { toast?.('❌ Item de validade sem identificador'); return; }
   abrirModal(id);
-});
+}, true); // Captura antes do stopPropagation da célula de ações no desktop.
 
 BB.modulo({
   nome: 'validade',
