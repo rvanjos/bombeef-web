@@ -356,6 +356,11 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
       <!-- Coluna direita: análise de custos (sempre visível, não rola) -->
       <div id="kc-detalhe" style="width:270px;flex-shrink:0;overflow-y:auto;background:#fff8f2;padding:16px 18px;">
         <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:#8B0000;margin-bottom:12px">📊 Análise de Custos</div>
+        <div style="margin-bottom:12px;padding:10px;border:1px solid #f0d5b0;border-radius:7px;background:#fff">
+          <div style="font-size:12px;font-weight:700;color:#555">Venda normal (sem desconto)</div>
+          <strong id="kc-venda-normal" style="display:block;margin-top:5px;font-family:'DM Mono',monospace;font-size:18px;color:#8B0000">—</strong>
+          <div id="kc-venda-normal-info" style="margin-top:5px;font-size:11px;color:#777">Somando os itens vendidos separadamente.</div>
+        </div>
         <div style="display:flex;flex-direction:column;gap:7px;font-size:12px">
           <div style="display:flex;justify-content:space-between;align-items:center">
             <span style="color:#555;font-weight:600">Custo Materiais</span>
@@ -1146,6 +1151,19 @@ async function buscarProdKit(i,cod){
 
 function recalcKit(){
   const _set=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
+  // Venda avulsa: usa o preço normal de cada produto, inclusive itens próximos
+  // do vencimento. O custo especial do kit não altera essa referência.
+  let vendaNormalCentavos=0, precosPendentes=0;
+  for(const item of kitItems){
+    const qtd=Number(item.quantidade ?? 1), preco=Number(item.precoVenda);
+    if(qtd===0) continue;
+    if(!Number.isFinite(qtd)||qtd<0||!Number.isFinite(preco)||preco<=0){precosPendentes++;continue;}
+    vendaNormalCentavos+=Math.round((qtd*preco+Number.EPSILON)*100);
+  }
+  _set('kc-venda-normal', kitItems.length && !precosPendentes ? fmt.brl(vendaNormalCentavos/100) : '—');
+  _set('kc-venda-normal-info', precosPendentes
+    ? `Confira o preço de venda e a quantidade de ${precosPendentes} item(ns) para calcular o total.`
+    : 'Somando as quantidades × preço normal de venda dos itens.');
   const matReal=kitItems.reduce((s,i)=>s+(parseFloat(i.quantidade||1)*parseFloat(i.precoCusto||0)),0);
   const matMargem=kitItems.reduce((s,i)=>{
     const qtd=parseFloat(i.quantidade||1);
