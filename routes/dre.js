@@ -23,6 +23,7 @@ const multer   = require('multer');
 const XLSX     = require('xlsx');
 const autenticar = require('../middleware/auth');
 const DREFluxo = require('../public/js/dre-fluxo');
+const {interpretarCaixaPdfV3}=require('../lib/cartao-caixa-pdf-v3');
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -1839,6 +1840,16 @@ module.exports = function (pool, app) {
       await pool.query(`DELETE FROM dre_sessoes WHERE id = $1`, [parseInt(req.params.id)]);
       res.json({ ok: true });
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
+  });
+
+  // Leitura sem gravação: reutiliza o parser por coordenadas do agente financeiro.
+  r.post('/cartao-pdf/preview', upload.single('arquivo'), async(req,res)=>{
+    if(!req.file)return res.status(400).json({ok:false,erro:'Arquivo não enviado'});
+    if(!/\.pdf$/i.test(req.file.originalname||''))return res.status(400).json({ok:false,erro:'Envie uma fatura PDF'});
+    try{
+      const preview=await interpretarCaixaPdfV3(req.file.buffer,String(req.body?.senha||''),req.file.originalname);
+      res.json(preview.ok?{ok:true,preview}:{ok:false,codigo:preview.codigo,erro:preview.erro});
+    }catch(e){console.error('[dre/cartao-pdf]',e.name);res.status(422).json({ok:false,erro:'Não foi possível ler a fatura PDF. Verifique o arquivo e a senha, se houver.'});}
   });
 
   // ── POST /import-extrato ───────────────────────────────────────────────────
