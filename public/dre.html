@@ -1913,6 +1913,16 @@ async function confirmarImportCC() {
   if (ext === 'pdf') {
     toast('💳 Lendo fatura PDF...');
     try {
+      const fd=new FormData();fd.append('arquivo',file);
+      const leitura=await api.upload('/api/dre/cartao-pdf/preview',fd);
+      if(leitura.ok && leitura.preview?.banco==='CAIXA'){
+        if(!leitura.preview.conferencia_ok)throw new Error('A soma dos lançamentos não confere com o total da fatura. Revise o arquivo antes de importar.');
+        const lancs=converterPreviewCaixa(leitura.preview,mesCC);
+        if(!lancs.length)throw new Error('Nenhum lançamento com valor encontrado na fatura');
+        aplicarRegrasRecorrentesCartao(lancs);
+        abrirRevisaoCC(lancs,mesCC,bandeira,file.name,document.getElementById('cc-salvar-direto')?.checked);
+        return;
+      }
       const buf = await file.arrayBuffer();
       const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
       let fullText = '';
@@ -2034,6 +2044,19 @@ async function confirmarImportCC() {
 }
 
 // ─── PARSER PDF FATURAS ───────────────────────────────────────────────────────
+function converterPreviewCaixa(preview,mesPagamento){
+  return (preview.cartoes||[]).flatMap(cartao=>(cartao.itens||[]).filter(i=>Number(i.valor)!==0).map(item=>{
+    const data=item.data_compra||preview.vencimento;
+    const mes=item.data_compra?data.slice(5,7)+'/'+data.slice(0,4):preview.competencia;
+    const parcela=item.parcela_atual&&item.parcelas_total?item.parcela_atual+'/'+item.parcelas_total:null;
+    const extra=['Cartão '+cartao.final,parcela?'Parc. '+parcela:''].filter(Boolean).join(' · ');
+    return {id:'cc_caixa_'+item.hash_item,data,mes,mesCaixa:mesPagamento,
+      lancamento:item.descricao+' ('+extra+')',razaoSocial:item.descricao,valor:-Number(item.valor),
+      portador:'Cartão '+cartao.final,parcela,fonte:'CC',bandeira:'Caixa',categoria:autoClassificar(item.descricao,''),
+      dataReferencia:!item.data_compra,cartaoItemRef:item.hash_item};
+  }));
+}
+
 function parseFaturaPDF(text, fileName) {
   const lower = text.toLowerCase();
   if (lower.includes('c6bank') || lower.includes('c6 bank') || lower.includes('c6 carbon')) {
@@ -2272,23 +2295,22 @@ function parseCCCaixaCSV(text) {
     const desc     = (parts[iDesc]    || '').trim();
     const cidade   = (parts[iCidade]  || '').trim();
     const parcela  = (parts[iParcela] || '').trim();
-    const valorStr = (parts[iValor]   || '').trim().replace(',', '.');
+    const valorStr = (parts[iValor]   || '').trim();
     const nat      = (parts[iNat]     || '').trim().toLowerCase();
 
     if (!dataStr || !valorStr) continue;
 
-    // Ignorar créditos (cashback, pagamentos)
-    if (nat === 'crédito' || nat === 'credito') continue;
-    // Ignorar anuidade = R$ 0
-    if (!parseFloat(valorStr)) continue;
+    // Pagamento anterior é transferência; estornos/créditos do ciclo abatem gastos.
+    if(/TOTAL DA FATURA ANTERIOR|OBRIGADO PELO PAGAMENTO|PAGAMENTO (?:RECEBIDO|DA FATURA)/i.test(desc)||/^pagamento$/i.test(tipo))continue;
+    const credito=/^(?:crédito|credito|c)$/i.test(nat);
+    const valorNum=Number(valorStr.includes(',')?valorStr.replace(/\./g,'').replace(',','.'):valorStr);
+    if(!Number.isFinite(valorNum)||valorNum===0)continue;
 
     // Converter data: dd/mm/yyyy → yyyy-mm-dd
     const [dd, mm, yyyy] = dataStr.split('/');
     if (!dd || !mm || !yyyy) continue;
     const dataISO = `${yyyy}-${mm}-${dd}`;
     const mesLanc = `${mm}/${yyyy}`;
-
-    const valorNum = parseFloat(valorStr) || 0;
 
     // Nome descritivo
     const nomeDesc = [desc, cidade].filter(Boolean).join(' — ');
@@ -2307,7 +2329,7 @@ function parseCCCaixaCSV(text) {
       mes:        mesLanc,          // mês da data real da compra (competência)
       lancamento: lancLabel,
       razaoSocial:desc,
-      valor:      -Math.abs(valorNum),
+      valor:      credito?Math.abs(valorNum):-Math.abs(valorNum),
       portador:   cartao ? `Cartão ${cartao}` : '',
       parcela:    parcela || null,
       fonte:      'CC',
