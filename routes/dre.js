@@ -1671,7 +1671,7 @@ module.exports = function (pool, app) {
 
       // 1) Tenta atualizar pelo sessao_id
       if (sessao_id) {
-        const sql = `UPDATE dre_sessoes SET descricao=$1, dados_json=$2, atualizado_em=NOW()
+        const sql = `UPDATE dre_sessoes SET descricao=$1, dados_json=($2::jsonb || jsonb_build_object('estoquesMes',COALESCE($2::jsonb->'estoquesMes',dre_sessoes.dados_json->'estoquesMes','{}'::jsonb))), atualizado_em=NOW()
           ${resultado ? `,res_receitas=$4,res_despesas=$5,res_cmv=$6,res_lucro_bruto=$7,res_lucro_op=$8,res_final=$9` : ''}
           ${resultado ? 'WHERE id=$3 AND loja_id=$10 AND mes_ref=$11 RETURNING id' : 'WHERE id=$3 AND loja_id=$4 AND mes_ref=$5 RETURNING id'}`;
         const params = resultado
@@ -1694,9 +1694,9 @@ module.exports = function (pool, app) {
         );
         if (existing.rows.length) {
           const sql = resultado
-            ? `UPDATE dre_sessoes SET descricao=$1,dados_json=$2,usuario_id=COALESCE($3,usuario_id),atualizado_em=NOW(),
+            ? `UPDATE dre_sessoes SET descricao=$1,dados_json=($2::jsonb || jsonb_build_object('estoquesMes',COALESCE($2::jsonb->'estoquesMes',dre_sessoes.dados_json->'estoquesMes','{}'::jsonb))),usuario_id=COALESCE($3,usuario_id),atualizado_em=NOW(),
                res_receitas=$5,res_despesas=$6,res_cmv=$7,res_lucro_bruto=$8,res_lucro_op=$9,res_final=$10 WHERE id=$4 AND loja_id=$11`
-            : `UPDATE dre_sessoes SET descricao=$1,dados_json=$2,usuario_id=COALESCE($3,usuario_id),atualizado_em=NOW() WHERE id=$4 AND loja_id=$5`;
+            : `UPDATE dre_sessoes SET descricao=$1,dados_json=($2::jsonb || jsonb_build_object('estoquesMes',COALESCE($2::jsonb->'estoquesMes',dre_sessoes.dados_json->'estoquesMes','{}'::jsonb))),usuario_id=COALESCE($3,usuario_id),atualizado_em=NOW() WHERE id=$4 AND loja_id=$5`;
           const params = resultado
             ? [desc, dadosStr, uid, existing.rows[0].id, res_receitas, res_despesas, res_cmv, res_lucro_bruto, res_lucro_op, res_final, lojaId]
             : [desc, dadosStr, uid, existing.rows[0].id, lojaId];

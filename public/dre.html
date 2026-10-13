@@ -8,7 +8,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="/js/api.js"></script>
-<script src="/js/dre-conferencia.js?v=7"></script>
+<script src="/js/dre-conferencia.js?v=8"></script>
 <script src="/js/dre-fluxo.js?v=1"></script>
 <script>
   if (typeof pdfjsLib !== 'undefined') {
@@ -1081,7 +1081,16 @@ let _taxaRoyalties = 4.88; // Sprint 3.1-B: carregada do backend em carregarCate
 let _cartaoRegras = new Map(); // descrição normalizada → categoria DRE aprendida
 let _filtroRapido = 'todos'; // Sprint 3.1-F: filtro rápido ativo
 let _estoquesMes = {}; // { 'MM/YYYY': valorEstoqueFinal }
-try { _estoquesMes = JSON.parse(localStorage.getItem('bb_estoques_mes') || '{}'); window._estoquesMes = _estoquesMes; } catch(_) {}
+function chaveEstoqueLocal(){
+  try { const tk=BB.api.token();const p=JSON.parse(atob(tk.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));return Number.isSafeInteger(Number(p.lojaId))&&Number(p.lojaId)>0?'bb_estoques_mes:'+p.lojaId:null; }
+  catch(_) { return null; }
+}
+try {
+  const chave=chaveEstoqueLocal();
+  // O cache anterior pertence à unidade histórica; não o reutilizar em outra loja.
+  _estoquesMes=JSON.parse((chave && localStorage.getItem(chave)) || (chave==='bb_estoques_mes:1' && localStorage.getItem('bb_estoques_mes')) || '{}');
+  window._estoquesMes=_estoquesMes;
+} catch(_) { window._estoquesMes={}; }
 
 let _fatManualMes = {}; // { 'MM/YYYY': faturamentoManual } — meses sem XMenu
 try { _fatManualMes = JSON.parse(localStorage.getItem('bb_fat_manual_mes') || '{}'); window._fatManualMes = _fatManualMes; } catch(_) {}
@@ -1593,6 +1602,15 @@ async function carregarSessao() {
     }
     const lista = { ok:true, data:lote.data.map(s=>({id:s.id,mes_ref:s.mes_ref,atualizado_em:s.atualizado_em})) };
     const sessoes = lote.data.map(data => ({ok:true,data}));
+    // Os snapshots chegam do mais recente para o mais antigo. Estoque recente
+    // deve prevalecer; zero é um fechamento informado, não ausência de informação.
+    for(const r of [...sessoes].reverse()){
+      const est=r.data?.dados_json?.estoquesMes;
+      if(est && typeof est==='object') window._estoquesMes={...(window._estoquesMes||{}),...est};
+    }
+    _estoquesMes=window._estoquesMes||{};
+    try { const chave=chaveEstoqueLocal();if(chave)localStorage.setItem(chave,JSON.stringify(_estoquesMes)); } catch(_) {}
+
 
     // Junta todos os TXS de todos os meses — deduplicando por fitid ou hash
     TXS = []; files = []; supMem = {};
@@ -1624,13 +1642,6 @@ async function carregarSessao() {
           }
         }
         supMem = { ...supMem, ...memFiltrada };
-      }
-      // Carrega estoques finais por mês
-      if (dados.estoquesMes) {
-        window._estoquesMes = { ...(window._estoquesMes||{}), ...dados.estoquesMes };
-        _estoquesMes = window._estoquesMes;
-        // Persiste no localStorage para sobreviver a recarregamentos
-        try { localStorage.setItem('bb_estoques_mes', JSON.stringify(_estoquesMes)); } catch(_) {}
       }
       window._sessoesPorMes[r.data.mes_ref] = r.data.id;
     }
@@ -5216,12 +5227,12 @@ async function _garantirFatPorMes(forcar=false) {
 }
 function setEstoqueFinal(mesEnc, valor) {
   const mes = mesEnc.replace('_', '/');
-  const val = parseFloat(valor) || 0;
+  const val = Number(valor);
+  if(String(valor).trim()===''||!Number.isFinite(val)||val<0){toast('⚠️ Informe um estoque final válido, maior ou igual a zero');return;}
   if (!window._estoquesMes) window._estoquesMes = {};
-  if (val > 0) window._estoquesMes[mes] = val;
-  else delete window._estoquesMes[mes];
+  window._estoquesMes[mes] = Math.round((val+Number.EPSILON)*100)/100;
   _estoquesMes = window._estoquesMes;
-  try { localStorage.setItem('bb_estoques_mes', JSON.stringify(_estoquesMes)); } catch(_) {}
+  try { const chave=chaveEstoqueLocal();if(chave)localStorage.setItem(chave,JSON.stringify(_estoquesMes)); } catch(_) {}
   renderDRE();
   if (document.getElementById('m-dre')?.classList.contains('open')) renderDREFull();
   autoSv();
@@ -5515,7 +5526,8 @@ function calcularMotorDRE(mesAlvo, modoOverride) {
     const estFin = parseFloat((window._estoquesMes||{})[mesAlvo]||0);
     ajusteEstoque = estIni - estFin;
   }
-  const cmv = cmvBruto + ajusteEstoque;
+  // Compras/despesas são negativas no DRE; o ajuste de custo tem sinal oposto.
+  const cmv = cmvBruto - ajusteEstoque;
   const lucroBruto = receitas + cmv;
 
   const OPER = ['PESSOAL','VENDAS_CAT','CONSUMO','TERCEIROS','MATERIAL','OUTRAS','IMPOSTOS'];
@@ -5621,13 +5633,14 @@ function _buildDRE(el, full) {
     const isDesp=gk!=='RECEITAS';
     const stBg=gk==='RECEITAS'?'#e8f7ef':gk==='CMV'?'#fff0f0':'#f5f0eb';
     const stCol=gk==='RECEITAS'?'var(--green)':'var(--red-l)';
-    const totG=sgt(gk);
+    const subtotalMes=m=>gk==='CMV'?calcularMotorDRE(m,getModo()).cmv:sg(gk,m);
+    const totG=meses.reduce((s,m)=>s+subtotalMes(m),0);
     const gid='dreg-'+(full?'f':'s')+'-'+gk;
     return '<tr class="'+gid+'-row" style="background:'+stBg+'">'
       +'<td style="'+TDL+';'+FZL+'font-weight:700;color:'+stCol+';background:'+stBg+'">▶ SUBTOTAL '+(g?g.l:gk)+'</td>'
-      +meses.map(m=>{const v=sg(gk,m);if(acumMes)acumMes[m]=(acumMes[m]||0)+v;
-        return '<td style="'+TD+';font-weight:700;color:'+(v>=0?'var(--green)':'var(--red-l)')+'">'+fmt.brl(isDesp?-Math.abs(v):v)+pct(v,recTotalMes[m])+'</td>';}).join('')
-      +(showTot?'<td style="'+TD+';font-weight:700;color:'+(totG>=0?'var(--green)':'var(--red-l)')+'">'+fmt.brl(isDesp?-Math.abs(totG):totG)+'</td>':'')
+      +meses.map(m=>{const v=subtotalMes(m);if(acumMes)acumMes[m]=(acumMes[m]||0)+v;
+        return '<td style="'+TD+';font-weight:700;color:'+(v>=0?'var(--green)':'var(--red-l)')+'">'+fmt.brl(gk==='CMV'?v:isDesp?-Math.abs(v):v)+pct(v,recTotalMes[m])+'</td>';}).join('')
+      +(showTot?'<td style="'+TD+';font-weight:700;color:'+(totG>=0?'var(--green)':'var(--red-l)')+'">'+fmt.brl(gk==='CMV'?totG:isDesp?-Math.abs(totG):totG)+'</td>':'')
       +'</tr>'
       +'<tr><td colspan="'+cols+'" style="height:2px;background:var(--border)"></td></tr>';
   }
@@ -5770,10 +5783,10 @@ function _buildDRE(el, full) {
         const val = parseFloat(EST[m] || 0);
         const mEnc = m.replace('/', '_');
         html += `<td style="${TD};padding:3px 6px">
-          <input type="number" step="100" min="0"
-            value="${val || ''}"
-            placeholder="0,00"
-            title="Estoque final de ${m}"
+          <input type="number" step="0.01" min="0"
+            value="${Object.prototype.hasOwnProperty.call(EST,m)?val:''}"
+            placeholder="Não informado"
+            title="Estoque final de ${m}. CMV = compras + estoque inicial − estoque final."
             style="width:90px;text-align:right;font-size:11px;font-family:'DM Mono',monospace;border:1px solid #fcd34d;border-radius:4px;padding:2px 5px;background:#fffbeb"
             onchange="setEstoqueFinal('${mEnc}', this.value)"
             onclick="event.stopPropagation()"
@@ -5794,7 +5807,7 @@ function _buildDRE(el, full) {
       const estIni = parseFloat((window._estoquesMes||{})[mAnterior] || 0);
       const estFin = parseFloat((window._estoquesMes||{})[m] || 0);
       const ajuste = estIni - estFin;
-      lucBrutoMes[m] = (lucBrutoMes[m] || 0) + sg('CMV', m) + ajuste;
+      lucBrutoMes[m] = (lucBrutoMes[m] || 0) + sg('CMV', m) - ajuste;
     });
   } else {
     // Modo Caixa: Lucro Bruto = Receitas + CMV pago (sem ajuste de estoque)
@@ -6682,7 +6695,7 @@ function _drillRender() {
   tbody.innerHTML = [...grupos.entries()].map(([nome,itens]) => {
     const subtotal = itens.filter(t => idsNoDre.has(String(t.id))).reduce((s,t) => s + Number(t.valor||0), 0);
     const problemas = itens.reduce((s,t) => s + (alertas.has(String(t.id)) ? 1 : 0), 0);
-    const head = `<tr class="drill-group"><td colspan="6"><div><strong>${esc(nome)}</strong><span>${itens.length} lançamento(s) · ${fmt.brl(subtotal)}</span></div>${problemas ? `<b>${problemas} para conferir</b>` : '<i>sem alertas</i>'}</td></tr>`;
+    const head = `<tr class="drill-group"><td colspan="6"><div class="drill-group-bar"><div class="drill-group-name"><strong>${esc(nome)}</strong><span>${itens.length} lançamento(s) · ${fmt.brl(subtotal)}</span></div>${problemas ? `<b>${problemas} para conferir</b>` : '<i>sem alertas</i>'}</div></td></tr>`;
     return head + itens.map(t => {
       const v = Number(t.valor||0); const avisos = alertas.get(String(t.id)) || [];
       return `<tr class="drill-row${avisos.length?' has-warning':''}">
@@ -6898,15 +6911,16 @@ function exportXLS(){
       html += `</tr>`;
     }
     // Subtotal
-    const totG=sgt(gk);
+    const subtotalMes=m=>gk==='CMV'?calcularMotorDRE(m,getModo()).cmv:sg(gk,m);
+    const totG=meses.reduce((s,m)=>s+subtotalMes(m),0);
     html += `<tr>`;
     html += `<td class="${stCls} left bold" style="min-width:260px;max-width:260px">▶ SUBTOTAL ${label}</td>`;
     meses.forEach(m => {
-      const v=sg(gk,m); const disp=isDesp?-Math.abs(v):v;
+      const v=subtotalMes(m); const disp=gk==='CMV'?v:isDesp?-Math.abs(v):v;
       html += `<td class="${stCls} mono">${v===0?'—':brl2(disp)}</td>`;
     });
     if(showTot) {
-      const disp=isDesp?-Math.abs(totG):totG;
+      const disp=gk==='CMV'?totG:isDesp?-Math.abs(totG):totG;
       html += `<td class="${stCls} mono">${totG===0?'—':brl2(disp)}</td>`;
     }
     html += `</tr>`;
@@ -6945,7 +6959,7 @@ function exportXLS(){
 
   // Ajuste de estoque no Excel
   const ESTxls = window._estoquesMes || _estoquesMes || {};
-  const temEstoque = Object.keys(ESTxls).length > 0 && meses.some(m => {
+  const temEstoque = getModo()==='comp' && Object.keys(ESTxls).length > 0 && meses.some(m => {
     const [mm,yy] = m.split('/');
     const dtAnt = new Date(parseInt(yy), parseInt(mm)-2, 1);
     const mAnt = `${String(dtAnt.getMonth()+1).padStart(2,'0')}/${dtAnt.getFullYear()}`;
@@ -6963,9 +6977,9 @@ function exportXLS(){
       const estFin = parseFloat(ESTxls[m]||0);
       const ajuste = estIni - estFin; // positivo = aumenta CMV; negativo = reduz CMV
       totAjuste += ajuste;
-      html += `<td class="cat-row mono ${ajuste===0?'val-zero':ajuste>0?'val-neg':'val-pos'}">${ajuste===0?'—':brl2(ajuste)}</td>`;
+      html += `<td class="cat-row mono ${ajuste===0?'val-zero':ajuste>0?'val-neg':'val-pos'}">${ajuste===0?'—':brl2(-ajuste)}</td>`;
     });
-    if (showTot) html += `<td class="mono bold ${totAjuste===0?'val-zero':totAjuste>0?'val-neg':'val-pos'}">${totAjuste===0?'—':brl2(totAjuste)}</td>`;
+    if (showTot) html += `<td class="mono bold ${totAjuste===0?'val-zero':totAjuste>0?'val-neg':'val-pos'}">${totAjuste===0?'—':brl2(-totAjuste)}</td>`;
     html += `</tr>`;
 
     // Linha: Estoque Final informado
@@ -6984,7 +6998,7 @@ function exportXLS(){
     const dtAnt = new Date(parseInt(yy), parseInt(mm)-2, 1);
     const mAnt = `${String(dtAnt.getMonth()+1).padStart(2,'0')}/${dtAnt.getFullYear()}`;
     const ajuste = parseFloat((window._estoquesMes||{})[mAnt]||0) - parseFloat((window._estoquesMes||{})[m]||0);
-    lucBruto[m] = (lucBruto[m]||0) + sg('CMV',m) + ajuste;
+    lucBruto[m] = (lucBruto[m]||0) + sg('CMV',m) - ajuste;
   });
 
   meses.forEach(m=>{lucBruto[m]=calcularMotorDRE(m,getModo()).lucroBruto;});
@@ -7135,15 +7149,15 @@ async function gerarExcelDRE() {
         addRow(['  · ' + cat, ...meses.map(m => porMes[m] || 0), total], 'cat');
       });
     }
-    const cmvTotais = meses.map(m => sg('CMV', m));
+    const ajustesEstoque = meses.map(m => -calcularMotorDRE(m,modo).ajusteEstoque);
+    if (ajustesEstoque.some(v=>Math.abs(v)>0.005)) {
+      addRow(['  · Ajuste de Estoque (+Inicial − Final)', ...ajustesEstoque, ajustesEstoque.reduce((s,v)=>s+v,0)], 'cat');
+    }
+    const cmvTotais = meses.map(m => calcularMotorDRE(m,modo).cmv);
     addRow(['SUBTOTAL CMV', ...cmvTotais, cmvTotais.reduce((s, v) => s + v, 0)], 'subtotal');
     addRow([], 'blank');
 
     // Lucro bruto — mesmo motor usado pelo Demonstrativo
-    const ajustesEstoque = meses.map(m => calcularMotorDRE(m,modo).ajusteEstoque);
-    if (ajustesEstoque.some(v=>Math.abs(v)>0.005)) {
-      addRow(['  · Ajuste de Estoque (+Inicial − Final)', ...ajustesEstoque, ajustesEstoque.reduce((s,v)=>s+v,0)], 'cat');
-    }
     const lucBruto = meses.map(m => calcularMotorDRE(m,modo).lucroBruto);
     addRow(['LUCRO BRUTO', ...lucBruto, lucBruto.reduce((s, v) => s + v, 0)], 'resultado_verde');
     addRow([], 'blank');
@@ -7298,8 +7312,7 @@ async function salvar(silent=false, tentativa=1){
       const txsMes = porMes[mes];
       // Para o mês atual, usa sessId conhecido; outros meses usam null (backend encontra pelo mes_ref)
       const sid = (window._sessoesPorMes && window._sessoesPorMes[mes])
-               || (mes === mesRef ? sessId : null)
-               || sessId;
+               || (mes === mesRef ? sessId : null);
       // Sprint 3.1-E: calcular resultado antes de salvar e incluir no payload
       // O backend já suporta os 6 campos res_* e usa COALESCE (não sobrescreve sessões antigas)
       // calcResultadoDRE usa o modo atual (caixa/comp), estoque e DAS — sem nenhuma alteração de lógica
@@ -7479,8 +7492,9 @@ document.addEventListener('visibilitychange', () => {
         headers: {'Content-Type':'application/json','Authorization':'Bearer '+tk},
         body: JSON.stringify({
           sessao_id: sid, mes_ref: mes,
+          resultado:calcResultadoDRE(mes,'comp'),
           descricao: `Sessão ${mes} — ${porMes[mes].length} lançamentos`,
-          dados_json: {transactions: porMes[mes], loadedFiles: mes===mesRef?files:[], supplierMem: supMem, _savedAt: new Date().toISOString()}
+          dados_json: {transactions: porMes[mes], loadedFiles: mes===mesRef?files:[], supplierMem: supMem, estoquesMes:window._estoquesMes||{}, resultadoModo:'competencia', _savedAt: new Date().toISOString()}
         })
       }).catch(()=>{});
     });
@@ -7494,7 +7508,7 @@ window.addEventListener('beforeunload', (e) => {
       const payload = JSON.stringify({
         sessao_id: sessId, mes_ref: mesRef,
         descricao: `Sessão ${mesRef} — ${TXS.length} lançamentos`,
-        dados_json: {transactions:TXS, loadedFiles:files, supplierMem:supMem, _savedAt:new Date().toISOString()}
+        dados_json: {transactions:TXS, loadedFiles:files, supplierMem:supMem, estoquesMes:window._estoquesMes||{}, resultadoModo:'competencia', _savedAt:new Date().toISOString()}
       });
       navigator.sendBeacon('/api/dre/salvar-beacon',
         new Blob([payload], {type:'application/json'}));
