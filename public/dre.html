@@ -8,8 +8,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="/js/api.js"></script>
-<script src="/js/dre-conferencia.js?v=10"></script>
-<script src="/js/dre-fluxo.js?v=2"></script>
+<script src="/js/dre-conferencia.js?v=11"></script>
+<script src="/js/dre-fluxo.js?v=3"></script>
 <script>
   if (typeof pdfjsLib !== 'undefined') {
     pdfjsLib.GlobalWorkerOptions.workerSrc =
@@ -1390,7 +1390,7 @@ async function sincronizarBoletosAutomatico({notificar=false}={}) {
           continue;
         }
         // Campos do boleto acompanham a fonte; decisões humanas do DRE são preservadas.
-        const camposFonte = ['data','mes','mesCaixa','valor','lancamento','razaoSocial','fonte','needsReview','parcela','totalParcelas','vinculadoA','cartaoCredito','cartaoFaturaRef','cartaoItemRef'];
+        const camposFonte = ['data','mes','mesCaixa','valor','lancamento','razaoSocial','fonte','needsReview','parcela','totalParcelas','vinculadoA','cartaoCredito','cartaoFaturaRef','cartaoItemRef','dataNota'];
         for (const campo of camposFonte) {
           if (recebido[campo] !== undefined && String(existente[campo] ?? '') !== String(recebido[campo] ?? '')) {
             existente[campo] = recebido[campo];
@@ -3188,63 +3188,16 @@ function _scoreFaturaCandidata(tx, fatura) {
 }
 
 function tentarVincularFaturaAuto(tx) {
-  // Pré-condições: EXTRATO/OFX, débito, não vinculado ainda
-  if (tx.fonte !== 'EXTRATO' && tx.fonte !== 'OFX') return;
-  if (parseFloat(tx.valor || 0) >= 0) return;
-  if (tx.faturaCC && tx.vinculadoFaturaCC) return;
-
-  const faturas = ccrFaturasImportadas();
-  if (!faturas.length) return;
-
-  // Calcular score para cada fatura candidata
-  const candidatas = faturas
-    .filter(f => {
-      // Só considera faturas ainda não vinculadas a outro pagamento
-      const jaVinc = TXS.find(t =>
-        t.id !== tx.id &&
-        t.faturaCC === f.faturaId &&
-        t.vinculadoFaturaCC === true
-      );
-      return !jaVinc;
-    })
-    .map(f => ({ fatura: f, score: _scoreFaturaCandidata(tx, f) }))
-    .filter(c => c.score >= 80)
-    .sort((a, b) => b.score - a.score);
-
-  // Regra de segurança: só vincula se houver UMA candidata com score ≥ 80
-  // Se houver empate ou múltiplas candidatas → não vincula (manual)
-  if (candidatas.length === 0) return;
-  if (candidatas.length > 1) {
-    // Verificar se há empate próximo (diferença ≤ 10 pontos)
-    if (candidatas[1].score >= candidatas[0].score - 10) {
-      console.log('[auto-vinc] múltiplas candidatas com score próximo — deixar manual');
-      return;
-    }
+  const motor=window.DRECartaoPagamentos;if(!motor)return;
+  const decisao=motor.decidir(tx,motor.faturasDosLancamentos(TXS));
+  if(decisao.acao!=='vincular')return;
+  tx.faturaCC=decisao.fatura.faturaId;tx.faturasCCRefs=decisao.fatura.referencias||null;
+  tx.vinculadoFaturaCC=true;tx.categoria=motor.CAT;
+  for(const referencia of (decisao.fatura.referencias||[decisao.fatura.faturaId])){
+    api.patch('/api/dre/cartao-faturas/marcar-paga-por-ref',{fatura_id_ref:referencia,data_pagamento:tx.data,origem:'extrato'}).catch(()=>{});
   }
-
-  const melhor = candidatas[0];
-
-  // Aplicar vínculo
-  tx.faturaCC        = melhor.fatura.faturaId;
-  tx.vinculadoFaturaCC = true;
-  // Atualizar categoria apenas se vazia ou era "Pagamento de Cartão"
-  if (!tx.categoria || tx.categoria === 'Pagamento de Cartão') {
-    tx.categoria = 'Pagamento de Fatura CC';
-  }
-  console.log(`[auto-vinc] ✅ score=${melhor.score} → ${tx.lancamento} → ${melhor.fatura.faturaId}`);
-
-  // Vínculo automático com confiança alta (score ≥80, sem ambiguidade) é
-  // equivalente a clicar "Marcar Paga" à mão — antes esse passo nunca
-  // acontecia sozinho e o Rafael tinha que marcar fatura por fatura, mesmo
-  // quando o pagamento já estava certinho no extrato.
-  api.patch('/api/dre/cartao-faturas/marcar-paga-por-ref', {
-    fatura_id_ref: melhor.fatura.faturaId,
-    data_pagamento: tx.data || null,
-    origem: 'auto_vinc_extrato',
-  }).catch(() => {}); // best-effort: se a fatura nem estiver rastreada, tanto faz
 }
 
-// Rodar para todos os lançamentos EXTRATO não vinculados (retroativo)
 function _revinculateCC() {
   let n = 0;
   TXS.forEach(tx => {
@@ -4555,7 +4508,8 @@ async function renderStatusCartoesGrade() {
     const brl = v => 'R$ ' + parseFloat(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
 
     // KPIs topo
-    const pendDocs = TXS.filter(t => t.fonte === 'CC' && parseFloat(t.valor||0) < 0 && !t.ignorar && !t.documentoStatus).length;
+    const reconhecidos=new Set((DREFluxo.resolver(TXS,'comp').vinculosInferidos||[]).map(v=>String(v.itemId)));
+    const pendDocs = TXS.filter(t => t.fonte === 'CC' && parseFloat(t.valor||0) < 0 && !t.ignorar && !t.documentoStatus&&!reconhecidos.has(String(t.id))).length;
     const kpiHtml = `<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;font-size:11px;align-items:center">
       <span>📋 <strong>${kpis.total||0}</strong> faturas</span>
       <span style="color:#92400e">⏳ <strong>${kpis.classificando||0}</strong> classif.</span>
@@ -4694,16 +4648,17 @@ async function abrirConciliacaoCartao(faturaId=null) {
 function renderConciliacaoCartao() {
   const el=document.getElementById('conc-cc-body'); if(!el)return;
   _restaurarConciliacoesCartao();
+  const reconhecidos=new Set((DREFluxo.resolver(TXS,'comp').vinculosInferidos||[]).map(v=>String(v.itemId)));
   let itens=TXS.filter(t=>t.fonte==='CC' && parseFloat(t.valor||0)<0 && !t.ignorar);
-  if(!_concCCMostrarTodos) itens=itens.filter(t=>!t.documentoStatus);
+  if(!_concCCMostrarTodos) itens=itens.filter(t=>!t.documentoStatus&&!reconhecidos.has(String(t.id)));
   itens.sort((a,b)=>(b.mesCaixa||b.mes||'').localeCompare(a.mesCaixa||a.mes||'')||(b.data||'').localeCompare(a.data||''));
   if(!_concCCSelecionado || !itens.some(t=>String(t.id)===String(_concCCSelecionado))) _concCCSelecionado=itens[0]?.id||null;
   const cc=TXS.find(t=>String(t.id)===String(_concCCSelecionado));
   const docs=cc ? TXS.filter(t=>t.fonte?.startsWith('BOLETO') && !t.ignorar && (!t.cartaoItemRef || String(t.cartaoItemRef)===String(cc.id)))
     .map(t=>({t,score:_scoreDocumentoCC(cc,t)})).sort((a,b)=>b.score-a.score).slice(0,40) : [];
-  const pend=TXS.filter(t=>t.fonte==='CC'&&parseFloat(t.valor||0)<0&&!t.ignorar&&!t.documentoStatus).length;
+  const pend=TXS.filter(t=>t.fonte==='CC'&&parseFloat(t.valor||0)<0&&!t.ignorar&&!t.documentoStatus&&!reconhecidos.has(String(t.id))).length;
   const linhas=itens.map(t=>`<button onclick="_concCCSelecionado='${esc(String(t.id))}';renderConciliacaoCartao()" style="width:100%;text-align:left;padding:9px;border:1px solid ${String(t.id)===String(_concCCSelecionado)?'#7c3aed':'var(--border)'};background:${String(t.id)===String(_concCCSelecionado)?'#f5f3ff':'#fff'};border-radius:8px;margin-bottom:6px;cursor:pointer">
-    <div style="font-size:12px;font-weight:700">${esc(t.razaoSocial||t.lancamento||'Compra')}</div><div style="font-size:10px;color:var(--muted);margin-top:2px">${t.data||'sem data'} · ${t.mesCaixa||t.mes||''} · <strong>${fmt.brl(Math.abs(parseFloat(t.valor||0)))}</strong> ${t.documentoStatus==='sem_nota'?'· ✅ sem nota':t.documentoStatus==='boleto'?'· 🔗 nota vinculada':''}</div></button>`).join('');
+    <div style="font-size:12px;font-weight:700">${esc(t.razaoSocial||t.lancamento||'Compra')}</div><div style="font-size:10px;color:var(--muted);margin-top:2px">${t.data||'sem data'} · ${t.mesCaixa||t.mes||''} · <strong>${fmt.brl(Math.abs(parseFloat(t.valor||0)))}</strong> ${t.documentoStatus==='sem_nota'?'· ✅ sem nota':t.documentoStatus==='boleto'?'· 🔗 nota vinculada':reconhecidos.has(String(t.id))?'· 🔗 nota reconhecida pelo DRE':''}</div></button>`).join('');
   const candidatos=docs.map(({t,score})=>`<div style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:9px;border:1px solid ${score>=70?'#86efac':'var(--border)'};background:${score>=70?'#f0fdf4':'#fff'};border-radius:8px;margin-bottom:6px">
     <div><div style="font-size:12px;font-weight:700">${esc(t.razaoSocial||t.lancamento||'Nota/boleto')}</div><div style="font-size:10px;color:var(--muted)">${t.data||'sem data'} · ${fmt.brl(Math.abs(parseFloat(t.valor||0)))} · ${esc(t.lancamento||'')} ${score>=70?'· sugestão forte':''}</div></div>
     <button class="btn bg" style="font-size:10px;padding:5px 8px" onclick="vincularItemCCDocumento('${esc(String(cc.id))}','${esc(String(t.boletoId))}')">Vincular</button></div>`).join('');
@@ -7891,7 +7846,7 @@ function lancamentoItemFatura(i){
   return {...base,id:base.id||'ccdb_'+i.id,data,mes:base.mes||(/^\d{4}-\d{2}/.test(data)?data.slice(5,7)+'/'+data.slice(0,4):i.competencia),
     mesCaixa:base.mesCaixa||i.competencia,fonte:'CC',valor:valorItemFaturaDRE(i),lancamento:i.descricao||'',razaoSocial:base.razaoSocial||i.descricao||'',
     categoria:Object.prototype.hasOwnProperty.call(i,'categoria_dre')?(i.categoria_dre||null):(base.categoria||null),portador:i.portador,faturaCC:i.fatura_id_ref||base.faturaCC,
-    fatura_db_id:i.fatura_id,hash_item_persistido:i.hash_item,bandeira:i.bandeira||base.bandeira};
+    fatura_db_id:i.fatura_id,hash_item_persistido:i.hash_item,cartaoNome:i.cartao||base.cartaoNome||i.bandeira||base.bandeira,bandeira:i.bandeira||base.bandeira};
 }
 function valorItemFaturaDRE(i){
   // O agente Drive grava débitos positivos e créditos negativos; o DRE usa o inverso.
@@ -7910,7 +7865,7 @@ async function recuperarFaturasDoBanco(){
   for(const i of r.data||[]){
     const l=lancamentoItemFatura(i);
     const t=buscarItemFaturaNaSessao(l,i);
-    if(t){t.fatura_db_id=i.fatura_id;t.hash_item_persistido=i.hash_item;t.categoria=i.categoria_dre||null;}
+    if(t){t.fatura_db_id=i.fatura_id;t.hash_item_persistido=i.hash_item;t.cartaoNome=l.cartaoNome;t.categoria=i.categoria_dre||null;}
     else {TXS.push(l);}
   }
   updMesFiltro();render();updStats();renderDRE();
@@ -7965,7 +7920,8 @@ function situacaoItemFaturaDRE(i,faturaId){
   const base=[...TXS.filter(x=>!(x.fonte==='CC'&&String(x.id)===String(t.id))),t];
   const fluxo=DREFluxo.resolver(base,getModo());
   const incluido=fluxo.linhas.some(x=>String(x.id)===String(t.id)||String(x.id).startsWith(String(t.id)+'__caixa_'));
-  const status=t.ignorar?'Ignorado':nota?'Nota vinculada — despesa contada uma vez':incluido?(t.categoria?'Incluído no DRE':'Incluído em A CLASSIFICAR'):'Representado por outro lançamento';
+  const reconhecida=fluxo.vinculosInferidos?.find(v=>String(v.itemId)===String(t.id));
+  const status=t.ignorar?'Ignorado':reconhecida?'Nota reconhecida pelo DRE — despesa contada uma vez':nota?'Nota vinculada — despesa contada uma vez':incluido?(t.categoria?'Incluído no DRE':'Incluído em A CLASSIFICAR'):'Representado por outro lançamento';
   return `${status} · Competência ${t.mes||'—'} · Caixa ${t.mesCaixa||'—'}`;
 }
 

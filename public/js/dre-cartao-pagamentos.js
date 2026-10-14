@@ -23,6 +23,7 @@
     return /PAG(?:AMENTO|TO)?\s+(?:DE\s+)?FATURA|PAG(?:AMENTO|TO)?\s+.*CART|CARTAO\s+(?:DE\s+)?CREDITO|FATURA\s*ITAU|FATURA\s*CAIXA|FATURA\s*C6|ITAUCARD|FATURAITAU|DEB(?:ITO)?\s+.*CARTAO/.test(s);
   }
   function categoriaCartao(cat){return cat===CAT||cat===LEGACY;}
+  function emissor(v){const s=norm(v);return /CAIXA/.test(s)?'CAIXA':/ITAU/.test(s)?'ITAU':/C6/.test(s)?'C6':'';}
   function faturasDosLancamentos(txs){
     const mapa=new Map();
     (Array.isArray(txs)?txs:[]).forEach(t=>{
@@ -30,12 +31,16 @@
       const id=String(t.faturaCC);
       if(!mapa.has(id)){
         const mm=id.match(/CC_(\d{2})_(\d{4})/);
-        mapa.set(id,{faturaId:id,mes:mm?`${mm[1]}/${mm[2]}`:(t.mesCaixa||t.mes||''),bandeira:t.bandeira||'',soma:0,itens:0});
+        mapa.set(id,{faturaId:id,mes:mm?`${mm[1]}/${mm[2]}`:(t.mesCaixa||t.mes||''),bandeira:t.bandeira||'',emissor:emissor((t.cartaoNome||'')+' '+(t.bandeira||'')+' '+id),soma:0,itens:0});
       }
       const f=mapa.get(id); f.soma+=Number(t.valor||0)||0; f.itens++;
       if(!f.bandeira&&t.bandeira)f.bandeira=t.bandeira;
+      if(!f.emissor)f.emissor=emissor(t.cartaoNome||t.bandeira||'');
     });
-    return [...mapa.values()].map(f=>({...f,total:Math.abs(f.soma)})).filter(f=>f.total>0.009);
+    const individuais=[...mapa.values()].map(f=>({...f,total:Math.abs(f.soma)})).filter(f=>f.total>0.009);
+    const grupos=new Map();for(const f of individuais){if(!f.emissor)continue;const k=f.emissor+'|'+f.mes;if(!grupos.has(k))grupos.set(k,[]);grupos.get(k).push(f);}
+    const agregadas=[...grupos.values()].filter(g=>g.length>1).map(g=>({faturaId:'GRUPO:'+g[0].emissor+':'+g[0].mes,mes:g[0].mes,emissor:g[0].emissor,bandeira:g[0].emissor,total:Math.abs(g.reduce((s,f)=>s+f.soma,0)),referencias:g.map(f=>f.faturaId),itens:g.reduce((s,f)=>s+f.itens,0)}));
+    return [...individuais,...agregadas];
   }
   function tolerancia(total){return Math.max(0.05,Math.min(2,Math.abs(total||0)*0.001));}
   function tokenBandeiraCombina(tx,f){
@@ -48,6 +53,9 @@
     const valor=Math.abs(Number(tx.valor||0));
     const mesTx=tx.mesCaixa||tx.mes||'';
     return (faturas||[]).map(f=>{
+      const e=emissor((tx.lancamento||'')+' '+(tx.razaoSocial||''));
+      if(e&&f.emissor&&e!==f.emissor)return null;
+      if(f.referencias&&(!e||e!==f.emissor))return null;
       const d=Math.abs(valor-Number(f.total||0));
       const dm=diffMes(mesTx,f.mes);
       const tol=tolerancia(f.total);
@@ -62,7 +70,12 @@
   }
   function decidir(tx,faturas){
     if(!tx||!FONTES_BANCO.has(String(tx.fonte||'').toUpperCase())||Number(tx.valor||0)>=0)return {acao:'nenhuma'};
-    if(tx.faturaCC)return {acao:'vinculado',faturaId:tx.faturaCC};
+    if(tx.faturaCC){
+      const atual=(faturas||[]).find(f=>f.faturaId===tx.faturaCC);
+      const grupo=candidatos(tx,faturas).filter(c=>c.fatura.referencias);
+      if(atual&&Math.abs(Math.abs(Number(tx.valor))-atual.total)>tolerancia(atual.total)&&grupo.length===1)return {acao:'vincular',fatura:grupo[0].fatura,score:grupo[0].score};
+      return {acao:'vinculado',faturaId:tx.faturaCC};
+    }
     const catAtual=String(tx.categoria||'');
     const jaCartao=categoriaCartao(catAtual);
     if(catAtual&&!jaCartao)return {acao:'nenhuma'}; // não sobrescreve classificação manual de outra natureza
@@ -86,12 +99,13 @@
       document.querySelectorAll('input.csel').forEach(i=>{if(i.value===LEGACY)i.value=CAT;});
     }
     function processar(){
-      if(processando||!Array.isArray(root.TXS))return false;
+      const txs=typeof root.getDreTransactions==='function'?root.getDreTransactions():root.TXS;
+      if(processando||!Array.isArray(txs))return false;
       processando=true;
       try{
-        const faturas=faturasDosLancamentos(root.TXS);
+        const faturas=faturasDosLancamentos(txs);
         let mudou=false,vinculados=0,pendentes=0,normalizados=0;
-        root.TXS.forEach(tx=>{
+        txs.forEach(tx=>{
           if(tx.categoria===LEGACY){tx.categoria=CAT;normalizados++;mudou=true;}
           const r=decidir(tx,faturas);
           if(r.acao==='vinculado'){
@@ -100,7 +114,7 @@
             tx._pagamentoCartaoPendente=false;
           }else if(r.acao==='vincular'&&r.fatura){
             tx.categoria=CAT;
-            tx.faturaCC=r.fatura.faturaId;
+            tx.faturaCC=r.fatura.faturaId;tx.faturasCCRefs=r.fatura.referencias||null;
             tx.vinculadoFaturaCC=true;
             tx.needsReview=false;
             tx._pagamentoCartaoPendente=false;
@@ -140,7 +154,7 @@
     root.reprocessarPagamentosCartaoDRE=processar;
   }
 
-  const api={CAT,LEGACY,norm,textoForte,categoriaCartao,faturasDosLancamentos,candidatos,decidir,instalarBrowser};
+  const api={CAT,LEGACY,norm,emissor,textoForte,categoriaCartao,faturasDosLancamentos,candidatos,decidir,instalarBrowser};
   instalarBrowser();
   return api;
 });
