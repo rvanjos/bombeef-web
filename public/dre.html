@@ -1375,12 +1375,12 @@ async function sincronizarBoletosAutomatico({notificar=false}={}) {
   _syncBoletosPromise = (async () => {
     atualizarStatusSyncBoletos('syncing', 'Sincronizando boletos…');
     try {
-      const d = await api.get(`/api/boletos/classificador?mes=${encodeURIComponent(mesRef)}`);
+      const d = await api.get('/api/boletos/classificador');
       if (!d.ok) throw new Error(d.erro || 'Falha ao consultar boletos');
       let alterados = 0;
       for (const recebido of (d.data || [])) {
         const boletoId = recebido.boletoId == null ? '' : String(recebido.boletoId);
-        const existente = boletoId ? TXS.find(t => String(t.boletoId) === boletoId) : null;
+        const existente = boletoId ? TXS.find(t => t.fonte?.startsWith('BOLETO') && String(t.boletoId) === boletoId) : null;
         if (!existente) {
           const novo = {...recebido};
           novo.id = novo.id || `bol_${boletoId || Date.now()+'_'+alterados}`;
@@ -4631,7 +4631,9 @@ function _scoreDocumentoCC(cc, bol) {
   return score;
 }
 
-function abrirConciliacaoCartao() {
+async function abrirConciliacaoCartao(faturaId=null) {
+  await recuperarFaturasDoBanco();
+  await sincronizarBoletosAutomatico();
   _concCCMostrarTodos = false;
   _concCCSelecionado = null;
   document.getElementById('m-conciliacao-cc')?.remove();
@@ -4641,6 +4643,10 @@ function abrirConciliacaoCartao() {
       <div id="conc-cc-body" class="mdb" style="overflow:auto;padding:14px"></div>
     </div></div>`);
   renderConciliacaoCartao();
+  if(faturaId){
+    _concCCSelecionado=TXS.find(t=>t.fonte==='CC'&&Number(t.fatura_db_id)===Number(faturaId)&&Number(t.valor)<0)?.id||null;
+    _concCCMostrarTodos=true;renderConciliacaoCartao();
+  }
 }
 
 function renderConciliacaoCartao() {
@@ -4672,7 +4678,7 @@ async function vincularItemCCDocumento(ccId,boletoId) {
   if(!cc||!bol)return;
   const mesCaixa=cc.mesCaixa||cc.mes||mesRef;
   const faturaRef=cc.faturaCC||`CC_${mesCaixa.replace('/','_')}_${String(cc.bandeira||'cartao').replace(/\W+/g,'_')}`;
-  const r=await api.post(`/api/boletos/${boletoId}/vincular-cartao`,{cartao:cc.bandeira||'',faturaRef,itemRef:String(cc.id),mesCaixa});
+  const r=await api.post(`/api/boletos/${boletoId}/vincular-cartao`,{cartao:cc.bandeira||'',faturaRef,itemRef:String(cc.id),hashItem:cc.hash_item_persistido||_hashItemCC(cc),mesCaixa});
   if(!r.ok){toast('❌ '+(r.erro||'Não foi possível vincular'));return;}
   cc.documentoStatus='boleto'; cc.documentoBoletoId=bol.boletoId;
   cc.faturaCC=cc.faturaCC||faturaRef;
@@ -7921,9 +7927,14 @@ function lancamentoItemFatura(i){
   const base=i.dados_json&&typeof i.dados_json==='object'?i.dados_json:{};
   const data=String(i.data_compra||'').slice(0,10);
   return {...base,id:base.id||'ccdb_'+i.id,data,mes:base.mes||(/^\d{4}-\d{2}/.test(data)?data.slice(5,7)+'/'+data.slice(0,4):i.competencia),
-    mesCaixa:base.mesCaixa||i.competencia,fonte:'CC',valor:Number(i.valor),lancamento:i.descricao||'',razaoSocial:base.razaoSocial||i.descricao||'',
-    categoria:i.categoria_dre||base.categoria||null,portador:i.portador,faturaCC:i.fatura_id_ref||base.faturaCC,
+    mesCaixa:base.mesCaixa||i.competencia,fonte:'CC',valor:valorItemFaturaDRE(i),lancamento:i.descricao||'',razaoSocial:base.razaoSocial||i.descricao||'',
+    categoria:Object.prototype.hasOwnProperty.call(i,'categoria_dre')?(i.categoria_dre||null):(base.categoria||null),portador:i.portador,faturaCC:i.fatura_id_ref||base.faturaCC,
     fatura_db_id:i.fatura_id,hash_item_persistido:i.hash_item,bandeira:i.bandeira||base.bandeira};
+}
+function valorItemFaturaDRE(i){
+  // O agente Drive grava débitos positivos e créditos negativos; o DRE usa o inverso.
+  // Importações pelo DRE já possuem a convenção contábil e não devem ser invertidas.
+  return String(i.fatura_id_ref||'').startsWith('DRIVE:')?-Number(i.valor):Number(i.valor);
 }
 function buscarItemFaturaNaSessao(l,i){
   const candidatos=TXS.filter(t=>t.fonte==='CC'&&(String(t.id)===String(l.id)||
@@ -7938,7 +7949,7 @@ async function recuperarFaturasDoBanco(){
     const l=lancamentoItemFatura(i);
     const t=buscarItemFaturaNaSessao(l,i);
     if(t){t.fatura_db_id=i.fatura_id;t.hash_item_persistido=i.hash_item;if(!t.categoria&&i.categoria_dre)t.categoria=i.categoria_dre;}
-    else if(i.dados_json){TXS.push(l);}
+    else {TXS.push(l);}
   }
   updMesFiltro();render();updStats();renderDRE();
 }
@@ -7951,10 +7962,22 @@ async function abrirPendenciasFatura(id){
     return {...l,...(t||{}),fatura_db_id:id,hash_item_persistido:i.hash_item};
   });
   if(!lancs.length){toast('Nenhum item ativo nesta fatura');return;}
+  document.getElementById('m-cf-itens').style.display='none';
+  fecharControleFaturas();
   abrirRevisaoCC(lancs,r.data[0].competencia,lancs[0].bandeira||'Cartão','Fatura salva',false,id);
-  ccrFiltrar('pendentes');
+  ccrFiltrar(lancs.some(l=>!l.categoria)?'pendentes':'todos');
 }
 let _cfItensFaturaIdAtual = null;
+function situacaoItemFaturaDRE(i,faturaId){
+  const l=lancamentoItemFatura({...i,fatura_id:faturaId});
+  const t=buscarItemFaturaNaSessao(l,{...i,fatura_id:faturaId})||l;
+  const nota=TXS.find(n=>n.fonte?.startsWith('BOLETO')&&String(n.cartaoItemRef||'')===String(t.id));
+  const base=TXS.some(x=>x===t)?TXS:[...TXS,t];
+  const fluxo=DREFluxo.resolver(base,getModo());
+  const incluido=fluxo.linhas.some(x=>String(x.id)===String(t.id)||String(x.id).startsWith(String(t.id)+'__caixa_'));
+  const status=t.ignorar?'Ignorado':nota?'Nota vinculada — despesa contada uma vez':incluido?(t.categoria?'Incluído no DRE':'Incluído em A CLASSIFICAR'):'Representado por outro lançamento';
+  return `${status} · Competência ${t.mes||'—'} · Caixa ${t.mesCaixa||'—'}`;
+}
 
 async function verItensFatura(faturaId, titulo) {
   _cfItensFaturaIdAtual = faturaId;
@@ -7970,15 +7993,15 @@ async function verItensFatura(faturaId, titulo) {
       tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:20px;color:var(--muted)">Nenhum item registrado.</td></tr>';
       return;
     }
-    const total = res.data.reduce((s,i) => s + Math.abs(parseFloat(i.valor||0)), 0);
+    const total = -res.data.reduce((s,i) => s + valorItemFaturaDRE(i), 0);
     tbody.innerHTML = res.data.map(i => `
       <tr${i.removido?' style="opacity:.45;text-decoration:line-through"':''}>
         <td style="font-size:11px;color:var(--muted);white-space:nowrap">${i.data_compra?i.data_compra.split('-').reverse().join('/'):'—'}</td>
         <td style="font-size:12px">${i.descricao||'—'}${i.portador?`<div style="font-size:10px;color:var(--muted)">${i.portador}</div>`:''}</td>
-        <td style="text-align:right;font-family:'DM Mono',monospace;font-size:12px;font-weight:600;color:${parseFloat(i.valor||0)<0?'#dc2626':'#16a34a'}">${_cfBrl(i.valor)}</td>
+        <td style="text-align:right;font-family:'DM Mono',monospace;font-size:12px;font-weight:600;color:${valorItemFaturaDRE(i)<0?'#dc2626':'#16a34a'}">${_cfBrl(valorItemFaturaDRE(i))}</td>
         <td style="font-size:11px">${i.categoria_dre
           ?`<span style="background:var(--bg);padding:2px 6px;border-radius:4px;font-size:10px">${i.categoria_dre}</span>`
-          :(i.removido?'<span style="font-size:10px;color:var(--muted)">removido</span>':'<span style="color:#f59e0b;font-size:10px">sem categoria</span>')}</td>
+          :(i.removido?'<span style="font-size:10px;color:var(--muted)">removido</span>':'<span style="color:#f59e0b;font-size:10px">sem categoria</span>')}<div style="font-size:10px;color:var(--muted);margin-top:4px">${esc(situacaoItemFaturaDRE(i,faturaId))}</div></td>
       </tr>`).join('') +
       `<tr style="background:var(--bg)">
         <td colspan="2" style="text-align:right;font-size:11px;font-weight:700;padding:8px 12px">Total:</td>
@@ -8604,7 +8627,7 @@ function localizarConferencia(id) {
 <div class="modal-overlay" id="m-cf-itens" onclick="if(event.target===this)this.style.display='none'" style="z-index:700">
   <div style="background:#fff;border-radius:14px;width:100%;max-width:700px;max-height:85vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.3)">
     <div style="background:var(--red);padding:12px 18px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
-      <button id="cf-classificar-pendentes" class="btn bp" style="margin-right:8px">Classificar pendências</button><div id="cf-itens-titulo" style="color:#fff;font-size:14px;font-weight:700">Itens da Fatura</div>
+      <button id="cf-classificar-pendentes" class="btn bp" style="margin-right:8px">Classificar / revisar</button><button class="btn bs" onclick="document.getElementById('m-cf-itens').style.display='none';fecharControleFaturas();abrirConciliacaoCartao(_cfItensFaturaIdAtual)">Vincular nota</button><div id="cf-itens-titulo" style="color:#fff;font-size:14px;font-weight:700">Itens da Fatura</div>
       <button onclick="document.getElementById('m-cf-itens').style.display='none'" style="background:none;border:none;color:rgba(255,255,255,.8);font-size:20px;cursor:pointer">×</button>
     </div>
     <div style="overflow-y:auto;flex:1;min-height:0">
