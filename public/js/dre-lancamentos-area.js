@@ -5,8 +5,8 @@ const st={
   view:localStorage.getItem('dre-main-view')||'demonstrativo',
   q:'',grupo:'nenhum',status:'todos',origem:'todas',
   sel:new Set(),detalhe:null,gruposFechados:new Set(),
-  limite:300,
-  ferramentas:localStorage.getItem('dre-ferramentas')==='1'
+  limite:100,
+  ferramentas:false
 };
 
 const esc=v=>String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -55,6 +55,28 @@ function css(){
   body.dre-clean:not(.dre-tools-open) #painel-pendencias{display:none!important}
   body.dre-clean:not(.dre-tools-open) #dz-area{display:none!important}
   body.dre-clean:not(.dre-tools-open) .banner.show{display:none!important}
+  body.dre-clean .ctrl{display:none!important}
+  body.dre-view-demonstrativo .main{display:none!important}
+  body.dre-view-demonstrativo .dre-p{display:block!important;width:100%!important;min-width:0!important;flex:1;overflow:auto;border:0}
+  body.dre-view-demonstrativo #painel-pendencias,body.dre-view-demonstrativo .prog,body.dre-view-demonstrativo #aviso-modo-dre{display:none!important}
+  body.dre-view-demonstrativo .dre-hd button:last-child{display:none}
+  #painel-cartoes{display:none!important}
+  #dre-main-tabs{flex-wrap:wrap;flex-shrink:0}
+  #dre-periodo{padding:6px;border:1px solid var(--border);border-radius:7px;max-width:145px}
+  #dre-actions{position:relative}
+  #dre-actions summary{cursor:pointer;list-style:none;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px}
+  #dre-actions>div{position:absolute;right:0;top:38px;min-width:210px;background:#fff;border:1px solid var(--border);border-radius:10px;padding:6px;box-shadow:0 8px 24px #0002;z-index:70}
+  #dre-actions button{display:block;width:100%;text-align:left;border:0;background:#fff;padding:9px;border-radius:5px;cursor:pointer;font-size:12px}
+  #dre-actions button:hover{background:#f8f4f0}
+  .mbg{padding:12px;box-sizing:border-box}
+  .mbg .md{max-height:calc(100dvh - 24px)!important;max-width:calc(100vw - 24px)!important;display:flex;flex-direction:column;overflow:hidden}
+  .mbg .mdh,.mbg .mdf{flex-shrink:0;flex-wrap:wrap;gap:8px}
+  .mbg .mdb{min-height:0;overflow:auto}
+  .modal-overlay{padding:12px!important;box-sizing:border-box}
+  .modal-overlay>div{max-height:calc(100dvh - 24px)!important;max-width:calc(100vw - 24px)!important}
+  .dla-group{overflow-x:auto}
+  .dla-row,.dla-headrow{min-width:1000px}
+  @media(max-width:760px){.dla-row{min-width:0}#dre-main-tabs{padding:8px}.dre-main-tab{padding:6px 8px}}
   body.dre-clean .ctrl{padding:7px 12px}
   body.dre-clean .stats-grid{padding-top:8px;padding-bottom:8px}
   body.dre-clean .totals-row{padding-bottom:8px}
@@ -151,9 +173,20 @@ function nav(){
     <button class="dre-main-tab" data-v="conciliacao">🔗 Conciliação</button>
     <button class="dre-main-tab" data-v="planejamento">📅 Planejamento</button>
     <span class="dre-ws-spacer"></span>
-    <button class="dre-ws-tools ${st.ferramentas?'on':''}" id="dre-tools-btn">⚙️ ${st.ferramentas?'Ocultar ferramentas':'Ferramentas'}</button>`;
+    <input type="month" id="dre-periodo" aria-label="Mês do DRE" value="${document.getElementById('f-mesref')?.value||''}">
+    <button class="dre-ws-tools" onclick="salvarTodos()">Salvar</button>
+    <details id="dre-actions"><summary>Importar e ações ▾</summary><div>
+      <button onclick="document.getElementById('f-ofx').click()">Importar extrato</button>
+      <button onclick="document.getElementById('f-cc').click()">Enviar fatura de cartão</button>
+      <button onclick="abrirControleFaturas()">Faturas e classificações</button>
+      <button onclick="abrirManual()">Novo lançamento</button>
+      <button onclick="abrirAuditoriaDREFranquia()">Auditar envio</button>
+      <button onclick="gerarExcelDRE()">Exportar Excel</button>
+      <button onclick="abrirSessoes()">Histórico de sessões</button>
+    </div></details>`;
   n.querySelectorAll('[data-v]').forEach(b=>b.onclick=()=>setView(b.dataset.v));
-  n.querySelector('#dre-tools-btn').onclick=toggleFerramentas;
+  n.querySelector('#dre-periodo').onchange=e=>{const real=document.getElementById('f-mesref');real.value=e.target.value;if(typeof root.trocarMes==='function')root.trocarMes();};
+  n.querySelectorAll('#dre-actions button').forEach(b=>b.addEventListener('click',()=>document.getElementById('dre-actions').removeAttribute('open')));
 }
 
 function area(){
@@ -191,7 +224,8 @@ function setView(v){
   document.body.classList.toggle('dre-view-conciliacao',v==='conciliacao');
   document.body.classList.toggle('dre-view-planejamento',v==='planejamento');
   document.body.classList.add('dre-clean');
-  document.body.classList.toggle('dre-tools-open',st.ferramentas);
+  document.body.classList.toggle('dre-tools-open',false);
+  if(v==='demonstrativo'&&typeof root.renderDRE==='function')root.renderDRE();
   marcarTab();
   if(v==='lancamentos')render();
   if((v==='conciliacao'||v==='planejamento')&&typeof root.dreFinanceViewRender==='function') root.dreFinanceViewRender(v);
@@ -306,7 +340,7 @@ function render(){
         ${fechado?'':`<div class="dla-headrow"><span></span><span>Data</span><span>Origem</span><span>Lançamento / fornecedor</span><span>Categoria</span><span>Status</span><span style="text-align:right">Valor</span><span style="text-align:right">Ações</span></div>${it.map(row).join('')}`}
       </div>`;
     }).join(''):'<div class="dla-empty">Nenhum lançamento encontrado com estes filtros.</div>'}
-    ${l.length>visiveis.length?`<div style="display:flex;justify-content:center;padding:14px"><button class="btn bs" onclick="dreLancMais()">Mostrar mais ${Math.min(300,l.length-visiveis.length)} de ${l.length-visiveis.length} restantes</button></div>`:''}
+    ${l.length>visiveis.length?`<div style="display:flex;justify-content:center;padding:14px"><button class="btn bs" onclick="dreLancMais()">Mostrar mais ${Math.min(100,l.length-visiveis.length)} de ${l.length-visiveis.length} restantes</button></div>`:''}
   `;
   const sels=a.querySelectorAll('.dla-filtros select');
   if(sels[0])sels[0].value=st.grupo;
@@ -346,7 +380,8 @@ function abrirDetalhes(id){
   d.innerHTML=detalheHtml(t);d.classList.add('open');bg.classList.add('open');
 }
 function fecharDetalhes(){st.detalhe=null;document.getElementById('dre-lanc-drawer')?.classList.remove('open');document.getElementById('dre-lanc-drawer-bg')?.classList.remove('open');}
-function refresh(){_catValsCache=null;if(st.view==='lancamentos')setTimeout(render,20);}
+let refreshTimer;
+function refresh(){_catValsCache=null;clearTimeout(refreshTimer);const p=document.getElementById('dre-periodo'),real=document.getElementById('f-mesref');if(p&&real)p.value=real.value;if(st.view==='lancamentos')refreshTimer=setTimeout(render,40);}
 function wrapRender(){
   if(root.__dreWsWrapped||typeof root.render!=='function')return;
   root.__dreWsWrapped=true;
@@ -355,9 +390,9 @@ function wrapRender(){
 }
 
 root.dreLancRefresh=refresh;
-root.dreLancBusca=v=>{st.q=v;st.limite=300;render();};
-root.dreLancGrupo=v=>{st.grupo=v;st.limite=300;render();};
-root.dreLancMais=()=>{st.limite+=300;render();};
+root.dreLancBusca=v=>{st.q=v;st.limite=100;render();};
+root.dreLancGrupo=v=>{st.grupo=v;st.limite=100;render();};
+root.dreLancMais=()=>{st.limite+=100;render();};
 root.dreLancStatus=v=>{st.status=v;render();};
 root.dreLancOrigem=v=>{st.origem=v;render();};
 root.dreLancSel=(id,on)=>{on?st.sel.add(String(id)):st.sel.delete(String(id));render();};

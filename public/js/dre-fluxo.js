@@ -21,8 +21,9 @@
     const faturas=Cartao?.faturasDosLancamentos(entrada)||[];
     const fontes=entrada.map(t=>{if(!banco(t)||ref(t))return t;const d=Cartao?.decidir(t,faturas);return d?.acao==='vincular'?{...t,faturaCC:d.fatura.faturaId,vinculadoFaturaCC:true}:t;});
     const ativos=fontes.filter(t=>!t.ignorar||pagamentoCartao(t));
-    const documentos=new Map(),itens=new Map(),pagamentos=new Map(),suprimidos=[],pendencias=[];
+    const documentos=new Map(),itens=new Map(),pagamentos=new Map(),bancosPorBoleto=new Map(),suprimidos=[],pendencias=[];
     for(const t of ativos){
+      if(banco(t)&&!pagamentoCartao(t)&&t.boletoId&&!bancosPorBoleto.has(String(t.boletoId)))bancosPorBoleto.set(String(t.boletoId),t);
       if(documento(t)&&t.boletoId){const k=String(t.boletoId);const antigo=documentos.get(k);if(!antigo||(!antigo.categoria&&t.categoria))documentos.set(k,t);}
       if(t.fonte==='CC')itens.set(String(t.id),t);
       if(pagamentoCartao(t)){
@@ -48,7 +49,7 @@
       if(pagamentoCartao(t))continue;
       if(documento(t)){
         if(t.boletoId&&documentos.get(String(t.boletoId))!==t){retirar(t,'mesmo boleto');continue;}
-        const pagamento=ativos.find(x=>banco(x)&&!pagamentoCartao(x)&&t.boletoId&&String(x.boletoId)===String(t.boletoId));
+        const pagamento=t.boletoId?bancosPorBoleto.get(String(t.boletoId)):null;
         const item=t.cartaoItemRef&&itens.get(String(t.cartaoItemRef));
         if(modo==='caixa'&&(pagamento||item)){retirar(t,'documento representado pelo pagamento');continue;}
         if(modo==='caixa'&&t.fonte==='BOLETO_PREV'&&!t.cartaoCredito){retirar(t,'documento ainda não pago');continue;}

@@ -870,10 +870,12 @@ module.exports = function (pool, app) {
       const limit=Math.min(Math.max(parseInt(req.query.limit)||24,1),60);
       const lojaId=Number(req.user?.lojaId);
       const {rows}=await pool.query(`
-        SELECT id,mes_ref,descricao,dados_json,criado_em,atualizado_em,
-               res_receitas,res_despesas,res_cmv,res_lucro_bruto,res_lucro_op,res_final
-        FROM dre_sessoes
-        WHERE loja_id=$1
+        SELECT * FROM (
+          SELECT DISTINCT ON (mes_ref) id,mes_ref,descricao,dados_json,criado_em,atualizado_em,
+                 res_receitas,res_despesas,res_cmv,res_lucro_bruto,res_lucro_op,res_final
+          FROM dre_sessoes WHERE loja_id=$1
+          ORDER BY mes_ref,atualizado_em DESC,id DESC
+        ) recentes
         ORDER BY atualizado_em DESC
         LIMIT $2
       `,[lojaId,limit]);
