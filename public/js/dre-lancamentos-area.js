@@ -36,6 +36,8 @@ const dataBr=v=>{
   if(m)return `${m[3]}/${m[2]}/${m[1]}`;
   return s||'—';
 };
+const motivoIgnorado=t=>t.motivoIgnorado||(t.saldoInformativo?'Saldo bancário informativo':t.vinculadoFaturaCC?'Pagamento representado pela fatura':'Marcação antiga; motivo não registrado');
+const rendimento=t=>['OFX','EXTRATO'].includes(t.fonte)&&Number(t.valor)>0&&t.categoria==='Juros de aplicacoes financeiras'&&/RENDIMENTO/i.test(descricao(t));
 const temVinculo=t=>!!(t?.boletoId||t?.vinculadoFaturaCC||t?.faturaCC||t?.cartao_fatura_id||t?.cartaoItemRef);
 
 function css(){
@@ -277,7 +279,7 @@ function row(t){
     <span>${esc(origem(t))}</span>
     <div class="dla-desc"><strong title="${esc(descricao(t))}">${esc(descricao(t))}</strong><small>${esc(fornecedor(t)||'Sem fornecedor')}</small></div>
     <input class="dla-cat ${!t.categoria?'pendente':''}" list="cats-dl" value="${esc(t.categoria||'')}" placeholder="— Sem categoria —" onchange="setCat('${esc(id)}',this.value);dreLancRefresh()">
-    <span class="dla-status ${esc(s)}">${esc(s)}</span>
+    <span class="dla-status ${esc(s)}" title="${t.ignorar?esc(motivoIgnorado(t)):esc(s)}">${esc(s)}</span>
     <span class="dla-val ${v<0?'neg':'pos'}">${brl(v)}</span>
     <div class="dla-act">
       <button title="${t.ignorar?'Reativar':'Ignorar'}" onclick="togIgn('${esc(id)}');dreLancRefresh()">${t.ignorar?'↩️':'🚫'}</button>
@@ -301,6 +303,7 @@ function render(){
     <div class="dla-top">
       <div><div class="dla-title">Lançamentos</div><div class="dla-sub">Aqui você corrige e organiza os dados. O Demonstrativo fica apenas para leitura do resultado e a Conferência somente para inconsistências.</div></div>
       <div class="dla-top-actions">
+        ${st.status==='IGNORADO'&&txs().some(t=>t.ignorar&&rendimento(t))?'<button class="btn bs" onclick="dreLancReativarRendimentos()">Reativar rendimentos</button>':''}
         <button class="btn bs" onclick="dreLancSelecionarVisiveis()">Selecionar visíveis</button>
         <button class="btn bs" onclick="setTimeout(()=>{if(typeof abrirConferenciaDRE==='function')abrirConferenciaDRE()},0)">Abrir Conferência</button>
       </div>
@@ -354,6 +357,7 @@ function detalheHtml(t){
     <div class="dld-head"><div><div class="dld-title">${esc(descricao(t))}</div><div style="font-size:10px;color:var(--muted);margin-top:3px">${esc(fornecedor(t)||'Sem fornecedor')}</div></div><button class="dld-close" onclick="dreLancFecharDetalhes()">×</button></div>
     <div class="dld-body">
       ${vinculacao?'<div class="dld-warning">🔗 Este lançamento possui vínculo financeiro. Revise o vínculo antes de excluir para não quebrar a conciliação.</div>':''}
+      ${t.ignorar?`<div class="dld-warning">Motivo: ${esc(motivoIgnorado(t))}. Um rendimento confirmado pode ser reativado abaixo.</div>`:''}
       <div class="dld-grid">
         <div class="dld-field"><span>Data</span><b>${esc(dataBr(t.data))}</b></div>
         <div class="dld-field"><span>Valor</span><b>${esc(brl(v))}</b></div>
@@ -389,6 +393,14 @@ function wrapRender(){
   root.render=function(){const r=base.apply(this,arguments);refresh();return r;};
 }
 
+root.dreLancReativarRendimentos=()=>{
+  const itens=txs().filter(t=>t.ignorar&&rendimento(t));
+  itens.forEach(t=>{t.ignorar=false;t.motivoIgnorado=null;t.ignorarAlteradoEm=new Date().toISOString();});
+  if(typeof root.autoSv==='function')root.autoSv();
+  if(typeof root.updStats==='function')root.updStats();
+  if(typeof root.renderDRE==='function')root.renderDRE();
+  render();if(typeof root.toast==='function')root.toast(itens.length+' rendimento(s) reativado(s)');
+};
 root.dreLancRefresh=refresh;
 root.dreLancBusca=v=>{st.q=v;st.limite=100;render();};
 root.dreLancGrupo=v=>{st.grupo=v;st.limite=100;render();};
