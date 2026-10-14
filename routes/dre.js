@@ -2411,14 +2411,15 @@ module.exports = function (pool, app) {
           TO_CHAR(cf.data_pagamento, 'YYYY-MM-DD')          AS data_pagamento,
           -- Contagem de itens classificados (para status automático)
           (SELECT COUNT(*) FROM cartao_fatura_itens
-           WHERE fatura_id = cf.id AND removido = false
-             AND categoria_dre IS NOT NULL AND categoria_dre <> '') AS itens_classificados,
+           WHERE fatura_id = cf.id AND loja_id=$1 AND COALESCE(removido,false)=false
+             AND COALESCE(TRIM(categoria_dre),'')<>'') AS itens_classificados,
           (SELECT COUNT(*) FROM cartao_fatura_itens
-           WHERE fatura_id = cf.id AND removido = false) AS itens_total
+           WHERE fatura_id = cf.id AND loja_id=$1 AND COALESCE(removido,false)=false) AS itens_total
         FROM cartao_faturas cf
+        WHERE cf.loja_id=$1
         ORDER BY cf.importado_em DESC
         LIMIT 200
-      `);
+      `,[Number(req.user.lojaId)]);
 
       // Atualizar status automático baseado em classificação dos itens
       const rowsComStatus = rows.map(r => {
@@ -2434,13 +2435,6 @@ module.exports = function (pool, app) {
                  pct_classificado: tot > 0 ? Math.round(cls/tot*100) : 0 };
       });
 
-      // Persistir status calculado se mudou
-      for (const r of rowsComStatus) {
-        if (r.status !== rows.find(x => x.id === r.id)?.status) {
-          pool.query(`UPDATE cartao_faturas SET status=$1 WHERE id=$2 AND status != 'PAGA'`,
-            [r.status, r.id]).catch(()=>{});
-        }
-      }
 
       // KPIs
       const total        = rowsComStatus.length;
