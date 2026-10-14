@@ -31,15 +31,15 @@
       const id=String(t.faturaCC);
       if(!mapa.has(id)){
         const mm=id.match(/CC_(\d{2})_(\d{4})/);
-        mapa.set(id,{faturaId:id,mes:mm?`${mm[1]}/${mm[2]}`:(t.mesCaixa||t.mes||''),bandeira:t.bandeira||'',emissor:emissor((t.cartaoNome||'')+' '+(t.bandeira||'')+' '+id),soma:0,itens:0});
+        mapa.set(id,{faturaId:id,mes:mm?`${mm[1]}/${mm[2]}`:(t.mesCaixa||t.mes||''),bandeira:t.bandeira||'',documento:id.startsWith('DRIVE:')?id.split(':').slice(0,-1).join(':'):'',emissor:emissor((t.cartaoNome||'')+' '+(t.bandeira||'')+' '+id),soma:0,itens:0});
       }
       const f=mapa.get(id); f.soma+=Number(t.valor||0)||0; f.itens++;
       if(!f.bandeira&&t.bandeira)f.bandeira=t.bandeira;
       if(!f.emissor)f.emissor=emissor(t.cartaoNome||t.bandeira||'');
     });
     const individuais=[...mapa.values()].map(f=>({...f,total:Math.abs(f.soma)})).filter(f=>f.total>0.009);
-    const grupos=new Map();for(const f of individuais){if(!f.emissor)continue;const k=f.emissor+'|'+f.mes;if(!grupos.has(k))grupos.set(k,[]);grupos.get(k).push(f);}
-    const agregadas=[...grupos.values()].filter(g=>g.length>1).map(g=>({faturaId:'GRUPO:'+g[0].emissor+':'+g[0].mes,mes:g[0].mes,emissor:g[0].emissor,bandeira:g[0].emissor,total:Math.abs(g.reduce((s,f)=>s+f.soma,0)),referencias:g.map(f=>f.faturaId),itens:g.reduce((s,f)=>s+f.itens,0)}));
+    const grupos=new Map();for(const f of individuais){if(!f.emissor)continue;const k=f.emissor+'|'+f.mes+'|'+f.documento;if(!grupos.has(k))grupos.set(k,[]);grupos.get(k).push(f);}
+    const agregadas=[...grupos.values()].filter(g=>g.length>1).map(g=>({faturaId:'GRUPO:'+g[0].emissor+':'+g[0].mes+(g[0].documento?':'+g[0].documento:''),mes:g[0].mes,emissor:g[0].emissor,bandeira:g[0].emissor,total:Math.abs(g.reduce((s,f)=>s+f.soma,0)),referencias:g.map(f=>f.faturaId),itens:g.reduce((s,f)=>s+f.itens,0)}));
     return [...individuais,...agregadas];
   }
   function tolerancia(total){return Math.max(0.05,Math.min(2,Math.abs(total||0)*0.001));}
@@ -73,7 +73,7 @@
     if(tx.faturaCC){
       const atual=(faturas||[]).find(f=>f.faturaId===tx.faturaCC);
       const grupo=candidatos(tx,faturas).filter(c=>c.fatura.referencias);
-      if(atual&&Math.abs(Math.abs(Number(tx.valor))-atual.total)>tolerancia(atual.total)&&grupo.length===1)return {acao:'vincular',fatura:grupo[0].fatura,score:grupo[0].score};
+      if((!atual||Math.abs(Math.abs(Number(tx.valor))-atual.total)>tolerancia(atual.total))&&grupo.length===1)return {acao:'vincular',fatura:grupo[0].fatura,score:grupo[0].score};
       return {acao:'vinculado',faturaId:tx.faturaCC};
     }
     const catAtual=String(tx.categoria||'');
