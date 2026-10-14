@@ -412,6 +412,7 @@ module.exports = function (pool, app) {
           razaoSocial:  v.fornecedor || '',
           valor:        -Math.abs(v.valor),
           data:         v.dtPagamento || v.vencimento,
+          dataNota:     v.dtNota,
           mes:          v.mesCompetencia,
           mesCaixa:     v.mesCaixa,
           fonte:        isPago ? 'BOLETO' : 'BOLETO_PREV',

@@ -2759,7 +2759,7 @@ module.exports = function (pool, app) {
   r.get('/cartao-faturas/lancamentos', async(req,res)=>{
     try {
       const lojaId=Number(req.user?.lojaId);
-      const {rows}=await pool.query(`SELECT i.*,f.fatura_id_ref,f.bandeira,f.competencia,f.arquivo_nome
+      const {rows}=await pool.query(`SELECT i.*,f.fatura_id_ref,f.bandeira,f.cartao,f.competencia,f.arquivo_nome
         FROM cartao_fatura_itens i JOIN cartao_faturas f ON f.id=i.fatura_id
         WHERE i.loja_id=$1 AND f.loja_id=$1 AND COALESCE(i.removido,false)=false
         ORDER BY f.importado_em,i.id`,[lojaId]);
@@ -2772,7 +2772,7 @@ module.exports = function (pool, app) {
     try {
       const lojaId=Number(req.user?.lojaId);
       const { rows } = await pool.query(`
-        SELECT cfi.id, cfi.data_compra, cfi.descricao, cfi.valor, cfi.categoria_dre, cfi.portador, cfi.hash_item, cfi.removido, cfi.dados_json, cf.fatura_id_ref, cf.competencia
+        SELECT cfi.id, cfi.data_compra, cfi.descricao, cfi.valor, cfi.categoria_dre, cfi.portador, cfi.hash_item, cfi.removido, cfi.dados_json, cf.fatura_id_ref, cf.cartao, cf.bandeira, cf.competencia
         FROM cartao_fatura_itens cfi
         JOIN cartao_faturas cf ON cf.id=cfi.fatura_id
         WHERE cfi.fatura_id = $1 AND cfi.loja_id=$2 AND cf.loja_id=$2 AND COALESCE(cfi.removido,false)=false
