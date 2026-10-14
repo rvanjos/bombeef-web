@@ -85,7 +85,7 @@ function excluirSeguro(t){
 function aplicarFiltroDom(){
  document.querySelectorAll('#tbody tr[id^="tr-"]').forEach(row=>{const id=row.id.slice(3);const t=encontrar(id);if(!t)return;row.style.display=passaFiltro(t)?'':'none';enriquecerLinha(row,t);});
 }
-function posRender(){document.querySelectorAll('.dre-v2-detail-row').forEach(x=>x.remove());atualizarKpis();aplicarFiltroDom();}
+function posRender(){if(window.dreSetView&&document.body.classList.contains('dre-clean'))return;document.querySelectorAll('.dre-v2-detail-row').forEach(x=>x.remove());atualizarKpis();aplicarFiltroDom();}
 function envolverRender(){
  if(renderOriginal||typeof window.render!=='function')return;
  renderOriginal=window.render;

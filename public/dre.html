@@ -8,8 +8,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="/js/api.js"></script>
-<script src="/js/dre-conferencia.js?v=8"></script>
-<script src="/js/dre-fluxo.js?v=1"></script>
+<script src="/js/dre-conferencia.js?v=9"></script>
+<script src="/js/dre-fluxo.js?v=2"></script>
 <script>
   if (typeof pdfjsLib !== 'undefined') {
     pdfjsLib.GlobalWorkerOptions.workerSrc =
@@ -1594,8 +1594,9 @@ async function carregarSessao() {
     // Carga única: traz as sessões completas em uma requisição.
     // Antes eram 1 + N chamadas HTTP (até 25) a cada abertura/troca de mês.
     const lote = await api.get('/api/dre/sessoes-completas?limit=24');
-    if (!lote.ok || !lote.data?.length) {
-      TXS=[]; files=[]; supMem={}; sessId=null;
+    if(!lote.ok)throw new Error(lote.erro||'Não foi possível carregar o DRE');
+    if (!lote.data?.length) {
+      TXS=[]; files=[]; supMem={}; sessId=null; registrarBaseSalvaDRE();
       setSt('ok'); updMesFiltro(); render(); updStats(); renderDRE();
       atualizarAvisoModo();
       return;
@@ -1647,6 +1648,7 @@ async function carregarSessao() {
     }
     console.log(`[carregarSessao] ${TXS.length} lançamentos únicos de ${sessoes.filter(r=>r.ok).length} sessões`);
 
+    registrarBaseSalvaDRE();
     // Re-vincula BOLETO_PREV com EXTRATOs correspondentes (podem vir de sessões diferentes)
     _revinculateBoletosPrev();
 
@@ -2944,12 +2946,16 @@ function onGrpChange() {
 }
 
 function render() {
+  if(window.dreSetView&&document.body?.classList.contains('dre-clean')){
+    atualizarBadgeConferencia();return;
+  }
   const q     = (document.getElementById('busca').value||'').toLowerCase();
   const grp   = document.getElementById('f-grp').value;
   const mes   = document.getElementById('f-mes').value;
   const fonte = document.getElementById('f-fonte').value;
   const pend  = document.getElementById('f-pend').checked;
 
+  const limiarAlto=_filtroRapido==='altos'?TXS.reduce((s,x)=>s+Math.abs(Number(x.valor||0)),0)/Math.max(TXS.length,1)*3:0;
   // Todas as origens continuam visíveis; a deduplicação contábil pertence ao motor do DRE.
   const lista = TXS.filter(t => {
     // PREV_RECEITA nunca é ocultada
@@ -2978,7 +2984,7 @@ function render() {
     }
     if (_filtroRapido === 'naooper')  { if (!CATS_NAO_OPERACIONAIS.has(t.categoria)) return false; }
     if (_filtroRapido === 'altos') {
-      const limiar = TXS.reduce((s,x)=>s+Math.abs(parseFloat(x.valor||0)),0) / Math.max(TXS.length,1) * 3;
+      const limiar = limiarAlto;
       if (Math.abs(parseFloat(t.valor||0)) < limiar) return false;
     }
     if (_filtroRapido === 'manual')   { if (t.fonte !== 'MANUAL') return false; }
@@ -3003,14 +3009,13 @@ function render() {
     return;
   }
 
-  // Limita a 500 apenas quando não há filtro de mês específico
-  const mesFiltro = document.getElementById('f-mes').value;
-  const MAX_RENDER = mesFiltro ? 9999 : 500;
+  // A lista completa permanece na aba Lançamentos; a tabela legada tem limite de DOM.
+  const MAX_RENDER = 200;
   const listaRender = lista.length > MAX_RENDER ? lista.slice(0, MAX_RENDER) : lista;
   window._dreListaAtual = lista; // expõe para renderCardsMobile
   const avisoLimit = lista.length > MAX_RENDER 
     ? `<tr><td colspan="10" style="text-align:center;padding:8px;background:#fff8e6;font-size:12px;color:#856404">
-        ⚠️ Exibindo ${MAX_RENDER} de ${lista.length} lançamentos. Selecione um mês no filtro para ver todos.
+        Exibindo ${MAX_RENDER} de ${lista.length} lançamentos. Use a aba Lançamentos para navegar e carregar mais.
        </td></tr>` : '';
 
   tb.innerHTML = avisoLimit + listaRender.map(t => {
@@ -3066,7 +3071,7 @@ function render() {
   }).join('');
 
   document.getElementById('footer-note').textContent = `${listaRender.length} de ${lista.length} lançamento(s) exibido(s) · ${TXS.length} total`;
-  try { renderCardsMobile(lista); } catch(_) {} // cards mobile
+  try { if(window.innerWidth<=800)renderCardsMobile(listaRender); } catch(_) {} // cards mobile
   atualizarBadgeConferencia();
 }
 
@@ -3126,6 +3131,7 @@ function setCat(id, cat) {
   updStats();
   const mesLanc = t.mes || mesRef;
   salvarMesDebounce(mesLanc);
+  autoSv();
 }
 
 // ── Sprint 3.1-D: Vinculação automática por score ───────────────────────────
@@ -3297,8 +3303,32 @@ function salvarMesDebounce(mes) {
   _svMes[mes] = setTimeout(() => salvarMes(mes, true), 3000);
 }
 
+const _assinaturasSalvasDRE = new Map();
+const _salvamentosDRE = new Map();
+function assinaturaMesDRE(mes) {
+  const [mm,aa]=mes.split('/').map(Number);
+  const anterior=mm===1?'12/'+(aa-1):String(mm-1).padStart(2,'0')+'/'+aa;
+  const estoque=window._estoquesMes||{};
+  return JSON.stringify({transactions:TXS.filter(t=>!['PREV_RECEITA','PREV_DAS'].includes(t.fonte)&&(t.mes||mesRef)===mes),
+    estoques:[estoque[anterior],estoque[mes]],
+    files:mes===mesRef?files:[],mem:mes===mesRef?supMem:null});
+}
+function registrarBaseSalvaDRE(){
+  _assinaturasSalvasDRE.clear();
+  for(const mes of new Set(TXS.map(t=>t.mes||mesRef)))_assinaturasSalvasDRE.set(mes,assinaturaMesDRE(mes));
+}
 async function salvarMes(mes, silent=false) {
-  const txsMes = TXS.filter(t => {
+  if(_salvamentosDRE.has(mes)){
+    if(!await _salvamentosDRE.get(mes))return false;
+    return salvarMes(mes,silent);
+  }
+  if(_assinaturasSalvasDRE.get(mes)===assinaturaMesDRE(mes))return true;
+  const tarefa=_salvarMesDRE(mes,silent);
+  _salvamentosDRE.set(mes,tarefa);
+  try{return await tarefa;}finally{_salvamentosDRE.delete(mes);}
+}
+async function _salvarMesDRE(mes, silent=false) {
+  let txsMes = TXS.filter(t => {
     if (t.fonte === 'PREV_RECEITA') return false;
     if (t.fonte === 'PREV_DAS') return false;
     // Lançamento com mes definido — pertence ao seu mês
@@ -3331,8 +3361,10 @@ async function salvarMes(mes, silent=false) {
     } catch(_) {}
   }
   try {
+    txsMes=TXS.filter(t=>!['PREV_RECEITA','PREV_DAS'].includes(t.fonte)&&(t.mes||mesRef)===mes);
     // Calcula resultado do mês para salvar junto (Dashboard usa esse valor)
     const resultado = calcResultadoDRE(mes, 'comp');
+    const assinaturaEnviada=assinaturaMesDRE(mes);
 
     const d = await api.post('/api/dre/salvar', {
       sessao_id: sid,
@@ -3349,6 +3381,7 @@ async function salvarMes(mes, silent=false) {
       }
     });
     if (d.ok) {
+      _assinaturasSalvasDRE.set(mes,assinaturaEnviada);
       if (!window._sessoesPorMes) window._sessoesPorMes = {};
       window._sessoesPorMes[mes] = d.sessao_id;
       if (mes === mesRef) sessId = d.sessao_id;
@@ -4711,14 +4744,8 @@ async function desfazerConciliacaoCC(ccId) {
   render();renderDRE();autoSv();renderConciliacaoCartao();toast('Vínculo desfeito');
 }
 function toggleStatusCartoes() {
-  const painel = document.getElementById('painel-cartoes');
-  if (!painel) return;
-  if (painel.style.display === 'none') {
-    renderStatusCartoes();
-    painel.style.display = '';
-  } else {
-    painel.style.display = 'none';
-  }
+  const painel=document.getElementById('painel-cartoes');if(painel)painel.style.display='none';
+  abrirControleFaturas();
 }
 
 // Sprint 6.7-G: renderStatusCartoes — fonte única = banco (GET /api/dre/cartao-faturas)
@@ -5215,13 +5242,17 @@ window.togglePct = function togglePct() {
   renderDRE();
   if (document.getElementById('m-dre')?.classList.contains('open')) renderDREFull();
 }
+let _dreRenderTimer=null;
 window.renderDRE = function renderDRE(){
+  clearTimeout(_dreRenderTimer);
+  _dreRenderTimer=setTimeout(()=>{
   setTimeout(()=>{
     const inner=document.getElementById('dre-scroll-top-inner');
     const scroll=document.getElementById('dre-modal-scroll');
     if(inner&&scroll) inner.style.width=scroll.scrollWidth+'px';
   },50);
   _garantirFatPorMes().then(() => _buildDRE(document.getElementById('dre-body'),false));
+  },40);
 }
 window.renderDREFull = function renderDREFull(){
   _garantirFatPorMes().then(() => _buildDRE(document.getElementById('dre-full-body'),true));
@@ -7307,98 +7338,18 @@ function autoSv(){
 }
 
 async function salvarTodos(silent=false) {
-  // Agrupa por mês e salva cada sessão
-  const porMes = {};
-  TXS.forEach(t => {
-    const m = t.mes || mesRef;
-    if (!porMes[m]) porMes[m] = [];
-    porMes[m].push(t);
-  });
-  for (const mes of Object.keys(porMes)) {
-    if(!await salvarMes(mes,true)){toast('⚠️ Não foi possível atualizar o DRE. A fatura salva pode ser recuperada ao atualizar a tela.');return false;}
+  clearTimeout(_sv);
+  for(const mes of Object.keys(_svMes))clearTimeout(_svMes[mes]);
+  const meses=new Set([..._assinaturasSalvasDRE.keys(),...TXS.map(t=>t.mes||mesRef)]);
+  let ok=true;
+  for(const mes of meses){
+    if(!await salvarMes(mes,true))ok=false;
   }
-  if (!silent) toast('💾 Salvo! ' + TXS.length + ' lançamentos');
+  if(!ok){setSt('err');if(!silent)toast('⚠️ Alguns meses não puderam ser salvos. As alterações continuam na tela; confira se o mês está fechado.');return false;}
+  if(!silent)toast('💾 Alterações salvas');
   setSt('ok');return true;
 }
-
-async function salvar(silent=false, tentativa=1){
-  if(!TXS.length){ if(!silent) toast('⚠️ Sem lançamentos para salvar'); return; }
-  setSt('load');
-  try {
-    // Agrupa lançamentos por mês e salva cada grupo na sessão correta
-    const porMes = {};
-    TXS.forEach(t => {
-      const m = t.mes || mesRef;
-      if (!porMes[m]) porMes[m] = [];
-      porMes[m].push(t);
-    });
-
-    const meses = Object.keys(porMes);
-    let ultimoSessId = sessId;
-
-    for (const mes of meses) {
-      const txsMes = porMes[mes];
-      // Para o mês atual, usa sessId conhecido; outros meses usam null (backend encontra pelo mes_ref)
-      const sid = (window._sessoesPorMes && window._sessoesPorMes[mes])
-               || (mes === mesRef ? sessId : null);
-      // Sprint 3.1-E: calcular resultado antes de salvar e incluir no payload
-      // O backend já suporta os 6 campos res_* e usa COALESCE (não sobrescreve sessões antigas)
-      // calcResultadoDRE usa o modo atual (caixa/comp), estoque e DAS — sem nenhuma alteração de lógica
-      let _res = null;
-      try { _res = calcResultadoDRE(mes, 'comp'); } catch(_e) { console.warn('[salvar] calcResultadoDRE falhou:', _e.message); }
-
-      const d = await api.post('/api/dre/salvar', {
-        sessao_id: sid,
-        mes_ref: mes,
-        descricao: `Sessão ${mes} — ${txsMes.length} lançamentos`,
-        dados_json: {
-          transactions: txsMes,
-          loadedFiles: mes === mesRef ? files : [],
-          supplierMem: supMem,
-          estoquesMes: window._estoquesMes || {},
-          resultadoModo: 'competencia',
-          _savedAt: new Date().toISOString()
-        },
-        resultado: _res ? {
-          receitas:   _res.receitas,
-          despesas:   _res.despesas,
-          cmv:        _res.cmv,
-          lucroBruto: _res.lucroBruto,
-          lucroOp:    _res.lucroOp,
-          final:      _res.final,
-        } : undefined,
-      });
-      if (d.ok) {
-        if (mes === mesRef) {
-          if (sessId && d.sessao_id && sessId !== d.sessao_id)
-            console.warn('[DRE] sessId mudou:', sessId, '→', d.sessao_id);
-          ultimoSessId = d.sessao_id;
-        }
-      } else {
-        if (tentativa < 3 && d.erro && d.erro.includes('accepting')){
-          setSt('load');
-          setTimeout(()=>salvar(silent, tentativa+1), 3000 * tentativa);
-          if(!silent) toast(`⏳ Banco reiniciando, tentando novamente (${tentativa}/3)...`);
-          return;
-        }
-        console.error('[DRE/salvar] erro mes', mes, d.erro);
-      }
-    }
-
-    sessId = ultimoSessId;
-    if(!silent) toast('💾 Salvo! ' + TXS.length + ' lançamentos em ' + meses.length + ' mês(es)');
-    setSt('ok');
-  } catch(e) {
-    if(tentativa < 3){
-      setTimeout(()=>salvar(silent, tentativa+1), 3000 * tentativa);
-      if(!silent) toast(`⏳ Falha de conexão, tentando novamente (${tentativa}/3)...`);
-      return;
-    }
-    console.error('[DRE/salvar] exception:', e);
-    if(!silent) toast('❌ Falha de conexão ao salvar');
-    setSt('err');
-  }
-}
+async function salvar(silent=false){return salvarTodos(silent);}
 
 async function abrirSessoes(){
   document.getElementById('m-sess').classList.add('open');
@@ -7513,7 +7464,9 @@ document.addEventListener('visibilitychange', () => {
     const tk = api.token ? api.token() : (sessionStorage.getItem('bb_token')||'');
     const porMes = {};
     TXS.forEach(t => { const m = t.mes||mesRef; if(!porMes[m]) porMes[m]=[]; porMes[m].push(t); });
-    Object.keys(porMes).forEach(mes => {
+    Object.keys(porMes).filter(mes=>_assinaturasSalvasDRE.get(mes)!==assinaturaMesDRE(mes)).forEach(mes => {
+      if(_salvamentosDRE.has(mes)){salvarMes(mes,true);return;}
+      const assinaturaEnviada=assinaturaMesDRE(mes);
       const sid = (window._sessoesPorMes||{})[mes] || (mes===mesRef?sessId:null);
       fetch('/api/dre/salvar', {
         method: 'POST', keepalive: true,
@@ -7524,7 +7477,7 @@ document.addEventListener('visibilitychange', () => {
           descricao: `Sessão ${mes} — ${porMes[mes].length} lançamentos`,
           dados_json: {transactions: porMes[mes], loadedFiles: mes===mesRef?files:[], supplierMem: supMem, estoquesMes:window._estoquesMes||{}, resultadoModo:'competencia', _savedAt: new Date().toISOString()}
         })
-      }).catch(()=>{});
+      }).then(r=>r.json()).then(d=>{if(d.ok)_assinaturasSalvasDRE.set(mes,assinaturaEnviada);}).catch(()=>{});
     });
   }
 });
