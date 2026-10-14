@@ -2183,8 +2183,8 @@ module.exports = function (pool, app) {
   }
 
   function detalheDespesasSessao(sessao, mes) {
-    const txs=extrairTransacoes(sessao?.dados_json).filter(t=>{
-      if(t?.ignorar || !String(t?.categoria||'').trim()) return false;
+    const txs=DREFluxo.resolver(extrairTransacoes(sessao?.dados_json),'comp').linhas.filter(t=>{
+      if(t?.ignorar) return false;
       if(CATS_NEUTRAS_RELATORIO.has(String(t.categoria))) return false;
       const m=String(t?.mes||mes);
       return m===mes && Number(t?.valor||0)<0;

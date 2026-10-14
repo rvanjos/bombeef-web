@@ -388,12 +388,12 @@ module.exports = function (pool, app) {
   r.get('/classificador', async (req, res) => {
     try {
       const { mes } = req.query;
-      let where = "WHERE status != 'cancelado'";
-      const params = [];
+      let where = "WHERE status != 'cancelado' AND loja_id=$1";
+      const params = [Number(req.user.lojaId)];
       if (mes) {
         params.push(mes);
         // Usa mes_competencia (data da NF) para provisão DRE — é a data de competência
-        where += ` AND COALESCE(mes_competencia, TO_CHAR(COALESCE(NULLIF(dt_nota,'')::date, vencimento), 'MM/YYYY')) = $1`;
+        where += ` AND COALESCE(mes_competencia, TO_CHAR(COALESCE(NULLIF(dt_nota,'')::date, vencimento), 'MM/YYYY')) = $2`;
       }
       const { rows } = await pool.query(
         `SELECT * FROM boletos ${where} ORDER BY vencimento ASC NULLS LAST`, params
@@ -670,12 +670,31 @@ module.exports = function (pool, app) {
   // Conciliação de uma NF/boleto com um item de fatura de cartão. O registro
   // continua existindo; apenas passa a ser a fonte contábil oficial da compra.
   r.post('/:id/vincular-cartao', autoPublish('boletos', 'boletos_atualizado'), async (req, res) => {
-    const { cartao, faturaRef, itemRef, mesCaixa } = req.body || {};
-    if (!faturaRef || !itemRef || !/^\d{2}\/\d{4}$/.test(String(mesCaixa||''))) {
+    const { cartao, faturaRef, itemRef, hashItem, mesCaixa } = req.body || {};
+    if (!faturaRef || !itemRef || !/^(0[1-9]|1[0-2])\/\d{4}$/.test(String(mesCaixa||''))) {
       return res.status(400).json({ ok:false, erro:'Fatura, item e mês de caixa são obrigatórios' });
     }
+    let client;
     try {
-      const { rows, rowCount } = await pool.query(`
+      const lojaId=Number(req.user.lojaId);
+      client=await pool.connect();await client.query('BEGIN');
+      const item=await client.query(`SELECT i.id,i.valor FROM cartao_fatura_itens i
+        JOIN cartao_faturas f ON f.id=i.fatura_id
+        WHERE i.loja_id=$1 AND f.loja_id=$1 AND f.fatura_id_ref=$2
+          AND COALESCE(i.removido,false)=false
+          AND CASE WHEN f.fatura_id_ref LIKE 'DRIVE:%' THEN i.valor>0 ELSE i.valor<0 END
+          AND (COALESCE(i.dados_json->>'id','ccdb_'||i.id::text)=$3 OR 'cc_caixa_'||i.hash_item=$3 OR i.hash_item=$4)
+        FOR UPDATE OF f`,[lojaId,faturaRef,String(itemRef),hashItem||null]);
+      if(item.rows.length!==1){await client.query('ROLLBACK');return res.status(404).json({ok:false,erro:'Item da fatura não encontrado nesta loja. Atualize o DRE.'});}
+      const nota=await client.query(`SELECT id,valor FROM boletos WHERE id=$1 AND loja_id=$2 AND status!='cancelado' FOR UPDATE`,[req.params.id,lojaId]);
+      if(!nota.rows.length){await client.query('ROLLBACK');return res.status(404).json({ok:false,erro:'Nota não encontrada nesta loja ou cancelada'});}
+      if(Math.abs(Math.round(Math.abs(Number(item.rows[0].valor))*100)-Math.round(Math.abs(Number(nota.rows[0].valor))*100))>1){
+        await client.query('ROLLBACK');return res.status(409).json({ok:false,erro:'O valor da nota/parcela não corresponde ao item do cartão. Selecione a parcela correspondente antes de vincular.'});
+      }
+      const conflitos=await client.query(`SELECT id FROM boletos WHERE loja_id=$1 AND status!='cancelado'
+        AND ((cartao_item_ref=$2 AND id!=$3) OR (id=$3 AND NULLIF(cartao_item_ref,'') IS NOT NULL AND cartao_item_ref!=$2))`,[lojaId,String(itemRef),req.params.id]);
+      if(conflitos.rows.length){await client.query('ROLLBACK');return res.status(409).json({ok:false,erro:'A nota ou o item já possui vínculo. Desfaça o vínculo anterior antes de trocar.'});}
+      const { rows, rowCount } = await client.query(`
         UPDATE boletos SET
           status_antes_cartao = CASE WHEN cartao_fatura_ref IS NULL THEN status ELSE status_antes_cartao END,
           status              = 'pago',
@@ -686,15 +705,17 @@ module.exports = function (pool, app) {
           vinculado_extrato   = false,
           extrato_lancamento  = NULL,
           atualizado_em       = NOW()
-        WHERE id=$5 AND status!='cancelado'
+        WHERE id=$5 AND loja_id=$6 AND status!='cancelado'
         RETURNING id, status, mes_caixa, cartao_credito, cartao_fatura_ref, cartao_item_ref
-      `, [cartao||null, faturaRef, itemRef, mesCaixa, req.params.id]);
-      if (!rowCount) return res.status(404).json({ ok:false, erro:'Boleto não encontrado ou cancelado' });
+      `, [cartao||null, faturaRef, itemRef, mesCaixa, req.params.id,lojaId]);
+      if (!rowCount){await client.query('ROLLBACK');return res.status(404).json({ ok:false, erro:'Nota não encontrada nesta loja ou cancelada' });}
+      await client.query('COMMIT');
       res.json({ ok:true, data:rows[0] });
     } catch (e) {
+      if(client)await client.query('ROLLBACK');
       console.error('[boletos/vincular-cartao]', e.message);
       res.status(500).json({ ok:false, erro:'Erro ao vincular boleto à fatura' });
-    }
+    }finally{client?.release();}
   });
 
   r.post('/:id/desvincular-cartao', autoPublish('boletos', 'boletos_atualizado'), async (req, res) => {
@@ -707,9 +728,9 @@ module.exports = function (pool, app) {
           cartao_fatura_ref  = NULL,
           cartao_item_ref    = NULL,
           atualizado_em      = NOW()
-        WHERE id=$1 AND cartao_fatura_ref IS NOT NULL
+        WHERE id=$1 AND loja_id=$2 AND cartao_fatura_ref IS NOT NULL
         RETURNING id, status, mes_caixa
-      `, [req.params.id]);
+      `, [req.params.id,Number(req.user.lojaId)]);
       if (!rowCount) return res.status(404).json({ ok:false, erro:'Vínculo não encontrado' });
       res.json({ ok:true, data:rows[0] });
     } catch (e) {
