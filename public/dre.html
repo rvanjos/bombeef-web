@@ -3303,6 +3303,7 @@ function salvarMesDebounce(mes) {
   _svMes[mes] = setTimeout(() => salvarMes(mes, true), 3000);
 }
 
+let _mesMetadadosDRE=null;
 const _assinaturasSalvasDRE = new Map();
 const _salvamentosDRE = new Map();
 function assinaturaMesDRE(mes) {
@@ -3311,9 +3312,10 @@ function assinaturaMesDRE(mes) {
   const estoque=window._estoquesMes||{};
   return JSON.stringify({transactions:TXS.filter(t=>!['PREV_RECEITA','PREV_DAS'].includes(t.fonte)&&(t.mes||mesRef)===mes),
     estoques:[estoque[anterior],estoque[mes]],
-    files:mes===mesRef?files:[],mem:mes===mesRef?supMem:null});
+    files:mes===_mesMetadadosDRE?files:[],mem:mes===_mesMetadadosDRE?supMem:null});
 }
 function registrarBaseSalvaDRE(){
+  _mesMetadadosDRE=mesRef;
   _assinaturasSalvasDRE.clear();
   for(const mes of new Set(TXS.map(t=>t.mes||mesRef)))_assinaturasSalvasDRE.set(mes,assinaturaMesDRE(mes));
 }
@@ -3373,7 +3375,7 @@ async function _salvarMesDRE(mes, silent=false) {
       resultado, // resultado calculado pelo frontend
       dados_json: {
         transactions: txsMes,
-        loadedFiles: mes === mesRef ? files : [],
+        loadedFiles: mes === (_mesMetadadosDRE||mesRef) ? files : [],
         supplierMem: supMem,
         estoquesMes: window._estoquesMes || {},
         resultadoModo: 'competencia',
@@ -7475,7 +7477,7 @@ document.addEventListener('visibilitychange', () => {
           sessao_id: sid, mes_ref: mes,
           resultado:calcResultadoDRE(mes,'comp'),
           descricao: `Sessão ${mes} — ${porMes[mes].length} lançamentos`,
-          dados_json: {transactions: porMes[mes], loadedFiles: mes===mesRef?files:[], supplierMem: supMem, estoquesMes:window._estoquesMes||{}, resultadoModo:'competencia', _savedAt: new Date().toISOString()}
+          dados_json: {transactions: porMes[mes], loadedFiles: mes===(_mesMetadadosDRE||mesRef)?files:[], supplierMem: supMem, estoquesMes:window._estoquesMes||{}, resultadoModo:'competencia', _savedAt: new Date().toISOString()}
         })
       }).then(r=>r.json()).then(d=>{if(d.ok)_assinaturasSalvasDRE.set(mes,assinaturaEnviada);}).catch(()=>{});
     });

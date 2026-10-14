@@ -5,7 +5,7 @@ function fixture(){
  const calls=[];let post=async()=>({ok:true,sessao_id:1});
  const txs=Array.from({length:12},(_,i)=>({id:String(i),fonte:'MANUAL',mes:String(i+1).padStart(2,'0')+'/2026',valor:-100,categoria:'Aluguel'}));
  const c=vm.createContext({console:{log(){},error(){}},TXS:txs,files:[],supMem:{},mesRef:'10/2026',sessId:10,_sv:0,_svMes:{},setTimeout,clearTimeout,setSt(){},toast(){},calcResultadoDRE:()=>({}),window:{_sessoesPorMes:Object.fromEntries(txs.map((t,i)=>[t.mes,i+1])),_estoquesMes:{}},api:{post:async(u,b)=>{calls.push(JSON.parse(JSON.stringify(b)));return post();},get:async()=>({ok:true,data:{id:1}})}});
- vm.runInContext(html.slice(html.indexOf('const _assinaturasSalvasDRE'),html.indexOf('async function desvinculardoBoleto')),c);
+ vm.runInContext(html.slice(html.indexOf('let _mesMetadadosDRE'),html.indexOf('async function desvinculardoBoleto')),c);
  vm.runInContext(html.slice(html.indexOf('async function salvarTodos('),html.indexOf('async function abrirSessoes(')),c);
  c.registrarBaseSalvaDRE();return {c,calls,setPost:f=>post=f};
 }
@@ -36,3 +36,5 @@ test('áreas separadas, menu único e navegação em blocos com 3.700 itens',{sk
   w.dreSetView('demonstrativo');assert.equal(w.document.body.classList.contains('dre-view-demonstrativo'),true);
  }finally{w.close();}
 });
+
+test('trocar mês para consulta não provoca salvamento de metadados sem edição',async()=>{const {c,calls}=fixture();c.mesRef='05/2026';await c.salvarTodos();assert.equal(calls.length,0);c.files.push('novo.pdf');await c.salvarTodos();assert.equal(calls.length,1);assert.equal(calls[0].mes_ref,'10/2026');assert.equal(calls[0].dados_json.loadedFiles[0],'novo.pdf');});
