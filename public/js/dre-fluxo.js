@@ -99,7 +99,7 @@
     }
     const ccDocumentos=new Map();
     for(const d of documentos.values())if(d.cartaoItemRef)ccDocumentos.set(String(d.cartaoItemRef),d);
-    const fitids=new Set(),linhas=[];
+    const fitids=new Set(),linhas=[],faturasPendentes=[];
     const retirar=(t,motivo)=>{suprimidos.push({id:t.id,motivo,valor:t.valor});};
     const adicionar=(t)=>{
       const linha={...t};
@@ -161,12 +161,12 @@
       }
       if(diferenca!==0){
         const base=unicos.at(-1);
-        adicionar({...base,id:base.id+'__pendencia',_pagamentoOrigemId:base.id,valor:diferenca/100,categoria:null,ignorar:false,lancamento:'Fatura pendente de detalhamento — '+(base.lancamento||''),mes:base.mesCaixa||base.mes});
+        faturasPendentes.push({...base,_foraDRE:true,_pendenciaClassificacao:true,id:base.id+'__pendencia',_pagamentoOrigemId:base.id,valor:diferenca/100,categoria:null,ignorar:false,lancamento:'Fatura pendente de detalhamento — '+(base.lancamento||''),mes:base.mesCaixa||base.mes});
         pendencias.push({id:base.id,tipo:'fatura',valor:diferenca/100,mes:base.mes,mesCaixa:base.mesCaixa,referencia:chave,descricao:'Pagamento e itens da fatura não conciliados'});
       }
-      for(const p of unicos)retirar(p,diferenca===0?'pagamento representado pelos gastos da fatura':'pagamento substituído por gastos + diferença a classificar');
+      for(const p of unicos)retirar(p,diferenca===0?'pagamento representado pelos gastos da fatura':'pagamento fora do resultado; detalhamento da fatura pendente');
     }
-    return {linhas,pendencias,suprimidos,vinculosInferidos:notas.vinculos};
+    return {linhas,pendencias,suprimidos,faturasPendentes,vinculosInferidos:notas.vinculos};
   }
   return {resolver,pagamentoCartao,identidade,contaBanco,deduplicar,detectarDuplicidades};
 });
