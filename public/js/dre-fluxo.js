@@ -8,13 +8,52 @@
   const pagamentoCartao=t=>banco(t)&&Number(t.valor)<0&&(
     ['Pagamento de Cartão','Pagamento de Fatura CC'].includes(t.categoria)||t.vinculadoFaturaCC||
     /pag(?:amento|to|\.)?\s*(?:de\s*)?(?:fatura|cart[aã]o)|pag.*fatura/i.test(t.lancamento||''));
+  function contaBanco(t){
+    return String(t.contaBancaria||[t.bankId||t.banco||'',t.acctId||t.conta||''].join(':')).trim();
+  }
   function identidade(t){
+    const loja=String(t.loja_id||'');
     const origem=documento(t)?'BOLETO':banco(t)?'BANCO':String(t.fonte||'');
-    if(documento(t)&&t.boletoId)return origem+'|'+t.boletoId;
-    if(banco(t)&&t.fitid)return origem+'|'+(t.conta||t.banco||'')+'|'+t.fitid;
-    if(t.fonte==='CC'&&(t.item_hash||t.hash_item_persistido))return 'CC|'+ref(t)+'|'+(t.item_hash||t.hash_item_persistido);
-    if(t.id)return origem+'|id|'+t.id;
-    return origem+'|'+ref(t)+'|'+JSON.stringify([t.data,t.valor,t.lancamento,t.mes,t.parcela,t.totalParcelas]);
+    if(documento(t)&&t.boletoId)return loja+'|'+origem+'|'+t.boletoId;
+    if(banco(t)&&t.fitid)return loja+'|'+origem+'|'+contaBanco(t)+'|'+t.fitid;
+    if(t.fonte==='CC'&&(t.item_hash||t.hash_item_persistido))return loja+'|CC|'+(t.fatura_db_id||ref(t))+'|'+(t.item_hash||t.hash_item_persistido);
+    if(t.fonte==='CC'&&t.item_db_id&&t.fatura_db_id)return loja+'|CCDB|'+t.fatura_db_id+'|'+t.item_db_id;
+    if(t.id)return loja+'|'+origem+'|id|'+t.id;
+    return loja+'|'+origem+'|'+ref(t)+'|'+JSON.stringify([t.data,t.valor,t.lancamento,t.mes,t.parcela,t.totalParcelas]);
+  }
+  function deduplicar(fontes){
+    const vistos=new Map(),suprimidos=[],aliases=new Map();
+    const qualidade=t=>(t.ignorar?0:1000)+(t._categoriaEditada?100:0)+(t.item_db_id?20:0)+(t.categoria?2:0)+(t.documentoBoletoId||t.cartaoItemRef?1:0)+(t.fonte==='BOLETO'?5:0);
+    for(const t of fontes){
+      if(t.ignorar&&t.duplicadoDe){aliases.set(String(t.id),String(t.duplicadoDe));suprimidos.push({id:t.id,motivo:'Duplicidade confirmada: '+t.duplicadoDe,valor:t.valor});continue;}
+      // Só identidade comprovada; data/valor/descrição iguais exigem conferência.
+      const k=identidade(t),ant=vistos.get(k);
+      if(ant&&cents(ant.valor)===cents(t.valor)&&String(ant.data||'')===String(t.data||'')){
+        const manter=qualidade(t)>qualidade(ant)?t:ant,outro=manter===t?ant:t;
+        vistos.set(k,manter);aliases.set(String(outro.id),String(manter.id));
+        suprimidos.push({id:outro.id,motivo:'Mesma identidade de origem: '+manter.id,valor:outro.valor});
+      }else vistos.set(ant?k+'|conflito|'+String(t.id):k,t);
+    }
+    const final=id=>{const visitados=new Set();while(aliases.has(id)&&!visitados.has(id)){visitados.add(id);id=aliases.get(id);}return id;};
+    return {fontes:[...vistos.values()].map(t=>t.cartaoItemRef&&aliases.has(String(t.cartaoItemRef))?{...t,cartaoItemRef:final(String(t.cartaoItemRef))}:t),suprimidos};
+  }
+  function detectarDuplicidades(txs){
+    const norm=v=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+    const grupos=new Map(),pares=[];
+    for(const t of txs||[]){
+      if(t.ignorar||(!banco(t)&&t.fonte!=='CC')||!t.data||!Number(t.valor))continue;
+      const k=[t.loja_id||'',banco(t)?'BANCO':'CC',String(t.data).slice(0,10),cents(t.valor),t.fonte==='CC'?(t.mesCaixa||''):''].join('|');
+      if(!grupos.has(k))grupos.set(k,[]);grupos.get(k).push(t);
+    }
+    for(const itens of grupos.values())for(let i=0;i<itens.length;i++)for(let j=i+1;j<itens.length;j++){
+      const a=itens[i],b=itens[j];if(String(a.id)===String(b.id))continue;
+      if(banco(a)&&contaBanco(a)!==':'&&contaBanco(b)!==':'&&contaBanco(a)!==contaBanco(b))continue;
+      const x=norm(a.lancamento),y=norm(b.lancamento),fx=norm(a.razaoSocial),fy=norm(b.razaoSocial);
+      const desc=x.length>=12&&y.length>=12&&(x.startsWith(y)||y.startsWith(x));
+      const fornecedor=x===y&&fx.length>=12&&fx===fy;
+      if(desc||fornecedor)pares.push({ids:[String(a.id),String(b.id)],motivo:identidade(a)===identidade(b)?'Mesma identidade de origem':'Mesma data e valor; descrição igual ou abreviada — confirmar'});
+    }
+    return pares;
   }
   function reconhecerNotas(fontes){
     const norm=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/[^A-Z0-9 ]/g,' ').split(/\s+/).filter(x=>x.length>=3&&!['LTDA','COMERCIAL','COMERCIO','SERVICOS','SAO','PAULO','ATACADO','INDUSTRIA','CARNES','ACOUGUE','CAMPINAS','VALINHOS','INDAIATUBA'].includes(x));
@@ -38,14 +77,15 @@
     return {fontes:fontes.map(t=>trocas.get(t)||t),vinculos,pendencias};
   }
   function resolver(txs,modo='comp'){
-    const entrada=Array.isArray(txs)?txs:[];
+    const dedup=deduplicar(Array.isArray(txs)?txs:[]);
+    const entrada=dedup.fontes;
     const faturas=Cartao?.faturasDosLancamentos(entrada)||[];
     const pagamentosResolvidos=entrada.map(t=>{if(!banco(t))return t;const d=Cartao?.decidir(t,faturas);return d?.acao==='vincular'?{...t,faturaCC:d.fatura.faturaId,faturasCCRefs:d.fatura.referencias||null,vinculadoFaturaCC:true}:t;});
     const notas=reconhecerNotas(pagamentosResolvidos),fontes=notas.fontes;
     const grupos=new Map();for(const p of fontes.filter(pagamentoCartao)){const refs=p.faturasCCRefs||faturas.find(f=>f.faturaId===ref(p))?.referencias||[];for(const r of refs)grupos.set(String(r),ref(p));}
     const chave=t=>grupos.get(ref(t))||ref(t);
     const ativos=fontes.filter(t=>!t.ignorar||pagamentoCartao(t));
-    const documentos=new Map(),itens=new Map(),pagamentos=new Map(),bancosPorBoleto=new Map(),suprimidos=[],pendencias=[...notas.pendencias];
+    const documentos=new Map(),itens=new Map(),pagamentos=new Map(),bancosPorBoleto=new Map(),suprimidos=[...dedup.suprimidos],pendencias=[...notas.pendencias];
     for(const t of ativos){
       if(banco(t)&&!pagamentoCartao(t)&&t.boletoId&&!bancosPorBoleto.has(String(t.boletoId)))bancosPorBoleto.set(String(t.boletoId),t);
       if(documento(t)&&t.boletoId){const k=String(t.boletoId);const antigo=documentos.get(k);if(!antigo||(!antigo.categoria&&t.categoria))documentos.set(k,t);}
@@ -69,7 +109,6 @@
       linhas.push(linha);
     };
     for(const t of ativos){
-      if(banco(t)&&t.fitid){const k=String(t.conta||t.banco||'')+'|'+t.fitid;if(fitids.has(k)){retirar(t,'FITID repetido');continue;}fitids.add(k);}
       if(pagamentoCartao(t))continue;
       if(documento(t)){
         if(t.boletoId&&documentos.get(String(t.boletoId))!==t){retirar(t,'mesmo boleto');continue;}
@@ -94,7 +133,7 @@
     }
     for(const [chave,pags] of pagamentos){
       // Identidade bancária, nunca mera coincidência de data e valor.
-      const vistos=new Set();const unicos=pags.filter(t=>{if(!t.fitid)return true;const k=(t.conta||t.banco||'')+'|'+t.fitid;if(vistos.has(k)){retirar(t,'FITID repetido');return false;}vistos.add(k);return true;});
+      const unicos=pags; // Identidades de origem já conciliadas antes de montar as faturas.
       const detalhes=chave.startsWith('pagamento:')?[]:fontes.filter(t=>t.fonte==='CC'&& (grupos.get(ref(t))||ref(t))===chave);
       const docsSemItem=chave.startsWith('pagamento:')?[]:[...documentos.values()].filter(d=>(grupos.get(ref(d))||ref(d))===chave&&(!d.cartaoItemRef||!itens.has(String(d.cartaoItemRef))));
       const pago=unicos.reduce((n,t)=>n+cents(t.valor),0);
@@ -128,5 +167,5 @@
     }
     return {linhas,pendencias,suprimidos,vinculosInferidos:notas.vinculos};
   }
-  return {resolver,pagamentoCartao,identidade};
+  return {resolver,pagamentoCartao,identidade,contaBanco,deduplicar,detectarDuplicidades};
 });
