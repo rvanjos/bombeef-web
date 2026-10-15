@@ -4,10 +4,9 @@ const fs=require('node:fs');
 const path=require('node:path');
 const ler=p=>fs.readFileSync(path.join(__dirname,'..',p),'utf8');
 
-test('ponto aplica tolerancia legal e exige aprovacao de extras',()=>{
+test('ponto aplica limite diario e exige aprovacao de extras',()=>{
   const rota=ler('routes/ponto.js');
-  assert.match(rota,/entradaAntecipada>5 \|\| saidaPosterior>5/);
-  assert.match(rota,/excedente>10/);
+  assert.match(rota,/excedente > 15/);
   assert.match(rota,/aprovacao_status/);
   assert.match(rota,/pendentes-aprovacao\/count/);
   assert.match(rota,/aprovacoes\/decidir-lote/);

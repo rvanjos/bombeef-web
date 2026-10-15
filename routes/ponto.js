@@ -247,29 +247,16 @@ module.exports = function(pool) {
     const previsto = new Date(`1970-01-01T${horarioEntrada}:00`);
     const atraso   = minutosSaoPaulo(entrada) - (previsto.getHours()*60+previsto.getMinutes());
     if (atraso > (toleranciaMin||10)) return 'atraso';
-    if (horasTrab !== null && horasTrab > jornadaHoras + 0.1) return 'hora_extra';
+    if (horasTrab !== null && calcularExtraMinutos(horasTrab, jornadaHoras) > 0) return 'hora_extra';
     return 'ok';
   }
 
-  // CLT art. 58, §1º: variações de até 5 min por marcação, observado máximo de 10 min/dia,
-  // não geram desconto/acréscimo. Se o excedente diário ultrapassar 10 min, ele entra na apuração.
-  function calcularExtraMinutos(horasTrab, jornadaHoras, trocaFolga=false, entrada=null, saida=null, horarioEntrada=null, horarioSaida=null) {
+  // Regra operacional: até 15 minutos de excedente total diário não gera extra.
+  // Acima do limite, apura o excedente integral; marcações originais são preservadas.
+  function calcularExtraMinutos(horasTrab, jornadaHoras, trocaFolga=false) {
     if (trocaFolga || horasTrab === null || horasTrab === undefined) return 0;
-    const excedente = Math.max(0, Math.round(Number(horasTrab)*60 - Number(jornadaHoras||8)*60));
-    if (!excedente) return 0;
-
-    // Art. 58, §1º: cada marcação tem margem de até 5 min, com teto diário de 10 min.
-    // Se uma marcação isolada ultrapassa 5 min, a tolerância deixa de protegê-la.
-    let entradaAntecipada=0, saidaPosterior=0;
-    if (entrada && horarioEntrada) {
-      const previsto=String(horarioEntrada).slice(0,5).split(':').map(Number);
-      entradaAntecipada=Math.max(0,(previsto[0]*60+previsto[1])-minutosSaoPaulo(entrada));
-    }
-    if (saida && horarioSaida) {
-      const previsto=String(horarioSaida).slice(0,5).split(':').map(Number);
-      saidaPosterior=Math.max(0,minutosSaoPaulo(saida)-(previsto[0]*60+previsto[1]));
-    }
-    return (excedente>10 || entradaAntecipada>5 || saidaPosterior>5) ? excedente : 0;
+    const excedente = Math.max(0, Math.round(Number(horasTrab)*60 - Number(jornadaHoras ?? 8)*60));
+    return excedente > 15 ? excedente : 0;
   }
 
   function calcularIntervaloSuprimido(saidaInt, retornoInt, intervaloMin) {
