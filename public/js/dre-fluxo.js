@@ -114,14 +114,14 @@
             let soma=0;
             originais.forEach((t,i)=>{
               const valor=i===originais.length-1?Math.round(alvo)-soma:Math.round(cents(t.valor)*fracao);
-              soma+=valor;linhas.push({...t,id:t.id+'__caixa_'+p.id,valor:valor/100,mesCaixa:p.mesCaixa||p.mes});
+              soma+=valor;linhas.push({...t,id:t.id+'__caixa_'+p.id,_origemId:t.id,valor:valor/100,mesCaixa:p.mesCaixa||p.mes});
             });
           }
         }
       }
       if(diferenca!==0){
         const base=unicos.at(-1);
-        adicionar({...base,id:base.id+'__pendencia',valor:diferenca/100,categoria:null,ignorar:false,lancamento:'Fatura pendente de detalhamento — '+(base.lancamento||''),mes:base.mesCaixa||base.mes});
+        adicionar({...base,id:base.id+'__pendencia',_pagamentoOrigemId:base.id,valor:diferenca/100,categoria:null,ignorar:false,lancamento:'Fatura pendente de detalhamento — '+(base.lancamento||''),mes:base.mesCaixa||base.mes});
         pendencias.push({id:base.id,tipo:'fatura',valor:diferenca/100,mes:base.mes,mesCaixa:base.mesCaixa,referencia:chave,descricao:'Pagamento e itens da fatura não conciliados'});
       }
       for(const p of unicos)retirar(p,diferenca===0?'pagamento representado pelos gastos da fatura':'pagamento substituído por gastos + diferença a classificar');
