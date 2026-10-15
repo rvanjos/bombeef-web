@@ -8,8 +8,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="/js/api.js"></script>
-<script src="/js/dre-conferencia.js?v=11"></script>
-<script src="/js/dre-fluxo.js?v=3"></script>
+<script src="/js/dre-conferencia.js?v=12"></script>
+<script src="/js/dre-fluxo.js?v=4"></script>
 <script>
   if (typeof pdfjsLib !== 'undefined') {
     pdfjsLib.GlobalWorkerOptions.workerSrc =
@@ -3098,7 +3098,7 @@ function _chaveFornecedor(t) {
 async function setCat(id, cat) {
   const t = TXS.find(x => String(x.id)===String(id)); if (!t) return;
   if(t.fonte==='CC'&&(t.faturaCC||t.fatura_db_id)){
-    if(!await _sincronizarCategoriesCC([{...t,categoria:cat||null}],t.faturaCC)){render();return;}
+    if(!await _sincronizarCategoriesCC([{...t,categoria:cat||null}],t.faturaCC)){return false;}
   }
   t.categoria = cat;
   if (cat) t.needsReview = false;
@@ -3134,6 +3134,7 @@ async function setCat(id, cat) {
   salvarMesDebounce(mesLanc);
   autoSv();
   if(t.fonte==='CC'){render();renderDRE();}
+  return true;
 }
 
 // ── Sprint 3.1-D: Vinculação automática por score ───────────────────────────
@@ -5533,8 +5534,8 @@ function prepararBaseDRE(modoOverride) {
   return { modo:modoBase, at, invalidos, meses, data, dataNaoOper, sg, sgt, getMes:getMesBase, valorDre };
 }
 
-function calcularMotorDRE(mesAlvo, modoOverride) {
-  const base = prepararBaseDRE(modoOverride);
+function calcularMotorDRE(mesAlvo, modoOverride, basePreparada) {
+  const base = basePreparada || prepararBaseDRE(modoOverride);
   const modoCalc = base.modo;
   const sg = gk => base.sg(gk, mesAlvo);
   const receitas = sg('RECEITAS');
@@ -5557,7 +5558,7 @@ function calcularMotorDRE(mesAlvo, modoOverride) {
   let despOper = OPER.reduce((s,gk)=>s+sg(gk),0);
 
   const mesesComSimples = new Set(
-    _txsSemDuplicatas(TXS).filter(t=>!t.ignorar&&t.categoria==='Simples Nacional').map(t=>t.mes||mesRef)
+    (base.at||_txsSemDuplicatas(TXS)).filter(t=>!t.ignorar&&t.categoria==='Simples Nacional').map(t=>t.mes||mesRef)
   );
   let dasEstimado = 0;
   if (!mesesComSimples.has(mesAlvo)) {
@@ -5584,6 +5585,8 @@ function _buildDRE(el, full) {
   if (!el) return;
   const baseDRE = prepararBaseDRE(getModo());
   const {at,data,dataNaoOper,meses,sg,sgt} = baseDRE;
+  const motores=new Map();
+  const motorMes=m=>{if(!motores.has(m))motores.set(m,calcularMotorDRE(m,getModo(),baseDRE));return motores.get(m);};
   const pendenciasFluxo=(window._drePendenciasFluxo||[]);
   if (!at.length) {
     el.innerHTML='<div style="padding:20px;text-align:center;color:var(--muted);font-size:12px">Classifique os lançamentos para ver o DRE</div>';
@@ -5656,7 +5659,7 @@ function _buildDRE(el, full) {
     const isDesp=gk!=='RECEITAS';
     const stBg=gk==='RECEITAS'?'#e8f7ef':gk==='CMV'?'#fff0f0':'#f5f0eb';
     const stCol=gk==='RECEITAS'?'var(--green)':'var(--red-l)';
-    const subtotalMes=m=>gk==='CMV'?calcularMotorDRE(m,getModo()).cmv:sg(gk,m);
+    const subtotalMes=m=>gk==='CMV'?motorMes(m).cmv:sg(gk,m);
     const totG=meses.reduce((s,m)=>s+subtotalMes(m),0);
     const gid='dreg-'+(full?'f':'s')+'-'+gk;
     return '<tr class="'+gid+'-row" style="background:'+stBg+'">'
@@ -5839,7 +5842,7 @@ function _buildDRE(el, full) {
     });
   }
   h += renderSubtotal('CMV', null);
-  meses.forEach(m=>{ lucBrutoMes[m]=calcularMotorDRE(m,getModo()).lucroBruto; });
+  meses.forEach(m=>{ lucBrutoMes[m]=motorMes(m).lucroBruto; });
   h += renderResultado('LUCRO BRUTO', '🟢', lucBrutoMes, '#e8f7ef', '#22c55e');
   meses.forEach(m=>{ lucOpMes[m]=lucBrutoMes[m]||0; });
 
@@ -5904,7 +5907,7 @@ function _buildDRE(el, full) {
   }
 
   // ── RESULTADO 2: LUCRO OPERACIONAL ────────────────────────────────────────
-  meses.forEach(m=>{ lucOpMes[m]=calcularMotorDRE(m,getModo()).lucroOp; });
+  meses.forEach(m=>{ lucOpMes[m]=motorMes(m).lucroOp; });
   h += renderResultado('LUCRO OPERACIONAL', '🔵', lucOpMes, '#eff6ff', '#3b82f6');
   meses.forEach(m=>{ resFinMes[m]=lucOpMes[m]||0; });
 
@@ -5917,7 +5920,7 @@ function _buildDRE(el, full) {
   }
 
   // ── RESULTADO 3: RESULTADO ANTES DAS RETIRADAS ────────────────────────────
-  meses.forEach(m=>{ resFinMes[m]=calcularMotorDRE(m,getModo()).antesRetiradas; });
+  meses.forEach(m=>{ resFinMes[m]=motorMes(m).antesRetiradas; });
   h += renderResultado('RESULTADO ANTES DAS RETIRADAS', '🟡', resFinMes, '#fffbeb', '#f59e0b');
   meses.forEach(m=>{ resAntRetMes[m]=resFinMes[m]||0; });
 
@@ -5930,7 +5933,7 @@ function _buildDRE(el, full) {
   }
 
   // ── RESULTADO FINAL ───────────────────────────────────────────────────────
-  meses.forEach(m=>{ resAntRetMes[m]=calcularMotorDRE(m,getModo()).final; });
+  meses.forEach(m=>{ resAntRetMes[m]=motorMes(m).final; });
   const totFinal=meses.reduce((s,m)=>s+(resAntRetMes[m]||0),0);
   h+='<tr style="background:#1a1a1a;border-top:4px solid #374151">'
     +'<td style="padding:12px 14px;color:#fff;font-weight:800;font-size:14px">💰 RESULTADO FINAL (LUCRO / PREJUÍZO REAL)</td>'
@@ -6654,9 +6657,10 @@ function _drillFornecedor(t) {
   return (t.razaoSocial || t.fornecedor || t.portador || 'Sem fornecedor').trim();
 }
 
-function _drillCategoriasOptions(atual) {
+function _drillCategoriasOptions(atual, somenteFatura=false) {
   const opts = Object.values(CATS).flatMap(g => g.s).sort((a,b) => a.localeCompare(b,'pt-BR'));
   const cartoes = CARTOES_MONITORADOS.map(c => `<option value="__FATURA_CC__${esc(c.id)}">💳 Pagamento fatura — ${esc(c.label)}</option>`).join('');
+  if(somenteFatura)return `<option value="">Vincular à fatura correspondente…</option>${cartoes}`;
   return `<option value="">— Sem categoria —</option><optgroup label="Pagamento de Fatura CC">${cartoes}</optgroup><optgroup label="Categorias DRE">${opts.map(c => `<option value="${esc(c)}"${c === atual ? ' selected' : ''}>${esc(c)}</option>`).join('')}</optgroup>`;
 }
 
@@ -6726,7 +6730,7 @@ function _drillRender() {
         <td data-label="Lançamento"><strong>${esc(t.lancamento||'—')}</strong>${avisos.length ? `<div class="drill-alerts">${avisos.map(a => `<span class="${a.tipo}">${esc(a.texto)}</span>`).join('')}</div>` : ''}</td>
         <td data-label="Fornecedor" title="${esc(_drillFornecedor(t))}">${esc(_drillFornecedor(t))}</td>
         <td data-label="Origem"><span class="drill-source">${esc(fonteNome[t.fonte]||t.fonte||'—')}</span></td>
-        <td data-label="Categoria"><select class="drill-cat-select" data-id="${esc(t.id)}" data-original="${esc(t.categoria||'')}" onchange="drillSalvarCategoria(this)">${_drillCategoriasOptions(t.categoria)}</select></td>
+        <td data-label="Categoria"><select class="drill-cat-select" data-id="${esc(t._origemId||t._pagamentoOrigemId||t.id)}" data-original="${esc(t.categoria||'')}" data-pendencia="${t._pagamentoOrigemId?'fatura':''}" onchange="drillSalvarCategoria(this)">${_drillCategoriasOptions(t.categoria,!!t._pagamentoOrigemId)}</select></td>
         <td data-label="Valor" class="drill-value ${v < 0 ? 'neg' : 'pos'}">${fmt.brl(v)}</td>
       </tr>`;
     }).join('');
@@ -6767,18 +6771,26 @@ function abrirCategoriaConferencia(id) {
   drillDown(t.categoria, _drillMesTx(t, getModo()));
 }
 
-function drillSalvarCategoria(sel) {
+async function drillSalvarCategoria(sel) {
   const id = sel.dataset.id;
   const t = TXS.find(x => String(x.id) === String(id));
-  if (!t) return;
+  if (!t) { toast('⚠️ Esta linha é uma diferença de conciliação. Vincule o pagamento à fatura para detalhá-la.'); return; }
   const novaCat = sel.value;
+  if(sel.dataset.pendencia==='fatura'&&!novaCat.startsWith('__FATURA_CC__'))return;
   if (novaCat.startsWith('__FATURA_CC__')) {
     const cartao = CARTOES_MONITORADOS.find(k => String(k.id) === novaCat.replace('__FATURA_CC__',''));
     sel.value = sel.dataset.original || '';
     abrirVinculacaoPagFaturaFromExtrato(id, cartao);
     return;
   }
-  setCat(id, novaCat);
+  sel.disabled=true;
+  let salvo=false;
+  try {
+    salvo=await setCat(id,novaCat);
+    if(salvo===false){sel.value=sel.dataset.original==='A CLASSIFICAR'?'':sel.dataset.original||'';return;}
+    if(!await salvarMes(t.mes||mesRef,true)){toast('⚠️ Categoria da fatura confirmada; sessão do DRE pendente de salvar.');return;}
+  } catch(e){toast('❌ Não foi possível salvar: '+e.message);return;}
+  finally{sel.disabled=false;}
   render();
   renderDRE();
   if (document.getElementById('m-dre')?.classList.contains('open')) renderDREFull();
@@ -7845,8 +7857,8 @@ function lancamentoItemFatura(i){
   const data=String(i.data_compra||'').slice(0,10);
   return {...base,id:base.id||'ccdb_'+i.id,data,mes:base.mes||(/^\d{4}-\d{2}/.test(data)?data.slice(5,7)+'/'+data.slice(0,4):i.competencia),
     mesCaixa:base.mesCaixa||i.competencia,fonte:'CC',valor:valorItemFaturaDRE(i),lancamento:i.descricao||'',razaoSocial:base.razaoSocial||i.descricao||'',
-    categoria:Object.prototype.hasOwnProperty.call(i,'categoria_dre')?(i.categoria_dre||null):(base.categoria||null),portador:i.portador,faturaCC:i.fatura_id_ref||base.faturaCC,
-    fatura_db_id:i.fatura_id,hash_item_persistido:i.hash_item,cartaoNome:i.cartao||base.cartaoNome||i.bandeira||base.bandeira,bandeira:i.bandeira||base.bandeira};
+    categoria:Object.prototype.hasOwnProperty.call(i,'categoria_dre')?(i.categoria_dre||null):(base.categoria||null),portador:i.portador,faturaCC:i.fatura_id_ref||base.faturaCC||("FATURA_DB:"+i.fatura_id),
+    fatura_db_id:i.fatura_id,item_db_id:i.id,hash_item_persistido:i.hash_item,cartaoNome:i.cartao||base.cartaoNome||i.bandeira||base.bandeira,bandeira:i.bandeira||base.bandeira};
 }
 function valorItemFaturaDRE(i){
   // O agente Drive grava débitos positivos e créditos negativos; o DRE usa o inverso.
@@ -7862,11 +7874,20 @@ function buscarItemFaturaNaSessao(l,i){
 async function recuperarFaturasDoBanco(){
   const r=await api.get('/api/dre/cartao-faturas/lancamentos');
   if(!r.ok){toast('⚠️ Não foi possível conferir as faturas salvas. Tente atualizar antes do fechamento.');return;}
+  const recuperadas=[];
   for(const i of r.data||[]){
     const l=lancamentoItemFatura(i);
     const t=buscarItemFaturaNaSessao(l,i);
-    if(t){t.fatura_db_id=i.fatura_id;t.hash_item_persistido=i.hash_item;t.cartaoNome=l.cartaoNome;t.categoria=i.categoria_dre||null;}
+    if(t){
+      t.fatura_db_id=i.fatura_id;t.item_db_id=i.id;t.hash_item_persistido=i.hash_item;t.cartaoNome=l.cartaoNome;
+      const recuperar=!i.categoria_dre&&!i.dados_json?._categoriaEditada&&t.categoria&&t.categoria!=='A CLASSIFICAR'&&Object.values(CATS).some(g=>g.s.includes(t.categoria));
+      if(recuperar)recuperadas.push({...t});else t.categoria=i.categoria_dre||null;
+    }
     else {TXS.push(l);}
+  }
+  if(recuperadas.length){
+    const salvo=await _sincronizarCategoriesCC(recuperadas);
+    toast(salvo?'✅ '+recuperadas.length+' classificação(ões) recuperada(s) da sessão e gravada(s) na fatura.':'⚠️ Classificações da sessão preservadas; recuperação na fatura pendente.');
   }
   updMesFiltro();render();updStats();renderDRE();
 }
@@ -7902,6 +7923,7 @@ async function classificarItemFaturaInline(faturaId,itemId,categoria,input){
     const r=await api.patch('/api/dre/cartao-faturas/sincronizar-categorias',{itens:[{fatura_id:faturaId,hash_item:i.hash_item,categoria:categoria||null}]});
     if(!r.ok||r.atualizados!==1){input.value=anterior;if(status)status.textContent='Não salvo — '+(r.erro||'tente novamente');return;}
     i.categoria_dre=categoria||null;
+    i.dados_json={...(i.dados_json||{}),_categoriaEditada:true};
     const l=lancamentoItemFatura({...i,fatura_id:faturaId});
     const t=buscarItemFaturaNaSessao(l,{...i,fatura_id:faturaId});
     if(t)t.categoria=l.categoria;else TXS.push(l);
@@ -7912,13 +7934,13 @@ async function classificarItemFaturaInline(faturaId,itemId,categoria,input){
   }catch(e){input.value=i.categoria_dre||anterior;if(status)status.textContent='Falha de conexão — tente novamente';}
   finally{input.disabled=false;_cfItensEnviando.delete(chave);}
 }
-function situacaoItemFaturaDRE(i,faturaId){
+function situacaoItemFaturaDRE(i,faturaId,fluxoPronto){
   const l=lancamentoItemFatura({...i,fatura_id:faturaId});
   const existente=buscarItemFaturaNaSessao(l,{...i,fatura_id:faturaId});
   const t={...(existente||l),categoria:i.categoria_dre||null};
   const nota=TXS.find(n=>n.fonte?.startsWith('BOLETO')&&String(n.cartaoItemRef||'')===String(t.id));
   const base=[...TXS.filter(x=>!(x.fonte==='CC'&&String(x.id)===String(t.id))),t];
-  const fluxo=DREFluxo.resolver(base,getModo());
+  const fluxo=fluxoPronto||DREFluxo.resolver(base,getModo());
   const incluido=fluxo.linhas.some(x=>String(x.id)===String(t.id)||String(x.id).startsWith(String(t.id)+'__caixa_'));
   const reconhecida=fluxo.vinculosInferidos?.find(v=>String(v.itemId)===String(t.id));
   const status=t.ignorar?'Ignorado':reconhecida?'Nota reconhecida pelo DRE — despesa contada uma vez':nota?'Nota vinculada — despesa contada uma vez':incluido?(t.categoria?'Incluído no DRE':'Incluído em A CLASSIFICAR'):'Representado por outro lançamento';
@@ -7941,12 +7963,13 @@ async function verItensFatura(faturaId, titulo) {
     }
     res.data.forEach(i=>_cfItensEdicao.set(faturaId+':'+i.id,i));
     const total = -res.data.reduce((s,i) => s + valorItemFaturaDRE(i), 0);
+    const fluxoItens=DREFluxo.resolver(TXS,getModo());
     tbody.innerHTML = res.data.map(i => `
       <tr${i.removido?' style="opacity:.45;text-decoration:line-through"':''}>
         <td style="font-size:11px;color:var(--muted);white-space:nowrap">${i.data_compra?i.data_compra.split('-').reverse().join('/'):'—'}</td>
         <td style="font-size:12px">${i.descricao||'—'}${i.portador?`<div style="font-size:10px;color:var(--muted)">${i.portador}</div>`:''}</td>
         <td style="text-align:right;font-family:'DM Mono',monospace;font-size:12px;font-weight:600;color:${valorItemFaturaDRE(i)<0?'#dc2626':'#16a34a'}">${_cfBrl(valorItemFaturaDRE(i))}</td>
-        <td style="font-size:11px">${categoriaItemFaturaSelect(i,faturaId)}<div id="cf-item-dre-${Number(i.id)}" style="font-size:10px;color:var(--muted);margin-top:4px">${esc(situacaoItemFaturaDRE(i,faturaId))}</div></td>
+        <td style="font-size:11px">${categoriaItemFaturaSelect(i,faturaId)}<div id="cf-item-dre-${Number(i.id)}" style="font-size:10px;color:var(--muted);margin-top:4px">${esc(situacaoItemFaturaDRE(i,faturaId,fluxoItens))}</div></td>
       </tr>`).join('') +
       `<tr style="background:var(--bg)">
         <td colspan="2" style="text-align:right;font-size:11px;font-weight:700;padding:8px 12px">Total:</td>
@@ -8191,7 +8214,8 @@ async function _sincronizarCategoriesCC(lancs, faturaIdRef) {
     .filter(l => (l.faturaCC||l.fatura_db_id) && l.categoria!==undefined)
     .map(l => ({
       faturaCC:   l.faturaCC,
-      fatura_id:  l.fatura_db_id || null,  // Fix 6.7-J: id direto quando disponível
+      fatura_id:  l.fatura_db_id || null,
+      item_id: l.item_db_id || null,  // Fix 6.7-J: id direto quando disponível
       hash_item: l.hash_item_persistido || _hashItemCC(l),
       categoria:  l.categoria,
     }));

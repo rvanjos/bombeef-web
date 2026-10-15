@@ -72,7 +72,9 @@
     if(!tx||!FONTES_BANCO.has(String(tx.fonte||'').toUpperCase())||Number(tx.valor||0)>=0)return {acao:'nenhuma'};
     if(tx.faturaCC){
       const atual=(faturas||[]).find(f=>f.faturaId===tx.faturaCC);
-      const grupo=candidatos(tx,faturas).filter(c=>c.fatura.referencias);
+      const compativeis=candidatos(tx,faturas);
+      const grupo=compativeis.filter(c=>c.fatura.referencias);
+      if(!atual&&compativeis.length===1)return {acao:'vincular',fatura:compativeis[0].fatura,score:compativeis[0].score};
       if((!atual||Math.abs(Math.abs(Number(tx.valor))-atual.total)>tolerancia(atual.total))&&grupo.length===1)return {acao:'vincular',fatura:grupo[0].fatura,score:grupo[0].score};
       return {acao:'vinculado',faturaId:tx.faturaCC};
     }

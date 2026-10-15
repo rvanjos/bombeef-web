@@ -2558,9 +2558,10 @@ module.exports = function (pool, app) {
         const chaveNorm=_normalizarDescricaoCartao(descricaoItem);
         // Atualizar somente o item da loja atual.
         const upd = await pool.query(
-          `UPDATE cartao_fatura_itens SET categoria_dre=$1,descricao_norm=$4
+          `UPDATE cartao_fatura_itens SET categoria_dre=$1,descricao_norm=$4,
+             dados_json=COALESCE(dados_json,'{}'::jsonb)||jsonb_build_object('_categoriaEditada',true,'_categoriaEditadaEm',NOW(),'_categoriaEditadaPor',$6::int)
            WHERE fatura_id=$2 AND hash_item=$3 AND COALESCE(removido,false)=false AND loja_id=$5`,
-          [it.categoria, faturaId, it.hash_item, chaveNorm||null, lojaId]
+          [it.categoria, faturaId, it.hash_item, chaveNorm||null, lojaId,req.user?.id||null]
         );
         atualizados += upd.rowCount;
         if(upd.rowCount && descricaoItem && it.categoria){
