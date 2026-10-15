@@ -8,7 +8,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="/js/api.js"></script>
-<script src="/js/dre-conferencia.js?v=12"></script>
+<script src="/js/dre-excel.js?v=1"></script>
+<script src="/js/dre-conferencia.js?v=13"></script>
 <script src="/js/dre-fluxo.js?v=4"></script>
 <script>
   if (typeof pdfjsLib !== 'undefined') {
@@ -3216,41 +3217,8 @@ function _revinculateCC() {
 
 // Vincula lançamento de pagamento de cartão aos itens da fatura CC
 function vincularFaturaCartao(pagTx) {
-  const valorPag = Math.abs(parseFloat(pagTx.valor||0));
-  if (valorPag < 1) return;
-
-  // Busca lançamentos CC de qualquer mês (a fatura pode ser de 1-2 meses atrás)
-  const itensFatura = TXS.filter(t => t.fonte === 'CC');
-  if (!itensFatura.length) {
-    toast('⚠️ Nenhuma fatura CC importada. Importe a fatura do cartão via "Fatura CC".', 5000);
-    return;
-  }
-
-  // Agrupa itens CC por mês para encontrar qual fatura tem valor mais próximo
-  const porMes = {};
-  itensFatura.forEach(t => {
-    const m = t.mes || '';
-    if (!porMes[m]) porMes[m] = 0;
-    porMes[m] += Math.abs(parseFloat(t.valor||0));
-  });
-
-  // Acha o mês cuja soma é mais próxima do pagamento
-  let melhorMes = '', melhorDiff = Infinity, melhorTotal = 0;
-  for (const [mes, total] of Object.entries(porMes)) {
-    const diff = Math.abs(valorPag - total);
-    if (diff < melhorDiff) { melhorDiff = diff; melhorMes = mes; melhorTotal = total; }
-  }
-
-  const qtd = itensFatura.filter(t => t.mes === melhorMes).length;
-  const tolerance = valorPag * 0.05;
-
-  if (melhorDiff <= tolerance) {
-    pagTx.vinculadoFaturaCC = true;
-    pagTx.totalFaturaCC = melhorTotal;
-    toast(`✅ Pagamento vinculado à fatura CC de ${melhorMes}: ${fmt.brl(melhorTotal)} (${qtd} lançamentos)`, 5000);
-  } else {
-    toast(`ℹ️ Pagamento de cartão ${fmt.brl(valorPag)}. Fatura CC mais próxima: ${melhorMes} (${fmt.brl(melhorTotal)}). Valores diferentes — confira se a fatura correta foi importada.`, 7000);
-  }
+  // A mesma regra de identidade, emissor, data e valor vale em todas as telas.
+  tentarVincularFaturaAuto(pagTx);
 }
 
 const _svMes = {}; // debounce por mês
@@ -3266,7 +3234,7 @@ function assinaturaMesDRE(mes) {
   const [mm,aa]=mes.split('/').map(Number);
   const anterior=mm===1?'12/'+(aa-1):String(mm-1).padStart(2,'0')+'/'+aa;
   const estoque=window._estoquesMes||{};
-  return JSON.stringify({transactions:TXS.filter(t=>!['PREV_RECEITA','PREV_DAS'].includes(t.fonte)&&(t.mes||mesRef)===mes),
+  return JSON.stringify({transactions:TXS.filter(t=>!['PREV_RECEITA','PREV_DAS'].includes(t.fonte)&&(t.mes||mesRef)===mes).map(t=>Object.fromEntries(Object.entries(t).filter(([k])=>!k.startsWith('_pagamentoCartao')))),
     estoques:[estoque[anterior],estoque[mes]],
     files:mes===_mesMetadadosDRE?files:[],mem:mes===_mesMetadadosDRE?supMem:null});
 }
@@ -4057,24 +4025,8 @@ function ccrAlertarPagamentoSemFatura(faturaId, mesCC, bandeira) {
 
 // Lista faturas CC já importadas (agrupa por faturaId único)
 function ccrFaturasImportadas() {
-  const map = {};
-  TXS.filter(t => t.fonte==='CC' && t.faturaCC).forEach(t => {
-    if (!map[t.faturaCC]) {
-      // Extrair mês do faturaId: CC_05_2026_Caixa → 05/2026
-      const mMatch = t.faturaCC.match(/CC_(\d{2})_(\d{4})/);
-      const mesFromId = mMatch ? `${mMatch[1]}/${mMatch[2]}` : null;
-      map[t.faturaCC] = {
-        faturaId: t.faturaCC,
-        bandeira: t.bandeira || '—',
-        mes: mesFromId || t.mesCaixa || t.mes,
-        total: 0,
-        n: 0
-      };
-    }
-    map[t.faturaCC].total -= parseFloat(t.valor||0);
-    map[t.faturaCC].n++;
-  });
-  return Object.values(map);
+  return window.DRECartaoPagamentos.faturasDosLancamentos(TXS).map(f=>({...f,
+    bandeira:[f.emissor,f.bandeira].filter(Boolean).join(' · ')||'Cartão',n:f.itens}));
 }
 
 // Fluxo: ao classificar um pagamento de extrato como "Pagamento de Fatura CC"
@@ -4086,7 +4038,7 @@ function abrirVinculacaoPagFaturaFromExtrato(txId, cartao) {
   const valorPag = Math.abs(parseFloat(tx.valor||0));
 
   // Faturas já importadas deste cartão
-  const faturasCartao = ccrFaturasImportadas().filter(f => cartao.match.test(f.bandeira));
+  const faturasCartao = ccrFaturasImportadas().filter(f => {const txt=[f.emissor,f.bandeira].join(' ');return cartao.match.test(txt)||(cartao.id.startsWith('itau')&&f.emissor==='ITAU');});
 
   // Candidatas por proximidade de valor (±20%)
   const candidatas = faturasCartao.filter(f => Math.abs(f.total - valorPag) < valorPag * 0.2)
@@ -4153,26 +4105,28 @@ function abrirVinculacaoPagFaturaFromExtrato(txId, cartao) {
   document.body.insertAdjacentHTML('beforeend', html);
 }
 
-function confirmarPagFaturaExtrato(txId, cartaoId) {
+async function confirmarPagFaturaExtrato(txId, cartaoId) {
   const tx = TXS.find(t => t.id == txId);
   if (!tx) return;
   const sel = document.querySelector('input[name="ext-fatura-sel"]:checked');
   const cartao = CARTOES_MONITORADOS.find(k => k.id === cartaoId);
 
   // Define categoria como Pagamento de Fatura CC
-  const catPag = 'Pagamento de Fatura CC';
-  setCat(txId, catPag);
+  const catPag = window.DRECartaoPagamentos.CAT;
+  if(await setCat(txId,catPag)===false)return;
   tx.bandeira = cartao?.label || cartaoId;
   tx.isPagamentoFatura = true;
 
   if (sel?.value && sel.value !== 'sem-fatura') {
     // Vincula à fatura selecionada
     tx.faturaCC = sel.value;
+    tx.faturasCCRefs=ccrFaturasImportadas().find(f=>f.faturaId===sel.value)?.referencias||null;
     tx.vinculadoFaturaCC = true;
     toast(`✅ Classificado como pagamento de fatura ${cartao?.label} e vinculado!`);
     // Marca os lançamentos da fatura com bandeira do cartão
     TXS.filter(t => t.faturaCC === sel.value).forEach(t => { if (!t.bandeira) t.bandeira = cartao?.label || ''; });
   } else {
+    tx.faturaCC=null;tx.faturasCCRefs=null;tx.vinculadoFaturaCC=false;
     toast(`💳 Marcado como pagamento de fatura ${cartao?.label} — vincule a fatura quando importá-la.`);
   }
 
@@ -4298,7 +4252,7 @@ function confirmarVinculoPagFatura(faturaId) {
       tx.vinculadoFaturaCC = true;
       if (tx.ignorar) tx.ignorar = false;
       if (!tx.categoria || tx.categoria === '' || tx.categoria === 'Pagamento de Cartão') {
-        tx.categoria = 'Pagamento de Fatura CC';
+        tx.categoria = window.DRECartaoPagamentos.CAT;
       }
       toast('✅ Pagamento vinculado!');
     }
@@ -5040,7 +4994,7 @@ function updStats() {
   atualizarPainelPendencias();
 
   // ── R1: Banner de lançamentos sem categoria ──────────────────────────────
-  const semCat    = at.filter(t => !t.categoria && t.fonte !== 'PREV_RECEITA');
+  const semCat    = DREFluxo.resolver(TXS,modo).linhas.filter(t=>t._pendenciaClassificacao&&t.fonte!=='PREV_RECEITA');
   const semCatVal = semCat.reduce((s, t) => s + Math.abs(parseFloat(t.valor || 0)), 0);
   const bannerSC  = document.getElementById('banner-sem-cat');
   if (bannerSC) {
@@ -5059,10 +5013,14 @@ function updStats() {
 // ─── DRE VISUAL ───────────────────────────────────────────────────────────────
 // ── R1: filtrar pendentes sem categoria ──────────────────────────────────────
 function filtrarPendentes() {
-  const cb = document.getElementById('f-pend');
-  if (cb) { cb.checked = true; }
-  render();
-  document.getElementById('banner-sem-cat')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  _drillContext.cat='A CLASSIFICAR';_drillContext.mes='';_drillContext.modo=getModo();
+  _drillContext.busca='';_drillContext.soProblemas=false;
+  const busca=document.getElementById('drill-search');if(busca)busca.value='';
+  const chk=document.getElementById('drill-only-problems');if(chk)chk.checked=false;
+  document.getElementById('drill-title').textContent='Pendências do demonstrativo';
+  document.getElementById('drill-sub').textContent='Todos os meses · classifique os itens ou vincule o pagamento à fatura detalhada';
+  document.getElementById('m-drill').style.display='flex';
+  _drillRender();
 }
 
 // ── Sprint 3.1-C: aviso de modo + persistência ──────────────────────────────
@@ -5592,7 +5550,9 @@ function _buildDRE(el, full) {
     el.innerHTML='<div style="padding:20px;text-align:center;color:var(--muted);font-size:12px">Classifique os lançamentos para ver o DRE</div>';
     return;
   }
-  if (baseDRE.invalidos.length) {
+  const avisoInvalidos=JSON.stringify(baseDRE.invalidos.map(t=>[t.id,t.mes,t.mesCaixa]));
+  if (baseDRE.invalidos.length && window._ultimoAvisoMesInvalido!==avisoInvalidos) {
+    window._ultimoAvisoMesInvalido=avisoInvalidos;
     console.warn(`[DRE] ${baseDRE.invalidos.length} lançamento(s) com mês inválido (ignorados no DRE):`,
       baseDRE.invalidos.map(t=>({id:t.id,lancamento:t.lancamento,mes:t.mes,mesCaixa:t.mesCaixa,valor:t.valor})));
   }
@@ -6666,7 +6626,7 @@ function _drillCategoriasOptions(atual, somenteFatura=false) {
 
 function _drillDados() {
   const {cat, mes, modo} = _drillContext;
-  const todosMes = _txsSemDuplicatas(TXS,modo).filter(t => _drillMesTx(t, modo) === mes);
+  const todosMes = _txsSemDuplicatas(TXS,modo).filter(t => !mes || _drillMesTx(t, modo) === mes);
   const lancs = todosMes.filter(t => t.categoria === cat);
   const alertas = new Map();
   const add = (id, texto, tipo='warn') => {
@@ -7120,7 +7080,7 @@ function exportXLS(){
   toast('📤 Excel exportado com formatação!');
 }
 
-// gerarExcelDRE — gera XLSX formatado via servidor (openpyxl)
+// gerarExcelDRE — preserva valores e estilos no XLSX gerado no navegador
 async function gerarExcelDRE() {
   if (!TXS.length) { toast('Sem dados para exportar'); return; }
   toast('⏳ Gerando Excel formatado...');
@@ -7253,25 +7213,11 @@ async function gerarExcelDRE() {
     return { rows, styles, meses };
   }
 
-  // Converte para worksheet SheetJS
-  function toWorksheet(dados) {
-    const { rows, styles, meses } = dados;
-    const wsData = rows.map(row => row.map(cell => typeof cell === 'number' ? cell : (cell || '')));
-    const ws = XLSX.utils.aoa_to_sheet(wsData);
-
-    // Largura das colunas
-    ws['!cols'] = [{ wch: 42 }, ...meses.map(() => ({ wch: 14 })), { wch: 14 }];
-
-    // Aplicar estilos básicos (SheetJS community não suporta estilos — exportamos valores corretos)
-    return ws;
-  }
-
   const modosExport = [
     { modo: 'comp', nome: 'DRE Competência' },
     { modo: 'caixa', nome: 'Fluxo de Caixa' }
   ];
 
-  const wb = XLSX.utils.book_new();
 
   // Monta payload para o servidor
   const abas = [];
@@ -7287,21 +7233,13 @@ async function gerarExcelDRE() {
     } catch(e) { console.error('[gerarExcelDRE] modo', modo, e); }
   }
 
-  // Exportar direto via SheetJS no browser (sem servidor)
   try {
-    const wb = XLSX.utils.book_new();
-    for (const { modo, nome } of modosExport) {
-      const dados = montarDados(modo);
-      const ws    = toWorksheet(dados);
-      XLSX.utils.book_append_sheet(wb, ws, nome);
-    }
-    const ano = new Date().getFullYear();
-    XLSX.writeFile(wb, `DRE_BomBeef_${ano}.xlsx`);
-    toast('✅ Excel exportado com sucesso!');
+    if(!window.DREExcel)throw new Error('Biblioteca de Excel indisponível. Atualize a página e tente novamente.');
+    await window.DREExcel.exportar(abas);
+    toast('✅ Excel formatado exportado com sucesso!');
   } catch(e) {
-    console.error('[gerarExcelDRE]', e);
-    toast('⚠️ Erro ao gerar Excel: ' + e.message);
-    exportXLS();
+    console.error('[gerarExcelDRE]',e);
+    toast('⚠️ Não foi possível gerar o Excel formatado: '+e.message);
   }
 }
 
