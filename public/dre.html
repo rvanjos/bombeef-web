@@ -9,7 +9,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="/js/api.js"></script>
 <script src="/js/dre-excel.js?v=1"></script>
-<script src="/js/dre-conferencia.js?v=13"></script>
+<script src="/js/dre-conferencia.js?v=14"></script>
 <script src="/js/dre-fluxo.js?v=6"></script>
 <script>
   if (typeof pdfjsLib !== 'undefined') {
@@ -4069,7 +4069,7 @@ function abrirVinculacaoPagFaturaFromExtrato(txId, cartao) {
     </div>`;
 
   const html = `
-    <div class="mbg open" id="m-pag-fatura-extrato" onclick="if(event.target===this){this.remove()}">
+    <div class="mbg open" id="m-pag-fatura-extrato" style="z-index:1200" onclick="if(event.target===this&&this.dataset.salvando!=='1'){this.remove()}">
       <div class="md" style="max-width:500px">
         <div class="mdh">
           <div>
@@ -4112,27 +4112,32 @@ async function confirmarPagFaturaExtrato(txId, cartaoId) {
   const sel = document.querySelector('input[name="ext-fatura-sel"]:checked');
   const cartao = CARTOES_MONITORADOS.find(k => k.id === cartaoId);
 
-  // Define categoria como Pagamento de Fatura CC
-  const catPag = window.DRECartaoPagamentos.CAT;
-  if(await setCat(txId,catPag)===false)return;
+  const modal = document.getElementById('m-pag-fatura-extrato');
+  if (!sel) { toast('Selecione a fatura correspondente.'); return; }
+  if (modal?.dataset.salvando === '1') return;
+  const anterior = JSON.parse(JSON.stringify(tx));
+  if (modal) { modal.dataset.salvando='1'; modal.querySelectorAll('button,input').forEach(el=>el.disabled=true); }
+  tx.categoria = window.DRECartaoPagamentos.CAT;
   tx.bandeira = cartao?.label || cartaoId;
   tx.isPagamentoFatura = true;
-
-  if (sel?.value && sel.value !== 'sem-fatura') {
-    // Vincula à fatura selecionada
-    tx.faturaCC = sel.value;
-    tx.faturasCCRefs=ccrFaturasImportadas().find(f=>f.faturaId===sel.value)?.referencias||null;
-    tx.vinculadoFaturaCC = true;
-    toast(`✅ Classificado como pagamento de fatura ${cartao?.label} e vinculado!`);
-    // Marca os lançamentos da fatura com bandeira do cartão
-    TXS.filter(t => t.faturaCC === sel.value).forEach(t => { if (!t.bandeira) t.bandeira = cartao?.label || ''; });
-  } else {
-    tx.faturaCC=null;tx.faturasCCRefs=null;tx.vinculadoFaturaCC=false;
-    toast(`💳 Marcado como pagamento de fatura ${cartao?.label} — vincule a fatura quando importá-la.`);
+  tx.faturaCC = sel.value === 'sem-fatura' ? null : sel.value;
+  tx.faturasCCRefs = tx.faturaCC ? ccrFaturasImportadas().find(f=>f.faturaId===tx.faturaCC)?.referencias||null : null;
+  tx.vinculadoFaturaCC = Boolean(tx.faturaCC);
+  tx._vinculoFaturaManual = Boolean(tx.faturaCC);
+  tx.needsReview = !tx.faturaCC;
+  tx._pagamentoCartaoPendente = !tx.faturaCC;
+  try {
+    if (!await salvarMes(tx.mes || mesRef, true)) throw new Error('Falha ao salvar vínculo');
+  } catch (e) {
+    Object.keys(tx).forEach(k=>delete tx[k]); Object.assign(tx,anterior);
+    if (modal) { delete modal.dataset.salvando; modal.querySelectorAll('button,input').forEach(el=>el.disabled=false); }
+    toast('❌ O vínculo não foi salvo. A seleção foi mantida; tente novamente.');
+    return;
   }
-
-  document.getElementById('m-pag-fatura-extrato').remove();
-  render(); renderDRE(); autoSv();
+  modal?.remove();
+  render(); renderDRE();
+  if (document.getElementById('m-drill')?.style.display === 'flex') _drillRender();
+  toast(tx.faturaCC ? '✅ Vínculo salvo. Eventual diferença de valor continua pendente de detalhamento.' : '💳 Pagamento salvo — importe a fatura para detalhar.');
   setTimeout(renderStatusCartoes, 200);
 }
 

@@ -70,6 +70,7 @@
   }
   function decidir(tx,faturas){
     if(!tx||!FONTES_BANCO.has(String(tx.fonte||'').toUpperCase())||Number(tx.valor||0)>=0)return {acao:'nenhuma'};
+    if(tx._vinculoFaturaManual)return tx.faturaCC?{acao:'vinculado',faturaId:tx.faturaCC}:{acao:'pendente',motivo:'Fatura não vinculada por escolha manual'};
     if(tx.faturaCC){
       const atual=(faturas||[]).find(f=>f.faturaId===tx.faturaCC);
       const compativeis=candidatos(tx,faturas);
