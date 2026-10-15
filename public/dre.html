@@ -10,7 +10,7 @@
 <script src="/js/api.js"></script>
 <script src="/js/dre-excel.js?v=1"></script>
 <script src="/js/dre-conferencia.js?v=13"></script>
-<script src="/js/dre-fluxo.js?v=5"></script>
+<script src="/js/dre-fluxo.js?v=6"></script>
 <script>
   if (typeof pdfjsLib !== 'undefined') {
     pdfjsLib.GlobalWorkerOptions.workerSrc =
@@ -4995,16 +4995,18 @@ function updStats() {
   atualizarPainelPendencias();
 
   // ── R1: Banner de lançamentos sem categoria ──────────────────────────────
-  const semCat    = DREFluxo.resolver(TXS,modo).linhas.filter(t=>t._pendenciaClassificacao&&t.fonte!=='PREV_RECEITA');
+  const conferenciaCartoes=DREFluxo.resolver(TXS,modo);
+  const semCat=conferenciaCartoes.linhas.filter(t=>t._pendenciaClassificacao&&t.fonte!=='PREV_RECEITA');
+  const faturasFora=conferenciaCartoes.faturasPendentes||[];
   const semCatVal = semCat.reduce((s, t) => s + Math.abs(parseFloat(t.valor || 0)), 0);
   const bannerSC  = document.getElementById('banner-sem-cat');
   if (bannerSC) {
-    if (semCat.length > 0) {
+    if (semCat.length > 0 || faturasFora.length > 0) {
       bannerSC.style.display = 'flex';
       const t = document.getElementById('bsc-titulo');
       const d = document.getElementById('bsc-texto');
-      if (t) t.textContent = `ATENÇÃO: ${semCat.length} lançamento(s) sem categoria`;
-      if (d) d.textContent = ` — R$ ${fmt.brl(semCatVal)} incluídos provisoriamente em A CLASSIFICAR.`;
+      if (t) t.textContent = `ATENÇÃO: ${semCat.length} item(ns) sem categoria · ${faturasFora.length} fatura(s) para detalhar`;
+      if (d) d.textContent = ` — Itens sem categoria: ${fmt.brl(semCatVal)}. Totais de fatura sem detalhamento fora do resultado.`;
     } else {
       bannerSC.style.display = 'none';
     }
@@ -5367,6 +5369,7 @@ function _revinculateBoletosPrev() {
 function _txsSemDuplicatas(txs,modoOverride) {
   const fluxo=DREFluxo.resolver(txs,modoOverride||getModo());
   window._drePendenciasFluxo=fluxo.pendencias;
+  window._dreFaturasPendentes=fluxo.faturasPendentes||[];
   window._dedupLog=()=>fluxo.suprimidos;
   window._dedupCount=()=>fluxo.suprimidos.length;
   return fluxo.linhas;
@@ -5558,7 +5561,7 @@ function _buildDRE(el, full) {
       baseDRE.invalidos.map(t=>({id:t.id,lancamento:t.lancamento,mes:t.mes,mesCaixa:t.mesCaixa,valor:t.valor})));
   }
   const showTot=meses.length>1||full;
-  const avisoPendencias=pendenciasFluxo.length?'<div style="padding:10px;background:#fff3cd;color:#854d0e;border:1px solid #facc15"><b>DRE provisório</b> — Valores pendentes incluídos em A CLASSIFICAR. Resolva a classificação e o detalhamento das faturas antes do fechamento.</div>':'';
+  const avisoPendencias=pendenciasFluxo.length?'<div style="padding:10px;background:#fff3cd;color:#854d0e;border:1px solid #facc15"><b>DRE provisório</b> — Itens individuais sem categoria permanecem em A CLASSIFICAR. Totais e diferenças de fatura sem detalhamento ficam fora do resultado; confira em Ver pendentes.</div>':'';
   const recTotalMes=Object.fromEntries(meses.map(m=>[m,sg('RECEITAS',m)]));
 
   const pct=(v,base)=>{
@@ -6627,7 +6630,9 @@ function _drillCategoriasOptions(atual, somenteFatura=false) {
 
 function _drillDados() {
   const {cat, mes, modo} = _drillContext;
-  const todosMes = _txsSemDuplicatas(TXS,modo).filter(t => !mes || _drillMesTx(t, modo) === mes);
+  const resultado=_txsSemDuplicatas(TXS,modo);
+  const consulta=!mes?[...resultado,...(window._dreFaturasPendentes||[]).map(t=>({...t,categoria:'A CLASSIFICAR'}))]:resultado;
+  const todosMes = consulta.filter(t => !mes || _drillMesTx(t, modo) === mes);
   const lancs = todosMes.filter(t => t.categoria === cat);
   const alertas = new Map();
   const add = (id, texto, tipo='warn') => {
@@ -6689,7 +6694,7 @@ function _drillRender() {
       const v = Number(t.valor||0); const avisos = alertas.get(String(t.id)) || [];
       return `<tr class="drill-row${avisos.length?' has-warning':''}">
         <td data-label="Data">${t.data ? t.data.slice(0,10).split('-').reverse().join('/') : '—'}</td>
-        <td data-label="Lançamento"><strong>${esc(t.lancamento||'—')}</strong>${avisos.length ? `<div class="drill-alerts">${avisos.map(a => `<span class="${a.tipo}">${esc(a.texto)}</span>`).join('')}</div>` : ''}</td>
+        <td data-label="Lançamento"><strong>${esc(t.lancamento||'—')}</strong>${t._foraDRE?'<div style="color:#92400e;font-size:10px">Fora do resultado do DRE · aguardando detalhamento</div>':''}${avisos.length ? `<div class="drill-alerts">${avisos.map(a => `<span class="${a.tipo}">${esc(a.texto)}</span>`).join('')}</div>` : ''}</td>
         <td data-label="Fornecedor" title="${esc(_drillFornecedor(t))}">${esc(_drillFornecedor(t))}</td>
         <td data-label="Origem"><span class="drill-source">${esc(fonteNome[t.fonte]||t.fonte||'—')}</span></td>
         <td data-label="Categoria"><select class="drill-cat-select" data-id="${esc(t._origemId||t._pagamentoOrigemId||t.id)}" data-original="${esc(t.categoria||'')}" data-pendencia="${t._pagamentoOrigemId?'fatura':''}" onchange="drillSalvarCategoria(this)">${_drillCategoriasOptions(t.categoria,!!t._pagamentoOrigemId)}</select>${avisos.some(a=>a.tipo==='danger')?`<button class="btn bs" style="margin-top:5px;font-size:10px" onclick="compararDuplicidadeDRE(${esc(JSON.stringify(String(t._origemId||t.id)))})">Comparar duplicidade</button>`:''}</td>
