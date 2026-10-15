@@ -47,7 +47,7 @@ test('demonstrativo compacto e completo exibem subtotal CMV e lucro ajustados',(
 test('Excel numérico reproduz CMV e lucro de competência sem aplicar estoque ao caixa',()=>{
  const c=motor(),mes='09/2026',data={RECEITAS:{Vendas:{[mes]:50000}},CMV:{Bovino:{[mes]:-30000}},PESSOAL:{Salário:{[mes]:-5000}}};
  c.prepararBaseDRE=modo=>({modo,data,meses:[mes],sg:(g,m)=>Object.values(data[g]||{}).reduce((s,x)=>s+(x[m]||0),0)});c.nomeMes=m=>m;
- const a=html.indexOf('  function montarDados(modo)'),b=html.indexOf('  function toWorksheet(dados)',a);vm.runInContext(html.slice(a,b),c);
+ const a=html.indexOf('  function montarDados(modo)'),b=html.indexOf('  const modosExport',a);vm.runInContext(html.slice(a,b),c);
  const comp=c.montarDados('comp').rows,caixa=c.montarDados('caixa').rows;
  assert.equal(comp.find(r=>r[0]==='SUBTOTAL CMV')[1],-28000);assert.equal(comp.find(r=>r[0]==='LUCRO BRUTO')[1],22000);assert.equal(comp.find(r=>String(r[0]).includes('Ajuste de Estoque'))[1],2000);
  assert.equal(caixa.find(r=>r[0]==='SUBTOTAL CMV')[1],-30000);assert.equal(caixa.some(r=>String(r[0]).includes('Ajuste de Estoque')),false);

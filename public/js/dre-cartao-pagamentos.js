@@ -108,11 +108,12 @@
         const faturas=faturasDosLancamentos(txs);
         let mudou=false,vinculados=0,pendentes=0,normalizados=0;
         txs.forEach(tx=>{
-          if(tx.categoria===LEGACY){tx.categoria=CAT;normalizados++;mudou=true;}
+          const antes=JSON.stringify([tx.categoria,tx.faturaCC,tx.faturasCCRefs,tx.vinculadoFaturaCC]);
+          if(tx.categoria===LEGACY){tx.categoria=CAT;normalizados++;}
           const r=decidir(tx,faturas);
           if(r.acao==='vinculado'){
-            if(tx.categoria!==CAT){tx.categoria=CAT;mudou=true;}
-            if(tx.needsReview){tx.needsReview=false;mudou=true;}
+            if(tx.categoria!==CAT){tx.categoria=CAT;}
+            if(tx.needsReview){tx.needsReview=false;}
             tx._pagamentoCartaoPendente=false;
           }else if(r.acao==='vincular'&&r.fatura){
             tx.categoria=CAT;
@@ -121,14 +122,16 @@
             tx.needsReview=false;
             tx._pagamentoCartaoPendente=false;
             tx._pagamentoCartaoAuto=true;
-            vinculados++;mudou=true;
+            vinculados++;
           }else if(r.acao==='pendente'){
-            if(tx.categoria!==CAT){tx.categoria=CAT;mudou=true;}
-            if(!tx.needsReview){tx.needsReview=true;mudou=true;}
+            if(tx.categoria!==CAT){tx.categoria=CAT;}
+            if(!tx.needsReview){tx.needsReview=true;}
             tx._pagamentoCartaoPendente=true;
             tx._pagamentoCartaoMotivo=r.motivo;
             pendentes++;
           }
+          const depois=JSON.stringify([tx.categoria,tx.faturaCC,tx.faturasCCRefs,tx.vinculadoFaturaCC]);
+          if(antes!==depois)mudou=true;
         });
         limparOpcoesDuplicadas();
         if(mudou){
