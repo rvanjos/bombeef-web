@@ -10,7 +10,7 @@
 <script src="/js/api.js"></script>
 <script src="/js/dre-excel.js?v=1"></script>
 <script src="/js/dre-conferencia.js?v=13"></script>
-<script src="/js/dre-fluxo.js?v=4"></script>
+<script src="/js/dre-fluxo.js?v=5"></script>
 <script>
   if (typeof pdfjsLib !== 'undefined') {
     pdfjsLib.GlobalWorkerOptions.workerSrc =
@@ -1623,7 +1623,7 @@ async function carregarSessao() {
       const dados=r.data.dados_json;
       const txs=Array.isArray(dados)?dados:(dados.transactions||[]);
       for(const t of txs){
-        const chave=DREFluxo.identidade(t),existente=vistos.get(chave);
+        const chave=t.id?String(t.fonte||'')+'|id|'+String(t.id):DREFluxo.identidade(t),existente=vistos.get(chave);
         if(existente){
           if(t.fonte==='BOLETO'&&existente.fonte==='BOLETO_PREV')Object.assign(existente,{...t,categoria:t.categoria||existente.categoria});
           else if(!existente.categoria&&t.categoria)existente.categoria=t.categoria;
@@ -3377,6 +3377,7 @@ async function verVinculoDRE(id) {
 function togIgn(id) {
   const t=TXS.find(x=>String(x.id)===String(id)); if(t){
     t.ignorar=!t.ignorar;
+    if(!t.ignorar&&t.duplicadoDe){t.historicoDuplicidade=[...(t.historicoDuplicidade||[]),{acao:'REATIVAR',em:new Date().toISOString()}];delete t.duplicadoDe;}
     t.motivoIgnorado=t.ignorar?'Marcado manualmente no DRE':null;
     t.ignorarAlteradoEm=new Date().toISOString();
     render(); updStats(); renderDRE(); autoSv();
@@ -6640,6 +6641,7 @@ function _drillDados() {
     a.mesesInvalidos.forEach(i => add(i.transacao.id, 'Mês inválido', 'danger'));
   }
   lancs.forEach(t => { if (t.needsReview) add(t.id, 'Revisar classificação'); });
+  for(const p of DREFluxo.detectarDuplicidades(TXS))for(const id of p.ids)add(id,p.motivo,'danger');
 
   const norm = v => window.DREConferencia ? window.DREConferencia.normalizarTexto(v) : String(v||'').toUpperCase().trim();
   const catsFornecedor = new Map();
@@ -6690,7 +6692,7 @@ function _drillRender() {
         <td data-label="Lançamento"><strong>${esc(t.lancamento||'—')}</strong>${avisos.length ? `<div class="drill-alerts">${avisos.map(a => `<span class="${a.tipo}">${esc(a.texto)}</span>`).join('')}</div>` : ''}</td>
         <td data-label="Fornecedor" title="${esc(_drillFornecedor(t))}">${esc(_drillFornecedor(t))}</td>
         <td data-label="Origem"><span class="drill-source">${esc(fonteNome[t.fonte]||t.fonte||'—')}</span></td>
-        <td data-label="Categoria"><select class="drill-cat-select" data-id="${esc(t._origemId||t._pagamentoOrigemId||t.id)}" data-original="${esc(t.categoria||'')}" data-pendencia="${t._pagamentoOrigemId?'fatura':''}" onchange="drillSalvarCategoria(this)">${_drillCategoriasOptions(t.categoria,!!t._pagamentoOrigemId)}</select></td>
+        <td data-label="Categoria"><select class="drill-cat-select" data-id="${esc(t._origemId||t._pagamentoOrigemId||t.id)}" data-original="${esc(t.categoria||'')}" data-pendencia="${t._pagamentoOrigemId?'fatura':''}" onchange="drillSalvarCategoria(this)">${_drillCategoriasOptions(t.categoria,!!t._pagamentoOrigemId)}</select>${avisos.some(a=>a.tipo==='danger')?`<button class="btn bs" style="margin-top:5px;font-size:10px" onclick="compararDuplicidadeDRE(${esc(JSON.stringify(String(t._origemId||t.id)))})">Comparar duplicidade</button>`:''}</td>
         <td data-label="Valor" class="drill-value ${v < 0 ? 'neg' : 'pos'}">${fmt.brl(v)}</td>
       </tr>`;
     }).join('');
@@ -6757,6 +6759,25 @@ async function drillSalvarCategoria(sel) {
   atualizarBadgeConferencia();
   _drillRender();
   toast(`✅ Reclassificado: ${novaCat || 'sem categoria'}`);
+}
+
+function compararDuplicidadeDRE(id){
+  const pares=DREFluxo.detectarDuplicidades(TXS).filter(p=>p.ids.includes(String(id)));
+  const ids=new Set(pares.flatMap(p=>p.ids)),itens=TXS.filter(t=>ids.has(String(t.id)));
+  if(itens.length<2){toast('Não há outro registro compatível ativo.');return;}
+  document.getElementById('m-duplicidade-dre')?.remove();
+  const html=itens.map(t=>`<div style="border:1px solid #ddd;padding:12px;margin:8px 0;border-radius:8px"><b>${esc(t.lancamento)}</b><div>${esc(t.data)} · ${fmt.brl(t.valor)} · ${esc(t.categoria||'Sem categoria')}</div><div>${esc(t.razaoSocial||'Sem fornecedor')} · ${esc(t.fonte)} · Conta: ${esc(DREFluxo.contaBanco(t))} · Fatura: ${esc(t.faturaCC||'—')} · ID: ${esc(t.id)}</div>${itens.filter(o=>o!==t).map(o=>`<button class="btn bs" style="margin-top:8px" onclick="confirmarDuplicidadeDRE(${esc(JSON.stringify(String(t.id)))},${esc(JSON.stringify(String(o.id)))})">Manter este e desconsiderar ${esc(o.lancamento)}</button>`).join('')}</div>`).join('');
+  document.body.insertAdjacentHTML('beforeend',`<div id="m-duplicidade-dre" class="mbg" style="display:flex;z-index:1200"><div class="md" style="max-width:760px"><div class="mdh"><h3>Comparar lançamentos</h3><button class="mdx" onclick="document.getElementById('m-duplicidade-dre').remove()">×</button></div><div class="mdb" style="max-height:65vh;overflow:auto"><p>Confira conta, fatura e descrição. A cópia será mantida no histórico como ignorada. Você pode reativá-la na aba Lançamentos → Ignorados.</p>${html}</div></div></div>`);
+}
+async function confirmarDuplicidadeDRE(manterId,duplicadoId){
+  const manter=TXS.find(t=>String(t.id)===String(manterId)),dup=TXS.find(t=>String(t.id)===String(duplicadoId));
+  if(!manter||!dup||dup.ignorar||manter.ignorar)return;
+  if(!DREFluxo.detectarDuplicidades([manter,dup]).length){toast('Os dados mudaram; confira novamente.');return;}
+  const anterior={...dup};
+  dup.ignorar=true;dup.duplicadoDe=String(manter.id);dup.motivoIgnorado='Duplicidade confirmada; representado por '+manter.id;
+  dup.historicoDuplicidade=[...(dup.historicoDuplicidade||[]),{acao:'DESCONSIDERAR',representadoPor:String(manter.id),em:new Date().toISOString()}];
+  if(!await salvarMes(dup.mes||mesRef,true)){Object.keys(dup).forEach(k=>delete dup[k]);Object.assign(dup,anterior);toast('Não salvo. Confira se o mês está fechado.');return;}
+  document.getElementById('m-duplicidade-dre')?.remove();render();updStats();renderDRE();_drillRender();toast('Duplicidade corrigida; os dois registros continuam no histórico.');
 }
 
 // ── Exporta cada lançamento em sua própria linha (SEM agrupar por categoria) ──
@@ -7804,10 +7825,15 @@ function valorItemFaturaDRE(i){
   return String(i.fatura_id_ref||'').startsWith('DRIVE:')?-Number(i.valor):Number(i.valor);
 }
 function buscarItemFaturaNaSessao(l,i){
-  const candidatos=TXS.filter(t=>t.fonte==='CC'&&(String(t.id)===String(l.id)||
-    ((t.faturaCC===l.faturaCC||t.fatura_db_id===i.fatura_id)&&(_hashItemCC(t)===i.hash_item||
-     _hashItemCC(t).split('|').slice(0,3).join('|')===String(i.hash_item||'').split('|').slice(0,3).join('|')))));
-  return candidatos.length===1?candidatos[0]:null;
+  const cc=TXS.filter(t=>t.fonte==='CC');
+  const direto=cc.find(t=>String(t.item_db_id||'')===String(i.id)&&String(t.fatura_db_id||'')===String(i.fatura_id));
+  const porId=cc.find(t=>String(t.id)===String(l.id));
+  const candidatos=cc.filter(t=>t===direto||t===porId||((t.faturaCC===l.faturaCC||String(t.fatura_db_id||'')===String(i.fatura_id))&&
+    (t.hash_item_persistido===i.hash_item||_hashItemCC(t)===i.hash_item)));
+  if(!candidatos.length)return null;
+  // Associa cópias comprovadas, sem inserir uma terceira quando há duas na sessão.
+  candidatos.forEach(t=>{t.fatura_db_id=i.fatura_id;t.item_db_id=i.id;t.hash_item_persistido=i.hash_item;});
+  return direto||porId||candidatos.find(t=>t._categoriaEditada)||candidatos[0];
 }
 async function recuperarFaturasDoBanco(){
   const r=await api.get('/api/dre/cartao-faturas/lancamentos');
@@ -7817,7 +7843,7 @@ async function recuperarFaturasDoBanco(){
     const l=lancamentoItemFatura(i);
     const t=buscarItemFaturaNaSessao(l,i);
     if(t){
-      t.fatura_db_id=i.fatura_id;t.item_db_id=i.id;t.hash_item_persistido=i.hash_item;t.cartaoNome=l.cartaoNome;
+      t.fatura_db_id=i.fatura_id;t.item_db_id=i.id;t.hash_item_persistido=i.hash_item;t.cartaoNome=l.cartaoNome;t._categoriaEditada=!!i.dados_json?._categoriaEditada;
       const recuperar=!i.categoria_dre&&!i.dados_json?._categoriaEditada&&t.categoria&&t.categoria!=='A CLASSIFICAR'&&Object.values(CATS).some(g=>g.s.includes(t.categoria));
       if(recuperar)recuperadas.push({...t});else t.categoria=i.categoria_dre||null;
     }
