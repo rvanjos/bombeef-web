@@ -23,11 +23,12 @@
   }
   function deduplicar(fontes){
     const vistos=new Map(),suprimidos=[],aliases=new Map();
-    const qualidade=t=>(t.ignorar?0:1000)+(t._categoriaEditada?100:0)+(t.item_db_id?20:0)+(t.categoria?2:0)+(t.documentoBoletoId||t.cartaoItemRef?1:0)+(t.fonte==='BOLETO'?5:0);
+    const qualidade=t=>(t.ignorarAlteradoEm?2000:0)+(t.ignorar?0:1000)+(t._categoriaEditada?100:0)+(t.item_db_id?20:0)+(t.categoria?2:0)+(t.documentoBoletoId||t.cartaoItemRef?1:0)+(t.fonte==='BOLETO'?5:0);
     for(const t of fontes){
       if(t.ignorar&&t.duplicadoDe){aliases.set(String(t.id),String(t.duplicadoDe));suprimidos.push({id:t.id,motivo:'Duplicidade confirmada: '+t.duplicadoDe,valor:t.valor});continue;}
       // Só identidade comprovada; data/valor/descrição iguais exigem conferência.
-      const k=identidade(t),ant=vistos.get(k);
+      const temOrigem=t.id||(banco(t)&&t.fitid)||(documento(t)&&t.boletoId)||(t.fonte==='CC'&&(t.item_db_id||t.hash_item_persistido||t.item_hash));
+      const k=temOrigem?identidade(t):'sem-identidade|'+vistos.size,ant=vistos.get(k);
       if(ant&&cents(ant.valor)===cents(t.valor)&&String(ant.data||'')===String(t.data||'')){
         const manter=qualidade(t)>qualidade(ant)?t:ant,outro=manter===t?ant:t;
         vistos.set(k,manter);aliases.set(String(outro.id),String(manter.id));
