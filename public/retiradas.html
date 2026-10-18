@@ -350,6 +350,7 @@ async function init(){
   montarColunas();
   await carregarFuncionarios();
   carregar();
+  if (new URLSearchParams(location.search).get('acao') === 'nova') abrirModal();
 }
 
 async function carregarFuncionarios(){
