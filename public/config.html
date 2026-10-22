@@ -518,23 +518,24 @@ async function carregarUsuarios(){
   const tb = document.getElementById('tbody-usr');
   const perfis={admin:'Admin',gestor:'Gestor',financeiro:'Financeiro',estoque:'Estoque',caixa:'Caixa'};
   tb.innerHTML = usuarios.map(u=>`<tr>
-    <td><b>${u.nome}</b></td>
-    <td style="font-size:12px">${u.email}</td>
-    <td><span class="pill" style="background:#e8e0ff;color:#4a2080">${perfis[u.perfil]||u.perfil}</span></td>
+    <td><b>${escLoja(u.nome)}</b></td>
+    <td style="font-size:12px">${escLoja(u.email)}</td>
+    <td><span class="pill" style="background:#e8e0ff;color:#4a2080">${escLoja(perfis[u.perfil]||u.perfil)}</span></td>
     <td><span class="pill ${u.ativo?'pill-ok':'pill-off'}">${u.ativo?'Ativo':'Inativo'}</span></td>
    <td>
   <button class="act-btn" onclick="abrirUsuario(${u.id})">✏️</button>
   ${
     u.ativo
-      ? `<button class="act-btn" onclick="inativarUsr(${u.id}, '${(u.nome || '').replace(/'/g, "\\'")}')" style="color:var(--orange)">⏸</button>`
+      ? `<button class="act-btn" onclick="inativarUsr(${Number(u.id)})" style="color:var(--orange)">⏸</button>`
       : `<button class="act-btn" onclick="reativarUsr(${u.id})" style="color:var(--green)">↩</button>`
   }
-  <button class="act-btn" onclick="excluirUsr(${u.id}, '${(u.nome || '').replace(/'/g, "\\'")}')" style="color:var(--red-l)">🗑</button>
+  <button class="act-btn" onclick="excluirUsr(${Number(u.id)})" style="color:var(--red-l)">🗑</button>
 </td>
   </tr>`).join('');
 }
 
-async function inativarUsr(id, nome){
+async function inativarUsr(id){
+  const nome = usuarios.find(u=>Number(u.id)===Number(id))?.nome || "";
   if(!confirm(`Inativar o usuário "${nome}"?`)) return;
   const d = await api.delete(`/auth/usuarios/${id}`);
   if(d.ok){
@@ -555,7 +556,8 @@ async function reativarUsr(id){
   }
 }
 
-async function excluirUsr(id, nome){
+async function excluirUsr(id){
+  const nome = usuarios.find(u=>Number(u.id)===Number(id))?.nome || "";
   if(!confirm(`Excluir permanentemente o usuário "${nome}"?\n\nEssa ação é definitiva.`)) return;
   const d = await api.delete(`/auth/usuarios/${id}/permanente`);
   if(d.ok){
@@ -649,14 +651,14 @@ async function carregarFuncionarios(){
   funcionarios = d.data;
   const tb = document.getElementById('tbody-func');
   tb.innerHTML = funcionarios.map(f=>`<tr>
-    <td><b>${f.nome}</b></td>
-    <td style="font-size:12px">${f.cargo||'—'}</td>
-    <td style="font-size:12px">${f.email||'—'}</td>
+    <td><b>${escLoja(f.nome)}</b></td>
+    <td style="font-size:12px">${escLoja(f.cargo||'—')}</td>
+    <td style="font-size:12px">${escLoja(f.email||'—')}</td>
     <td style="font-family:'DM Mono',monospace;font-weight:600">${fmt.brl(f.limite_retirada)}</td>
     <td>${f.freelancer?'<span class="pill" style="background:#fef3c7;color:#92400e">Freelancer</span>':'<span class="pill pill-ok">Funcionário</span>'}</td>
     <td>
       ${f.usuario_id
-        ? `<span class="pill pill-ok" title="Vinculado: ${f.usuario_email||''}">🔗 Vinculado</span>`
+        ? `<span class="pill pill-ok" title="Vinculado: ${escLoja(f.usuario_email||'')}">🔗 Vinculado</span>`
         : `<span class="pill pill-off">Sem vínculo</span>`}
     </td>
     <td><span class="pill ${f.ativo?'pill-ok':'pill-off'}">${f.ativo?'Ativo':'Inativo'}</span></td>
@@ -779,11 +781,11 @@ async function carregarMetas(){
   tb.innerHTML = metas.slice(0,12).map(m=>{
     const pct = m.faturamento_meta>0 ? ((m.faturamento_real/m.faturamento_meta)*100).toFixed(0) : '—';
     return `<tr>
-      <td style="font-weight:600">${m.mes}</td>
+      <td style="font-weight:600">${escLoja(m.mes)}</td>
       <td>${fmt.brl(m.faturamento_meta)}</td>
       <td>${fmt.brl(m.faturamento_real)}</td>
 <td style="color:${parseFloat(pct)>=100?'var(--green)':'var(--orange)'};font-weight:600">${pct}%</td>
-      <td>${m.meta_perda_pct}%</td>
+      <td>${escLoja(m.meta_perda_pct)}%</td>
       <td>${fmt.brl(m.meta_retiradas)}</td>
     </tr>`;
   }).join('');
@@ -813,9 +815,9 @@ categorias = (d.data || []).filter(c => c.ativo !== false);
     <td>
       <input type="checkbox" class="check-cat" value="${c.id}">
     </td>
-    <td><b>${c.grupo || ''}</b></td>
-    <td>${c.subgrupo || ''}</td>
-    <td>${c.label_exibicao || c.subgrupo || ''}</td>
+    <td><b>${escLoja(c.grupo || '')}</b></td>
+    <td>${escLoja(c.subgrupo || '')}</td>
+    <td>${escLoja(c.label_exibicao || c.subgrupo || '')}</td>
     <td>${c.ordem ?? 99}</td>
     <td>
       <button class="act-btn" onclick="abrirCat(${c.id})">✏️</button>
@@ -831,7 +833,7 @@ function abrirCat(id=null){
   const grupos = [...new Set((categorias || []).map(c => (c.grupo || '').trim()).filter(Boolean))].sort();
   const dl = document.getElementById('lista-grupos-dre');
   if (dl) {
-    dl.innerHTML = grupos.map(g => `<option value="${g}">`).join('');
+    dl.innerHTML = grupos.map(g => `<option value="${escLoja(g)}">`).join('');
   }
 
   if(!id){
@@ -964,7 +966,8 @@ function showPage(page, el, fromMobile){
   if(page==='metas')          carregarMetas();
 }
 
-async function inativarUsr(id, nome){
+async function inativarUsr(id){
+  const nome = usuarios.find(u=>Number(u.id)===Number(id))?.nome || "";
   if(!confirm(`Inativar o usuário "${nome}"?`)) return;
 
   const d = await api.delete(`/auth/usuarios/${id}`);
@@ -977,7 +980,8 @@ async function inativarUsr(id, nome){
   carregarUsuarios();
 }
 
-async function excluirUsr(id, nome){
+async function excluirUsr(id){
+  const nome = usuarios.find(u=>Number(u.id)===Number(id))?.nome || "";
   const ok = confirm(
     `Excluir permanentemente o usuário "${nome}"?\n\nEssa ação é definitiva e deve ser usada apenas para usuários de teste.`
   );
@@ -1005,8 +1009,8 @@ async function carregarAcoes(){
   if(!acoes.length){ tbody.innerHTML=''; empty.style.display=''; return; }
   empty.style.display='none';
   tbody.innerHTML = acoes.map(a=>`<tr>
-    <td style="font-weight:500">${a.descricao}</td>
-    <td style="text-align:center;color:var(--muted);font-size:12px">${a.ordem}</td>
+    <td style="font-weight:500">${escLoja(a.descricao)}</td>
+    <td style="text-align:center;color:var(--muted);font-size:12px">${escLoja(a.ordem)}</td>
     <td>
       <button class="act-btn" onclick="abrirAcao(${a.id})">✏️</button>
       <button class="act-btn" onclick="excluirAcao(${a.id})" style="color:var(--red-l)">🗑️</button>
@@ -1150,7 +1154,7 @@ async function salvarSenha(){
   }
 
   if(d.ok){
-    toast('✅ Senha alterada com sucesso!');
+    toast(d.login_necessario ? '✅ Senha alterada. Entre novamente para continuar.' : '✅ Senha alterada com sucesso!');
     fecharSenha();
   } else {
     toast('❌ ' + (d.erro || 'Erro ao alterar senha'));

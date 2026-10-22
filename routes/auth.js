@@ -18,6 +18,9 @@ const express  = require('express');
 const bcrypt   = require('bcryptjs');
 const jwt      = require('jsonwebtoken');
 const autenticar = require('../middleware/auth');
+const { exigirAdminGlobal } = require('../lib/admin-global');
+const { verificarToken } = require('../lib/auth-token');
+const { alterarSenha, abrirSessaoAutenticada } = require('../lib/auth-password');
 const {executarComoSistema}=require('../lib/tenant-context');
 const {auditarSegurancaMultiloja}=require('../lib/multiloja-security');
 const {
@@ -32,6 +35,7 @@ const {
 module.exports = function (pool) {
   autenticar.configurarPool(pool);
   const r = express.Router();
+  r.use(['/usuarios', '/multiloja'], autenticar('admin'), exigirAdminGlobal(pool));
 
   // Helper: executa query com retry automático para ECONNRESET/banco reiniciando
   async function queryComRetry(sql, params = [], tentativas = 3) {
@@ -162,21 +166,21 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
     try {
       await garantirTabelas();
       // Verifica mesmo expirado (ignoreExpiration) para permitir renovação
-      const payload = jwt.verify(oldToken, process.env.JWT_SECRET, { ignoreExpiration: true });
-      // Só renova se expirou há menos de 1 dia (segurança)
+      const payload = verificarToken(oldToken, { ignoreExpiration: true });
+      // Só renova sessões revogáveis até três dias após a expiração
       const expiredAgo = Math.floor(Date.now()/1000) - payload.exp;
       if (expiredAgo > 86400 * 3) return res.status(401).json({ ok: false, erro: 'Token muito antigo' });
       // Verifica se usuário ainda existe e está ativo
       const { rows } = await pool.query('SELECT id,nome,email,perfil FROM usuarios WHERE id=$1 AND ativo=true', [payload.id]);
       if (!rows.length) return res.status(401).json({ ok: false, erro: 'Usuário inativo' });
       const loja = await resolverLojaDoUsuario(pool, rows[0].id, payload.lojaId || null);
-      if (!loja) return res.status(403).json({ ok: false, erro: 'Usuário sem acesso a uma loja ativa' });
+      if (!loja || Number(loja.loja_id) !== Number(payload.lojaId) || Number(loja.vinculo_id) !== Number(payload.vinculoLojaId)) return res.status(403).json({ ok: false, erro: 'Acesso à loja encerrado. Entre novamente.' });
       if(payload.sessaoId){
         const {rows:sessoes}=await executarComoSistema(()=>pool.query(`SELECT id FROM login_sessoes
           WHERE id=$1 AND usuario_id=$2 AND loja_id=$3 AND encerrado_em IS NULL`,[payload.sessaoId,rows[0].id,loja.loja_id]));
         if(!sessoes.length)return res.status(401).json({ok:false,erro:'Sessão encerrada. Entre novamente.'});
       }
-      const sessaoId = payload.sessaoId || await abrirSessao(rows[0].id, req, loja.loja_id);
+      const sessaoId = payload.sessaoId;
       const newToken = jwt.sign(
         payloadComLoja(rows[0], sessaoId, loja),
         process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
@@ -218,7 +222,8 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
 
       // Atualiza último login
       await pool.query(`UPDATE usuarios SET ultimo_login = NOW() WHERE id = $1`, [usuario.id]);
-      const sessaoId = await abrirSessao(usuario.id, req, loja.loja_id);
+      const sessaoId = await abrirSessaoAutenticada(pool, usuario.id, usuario.senha_hash, loja.loja_id, req);
+      if (!sessaoId) return res.status(401).json({ ok: false, erro: 'Credenciais alteradas. Entre novamente.' });
 
       const token = jwt.sign(
         payloadComLoja(usuario, sessaoId, loja),
@@ -346,7 +351,8 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
       const loja = await resolverLojaDoUsuario(pool, req.user.id, lojaId);
       if (!loja) return res.status(403).json({ ok:false, erro:'Acesso à loja não autorizado' });
 
-      const sessaoLojaId=await executarComoSistema(()=>abrirSessao(req.user.id,req,loja.loja_id));
+      const sessaoLojaId = await abrirSessaoAutenticada(pool, req.user.id, null, loja.loja_id, req, req.user.sessaoId);
+      if (!sessaoLojaId) return res.status(401).json({ ok:false, erro:'Sessão encerrada. Entre novamente.' });
       const token = jwt.sign(
         payloadComLoja(rows[0], sessaoLojaId, loja),
         process.env.JWT_SECRET,
@@ -671,12 +677,12 @@ r.delete('/usuarios/:id/permanente', autenticar('admin'), async (req, res) => {
   // ── PUT /usuarios/:id/senha — admin troca senha de qualquer usuário ─────────
   r.put('/usuarios/:id/senha', autenticar('admin'), async (req, res) => {
     const { senha_nova } = req.body;
-    if (!senha_nova || senha_nova.length < 6)
+    if (typeof senha_nova !== 'string' || senha_nova.length < 6)
       return res.status(400).json({ ok: false, erro: 'Senha deve ter no mínimo 6 caracteres' });
     try {
       const hash = await bcrypt.hash(senha_nova, 12);
-      await pool.query(`UPDATE usuarios SET senha_hash=$1, atualizado_em=NOW() WHERE id=$2`,
-        [hash, parseInt(req.params.id)]);
+      const alterado = await alterarSenha(pool, Number(req.params.id), hash, { lojaId: req.user.lojaId });
+      if (!alterado) return res.status(404).json({ ok: false, erro: 'Usuário não encontrado nesta loja' });
       res.json({ ok: true });
     } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
@@ -684,7 +690,7 @@ r.delete('/usuarios/:id/permanente', autenticar('admin'), async (req, res) => {
   // ── PUT /senha ─────────────────────────────────────────────────────────────
   r.put('/senha', autenticar(), async (req, res) => {
     const { senha_atual, senha_nova } = req.body;
-    if (!senha_atual || !senha_nova) {
+    if (typeof senha_atual !== 'string' || typeof senha_nova !== 'string' || !senha_atual || !senha_nova) {
       return res.status(400).json({ ok: false, erro: 'Senha atual e nova são obrigatórias' });
     }
     if (senha_nova.length < 6) {
@@ -696,55 +702,14 @@ r.delete('/usuarios/:id/permanente', autenticar('admin'), async (req, res) => {
       if (!ok) return res.status(401).json({ ok: false, erro: 'Senha atual incorreta' });
 
       const hash = await bcrypt.hash(senha_nova, 12);
-      await pool.query(
-        `UPDATE usuarios SET senha_hash = $1, atualizado_em = NOW() WHERE id = $2`,
-        [hash, req.user.id]
-      );
-      res.json({ ok: true });
+      const alterado = await alterarSenha(pool, req.user.id, hash, { hashAnterior: rows[0].senha_hash });
+      if (!alterado) return res.status(409).json({ ok: false, erro: 'Senha alterada por outra sessão. Entre novamente.' });
+      res.json({ ok: true, login_necessario: true });
     } catch (e) {
       res.status(500).json({ ok: false, erro: e.message });
     }
   });
 
-  // ── GET /reset-admin — recuperação de senha de emergência ──────────────────
-  // Token: bb@Reset2024! — acesso apenas via URL direta
-  r.get('/reset-admin', async (req, res) => {
-    const TOKEN = 'bb@Reset2024!';
-    const { tk, pwd, email } = req.query;
-    if (tk !== TOKEN)
-      return res.status(403).send('<h2>❌ Token inválido</h2>');
-    // Se não passar pwd, mostra formulário
-    if (!pwd) {
-      return res.send(`<!DOCTYPE html><html><body style="font-family:sans-serif;padding:40px;max-width:400px">
-        <h2>🔑 Reset de Senha — Bom Beef</h2>
-        <form method="GET">
-          <input type="hidden" name="tk" value="${TOKEN}">
-          <p><label>E-mail do admin (opcional):<br>
-          <input name="email" style="width:100%;padding:8px;margin-top:4px"></label></p>
-          <p><label>Nova senha:<br>
-          <input name="pwd" type="password" style="width:100%;padding:8px;margin-top:4px" required minlength="6"></label></p>
-          <button type="submit" style="background:#8B0000;color:#fff;padding:10px 20px;border:none;border-radius:6px;font-size:14px;cursor:pointer">
-            Alterar Senha
-          </button>
-        </form>
-      </body></html>`);
-    }
-    if (pwd.length < 6)
-      return res.send('<h2>❌ Senha deve ter no mínimo 6 caracteres</h2>');
-    try {
-      const hash = await bcrypt.hash(pwd, 12);
-      const where = email ? `email=$2` : `perfil='admin'`;
-      const params = email ? [hash, email] : [hash];
-      const { rows } = await queryComRetry(
-        `UPDATE usuarios SET senha_hash=$1, atualizado_em=NOW() WHERE ${where} RETURNING id, nome, email, perfil`,
-        params
-      );
-      if (!rows.length) return res.send('<h2>❌ Usuário não encontrado</h2>');
-      res.send(`<h2>✅ Senha atualizada!</h2><p>Usuário: <b>${rows[0].nome}</b> (${rows[0].email})</p>
-        <p><a href="/auth/reset-admin?tk=${TOKEN}">Alterar outra senha</a></p>
-        <p><a href="/">Voltar ao sistema</a></p>`);
-    } catch(e) { res.status(500).send('Erro: '+e.message); }
-  });
 
   return r;
 };

@@ -9,7 +9,7 @@
  *   router.use(autenticar(['admin','gestor'])); // admin ou gestor
  */
 
-const jwt = require('jsonwebtoken');
+const { verificarToken } = require('../lib/auth-token');
 const { executarNaLoja } = require('../lib/tenant-context');
 
 let poolAutenticacao=null;
@@ -28,7 +28,7 @@ function autenticar(perfisPermitidos = null) {
 
     let payload;
     try {
-      payload = jwt.verify(token, process.env.JWT_SECRET);
+      payload = verificarToken(token);
     } catch (e) {
       const msg = e.name === 'TokenExpiredError' ? 'Token expirado' : 'Token inválido';
       return res.status(401).json({ ok: false, erro: msg });
