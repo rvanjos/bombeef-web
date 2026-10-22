@@ -8,6 +8,7 @@
 
 const express    = require('express');
 const autenticar = require('../middleware/auth');
+const { exigirAdminGlobal } = require('../lib/admin-global');
 
 // Tabelas para backup (em ordem que respeita FK)
 const TABELAS = [
@@ -32,7 +33,7 @@ const TABELAS = [
 
 module.exports = function (pool) {
   const r = express.Router();
-  r.use(autenticar('admin'));
+  r.use(autenticar('admin'), exigirAdminGlobal(pool));
 
   // ── GET /stats — resumo do banco ────────────────────────────────────────────
   r.get('/stats', async (req, res) => {

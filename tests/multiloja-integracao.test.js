@@ -42,7 +42,7 @@ test('PostgreSQL: migração legada preserva histórico, aceita CNPJ em duas loj
   await db.exec("UPDATE lojas SET pronta_operacao=false WHERE id=2;INSERT INTO login_sessoes(usuario_id,loja_id) VALUES(1,1)");
   const vinculo=(await db.query('SELECT id FROM usuario_lojas WHERE usuario_id=1 AND loja_id=1')).rows[0].id;
   const sessao=(await db.query('SELECT id FROM login_sessoes WHERE usuario_id=1')).rows[0].id;
-  const token=jwt.sign({id:1,lojaId:1,perfil:'admin',vinculoLojaId:vinculo,sessaoId:sessao},process.env.JWT_SECRET);
+  const token=jwt.sign({id:1,lojaId:1,perfil:'admin',vinculoLojaId:vinculo,sessaoId:sessao},process.env.JWT_SECRET,{expiresIn:"1h"});
   const app=express();app.use(express.json());app.use('/auth',require('../routes/auth')(pool));
   const server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));
   try{

@@ -5,7 +5,7 @@ process.env.JWT_SECRET='segredo-apenas-fixtures-multiloja';
 const payload={id:7,nome:'Admin',perfil:'admin',lojaId:2,vinculoLojaId:9,sessaoId:11};
 async function executar(rows,perfil='admin'){
  let consulta,proximo=false;autenticar.configurarPool({query:async(s,p)=>{consulta={s,p};return {rows};}});
- const req={headers:{authorization:'Bearer '+jwt.sign(payload,process.env.JWT_SECRET)}};
+ const req={headers:{authorization:'Bearer '+jwt.sign(payload,process.env.JWT_SECRET,{expiresIn:"1h"})}};
  const res={status(n){this.code=n;return this},json(d){this.body=d;return this}};
  await autenticar(perfil)(req,res,()=>{proximo=true;});return {req,res,consulta,proximo};
 }
@@ -17,5 +17,5 @@ test('revogação do vínculo, usuário ou sessão impede uso do token antigo',a
 });
 test('rebaixamento de perfil remove imediatamente permissão administrativa',async()=>{const r=await executar([{perfil:'caixa'}]);assert.equal(r.res.code,403);assert.equal(r.proximo,false);});
 test('falha de banco não libera autenticação por token apenas',async()=>{
- autenticar.configurarPool({query:async()=>{throw Error('indisponível')}});const req={headers:{authorization:'Bearer '+jwt.sign(payload,process.env.JWT_SECRET)}};const res={status(n){this.code=n;return this},json(d){this.body=d}};await autenticar()(req,res,()=>assert.fail('não deve liberar'));assert.equal(res.code,503);
+ autenticar.configurarPool({query:async()=>{throw Error('indisponível')}});const req={headers:{authorization:'Bearer '+jwt.sign(payload,process.env.JWT_SECRET,{expiresIn:"1h"})}};const res={status(n){this.code=n;return this},json(d){this.body=d}};await autenticar()(req,res,()=>assert.fail('não deve liberar'));assert.equal(res.code,503);
 });
