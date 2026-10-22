@@ -17,6 +17,8 @@ const rateLimit  = require('express-rate-limit');
 const morgan     = require('morgan');
 const path       = require('path');
 const pool        = require('./lib/db');
+const { chaveSSE, publicarSSE } = require('./lib/sse-tenant');
+const { politicaCors } = require('./lib/cors-policy');
 
 // ── Auto-migração na inicialização ────────────────────────────────────────────
 // Roda sempre que o servidor inicia — ADD COLUMN IF NOT EXISTS é idempotente
@@ -307,12 +309,7 @@ async function conectarComRetry() {
 // ── App Express ────────────────────────────────────────────────────────────────
 const app = express();
 
-app.use(cors({
-  origin: process.env.NODE_ENV === 'production'
-    ? process.env.ALLOWED_ORIGIN || true
-    : true,
-  credentials: true,
-}));
+app.use(cors(politicaCors()));
 
 // ── Segurança: headers HTTP ──────────────────────────────────────────────────
 app.use(helmet({
@@ -381,13 +378,7 @@ app.use(express.static(path.join(__dirname, 'public'), {
 const sseClients = new Map();
 
 function ssePublish(canal, dados) {
-  const set = sseClients.get(canal);
-  if (!set || !set.size) return;
-  const payload = 'data: ' + JSON.stringify(dados) + '\n\n';
-  for (const res of set) {
-    try { res.write(payload); }
-    catch(_) { set.delete(res); }
-  }
+  publicarSSE(sseClients, canal, dados);
 }
 // Expõe para uso nas rotas
 app.locals.ssePublish = ssePublish;
@@ -395,6 +386,8 @@ app.locals.ssePublish = ssePublish;
 // Endpoint SSE — o front-end conecta aqui para receber eventos
 app.get('/api/events', require('./middleware/auth')(), (req, res) => {
   const canal = req.query.canal || 'geral';
+  const chave = chaveSSE(req.user.lojaId, canal);
+  if (!chave) return res.status(400).json({ok:false,erro:'Canal inválido'});
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
@@ -402,8 +395,8 @@ app.get('/api/events', require('./middleware/auth')(), (req, res) => {
   res.flushHeaders();
   res.write('data: {"type":"connected"}\n\n');
 
-  if (!sseClients.has(canal)) sseClients.set(canal, new Set());
-  sseClients.get(canal).add(res);
+  if (!sseClients.has(chave)) sseClients.set(chave, new Set());
+  sseClients.get(chave).add(res);
 
   // Heartbeat a cada 25s para manter conexão viva
   const hb = setInterval(() => {
@@ -413,7 +406,9 @@ app.get('/api/events', require('./middleware/auth')(), (req, res) => {
 
   req.on('close', () => {
     clearInterval(hb);
-    sseClients.get(canal)?.delete(res);
+    const set=sseClients.get(chave);
+    set?.delete(res);
+    if(!set?.size)sseClients.delete(chave);
   });
 });
 

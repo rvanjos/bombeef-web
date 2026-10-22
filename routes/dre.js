@@ -1809,25 +1809,30 @@ module.exports = function (pool, app) {
     try {
       const { sessao_id, mes_ref, dados_json } = req.body;
       if (!mes_ref || !dados_json) return res.sendStatus(204);
+      const lojaId=Number(req.user.lojaId);
+      if(await bloquearSeFechado(mes_ref,lojaId))return res.status(423).json({ok:false,erro:'Mês fechado',codigo:'DRE_MES_FECHADO'});
       const descricao = `Sessão ${mes_ref} — auto-save ao fechar`;
       if (sessao_id) {
-        const cur = await pool.query(`SELECT dados_json FROM dre_sessoes WHERE id=$1`, [sessao_id]);
+        const cur = await pool.query(`SELECT dados_json,mes_ref FROM dre_sessoes WHERE id=$1 AND loja_id=$2`, [sessao_id,lojaId]);
+        if(!cur.rows.length)return res.status(404).json({ok:false,erro:'Sessão não encontrada'});
+        if(await bloquearSeFechado(cur.rows[0].mes_ref,lojaId))return res.status(423).json({ok:false,erro:'Mês fechado',codigo:'DRE_MES_FECHADO'});
+        if(cur.rows[0].mes_ref!==mes_ref)return res.status(409).json({ok:false,erro:'Mês da sessão incompatível'});
         const txsB = extrairTransacoes(cur.rows[0]?.dados_json);
         const txsNovosB = extrairTransacoes(dados_json);
         const merge = txsNovosB.length > 0 ? mergeTransacoes(txsB, txsNovosB) : (txsB.length > 0 ? txsB : txsNovosB);
         await pool.query(
-          `UPDATE dre_sessoes SET dados_json=$1, atualizado_em=NOW() WHERE id=$2`,
-          [JSON.stringify({...dados_json, transactions: merge}), sessao_id]
+          `UPDATE dre_sessoes SET dados_json=$1, atualizado_em=NOW() WHERE id=$2 AND loja_id=$3`,
+          [JSON.stringify({...dados_json, transactions: merge}), sessao_id,lojaId]
         );
         espelharLancamentos(sessao_id, merge).catch(()=>{});
       } else {
         const existing = await pool.query(
-          `SELECT id FROM dre_sessoes WHERE mes_ref=$1 ORDER BY atualizado_em DESC LIMIT 1`, [mes_ref]
+          `SELECT id FROM dre_sessoes WHERE mes_ref=$1 AND loja_id=$2 ORDER BY atualizado_em DESC LIMIT 1`, [mes_ref,lojaId]
         );
         if (existing.rows.length) {
           await pool.query(
-            `UPDATE dre_sessoes SET dados_json=$1, atualizado_em=NOW() WHERE id=$2`,
-            [JSON.stringify(dados_json), existing.rows[0].id]
+            `UPDATE dre_sessoes SET dados_json=$1, atualizado_em=NOW() WHERE id=$2 AND loja_id=$3`,
+            [JSON.stringify(dados_json), existing.rows[0].id,lojaId]
           );
           espelharLancamentos(existing.rows[0].id, dados_json?.transactions||[]).catch(()=>{});
         }
@@ -1839,7 +1844,12 @@ module.exports = function (pool, app) {
   // ── DELETE /sessoes/:id ────────────────────────────────────────────────────
   r.delete('/sessoes/:id', autoPublish('dre', 'dre_atualizado'), async (req, res) => {
     try {
-      await pool.query(`DELETE FROM dre_sessoes WHERE id = $1`, [parseInt(req.params.id)]);
+      const lojaId=Number(req.user.lojaId),id=Number(req.params.id);
+      if(!Number.isSafeInteger(id)||id<=0)return res.status(400).json({ok:false,erro:'Sessão inválida'});
+      const {rows}=await pool.query(`SELECT mes_ref FROM dre_sessoes WHERE id=$1 AND loja_id=$2`,[id,lojaId]);
+      if(!rows.length)return res.status(404).json({ok:false,erro:'Sessão não encontrada'});
+      if(await bloquearSeFechado(rows[0].mes_ref,lojaId))return res.status(423).json({ok:false,erro:'Mês fechado',codigo:'DRE_MES_FECHADO'});
+      await pool.query(`DELETE FROM dre_sessoes WHERE id=$1 AND loja_id=$2`, [id,lojaId]);
       res.json({ ok: true });
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
