@@ -19,6 +19,7 @@
 const express    = require('express');
 const autenticar = require('../middleware/auth');
 const events     = require('../lib/events');
+const { saldoAbertoSQL, registrarRetirada, alterarRetirada } = require('../lib/retiradas-limite');
 
 module.exports = function (pool, app) {
   const r = express.Router();
@@ -133,11 +134,11 @@ module.exports = function (pool, app) {
   }
   initTable().catch(e => console.error('[retiradas] initTable:', e.message));
 
-  // ── Helper: calcula total do mês por funcionário ───────────────────────────
-  async function totalMes(funcId, mes) {
+  // Limite de crédito considera toda a dívida aberta, independentemente do mês.
+  async function totalAberto(funcId, lojaId) {
     const { rows } = await pool.query(
-      `SELECT COALESCE(SUM(valor_total), 0) AS total FROM retiradas WHERE funcionario_id = $1 AND mes = $2`,
-      [funcId, mes]
+      `SELECT COALESCE(SUM(${saldoAbertoSQL()}), 0) AS total FROM retiradas WHERE funcionario_id=$1 AND loja_id=$2`,
+      [funcId, lojaId]
     );
     return parseFloat(rows[0].total);
   }
@@ -180,16 +181,16 @@ module.exports = function (pool, app) {
         const d = new Date();
         return `${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
       })();
-      const params = [mesRef], filtro = req.funcionarioEscopo
+      const params = [req.user.lojaId], filtro = req.funcionarioEscopo
         ? (params.push(req.funcionarioEscopo.id), `AND f.id = $2`)
         : '';
       const { rows } = await pool.query(`
         SELECT f.id, f.nome,
                COALESCE(f.limite_retirada,0)::numeric AS limite,
-          COALESCE(SUM(ret.valor_total),0)::numeric AS usado
+          COALESCE(SUM(${saldoAbertoSQL('ret')}),0)::numeric AS usado
           FROM funcionarios f
-          LEFT JOIN retiradas ret ON ret.funcionario_id=f.id AND ret.mes=$1
-         WHERE f.ativo=true ${filtro}
+          LEFT JOIN retiradas ret ON ret.funcionario_id=f.id AND ret.loja_id=f.loja_id
+         WHERE f.ativo=true AND f.loja_id=$1 ${filtro}
          GROUP BY f.id, f.nome, f.limite_retirada
          ORDER BY f.nome
       `, params);
@@ -220,12 +221,12 @@ module.exports = function (pool, app) {
       })();
 
       const { rows: func } = await pool.query(
-        `SELECT id, nome, limite_retirada FROM funcionarios WHERE id = $1`, [funcionarioId]
+        `SELECT id, nome, limite_retirada FROM funcionarios WHERE id=$1 AND loja_id=$2`, [funcionarioId, req.user.lojaId]
       );
       if (!func.length) return res.status(404).json({ ok: false, erro: 'Funcionário não encontrado' });
 
       const limite   = parseFloat(func[0].limite_retirada || 0);
-      const usado    = await totalMes(func[0].id, mesRef);
+      const usado    = await totalAberto(func[0].id, req.user.lojaId);
       const saldo    = Math.max(0, limite - usado);
       const pct      = limite > 0 ? ((usado / limite) * 100).toFixed(1) : '0.0';
 
@@ -259,7 +260,8 @@ module.exports = function (pool, app) {
           COALESCE(SUM(ret.valor_total), 0) AS total_retirado,
           COALESCE(SUM(ret.valor_total-COALESCE(ret.saldo_restante,CASE WHEN ret.status='pago' THEN 0 ELSE ret.valor_total END)),0) AS total_pago,
           COALESCE(SUM(COALESCE(ret.saldo_restante,CASE WHEN ret.status='pago' THEN 0 ELSE ret.valor_total END)),0) AS total_em_aberto,
-          f.limite_retirada - COALESCE(SUM(ret.valor_total), 0) AS saldo
+          GREATEST(0, f.limite_retirada - COALESCE((SELECT SUM(${saldoAbertoSQL('ab')}) FROM retiradas ab
+            WHERE ab.funcionario_id=f.id AND ab.loja_id=f.loja_id),0)) AS saldo
         FROM funcionarios f
         LEFT JOIN retiradas ret ON ret.funcionario_id = f.id AND ret.mes = $1
         WHERE f.ativo = true ${funcionario_id ? 'AND f.id = $2' : ''}
@@ -630,7 +632,7 @@ module.exports = function (pool, app) {
   r.get('/pendentes/count', permitir('retiradas_visualizar_equipe'), async (req, res) => {
     try {
       const { rows } = await pool.query(`
-        SELECT COUNT(*) AS total, COALESCE(SUM(valor_total),0) AS valor
+        SELECT COUNT(*) AS total, COALESCE(SUM(${saldoAbertoSQL()}),0) AS valor
         FROM retiradas
         WHERE COALESCE(status,'pendente') <> 'pago'
       `);
@@ -645,92 +647,28 @@ module.exports = function (pool, app) {
       return res.status(403).json({ ok:false, erro:'Seu usuário não está vinculado a um funcionário ativo' });
     if (req.funcionarioEscopo || (!req.podeRetirada('retiradas_lancar_equipe') && req.funcionarioProprio))
       ret.funcionarioId = (req.funcionarioEscopo || req.funcionarioProprio).id;
-    if (!ret.funcionarioId || !ret.descricao) {
+    if (!ret.funcionarioId || (!ret.itens && !ret.descricao)) {
       return res.status(400).json({ ok: false, erro: 'funcionarioId e descricao obrigatórios' });
     }
-    if (req.user?.perfil !== 'admin' && !ret.produtoId) {
+    if (req.user?.perfil !== 'admin' && !ret.itens && !ret.produtoId) {
       return res.status(400).json({ ok:false, erro:'Selecione um produto cadastrado para registrar a retirada' });
     }
     try {
-      // Verifica funcionário e limite
-      const { rows: func } = await pool.query(
-        `SELECT id, nome, limite_retirada FROM funcionarios WHERE id = $1 AND ativo = true`,
-        [ret.funcionarioId]
-      );
-      if (!func.length) return res.status(404).json({ ok: false, erro: 'Funcionário não encontrado' });
-
-      const dtRetirada = ret.dtRetirada || new Date().toISOString().slice(0, 10);
-      const mes        = ret.mes || (dtRetirada.slice(5, 7) + '/' + dtRetirada.slice(0, 4));
-
-      // Calcula valor
-      let precUnit = parseFloat(ret.precoUnitario || 0);
-      if (ret.produtoId) {
-        const prod = await pool.query(`SELECT preco_custo FROM produtos WHERE id = $1`, [ret.produtoId]);
-        if (!prod.rows.length) return res.status(404).json({ ok:false, erro:'Produto não encontrado' });
-        // O custo oficial do produto prevalece sobre valores enviados pela tela.
-        precUnit = parseFloat(prod.rows[0].preco_custo || 0);
-      }
-      const qtd        = parseFloat(ret.qtd || 1);
-      const descPct    = parseFloat(ret.descontoPct ?? 0); // 0 = paga integral, 100 = gratuito
-      const valorTotal = parseFloat((precUnit * qtd * (1 - descPct / 100)).toFixed(2));
-
-      // Verifica limite
-      const limite = parseFloat(func[0].limite_retirada || 0);
-      if (limite > 0) {
-        const usado = await totalMes(ret.funcionarioId, mes);
-        if (usado + valorTotal > limite) {
-          return res.status(422).json({
-            ok: false,
-            erro: `Limite excedido. Usado: R$ ${usado.toFixed(2)} / Limite: R$ ${limite.toFixed(2)}`,
-            saldo: Math.max(0, limite - usado),
-          });
-        }
-      }
-
-      const { rows } = await pool.query(`
-        INSERT INTO retiradas
-          (funcionario_id, produto_id, descricao, qtd, preco_unitario, desconto_pct,
-           valor_total, mes, dt_retirada, observacao, autorizado_por, usuario_id)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
-        RETURNING *
-      `, [
-        ret.funcionarioId, ret.produtoId || null, ret.descricao,
-        qtd, precUnit, descPct, valorTotal, mes, dtRetirada,
-        ret.observacao || null, ret.autorizadoPor || req.user.id, req.user.id,
-      ]);
-      res.json({ ok: true, data: rows[0] });
-
-      // F2-05 DESATIVADO: baixa de estoque não acontece mais ao criar retirada.
-      // A fonte de verdade é o PDV. Use o botão "Baixa no PDV" para marcar
-      // manualmente quando o item for lançado no caixa.
-
-    } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
+      const resultado = await registrarRetirada(pool, req, ret);
+      res.json({ ok: true, ...resultado });
+    } catch (e) {
+      res.status(e.status || 500).json({ ok:false, erro:e.message, saldo:e.saldo,
+        pagamento_minimo:e.pagamento_minimo, total_retirada:e.total_retirada });
+    }
   });
 
   // ── PUT /:id ───────────────────────────────────────────────────────────────
   r.put('/:id', permitir('retiradas_editar'), async (req, res) => {
     const ret = req.body;
     try {
-      await pool.query(`
-        UPDATE retiradas SET
-          descricao       = COALESCE($1, descricao),
-          qtd             = COALESCE($2, qtd),
-          preco_unitario  = COALESCE($3, preco_unitario),
-          desconto_pct    = COALESCE($4, desconto_pct),
-          valor_total     = COALESCE($5, valor_total),
-          observacao      = COALESCE($6, observacao)
-        WHERE id = $7
-      `, [
-        ret.descricao || null,
-        ret.qtd       !== undefined ? parseFloat(ret.qtd) : null,
-        ret.precoUnitario !== undefined ? parseFloat(ret.precoUnitario) : null,
-        ret.descontoPct   !== undefined ? parseFloat(ret.descontoPct) : null,
-        ret.valorTotal    !== undefined ? parseFloat(ret.valorTotal) : null,
-        ret.observacao || null,
-        parseInt(req.params.id),
-      ]);
+      await alterarRetirada(pool, req, Number(req.params.id), ret);
       res.json({ ok: true });
-    } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
+    } catch (e) { res.status(e.status || 500).json({ ok: false, erro: e.message }); }
   });
 
   // Marcação em lote: valida todos os IDs na loja antes de alterar qualquer linha.
@@ -816,12 +754,9 @@ module.exports = function (pool, app) {
   // ── PATCH /:id/reabrir — admin/gestor reabre retirada paga ─────────────────
   r.patch('/:id/reabrir', permitir('retiradas_pagamentos'), async (req, res) => {
     try {
-      await pool.query(
-        `UPDATE retiradas SET status='pendente', saldo_restante=valor_total, dt_pagamento=NULL, pago_por=NULL WHERE id=$1`,
-        [parseInt(req.params.id)]
-      );
+      await alterarRetirada(pool, req, Number(req.params.id), {}, true);
       res.json({ ok:true });
-    } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
+    } catch(e) { res.status(e.status || 500).json({ ok:false, erro:e.message }); }
   });
 
   // ── DELETE /:id ────────────────────────────────────────────────────────────

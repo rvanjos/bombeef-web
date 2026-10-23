@@ -295,6 +295,17 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
       <div id="r-sugestoes" style="display:none"></div>
       <div id="r-busca-wrap" style="display:none"><input id="r-busca"></div>
 
+      <div id="r-pagamento-ato" class="limite-alert">
+        <div id="r-pagamento-previa" aria-live="polite">Selecione o funcionário para consultar o limite disponível.</div>
+        <div id="r-pagamento-campos" style="margin-top:10px">
+          <div class="fg-row">
+            <div class="fg"><label>Valor recebido agora (R$)</label><input id="r-pago-agora" type="number" min="0" step="0.01" value="0.00" oninput="previewRetirada()"></div>
+            <div class="fg"><label>Forma do pagamento imediato</label><select id="r-forma-agora"><option value="pix">Pix</option><option value="dinheiro">Dinheiro</option><option value="debito">Cartão débito</option><option value="credito">Cartão crédito</option><option value="transferencia">Transferência</option><option value="outro">Outro</option></select></div>
+          </div>
+          <button type="button" class="btn btn-s" onclick="preencherMinimoRetirada()">Preencher pagamento mínimo</button>
+        </div>
+        <div style="font-size:11px;margin-top:8px">O limite considera todas as dívidas em aberto e é liberado conforme os pagamentos. Informe apenas o valor efetivamente recebido.</div>
+      </div>
       <div class="fg"><label>Observação</label><textarea id="r-obs" rows="2" placeholder="Opcional — vale para todos os itens"></textarea></div>
     </div>
     <div class="modal-foot">
@@ -395,9 +406,9 @@ async function carregarLimites(){
       <div class="lc-nome">${ld.nome}</div>
       <div class="lc-bar-bg"><div class="lc-bar ${cls}" style="width:${pct}%"></div></div>
       <div class="lc-info">
-        <span>${fmt.brl(ld.usado)} usado</span>
+        <span>${fmt.brl(ld.usado)} em aberto</span>
         <span>${fmt.pct(pct)}</span>
-        <span>Limite: ${fmt.brl(ld.limite)}</span>
+        <span>Disponível: ${fmt.brl(ld.saldo)} · Limite: ${fmt.brl(ld.limite)}</span>
       </div>
     </div>`;
   }
@@ -617,16 +628,22 @@ async function confirmarPreco(id, qtd) {
 }
 
 // ── Modal ──────────────────────────────────────────────────────────────────
+let retLimiteAtual=null, retLimiteCarga=0, retTotalAtual=0, retSalvando=false;
 function abrirModal(){
   document.getElementById('ret-itens').innerHTML='';
   _retItemIdx=0;
   document.getElementById('r-obs').value='';
   document.getElementById('r-total').textContent='R$ 0,00';
   document.getElementById('limite-info').style.display='none';
+  retLimiteAtual=null; retTotalAtual=0;
+  document.getElementById('r-pago-agora').value='0.00';
+  document.getElementById('r-pagamento-campos').hidden=!permissoesRet.pagamentos;
   document.getElementById('modal-ret').classList.add('open');
   addItemRet(); // primeiro item automático
+  atualizarLimite();
 }
 window.fecharModal = function fecharModal(id){
+  if(retSalvando && (!id || id==='modal-ret')) return;
   if(id){const el=document.getElementById(id);if(el)el.classList.remove('open');return;}
   document.getElementById('modal-ret').classList.remove('open');
   document.getElementById('ret-itens').innerHTML='';
@@ -731,13 +748,37 @@ function calcTotal(){
 
 async function atualizarLimite(){
   const funcId = document.getElementById('r-func').value;
+  const carga=++retLimiteCarga;
+  retLimiteAtual=null;
+  document.getElementById('limite-info').style.display='none';
+  previewRetirada();
   if(!funcId) return;
-  const d = await api.get(`/api/retiradas/limite/${funcId}?mes=${mesAtual}`);
-  if(!d.ok) return;
+  let d;
+  try { d=await api.get(`/api/retiradas/limite/${funcId}`); } catch (_) { return; }
+  if(carga!==retLimiteCarga || !d.ok) return;
   const info = document.getElementById('limite-info');
   info.style.display='';
   const ld = d.data;
-  info.innerHTML = `👤 <b>${ld.funcionario}</b> — Usado: ${fmt.brl(ld.usado)} · Saldo: <b style="color:${ld.saldo<=0?'var(--red-l)':'var(--green)'}">${fmt.brl(ld.saldo)}</b> de ${fmt.brl(ld.limite)}`;
+  retLimiteAtual=ld;
+  info.textContent = `${ld.funcionario} — Dívida em aberto: ${fmt.brl(ld.usado)} · Limite disponível: ${fmt.brl(ld.saldo)} de ${fmt.brl(ld.limite)}`;
+  previewRetirada();
+}
+
+function previewRetirada(){
+  const el=document.getElementById('r-pagamento-previa');
+  if(!retLimiteAtual){el.textContent='Selecione o funcionário e aguarde a consulta do limite. Se não carregar, selecione novamente.';return;}
+  const total=Math.round(retTotalAtual*100), disponivel=Math.round(Number(retLimiteAtual.saldo)*100);
+  const minimo=Math.max(0,total-disponivel), pago=Math.round(Number(document.getElementById('r-pago-agora').value||0)*100);
+  el.textContent=`Total: ${fmt.brl(total/100)} · Disponível: ${fmt.brl(disponivel/100)}. `+
+    (minimo>0?`Pagamento imediato mínimo: ${fmt.brl(minimo/100)}. `:'Pagamento imediato opcional. ')+
+    (!permissoesRet.pagamentos&&minimo>0?'Solicite a confirmação do pagamento a um usuário autorizado.':
+      pago>total?'O pagamento não pode superar o valor da retirada.':
+      pago<minimo?'Informe o valor recebido para cobrir o excedente.':`Ficará em aberto nesta retirada: ${fmt.brl((total-pago)/100)}.`);
+}
+function preencherMinimoRetirada(){
+  if(!retLimiteAtual || !permissoesRet.pagamentos) return;
+  document.getElementById('r-pago-agora').value=(Math.max(0,Math.round(retTotalAtual*100)-Math.round(Number(retLimiteAtual.saldo)*100))/100).toFixed(2);
+  previewRetirada();
 }
 
 // ── Múltiplos itens na retirada ───────────────────────────────────────────
@@ -876,15 +917,18 @@ function calcTotalRet() {
     const idx = row.id.replace('ret-item-','');
     const qtd   = parseFloat(document.getElementById(`ret-qtd-${idx}`)?.value)||0;
     const preco = parseFloat(document.getElementById(`ret-preco-${idx}`)?.value)||0;
-    const sub   = qtd * preco;
+    const sub   = Math.round(qtd * preco * 100) / 100;
     const el    = document.getElementById(`ret-total-${idx}`);
     if(el) el.textContent = sub>0 ? fmt.brl(sub) : '—';
     total += sub;
   });
   document.getElementById('r-total').textContent = fmt.brl(total);
+  retTotalAtual=total;
+  previewRetirada();
 }
 
 async function salvar(){
+  if(retSalvando) return;
   const funcId = document.getElementById('r-func').value;
   if(!funcId){ toast('Selecione o funcionário'); return; }
   const obs = document.getElementById('r-obs').value;
@@ -904,27 +948,24 @@ async function salvar(){
   });
   if (!itens.length){ toast('Adicione ao menos um produto'); return; }
 
-  const botao=document.getElementById('btn-salvar'); botao.disabled=true; botao.textContent='Salvando...';
-  // Salva cada item como uma retirada separada
-  let erros = 0;
-  for (const item of itens) {
-    const body = {
-      funcionarioId: parseInt(funcId),
-      produtoId:     item.produtoId,
-      descricao:     item.descricao,
-      qtd:           item.qtd,
-      precoUnitario: item.precoUnitario,
-      descontoPct:   0,
-      dtRetirada:    dt,
-      observacao:    obs,
-    };
-    const d = await api.post('/api/retiradas', body);
-    if(!d.ok) erros++;
-  }
-  if (erros) toast(`⚠️ ${erros} item(s) com erro ao salvar`);
-  else toast(`✅ ${itens.length} item(s) registrado(s)!`);
-  botao.disabled=false; botao.textContent='💾 Registrar Retirada';
-  fecharModal(); await carregarFuncionarios(); carregar();
+  const valorPagoAgora=Number(document.getElementById('r-pago-agora').value||0);
+  if(!Number.isFinite(valorPagoAgora)||valorPagoAgora<0){toast('Informe um pagamento válido.');return;}
+  const botao=document.getElementById('btn-salvar');
+  retSalvando=true; botao.disabled=true; botao.textContent='Salvando...';
+  try {
+    const d=await api.post('/api/retiradas',{
+      funcionarioId:Number(funcId),itens,dtRetirada:dt,observacao:obs,
+      valorPagoAgora,formaPagamento:document.getElementById('r-forma-agora').value
+    });
+    if(!d.ok){
+      toast(d.erro || 'Não foi possível registrar a retirada.');
+      if(d.pagamento_minimo!==undefined) document.getElementById('r-pagamento-previa').textContent=`Pagamento imediato mínimo atualizado: ${fmt.brl(d.pagamento_minimo)}. Nenhum item foi gravado. Confira o valor recebido e confirme novamente.`;
+      return;
+    }
+    toast(`✅ ${itens.length} item(s) registrado(s) · Pago agora: ${fmt.brl(d.valor_pago||0)}.`);
+    retSalvando=false; fecharModal(); await carregarFuncionarios(); await carregar();
+  } catch (_) { toast('Não foi possível confirmar. Confira o histórico antes de tentar novamente.'); }
+  finally { retSalvando=false; botao.disabled=false; botao.textContent='💾 Registrar Retirada'; }
 }
 
 // Estado do modal de pagamento
@@ -1150,7 +1191,7 @@ window.abrirRelatorio = async function abrirRelatorio(){
   document.getElementById('rel-body').innerHTML = `
     <div style="font-size:14px;font-weight:600;margin-bottom:14px">Referência: ${r.mes} · Total Geral: <b style="color:var(--purple)">${fmt.brl(r.totalGeral)}</b></div>
     <table class="rel-table">
-      <thead><tr><th>Funcionário</th><th>Qtd Itens</th><th>Total Retirado</th><th>Pago</th><th>Em aberto</th><th>Limite</th><th>Saldo limite</th></tr></thead>
+      <thead><tr><th>Funcionário</th><th>Qtd Itens</th><th>Total Retirado</th><th>Pago</th><th>Em aberto no mês</th><th>Limite</th><th>Limite disponível (todos os meses)</th></tr></thead>
       <tbody>${r.resumo.map(f=>`<tr>
         <td><b>${f.nome}</b></td>
         <td>${f.qtd_itens}</td>
