@@ -302,7 +302,7 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
             <div class="fg"><label>Valor recebido agora (R$)</label><input id="r-pago-agora" type="number" min="0" step="0.01" value="0.00" oninput="previewRetirada()"></div>
             <div class="fg"><label>Forma do pagamento imediato</label><select id="r-forma-agora"><option value="pix">Pix</option><option value="dinheiro">Dinheiro</option><option value="debito">Cartão débito</option><option value="credito">Cartão crédito</option><option value="transferencia">Transferência</option><option value="outro">Outro</option></select></div>
           </div>
-          <button type="button" class="btn btn-s" onclick="preencherMinimoRetirada()">Preencher pagamento mínimo</button>
+          <button type="button" class="btn btn-s" onclick="preencherMinimoRetirada()">Preencher pagamento do excedente</button>
         </div>
         <div style="font-size:11px;margin-top:8px">O limite considera todas as dívidas em aberto e é liberado conforme os pagamentos. Informe apenas o valor efetivamente recebido.</div>
       </div>
@@ -770,10 +770,10 @@ function previewRetirada(){
   const total=Math.round(retTotalAtual*100), disponivel=Math.round(Number(retLimiteAtual.saldo)*100);
   const minimo=Math.max(0,total-disponivel), pago=Math.round(Number(document.getElementById('r-pago-agora').value||0)*100);
   el.textContent=`Total: ${fmt.brl(total/100)} · Disponível: ${fmt.brl(disponivel/100)}. `+
-    (minimo>0?`Pagamento imediato mínimo: ${fmt.brl(minimo/100)}. `:'Pagamento imediato opcional. ')+
+    (minimo>0?`Para manter o limite, pague ${fmt.brl(minimo/100)} desta retirada no ato ou pague o saldo anterior. O lançamento pode ser registrado e ficará em aberto até o pagamento. `:'Pagamento imediato opcional. ')+
     (!permissoesRet.pagamentos&&minimo>0?'Solicite a confirmação do pagamento a um usuário autorizado.':
       pago>total?'O pagamento não pode superar o valor da retirada.':
-      pago<minimo?'Informe o valor recebido para cobrir o excedente.':`Ficará em aberto nesta retirada: ${fmt.brl((total-pago)/100)}.`);
+      `Ficará em aberto nesta retirada: ${fmt.brl((total-pago)/100)}.`);
 }
 function preencherMinimoRetirada(){
   if(!retLimiteAtual || !permissoesRet.pagamentos) return;
@@ -963,6 +963,7 @@ async function salvar(){
       return;
     }
     toast(`✅ ${itens.length} item(s) registrado(s) · Pago agora: ${fmt.brl(d.valor_pago||0)}.`);
+    if(d.aviso) alert(d.aviso);
     retSalvando=false; fecharModal(); await carregarFuncionarios(); await carregar();
   } catch (_) { toast('Não foi possível confirmar. Confira o histórico antes de tentar novamente.'); }
   finally { retSalvando=false; botao.disabled=false; botao.textContent='💾 Registrar Retirada'; }

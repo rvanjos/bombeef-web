@@ -30,9 +30,11 @@ function fixture({limite=300,aberto=200,autorizado=true,failItem=false}={}) {
   const body={funcionarioId:7,dtRetirada:'2026-10-23',itens:[{descricao:'Teste',qtd:1,precoUnitario:150}]};
   return {pool,req,body,historico,pagamentos,vinculos,queries,registrar:b=>registrarRetirada(pool,req,{...body,...b})};
 }
-test('dívida antiga ocupa limite; exige apenas o excedente pago no ato',async()=>{
-  const f=fixture();await assert.rejects(f.registrar({}),e=>e.status===422&&e.pagamento_minimo===50&&e.saldo===100);
-  assert.equal(f.historico.length,2);assert.equal(f.pagamentos.length,0);
+test('dívida antiga gera aviso, mas não impede retirada nem inventa pagamento',async()=>{
+  const a=fixture(),aberta=await a.registrar({});assert.equal(aberta.excedente_limite,50);assert.equal(aberta.data[0].saldo_restante,150);
+  assert.equal(a.pagamentos.length,0);assert.match(aberta.aviso,/pague o saldo anterior/);
+  assert.ok(a.queries.find(q=>q.sql.includes('INSERT INTO retiradas')).p[9].includes(aberta.aviso));
+  const f=fixture();
   const r=await f.registrar({valorPagoAgora:50,formaPagamento:'pix'});
   assert.equal(r.saldo_aberto,300);assert.equal(r.limite_disponivel,0);assert.equal(r.data[0].saldo_restante,100);assert.equal(r.data[0].status,'parcial');
   assert.equal(f.pagamentos[0].valor_pago,50);assert.equal(f.pagamentos[0].usuario_id,8);assert.equal(f.pagamentos[0].loja_id,1);assert.equal(f.vinculos[0][2],50);
@@ -44,12 +46,14 @@ test('pagamento anterior libera limite sem depender de virada do mês',async()=>
 test('pagamento parcial anterior libera só o valor efetivamente pago',async()=>{
   const f=fixture({aberto:100});const r=await f.registrar({});assert.equal(r.saldo_aberto,250);assert.equal(r.limite_disponivel,50);
 });
-test('sem disponível, nova retirada precisa ser integralmente paga',async()=>{
-  const f=fixture({aberto:300});await assert.rejects(f.registrar({valorPagoAgora:149,formaPagamento:'dinheiro'}),e=>e.pagamento_minimo===150);
+test('sem disponível, permite registro aberto e também pagamento integral no ato',async()=>{
+  const a=fixture({aberto:300});const aberta=await a.registrar({});assert.equal(aberta.pagamento_recomendado,150);assert.equal(aberta.saldo_aberto,450);assert.equal(aberta.data[0].status,'pendente');
+  const f=fixture({aberto:300});
   const r=await f.registrar({valorPagoAgora:150,formaPagamento:'dinheiro'});assert.equal(r.data[0].status,'pago');assert.equal(r.saldo_aberto,300);
 });
-test('limite zero exige pagamento integral; dívida antiga de outra loja não interfere',async()=>{
-  const f=fixture({limite:0,aberto:0});await assert.rejects(f.registrar({}),e=>e.pagamento_minimo===150);
+test('limite zero avisa o excedente; dívida antiga de outra loja não interfere',async()=>{
+  const a=fixture({limite:0,aberto:0});assert.equal((await a.registrar({})).excedente_limite,150);
+  const f=fixture({limite:0,aberto:0});
   const r=await f.registrar({valorPagoAgora:150,formaPagamento:'debito'});assert.equal(r.saldo_aberto,0);assert.equal(f.historico[1].saldo_restante,999);
 });
 test('lote registra um único pagamento e mantém vínculo de cada item abatido',async()=>{
@@ -67,9 +71,9 @@ test('registrar pagamento exige autorização; valores inválidos não gravam',a
   const f=fixture({autorizado:false});await assert.rejects(f.registrar({valorPagoAgora:50,formaPagamento:'pix'}),e=>e.status===403);
   for(const b of [{valorPagoAgora:151,formaPagamento:'pix'},{valorPagoAgora:-1},{valorPagoAgora:1.005},{itens:[{descricao:'X',qtd:-1,precoUnitario:2}]}])await assert.rejects(f.registrar(b));
 });
-test('duas novas retiradas concorrentes não ultrapassam o limite',async()=>{
-  const f=fixture({aberto:0,limite:200});const r=await Promise.allSettled([f.registrar({}),f.registrar({})]);
-  assert.equal(r.filter(x=>x.status==='fulfilled').length,1);assert.equal(r.filter(x=>x.status==='rejected'&&x.reason.status===422).length,1);assert.equal(f.historico.length,3);
+test('duas retiradas concorrentes contabilizam saldo e aviso sem perder lançamentos',async()=>{
+  const f=fixture({aberto:0,limite:200});const r=await Promise.all([f.registrar({}),f.registrar({})]);
+  assert.equal(r[0].saldo_aberto,150);assert.equal(r[1].saldo_aberto,300);assert.equal(r[1].excedente_limite,100);assert.equal(f.historico.length,4);
 });
 test('edição preserva pagamento já feito e impede aumentar dívida acima do limite',async()=>{
   const f=fixture();await alterarRetirada(f.pool,f.req,1,{valorTotal:300});const q=f.queries.find(q=>q.sql.startsWith('UPDATE retiradas'));assert.equal(q.p[6],250);assert.equal(q.p[7],'parcial');assert.equal(q.p[10],1);
@@ -89,7 +93,7 @@ test('prévia informa mínimo e campo permite pagamento opcional',()=>{
   const src=fs.readFileSync('public/retiradas.html','utf8'),els={'r-pagamento-previa':{},'r-pago-agora':{value:'0'}};
   const ctx={document:{getElementById:id=>els[id]},retLimiteAtual:{saldo:100},retTotalAtual:150,permissoesRet:{pagamentos:true},fmt:{brl:n=>String(n)}};
   vm.runInNewContext(src.slice(src.indexOf('function previewRetirada()'),src.indexOf('// ── Múltiplos itens')),ctx);
-  ctx.previewRetirada();assert.match(els['r-pagamento-previa'].textContent,/mínimo: 50/);ctx.preencherMinimoRetirada();assert.equal(els['r-pago-agora'].value,'50.00');assert.match(els['r-pagamento-previa'].textContent,/em aberto nesta retirada: 100/);
+  ctx.previewRetirada();assert.match(els['r-pagamento-previa'].textContent,/pague 50/);assert.match(els['r-pagamento-previa'].textContent,/lançamento pode ser registrado/);ctx.preencherMinimoRetirada();assert.equal(els['r-pago-agora'].value,'50.00');assert.match(els['r-pagamento-previa'].textContent,/em aberto nesta retirada: 100/);
 });
 test('tela envia lote uma vez e mantém os itens quando o backend exige pagamento',async()=>{
   const src=fs.readFileSync('public/retiradas.html','utf8'),els={};
