@@ -9,8 +9,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="/js/api.js"></script>
 <script src="/js/dre-excel.js?v=1"></script>
-<script src="/js/dre-conferencia.js?v=15"></script>
-<script src="/js/dre-fluxo.js?v=6"></script>
+<script src="/js/dre-conferencia.js?v=16"></script>
+<script src="/js/dre-fluxo.js?v=7"></script>
 <script>
   if (typeof pdfjsLib !== 'undefined') {
     pdfjsLib.GlobalWorkerOptions.workerSrc =
@@ -2879,9 +2879,11 @@ function parseCCRows(rows) {
 
 function addLancs(novos, fileName) {
   const existentes=new Map(TXS.map(t=>[DREFluxo.identidade(t),t]));
+  const chaveBanco=t=>['EXTRATO','OFX','CSV','XLSX'].includes(String(t.fonte||'').toUpperCase())&&t.fitid?JSON.stringify([t.loja_id||'',DREFluxo.escopoBanco(t),t.fitid,t.data,Math.round(Number(t.valor)*100)]):null;
+  const bancarios=new Map(TXS.filter(t=>chaveBanco(t)).map(t=>[chaveBanco(t),t]));
   let n=0,dup=0,atualiz=0;
   for(const l of novos){
-    const chave=DREFluxo.identidade(l),existing=existentes.get(chave);
+    const chave=DREFluxo.identidade(l),existing=existentes.get(chave)||(chaveBanco(l)&&bancarios.get(chaveBanco(l)));
     if(existing){
       if(String(l.fonte||'').startsWith('BOLETO')){
         const categoria=existing.categoria||l.categoria;
@@ -2896,6 +2898,7 @@ function addLancs(novos, fileName) {
     }
     const novoTx={...l,id:l.id||(Date.now()+'_'+Math.random())};
     TXS.push(novoTx);existentes.set(chave,novoTx);n++;
+    if(chaveBanco(novoTx))bancarios.set(chaveBanco(novoTx),novoTx);
     if(novoTx.fonte==='EXTRATO'||novoTx.fonte==='OFX')tentarVincularFaturaAuto(novoTx);
   }
   if (!files.includes(fileName)) files.push(fileName);
@@ -6788,6 +6791,35 @@ async function confirmarDuplicidadeDRE(manterId,duplicadoId){
   dup.historicoDuplicidade=[...(dup.historicoDuplicidade||[]),{acao:'DESCONSIDERAR',representadoPor:String(manter.id),em:new Date().toISOString()}];
   if(!await salvarMes(dup.mes||mesRef,true)){Object.keys(dup).forEach(k=>delete dup[k]);Object.assign(dup,anterior);toast('Não salvo. Confira se o mês está fechado.');return;}
   document.getElementById('m-duplicidade-dre')?.remove();render();updStats();renderDRE();_drillRender();toast('Duplicidade corrigida; os dois registros continuam no histórico.');
+}
+
+let _tratandoReimportacoesDRE=false;
+async function tratarReimportacoesDRE(){
+  if(_tratandoReimportacoesDRE)return;
+  const grupos=DREConferencia.analisar(TXS).reimportacoes.filter(g=>!window.DREConfV2Decisao?.(g.chave));
+  const plano=DREFluxo.planejarReimportacoes(TXS,grupos);
+  if(!plano.length){toast('Nenhum grupo idêntico elegível. Vínculos ou categorias divergentes exigem conferência.');return;}
+  const total=plano.reduce((s,p)=>s+Math.abs(Number(p.valor)||0),0);
+  if(!confirm(`Tratar ${plano.length} cópia(s) idêntica(s), com impacto de ${fmt.brl(total)}?\n\nMantenha estes grupos somente se forem operações distintas. Ao confirmar, uma versão será mantida no cálculo e as cópias ficarão em Ignorados, com histórico. Nenhum lançamento será apagado.`))return;
+  _tratandoReimportacoesDRE=true;
+  let salvos=0,falhas=0;
+  try{
+    for(const mes of new Set(plano.map(p=>p.mes||mesRef))){
+      const alterados=[];
+      for(const p of plano.filter(p=>(p.mes||mesRef)===mes)){
+        const dup=TXS.find(t=>String(t.id)===p.duplicadoId),manter=TXS.find(t=>String(t.id)===p.manterId);
+        if(!dup||!manter||dup.ignorar||manter.ignorar)continue;
+        alterados.push([dup,{...dup}]);
+        dup.ignorar=true;dup.duplicadoDe=p.manterId;dup.motivoIgnorado='Reimportação idêntica confirmada em lote; representado por '+p.manterId;
+        dup.historicoDuplicidade=[...(dup.historicoDuplicidade||[]),{acao:'DESCONSIDERAR_LOTE',representadoPor:p.manterId,em:new Date().toISOString()}];
+      }
+      let ok=false;try{ok=await salvarMes(mes,true);}catch(_){}
+      if(ok)salvos+=alterados.length;
+      else{falhas+=alterados.length;for(const [t,anterior] of alterados){Object.keys(t).forEach(k=>delete t[k]);Object.assign(t,anterior);}}
+    }
+    render();updStats();renderDRE();abrirConferenciaDRE();
+    toast(`${salvos} cópia(s) tratada(s)${falhas?' · '+falhas+' não salvas; confira se o mês está fechado':''}. Histórico preservado.`);
+  }finally{_tratandoReimportacoesDRE=false;}
 }
 
 // ── Exporta cada lançamento em sua própria linha (SEM agrupar por categoria) ──
