@@ -1,11 +1,12 @@
 (function (root, factory) {
-  const api = factory();
+  const api = factory(root);
   if (typeof module === 'object' && module.exports) module.exports = api;
   if (root) root.DREConferencia = api;
-})(typeof window !== 'undefined' ? window : null, function () {
+})(typeof window !== 'undefined' ? window : null, function (root) {
   'use strict';
 
-  const FONTES_BANCO = new Set(['EXTRATO', 'OFX']);
+  const FONTES_BANCO = new Set(['EXTRATO', 'OFX', 'CSV', 'XLSX']);
+  const fluxo=()=>typeof module==='object'&&module.exports?require('./dre-fluxo'):root?.DREFluxo;
   const DESCRICOES_GENERICAS = new Set([
     'BOLETO', 'PIX', 'PAGAMENTO', 'PAGAMENTOS', 'RECEBIMENTO', 'RECEBIMENTOS',
     'TED', 'DOC', 'DEBITO', 'CREDITO'
@@ -110,7 +111,9 @@
   }
 
   function analisar(transacoes) {
-    const lista = Array.isArray(transacoes) ? transacoes.filter(Boolean) : [];
+    const originais = Array.isArray(transacoes) ? transacoes.filter(Boolean) : [];
+    const automaticas=fluxo()?.deduplicar(originais)||{fontes:originais,suprimidos:[]};
+    const lista = automaticas.fontes;
     const banco = lista.filter(fonteBanco);
     const exatas = [];
     const idsEmDuplicidade = new Set();
@@ -119,6 +122,7 @@
     function registrarGrupo(grupo, motivo, confianca) {
       const unicos = Array.from(new Map(grupo.map(t => [String(t.id), t])).values());
       if (unicos.length < 2) return;
+      if(unicos.filter(t=>!t.ignorar).length<2)return;
       if (unicos.every(t => idsEmDuplicidade.has(String(t.id)))) return;
       const assinatura = unicos.map(t => String(t.id)).sort().join('|');
       if (assinaturas.has(assinatura)) return;
@@ -140,8 +144,8 @@
 
     const porFitid = new Map();
     banco.forEach(t => {
-      const fitid = normalizarTexto(t.fitid);
-      if (!fitid) return;
+      const fitid = [t.loja_id||'',fluxo()?.escopoBanco(t)||'',String(t.fitid||'').trim()].join('|');
+      if (!t.fitid) return;
       if (!porFitid.has(fitid)) porFitid.set(fitid, []);
       porFitid.get(fitid).push(t);
     });
@@ -149,7 +153,7 @@
 
     const porChave = new Map();
     banco.forEach(t => {
-      const chave = chaveExata(t);
+      const chave = [t.loja_id||'',fluxo()?.escopoBanco(t)||'',chaveExata(t)].join('|');
       if (!porChave.has(chave)) porChave.set(chave, []);
       porChave.get(chave).push(t);
     });
@@ -173,6 +177,7 @@
         for (let j = i + 1; j < ordenado.length; j += 1) {
           const a = ordenado[i];
           const b = ordenado[j];
+          if(String(a.loja_id||'')!==String(b.loja_id||'')||fluxo()?.escopoBanco(a)!==fluxo()?.escopoBanco(b))continue;
           if (idsEmDuplicidade.has(String(a.id)) && idsEmDuplicidade.has(String(b.id))) continue;
           const diferencaDias = diasEntre(a.data, b.data);
           if (diferencaDias == null) continue;
@@ -249,6 +254,7 @@
       totalTransacoes: lista.length,
       totalBanco: banco.length,
       reimportacoes: exatas,
+      reimportacoesAutomaticas: automaticas.suprimidos.filter(t=>String(t.motivo).startsWith('Mesma identidade de origem:')),
       pagamentosParecidos,
       conciliacoes,
       mesesInvalidos,
@@ -406,11 +412,13 @@ if (typeof window !== 'undefined') {
 
         if (aba === 'reimportacoes') {
           const pendentes = analise.reimportacoes.filter(g => !grupoResolvido(g));
+          const auto=(analise.reimportacoesAutomaticas||[]).length;
+          const avisoAuto=auto?`<div class="confx-aviso">${auto} cópia(s) com a mesma identidade já foram desconsideradas automaticamente no cálculo. Os registros originais permanecem no histórico.</div>`:'';
           if (!pendentes.length) {
-            el.innerHTML = '<div style="padding:34px 18px;text-align:center;background:#f8fafc;border:1px dashed #e8e0d8;border-radius:10px;color:#7a7068;font-size:12px">✅ Nenhuma reimportação pendente.</div>';
+            el.innerHTML = avisoAuto+'<div style="padding:34px 18px;text-align:center;background:#f8fafc;border:1px dashed #e8e0d8;border-radius:10px;color:#7a7068;font-size:12px">✅ Nenhuma reimportação pendente.</div>';
             return;
           }
-          el.innerHTML = '<div class="confx-aviso"><strong>Como usar:</strong> compare os lançamentos do mesmo grupo. Se forem lançamentos legítimos, marque como correto. Se houver duplicidade real, exclua somente o registro duplicado.</div>' +
+          el.innerHTML = avisoAuto+'<div class="confx-aviso">Cópias com identidade comprovada são tratadas automaticamente. Nos registros antigos sem essa identificação, confira os grupos abaixo e trate os idênticos de uma só vez. Categorias divergentes e vínculos conflitantes ficam para revisão.</div><button class="btn bg" style="margin-bottom:12px" onclick="tratarReimportacoesDRE()">Tratar reimportações idênticas em lote</button>' +
             pendentes.map((g, i) => {
               const mes = g.transacoes.map(t=>t.mes||t.mesCaixa||'').find(Boolean)||'';
               const ids = g.transacoes.map(t=>String(t.id||''));

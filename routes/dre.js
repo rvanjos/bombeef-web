@@ -23,6 +23,7 @@ const multer   = require('multer');
 const XLSX     = require('xlsx');
 const autenticar = require('../middleware/auth');
 const DREFluxo = require('../public/js/dre-fluxo');
+const {createHash}=require('node:crypto');
 const {interpretarCaixaPdfV3}=require('../lib/cartao-caixa-pdf-v3');
 
 const upload = multer({
@@ -1428,7 +1429,7 @@ module.exports = function (pool, app) {
   }
 
   function analiseTransacoesSessao(txs) {
-    const ativos=(Array.isArray(txs)?txs:[]).filter(t=>!t?.ignorar);
+    const ativos=DREFluxo.deduplicar(Array.isArray(txs)?txs:[]).fontes.filter(t=>!t?.ignorar);
     const semCategoria=ativos.filter(t=>!String(t?.categoria||'').trim());
     const extratos=ativos.filter(t=>['EXTRATO','OFX'].includes(String(t?.fonte||'').toUpperCase()));
     const duplicidades=[];
@@ -1897,6 +1898,10 @@ module.exports = function (pool, app) {
       if (!lancamentos.length) {
         return res.status(422).json({ ok: false, erro: 'Nenhum lançamento encontrado no arquivo.' });
       }
+      // Identidade estável inclusive em CSV/XLSX sem FITID. Duas linhas iguais
+      // no mesmo arquivo continuam distintas pelo índice; reenvio não as duplica.
+      const extratoArquivoHash=createHash('sha256').update(req.file.buffer).digest('hex');
+      lancamentos.forEach((l,i)=>{l.extratoArquivoHash=extratoArquivoHash;l.extratoLinha=i;});
 
       // ── Auto-baixa de boletos: se lançamento do extrato bate com boleto pelo valor ──
       let boletosQuitados = 0;
@@ -1961,13 +1966,13 @@ module.exports = function (pool, app) {
       let duplicatasEstimadas = 0;
       if (mesImport) {
         const sessaoExist = await pool.query(
-          `SELECT dados_json FROM dre_sessoes WHERE mes_ref=$1 ORDER BY atualizado_em DESC LIMIT 1`,
-          [mesImport]
+          `SELECT dados_json FROM dre_sessoes WHERE mes_ref=$1 AND loja_id=$2 ORDER BY atualizado_em DESC LIMIT 1`,
+          [mesImport,Number(req.user.lojaId)]
         ).catch(()=>({ rows: [] }));
         if (sessaoExist.rows.length) {
           const txExist = extrairTransacoes(sessaoExist.rows[0].dados_json);
-          const fitidsExist = new Set(txExist.filter(t=>t.fitid).map(t=>t.fitid));
-          duplicatasEstimadas = lancamentos.filter(l => l.fitid && fitidsExist.has(l.fitid)).length;
+          const antes=DREFluxo.deduplicar(txExist).fontes;
+          duplicatasEstimadas=Math.max(0,antes.length+lancamentos.length-DREFluxo.deduplicar([...antes,...lancamentos]).fontes.length);
         }
       }
       res.json({ ok: true, lancamentos, total: lancamentos.length, duplicatasEstimadas, boletosQuitados });

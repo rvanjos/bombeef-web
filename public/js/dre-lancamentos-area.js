@@ -6,6 +6,7 @@ const st={
   q:'',grupo:'nenhum',status:'todos',origem:'todas',
   mes:'',criterio:'data',de:'',ate:'',conta:'',
   sel:new Set(),detalhe:null,gruposFechados:new Set(),
+  automaticas:new Map(),
   limite:100,
   ferramentas:false
 };
@@ -26,6 +27,7 @@ const origem=t=>{
 };
 const status=t=>{
   if(t?.ignorar)return'IGNORADO';
+  if(st.automaticas.has(String(t?.id)))return'REIMPORTADO';
   if(t?.needsReview)return'REVISAR';
   if(!t?.categoria)return'PENDENTE';
   if(t?.boletoId||t?.vinculadoFaturaCC||t?.faturaCC)return'VINCULADO';
@@ -320,8 +322,9 @@ function row(t){
 
 function render(){
   const a=document.getElementById('dre-lanc-area');if(!a)return;
+  st.automaticas=new Map((root.DREFluxo?.deduplicar(txs()).suprimidos||[]).filter(t=>String(t.motivo).startsWith('Mesma identidade de origem:')).map(t=>[String(t.id),t]));
   const l=listaFiltrada();
-  const ativos=l.filter(t=>!t.ignorar);
+  const ativos=l.filter(t=>!t.ignorar&&!st.automaticas.has(String(t.id)));
   const pend=ativos.filter(t=>!t.categoria).length;
   const rev=ativos.filter(t=>t.needsReview).length;
   const vinc=ativos.filter(temVinculo).length;
@@ -358,7 +361,7 @@ function render(){
       </select></label>
       <label>Status<select onchange="dreLancStatus(this.value)">
         <option value="todos">Todos os status</option>
-        ${['PENDENTE','REVISAR','CLASSIFICADO','VINCULADO','IGNORADO'].map(x=>`<option value="${x}" ${st.status===x?'selected':''}>${x}</option>`).join('')}
+        ${['PENDENTE','REVISAR','CLASSIFICADO','VINCULADO','IGNORADO','REIMPORTADO'].map(x=>`<option value="${x}" ${st.status===x?'selected':''}>${x}</option>`).join('')}
       </select></label>
       <label>Origem<select onchange="dreLancOrigem(this.value)">
         <option value="todas">Todas as origens</option>
@@ -394,6 +397,7 @@ function detalheHtml(t){
     <div class="dld-head"><div><div class="dld-title">${esc(descricao(t))}</div><div style="font-size:10px;color:var(--muted);margin-top:3px">${esc(fornecedor(t)||'Sem fornecedor')}</div></div><button class="dld-close" onclick="dreLancFecharDetalhes()">×</button></div>
     <div class="dld-body">
       ${vinculacao?'<div class="dld-warning">🔗 Este lançamento possui vínculo financeiro. Revise o vínculo antes de excluir para não quebrar a conciliação.</div>':''}
+      ${st.automaticas.has(id)?`<div class="dld-warning">Cópia desconsiderada automaticamente no cálculo do DRE. ${esc(st.automaticas.get(id).motivo)}</div>`:''}
       ${t.ignorar?`<div class="dld-warning">Motivo: ${esc(motivoIgnorado(t))}. Um rendimento confirmado pode ser reativado abaixo.</div>`:''}
       <div class="dld-grid">
         <div class="dld-field"><span>Data</span><b>${esc(dataBr(t.data))}</b></div>

@@ -28,7 +28,7 @@ assert.strictEqual(analiseGiro.pagamentosParecidos.length, 0, 'não deve repetir
 assert.strictEqual(analiseGiro.reimportacoes[0].transacoes[0].entradaEm, '2026-07-20T19:52:23.607Z');
 
 const analiseIgnorado = DREConferencia.analisar([giroOriginal, {...giroReimportado, ignorar: true}]);
-assert.strictEqual(analiseIgnorado.reimportacoes[0].impactoPotencial, 0, 'registro já ignorado não deve compor impacto potencial');
+assert.strictEqual(analiseIgnorado.reimportacoes.length, 0, 'registro já ignorado não deve voltar como reimportação pendente');
 
 const pagamentosProximos = DREConferencia.analisar([
   {id:'a', data:'2026-08-01', fonte:'EXTRATO', lancamento:'BOLETO', razaoSocial:'Fornecedor Teste Ltda', valor:-500},

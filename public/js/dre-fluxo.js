@@ -1,7 +1,7 @@
 (function(root,factory){const api=factory(root);if(typeof module==='object'&&module.exports)module.exports=api;if(root)root.DREFluxo=api;})(typeof window!=='undefined'?window:null,function(root){
   'use strict';
   const Cartao=typeof module==='object'&&module.exports?require('./dre-cartao-pagamentos'):root?.DRECartaoPagamentos;
-  const banco=t=>['EXTRATO','OFX'].includes(t.fonte);
+  const banco=t=>['EXTRATO','OFX','CSV','XLSX'].includes(String(t.fonte||'').toUpperCase());
   const documento=t=>String(t.fonte||'').startsWith('BOLETO');
   const cents=v=>Math.round(Number(v||0)*100);
   const ref=t=>String(t.faturaCC||t.cartaoFaturaRef||'');
@@ -11,11 +11,21 @@
   function contaBanco(t){
     return String(t.contaBancaria||[t.bankId||t.banco||'',t.acctId||t.conta||''].join(':')).trim();
   }
+  function escopoBanco(t){
+    const norm=v=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toUpperCase();
+    const partes=String(t.contaBancaria||'').split('·').map(v=>v.trim());
+    let codigo=String(t.bankId||'').replace(/^0+/,'');
+    const nome=norm(t.banco||partes[0]);
+    if(!codigo)codigo=/^ITAU$/.test(nome)?'341':/^PAGBANK$/.test(nome)?'290':nome;
+    const conta=norm(t.acctId||t.conta||partes[1]);
+    return [codigo,conta].join(':');
+  }
   function identidade(t){
     const loja=String(t.loja_id||'');
     const origem=documento(t)?'BOLETO':banco(t)?'BANCO':String(t.fonte||'');
     if(documento(t)&&t.boletoId)return loja+'|'+origem+'|'+t.boletoId;
-    if(banco(t)&&t.fitid)return loja+'|'+origem+'|'+contaBanco(t)+'|'+t.fitid;
+    if(banco(t)&&t.extratoArquivoHash&&Number.isInteger(t.extratoLinha))return loja+'|'+origem+'|ARQUIVO|'+t.extratoArquivoHash+'|'+t.extratoLinha;
+    if(banco(t)&&t.fitid)return loja+'|'+origem+'|'+escopoBanco(t)+'|'+t.fitid;
     if(t.fonte==='CC'&&(t.item_hash||t.hash_item_persistido))return loja+'|CC|'+(t.fatura_db_id||ref(t))+'|'+(t.item_hash||t.hash_item_persistido);
     if(t.fonte==='CC'&&t.item_db_id&&t.fatura_db_id)return loja+'|CCDB|'+t.fatura_db_id+'|'+t.item_db_id;
     if(t.id)return loja+'|'+origem+'|id|'+t.id;
@@ -23,20 +33,30 @@
   }
   function deduplicar(fontes){
     const vistos=new Map(),suprimidos=[],aliases=new Map();
-    const qualidade=t=>(t.ignorarAlteradoEm?2000:0)+(t.ignorar?0:1000)+(t._categoriaEditada?100:0)+(t.item_db_id?20:0)+(t.categoria?2:0)+(t.documentoBoletoId||t.cartaoItemRef?1:0)+(t.fonte==='BOLETO'?5:0);
+    const qualidade=t=>(t.ignorarAlteradoEm?2000:0)+(t.ignorar?0:1000)+(t.boletoId||t.faturaCC||t.vinculadoFaturaCC?200:0)+(t._categoriaEditada?100:0)+(t.item_db_id?20:0)+(t.categoria?2:0)+(t.documentoBoletoId||t.cartaoItemRef?1:0)+(t.fonte==='BOLETO'?5:0);
+    const porOrigem=new Map(),chaves=new Map();
     for(const t of fontes){
       if(t.ignorar&&t.duplicadoDe){aliases.set(String(t.id),String(t.duplicadoDe));suprimidos.push({id:t.id,motivo:'Duplicidade confirmada: '+t.duplicadoDe,valor:t.valor});continue;}
       // Só identidade comprovada; data/valor/descrição iguais exigem conferência.
-      const temOrigem=t.id||(banco(t)&&t.fitid)||(documento(t)&&t.boletoId)||(t.fonte==='CC'&&(t.item_db_id||t.hash_item_persistido||t.item_hash));
-      const k=temOrigem?identidade(t):'sem-identidade|'+vistos.size,ant=vistos.get(k);
-      if(ant&&cents(ant.valor)===cents(t.valor)&&String(ant.data||'')===String(t.data||'')){
+      const temOrigem=t.id||(banco(t)&&(t.fitid||(t.extratoArquivoHash&&Number.isInteger(t.extratoLinha))))||(documento(t)&&t.boletoId)||(t.fonte==='CC'&&(t.item_db_id||t.hash_item_persistido||t.item_hash));
+      const k=temOrigem?identidade(t):'sem-identidade|'+vistos.size;
+      // A linha do mesmo arquivo e o FITID são identidades alternativas, não excludentes.
+      const fit=banco(t)&&t.fitid?String(t.loja_id||'')+'|'+escopoBanco(t)+'|'+t.fitid:null;
+      const ant=vistos.get(k)||(fit&&porOrigem.get(fit));
+      const conflito=ant&&(['boletoId','faturaCC','vinculadoA'].some(c=>ant[c]&&t[c]&&String(ant[c])!==String(t[c]))||(ant._categoriaEditada&&t._categoriaEditada&&ant.categoria&&t.categoria&&ant.categoria!==t.categoria));
+      if(ant&&!conflito&&cents(ant.valor)===cents(t.valor)&&String(ant.data||'')===String(t.data||'')){
         const manter=qualidade(t)>qualidade(ant)?t:ant,outro=manter===t?ant:t;
-        vistos.set(k,manter);aliases.set(String(outro.id),String(manter.id));
-        suprimidos.push({id:outro.id,motivo:'Mesma identidade de origem: '+manter.id,valor:outro.valor});
-      }else vistos.set(ant?k+'|conflito|'+String(t.id):k,t);
+        const aproveitarCategoria=outro.categoria&&(!manter.categoria||(!manter._categoriaEditada&&outro._categoriaEditada));
+        const canonico=aproveitarCategoria?{...manter,categoria:outro.categoria,grupoKey:outro.grupoKey,_categoriaEditada:outro._categoriaEditada}:manter;
+        // Substitui a referência canônica sem inserir o mesmo registro em duas chaves.
+        const chaveAnt=chaves.get(ant);vistos.set(chaveAnt,canonico);chaves.set(canonico,chaveAnt);
+        if(fit)porOrigem.set(fit,canonico);
+        aliases.set(String(outro.id),String(manter.id));
+        suprimidos.push({id:outro.id,representadoPor:manter.id,motivo:'Mesma identidade de origem: '+manter.id,valor:outro.valor});
+      }else{const chave=ant?k+'|conflito|'+String(t.id):k;vistos.set(chave,t);chaves.set(t,chave);if(fit&&!ant)porOrigem.set(fit,t);}
     }
     const final=id=>{const visitados=new Set();while(aliases.has(id)&&!visitados.has(id)){visitados.add(id);id=aliases.get(id);}return id;};
-    return {fontes:[...vistos.values()].map(t=>t.cartaoItemRef&&aliases.has(String(t.cartaoItemRef))?{...t,cartaoItemRef:final(String(t.cartaoItemRef))}:t),suprimidos};
+    return {fontes:[...new Set(vistos.values())].map(t=>t.cartaoItemRef&&aliases.has(String(t.cartaoItemRef))?{...t,cartaoItemRef:final(String(t.cartaoItemRef))}:t),suprimidos};
   }
   function detectarDuplicidades(txs){
     const norm=v=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/[^A-Z0-9]/g,'');
@@ -55,6 +75,28 @@
       if(desc||fornecedor)pares.push({ids:[String(a.id),String(b.id)],motivo:identidade(a)===identidade(b)?'Mesma identidade de origem':'Mesma data e valor; descrição igual ou abreviada — confirmar'});
     }
     return pares;
+  }
+  // Plano para confirmação única de legados sem identidade suficiente. Não altera dados.
+  function planejarReimportacoes(txs,grupos){
+    const norm=v=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/\s+/g,' ').trim();
+    const assinatura=t=>JSON.stringify([t.loja_id||'',escopoBanco(t),String(t.data||'').slice(0,10),cents(t.valor),norm(t.lancamento||t.descricao),norm(t.razaoSocial||t.fornecedor||t.portador||t.boletoFornecedor),t.mes||'',t.mesCaixa||'']);
+    const indice=new Map(txs.map(t=>[String(t.id),t])),usados=new Set(),plano=[];
+    const referenciados=new Set(txs.flatMap(t=>['vinculadoA','cartaoItemRef','extratoId'].map(c=>String(t[c]||'')).filter(Boolean)));
+    const vinculo=t=>!!(t.boletoId||t.faturaCC||t.vinculadoFaturaCC||t.vinculadoA||t.cartaoItemRef);
+    for(const grupo of grupos||[]){
+      const itens=[...new Set((grupo.transacoes||[]).map(t=>String(t.id)))].map(id=>indice.get(id));
+      if(itens.length<2||itens.some(t=>!t||!t.id||t.ignorar||!banco(t)||usados.has(String(t.id))))continue;
+      if(new Set(itens.map(assinatura)).size!==1||itens.filter(vinculo).length>1)continue;
+      if(new Set(itens.map(t=>t.categoria).filter(Boolean)).size>1)continue;
+      const ordenados=itens.slice().sort((a,b)=>Number(vinculo(b))-Number(vinculo(a))||Number(!!b._categoriaEditada)-Number(!!a._categoriaEditada)||Number(!!b.categoria)-Number(!!a.categoria)||String(a.id).localeCompare(String(b.id)));
+      const manter=ordenados[0];
+      for(const dup of ordenados.slice(1)){
+        if(referenciados.has(String(dup.id)))continue;
+        plano.push({manterId:String(manter.id),duplicadoId:String(dup.id),mes:dup.mes,valor:dup.valor});usados.add(String(dup.id));
+      }
+      usados.add(String(manter.id));
+    }
+    return plano;
   }
   function reconhecerNotas(fontes){
     const norm=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/[^A-Z0-9 ]/g,' ').split(/\s+/).filter(x=>x.length>=3&&!['LTDA','COMERCIAL','COMERCIO','SERVICOS','SAO','PAULO','ATACADO','INDUSTRIA','CARNES','ACOUGUE','CAMPINAS','VALINHOS','INDAIATUBA'].includes(x));
@@ -168,5 +210,5 @@
     }
     return {linhas,pendencias,suprimidos,faturasPendentes,vinculosInferidos:notas.vinculos};
   }
-  return {resolver,pagamentoCartao,identidade,contaBanco,deduplicar,detectarDuplicidades};
+  return {resolver,pagamentoCartao,identidade,contaBanco,escopoBanco,deduplicar,detectarDuplicidades,planejarReimportacoes};
 });
