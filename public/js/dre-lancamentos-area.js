@@ -4,6 +4,7 @@
 const st={
   view:localStorage.getItem('dre-main-view')||'demonstrativo',
   q:'',grupo:'nenhum',status:'todos',origem:'todas',
+  mes:'',criterio:'data',de:'',ate:'',conta:'',
   sel:new Set(),detalhe:null,gruposFechados:new Set(),
   limite:100,
   ferramentas:false
@@ -18,7 +19,7 @@ const descricao=t=>t?.lancamento||t?.descricao||'Sem descrição';
 const origem=t=>{
   const f=String(t?.fonte||'').toUpperCase();
   if(f==='CC')return'Cartão';
-  if(f==='OFX'||f==='EXTRATO')return'Banco';
+  if(['OFX','EXTRATO','XLSX','CSV'].includes(f))return'Banco';
   if(f.startsWith('BOLETO'))return'Boleto';
   if(f==='MANUAL')return'Manual';
   return f||'Outro';
@@ -39,6 +40,26 @@ const dataBr=v=>{
 const motivoIgnorado=t=>t.motivoIgnorado||(t.saldoInformativo?'Saldo bancário informativo':t.vinculadoFaturaCC?'Pagamento representado pela fatura':'Marcação antiga; motivo não registrado');
 const rendimento=t=>['OFX','EXTRATO'].includes(t.fonte)&&Number(t.valor)>0&&t.categoria==='Juros de aplicacoes financeiras'&&/RENDIMENTO/i.test(descricao(t));
 const temVinculo=t=>!!(t?.boletoId||t?.vinculadoFaturaCC||t?.faturaCC||t?.cartao_fatura_id||t?.cartaoItemRef);
+// Use apenas a origem registrada no extrato; ausência de metadados não prova Itaú.
+function contaBanco(t){
+  if(origem(t)!=='Banco')return '';
+  if(String(t.contaBancaria||'').trim())return String(t.contaBancaria).trim();
+  const codigo=String(t.bankId||'').replace(/^0+/,'');
+  const banco=String(t.banco||'').trim()||({'341':'Itaú','290':'PagBank'}[codigo])||(codigo?'Banco '+codigo:'Banco não identificado');
+  return [banco,t.acctId||t.conta||''].filter(Boolean).join(' · ');
+}
+function dataIso(v){
+  const s=String(v||'');
+  if(/^\d{4}-\d{2}-\d{2}/.test(s))return s.slice(0,10);
+  const m=s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  return m?`${m[3]}-${m[2]}-${m[1]}`:'';
+}
+function mesIso(v){
+  const s=String(v||'');
+  if(/^\d{4}-\d{2}/.test(s))return s.slice(0,7);
+  const m=s.match(/^(\d{2})\/(\d{4})$/);
+  return m?`${m[2]}-${m[1]}`:'';
+}
 
 function css(){
   if(document.getElementById('dre-workspace-v3-style'))return;
@@ -107,6 +128,8 @@ function css(){
   .dla-kpi.warn{border-left:4px solid #d97706}.dla-kpi.red{border-left:4px solid #b91c1c}.dla-kpi.green{border-left:4px solid #15803d}.dla-kpi.blue{border-left:4px solid #2563eb}
   .dla-filtros{display:grid;grid-template-columns:minmax(260px,2fr) repeat(3,minmax(140px,1fr));gap:8px;background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:10px}
   .dla-filtros input,.dla-filtros select{padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;background:#fff}
+  .dla-filtros label{display:flex;flex-direction:column;gap:4px;font-size:11px;color:var(--muted);min-width:0}
+  .dla-filtros label>*{min-width:0;width:100%;box-sizing:border-box}
   .dla-filtros input:focus,.dla-filtros select:focus{outline:none;border-color:var(--red)}
   .dla-bulk{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:#fff7ed;border:1px solid #fed7aa;border-radius:9px;padding:9px 10px;margin-bottom:10px}
   .dla-bulk select{padding:7px 9px;border:1px solid #fdba74;border-radius:7px;min-width:260px}
@@ -249,7 +272,13 @@ function catOptions(cur){
 
 function passa(t){
   if(!t)return false;
-  const blob=norm([descricao(t),fornecedor(t),t.categoria,t.fonte,t.valor,t.data,t.nf,t.parcela].join(' '));
+  const data=dataIso(t.data);
+  const mes=st.criterio==='data'?data.slice(0,7):mesIso(st.criterio==='caixa'?(t.mesCaixa||t.mes):t.mes);
+  if(st.mes&&mes!==st.mes)return false;
+  if(st.de&&(!data||data<st.de))return false;
+  if(st.ate&&(!data||data>st.ate))return false;
+  if(st.conta&&contaBanco(t)!==st.conta)return false;
+  const blob=norm([descricao(t),fornecedor(t),t.categoria,t.fonte,t.valor,t.data,t.nf,t.parcela,contaBanco(t),t.bankId,t.acctId,t.fitid].join(' '));
   if(st.q&&!blob.includes(norm(st.q)))return false;
   if(st.status!=='todos'&&status(t)!==st.status)return false;
   if(st.origem!=='todas'&&origem(t)!==st.origem)return false;
@@ -260,6 +289,7 @@ function chaveGrupo(t){
   if(st.grupo==='fornecedor')return fornecedor(t)||'Sem fornecedor';
   if(st.grupo==='categoria')return t.categoria||'Sem categoria';
   if(st.grupo==='origem')return origem(t);
+  if(st.grupo==='conta')return contaBanco(t)||'Sem origem bancária';
   if(st.grupo==='data')return dataBr(t.data);
   if(st.grupo==='status')return status(t);
   return'';
@@ -277,7 +307,7 @@ function row(t){
     <input type="checkbox" ${st.sel.has(id)?'checked':''} onchange="dreLancSel('${esc(id)}',this.checked)">
     <span>${esc(dataBr(t.data))}</span>
     <span>${esc(origem(t))}</span>
-    <div class="dla-desc"><strong title="${esc(descricao(t))}">${esc(descricao(t))}</strong><small>${esc(fornecedor(t)||'Sem fornecedor')}</small></div>
+    <div class="dla-desc"><strong title="${esc(descricao(t))}">${esc(descricao(t))}</strong><small>${esc(fornecedor(t)||'Sem fornecedor')}</small>${contaBanco(t)?`<small>${esc(contaBanco(t))}</small>`:''}</div>
     <input class="dla-cat ${!t.categoria?'pendente':''}" list="cats-dl" value="${esc(t.categoria||'')}" placeholder="— Sem categoria —" onchange="setCat('${esc(id)}',this.value);dreLancRefresh()">
     <span class="dla-status ${esc(s)}" title="${t.ignorar?esc(motivoIgnorado(t)):esc(s)}">${esc(s)}</span>
     <span class="dla-val ${v<0?'neg':'pos'}">${brl(v)}</span>
@@ -316,25 +346,32 @@ function render(){
       <div class="dla-kpi"><b>${ign}</b><span>Ignorados</span></div>
     </div>
     <div class="dla-filtros">
-      <input placeholder="Buscar fornecedor, descrição, categoria, NF, valor..." value="${esc(st.q)}" oninput="dreLancBusca(this.value)">
-      <select onchange="dreLancGrupo(this.value)">
+      <label>Buscar<input id="dla-busca" placeholder="Fornecedor, descrição, banco, NF, valor..." value="${esc(st.q)}" oninput="dreLancBusca(this.value)"></label>
+      <label>Agrupamento<select id="dla-grupo" onchange="dreLancGrupo(this.value)">
         <option value="nenhum">Sem agrupamento</option>
         <option value="fornecedor">Agrupar por fornecedor</option>
         <option value="categoria">Agrupar por categoria</option>
         <option value="origem">Agrupar por origem</option>
+        <option value="conta">Agrupar por banco / conta</option>
         <option value="data">Agrupar por data</option>
         <option value="status">Agrupar por status</option>
-      </select>
-      <select onchange="dreLancStatus(this.value)">
+      </select></label>
+      <label>Status<select onchange="dreLancStatus(this.value)">
         <option value="todos">Todos os status</option>
         ${['PENDENTE','REVISAR','CLASSIFICADO','VINCULADO','IGNORADO'].map(x=>`<option value="${x}" ${st.status===x?'selected':''}>${x}</option>`).join('')}
-      </select>
-      <select onchange="dreLancOrigem(this.value)">
+      </select></label>
+      <label>Origem<select onchange="dreLancOrigem(this.value)">
         <option value="todas">Todas as origens</option>
         ${['Banco','Cartão','Boleto','Manual','Outro'].map(x=>`<option value="${x}" ${st.origem===x?'selected':''}>${x}</option>`).join('')}
-      </select>
+      </select></label>
+      <label>Mês específico<input type="month" value="${esc(st.mes)}" onchange="dreLancFiltro('mes',this.value)"></label>
+      <label>Filtrar o mês por<select onchange="dreLancFiltro('criterio',this.value)">${[['data','Data do lançamento'],['competencia','Competência do DRE'],['caixa','Mês de caixa']].map(([v,l])=>`<option value="${v}" ${st.criterio===v?'selected':''}>${l}</option>`).join('')}</select></label>
+      <label>Banco / conta<select onchange="dreLancFiltro('conta',this.value)"><option value="">Todos os bancos e origens</option>${[...new Set(txs().map(contaBanco).filter(Boolean))].sort().map(c=>`<option value="${esc(c)}" ${st.conta===c?'selected':''}>${esc(c)}</option>`).join('')}</select></label>
+      <label>Data de início<input type="date" value="${esc(st.de)}" onchange="dreLancFiltro('de',this.value)"></label>
+      <label>Data de fim<input type="date" value="${esc(st.ate)}" onchange="dreLancFiltro('ate',this.value)"></label>
+      <button class="btn bs" onclick="dreLancLimparFiltros()">Limpar filtros</button>
     </div>
-    <div class="dla-note">Dica: agrupe por fornecedor para corrigir categorias repetidas com mais segurança. Use a Conferência quando o sistema detectar inconsistência.</div>
+    <div class="dla-note">${l.length} lançamento(s) encontrado(s) · Entradas: ${brl(ativos.reduce((s,t)=>s+Math.max(0,Number(t.valor)||0),0))} · Saídas: ${brl(ativos.reduce((s,t)=>s+Math.max(0,-Number(t.valor)||0),0))}. Os filtros desta lista são independentes do mês do Demonstrativo. Sem mês preenchido, mostra todo o histórico carregado. Para retirar o outro banco, filtre a conta e confira cada linha em Ver. “Ignorar” mantém o histórico e retira o lançamento do cálculo; vínculos exigem revisão antes de excluir. Banco não identificado precisa de conferência no extrato original.</div>
     ${st.sel.size?`<div class="dla-bulk"><strong>${st.sel.size} selecionado(s)</strong><select id="dla-bulk-cat"><option value="">Escolha a categoria...</option>${catOptions('').replace('<option value="">— Sem categoria —</option>','')}</select><button class="btn bg" onclick="dreLancAplicarLote()">Aplicar categoria</button><button class="btn bs" onclick="dreLancLimparSel()">Limpar seleção</button></div>`:''}
     ${visiveis.length?gs.map(([k,it])=>{
       const key=encodeURIComponent(k||'_todos_'),fechado=st.gruposFechados.has(key);
@@ -345,8 +382,8 @@ function render(){
     }).join(''):'<div class="dla-empty">Nenhum lançamento encontrado com estes filtros.</div>'}
     ${l.length>visiveis.length?`<div style="display:flex;justify-content:center;padding:14px"><button class="btn bs" onclick="dreLancMais()">Mostrar mais ${Math.min(100,l.length-visiveis.length)} de ${l.length-visiveis.length} restantes</button></div>`:''}
   `;
-  const sels=a.querySelectorAll('.dla-filtros select');
-  if(sels[0])sels[0].value=st.grupo;
+  const grupo=a.querySelector('#dla-grupo');
+  if(grupo)grupo.value=st.grupo;
 }
 
 function detalheHtml(t){
@@ -362,6 +399,8 @@ function detalheHtml(t){
         <div class="dld-field"><span>Data</span><b>${esc(dataBr(t.data))}</b></div>
         <div class="dld-field"><span>Valor</span><b>${esc(brl(v))}</b></div>
         <div class="dld-field"><span>Origem</span><b>${esc(origem(t))}</b></div>
+        <div class="dld-field"><span>Banco / conta de origem</span><b>${esc(contaBanco(t)||'Não se aplica')}</b></div>
+        <div class="dld-field"><span>Código bancário / conta</span><b>${esc([t.bankId,t.acctId].filter(Boolean).join(' / ')||'Não registrado')}</b></div>
         <div class="dld-field"><span>Status</span><b>${esc(status(t))}</b></div>
         <div class="dld-field"><span>Mês DRE</span><b>${esc(t.mes||'—')}</b></div>
         <div class="dld-field"><span>Mês Caixa</span><b>${esc(t.mesCaixa||'—')}</b></div>
@@ -402,14 +441,16 @@ root.dreLancReativarRendimentos=()=>{
   render();if(typeof root.toast==='function')root.toast(itens.length+' rendimento(s) reativado(s)');
 };
 root.dreLancRefresh=refresh;
-root.dreLancBusca=v=>{st.q=v;st.limite=100;render();};
+root.dreLancBusca=v=>{const campo=document.getElementById('dla-busca'),pos=campo?.selectionStart;st.q=v;st.limite=100;st.sel.clear();render();const novo=document.getElementById('dla-busca');novo?.focus();if(pos!=null)novo?.setSelectionRange(pos,pos);};
+root.dreLancFiltro=(campo,v)=>{if(!['mes','criterio','de','ate','conta'].includes(campo))return;st[campo]=v;st.limite=100;st.sel.clear();render();};
+root.dreLancLimparFiltros=()=>{Object.assign(st,{q:'',mes:'',criterio:'data',de:'',ate:'',conta:'',status:'todos',origem:'todas',limite:100});st.sel.clear();render();};
 root.dreLancGrupo=v=>{st.grupo=v;st.limite=100;render();};
 root.dreLancMais=()=>{st.limite+=100;render();};
-root.dreLancStatus=v=>{st.status=v;render();};
-root.dreLancOrigem=v=>{st.origem=v;render();};
+root.dreLancStatus=v=>{st.status=v;st.sel.clear();st.limite=100;render();};
+root.dreLancOrigem=v=>{st.origem=v;st.sel.clear();st.limite=100;render();};
 root.dreLancSel=(id,on)=>{on?st.sel.add(String(id)):st.sel.delete(String(id));render();};
 root.dreLancLimparSel=()=>{st.sel.clear();render();};
-root.dreLancSelecionarVisiveis=()=>{listaFiltrada().forEach(t=>st.sel.add(String(t.id)));render();};
+root.dreLancSelecionarVisiveis=()=>{listaFiltrada().slice(0,st.limite).forEach(t=>st.sel.add(String(t.id)));render();};
 root.dreLancToggleGrupo=k=>{st.gruposFechados.has(k)?st.gruposFechados.delete(k):st.gruposFechados.add(k);render();};
 root.dreLancAplicarLote=()=>{
   const cat=document.getElementById('dla-bulk-cat')?.value;
