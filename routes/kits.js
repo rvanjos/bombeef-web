@@ -2,6 +2,7 @@
  * routes/kits.js — Kits e Precificação
  */
 const express    = require('express');
+const { validarPeriodo } = require('../lib/kit-periodo');
 const autenticar = require('../middleware/auth');
 
 module.exports = function (pool) {
@@ -368,6 +369,8 @@ module.exports = function (pool) {
   r.post('/', gerenciarKits, async (req, res) => {
     const { codigo, nome, descricao, precoVenda, margem, dataInicio, dataFim, itens = [] } = req.body;
     if (!nome) return res.status(400).json({ ok: false, erro: 'nome é obrigatório' });
+    const erroPeriodo = validarPeriodo(dataInicio, dataFim);
+    if (erroPeriodo) return res.status(400).json({ok:false,erro:erroPeriodo});
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
@@ -384,9 +387,9 @@ module.exports = function (pool) {
       // Monta INSERT dinamicamente para preencher todas as colunas de nome existentes
       const nomeColunas = [hasNomeKit && 'nome_kit', hasNome && 'nome'].filter(Boolean);
       const nomeValues  = nomeColunas.map(() => nome.trim());
-      const allCols     = ['codigo', ...nomeColunas, 'descricao', 'preco_venda', 'margem'];
+      const allCols     = ['codigo', ...nomeColunas, 'descricao', 'preco_venda', 'margem', 'data_inicio', 'data_fim'];
       const allVals     = [codigo?.trim()||null, ...nomeValues, descricao||null,
-                           parseFloat(precoVenda||0), parseFloat(margem||0)];
+                           parseFloat(precoVenda||0), parseFloat(margem||0), dataInicio || null, dataFim || null];
       const placeholders = allVals.map((_,i) => '$'+(i+1)).join(',');
       
       const { rows: r1 } = await client.query(
@@ -423,6 +426,8 @@ module.exports = function (pool) {
   // PUT /:id
   r.put('/:id', gerenciarKits, async (req, res) => {
     const { nome, descricao, precoVenda, margem, dataInicio, dataFim, itens } = req.body;
+    const erroPeriodo = validarPeriodo(dataInicio, dataFim);
+    if (erroPeriodo) return res.status(400).json({ok:false,erro:erroPeriodo});
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
@@ -439,13 +444,14 @@ module.exports = function (pool) {
         UPDATE kits SET
           ${nomeColPut} = COALESCE($1, ${nomeColPut}), descricao = COALESCE($2, descricao),
           preco_venda = COALESCE($3, preco_venda), margem = COALESCE($4, margem),
-          data_inicio = $6, data_fim = $7,
+          data_inicio = CASE WHEN $8 THEN $6::date ELSE data_inicio END,
+          data_fim = CASE WHEN $9 THEN $7::date ELSE data_fim END,
           atualizado_em = NOW()
         WHERE id = $5
       `, [nome||null, descricao||null,
           precoVenda !== undefined ? parseFloat(precoVenda) : null,
           margem !== undefined ? parseFloat(margem) : null,
-          numId, dataInicio||null, dataFim||null]);
+          numId, dataInicio||null, dataFim||null, dataInicio !== undefined, dataFim !== undefined]);
 
       if (Array.isArray(itens)) {
         const { rows: kitRow } = await client.query(
