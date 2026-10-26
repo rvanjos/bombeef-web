@@ -202,6 +202,9 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
       <div class="toolbar">
         <button class="btn btn-g" onclick="abrirKit()">＋ Novo Kit</button>
         <div class="search-w"><input type="text" id="busca-k" placeholder="Código ou nome do kit..." oninput="filtrarK()"></div>
+        <label style="font-size:12px">Período de <input type="date" id="kits-de" onchange="filtrarK()"></label>
+        <label style="font-size:12px">até <input type="date" id="kits-ate" onchange="filtrarK()"></label>
+        <button class="btn btn-s" onclick="document.getElementById('kits-de').value='';document.getElementById('kits-ate').value='';filtrarK()">Limpar datas</button>
       </div>
       <!-- Desktop: tabela -->
       <div class="card kits-desktop" style="margin-bottom:16px;overflow-x:auto">
@@ -328,12 +331,12 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
           <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:5px">Período do Kit</label>
           <div style="display:flex;align-items:center;gap:8px">
             <div>
-              <label style="font-size:10px;color:var(--muted);display:block;margin-bottom:2px">De</label>
+              <label for="k-data-inicio" style="font-size:10px;color:var(--muted);display:block;margin-bottom:2px">Data de início</label>
               <input id="k-data-inicio" type="date" oninput="atualizarNomeKit()" style="border:1px solid var(--border);border-radius:7px;padding:6px 10px;font-size:12px;font-family:inherit;color:var(--text)">
             </div>
             <span style="color:var(--muted);margin-top:14px">→</span>
             <div>
-              <label style="font-size:10px;color:var(--muted);display:block;margin-bottom:2px">Até</label>
+              <label for="k-data-fim" style="font-size:10px;color:var(--muted);display:block;margin-bottom:2px">Data de fim</label>
               <input id="k-data-fim" type="date" oninput="atualizarNomeKit()" style="border:1px solid var(--border);border-radius:7px;padding:6px 10px;font-size:12px;font-family:inherit;color:var(--text)">
             </div>
           </div>
@@ -811,7 +814,19 @@ async function carregarRankingProdutos() {
 
 function filtrarK(){
   const q=document.getElementById('busca-k').value.toLowerCase();
-  renderK(kits.filter(k=>!q||(k.codigo||'').toLowerCase().includes(q)||k.nome.toLowerCase().includes(q)));
+  const de=document.getElementById('kits-de').value, ate=document.getElementById('kits-ate').value;
+  if(de && ate && de>ate){toast('O fim da busca deve ser igual ou posterior ao início.');return;}
+  renderK(kits.filter(k=>{
+    const ini=dataKit(k.data_inicio), fim=dataKit(k.data_fim);
+    const nomeOk=!q||(k.codigo||'').toLowerCase().includes(q)||k.nome.toLowerCase().includes(q);
+    return nomeOk && (!(de||ate) || ((ini||fim) && (!de||!fim||fim>=de) && (!ate||!ini||ini<=ate)));
+  }));
+}
+function dataKit(v){return v?String(v).slice(0,10):'';}
+function periodoKit(k){
+  const ini=dataKit(k.data_inicio), fim=dataKit(k.data_fim);
+  const formatar=v=>v.split('-').reverse().join('/');
+  return ini||fim?`${ini?formatar(ini):'Sem início'} até ${fim?formatar(fim):'Sem fim'}`:'Período não informado';
 }
 
 function calcCustoTotalKit(custoMat){
@@ -855,7 +870,7 @@ function renderK(lista){
   // Tabela desktop
   if(tb) tb.innerHTML=lista.map(k=>`<tr style="cursor:pointer" onclick="abrirKit('${k.id}')">
     <td style="font-family:'DM Mono',monospace;font-size:11px">${k.codigo}</td>
-    <td><b>${k.nome}</b>${k.descricao?`<br><small style="color:var(--muted)">${k.descricao}</small>`:''}</td>
+    <td><b>${k.nome}</b><br><small style="color:var(--muted)">${periodoKit(k)}</small>${k.descricao?`<br><small style="color:var(--muted)">${k.descricao}</small>`:''}</td>
     <td style="font-family:'DM Mono',monospace">${fmt.brl(parseFloat(k.custo_total||0))}</td>
     <td style="font-family:'DM Mono',monospace">${fmt.brl(k._precoMin)}</td>
     <td style="font-family:'DM Mono',monospace;font-weight:600">${fmt.brl(parseFloat(k.preco_venda||0))}</td>
@@ -880,6 +895,7 @@ function renderK(lista){
         <div style="flex:1;min-width:0">
           <div style="font-size:10px;font-family:'DM Mono',monospace;color:var(--muted);margin-bottom:2px">${k.codigo}</div>
           <div style="font-size:15px;font-weight:700;line-height:1.2">${k.nome}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">${periodoKit(k)}</div>
           ${k.descricao?`<div style="font-size:11px;color:var(--muted);margin-top:2px">${k.descricao}</div>`:''}
         </div>
         <div style="text-align:right;flex-shrink:0">
@@ -917,8 +933,8 @@ function abrirKit(id){
   document.getElementById('k-nome').value=k?.nome||'';
   document.getElementById('k-desc').value=k?.descricao||'';
   document.getElementById('k-pvenda').value=k?.preco_venda||'';
-  document.getElementById('k-data-inicio').value=k?.data_inicio||'';
-  document.getElementById('k-data-fim').value=k?.data_fim||'';
+  document.getElementById('k-data-inicio').value=dataKit(k?.data_inicio);
+  document.getElementById('k-data-fim').value=dataKit(k?.data_fim);
   kitItems=k?.itens?k.itens.map(i=>{
     const prod = prods.find(p => String(p.codigo||'') === String(i.codigo_produto||''));
     return {
@@ -1246,6 +1262,7 @@ async function salvarKit(){
     itens:kitItems.map(i=>({codigo:i.codigo,descricao:i.descricao,quantidade:parseFloat(i.quantidade||1),precoCusto:parseFloat(i.precoCusto||0),ignorarMargem:!!i.ignorarMargem,custoKit:i.custoKit!=null?parseFloat(i.custoKit):null}))
   };
   if(!body.codigo||!body.nome){toast('Código e nome obrigatórios');return;}
+  if(body.dataInicio && body.dataFim && body.dataInicio>body.dataFim){toast('A data de fim deve ser igual ou posterior à data de início.');return;}
   try {
     const d=id?await api.put(`/api/kits/${id}`,body):await api.post('/api/kits',body);
     if(!d.ok){toast('Erro: '+(d.erro||JSON.stringify(d)));return;}
