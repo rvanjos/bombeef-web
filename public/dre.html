@@ -11,6 +11,8 @@
 <script src="/js/dre-excel.js?v=1"></script>
 <script src="/js/dre-conferencia.js?v=16"></script>
 <script src="/js/dre-fluxo.js?v=7"></script>
+<script src="/js/dre-cartao-c6.js?v=1"></script>
+<script src="/js/dre-cartao-ocr.js?v=1"></script>
 <script>
   if (typeof pdfjsLib !== 'undefined') {
     pdfjsLib.GlobalWorkerOptions.workerSrc =
@@ -1928,8 +1930,11 @@ async function confirmarImportCC() {
       }
       const buf = await file.arrayBuffer();
       const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+      try {
       let fullText = '';
+      const textosPaginas=[];
       for (let i = 1; i <= pdf.numPages; i++) {
+        const inicioPagina=fullText.length;
         const page = await pdf.getPage(i);
         const content = await page.getTextContent();
         const items = content.items.filter(it => it.str.trim());
@@ -1959,9 +1964,32 @@ async function confirmarImportCC() {
             if (texto) fullText += texto + '\n';
           }
         }
+        textosPaginas.push(fullText.slice(inicioPagina));
+        page.cleanup();
         fullText += '\n--- PAGE ---\n';
       }
-      console.log('[PDF DEBUG] fullText primeiros 3000 chars:', fullText.slice(0, 3000));
+      const temPaginaImagem=textosPaginas.some(t=>t.replace(/\s/g,'').length<40);
+      const precisaOCR=temPaginaImagem&&(!textosPaginas.some(t=>t.trim())||/c6\s*(?:ban\s*k|carbon)/i.test(fullText));
+      if(precisaOCR){
+        fullText=await DRECartaoOCR.ler(pdf,textosPaginas);
+        const preview=DRECartaoC6.interpretar(fullText);
+        if(!preview.conferenciaOk)throw Error('A leitura encontrou '+preview.itens.length+' lançamentos, somando '+fmt.brl(preview.somaCentavos/100)+', mas a fatura informa '+fmt.brl(preview.totalCentavos/100)+'. Nada foi salvo. Envie o PDF original do banco ou confira o arquivo.');
+        const lancs=[];
+        for(const item of preview.itens){
+          const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(item.chave));
+          const hash=Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');
+          lancs.push({id:'cc_c6_'+hash,cartaoItemRef:hash,data:item.data,
+            mes:item.data.slice(5,7)+'/'+item.data.slice(0,4),mesCaixa:mesCC,
+            lancamento:item.descricao+' (Cartão '+item.cartao+')',razaoSocial:item.descricao,
+            valor:-item.valorCentavos/100,portador:item.portador+' (Final '+item.cartao+')',
+            parcela:item.parcela,fonte:'CC',bandeira:'C6 Bank',categoria:autoClassificar(item.descricao,item.portador)});
+        }
+        aplicarRegrasRecorrentesCartao(lancs);
+        // OCR sempre passa pela revisão, mesmo quando a opção de salvar direto está marcada.
+        abrirRevisaoCC(lancs,mesCC,bandeira,file.name,false);
+        document.getElementById('ccr-subtitulo').textContent=preview.itens.length+' lançamentos · soma conferida: '+fmt.brl(preview.totalCentavos/100)+' · leitura por imagem: confira as descrições antes de salvar';
+        return;
+      }
       const lancs = parseFaturaPDF(fullText, file.name);
       if (!lancs.length) { toast('⚠️ Nenhum lançamento encontrado no PDF'); return; }
       // Corrige mês dos lançamentos sem data para o mês confirmado
@@ -1974,6 +2002,7 @@ async function confirmarImportCC() {
       const regrasAplicadas=aplicarRegrasRecorrentesCartao(lancs);
       if(regrasAplicadas) toast('🧠 '+regrasAplicadas+' compra(s) classificada(s) pela recorrência');
       abrirRevisaoCC(lancs, mesCC, bandeira, file.name,document.getElementById('cc-salvar-direto')?.checked);
+      } finally { await pdf.destroy(); }
     } catch(e) {
       console.error('[procCC PDF]', e);
       toast('❌ Erro ao ler PDF: ' + e.message);
@@ -3731,11 +3760,11 @@ function ccrRenderGrupos() {
     ? _ccrGrupos.filter(g => g.itens.some(i => !i.categoria))
     : _ccrGrupos;
 
-  const total = _ccrLancs.reduce((s, l) => s + Math.abs(parseFloat(l.valor||0)), 0);
+  const total = _ccrLancs.reduce((s, l) => s + parseFloat(l.valor||0), 0);
   const nPend = _ccrLancs.filter(l => !l.categoria).length;
   const pct   = _ccrLancs.length ? Math.round((_ccrLancs.length - nPend) / _ccrLancs.length * 100) : 100;
 
-  document.getElementById('ccr-total-val').textContent = '-' + fmt.brl(total);
+  document.getElementById('ccr-total-val').textContent = fmt.brl(total);
   document.getElementById('ccr-n-lanc').textContent    = _ccrLancs.length + ' lançamentos';
   document.getElementById('ccr-n-pend').textContent    = nPend ? `⚠ ${nPend} pendentes` : '✅ todos classificados';
   document.getElementById('ccr-n-pend').style.color    = nPend ? 'var(--orange)' : 'var(--green)';
@@ -3745,7 +3774,7 @@ function ccrRenderGrupos() {
 
   // Opções de categoria para cada linha
   container.innerHTML = gruposVisiveis.map((g, gi) => {
-    const totalGrupo = g.itens.reduce((s,i) => s + Math.abs(parseFloat(i.valor||0)), 0);
+    const totalGrupo = Math.abs(g.itens.reduce((s,i) => s + parseFloat(i.valor||0), 0));
     const todasCat   = g.itens.every(i => i.categoria);
     const catGrupo   = g.itens[0]?.categoria || '';
     // Verifica se todos os itens do grupo têm a mesma categoria
@@ -3767,9 +3796,9 @@ function ccrRenderGrupos() {
       <!-- Header do grupo: clica para expandir/colapsar itens -->
       <div style="background:${bgHeader};padding:9px 14px;display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:12px;cursor:pointer;border-radius:8px 8px 0 0" onclick="ccrToggleGrupo(${gi})">
         <div style="overflow:hidden">
-          <span style="font-size:13px;font-weight:600;color:var(--text)">${g.nomeRef}${badge}</span>
+          <span style="font-size:13px;font-weight:600;color:var(--text)">${esc(g.nomeRef)}${badge}</span>
           ${g.itens.length===1 && g.itens[0].data ? `<span style="font-size:10px;color:var(--muted);margin-left:8px">${fmt.date(g.itens[0].data)}</span>` : ''}
-          ${g.itens.length===1 && g.itens[0].portador ? `<span style="font-size:10px;color:var(--muted);margin-left:6px;background:#f3f4f6;padding:1px 5px;border-radius:3px">${g.itens[0].portador}</span>` : ''}
+          ${g.itens.length===1 && g.itens[0].portador ? `<span style="font-size:10px;color:var(--muted);margin-left:6px;background:#f3f4f6;padding:1px 5px;border-radius:3px">${esc(g.itens[0].portador)}</span>` : ''}
         </div>
         <span style="font-size:11px;color:var(--muted);white-space:nowrap">${g.itens.length}x · ${isCredito?'+':''}${fmt.brl(totalGrupo)}</span>
         <span id="ccrg-arr-${gi}" style="font-size:12px;color:var(--muted)">▼</span>
@@ -3799,9 +3828,9 @@ function ccrRenderGrupos() {
               ${mesItem ? `<div style="font-size:9px;color:var(--muted)">${mesItem}</div>` : ''}
             </div>
             <div style="overflow:hidden">
-              <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)" title="${item.lancamento||''}">${item.lancamento||'—'}</div>
+              <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)" title="${esc(item.lancamento||'')}">${esc(item.lancamento||'—')}</div>
               <div style="display:flex;gap:6px;margin-top:2px;flex-wrap:wrap">
-                ${item.portador ? `<span style="font-size:9px;background:#f3f4f6;color:#374151;padding:1px 5px;border-radius:3px;white-space:nowrap">👤 ${item.portador}</span>` : ''}
+                ${item.portador ? `<span style="font-size:9px;background:#f3f4f6;color:#374151;padding:1px 5px;border-radius:3px;white-space:nowrap">👤 ${esc(item.portador)}</span>` : ''}
                 ${parcInfo ? `<span style="font-size:9px;background:#fef3c7;color:#92400e;padding:1px 5px;border-radius:3px;white-space:nowrap">📋 Parc. ${parcInfo}</span>` : ''}
                 ${item.mesCaixa && item.mesCaixa !== item.mes ? `<span style="font-size:9px;background:#ede9fe;color:#5b21b6;padding:1px 5px;border-radius:3px;white-space:nowrap">💳 pag. ${item.mesCaixa}</span>` : ''}
               </div>
