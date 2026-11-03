@@ -514,6 +514,13 @@ main{padding:16px;background:#f8f6f3}
       <section class="ja-card">
         <div class="ja-card-head"><div><h4>⏱️ Jornada semanal</h4><small style="color:var(--muted)">Defina trabalho, folga, horários e intervalo por dia.</small></div><button class="btn btn-red" onclick="salvarJornadaRH()">💾 Salvar jornada</button></div>
         <div class="ja-card-body">
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+            <label>Válida a partir de <input type="date" id="ja-vigencia" onchange="carregarJornadaAusencias()"></label>
+            <label>Rodízio de domingos <select id="ja-ciclo" onchange="jaRodizioMudou()"><option value="0">Conforme semana abaixo</option><option value="2">1 trabalha / 1 folga</option><option value="3">2 trabalham / 1 folga</option></select></label>
+            <label>Primeiro domingo trabalhado do ciclo <input type="date" id="ja-dom-base"></label>
+          </div>
+          <p style="font-size:12px;color:var(--muted)">A configuração é compartilhada com o cartão de ponto, o calendário e a previsão da premiação. Ajuste os dias de folga e os horários para a escala 5x2 quando ela começar. Domingo trabalhado: configure 09:00–14:00 e o intervalo aplicável. Folgas atuais informadas: Jiu segunda, Lucas terça e Daniela quarta.</p>
+          <div id="ja-historico" style="font-size:11px;margin-bottom:10px"></div>
           <div id="ja-dias"><div class="empty">Selecione um funcionário para configurar a jornada.</div></div>
           <div style="margin-top:10px;padding:9px 10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;font-size:11px;color:#475569">
             O Ponto desconsidera até 15 minutos de excedente total diário na apuração de horas extras. Acima disso, o excedente integral segue para aprovação.
@@ -2072,7 +2079,8 @@ async function renderEscala() {
   document.getElementById('escala-mes-label').textContent = `${MESES[mes]} ${ano}`;
   document.getElementById('escala-cal-container').innerHTML = '<div class="loading">Carregando...</div>';
   try {
-  const d = await get('/api/rh/escalas/funcionarios');
+  const de=`${ano}-${String(mes+1).padStart(2,'0')}-01`,ate=`${ano}-${String(mes+1).padStart(2,'0')}-${new Date(ano,mes+1,0).getDate()}`;
+  const d = await get('/api/rh/escalas/funcionarios?de='+de+'&ate='+ate);
   if (!d.ok) { document.getElementById('escala-cal-container').innerHTML = `<div class="empty"><div class="icon">⚠️</div><p>${d.erro||'Erro ao carregar'}</p></div>`; return; }
   _escalasConfig = d.data;
 
@@ -2087,7 +2095,7 @@ async function renderEscala() {
   fimDeSemana.forEach(({dia}) => { porDia[dia] = []; });
 
   for (const f of _escalasConfig) {
-    if (!f.data_inicio) continue;
+    if (!f.data_inicio && !Object.keys(f.calendario_escala||{}).length) continue;
     const fds = f.trabalha_fds || 'ambos';
     const inicio = new Date(f.data_inicio + 'T12:00:00');
     const tipoEscala = f.tipo_escala || 'F';
@@ -2095,6 +2103,9 @@ async function renderEscala() {
     const ciclo = tipoEscala === 'M' ? 3 : 2;
 
     for (const { dia, dow } of fimDeSemana) {
+      const data=`${ano}-${String(mes+1).padStart(2,'0')}-${String(dia).padStart(2,'0')}`;
+      if(Object.prototype.hasOwnProperty.call(f.calendario_escala||{},data)){porDia[dia].push({nome:f.nome.split(' ')[0],trabalha:f.calendario_escala[data]});continue;}
+      if(!f.data_inicio)continue;
       if (fds === 'nao') continue;
       if (fds === 'domingo' && dow !== 0) continue;
       if (fds === 'sabado'  && dow !== 6) continue;
@@ -2181,54 +2192,7 @@ async function renderEscala() {
 }
 
 async function abrirConfigEscala() {
-  const d = await get('/api/rh/escalas/funcionarios');
-  if (!d.ok) return;
-  let html = '';
-  for (const f of d.data) {
-    html += `<div class="escala-row">
-      <div><div class="nome">${f.nome}</div><div class="cargo">${f.cargo||'—'}</div></div>
-      <div class="escala-campo">
-        <label>Data início contagem</label>
-        <input type="date" id="esc-inicio-${f.id}" value="${f.data_inicio ? f.data_inicio.slice(0,10) : ''}">
-      </div>
-      <div class="escala-campo">
-        <label>Ciclo</label>
-        <select id="esc-tipo-${f.id}">
-          <option value="F" ${f.tipo_escala==='F'?'selected':''}>Feminino (1T/1F)</option>
-          <option value="M" ${f.tipo_escala==='M'?'selected':''}>Masculino (2T/1F)</option>
-        </select>
-      </div>
-      <div class="escala-campo">
-        <label>Primeiro dia</label>
-        <select id="esc-prim-${f.id}">
-          <option value="trabalho" ${f.primeiro_dia==='trabalho'||!f.primeiro_dia?'selected':''}>Trabalhando</option>
-          <option value="folga" ${f.primeiro_dia==='folga'?'selected':''}>De Folga</option>
-        </select>
-      </div>
-      <div class="escala-campo">
-        <label>Trabalha sáb/dom?</label>
-        <select id="esc-fds-${f.id}">
-          <option value="ambos" ${!f.trabalha_fds||f.trabalha_fds==='ambos'?'selected':''}>Sáb + Dom</option>
-          <option value="domingo" ${f.trabalha_fds==='domingo'?'selected':''}>Só Dom</option>
-          <option value="sabado" ${f.trabalha_fds==='sabado'?'selected':''}>Só Sáb</option>
-          <option value="nao" ${f.trabalha_fds==='nao'?'selected':''}>Não trabalha</option>
-        </select>
-      </div>
-      <button class="btn btn-green btn-sm" onclick="salvarEscala(${f.id})">💾</button>
-    </div>`;
-  }
-  document.getElementById('escala-config-list').innerHTML = html || '<p style="color:var(--muted)">Nenhum funcionário</p>';
-  document.getElementById('modal-escala-config').classList.add('open');
-}
-
-async function salvarEscala(funcId) {
-  const inicio = document.getElementById(`esc-inicio-${funcId}`).value;
-  const tipo   = document.getElementById(`esc-tipo-${funcId}`).value;
-  const prim   = document.getElementById(`esc-prim-${funcId}`).value;
-  const fds    = document.getElementById(`esc-fds-${funcId}`).value;
-  if (!inicio) { toast('⚠️ Informe a data de início'); return; }
-  const d = await post('/api/rh/escalas', { funcionario_id: funcId, data_inicio: inicio, tipo_escala: tipo, primeiro_dia: prim, trabalha_fds: fds });
-  if (d.ok) { toast('✅ Escala salva!'); renderEscala(); } else toast('❌ ' + d.erro);
+  showTab('jornada');toast('Configure horários, folgas e rodízio em Jornada e Ausências.');
 }
 
 // ── Relatório ────────────────────────────────────────────────────────────────
@@ -2584,6 +2548,8 @@ function situacaoPonto(p){
   const atr=(em[0]*60+em[1])-(hh*60+mm);
   if(atr>tol)return{tipo:'atraso',html:`<span class="ponto-status" style="background:#fef3c7;color:#92400e">⚠ Atraso ${atr}min</span>`};
   const extraMin=Math.max(0,Number(p.extra_minutos||0));
+  if(extraMin>0&&p.aprovacao_status==='rejeitado')return{tipo:'ajustado',html:'<span class="ponto-status">Ocorrência recusada — batidas preservadas</span>'};
+  if(extraMin>0&&p.aprovacao_status!=='aprovado')return{tipo:'pendente',html:'<span class="ponto-status">Excedente pendente de aprovação</span>'};
   if(extraMin>0)return{tipo:'extra',html:`<span class="ponto-status" style="background:#dcfce7;color:#166534">⏫ Extra ${fmtHorasPonto(extraMin/60)}</span>`};
   return{tipo:'normal',html:'<span class="ponto-status" style="background:#f0fdf4;color:#166534">✓ Normal</span>'};
 }
@@ -2754,19 +2720,28 @@ async function inicializarJornadaRH(){
 async function carregarJornadaAusencias(){
   const id=document.getElementById('ja-func').value;
   const box=document.getElementById('ja-dias');
+  const hoje=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+  const vigencia=document.getElementById('ja-vigencia');if(!vigencia.value)vigencia.value=hoje;vigencia.min=hoje;
   if(!id){box.innerHTML='<div class="empty">Selecione um funcionário para configurar a jornada.</div>';document.getElementById('ja-aus-list').innerHTML='';return;}
   const [cfg,aus]=await Promise.all([
-    get('/api/ponto/jornada-config/'+id),
+    get('/api/ponto/jornada-config/'+id+'?data='+vigencia.value),
     get('/api/ponto/ausencias?funcionario_id='+encodeURIComponent(id))
   ]);
   if(!cfg.ok){box.innerHTML='<div class="empty">Não foi possível carregar a jornada.</div>';return;}
   const func=cfg.data?.funcionario||{};
+  const versao=cfg.data?.versao,legado=cfg.data?.rodizio_legado;
+  document.getElementById('ja-ciclo').value=versao&&String(versao.vigencia_inicio).slice(0,10)!=='1900-01-01'?Number(versao.domingo_ciclo||0):(legado?.data_inicio?(legado.tipo_escala==='M'?3:2):0);
+  let base=versao?.domingo_base?String(versao.domingo_base).slice(0,10):'';
+  if(!base&&legado?.data_inicio){const t=new Date(String(legado.data_inicio).slice(0,10)+'T12:00:00Z');while(t.getUTCDay()!==0)t.setUTCDate(t.getUTCDate()+1);if(legado.primeiro_dia==='folga')t.setUTCDate(t.getUTCDate()+7);base=t.toISOString().slice(0,10);}
+  document.getElementById('ja-dom-base').value=base;
+  document.getElementById('ja-historico').textContent='Versões registradas: '+((cfg.data?.historico||[]).map(v=>v.vigencia_inicio==='1900-01-01'?'Configuração anterior':v.vigencia_inicio).join(' · ')||'configuração anterior. Ao salvar, ela será preservada.');
   const mapa=new Map((cfg.data?.dias||[]).map(x=>[Number(x.dia_semana),x]));
   box.innerHTML=_jaDiasNome.map((nome,dia)=>{
     const j=mapa.get(dia);
-    const folga=j?!!j.folga:false;
-    const ent=(j?.horario_entrada||func.horario_entrada||'08:00').slice(0,5);
-    const sai=(j?.horario_saida||func.horario_saida||'18:00').slice(0,5);
+    const domingoNovo=dia===0&&(!versao||String(versao.vigencia_inicio).slice(0,10)==='1900-01-01');
+    const folga=domingoNovo&&Number(document.getElementById('ja-ciclo').value)>0?false:(j?!!j.folga:false);
+    const ent=(domingoNovo?'09:00':(j?.horario_entrada||func.horario_entrada||'08:00')).slice(0,5);
+    const sai=(domingoNovo?'14:00':(j?.horario_saida||func.horario_saida||'18:00')).slice(0,5);
     const inte=Number(j?.intervalo_min??func.intervalo_min??60);
     return '<div class="ja-day" data-dia="'+dia+'">'+
       '<strong style="font-size:12px">'+nome+'</strong>'+
@@ -2778,17 +2753,24 @@ async function carregarJornadaAusencias(){
   }).join('');
   renderAusenciasRH(aus.data||[]);
 }
+function jaRodizioMudou(){
+  if(!Number(document.getElementById('ja-ciclo').value))return;
+  const row=document.querySelector('#ja-dias .ja-day[data-dia="0"]');if(!row)return;
+  row.querySelector('.ja-folga').checked=false;jaAtualizarDia(row.querySelector('.ja-folga'));
+  row.querySelector('.ja-ent').value='09:00';row.querySelector('.ja-sai').value='14:00';
+  toast('Confira o intervalo do domingo e escolha o primeiro domingo trabalhado do ciclo.');
+}
 function jaAtualizarDia(chk){const row=chk.closest('.ja-day');row.querySelectorAll('input:not(.ja-folga)').forEach(i=>i.disabled=chk.checked);}
 async function salvarJornadaRH(){
   const id=document.getElementById('ja-func').value;if(!id){toast('Selecione um funcionário');return;}
   const dias=[...document.querySelectorAll('#ja-dias .ja-day')].map(row=>({
     dia_semana:Number(row.dataset.dia),folga:row.querySelector('.ja-folga').checked,
     horario_entrada:row.querySelector('.ja-ent').value,horario_saida:row.querySelector('.ja-sai').value,
-    intervalo_min:Number(row.querySelector('.ja-int').value||60),
+    intervalo_min:Number(row.querySelector('.ja-int').value||0),
     jornada_horas:Math.max(0,((()=>{const a=row.querySelector('.ja-ent').value.split(':').map(Number),b=row.querySelector('.ja-sai').value.split(':').map(Number);return ((b[0]*60+b[1])-(a[0]*60+a[1])-Number(row.querySelector('.ja-int').value||0))/60;})()))
   }));
-  const d=await put('/api/ponto/jornada-dia/'+id,{dias});
-  if(!d.ok){toast('❌ '+d.erro);return;}toast('✅ Jornada semanal salva no RH.');
+  const d=await put('/api/ponto/jornada-dia/'+id,{dias,vigencia_inicio:document.getElementById('ja-vigencia').value,domingo_ciclo:Number(document.getElementById('ja-ciclo').value),domingo_base:document.getElementById('ja-dom-base').value});
+  if(!d.ok){toast('❌ '+d.erro);return;}toast('✅ Escala salva com vigência. Cartão de ponto e calendário sincronizados.');await carregarJornadaAusencias();
 }
 async function salvarAusenciaRH(){
   const funcionario_id=document.getElementById('ja-func').value;
@@ -2839,6 +2821,7 @@ async function exportarPonto(){
   const cartoes=resposta.data.map(func=>{
     const registros=new Map((func.registros||[]).map(r=>[(r.data_ref||r.data||'').slice(0,10),r]));
     const jornadas=new Map((func.jornadas_dia||[]).map(j=>[Number(j.dia_semana),j]));
+    const calendario=new Map((func.calendario_jornada||[]).map(j=>[j.data,j]));
     const folgas=(func.dias_folga||[]).map(v=>String(v).toLowerCase());
     let totalPrevisto=0,totalTrabalhado=0,totalExtra=0,totalDesconto=0,almocosCorridos=0,ausencias=0,incompletos=0;
     const linhas=[];
@@ -2846,7 +2829,7 @@ async function exportarPonto(){
     for(let dia=1;dia<=limite;dia++){
       const data=chaveData(ano,mes,dia),dataLocal=new Date(ano,mes-1,dia,12),semana=dataLocal.getDay();
       const registro=registros.get(data);
-      const jornadaDia=jornadas.get(semana);
+      const jornadaDia=calendario.get(data)||jornadas.get(semana);
       const ausencia=(func.ausencias||[]).find(a=>data>=String(a.data_inicio).slice(0,10)&&data<=String(a.data_fim).slice(0,10));
       const folga=jornadaDia?!!jornadaDia.folga:folgas.includes(nomesFolga[semana]);
       const jornadaHoras=(folga||ausencia)?0:Number(jornadaDia?.jornada_horas??func.jornada_horas??8);
@@ -2868,9 +2851,10 @@ async function exportarPonto(){
           incompletos++;
         }
         const saldo=trabalhadoMin-previstoMin;
-        extraMin=Math.max(0,Number(registro.extra_minutos||0));
+        extraMin=registro.aprovacao_status==='aprovado'?Math.max(0,Number(registro.extra_minutos||0)):0;
         descontoMin=saldo<0?Math.abs(saldo):0;
-        if(folga&&!registro.troca_folga&&trabalhadoMin>15){extraMin=Math.max(extraMin,trabalhadoMin);ocorrencia='Trabalho em folga';}
+        if(folga&&!registro.troca_folga&&trabalhadoMin>15)ocorrencia='Trabalho em folga';
+        if(Number(registro.extra_minutos||0)>0)ocorrencia+=' · '+(registro.aprovacao_status==='aprovado'?'Extra aprovada':registro.aprovacao_status==='rejeitado'?'Ocorrência recusada':'Excedente pendente de aprovação');
       }else if(registro){
         ocorrencia='Marcação incompleta';
         incompletos++;

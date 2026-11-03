@@ -4,6 +4,7 @@
  */
 const express = require('express');
 const autenticar = require('../middleware/auth');
+const {validarEscala,resolverEscala,initEscalas,carregarEscalas,salvarEscala,iso}=require('../lib/ponto-escala');
 
 module.exports = function(pool) {
   const r = express.Router();
@@ -156,11 +157,16 @@ module.exports = function(pool) {
       console.warn('[ponto] fix FK:', e.message);
     }
   }
-  initTables().then(() => {
+  const inicializacao=initTables().then(()=>initEscalas(pool));
+  inicializacao.then(() => {
     console.log('[ponto] tabelas OK');
   }).catch(e => {
     console.error('[ponto] initTables ERRO:', e.message);
   });
+
+  r.use(async(req,res,next)=>{try{await inicializacao;next();}catch(_){res.status(503).json({ok:false,erro:'Configuração de escalas indisponível'});}});
+  async function escalaDia(funcionarioId,lojaId,data,versoes){return resolverEscala(versoes||await carregarEscalas(pool,lojaId),funcionarioId,lojaId,data);}
+  function aplicarDia(p,d){if(d)Object.assign(p,{horario_entrada:d.horario_entrada,horario_saida:d.horario_saida,jornada_horas:d.jornada_horas,intervalo_min:d.intervalo_min,folga_jornada_dia:d.folga,escala_id:d.escala_id});return p;}
 
   // ── GET /funcionarios — lista funcionários para o grid de ponto ──────────────
   // Usa tabela funcionarios (unificada)
@@ -195,6 +201,8 @@ module.exports = function(pool) {
         `, paramsUsuario);
         rows = r2.rows.map(r => ({ ...r, dias_folga:[] }));
       }
+      const vs=await carregarEscalas(pool,req.user.lojaId);
+      rows.forEach(f=>aplicarDia(f,resolverEscala(vs,f.id,req.user.lojaId,dataSaoPaulo())));
       res.json({ ok:true, data:rows });
     } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
   });
@@ -265,7 +273,7 @@ module.exports = function(pool) {
     return Math.max(0, Number(intervaloMin||60) - realizado);
   }
 
-  async function atualizarApuracaoPonto(pontoId) {
+  async function atualizarApuracaoPonto(pontoId,versoes) {
     const { rows } = await pool.query(`
       SELECT p.*,
         COALESCE(jd.horario_entrada,f.horario_entrada) AS horario_entrada_efetivo,
@@ -293,6 +301,8 @@ module.exports = function(pool) {
     `, [pontoId]);
     const p=rows[0];
     if(!p) return null;
+    const escala=await escalaDia(p.funcionario_id,p.loja_id,p.data_ref,versoes);
+    if(escala)Object.assign(p,{horario_entrada_efetivo:escala.horario_entrada,horario_saida_efetivo:escala.horario_saida,jornada_horas_efetiva:escala.jornada_horas,intervalo_min_efetivo:escala.intervalo_min});
     const horas=calcHoras(p.entrada,p.saida,p.saida_intervalo,p.retorno_intervalo,p.intervalo_min_efetivo);
     const extra=calcularExtraMinutos(horas,p.jornada_horas_efetiva,p.troca_folga,p.entrada,p.saida,p.horario_entrada_efetivo,p.horario_saida_efetivo);
     const intervalo=p.almoco_corrido_confirmado
@@ -316,18 +326,20 @@ module.exports = function(pool) {
     return upd[0];
   }
 
-  async function recalcularPendenciasRecentes() {
+  async function recalcularPendenciasRecentes(lojaId) {
     const { rows } = await pool.query(`
       SELECT id FROM ponto_registros
       WHERE COALESCE(aprovacao_status,'nao_aplicavel') IN ('nao_aplicavel','pendente')
+        AND loja_id=$1
         AND data_ref >= CURRENT_DATE - INTERVAL '62 days'
         AND (entrada IS NOT NULL OR saida_intervalo IS NOT NULL OR retorno_intervalo IS NOT NULL OR saida IS NOT NULL)
         AND (NULLIF(current_setting('app.loja_id',true),'') IS NULL
              OR loja_id=NULLIF(current_setting('app.loja_id',true),'')::int)
       ORDER BY data_ref DESC
       LIMIT 500
-    `);
-    for (const x of rows) await atualizarApuracaoPonto(x.id);
+    `,[lojaId]);
+    const versoes=rows.length?await carregarEscalas(pool,lojaId):[];
+    for (const x of rows) await atualizarApuracaoPonto(x.id,versoes);
   }
 
   async function ausenciaAtiva(funcionarioId, dataRef) {
@@ -401,6 +413,7 @@ module.exports = function(pool) {
            AND jd.loja_id=p.loja_id
           WHERE p.funcionario_id=$1 AND p.data_ref=$2 LIMIT 1
         `,[funcionario_id,dataRef]);
+        if(atual)aplicarDia(atual,await escalaDia(funcionario_id,req.user.lojaId,dataRef));
         const exigeIntervalo=Number(atual?.intervalo_min||0)>0;
         const semMarcacao=exigeIntervalo && !atual?.saida_intervalo && !atual?.retorno_intervalo;
         if (semMarcacao) {
@@ -436,6 +449,7 @@ module.exports = function(pool) {
           WHERE p.funcionario_id=$1 AND p.data_ref=$2
           LIMIT 1
         `,[funcionario_id,dataRef]);
+        if(atual)aplicarDia(atual,await escalaDia(funcionario_id,req.user.lojaId,dataRef));
         if (atual?.saida_intervalo) {
           const realizado=Math.max(0,Math.floor((agora-new Date(atual.saida_intervalo))/60000));
           const minimo=Number(atual.intervalo_min??60);
@@ -660,7 +674,7 @@ module.exports = function(pool) {
     if (req.user?.perfil !== 'admin') return res.status(403).json({ ok:false, erro:'Acesso restrito ao administrador' });
     const { funcionario_id, mes, ano } = req.query;
     try {
-      await recalcularPendenciasRecentes();
+      await recalcularPendenciasRecentes(req.user.lojaId);
       let where = `WHERE 1=1`;
       const params = [];
       if (funcionario_id) { params.push(funcionario_id); where += ` AND p.funcionario_id=$${params.length}`; }
@@ -692,6 +706,8 @@ module.exports = function(pool) {
          AND jd.loja_id=p.loja_id
         ${where} ORDER BY p.data_ref DESC, f.nome ASC
       `, params);
+      const vs=await carregarEscalas(pool,req.user.lojaId);
+      rows.forEach(p=>aplicarDia(p,resolverEscala(vs,p.funcionario_id,req.user.lojaId,p.data_ref)));
       res.json({ ok:true, data:rows });
     } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
   });
@@ -784,6 +800,7 @@ module.exports = function(pool) {
               'extra_minutos', COALESCE(p.extra_minutos,0),
               'intervalo_suprimido_min', COALESCE(p.intervalo_suprimido_min,0),
               'aprovacao_status', COALESCE(p.aprovacao_status,'nao_aplicavel'),
+              'aprovacao_obs',p.aprovacao_obs,
               'troca_folga', COALESCE(p.troca_folga,false),
               'almoco_corrido_confirmado', COALESCE(p.almoco_corrido_confirmado,false),
               'almoco_corrido_justificativa', p.almoco_corrido_justificativa,
@@ -808,6 +825,15 @@ module.exports = function(pool) {
                  f.jornada_horas, f.tolerancia_min, f.intervalo_min
         ORDER BY f.nome
       `, [inicioMes, inicioProximoMes]);
+      const vs=await carregarEscalas(pool,req.user.lojaId);
+      for(const f of rows){
+        f.calendario_jornada=[];
+        for(let dia=1;dia<=new Date(anoNum,mesNum,0).getDate();dia++){
+          const data=`${anoNum}-${String(mesNum).padStart(2,'0')}-${String(dia).padStart(2,'0')}`;
+          const d=resolverEscala(vs,f.id,req.user.lojaId,data);
+          if(d)f.calendario_jornada.push({...d,data});
+        }
+      }
       res.json({ ok:true, data:rows });
     } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
   });
@@ -865,7 +891,7 @@ module.exports = function(pool) {
   r.get('/pendentes-aprovacao/count', async (req,res)=>{
     if(req.user?.perfil!=='admin') return res.json({ok:true,total:0});
     try{
-      await recalcularPendenciasRecentes();
+      await recalcularPendenciasRecentes(req.user.lojaId);
       const {rows:[x]}=await pool.query(`
         SELECT COUNT(*)::int AS total FROM ponto_registros p
         WHERE p.aprovacao_status='pendente'
@@ -879,10 +905,10 @@ module.exports = function(pool) {
   r.get('/aprovacoes', async (req,res)=>{
     if(req.user?.perfil!=='admin') return res.status(403).json({ok:false,erro:'Acesso restrito ao administrador'});
     try{
-      await recalcularPendenciasRecentes();
+      await recalcularPendenciasRecentes(req.user.lojaId);
       const status=req.query.status||'pendente';
       const {rows}=await pool.query(`
-        SELECT p.id,p.data_ref,p.entrada,p.saida_intervalo,p.retorno_intervalo,p.saida,
+        SELECT p.id,p.funcionario_id,p.data_ref,p.entrada,p.saida_intervalo,p.retorno_intervalo,p.saida,
                p.extra_minutos,p.intervalo_suprimido_min,p.aprovacao_status,p.aprovacao_obs,
                p.justificativa,p.observacao,p.entrada_manual,p.saida_manual,
                p.troca_folga,p.troca_folga_data,p.troca_folga_obs,p.intervalo_curto_motivo,
@@ -909,6 +935,8 @@ module.exports = function(pool) {
         ORDER BY p.data_ref DESC,f.nome
         LIMIT 300
       `,[status]);
+      const vs=await carregarEscalas(pool,req.user.lojaId);
+      rows.forEach(p=>{const d=resolverEscala(vs,p.funcionario_id,req.user.lojaId,p.data_ref);if(d)Object.assign(p,{horario_entrada_previsto:d.horario_entrada,horario_saida_previsto:d.horario_saida,jornada_prevista_horas:d.jornada_horas,intervalo_previsto_min:d.intervalo_min});});
       res.json({ok:true,data:rows});
     }catch(e){res.status(500).json({ok:false,erro:e.message});}
   });
@@ -971,9 +999,9 @@ module.exports = function(pool) {
       const {rows:[func]}=await pool.query(`
         SELECT id,nome,cargo,horario_entrada,horario_saida,jornada_horas,intervalo_min,
                COALESCE(dias_folga,ARRAY[]::TEXT[]) AS dias_folga,COALESCE(usa_ponto,true) AS usa_ponto
-        FROM funcionarios WHERE id=$1 AND ativo=true AND COALESCE(freelancer,false)=false
+        FROM funcionarios WHERE id=$1 AND loja_id=$2 AND ativo=true AND COALESCE(freelancer,false)=false
         LIMIT 1
-      `,[Number(req.params.funcionario_id)]);
+      `,[Number(req.params.funcionario_id),req.user.lojaId]);
       if(!func) return res.status(404).json({ok:false,erro:'Funcionário não encontrado'});
       const {rows:dias}=await pool.query(`
         SELECT * FROM ponto_jornada_dia
@@ -982,7 +1010,11 @@ module.exports = function(pool) {
                OR loja_id=NULLIF(current_setting('app.loja_id',true),'')::int)
         ORDER BY dia_semana
       `,[func.id]);
-      res.json({ok:true,data:{funcionario:func,dias}});
+      const versoes=await carregarEscalas(pool,req.user.lojaId);
+      const data=String(req.query.data||dataSaoPaulo());
+      const v=versoes.filter(v=>Number(v.funcionario_id)===func.id&&iso(v.vigencia_inicio)<=data)[0];
+      const {rows:legado}=await pool.query('SELECT * FROM rh_escalas WHERE funcionario_id=$1 AND loja_id=$2',[func.id,req.user.lojaId]);
+      res.json({ok:true,data:{funcionario:func,dias:v?.dias||dias,versao:v||null,rodizio_legado:legado[0]||null,historico:versoes.filter(v=>Number(v.funcionario_id)===func.id).map(v=>({id:v.id,vigencia_inicio:iso(v.vigencia_inicio),criado_em:v.criado_em}))}});
     }catch(e){res.status(500).json({ok:false,erro:e.message});}
   });
 
@@ -1004,28 +1036,18 @@ module.exports = function(pool) {
   // ── PUT /jornada-dia/:funcionario_id — salva jornada por dia (upsert) ─────
   r.put('/jornada-dia/:funcionario_id', async (req, res) => {
     if (!['admin','gestor'].includes(req.user?.perfil)) return res.status(403).json({ ok:false, erro:'Apenas a gestão pode alterar jornadas' });
-    const dias = req.body.dias; // array de {dia_semana, folga, horario_entrada, horario_saida, jornada_horas, intervalo_min}
-    if (!Array.isArray(dias)) return res.status(400).json({ ok:false, erro:'dias obrigatório' });
     try {
-      for (const d of dias) {
-        await pool.query(`
-          INSERT INTO ponto_jornada_dia (funcionario_id, dia_semana, folga, horario_entrada, horario_saida, jornada_horas, intervalo_min)
-          VALUES ($1,$2,$3,$4,$5,$6,$7)
-          ON CONFLICT (loja_id, funcionario_id, dia_semana) DO UPDATE SET
-            folga=$3, horario_entrada=$4, horario_saida=$5, jornada_horas=$6, intervalo_min=$7
-        `, [req.params.funcionario_id, d.dia_semana, d.folga||false,
-            d.folga ? null : (d.horario_entrada||'08:00'),
-            d.folga ? null : (d.horario_saida||'18:00'),
-            d.folga ? null : (d.jornada_horas||8),
-            d.folga ? null : (d.intervalo_min??60)]);
-      }
-      res.json({ ok:true });
-    } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
+      const config=validarEscala(req.body,dataSaoPaulo());
+      const v=await salvarEscala(pool,Number(req.params.funcionario_id),req.user.lojaId,req.user.id,config);
+      res.json({ok:true,data:{id:v.id,vigencia_inicio:iso(v.vigencia_inicio)}});
+    } catch(e) { res.status(e.code?500:400).json({ ok:false, erro:e.code?'Não foi possível salvar a escala':e.message }); }
   });
 
   // ── GET /jornada-dia-hoje/:funcionario_id — retorna jornada do dia atual ──
   r.get('/jornada-dia-hoje/:funcionario_id', async (req, res) => {
     try {
+      const escala=await escalaDia(Number(req.params.funcionario_id),req.user.lojaId,dataSaoPaulo());
+      if(escala)return res.json({ok:true,data:escala});
       const diaSemana = Number(new Intl.DateTimeFormat('en-US',{timeZone:FUSO_NEGOCIO,weekday:'short'}).format(new Date())
         .replace(/Sun|Mon|Tue|Wed|Thu|Fri|Sat/,m=>({Sun:0,Mon:1,Tue:2,Wed:3,Thu:4,Fri:5,Sat:6}[m])));
       const { rows } = await pool.query(`
