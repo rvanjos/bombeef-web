@@ -533,7 +533,7 @@ function renderStatus() {
       ? new Date(p.retorno_intervalo)-new Date(p.saida_intervalo)
       : (_func.intervalo_min??60)*60000;
     const trabH  = Math.max(0,(ms-intMs)/3600000);
-    const prevH  = parseFloat(_func.jornada_horas||8);
+    const prevH  = parseFloat(_func.jornada_horas??8);
     const atrasoMin = (() => {
       const e2=new Date(p.entrada),pv=new Date(`1970-01-01T${_func.horario_entrada||'08:00'}:00`);
       return (e2.getHours()*60+e2.getMinutes())-(pv.getHours()*60+pv.getMinutes());
@@ -842,7 +842,8 @@ async function carregarRelatorio() {
     const pendentes=regs.filter(r=>r.aprovacao_status==='pendente').length;
     const atrasados= regs.filter(r => r.status==='atraso').length;
     const horasTot = regs.reduce((s,r) => s + parseFloat(r.horas_trabalhadas||0), 0);
-    const horasEsp = totalDiasUteis * parseFloat(f.jornada_horas||8);
+    const diasCalendario=f.calendario_jornada||[];
+    const horasEsp=diasCalendario.length?diasCalendario.filter(d=>d.data<=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date())&&!(f.ausencias||[]).some(a=>d.data>=String(a.data_inicio).slice(0,10)&&d.data<=String(a.data_fim).slice(0,10))).reduce((s,d)=>s+Number(d.jornada_horas||0),0):totalDiasUteis * parseFloat(f.jornada_horas||8);
     const saldo    = horasTot - horasEsp;
     const fmt = h => {
       const abs = Math.abs(h);
@@ -1083,32 +1084,7 @@ function toggleFolga(dia) {
 }
 
 async function salvarJornadaDia() {
-  const id = document.getElementById('adm-func-sel').value;
-  if (!id) return;
-  const dias = DIAS_SEMANA.map((_, i) => {
-    const folga = document.querySelector(`.adm-folga[data-dia="${i}"]`)?.checked || false;
-    return {
-      dia_semana: i, folga,
-      horario_entrada: folga ? null : (document.getElementById(`adm-ent-${i}`)?.value || '08:00'),
-      horario_saida:   folga ? null : (document.getElementById(`adm-sai-${i}`)?.value || '18:00'),
-      jornada_horas:   folga ? null : parseFloat(document.getElementById(`adm-hor-${i}`)?.value || 8),
-      intervalo_min:   folga ? null : parseInt(document.getElementById(`adm-int-${i}`)?.value || 60),
-    };
-  });
-  const usaPonto = document.getElementById('adm-usa-ponto')?.checked !== false;
-  // Primeiro salva a jornada padrão (usa_ponto, horários padrão)
-  await api.put(`/api/ponto/jornada/${id}`, {
-    horario_entrada: document.getElementById(`adm-ent-1`)?.value || '08:00',
-    horario_saida:   document.getElementById(`adm-sai-1`)?.value || '18:00',
-    jornada_horas:   parseFloat(document.getElementById(`adm-hor-1`)?.value || 8),
-    intervalo_min:   parseInt(document.getElementById(`adm-int-1`)?.value || 60),
-    tolerancia_min:  10,
-    dias_folga:      dias.filter(d=>d.folga).map(d=>['domingo','segunda','terca','quarta','quinta','sexta','sabado'][d.dia_semana]),
-    usa_ponto:       usaPonto,
-  });
-  const d = await api.put(`/api/ponto/jornada-dia/${id}`, { dias });
-  if (!d.ok) { showToast('❌ ' + (d.erro||'Erro')); return; }
-  showToast('✅ Jornada semanal salva!');
+  showToast('Configure a escala com vigência em RH → Jornada e Ausências.');window.location.href='/rh.html';
 }
 
 function imprimirRelatorioPonto() {

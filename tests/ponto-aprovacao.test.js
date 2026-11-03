@@ -124,7 +124,7 @@ test('hora extra usa jornada efetiva do dia e nao jornada fixa do funcionario',(
 test('listagem do ponto recalcula pendencias recentes antes de renderizar',()=>{
   const rota=ler('routes/ponto.js');
   const trecho=rota.slice(rota.indexOf("r.get('/registros'"),rota.indexOf("r.put('/registros/:id'"));
-  assert.match(trecho,/await recalcularPendenciasRecentes\(\)/);
+  assert.match(trecho,/await recalcularPendenciasRecentes\(req.user.lojaId\)/);
 });
 
 

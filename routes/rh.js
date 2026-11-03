@@ -18,6 +18,7 @@ const multer = require('multer');
 const crypto = require('crypto');
 const autenticar = require('../middleware/auth');
 const { requireNivel } = autenticar;
+const {carregarEscalas,resolverEscala,iso}=require('../lib/ponto-escala');
 
 module.exports = function (pool, app) {
   const r = express.Router();
@@ -189,10 +190,16 @@ module.exports = function (pool, app) {
         SELECT f.id, f.nome,
                e.data_inicio, e.tipo_escala, e.primeiro_dia, e.trabalha_fds
         FROM funcionarios f
-        LEFT JOIN rh_escalas e ON e.funcionario_id = f.id
-        WHERE f.ativo = true AND COALESCE(f.freelancer,false) = false
+        LEFT JOIN rh_escalas e ON e.funcionario_id = f.id AND e.loja_id=f.loja_id
+        WHERE f.loja_id=$1 AND f.ativo = true AND COALESCE(f.freelancer,false) = false
         ORDER BY f.nome ASC
-      `).catch(() => ({ rows: [] }));
+      `,[req.user.lojaId]);
+      const vs=await carregarEscalas(pool,req.user.lojaId);
+      const de=String(req.query.de||''),ate=String(req.query.ate||'');
+      if(de&&ate){
+        if(!/^\d{4}-\d{2}-\d{2}$/.test(de)||!/^\d{4}-\d{2}-\d{2}$/.test(ate)||!Number.isFinite(Date.parse(de))||!Number.isFinite(Date.parse(ate))||ate<de||Date.parse(ate)-Date.parse(de)>62*86400000)return res.status(400).json({ok:false,erro:'Período inválido'});
+        for(const f of rows){f.calendario_escala={};for(let t=Date.parse(de);t<=Date.parse(ate);t+=86400000){const data=new Date(t).toISOString().slice(0,10),d=resolverEscala(vs.filter(v=>iso(v.vigencia_inicio)!=='1900-01-01'),f.id,req.user.lojaId,data);if(d)f.calendario_escala[data]=!d.folga;}}
+      }
       res.json({ ok: true, data: rows });
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
@@ -875,21 +882,7 @@ module.exports = function (pool, app) {
 
   // ── POST /escalas ─────────────────────────────────────────────────────────
   r.post('/escalas', async (req, res) => {
-    const { funcionario_id, data_inicio, tipo_escala, primeiro_dia, trabalha_fds } = req.body;
-    if (!funcionario_id || !data_inicio) return res.status(400).json({ ok: false, erro: 'funcionario_id e data_inicio obrigatórios' });
-    try {
-      await pool.query(`
-        INSERT INTO rh_escalas (funcionario_id, data_inicio, tipo_escala, primeiro_dia, trabalha_fds, atualizado_em)
-        VALUES ($1, $2, $3, $4, $5, NOW())
-        ON CONFLICT (loja_id, funcionario_id) DO UPDATE SET
-          data_inicio   = $2,
-          tipo_escala   = $3,
-          primeiro_dia  = $4,
-          trabalha_fds  = $5,
-          atualizado_em = NOW()
-      `, [funcionario_id, data_inicio, tipo_escala || 'F', primeiro_dia || 'trabalho', trabalha_fds || 'ambos']);
-      res.json({ ok: true });
-    } catch(e) { res.status(500).json({ ok: false, erro: e.message }); }
+    res.status(409).json({ok:false,erro:'Configure horários e rodízio em RH → Jornada e Ausências, com data de vigência.'});
   });
 
   // ── Premiação por meta de faturamento do fim de semana ───────────────────
@@ -1009,14 +1002,16 @@ module.exports = function (pool, app) {
           && data<=String(x.data_fim).slice(0,10));
         return a||null;
       };
+      const versoes=await carregarEscalas(pool,req.user.lojaId);
+      const trabalhaVigente=(f,data)=>{const d=resolverEscala(versoes.filter(v=>iso(v.vigencia_inicio)!=='1900-01-01'),f.id,req.user.lojaId,data);return d?!d.folga:trabalhaNoDia(f,data);};
       const finais = sabados.map(fds => {
         const fatSab=Number(fat[fds.sabado]||0), fatDom=Number(fat[fds.domingo]||0), total=fatSab+fatDom;
         const faixa=[...faixas].reverse().find(f=>total>=Number(f.meta));
         const premio=faixa?Number(faixa.premio):0;
         const pessoas=funcs.map(f => {
           const ausSab=ausenciaNoDia(f.id,fds.sabado), ausDom=ausenciaNoDia(f.id,fds.domingo);
-          const sab=ausSab?false:trabalhaNoDia(f,fds.sabado);
-          const dom=ausDom?false:trabalhaNoDia(f,fds.domingo);
+          const sab=ausSab?false:trabalhaVigente(f,fds.sabado);
+          const dom=ausDom?false:trabalhaVigente(f,fds.domingo);
           const dias=[sab,dom].filter(Boolean).length;
           const afastadoFimSemana=!!ausSab&&!!ausDom;
           let fator=cfg.modo_rateio==='todos'
