@@ -296,7 +296,7 @@ module.exports = function(pool) {
     const horas=calcHoras(p.entrada,p.saida,p.saida_intervalo,p.retorno_intervalo,p.intervalo_min_efetivo);
     const extra=calcularExtraMinutos(horas,p.jornada_horas_efetiva,p.troca_folga,p.entrada,p.saida,p.horario_entrada_efetivo,p.horario_saida_efetivo);
     const intervalo=p.almoco_corrido_confirmado
-      ? Number(p.intervalo_min_efetivo||60)
+      ? Number(p.intervalo_min_efetivo??60)
       : calcularIntervaloSuprimido(p.saida_intervalo,p.retorno_intervalo,p.intervalo_min_efetivo);
     const precisaAprovacao=!p.troca_folga && (extra>0 || intervalo>0 || p.almoco_corrido_confirmado);
     const novoStatus=precisaAprovacao
@@ -438,7 +438,7 @@ module.exports = function(pool) {
         `,[funcionario_id,dataRef]);
         if (atual?.saida_intervalo) {
           const realizado=Math.max(0,Math.floor((agora-new Date(atual.saida_intervalo))/60000));
-          const minimo=Number(atual.intervalo_min||60);
+          const minimo=Number(atual.intervalo_min??60);
           if (realizado < minimo) {
             if (req.body.confirmar_intervalo_curto !== true) {
               return res.status(409).json({
@@ -916,16 +916,17 @@ module.exports = function(pool) {
   r.post('/aprovacoes/decidir-lote', async (req,res)=>{
     if(req.user?.perfil!=='admin') return res.status(403).json({ok:false,erro:'Acesso restrito ao administrador'});
     const ids=[...new Set((req.body.ids||[]).map(Number).filter(Number.isInteger))];
-    const decisao=req.body.decisao==='rejeitado'?'rejeitado':'aprovado';
+    const decisao=req.body.decisao;
+    if(!['aprovado','rejeitado'].includes(decisao))return res.status(400).json({ok:false,erro:'Decisão inválida'});
+    if(decisao==='rejeitado'&&!String(req.body.observacao||'').trim())return res.status(400).json({ok:false,erro:'Informe o motivo da recusa, confirmando se houve trabalho no período.'});
     if(!ids.length) return res.status(400).json({ok:false,erro:'Selecione ao menos um lançamento'});
     const {rows}=await pool.query(`
       UPDATE ponto_registros SET aprovacao_status=$1,aprovacao_por=$2,aprovacao_em=NOW(),
         aprovacao_obs=$3,atualizado_em=NOW()
       WHERE id=ANY($4::int[]) AND aprovacao_status='pendente'
-        AND (NULLIF(current_setting('app.loja_id',true),'') IS NULL
-             OR loja_id=NULLIF(current_setting('app.loja_id',true),'')::int)
+        AND loja_id=$5
       RETURNING id
-    `,[decisao,req.user?.id||null,String(req.body.observacao||'').trim()||null,ids]);
+    `,[decisao,req.user?.id||null,String(req.body.observacao||'').trim()||null,ids,req.user.lojaId]);
     res.json({ok:true,quantidade:rows.length,decisao});
   });
 
@@ -956,7 +957,7 @@ module.exports = function(pool) {
           horario_entrada=$1, horario_saida=$2, intervalo_min=$3,
           jornada_horas=$4, tolerancia_min=$5, dias_folga=$6, usa_ponto=$7
         WHERE id=$8
-      `, [horario_entrada||'08:00', horario_saida||'18:00', parseInt(intervalo_min)||60,
+      `, [horario_entrada||'08:00', horario_saida||'18:00', parseInt(intervalo_min??60),
           parseFloat(jornada_horas)||8, 10,
           dias_folga||[], usa_ponto !== false, req.params.id]);
       res.json({ ok:true });
@@ -1016,7 +1017,7 @@ module.exports = function(pool) {
             d.folga ? null : (d.horario_entrada||'08:00'),
             d.folga ? null : (d.horario_saida||'18:00'),
             d.folga ? null : (d.jornada_horas||8),
-            d.folga ? null : (d.intervalo_min||60)]);
+            d.folga ? null : (d.intervalo_min??60)]);
       }
       res.json({ ok:true });
     } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
@@ -1037,7 +1038,7 @@ module.exports = function(pool) {
         if (!f.length) return res.json({ ok:true, data:null });
         return res.json({ ok:true, data:{ dia_semana:diaSemana, folga:false,
           horario_entrada: f[0].horario_entrada, horario_saida: f[0].horario_saida,
-          jornada_horas: f[0].jornada_horas||8, intervalo_min: f[0].intervalo_min||60 }});
+          jornada_horas: f[0].jornada_horas||8, intervalo_min: f[0].intervalo_min??60 }});
       }
       res.json({ ok:true, data:rows[0] });
     } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
