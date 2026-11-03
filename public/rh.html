@@ -539,12 +539,18 @@ main{padding:16px;background:#f8f6f3}
               <option value="outro">📌 Outro</option>
             </select>
             <input type="text" id="ja-aus-motivo" placeholder="Motivo / referência">
-            <input type="date" id="ja-aus-ini">
-            <input type="date" id="ja-aus-fim">
+            <label style="font-size:11px">Início do período<input type="date" id="ja-aus-ini"></label>
+            <label style="font-size:11px">Último dia do período<input type="date" id="ja-aus-fim"></label>
             <textarea id="ja-aus-obs" rows="2" placeholder="Observação (opcional)" style="grid-column:1/-1"></textarea>
-            <button class="btn btn-red" onclick="salvarAusenciaRH()" style="grid-column:1/-1">＋ Registrar período</button>
+            <div id="ja-aus-edicao" style="display:none;grid-column:1/-1">
+              <b>Editando período — o histórico anterior será preservado</b>
+              <input id="ja-aus-just" placeholder="Motivo da alteração (obrigatório)" style="width:100%;margin-top:8px">
+              <label id="ja-aus-reativar-box" style="display:none"><input type="checkbox" id="ja-aus-reativar"> Reativar este período cancelado com as datas corrigidas</label>
+            </div>
+            <button id="ja-aus-salvar" class="btn btn-red" onclick="salvarAusenciaRH()" style="grid-column:1/-1">＋ Registrar período</button>
+            <button id="ja-aus-limpar" class="btn btn-gray" onclick="limparEdicaoAusenciaRH()" style="display:none;grid-column:1/-1">Cancelar edição</button>
           </div>
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted);margin:14px 0 7px">Períodos ativos</div>
+          <label style="display:block;margin-top:12px"><input type="checkbox" id="ja-aus-todos" onchange="filtrarAusenciasRH()"> Mostrar também períodos cancelados</label>
           <div id="ja-aus-list"><div style="font-size:12px;color:var(--muted)">Selecione um funcionário.</div></div>
         </div>
       </section>
@@ -2719,13 +2725,14 @@ async function inicializarJornadaRH(){
 
 async function carregarJornadaAusencias(){
   const id=document.getElementById('ja-func').value;
+  if(_jaAusFuncionario!==id){limparEdicaoAusenciaRH();_jaAusencias.clear();_jaAusFuncionario=id;}
   const box=document.getElementById('ja-dias');
   const hoje=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
   const vigencia=document.getElementById('ja-vigencia');if(!vigencia.value)vigencia.value=hoje;vigencia.min=hoje;
   if(!id){box.innerHTML='<div class="empty">Selecione um funcionário para configurar a jornada.</div>';document.getElementById('ja-aus-list').innerHTML='';return;}
   const [cfg,aus]=await Promise.all([
     get('/api/ponto/jornada-config/'+id+'?data='+vigencia.value),
-    get('/api/ponto/ausencias?funcionario_id='+encodeURIComponent(id))
+    get('/api/ponto/ausencias?status=todos&funcionario_id='+encodeURIComponent(id))
   ]);
   if(!cfg.ok){box.innerHTML='<div class="empty">Não foi possível carregar a jornada.</div>';return;}
   const func=cfg.data?.funcionario||{};
@@ -2751,7 +2758,7 @@ async function carregarJornadaAusencias(){
       '<input class="ja-int" type="number" min="0" max="180" value="'+inte+'" title="Intervalo em minutos" '+(folga?'disabled':'')+'>'+
     '</div>';
   }).join('');
-  renderAusenciasRH(aus.data||[]);
+  if(aus.ok)renderAusenciasRH(aus.data||[]);else document.getElementById('ja-aus-list').textContent='Não foi possível carregar os períodos. Recarregue para conferir.';
 }
 function jaRodizioMudou(){
   if(!Number(document.getElementById('ja-ciclo').value))return;
@@ -2772,26 +2779,71 @@ async function salvarJornadaRH(){
   const d=await put('/api/ponto/jornada-dia/'+id,{dias,vigencia_inicio:document.getElementById('ja-vigencia').value,domingo_ciclo:Number(document.getElementById('ja-ciclo').value),domingo_base:document.getElementById('ja-dom-base').value});
   if(!d.ok){toast('❌ '+d.erro);return;}toast('✅ Escala salva com vigência. Cartão de ponto e calendário sincronizados.');await carregarJornadaAusencias();
 }
-async function salvarAusenciaRH(){
-  const funcionario_id=document.getElementById('ja-func').value;
-  const tipo=document.getElementById('ja-aus-tipo').value,data_inicio=document.getElementById('ja-aus-ini').value,data_fim=document.getElementById('ja-aus-fim').value;
-  if(!funcionario_id||!data_inicio||!data_fim){toast('⚠️ Selecione funcionário e período');return;}
-  const d=await post('/api/ponto/ausencias',{funcionario_id,tipo,data_inicio,data_fim,motivo:document.getElementById('ja-aus-motivo').value,observacao:document.getElementById('ja-aus-obs').value});
-  if(!d.ok){toast('❌ '+d.erro);return;}
-  document.getElementById('ja-aus-motivo').value='';document.getElementById('ja-aus-obs').value='';
-  toast('✅ Período registrado. O ponto não cobrará jornada nessas datas.');
-  await carregarJornadaAusencias();
+const _jaAusencias=new Map();let _jaAusEdit=null,_jaAusBusy=false,_jaAusFuncionario='';
+const jaAusEsc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function limparEdicaoAusenciaRH(){
+  _jaAusEdit=null;
+  ['ja-aus-motivo','ja-aus-obs','ja-aus-ini','ja-aus-fim','ja-aus-just'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('ja-aus-reativar').checked=false;
+  document.getElementById('ja-aus-edicao').style.display='none';document.getElementById('ja-aus-limpar').style.display='none';
+  document.getElementById('ja-aus-salvar').textContent='＋ Registrar período';
 }
-function renderAusenciasRH(lista){
-  const el=document.getElementById('ja-aus-list');
-  if(!lista.length){el.innerHTML='<div style="font-size:12px;color:var(--green)">✅ Nenhum período ativo.</div>';return;}
-  const labels={ferias:'🏖️ Férias',afastamento:'🩺 Afastamento',atestado:'📄 Atestado',licenca:'📋 Licença',outro:'📌 Outro'};
-  el.innerHTML=lista.map(a=>'<div class="ja-aus-item"><div style="display:flex;justify-content:space-between;gap:8px"><div><strong>'+labels[a.tipo]+'</strong><small>'+String(a.data_inicio).slice(0,10).split('-').reverse().join('/')+' a '+String(a.data_fim).slice(0,10).split('-').reverse().join('/')+'</small>'+(a.motivo?'<small>'+a.motivo+'</small>':'')+'</div><button class="btn btn-gray btn-sm" onclick="cancelarAusenciaRH('+a.id+')">Cancelar período</button></div></div>').join('');
+function editarAusenciaRH(id){
+  const a=_jaAusencias.get(Number(id));if(!a)return;
+  _jaAusEdit={...a};
+  document.getElementById('ja-aus-tipo').value=a.tipo;
+  document.getElementById('ja-aus-ini').value=String(a.data_inicio).slice(0,10);
+  document.getElementById('ja-aus-fim').value=String(a.data_fim).slice(0,10);
+  document.getElementById('ja-aus-motivo').value=a.motivo||'';document.getElementById('ja-aus-obs').value=a.observacao||'';
+  document.getElementById('ja-aus-just').value='';document.getElementById('ja-aus-reativar').checked=false;
+  document.getElementById('ja-aus-reativar-box').style.display=a.status==='cancelado'?'block':'none';
+  document.getElementById('ja-aus-edicao').style.display='block';document.getElementById('ja-aus-limpar').style.display='';
+  document.getElementById('ja-aus-salvar').textContent='Salvar alterações';
+  document.getElementById('ja-aus-tipo').scrollIntoView({behavior:'smooth',block:'center'});
+}
+function ultimoDiaAusencia(retorno){
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(retorno)||!Number.isFinite(Date.parse(retorno))||new Date(retorno).toISOString().slice(0,10)!==retorno)return null;
+  return new Date(Date.parse(retorno)-86400000).toISOString().slice(0,10);
+}
+function retornoAntecipadoRH(id){
+  const a=_jaAusencias.get(Number(id));if(!a)return;
+  const retorno=window.prompt('Primeiro dia de volta ao trabalho (AAAA-MM-DD). O afastamento terminará no dia anterior:',new Date().toLocaleDateString('sv-SE',{timeZone:'America/Sao_Paulo'}));
+  if(retorno===null)return;
+  const fim=ultimoDiaAusencia(retorno);
+  if(!fim||fim<String(a.data_inicio).slice(0,10)||fim>=String(a.data_fim).slice(0,10)){toast('Confira a data: o retorno deve ocorrer dentro do período e após o início.');return;}
+  editarAusenciaRH(id);document.getElementById('ja-aus-fim').value=fim;
+  document.getElementById('ja-aus-just').value='Retorno antecipado em '+retorno;
+  toast('Confira as datas e clique em Salvar alterações.');
+}
+async function salvarAusenciaRH(){
+  if(_jaAusBusy)return;
+  const funcionario_id=document.getElementById('ja-func').value;
+  const body={funcionario_id,tipo:document.getElementById('ja-aus-tipo').value,data_inicio:document.getElementById('ja-aus-ini').value,data_fim:document.getElementById('ja-aus-fim').value,motivo:document.getElementById('ja-aus-motivo').value,observacao:document.getElementById('ja-aus-obs').value};
+  if(!funcionario_id||!body.data_inicio||!body.data_fim||body.data_fim<body.data_inicio){toast('Confira o funcionário e as datas do período.');return;}
+  if(_jaAusEdit){
+    if(Number(_jaAusEdit.funcionario_id)!==Number(funcionario_id)){toast('Recarregue o funcionário antes de salvar.');return;}
+    Object.assign(body,{versao:Number(_jaAusEdit.versao||0),status:_jaAusEdit.status==='cancelado'&&document.getElementById('ja-aus-reativar').checked?'ativo':_jaAusEdit.status,justificativa:document.getElementById('ja-aus-just').value});
+    if(!body.justificativa.trim()){toast('Informe o motivo da alteração.');return;}
+  }
+  _jaAusBusy=true;document.getElementById('ja-aus-salvar').disabled=true;
+  try{
+    const d=_jaAusEdit?await put('/api/ponto/ausencias/'+_jaAusEdit.id,body):await post('/api/ponto/ausencias',body);
+    if(!d.ok){toast('❌ '+d.erro);return;}
+    limparEdicaoAusenciaRH();toast('✅ Período salvo. Histórico preservado e datas atualizadas no ponto.');
+    await carregarJornadaAusencias();
+  }finally{_jaAusBusy=false;document.getElementById('ja-aus-salvar').disabled=false;}
+}
+function renderAusenciasRH(lista){_jaAusencias.clear();lista.forEach(a=>_jaAusencias.set(Number(a.id),a));filtrarAusenciasRH();}
+function filtrarAusenciasRH(){
+  const lista=[..._jaAusencias.values()].filter(a=>a.status==='ativo'||document.getElementById('ja-aus-todos').checked),el=document.getElementById('ja-aus-list');
+  const labels={ferias:'🏖️ Férias',afastamento:'🩺 Afastamento',licenca:'📋 Licença',atestado:'📄 Atestado',outro:'📌 Outro'};
+  const data=d=>String(d||'').slice(0,10).split('-').reverse().join('/');
+  el.innerHTML=lista.length?lista.map(a=>'<div class="ja-aus-item"><strong>'+jaAusEsc(labels[a.tipo]||a.tipo)+' · '+(a.status==='ativo'?'Ativo':'Cancelado')+'</strong><small>'+data(a.data_inicio)+' a '+data(a.data_fim)+'</small><small>'+jaAusEsc(a.motivo||'')+'</small><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"><button class="btn btn-gray btn-sm" onclick="editarAusenciaRH('+Number(a.id)+')">Editar'+(a.status==='cancelado'?' / reativar':'')+'</button>'+(a.status==='ativo'?'<button class="btn btn-gray btn-sm" onclick="retornoAntecipadoRH('+Number(a.id)+')">Retorno antecipado</button><button class="btn btn-gray btn-sm" onclick="cancelarAusenciaRH('+Number(a.id)+')">Cancelar período</button>':'')+'</div>'+((a.historico_edicoes||[]).length?'<details style="font-size:11px;margin-top:8px"><summary>Histórico de alterações</summary>'+(a.historico_edicoes||[]).map(h=>'<p>'+jaAusEsc(new Date(h.em).toLocaleString('pt-BR'))+' · Usuário '+Number(h.usuario_id)+' · '+jaAusEsc(h.justificativa||h.acao)+'<br>Anterior: '+data(h.antes?.data_inicio)+' a '+data(h.antes?.data_fim)+(h.depois?'<br>Alterado: '+data(h.depois.data_inicio)+' a '+data(h.depois.data_fim)+' · '+jaAusEsc(h.depois.status):'')+'</p>').join('')+'</details>':'')+'</div>').join(''):'<div style="font-size:12px;color:var(--muted)">Nenhum período para este filtro.</div>';
 }
 async function cancelarAusenciaRH(id){
-  if(!confirm('Cancelar este período? O histórico será preservado.'))return;
-  const d=await post('/api/ponto/ausencias/'+id+'/cancelar',{});
-  if(!d.ok){toast('❌ '+d.erro);return;}toast('✅ Período cancelado, histórico preservado.');await carregarJornadaAusencias();
+  const a=_jaAusencias.get(Number(id));if(!a||!confirm('Cancelar este período? Se a pessoa voltou antes, use Retorno antecipado para preservar os dias afastados.'))return;
+  const d=await post('/api/ponto/ausencias/'+id+'/cancelar',{versao:Number(a.versao||0)});
+  if(!d.ok){toast('❌ '+d.erro);return;}limparEdicaoAusenciaRH();toast('Período cancelado com histórico preservado.');await carregarJornadaAusencias();
 }
 
 function abrirConfJornada(){document.getElementById('m-jornada').classList.add('open');}

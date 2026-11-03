@@ -5,6 +5,7 @@
 const express = require('express');
 const autenticar = require('../middleware/auth');
 const {validarEscala,resolverEscala,initEscalas,carregarEscalas,salvarEscala,iso}=require('../lib/ponto-escala');
+const {validarPeriodo,editarAusencia}=require('../lib/ponto-ausencia');
 
 module.exports = function(pool) {
   const r = express.Router();
@@ -129,6 +130,8 @@ module.exports = function(pool) {
       )
     `).catch(e=>console.warn('[ponto] criar ponto_ausencias:',e.message));
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_ponto_ausencias_func_periodo ON ponto_ausencias(funcionario_id,data_inicio,data_fim)`).catch(()=>{});
+    await pool.query(`ALTER TABLE ponto_ausencias ADD COLUMN IF NOT EXISTS versao INTEGER NOT NULL DEFAULT 0`);
+    await pool.query(`ALTER TABLE ponto_ausencias ADD COLUMN IF NOT EXISTS historico_edicoes JSONB NOT NULL DEFAULT '[]'::jsonb`);
 
     // Corrige FK diretamente: drop qualquer FK em funcionario_id e recria apontando para funcionarios
     try {
@@ -845,14 +848,14 @@ module.exports = function(pool) {
     try{
       const {rows}=await pool.query(`
         SELECT a.*,f.nome AS funcionario_nome
-        FROM ponto_ausencias a JOIN funcionarios f ON f.id=a.funcionario_id
-        WHERE a.status='ativo'
+        FROM ponto_ausencias a JOIN funcionarios f ON f.id=a.funcionario_id AND f.loja_id=a.loja_id
+        WHERE ($2='todos' OR a.status='ativo') AND a.loja_id=$3
           AND ($1::int IS NULL OR a.funcionario_id=$1)
           AND (NULLIF(current_setting('app.loja_id',true),'') IS NULL
                OR a.loja_id=NULLIF(current_setting('app.loja_id',true),'')::int)
         ORDER BY a.data_inicio DESC,a.id DESC
         LIMIT 300
-      `,[funcionarioId]);
+      `,[funcionarioId,req.query.status==='todos'?'todos':'ativo',req.user.lojaId]);
       res.json({ok:true,data:rows});
     }catch(e){res.status(500).json({ok:false,erro:e.message});}
   });
@@ -863,26 +866,37 @@ module.exports = function(pool) {
     const tipos=['ferias','afastamento','licenca','atestado','outro'];
     if(!funcionario_id||!tipos.includes(tipo)||!data_inicio||!data_fim) return res.status(400).json({ok:false,erro:'Funcionário, tipo e período são obrigatórios'});
     try{
+      validarPeriodo(req.body);
+      const {rows:func}=await pool.query('SELECT id FROM funcionarios WHERE id=$1 AND loja_id=$2',[Number(funcionario_id),req.user.lojaId]);
+      if(!func.length)return res.status(404).json({ok:false,erro:'Funcionário não encontrado nesta loja'});
       const {rows}=await pool.query(`
-        INSERT INTO ponto_ausencias(funcionario_id,tipo,data_inicio,data_fim,motivo,observacao,criado_por)
-        VALUES($1,$2,$3,$4,$5,$6,$7)
+        INSERT INTO ponto_ausencias(funcionario_id,tipo,data_inicio,data_fim,motivo,observacao,criado_por,loja_id)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8)
         RETURNING *
-      `,[Number(funcionario_id),tipo,data_inicio,data_fim,String(motivo||'').trim()||null,String(observacao||'').trim()||null,req.user?.id||null]);
+      `,[Number(funcionario_id),tipo,data_inicio,data_fim,String(motivo||'').trim()||null,String(observacao||'').trim()||null,req.user?.id||null,req.user.lojaId]);
       res.json({ok:true,data:rows[0]});
-    }catch(e){res.status(500).json({ok:false,erro:e.message});}
+    }catch(e){res.status(e.code?500:400).json({ok:false,erro:e.code?'Não foi possível registrar o período':e.message});}
+  });
+
+  r.put('/ausencias/:id',async(req,res)=>{
+    if(!['admin','gestor'].includes(req.user?.perfil))return res.status(403).json({ok:false,erro:'Acesso restrito à gestão'});
+    try{res.json({ok:true,data:await editarAusencia(pool,req.user,Number(req.params.id),req.body)});}
+    catch(e){res.status(e.status||(e.code?500:400)).json({ok:false,erro:e.code?'Não foi possível salvar o período':e.message});}
   });
 
   r.post('/ausencias/:id/cancelar', async (req,res)=>{
     if(!['admin','gestor'].includes(req.user?.perfil)) return res.status(403).json({ok:false,erro:'Acesso restrito à gestão'});
     try{
+      if(!Number.isInteger(req.body.versao)||req.body.versao<0)return res.status(400).json({ok:false,erro:'Recarregue o período antes de cancelar'});
       const {rows}=await pool.query(`
-        UPDATE ponto_ausencias SET status='cancelado',cancelado_por=$1,cancelado_em=NOW()
-        WHERE id=$2 AND status='ativo'
+        UPDATE ponto_ausencias AS a SET status='cancelado',cancelado_por=$1,cancelado_em=NOW(),versao=versao+1,
+          historico_edicoes=historico_edicoes||jsonb_build_array(jsonb_build_object('acao','CANCELAR','antes',to_jsonb(a)-'historico_edicoes','usuario_id',$1,'em',NOW()))
+        WHERE id=$2 AND status='ativo' AND loja_id=$3 AND versao=$4
           AND (NULLIF(current_setting('app.loja_id',true),'') IS NULL
                OR loja_id=NULLIF(current_setting('app.loja_id',true),'')::int)
         RETURNING *
-      `,[req.user?.id||null,Number(req.params.id)]);
-      if(!rows.length) return res.status(404).json({ok:false,erro:'Período não encontrado ou já cancelado'});
+      `,[req.user?.id||null,Number(req.params.id),req.user.lojaId,req.body.versao]);
+      if(!rows.length) return res.status(409).json({ok:false,erro:'O período mudou ou não está disponível nesta loja. Recarregue antes de cancelar.'});
       res.json({ok:true,data:rows[0]});
     }catch(e){res.status(500).json({ok:false,erro:e.message});}
   });
