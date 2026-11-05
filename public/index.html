@@ -1055,7 +1055,7 @@ function entrarNoPortal() {
     abrir:()=>{
       const frame=$('iframe-rh');
       frame.addEventListener('load',broadcastToken,{once:true});
-      frame.src='rh.html?aba=documentos';
+      frame.src=(usuario?.perfil==='admin'?'rh.html':'rh-funcionario.html')+'?aba=documentos';
       showTab('rh');
     }
   });
@@ -1086,6 +1086,9 @@ function iniciarHeartbeatSessao() {
 
 async function fazerLogout() {
   BBDocumentosAviso.limpar();
+  document.querySelectorAll('iframe').forEach(frame=>{
+    try{frame.contentWindow.postMessage({type:'bb_logout'},window.location.origin);}catch(_){}
+  });
   const tk = token();
   if (sessaoHeartbeatTimer) clearInterval(sessaoHeartbeatTimer);
   sessaoHeartbeatTimer = null;

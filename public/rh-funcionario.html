@@ -122,7 +122,9 @@ header{background:var(--red);color:#fff;padding:14px 16px 12px;display:flex;alig
 <div class="tabs">
   <button class="tab active" onclick="showTab('lanc')">📝 Meus Lançamentos</button>
   <button class="tab" onclick="showTab('escala')">📅 Escala de Domingos</button>
+  <button class="tab" onclick="showTab('documentos')">📁 Meus Documentos</button>
 </div>
+<div id="tab-documentos" class="tab-content"><div id="meus-documentos" style="padding:16px;max-width:1000px;margin:auto"></div></div>
 
 <!-- ABA: LANÇAMENTOS -->
 <div id="tab-lanc" class="tab-content active">
@@ -267,6 +269,7 @@ header{background:var(--red);color:#fff;padding:14px 16px 12px;display:flex;alig
 <div id="toast" class="toast"></div>
 
 <script src="/js/api.js"></script>
+<script src="/js/rh-documentos-funcionario.js?v=1"></script>
 <script>
 const BASE  = window.location.origin;
 const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
@@ -305,6 +308,7 @@ function showTab(t){
   document.getElementById('tab-'+t)?.classList.add('active');
   if(t==='escala') renderEscala();
   if(t==='lanc')   carregarLanc();
+  if(t==='documentos')RHDocumentosFuncionario.carregar(document.getElementById('meus-documentos'));
 }
 
 function _navMes(selId,delta){ const sel=document.getElementById(selId); const[y,m]=sel.value.split('-').map(Number); const d=new Date(y,m-1+delta,1); sel.value=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; }
@@ -339,6 +343,7 @@ async function init(){
   }catch(e){ console.warn('[rh-func]',e); }
   if(!_funcId){ document.getElementById('alerta-vinculo').style.display=''; document.getElementById('lanc-area').style.display='none'; }
   else carregarLanc();
+  if(new URLSearchParams(location.search).get('aba')==='documentos')showTab('documentos');
 }
 
 async function carregarLanc(){
