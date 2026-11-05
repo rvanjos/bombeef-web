@@ -19,6 +19,7 @@ const crypto = require('crypto');
 const autenticar = require('../middleware/auth');
 const { requireNivel } = autenticar;
 const {carregarEscalas,resolverEscala,iso}=require('../lib/ponto-escala');
+const {contarPendenciasProprias}=require('../lib/rh-documentos-pendentes');
 
 module.exports = function (pool, app) {
   const r = express.Router();
@@ -494,6 +495,15 @@ module.exports = function (pool, app) {
   }, 2000);
 
   // ── Documentos do funcionário ──────────────────────────────────────────────
+  // Aviso de login: inclusive administradores recebem apenas as próprias pendências.
+  r.get('/documentos/meus-pendentes', async (req,res)=>{
+    res.setHeader('Cache-Control','private, no-store');
+    try{
+      const total=await contarPendenciasProprias(pool,req.user);
+      res.json({ok:true,total});
+    }catch(_){res.status(500).json({ok:false,erro:'Não foi possível consultar seus documentos pendentes.'});}
+  });
+
   r.get('/documentos', async (req,res)=>{
     try{
       let funcionarioId=null;
