@@ -1819,6 +1819,7 @@ async function init() {
     }
     if (isGestor) showTab('jornada'); else showTab('meus');
   }
+  if(new URLSearchParams(location.search).get('aba')==='documentos')showTab('documentos');
   atualizarBadgeDocumentos();
 }
 

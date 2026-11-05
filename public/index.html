@@ -403,6 +403,7 @@ body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var
 </style>
 <!-- F1-01: Barramento de eventos — distribuição de eventos SSE para iframes -->
 <script src="js/bb-events.js"></script>
+<script src="js/rh-documentos-aviso.js?v=1"></script>
 </head>
 <body>
 
@@ -1049,6 +1050,15 @@ function entrarNoPortal() {
   broadcastToken();
   setTimeout(broadcastToken, 800);
   setTimeout(broadcastToken, 2500);
+  BBDocumentosAviso.verificar({
+    consultar:()=>apiFetch('/api/rh/documentos/meus-pendentes',{cache:'no-store'}),
+    abrir:()=>{
+      const frame=$('iframe-rh');
+      frame.addEventListener('load',broadcastToken,{once:true});
+      frame.src='rh.html?aba=documentos';
+      showTab('rh');
+    }
+  });
 }
 
 async function enviarHeartbeatSessao() {
@@ -1075,6 +1085,7 @@ function iniciarHeartbeatSessao() {
 }
 
 async function fazerLogout() {
+  BBDocumentosAviso.limpar();
   const tk = token();
   if (sessaoHeartbeatTimer) clearInterval(sessaoHeartbeatTimer);
   sessaoHeartbeatTimer = null;
