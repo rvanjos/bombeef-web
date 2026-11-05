@@ -18,8 +18,9 @@ test('documentos RH usam bucket privado e banco guarda apenas metadados',()=>{
 
 test('documentos respeitam loja e acesso do funcionario',()=>{
   const rota=ler('routes/rh.js');
-  assert.match(rota,/d\.loja_id=NULLIF\(current_setting\('app\.loja_id',true\),''\)::int/);
-  assert.match(rota,/Number\(doc\.usuario_id\)!==Number\(req\.user\?\.id\)/);
+  assert.match(rota,/AND d\.loja_id=\$2/);
+  assert.match(rota,/Number\(proprio\.id\)!==Number\(doc\.funcionario_id\)/);
+  assert.match(rota,/Number\(doc\.loja_id\)!==Number\(req\.user\.lojaId\)/);
   assert.match(rota,/funcionarioDoUsuario/);
 });
 
