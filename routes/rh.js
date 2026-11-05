@@ -296,6 +296,171 @@ module.exports = function (pool, app) {
     } catch (e) { res.status(500).json({ ok: false, erro: e.message }); }
   });
 
+  // ── Documentos do funcionário ──────────────────────────────────────────────
+  // Antes da barreira administrativa: leitura/ateste usam o vínculo próprio;
+  // upload e arquivamento continuam exigindo admin nas respectivas rotas.
+  // Aviso de login: inclusive administradores recebem apenas as próprias pendências.
+  r.get('/documentos/meus-pendentes', async (req,res)=>{
+    res.setHeader('Cache-Control','private, no-store');
+    try{
+      const total=await contarPendenciasProprias(pool,req.user);
+      res.json({ok:true,total});
+    }catch(_){res.status(500).json({ok:false,erro:'Não foi possível consultar seus documentos pendentes.'});}
+  });
+
+  r.get('/documentos', async (req,res)=>{
+    res.setHeader('Cache-Control','private, no-store');
+    try{
+      let funcionarioId=null;
+      if(gestorRH(req)&&req.query.escopo!=='meu') funcionarioId=req.query.funcionario_id?Number(req.query.funcionario_id):null;
+      else {
+        const f=await funcionarioDoUsuario(req.user?.id,req.user?.lojaId);
+        if(!f) return res.status(403).json({ok:false,erro:'Usuário não vinculado a funcionário'});
+        funcionarioId=f.id;
+      }
+      const params=[funcionarioId,req.user.lojaId];
+      const {rows}=await pool.query(`
+        SELECT d.id,d.funcionario_id,d.tipo,d.titulo,d.competencia,d.observacao,
+               d.arquivo_nome,d.arquivo_mime,d.arquivo_tamanho,d.exige_confirmacao,
+               d.publicado_em,d.visualizado_em,d.confirmado_em,d.status,
+               f.nome AS funcionario_nome,f.cargo,
+               CASE
+                 WHEN d.confirmado_em IS NOT NULL THEN 'confirmado'
+                 WHEN d.visualizado_em IS NOT NULL THEN 'visualizado'
+                 ELSE 'pendente'
+               END AS recebimento_status
+        FROM rh_documentos_funcionario d
+        JOIN funcionarios f ON f.id=d.funcionario_id AND f.loja_id=d.loja_id
+        WHERE d.status='ativo'
+          AND ($1::int IS NULL OR d.funcionario_id=$1)
+          AND d.loja_id=$2
+        ORDER BY d.publicado_em DESC,d.id DESC
+        LIMIT 500
+      `,params);
+      res.json({ok:true,data:rows});
+    }catch(e){res.status(500).json({ok:false,erro:e.message});}
+  });
+
+  r.get('/documentos/pendentes/count', async (req,res)=>{
+    try{
+      let funcionarioId=null;
+      if(!gestorRH(req)){
+        const f=await funcionarioDoUsuario(req.user?.id,req.user?.lojaId);
+        if(!f) return res.json({ok:true,total:0});
+        funcionarioId=f.id;
+      }
+      const {rows:[x]}=await pool.query(`
+        SELECT COUNT(*)::int AS total
+        FROM rh_documentos_funcionario d
+        WHERE d.status='ativo' AND d.exige_confirmacao=true AND d.confirmado_em IS NULL
+          AND ($1::int IS NULL OR d.funcionario_id=$1)
+          AND d.loja_id=$2
+      `,[funcionarioId,req.user.lojaId]);
+      res.json({ok:true,total:Number(x?.total||0)});
+    }catch(e){res.json({ok:false,total:0,erro:e.message});}
+  });
+
+  r.post('/documentos/upload', (req,res,next)=>{
+    if(!gestorRH(req)) return res.status(403).json({ok:false,erro:'Acesso restrito à gestão'});
+    uploadDocumento.single('arquivo')(req,res,err=>err?res.status(400).json({ok:false,erro:err.message}):next());
+  }, async (req,res)=>{
+    const funcionarioId=Number(req.body.funcionario_id);
+    const tipo=String(req.body.tipo||'outro');
+    const tipos=['holerite','aviso_ferias','recibo_ferias','atestado','advertencia','outro'];
+    if(!funcionarioId||!tipos.includes(tipo)||!req.file) return res.status(400).json({ok:false,erro:'Funcionário, tipo e arquivo são obrigatórios'});
+    const titulo=String(req.body.titulo||req.file.originalname||'Documento').trim();
+    const competencia=String(req.body.competencia||'').trim()||null;
+    const observacao=String(req.body.observacao||'').trim()||null;
+    const exigeConfirmacao=String(req.body.exige_confirmacao||'true')!=='false';
+    const hash=sha256(req.file.buffer);
+    const ext=(req.file.originalname.split('.').pop()||'bin').replace(/[^a-zA-Z0-9]/g,'').toLowerCase();
+    const key='rh/'+String(funcionarioId)+'/'+new Date().getFullYear()+'/'+crypto.randomUUID()+'.'+ext;
+    try{
+      const {rows:[func]}=await pool.query(`
+        SELECT id FROM funcionarios
+        WHERE id=$1 AND ativo=true AND COALESCE(freelancer,false)=false
+          AND (NULLIF(current_setting('app.loja_id',true),'') IS NULL
+               OR loja_id=NULLIF(current_setting('app.loja_id',true),'')::int)
+        LIMIT 1
+      `,[funcionarioId]);
+      if(!func) return res.status(404).json({ok:false,erro:'Funcionário não encontrado'});
+      await s3Request('PUT',key,{body:req.file.buffer,contentType:req.file.mimetype});
+      const {rows}=await pool.query(`
+        INSERT INTO rh_documentos_funcionario(
+          funcionario_id,tipo,titulo,competencia,observacao,arquivo_nome,arquivo_mime,
+          arquivo_tamanho,arquivo_hash_sha256,storage_key,exige_confirmacao,publicado_por
+        ) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+        RETURNING id,funcionario_id,tipo,titulo,competencia,arquivo_nome,arquivo_tamanho,exige_confirmacao,publicado_em
+      `,[funcionarioId,tipo,titulo,competencia,observacao,req.file.originalname,req.file.mimetype,
+          req.file.size,hash,key,exigeConfirmacao,req.user?.id||null]);
+      res.json({ok:true,data:rows[0]});
+    }catch(e){res.status(500).json({ok:false,erro:e.message});}
+  });
+
+  r.get('/documentos/:id/arquivo', async (req,res)=>{
+    try{
+      const {rows}=await pool.query(`
+        SELECT d.*,f.usuario_id
+        FROM rh_documentos_funcionario d
+        JOIN funcionarios f ON f.id=d.funcionario_id AND f.loja_id=d.loja_id
+        WHERE d.id=$1 AND d.status='ativo'
+          AND d.loja_id=$2
+        LIMIT 1
+      `,[Number(req.params.id),req.user.lojaId]);
+      const doc=rows[0];
+      if(!doc||Number(doc.loja_id)!==Number(req.user.lojaId)) return res.status(404).json({ok:false,erro:'Documento não encontrado'});
+      if(!gestorRH(req)){
+        const proprio=await funcionarioDoUsuario(req.user?.id,req.user?.lojaId);
+        if(!proprio || Number(proprio.id)!==Number(doc.funcionario_id)) return res.status(403).json({ok:false,erro:'Acesso negado'});
+      }
+      const s3=await s3Request('GET',doc.storage_key);
+      const buf=Buffer.from(await s3.arrayBuffer());
+      if(!gestorRH(req) && !doc.visualizado_em){
+        await pool.query(`UPDATE rh_documentos_funcionario SET visualizado_em=NOW() WHERE id=$1 AND funcionario_id=$2 AND loja_id=$3 AND visualizado_em IS NULL`,[doc.id,doc.funcionario_id,req.user.lojaId]);
+      }
+      res.setHeader('Content-Type',doc.arquivo_mime||'application/octet-stream');
+      res.setHeader('Content-Disposition',`inline; filename*=UTF-8''${encodeURIComponent(doc.arquivo_nome)}`);
+      res.setHeader('Cache-Control','private, no-store');
+      res.send(buf);
+    }catch(e){res.status(500).json({ok:false,erro:e.message});}
+  });
+
+  r.post('/documentos/:id/confirmar', async (req,res)=>{
+    try{
+      const f=await funcionarioDoUsuario(req.user?.id,req.user?.lojaId);
+      if(!f) return res.status(403).json({ok:false,erro:'Usuário não vinculado a funcionário'});
+      const ip=req.headers['x-forwarded-for']?.split(',')[0]?.trim()||req.socket?.remoteAddress||null;
+      const ua=String(req.headers['user-agent']||'').slice(0,300)||null;
+      const {rows}=await pool.query(`
+        UPDATE rh_documentos_funcionario
+        SET visualizado_em=COALESCE(visualizado_em,NOW()),
+            confirmado_em=COALESCE(confirmado_em,NOW()),
+            confirmado_por=$1,confirmacao_ip=$2,confirmacao_user_agent=$3
+        WHERE id=$4 AND funcionario_id=$5 AND status='ativo'
+          AND (visualizado_em IS NOT NULL OR exige_confirmacao=false)
+          AND loja_id=$6
+        RETURNING id,confirmado_em
+      `,[req.user?.id||null,ip,ua,Number(req.params.id),f.id,req.user.lojaId]);
+      if(!rows.length) return res.status(409).json({ok:false,erro:'Abra o documento antes de confirmar o recebimento.'});
+      res.json({ok:true,data:rows[0],mensagem:'Recebimento confirmado. Esta confirmação registra somente o recebimento e acesso ao documento.'});
+    }catch(e){res.status(500).json({ok:false,erro:e.message});}
+  });
+
+  r.post('/documentos/:id/arquivar', async (req,res)=>{
+    if(!gestorRH(req)) return res.status(403).json({ok:false,erro:'Acesso restrito à gestão'});
+    try{
+      const {rows}=await pool.query(`
+        UPDATE rh_documentos_funcionario SET status='arquivado'
+        WHERE id=$1 AND status='ativo'
+          AND (NULLIF(current_setting('app.loja_id',true),'') IS NULL
+               OR loja_id=NULLIF(current_setting('app.loja_id',true),'')::int)
+        RETURNING id
+      `,[Number(req.params.id)]);
+      if(!rows.length) return res.status(404).json({ok:false,erro:'Documento não encontrado'});
+      res.json({ok:true});
+    }catch(e){res.status(500).json({ok:false,erro:e.message});}
+  });
+
   // ── Somente admin a partir daqui ─────────────────────────────────────────────
   r.use((req, res, next) => {
     if (req.user?.perfil !== 'admin')
@@ -492,169 +657,6 @@ module.exports = function (pool, app) {
 
   initTables().catch(e => console.error('[rh] initTables:', e.message));
   }, 2000);
-
-  // ── Documentos do funcionário ──────────────────────────────────────────────
-  // Aviso de login: inclusive administradores recebem apenas as próprias pendências.
-  r.get('/documentos/meus-pendentes', async (req,res)=>{
-    res.setHeader('Cache-Control','private, no-store');
-    try{
-      const total=await contarPendenciasProprias(pool,req.user);
-      res.json({ok:true,total});
-    }catch(_){res.status(500).json({ok:false,erro:'Não foi possível consultar seus documentos pendentes.'});}
-  });
-
-  r.get('/documentos', async (req,res)=>{
-    res.setHeader('Cache-Control','private, no-store');
-    try{
-      let funcionarioId=null;
-      if(gestorRH(req)&&req.query.escopo!=='meu') funcionarioId=req.query.funcionario_id?Number(req.query.funcionario_id):null;
-      else {
-        const f=await funcionarioDoUsuario(req.user?.id,req.user?.lojaId);
-        if(!f) return res.status(403).json({ok:false,erro:'Usuário não vinculado a funcionário'});
-        funcionarioId=f.id;
-      }
-      const params=[funcionarioId,req.user.lojaId];
-      const {rows}=await pool.query(`
-        SELECT d.id,d.funcionario_id,d.tipo,d.titulo,d.competencia,d.observacao,
-               d.arquivo_nome,d.arquivo_mime,d.arquivo_tamanho,d.exige_confirmacao,
-               d.publicado_em,d.visualizado_em,d.confirmado_em,d.status,
-               f.nome AS funcionario_nome,f.cargo,
-               CASE
-                 WHEN d.confirmado_em IS NOT NULL THEN 'confirmado'
-                 WHEN d.visualizado_em IS NOT NULL THEN 'visualizado'
-                 ELSE 'pendente'
-               END AS recebimento_status
-        FROM rh_documentos_funcionario d
-        JOIN funcionarios f ON f.id=d.funcionario_id AND f.loja_id=d.loja_id
-        WHERE d.status='ativo'
-          AND ($1::int IS NULL OR d.funcionario_id=$1)
-          AND d.loja_id=$2
-        ORDER BY d.publicado_em DESC,d.id DESC
-        LIMIT 500
-      `,params);
-      res.json({ok:true,data:rows});
-    }catch(e){res.status(500).json({ok:false,erro:e.message});}
-  });
-
-  r.get('/documentos/pendentes/count', async (req,res)=>{
-    try{
-      let funcionarioId=null;
-      if(!gestorRH(req)){
-        const f=await funcionarioDoUsuario(req.user?.id,req.user?.lojaId);
-        if(!f) return res.json({ok:true,total:0});
-        funcionarioId=f.id;
-      }
-      const {rows:[x]}=await pool.query(`
-        SELECT COUNT(*)::int AS total
-        FROM rh_documentos_funcionario d
-        WHERE d.status='ativo' AND d.exige_confirmacao=true AND d.confirmado_em IS NULL
-          AND ($1::int IS NULL OR d.funcionario_id=$1)
-          AND d.loja_id=$2
-      `,[funcionarioId,req.user.lojaId]);
-      res.json({ok:true,total:Number(x?.total||0)});
-    }catch(e){res.json({ok:false,total:0,erro:e.message});}
-  });
-
-  r.post('/documentos/upload', (req,res,next)=>{
-    if(!gestorRH(req)) return res.status(403).json({ok:false,erro:'Acesso restrito à gestão'});
-    uploadDocumento.single('arquivo')(req,res,err=>err?res.status(400).json({ok:false,erro:err.message}):next());
-  }, async (req,res)=>{
-    const funcionarioId=Number(req.body.funcionario_id);
-    const tipo=String(req.body.tipo||'outro');
-    const tipos=['holerite','aviso_ferias','recibo_ferias','atestado','advertencia','outro'];
-    if(!funcionarioId||!tipos.includes(tipo)||!req.file) return res.status(400).json({ok:false,erro:'Funcionário, tipo e arquivo são obrigatórios'});
-    const titulo=String(req.body.titulo||req.file.originalname||'Documento').trim();
-    const competencia=String(req.body.competencia||'').trim()||null;
-    const observacao=String(req.body.observacao||'').trim()||null;
-    const exigeConfirmacao=String(req.body.exige_confirmacao||'true')!=='false';
-    const hash=sha256(req.file.buffer);
-    const ext=(req.file.originalname.split('.').pop()||'bin').replace(/[^a-zA-Z0-9]/g,'').toLowerCase();
-    const key='rh/'+String(funcionarioId)+'/'+new Date().getFullYear()+'/'+crypto.randomUUID()+'.'+ext;
-    try{
-      const {rows:[func]}=await pool.query(`
-        SELECT id FROM funcionarios
-        WHERE id=$1 AND ativo=true AND COALESCE(freelancer,false)=false
-          AND (NULLIF(current_setting('app.loja_id',true),'') IS NULL
-               OR loja_id=NULLIF(current_setting('app.loja_id',true),'')::int)
-        LIMIT 1
-      `,[funcionarioId]);
-      if(!func) return res.status(404).json({ok:false,erro:'Funcionário não encontrado'});
-      await s3Request('PUT',key,{body:req.file.buffer,contentType:req.file.mimetype});
-      const {rows}=await pool.query(`
-        INSERT INTO rh_documentos_funcionario(
-          funcionario_id,tipo,titulo,competencia,observacao,arquivo_nome,arquivo_mime,
-          arquivo_tamanho,arquivo_hash_sha256,storage_key,exige_confirmacao,publicado_por
-        ) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
-        RETURNING id,funcionario_id,tipo,titulo,competencia,arquivo_nome,arquivo_tamanho,exige_confirmacao,publicado_em
-      `,[funcionarioId,tipo,titulo,competencia,observacao,req.file.originalname,req.file.mimetype,
-          req.file.size,hash,key,exigeConfirmacao,req.user?.id||null]);
-      res.json({ok:true,data:rows[0]});
-    }catch(e){res.status(500).json({ok:false,erro:e.message});}
-  });
-
-  r.get('/documentos/:id/arquivo', async (req,res)=>{
-    try{
-      const {rows}=await pool.query(`
-        SELECT d.*,f.usuario_id
-        FROM rh_documentos_funcionario d
-        JOIN funcionarios f ON f.id=d.funcionario_id AND f.loja_id=d.loja_id
-        WHERE d.id=$1 AND d.status='ativo'
-          AND d.loja_id=$2
-        LIMIT 1
-      `,[Number(req.params.id),req.user.lojaId]);
-      const doc=rows[0];
-      if(!doc||Number(doc.loja_id)!==Number(req.user.lojaId)) return res.status(404).json({ok:false,erro:'Documento não encontrado'});
-      if(!gestorRH(req)){
-        const proprio=await funcionarioDoUsuario(req.user?.id,req.user?.lojaId);
-        if(!proprio || Number(proprio.id)!==Number(doc.funcionario_id)) return res.status(403).json({ok:false,erro:'Acesso negado'});
-      }
-      const s3=await s3Request('GET',doc.storage_key);
-      const buf=Buffer.from(await s3.arrayBuffer());
-      if(!gestorRH(req) && !doc.visualizado_em){
-        await pool.query(`UPDATE rh_documentos_funcionario SET visualizado_em=NOW() WHERE id=$1 AND funcionario_id=$2 AND loja_id=$3 AND visualizado_em IS NULL`,[doc.id,doc.funcionario_id,req.user.lojaId]);
-      }
-      res.setHeader('Content-Type',doc.arquivo_mime||'application/octet-stream');
-      res.setHeader('Content-Disposition',`inline; filename*=UTF-8''${encodeURIComponent(doc.arquivo_nome)}`);
-      res.setHeader('Cache-Control','private, no-store');
-      res.send(buf);
-    }catch(e){res.status(500).json({ok:false,erro:e.message});}
-  });
-
-  r.post('/documentos/:id/confirmar', async (req,res)=>{
-    try{
-      const f=await funcionarioDoUsuario(req.user?.id,req.user?.lojaId);
-      if(!f) return res.status(403).json({ok:false,erro:'Usuário não vinculado a funcionário'});
-      const ip=req.headers['x-forwarded-for']?.split(',')[0]?.trim()||req.socket?.remoteAddress||null;
-      const ua=String(req.headers['user-agent']||'').slice(0,300)||null;
-      const {rows}=await pool.query(`
-        UPDATE rh_documentos_funcionario
-        SET visualizado_em=COALESCE(visualizado_em,NOW()),
-            confirmado_em=COALESCE(confirmado_em,NOW()),
-            confirmado_por=$1,confirmacao_ip=$2,confirmacao_user_agent=$3
-        WHERE id=$4 AND funcionario_id=$5 AND status='ativo'
-          AND (visualizado_em IS NOT NULL OR exige_confirmacao=false)
-          AND loja_id=$6
-        RETURNING id,confirmado_em
-      `,[req.user?.id||null,ip,ua,Number(req.params.id),f.id,req.user.lojaId]);
-      if(!rows.length) return res.status(409).json({ok:false,erro:'Abra o documento antes de confirmar o recebimento.'});
-      res.json({ok:true,data:rows[0],mensagem:'Recebimento confirmado. Esta confirmação registra somente o recebimento e acesso ao documento.'});
-    }catch(e){res.status(500).json({ok:false,erro:e.message});}
-  });
-
-  r.post('/documentos/:id/arquivar', async (req,res)=>{
-    if(!gestorRH(req)) return res.status(403).json({ok:false,erro:'Acesso restrito à gestão'});
-    try{
-      const {rows}=await pool.query(`
-        UPDATE rh_documentos_funcionario SET status='arquivado'
-        WHERE id=$1 AND status='ativo'
-          AND (NULLIF(current_setting('app.loja_id',true),'') IS NULL
-               OR loja_id=NULLIF(current_setting('app.loja_id',true),'')::int)
-        RETURNING id
-      `,[Number(req.params.id)]);
-      if(!rows.length) return res.status(404).json({ok:false,erro:'Documento não encontrado'});
-      res.json({ok:true});
-    }catch(e){res.status(500).json({ok:false,erro:e.message});}
-  });
 
   // ── GET /ficha?funcionario_id=X&mes=MM/YYYY ────────────────────────────────
   r.get('/ficha', async (req, res) => {
