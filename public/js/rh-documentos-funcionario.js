@@ -5,6 +5,13 @@
   function liberar(){operacao++;if(urlAtual){URL.revokeObjectURL(urlAtual);urlAtual=null;}}
   function el(tag,texto){const e=document.createElement(tag);if(texto)e.textContent=texto;return e;}
   function botao(texto,acao){const b=el('button',texto);b.type='button';b.className='btn btn-gray';b.onclick=acao;return b;}
+  function nomeArquivo(doc,tipo){
+    const ext=tipo==='application/pdf'?'pdf':tipo==='image/png'?'png':'jpg';
+    let nome=String(doc.arquivo_nome||'documento-'+doc.id).replace(/[\x00-\x1f\x7f\\/:*?"<>|]/g,'_').slice(0,160);
+    if(!nome||/^\.+$/.test(nome))nome='documento-'+doc.id;
+    if(!(ext==='jpg'?/\.jpe?g$/i:new RegExp('\\.'+ext+'$','i')).test(nome))nome+='.'+ext;
+    return nome;
+  }
   async function carregar(root){
     raizAtual=root;identidade=contexto(BB.api.token());
     const atual=++ciclo;liberar();root.replaceChildren(el('p','Carregando seus documentos...'));
@@ -31,7 +38,7 @@
         aviso.textContent=r.erro||'Não foi possível confirmar o recebimento.';confirmar.disabled=false;
       });
       confirmar.disabled=!doc.visualizado_em;
-      const visualizar=botao('Visualizar documento',async()=>{
+      const abrir=async(modo='visualizar')=>{
         liberar();const op=operacao,tk=BB.api.token();aviso.textContent='Abrindo documento...';
         viewer.hidden=true;viewer.replaceChildren();
         try{
@@ -41,16 +48,44 @@
           if(atual!==ciclo||op!==operacao||tk!==BB.api.token())return;
           if(!['application/pdf','image/jpeg','image/png'].includes(blob.type.split(';')[0]))throw Error('Formato do documento não suportado para visualização.');
           urlAtual=URL.createObjectURL(blob);
-          const arquivo=el(blob.type.startsWith('image/')?'img':'iframe');arquivo.src=urlAtual;arquivo.title=doc.titulo||'Documento do funcionário';arquivo.alt=doc.titulo||'Documento do funcionário';
+          estado.textContent=doc.confirmado_em?'Recebimento confirmado':'Visualizado — recebimento pendente';confirmar.disabled=false;
+          if(modo==='baixar'){
+            const a=el('a');a.href=urlAtual;a.download=nomeArquivo(doc,blob.type.split(';')[0]);a.style.display='none';document.body.append(a);a.click();a.remove();
+            aviso.textContent='Download solicitado. O recebimento continua dependendo da sua confirmação.';return;
+          }
+          const imagem=blob.type.startsWith('image/');
+          const arquivo=el(imagem&&modo!=='imprimir'?'img':'iframe');arquivo.title=doc.titulo||'Documento do funcionário';arquivo.alt=doc.titulo||'Documento do funcionário';
           arquivo.style.cssText='width:100%;border:1px solid #ddd;border-radius:8px;'+(arquivo.tagName==='IMG'?'height:auto':'height:65vh');
           const link=el('a','Abrir em outra aba');link.href=urlAtual;link.target='_blank';link.rel='noopener';
-          viewer.append(el('h3',doc.titulo||'Documento'),link,botao('Fechar visualização',()=>{liberar();viewer.replaceChildren();viewer.hidden=true;}),arquivo);
+          let pronto=false;
+          const imprimir=()=>{
+            if(!pronto||atual!==ciclo||op!==operacao)return;
+            try{arquivo.contentWindow.focus();arquivo.contentWindow.print();aviso.textContent='Impressão solicitada. Se o navegador não abrir a impressão, use “Abrir em outra aba” ou baixe o arquivo para imprimir.';}
+            catch(_){aviso.textContent='Use “Abrir em outra aba” ou baixe o arquivo e escolha Imprimir no visualizador do navegador.';}
+          };
+          const btnImprimir=botao('Imprimir arquivo',imprimir);btnImprimir.disabled=true;
+          const prontoParaImprimir=()=>{if(atual!==ciclo||op!==operacao)return;pronto=true;btnImprimir.disabled=false;if(modo==='imprimir')imprimir();};
+          if(arquivo.tagName==='IFRAME'){
+            if(imagem){
+              arquivo.onload=()=>{
+                if(atual!==ciclo||op!==operacao)return;
+                const pagina=arquivo.contentDocument,img=pagina.createElement('img'),style=pagina.createElement('style');
+                pagina.title=doc.titulo||'Documento';
+                style.textContent='@page{margin:12mm}body{margin:0}img{display:block;max-width:100%;height:auto}';pagina.head.append(style);
+                img.onload=prontoParaImprimir;img.src=urlAtual;pagina.body.append(img);
+              };
+              arquivo.src='about:blank';
+            }else{arquivo.onload=prontoParaImprimir;arquivo.src=urlAtual;}
+          }else arquivo.src=urlAtual;
+          viewer.append(el('h3',doc.titulo||'Documento'),link);
+          if(arquivo.tagName==='IFRAME')viewer.append(btnImprimir);
+          viewer.append(botao('Fechar visualização',()=>{liberar();viewer.replaceChildren();viewer.hidden=true;}),arquivo);
           viewer.hidden=false;aviso.textContent='Documento aberto. Confira o arquivo e confirme o recebimento quando estiver pronto.';
-          estado.textContent=doc.confirmado_em?'Recebimento confirmado':'Visualizado — recebimento pendente';confirmar.disabled=false;
           viewer.scrollIntoView({behavior:'smooth',block:'start'});
         }catch(e){if(atual===ciclo&&op===operacao)aviso.textContent=e.message;}
-      });
-      acoes.append(visualizar);if(doc.exige_confirmacao&&!doc.confirmado_em)acoes.append(confirmar);
+      };
+      acoes.append(botao('Visualizar documento',()=>abrir()),botao('Baixar',()=>abrir('baixar')),botao('Imprimir',()=>abrir('imprimir')));
+      if(doc.exige_confirmacao&&!doc.confirmado_em)acoes.append(confirmar);
       card.append(el('h3',doc.titulo||'Documento'),el('p',doc.competencia?'Competência: '+doc.competencia:''),estado,acoes);
       if(doc.observacao)card.append(el('p',doc.observacao));
       if(doc.exige_confirmacao&&!doc.confirmado_em)card.append(el('p','Abra o documento antes de confirmar. O ateste registra somente o recebimento e não significa concordância com valores ou quitação.'));
