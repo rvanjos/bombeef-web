@@ -221,6 +221,11 @@ function faturas(){
     return {...f,total,pagamentos:pags,pago,diff,pendCat:f.itens.filter(i=>!i.categoria).length};
   }).sort((a,b)=>String(b.mes).localeCompare(String(a.mes)));
 }
+function evidenciasFatura(f,notasPorItem){
+  const notas=f.itens.flatMap(t=>notasPorItem.get(String(t.id))||[]);
+  const lista=(itens,rotulo,vazio)=>`<div class="dfv-field"><span>${rotulo}</span>${itens.length?'<ul style="padding-inline-start:18px">'+itens.map(t=>`<li>${esc(t.lancamento||t.descricao||t.razaoSocial||'Lançamento')} · ${esc(dataBr(t.data))} · ${brl(Math.abs(Number(t.valor||0)))}</li>`).join('')+'</ul>':`<small>${vazio}</small>`}</div>`;
+  return `<details style="padding:8px 10px;border-bottom:1px solid var(--border)"><summary>Ver extrato e notas vinculadas</summary><div class="dfv-grid" style="margin-top:8px">${lista(f.pagamentos,'Extrato vinculado','Nenhum pagamento vinculado.')}<div class="dfv-field"><span>Fatura</span><b>${brl(f.total)}</b><small>${f.itens.length} itens · ${f.pendCat} sem categoria</small></div>${lista(notas,'Notas vinculadas','Nenhum vínculo explícito com nota.')}</div></details>`;
+}
 function renderConc(){
   const el=document.getElementById('dre-conc-area');if(!el)return;
   const fs=faturas();
@@ -229,6 +234,13 @@ function renderConc(){
   const pendPag=pagCartao.filter(t=>!t.faturaCC||t.needsReview);
   const bolBancos=bancos.filter(t=>t.boletoId);
   const bolPrev=txs().filter(t=>String(t.fonte||'').toUpperCase().startsWith('BOLETO'));
+  const notasPorItem=new Map();
+  for(const nota of bolPrev){
+    if(nota.ignorar||!nota.cartaoItemRef)continue;
+    const id=String(nota.cartaoItemRef);
+    if(!notasPorItem.has(id))notasPorItem.set(id,[]);
+    notasPorItem.get(id).push(nota);
+  }
   const semCat=txs().filter(t=>!t.ignorar&&!t.categoria&&!neutral(t.categoria)).length;
   const fechadas=fs.filter(f=>f.pago>0&&f.diff<=0.05&&f.pendCat===0).length;
   el.innerHTML=`
@@ -244,7 +256,7 @@ function renderConc(){
       ${fs.length?'<div class="dfv-list">'+fs.map(f=>{
         const ok=f.pago>0&&f.diff<=0.05&&f.pendCat===0;
         const stat=!f.pago?['warn','Aguardando pagamento']:f.diff>0.05?['bad','Valor divergente']:f.pendCat?['warn','Itens sem categoria']:['ok','Conciliada'];
-        return `<div class="dfv-row"><div><strong>${esc(f.bandeira||f.id)}</strong><small>${esc(f.mes||'')} · ${f.itens.length} item(ns) · ${f.pendCat} sem categoria</small></div><span>Fatura <b>${brl(f.total)}</b></span><span>Pago <b>${f.pago?brl(f.pago):'—'}</b></span><span>Dif. <b>${brl(f.diff)}</b></span><span class="dfv-status ${stat[0]}">${stat[1]}</span></div>`;
+        return `<div class="dfv-row"><div><strong>${esc(f.bandeira||f.id)}</strong><small>${esc(f.mes||'')} · ${f.itens.length} item(ns) · ${f.pendCat} sem categoria</small></div><span>Fatura <b>${brl(f.total)}</b></span><span>Pago <b>${f.pago?brl(f.pago):'—'}</b></span><span>Dif. <b>${brl(f.diff)}</b></span><span class="dfv-status ${stat[0]}">${stat[1]}</span></div>${evidenciasFatura(f,notasPorItem)}`;
       }).join('')+'</div>':'<div class="dfv-empty">Nenhuma fatura de cartão importada neste conjunto de lançamentos.</div>'}
     </div></div>
     <div class="dfv-card"><div class="dfv-card-h"><strong>🏦 Pagamentos de cartão no extrato</strong><span class="dfv-status ${pendPag.length?'warn':'ok'}">${pendPag.length?'Há pendências':'Sem pendências'}</span></div><div class="dfv-card-b">
