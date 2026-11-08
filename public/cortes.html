@@ -175,7 +175,7 @@ body{font-size:14px;color:#111827}
 @media(max-width:900px){.kpi-grid{grid-template-columns:repeat(2,1fr)}.dashboard-panels{grid-template-columns:1fr}.body{padding:12px}.tabs{padding:0 8px}.tbl-wrap{max-height:calc(100vh - 230px)}}
 @media(max-width:700px){.tbl-wrap{max-height:none}.table-help,.cm-cols-btn{display:none}.body{padding:10px}.kpi-grid{grid-template-columns:1fr 1fr}}
 </style>
-</head>
+<link rel="stylesheet" href="/css/bb-lista.css?v=1"></head>
 <body>
 <script>if(window.self!==window.top)document.documentElement.classList.add('is-embedded');</script>
 
@@ -241,7 +241,7 @@ body{font-size:14px;color:#111827}
       <div class="card-title">🥩 Registros de Corte</div>
       <div class="toolbar">
         <input type="month" id="reg-mes" onchange="carregarRegistros()">
-        <input type="text" id="reg-busca" placeholder="Buscar corte..." oninput="filtrarRegistros()" style="width:160px">
+        <input data-bb-lista-busca type="search" id="reg-busca" placeholder="Buscar corte..." oninput="filtrarRegistros()" style="width:160px">
         <button class="btn btn-p" onclick="abrirModalRegistro()">+ Novo Corte</button>
         <button class="btn btn-s" onclick="imprimirCortes()">🖨️ Imprimir</button>
         <button class="cm-cols-btn" data-cm-cols="tbl-registros" onclick="cmColunas.abrir('tbl-registros')">⚙️ Colunas</button>
@@ -326,7 +326,7 @@ body{font-size:14px;color:#111827}
     <div class="card-head">
       <div class="card-title">🔪 Situação dos Cortes Limpos</div>
       <div class="toolbar">
-        <input type="text" id="cl-busca" placeholder="Buscar corte ou fornecedor..."
+        <input data-bb-lista-busca type="search" id="cl-busca" placeholder="Buscar corte ou fornecedor..."
           oninput="filtrarCortesLimpos()" style="width:220px">
         <button class="cm-cols-btn" data-cm-cols="tbl-cortes-limpos" onclick="cmColunas.abrir('tbl-cortes-limpos')">⚙️ Colunas</button>
       </div>
@@ -362,7 +362,7 @@ body{font-size:14px;color:#111827}
     <div class="card-head">
       <div class="card-title">🏷️ Insumos & Preços</div>
       <div class="toolbar">
-        <input type="text" id="ins-busca" placeholder="Buscar..." oninput="filtrarInsumos()" style="width:160px">
+        <input data-bb-lista-busca type="search" id="ins-busca" placeholder="Buscar..." oninput="filtrarInsumos()" style="width:160px">
         <select id="ins-cat" onchange="filtrarInsumos()">
           <option value="">Todas as categorias</option>
           <option>Tempero</option><option>Embalagem</option>
@@ -384,7 +384,7 @@ body{font-size:14px;color:#111827}
     <div class="card-head">
       <div class="card-title">📋 Fichas Técnicas</div>
       <div class="toolbar">
-        <input type="text" id="fic-busca" placeholder="Buscar produto..." oninput="filtrarFichas()" style="width:180px">
+        <input data-bb-lista-busca type="search" id="fic-busca" placeholder="Buscar produto..." oninput="filtrarFichas()" style="width:180px">
         <button class="btn btn-p" onclick="abrirModalFicha()">+ Nova Ficha</button>
         <button class="cm-cols-btn" data-cm-cols="tbl-fichas" onclick="cmColunas.abrir('tbl-fichas')">⚙️ Colunas</button>
       </div>

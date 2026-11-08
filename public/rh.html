@@ -263,7 +263,12 @@ main{padding:16px;background:#f8f6f3}
 @media(max-width:900px){.ja-grid{grid-template-columns:1fr}.ja-day{grid-template-columns:90px 65px 1fr 1fr 82px}}
 @media(max-width:600px){.ja-day{grid-template-columns:1fr 70px}.ja-day .ja-time,.ja-day .ja-int{grid-column:span 1}.ja-grid{display:block}.ja-card{margin-bottom:10px}}
 </style>
-</head>
+<style>
+.rh-nav-grupos{gap:12px;padding:6px 10px;overflow-x:auto;scrollbar-width:thin}
+.rh-nav-grupo{flex:none}.rh-nav-grupo>span{font-size:10px;font-weight:800;color:var(--muted)}
+.rh-nav-grupo>div{display:flex}.rh-nav-grupo:has(>div>.tab:not([style*="display:none"]):not([style*="display: none"])){display:block}
+@media(max-width:700px){.rh-nav-grupo .tab{min-height:44px}.rh-nav-grupos{padding-inline:8px}}
+</style></head>
 <body>
 <script src="/js/api.js"></script>
 <script>if(window.self!==window.top)document.documentElement.classList.add('is-embedded');</script>
@@ -277,20 +282,12 @@ main{padding:16px;background:#f8f6f3}
   </div>
 </div>
 <main>
-  <div class="tabs">
-    <button class="tab active" onclick="showTab('folha')">📋 Folha Mensal</button>
-    <button class="tab" id="tab-btn-aprovacoes" onclick="showTab('aprovacoes')" style="display:none">
+  <div class="tabs rh-nav-grupos" aria-label="Áreas do RH">
+    <div class="rh-nav-grupo" role="group" aria-label="Folha e relatórios"><span aria-hidden="true">Folha e relatórios</span><div><button class="tab active" onclick="showTab('folha')">📋 Folha Mensal</button><button class="tab" id="tab-btn-aprovacoes" onclick="showTab('aprovacoes')" style="display:none">
       ✅ Aprovações <span id="badge-pendentes" style="display:none;background:var(--red);color:#fff;border-radius:10px;padding:1px 7px;font-size:10px;margin-left:4px">0</span>
-    </button>
-    <button class="tab" id="tab-btn-historico" onclick="showTab('historico')" style="display:none">📜 Histórico</button>
-    <button class="tab" id="tab-btn-meus" onclick="showTab('meus')" style="display:none">📝 Meus Lançamentos</button>
-    <button class="tab" onclick="showTab('escala')">📅 Escala de Domingos</button>
-    <button class="tab" id="tab-btn-meta-fds" onclick="showTab('meta-fds')" style="display:none">🎯 Premiação FDS</button>
-    <button class="tab" onclick="showTab('relatorio')">📄 Relatório</button>
-    <button class="tab" id="tab-btn-ponto" onclick="showTab('ponto')" style="display:none">⏱️ Ponto</button>
-    <button class="tab" id="tab-btn-jornada" onclick="showTab('jornada')" style="display:none">🗓️ Jornada e Ausências</button>
-    <button class="tab" id="tab-btn-documentos" onclick="showTab('documentos')" style="display:none">📁 Documentos <span id="badge-docs" style="display:none;background:var(--red);color:#fff;border-radius:10px;padding:1px 6px;font-size:10px;margin-left:3px">0</span></button>
-    <button class="tab" id="tab-btn-acessos" onclick="showTab('acessos')" style="display:none">🔐 Acessos</button>
+    </button><button class="tab" id="tab-btn-historico" onclick="showTab('historico')" style="display:none">📜 Histórico</button><button class="tab" id="tab-btn-meus" onclick="showTab('meus')" style="display:none">📝 Meus Lançamentos</button><button class="tab" id="tab-btn-meta-fds" onclick="showTab('meta-fds')" style="display:none">🎯 Premiação FDS</button><button class="tab" onclick="showTab('relatorio')">📄 Relatório</button></div></div>
+    <div class="rh-nav-grupo" role="group" aria-label="Jornada"><span aria-hidden="true">Jornada</span><div><button class="tab" id="tab-btn-ponto" onclick="showTab('ponto')" style="display:none">⏱️ Ponto</button><button class="tab" id="tab-btn-jornada" onclick="showTab('jornada')" style="display:none">🗓️ Jornada e Ausências</button><button class="tab" onclick="showTab('escala')">📅 Escala de Domingos</button></div></div>
+    <div class="rh-nav-grupo" role="group" aria-label="Documentos e acessos"><span aria-hidden="true">Documentos e acessos</span><div><button class="tab" id="tab-btn-documentos" onclick="showTab('documentos')" style="display:none">📁 Documentos <span id="badge-docs" style="display:none;background:var(--red);color:#fff;border-radius:10px;padding:1px 6px;font-size:10px;margin-left:3px">0</span></button><button class="tab" id="tab-btn-acessos" onclick="showTab('acessos')" style="display:none">🔐 Acessos</button></div></div>
   </div>
 
   <!-- ── TAB FOLHA ── -->

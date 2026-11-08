@@ -113,7 +113,12 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
 .aprov-card{background:var(--white);border:2px solid #c4b5fd;border-radius:10px;padding:14px;margin-bottom:10px;}
 .empty{text-align:center;padding:32px 16px;color:var(--muted);font-size:13px;}
 </style>
-</head>
+<style>
+.fiado-ext-saldos{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,140px),1fr));gap:8px;padding:10px 14px;border-bottom:1px solid var(--border)}
+.fiado-ext-saldos>div{display:grid;gap:3px;padding:8px;border-radius:8px;background:var(--bg)}
+.fiado-ext-saldos span{font-size:11px;color:var(--muted)}#ext-credito{color:var(--green)}
+@media(max-width:700px){#m-extrato button,#m-extrato select,#m-extrato input{min-height:44px}#m-extrato select,#m-extrato input{font-size:16px}}
+</style></head>
 <body>
 <div class="ph">
   <div class="ph-identity">
@@ -504,6 +509,7 @@ document.addEventListener('DOMContentLoaded',restaurarColunasFiado);
       </div>
     </div>
     <!-- Barra de filtros do extrato -->
+    <div class="fiado-ext-saldos"><div><span>Dívida em aberto</span><strong id="ext-divida">—</strong></div><div><span>Crédito disponível</span><strong id="ext-credito">—</strong></div><div><span>Movimentações</span><strong>Vendas e pagamentos</strong></div></div>
     <div id="ext-filtros" style="padding:10px 14px;background:var(--bg);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
       <select id="ext-tipo-filtro" onchange="onExtFiltroChange()" style="padding:6px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;background:var(--white);font-family:'DM Sans',sans-serif;cursor:pointer">
         <option value="tudo">📋 Tudo</option>
@@ -737,7 +743,7 @@ function renderTabelaClientes() {
       <td style="font-size:11px;color:var(--muted)">${c.ultimo_pagamento?c.ultimo_pagamento.slice(0,10).split('-').reverse().join('/'):'—'}</td>
       <td>${badgeSaldo}${Number(c.credito_saldo||0)>0?`<br><small style="color:var(--green)">Crédito: ${fmt.brl(Number(c.credito_saldo))}</small>`:""}</td>
       <td style="white-space:nowrap">
-        <button class="btn btn-gray btn-sm" onclick="verExtratoCli(${c.id})" title="Ver extrato">📋</button>
+        <button class="btn btn-gray btn-sm" onclick="verExtratoCli(${c.id})" title="Ver extrato">Extrato</button>
         <button class="btn btn-gray btn-sm" onclick="abrirDetalhe(${c.id})" title="Ver detalhes">👁</button>
         <button class="btn btn-gray btn-sm" onclick="abrirNovaVendaCliente(${c.id})" title="Nova venda">＋</button>
         <button class="btn btn-gray btn-sm" onclick="abrirPagamentoCliente(${c.id})" title="Pagamento">💵</button>
@@ -1397,6 +1403,8 @@ async function verExtratoCli(clienteId) {
   if (!cli) return;
   document.getElementById('ext-titulo').textContent = cli.nome;
   document.getElementById('ext-sub').textContent    = `${cli.telefone||''} · ${cli.tipo_cliente==='socio'?'🤝 Sócio':cli.tipo_cliente==='especial'?`⭐ Especial (${cli.desconto_pct||0}% desc)`:'👤 Normal'}`;
+  document.getElementById('ext-divida').textContent=fmt.brl(Number(cli.saldo_aberto||0));
+  document.getElementById('ext-credito').textContent=fmt.brl(Number(cli.credito_saldo||0));
   window._extratoClienteId = clienteId;
   resetFiltrosExtrato();
   document.getElementById('m-extrato').classList.add('open');

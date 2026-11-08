@@ -67,6 +67,8 @@
 <input type="file" id="arquivo" hidden onchange="enviarArquivo(this.files[0])">
 <script>
 let api=null, tipoAtual=null, filtro='todos';
+const enviando=new Set();
+const destino={produtos:'produtos',compras:'compras',faturamento:'faturamento',formas:'faturamento',validade:'validade'};
 const cfg={
  produtos:{rota:'/api/produtos/import',accept:'.xlsx,.xls,.csv'},
  compras:{rota:'/api/compras/importar',accept:'.xlsx,.xls,.csv'},
@@ -75,16 +77,28 @@ const cfg={
  validade:{rota:'/api/validade/import',accept:'.xlsx,.xls,.csv'}
 };
 window.onBBReady=()=>{api=BB.api;carregarResumo()};
-function selecionar(tipo){tipoAtual=tipo;const el=document.getElementById('arquivo');el.accept=cfg[tipo].accept;el.value='';el.click()}
-function status(tipo,classe,html){const el=document.getElementById('st-'+tipo);el.className='status '+classe;el.innerHTML=html}
+function selecionar(tipo){if(!api||enviando.has(tipo))return;tipoAtual=tipo;const el=document.getElementById('arquivo');el.accept=cfg[tipo].accept;el.value='';el.click()}
+function status(tipo,classe,html){const el=document.getElementById('st-'+tipo);el.className='status '+classe;el.setAttribute('role','status');el.innerHTML=html}
 async function enviarArquivo(file){
- if(!file||!tipoAtual)return;const tipo=tipoAtual,c=cfg[tipo];
+ if(!file||!tipoAtual||!api||enviando.has(tipoAtual))return;const tipo=tipoAtual,c=cfg[tipo];enviando.add(tipo);
  status(tipo,'wait','⏳ Enviando <strong>'+esc(file.name)+'</strong>...');
- try{const fd=new FormData();fd.append('arquivo',file);const r=await api.upload(c.rota,fd);if(r.ok===false)throw new Error(r.erro||'Falha na importação');
+ try{const fd=new FormData();fd.append('arquivo',file);const r=await api.upload(c.rota,fd);if(!r?.ok)throw new Error(r?.erro||'Falha na importação');
   const detalhes=[];if(r.inseridos!=null)detalhes.push(r.inseridos+' inserido(s)');if(r.atualizados!=null)detalhes.push(r.atualizados+' atualizado(s)');if(r.dias!=null)detalhes.push(r.dias+' dia(s)');if(r.duplicatas!=null)detalhes.push(r.duplicatas+' repetido(s) ignorado(s)');
-  status(tipo,'ok','✅ Importação concluída'+(detalhes.length?'<br>'+detalhes.join(' · '):''));BB.toast('✅ Importação concluída');
+  const erros=Array.isArray(r.detalheErros)?r.detalheErros:[];
+  const precisaRevisao=Number(r.erros)>0||erros.length>0||Number(r.pulados)>0;
+  const repetidos=Number(r.duplicatas||0)+Number(r.jaResolvidos||0);
+  const jaRecebido=!precisaRevisao&&repetidos>0&&!(Number(r.inseridos)||Number(r.atualizados)||Number(r.dias));
+  const estado=precisaRevisao?'Precisa de revisão':jaRecebido?'Já recebido':'Importado';
+  if(Number(r.erros)>0)detalhes.push(Number(r.erros)+' erro(s)');
+  if(Number(r.pulados)>0)detalhes.push(Number(r.pulados)+' linha(s) pulada(s)');
+  if(Number(r.jaResolvidos)>0)detalhes.push(Number(r.jaResolvidos)+' já resolvido(s)');
+  const motivos=erros.slice(0,10).map(e=>'<li>'+esc(typeof e==='string'?e:[e?.linha?'Linha '+e.linha:'',e?.erro||e?.motivo||e?.mensagem||'Confira a linha no arquivo'].filter(Boolean).join(': '))+'</li>').join('');
+  status(tipo,precisaRevisao?'err':'ok','<strong>'+esc(file.name)+'</strong> · '+estado+(detalhes.length?'<br>'+detalhes.map(esc).join(' · '):'')+(motivos?'<details><summary>Ver motivos</summary><ul>'+motivos+'</ul></details>':'')+'<br><button class="btn" onclick="abrirModulo(\''+destino[tipo]+'\')">Abrir módulo</button>');
+  BB.toast(estado);
   try{await api.get('/api/hub/invalidar-cache')}catch(_){}carregarResumo();
- }catch(e){status(tipo,'err','❌ '+esc(e.message||'Erro ao importar'))}
+ }catch(e){status(tipo,'err','<strong>'+esc(file.name)+'</strong> · Não importado<br>'+esc(e.message||'Erro ao importar'))}
+ finally{enviando.delete(tipo)}
+
 }
 async function carregarResumo(){try{const r=await api.get('/api/hub/resumo');if(!r.ok)return;const i=r.data.importacoes||{};setTxt('sum-produtos',i.produtos?.msg||'—');setTxt('sum-vendas',i.vendas?.msg||'—');setTxt('sum-boletos',i.boletos?.msg||'—')}catch(_){}}
 function setTxt(id,v){const el=document.getElementById(id);if(el)el.textContent='Última atualização: '+v}

@@ -236,7 +236,7 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
   <!-- Toolbar -->
   <div class="toolbar">
     <button class="btn btn-p" onclick="abrirModal()">＋ Novo Boleto</button>
-    <button class="btn btn-s" onclick="abrirImportXML()" title="Importar uma NF-e pelo arquivo XML">📄 Importar XML</button>
+    <button class="btn btn-s" onclick="abrirImportXML()" title="Importar uma NF-e pelo arquivo XML">📄 Importar NF-e (XML)</button>
     <button class="btn btn-s bb-desktop-only" onclick="abrirCentralImportacoes()">📥 Central de Importações</button>
     <div class="search-wrap"><input type="text" id="busca" placeholder="Buscar fornecedor, NF..." oninput="filtrar()"></div>
     <select class="flt" id="flt-status" onchange="carregar()">
@@ -447,9 +447,9 @@ select.flt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;fon
 <!-- Modal Baixa -->
 <div class="modal-bg" id="modal-baixa">
   <div class="modal" style="max-width:400px">
-    <div class="modal-head"><h3>Registrar Pagamento</h3><button class="modal-close" onclick="fecharBaixa()">×</button></div>
+    <div class="modal-head"><h3>Registrar baixa do pagamento</h3><button class="modal-close" onclick="fecharBaixa()">×</button></div>
     <div class="modal-body">
-      <input type="hidden" id="baixa-id">
+      <input type="hidden" id="baixa-id"><p style="font-size:12px;color:var(--muted);margin-bottom:10px">Use a baixa para registrar quando esta nota ou parcela foi paga. O vínculo com o extrato é exibido separadamente.</p>
       <div class="fg"><label>Data do Pagamento</label><input type="date" id="baixa-dt"></div>
       <div class="fg"><label>Observação</label><input id="baixa-obs" placeholder="Opcional"></div>
     </div>
@@ -467,7 +467,7 @@ const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt
 const COLUNAS = [
   ['fornecedor','Fornecedor / Produto',true],['nf','NF-e',true],['vencimento','Vencimento',true],
   ['parcela','Parcela',false],['categoria','Categoria',true],['valor','Valor',true],
-  ['status','Status',true],['extrato','Extrato / Cartão',false],['acoes','Ações',true]
+  ['status','Baixa',true],['extrato','Forma / vínculo',true],['acoes','Ações',true]
 ];
 let colunasVisiveis = JSON.parse(localStorage.getItem('bb_boletos_colunas') || 'null') || Object.fromEntries(COLUNAS.map(c=>[c[0],c[2]]));
 
@@ -922,7 +922,7 @@ function renderizar(lista){
             <span>Venc: <strong style="color:${isVenc?'var(--red-l)':'var(--text)'}">${vencStr}</strong></span>
             <span style="display:flex;gap:4px;align-items:center">
               ${b.dt_programado ? `<span style="font-size:11px;background:#ede9fe;color:#5b21b6;padding:2px 7px;border-radius:5px">📅 ${fmt.date(b.dt_programado)}</span>` : ''}
-              ${b.cartaoCredito ? `<span style="font-size:11px;background:#ede9fe;color:#5b21b6;padding:2px 7px;border-radius:5px;font-weight:600">💳 ${b.cartaoCredito}</span>` : ''}
+              ${b.cartaoCredito ? `<span style="font-size:11px;background:#ede9fe;color:#5b21b6;padding:2px 7px;border-radius:5px;font-weight:600">💳 ${esc(b.cartaoCredito)}</span>` : ''}
               ${b.vinculadoExtrato ? `<span style="font-size:11px;background:#d4edda;color:#155724;padding:2px 7px;border-radius:5px">🔗 Extrato</span>` : ''}
             </span>
           </div>
@@ -966,12 +966,12 @@ function renderizar(lista){
       <td data-col="status">${pill}</td>
       <td data-col="extrato" style="max-width:180px">
         ${b.cartaoCredito
-          ? `<span style="font-size:10px;background:#ede9fe;color:#5b21b6;padding:2px 7px;border-radius:4px;white-space:nowrap;font-weight:600">💳 ${b.cartaoCredito}</span>`
+          ? `<span style="font-size:10px;background:#ede9fe;color:#5b21b6;padding:2px 7px;border-radius:4px;white-space:nowrap;font-weight:600">💳 ${esc(b.cartaoCredito)}</span>`
           : ''}
         ${b.vinculadoExtrato
           ? `<div style="display:flex;align-items:center;gap:4px;margin-top:${b.cartaoCredito?'3px':'0'}">
-               <span title="${b.extratLancamento||'Vinculado ao extrato'}" style="font-size:10px;background:#d4edda;color:#155724;padding:2px 6px;border-radius:4px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px;cursor:help">
-                 🔗 ${b.extratLancamento ? b.extratLancamento.slice(0,25)+(b.extratLancamento.length>25?'…':'') : 'Extrato vinculado'}
+               <span title="${esc(b.extratLancamento||'Vinculado ao extrato')}" style="font-size:10px;background:#d4edda;color:#155724;padding:2px 6px;border-radius:4px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px;cursor:help">
+                 🔗 ${b.extratLancamento ? esc(b.extratLancamento.slice(0,25)+(b.extratLancamento.length>25?'…':'')) : 'Extrato vinculado'}
                </span>
                <button class="act-btn" onclick="desvincularExtrato(${b.dbId})" title="Remover vínculo com extrato" style="color:var(--red-l);font-size:11px;padding:1px 5px">✕</button>
              </div>`

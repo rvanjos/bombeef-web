@@ -344,7 +344,7 @@ body{font-size:14px;color:#111827}
 .val-edit-btn{display:inline-flex;align-items:center;gap:4px;padding:5px 8px!important;font-weight:700;color:#7f1d1d;background:#fff7f7;border:1px solid #fecaca;border-radius:6px;white-space:nowrap;}
 .val-edit-btn:hover{background:#fee2e2;}
 </style>
-</head>
+<style>.val-resolver{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:12px}.val-resolver>div{flex:1 0 100%}.val-resolver p{color:var(--muted)}@media(max-width:700px){.val-resolver button{min-height:44px}}</style></head>
 <body>
 <div class="ph">
   <div class="ph-identity">
@@ -392,44 +392,12 @@ body{font-size:14px;color:#111827}
     <div class="section-intro">
       <div><h2>Visão geral do estoque</h2><p>Priorize os itens vencidos e próximos do vencimento.</p></div>
     </div>
-    <!-- KPI cards grandes clicáveis -->
-    <div class="dash-kpi-grid">
-      <div class="dash-kpi vencido" onclick="goFiltro('vencido')">
-        <div class="dk-ico">💀</div><div class="dk-lbl">Vencidos</div>
-        <div class="dk-val vencido" id="dk-vencido">—</div>
-        <div class="dk-sub">Retirar imediatamente</div>
-      </div>
-      <div class="dash-kpi critico" onclick="goFiltro('critico')">
-        <div class="dk-ico">🔴</div><div class="dk-lbl">Crítico</div>
-        <div class="dk-val critico" id="dk-critico">—</div>
-        <div class="dk-sub">≤ 3 dias</div>
-      </div>
-      <div class="dash-kpi alerta" onclick="goFiltro('alerta')">
-        <div class="dk-ico">⚠️</div><div class="dk-lbl">Alerta</div>
-        <div class="dk-val alerta" id="dk-alerta">—</div>
-        <div class="dk-sub">≤ 7 dias</div>
-      </div>
-      <div class="dash-kpi atencao" onclick="goFiltro('atencao')">
-        <div class="dk-ico">👁</div><div class="dk-lbl">Atenção</div>
-        <div class="dk-val atencao" id="dk-atencao">—</div>
-        <div class="dk-sub">≤ 30 dias</div>
-      </div>
-      <div class="dash-kpi ok" onclick="goFiltro('ok')">
-        <div class="dk-ico">✅</div><div class="dk-lbl">OK</div>
-        <div class="dk-val ok" id="dk-ok2">—</div>
-        <div class="dk-sub">Dentro do prazo</div>
-      </div>
+    <div class="val-resolver">
+      <div><h3>Resolver hoje</h3><p>Confira os lotes que exigem atenção e as ações pendentes.</p></div>
+      <button type="button" class="btn btn-s" onclick="filtrarStatus('todos')">Buscar lote</button>
+      <button type="button" class="btn btn-s" onclick="filtrarStatus('vencido')">Ver vencidos</button>
+      <button type="button" class="btn btn-s" onclick="filtrarStatus('alerta')">Próximos do vencimento</button>
     </div>
-
-    <!-- Barra de progresso -->
-    <div class="dash-prog" id="dash-prog-wrap" style="display:none">
-      <div class="dp-lbl"><span>Saúde do estoque</span><span id="dp-pct-txt"></span></div>
-      <div class="dp-bg"><div class="dp-fill" id="dp-fill" style="width:0%"></div></div>
-      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:4px">
-        <span id="dp-lbl-l"></span><span id="dp-lbl-r"></span>
-      </div>
-    </div>
-
     <!-- Lista de produtos críticos direta na tela -->
     <div id="dash-lista-wrap">
 
@@ -477,6 +445,46 @@ body{font-size:14px;color:#111827}
         <div style="font-size:12px;margin-top:5px">Nenhum produto com validade crítica.</div>
       </div>
     </div>
+    <h3 style="margin:12px 0">Indicadores do estoque</h3>
+    <!-- KPI cards grandes clicáveis -->
+    <div class="dash-kpi-grid">
+      <div class="dash-kpi vencido" onclick="goFiltro('vencido')">
+        <div class="dk-ico">💀</div><div class="dk-lbl">Vencidos</div>
+        <div class="dk-val vencido" id="dk-vencido">—</div>
+        <div class="dk-sub">Retirar imediatamente</div>
+      </div>
+      <div class="dash-kpi critico" onclick="goFiltro('critico')">
+        <div class="dk-ico">🔴</div><div class="dk-lbl">Crítico</div>
+        <div class="dk-val critico" id="dk-critico">—</div>
+        <div class="dk-sub">≤ 3 dias</div>
+      </div>
+      <div class="dash-kpi alerta" onclick="goFiltro('alerta')">
+        <div class="dk-ico">⚠️</div><div class="dk-lbl">Alerta</div>
+        <div class="dk-val alerta" id="dk-alerta">—</div>
+        <div class="dk-sub">≤ 7 dias</div>
+      </div>
+      <div class="dash-kpi atencao" onclick="goFiltro('atencao')">
+        <div class="dk-ico">👁</div><div class="dk-lbl">Atenção</div>
+        <div class="dk-val atencao" id="dk-atencao">—</div>
+        <div class="dk-sub">≤ 30 dias</div>
+      </div>
+      <div class="dash-kpi ok" onclick="goFiltro('ok')">
+        <div class="dk-ico">✅</div><div class="dk-lbl">OK</div>
+        <div class="dk-val ok" id="dk-ok2">—</div>
+        <div class="dk-sub">Dentro do prazo</div>
+      </div>
+    </div>
+
+    <!-- Barra de progresso -->
+    <div class="dash-prog" id="dash-prog-wrap" style="display:none">
+      <div class="dp-lbl"><span>Saúde do estoque</span><span id="dp-pct-txt"></span></div>
+      <div class="dp-bg"><div class="dp-fill" id="dp-fill" style="width:0%"></div></div>
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:4px">
+        <span id="dp-lbl-l"></span><span id="dp-lbl-r"></span>
+      </div>
+    </div>
+
+
   </div>
 
   <!-- ── VALIDADE ── -->
