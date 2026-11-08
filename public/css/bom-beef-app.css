@@ -1,0 +1,22 @@
+[data-bb-instalar][hidden], #bb-app-nav[hidden], #bb-app-sem-acesso[hidden]{display:none}
+.bb-app #scr-login{overflow-y:auto;justify-content:safe center;padding:12px 0;padding-top:max(12px,env(safe-area-inset-top));padding-bottom:max(12px,env(safe-area-inset-bottom))}
+.bb-app .ph{padding-top:max(8px,env(safe-area-inset-top))}
+.bb-app #scr-portal{padding-bottom:env(safe-area-inset-bottom)}
+#bb-app-nav{display:flex;flex:none;gap:5px;padding:8px;background:#fff;border-bottom:1px solid #eee5dd;overflow-x:auto}
+.bb-app-nav-btn{flex:1;min-height:42px;border:0;border-radius:8px;background:#f7f4f0;color:#4d2929;padding:6px;font:600 13px system-ui;cursor:pointer}
+.bb-app-nav-btn[aria-current=page]{background:#8b0000;color:#fff}
+.bb-app-home{max-width:760px;margin:auto;padding:20px 0}
+.bb-app-home h1{font-size:clamp(22px,5vw,32px);color:#8b0000;margin:0 0 8px}
+.bb-app-home p{margin:0 0 16px;color:#665b52}
+#bb-app-modulos{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.bb-app-card{min-height:104px;text-align:left;background:#fff;color:#680c0c;border:1px solid #e8dfd6;border-radius:12px;padding:14px;font:700 16px system-ui;cursor:pointer}
+.bb-app-card small{display:block;color:#665b52;font:400 12px/1.45 system-ui;margin-top:7px}
+.bb-app-install{font:13px/1.5 system-ui;background:#f8f4f0;border:1px solid #e8dfd6;border-radius:10px;padding:10px 12px;margin-top:12px;color:#473d36}
+.bb-app-install summary{font-weight:700;color:#680c0c;cursor:pointer}
+.bb-app-install ul{padding-left:20px;margin:8px 0}
+.bb-app-install button{min-height:38px;border:0;border-radius:7px;background:#8b0000;color:#fff;padding:8px 12px;cursor:pointer;margin-top:5px}
+/* O portal posiciona as páginas e os módulos de forma absoluta. */
+.bb-app .portal-content{--bb-app-nav-height:59px}
+.bb-app #bb-app-nav{height:var(--bb-app-nav-height)}
+.bb-app .portal-content > .portal-page,
+.bb-app .portal-content > .frame-container{inset-block-start:var(--bb-app-nav-height)}
