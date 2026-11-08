@@ -95,17 +95,24 @@ body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var
   z-index:50;
 }
 .pnav::-webkit-scrollbar{display:none;}
-/* Collapsed */
-.pnav.collapsed{width:44px;overflow:visible;}
-.pnav.collapsed .pnav-section,.pnav.collapsed .tab-label,.pnav.collapsed .nav-pin-btn span{display:none;}
-.pnav.collapsed .pnav-tab{padding:6px 0;justify-content:center;gap:0;border:0;border-radius:8px;}
-.pnav.collapsed .tab-icon{font-size:17px;}
-.pnav.collapsed .pnav-tab:hover::after{
-  content:attr(data-label);
-  position:absolute;left:44px;top:50%;transform:translateY(-50%);
-  background:#333;color:#fff;padding:4px 10px;border-radius:6px;
-  font-size:11px;font-weight:600;white-space:nowrap;z-index:200;
-  pointer-events:none;box-shadow:0 2px 8px rgba(0,0,0,.25);
+/* Menu web: controles fixos e itens roláveis em ambos os modos. */
+.pnav-tools{display:flex;align-items:center;gap:5px;position:sticky;top:-8px;z-index:2;background:#fbfaf8;padding:6px 0;flex:none}
+.pnav-search{flex:1;min-width:0;height:34px;border:1px solid var(--border);border-radius:8px;background:#fff;padding:0 8px;font:inherit}
+.pnav .nav-toggle-btn{position:static;flex:0 0 32px;height:32px;border-radius:8px;box-shadow:none}
+.pnav-empty{color:var(--muted);font-size:12px;padding:10px 8px}
+#pnav [hidden]{display:none!important}
+.pnav.collapsed{width:54px;padding-inline:6px}
+.pnav.collapsed .pnav-tools{justify-content:center}
+.pnav.collapsed .pnav-search,.pnav.collapsed .pnav-empty,.pnav.collapsed .pnav-section,
+.pnav.collapsed .tab-label,.pnav.collapsed .nav-pin-btn,.pnav.collapsed [id^="nav-badge-"]{display:none}
+.pnav.collapsed .pnav-tab{padding:5px 0;justify-content:center;gap:0}
+.pnav.collapsed .tab-icon{font-size:16px}
+@media(min-width:769px){
+  #portal-header .ph-brand,#portal-header .ph-user,#portal-header .ph-store{min-width:0}
+  #portal-header .ph-brand h1,#portal-header .ph-brand p,#portal-header .ph-uname{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #portal-header .ph-uname{max-width:clamp(95px,16vw,230px)}
+  #portal-header .ph-store{height:34px;text-overflow:ellipsis}
+  #portal-header .ph-logout{min-height:34px;flex:none}
 }
 .pnav-tab{
   display:flex;
@@ -497,8 +504,11 @@ body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var
   <!-- Sidebar lateral (desktop) -->
   <div class="portal-body">
   <nav class="pnav" id="pnav" aria-label="Módulos do sistema">
-    <!-- Botão de colapso flutuante -->
-    <button class="nav-toggle-btn" id="nav-toggle-btn" onclick="togglePnav()" title="Recolher menu">‹</button>
+    <div class="pnav-tools">
+      <input class="pnav-search" id="pnav-search" type="search" placeholder="Buscar módulo" aria-label="Buscar módulo" autocomplete="off">
+      <button type="button" class="nav-toggle-btn" id="nav-toggle-btn" onclick="togglePnav()" aria-expanded="true" title="Recolher menu" aria-label="Recolher menu">‹</button>
+    </div>
+    <p class="pnav-empty" id="pnav-empty" role="status" hidden>Nenhum módulo encontrado.</p>
 
     <div class="pnav-section">Principal</div>
     <button type="button" class="pnav-tab" data-label="Início" onclick="showTab('inicio')" data-tab="inicio" style="display:none"><span class="tab-icon">🏠</span><span class="tab-label">Início</span></button>
@@ -1051,6 +1061,7 @@ async function trocarLojaAtiva(lojaId){
 function entrarNoPortal() {
   $('ph-av').textContent   = (usuario.nome||'?')[0].toUpperCase();
   $('ph-uname').textContent = usuario.nome;
+  $('ph-uname').title = usuario.nome || '';
   $('ph-role').textContent  = usuario.perfil;
   renderLojaAtiva();
 
@@ -1213,6 +1224,9 @@ function filtrarTabs() {
     tab.style.display = perfis.includes(usuario?.perfil) ? '' : 'none';
   });
 
+  $('pnav-search').value = '';
+  filtrarMenuWeb();
+
   // Iframe de RH: admin vê rh.html completo, demais veem rh-funcionario.html
   const ifrRH = document.getElementById('iframe-rh');
   if (ifrRH) {
@@ -1339,10 +1353,51 @@ window.matchMedia('(max-width:768px)').addEventListener('change', e => {
   if (!e.matches) fecharMobMenu();
 });
 
+function filtrarMenuWeb() {
+  const normalizar = texto => texto.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+  const busca = normalizar($('pnav-search').value);
+  const visiveis = [];
+  let secao = null;
+  for (const item of document.querySelectorAll('#pnav > .pnav-section, #pnav > .pnav-tab')) {
+    if (item.classList.contains('pnav-section')) {
+      secao = item;
+      secao.hidden = true;
+      continue;
+    }
+    item.hidden = !normalizar(item.dataset.label).includes(busca);
+    if (!item.hidden && item.style.display !== 'none') {
+      if (secao) secao.hidden = false;
+      visiveis.push(item);
+    }
+  }
+  $('pnav-empty').hidden = !busca || visiveis.length > 0;
+  return visiveis;
+}
+$('pnav-search').addEventListener('input', filtrarMenuWeb);
+$('pnav-search').addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    e.target.value = '';
+    filtrarMenuWeb();
+  }
+  if (e.key === 'Enter' && e.target.value.trim()) {
+    const itens = filtrarMenuWeb();
+    if (itens.length === 1 && itens[0].dataset.bloqueado !== '1') {
+      itens[0].focus();
+      itens[0].click();
+    }
+  }
+});
+
 // ── NAV COLAPSÁVEL ──────────────────────────────────────────────────────────
 (function initPnav() {
   const KEY_COL = 'pnav_collapsed';
   const KEY_PIN = 'pnav_pinned';
+
+  document.querySelectorAll('#pnav > .pnav-tab').forEach(tab => {
+    tab.setAttribute('aria-label',tab.dataset.label);
+    tab.title = tab.dataset.label;
+  });
 
   function applyState() {
     const pnav    = document.getElementById('pnav');
@@ -1352,7 +1407,16 @@ window.matchMedia('(max-width:768px)').addEventListener('change', e => {
     const collapsed = localStorage.getItem(KEY_COL) === '1';
     const pinned    = localStorage.getItem(KEY_PIN) === '1';
     pnav.classList.toggle('collapsed', collapsed);
-    if (btn) btn.textContent = collapsed ? '›' : '‹';
+    if (btn) {
+      btn.textContent = collapsed ? '›' : '‹';
+      btn.title = collapsed ? 'Expandir menu' : 'Recolher menu';
+      btn.setAttribute('aria-label',btn.title);
+      btn.setAttribute('aria-expanded',String(!collapsed));
+    }
+    if (collapsed && $('pnav-search').value) {
+      $('pnav-search').value = '';
+      filtrarMenuWeb();
+    }
     if (pinBtn) {
       pinBtn.classList.toggle('pinned', pinned);
       const pinLabel = pinBtn.querySelector('span:last-child');
@@ -1426,6 +1490,10 @@ function showTab(tab) {
   });
   document.querySelectorAll('.portal-page, .frame-container').forEach(p => p.classList.remove('active'));
 
+  if (tabBtn && $('pnav-search').value) {
+    $('pnav-search').value = '';
+    filtrarMenuWeb();
+  }
   const navAtiva = tabBtn || (tab === 'app-inicio' && usuario.perfil !== 'admin'
     ? document.querySelector('.pnav-tab[data-tab="inicio"]') : null);
   if (navAtiva) {
