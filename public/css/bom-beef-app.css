@@ -2,7 +2,7 @@
 .bb-app #scr-login{overflow-y:auto;justify-content:safe center;padding:12px 0;padding-top:max(12px,env(safe-area-inset-top));padding-bottom:max(12px,env(safe-area-inset-bottom))}
 .bb-app #scr-portal{padding-bottom:env(safe-area-inset-bottom)}
 #bb-app-nav{display:flex;flex:none;gap:5px;padding:8px;background:#fff;border-bottom:1px solid #eee5dd;overflow-x:auto}
-.bb-app-nav-btn{flex:1;min-height:42px;border:0;border-radius:8px;background:#f7f4f0;color:#4d2929;padding:6px;font:600 13px system-ui;cursor:pointer}
+.bb-app-nav-btn{flex:1;min-height:44px;border:0;border-radius:8px;background:#f7f4f0;color:#4d2929;padding:6px;font:600 13px system-ui;cursor:pointer}
 .bb-app-nav-btn[aria-current=page]{background:#8b0000;color:#fff}
 .bb-app-home{max-width:760px;margin:auto;padding:20px 0}
 .bb-app-home h1{font-size:clamp(22px,5vw,32px);color:#8b0000;margin:0 0 8px}
@@ -13,7 +13,7 @@
 .bb-app-install{font:13px/1.5 system-ui;background:#f8f4f0;border:1px solid #e8dfd6;border-radius:10px;padding:10px 12px;margin-top:12px;color:#473d36}
 .bb-app-install summary{font-weight:700;color:#680c0c;cursor:pointer}
 .bb-app-install ul{padding-left:20px;margin:8px 0}
-.bb-app-install button{min-height:38px;border:0;border-radius:7px;background:#8b0000;color:#fff;padding:8px 12px;cursor:pointer;margin-top:5px}
+.bb-app-install button{min-height:44px;border:0;border-radius:7px;background:#8b0000;color:#fff;padding:8px 12px;cursor:pointer;margin-top:5px}
 /* No app, a barra de atalhos e o módulo dividem a altura real do portal. */
 .bb-app .portal-content{min-width:0;min-height:0}
 .bb-app .portal-content > .portal-page,
@@ -26,26 +26,38 @@
 .mob-item-label{flex:1;min-width:0;overflow-wrap:anywhere}
 .mob-item-badge{flex:none;border-radius:12px;background:#8b0000;color:#fff;font-size:11px;padding:2px 6px}
 .mob-drawer-head,.mob-drawer-footer{flex:none}
+#mob-drawer[hidden]{display:none}
+.mob-nav-group-label{padding:14px 14px 5px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.portal-home h2{margin:18px 0 10px;font-size:15px;color:var(--text)}
+#portal-home-rapidos .portal-home-link{background:var(--bb-red-bg);border-color:var(--bb-red-bd);color:var(--bb-red-h)}
+#portal-header :focus-visible,#mob-drawer :focus-visible,#pnav :focus-visible,
+#bb-app-nav :focus-visible,.portal-home-link:focus-visible,.bb-app-card:focus-visible{
+  outline:2px solid currentColor;outline-offset:-3px
+}
+#toast{max-width:calc(100vw - 32px);width:max-content;bottom:calc(16px + env(safe-area-inset-bottom));overflow-wrap:anywhere;visibility:hidden}
+#toast.show{visibility:visible}
 .mob-drawer-footer{padding:10px 14px;border-top:1px solid var(--border);display:flex;gap:12px;align-items:center;justify-content:space-between}
 #mob-user-info{min-width:0;overflow-wrap:anywhere}
-.mob-drawer-footer button{flex:none;min-height:40px}
+.mob-drawer-footer button{flex:none;min-height:44px}
 
 @media(max-width:768px){
   .lw-field input,.ph-store{font-size:16px}
   .lw{padding:26px 20px}
-  .bb-app .ph{height:auto;min-height:54px;padding:calc(7px + env(safe-area-inset-top)) max(10px,env(safe-area-inset-right)) 7px max(10px,env(safe-area-inset-left));gap:8px}
-  .bb-app .ph-brand{min-width:0;flex:1}
-  .bb-app .ph-brand h1{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:14px}
-  .bb-app .ph-brand p,.bb-app .ph-space,.bb-app .ph-sync,
-  .bb-app .ph-av,.bb-app .ph-logout,.bb-app .mob-active-label{display:none}
-  .bb-app .ph-store{min-width:0;max-width:min(45vw,180px);width:45vw;min-height:38px;text-overflow:ellipsis}
-  .bb-app .ph-user{flex:none}
-  .bb-app .mob-menu-btn,.mob-drawer-close{min-width:44px;min-height:44px;justify-content:center}
-  .bb-app #mob-drawer{display:none;transform:none;transition:none;width:min(86vw,320px);max-width:100vw}
-  .bb-app #mob-drawer.open{display:flex}
-  .bb-app .mob-drawer-head{padding:calc(6px + env(safe-area-inset-top)) 14px 6px max(14px,env(safe-area-inset-left))}
-  .bb-app .mob-drawer-footer{padding-bottom:calc(10px + env(safe-area-inset-bottom))}
-  .bb-app #mob-nav-items .mob-nav-item{padding-left:max(14px,env(safe-area-inset-left))}
+  /* A faixa do portal é horizontal mesmo quando o tema empilha os cabeçalhos dos módulos. */
+  #portal-header{height:auto;min-height:54px;flex-flow:row nowrap;align-items:center;justify-content:flex-start;
+    padding:calc(5px + env(safe-area-inset-top)) max(10px,env(safe-area-inset-right)) 5px max(10px,env(safe-area-inset-left));gap:8px}
+  #portal-header .ph-brand{min-width:0;flex:1}
+  #portal-header .ph-brand h1{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:15px}
+  #portal-header .ph-brand p,#portal-header .ph-space,#portal-header .ph-sync,
+  #portal-header .ph-av,#portal-header .ph-logout{display:none}
+  #portal-header .ph-store{flex:0 1 44%;min-width:0;max-width:190px;width:44%;min-height:44px;text-overflow:ellipsis}
+  #portal-header .ph-user{flex:none}
+  #portal-header .mob-menu-btn,.mob-drawer-close{width:44px;min-width:44px;min-height:44px;justify-content:center;align-items:center}
+  #portal-header .mob-menu-btn{border:1px solid rgba(255,255,255,.3);border-radius:8px}
+  #mob-drawer{transform:none;transition:none;width:min(86vw,320px);max-width:100vw}
+  .mob-drawer-head{padding:calc(6px + env(safe-area-inset-top)) 14px 6px max(14px,env(safe-area-inset-left))}
+  .mob-drawer-footer{padding-bottom:calc(10px + env(safe-area-inset-bottom))}
+  #mob-nav-items .mob-nav-item,.mob-nav-group-label{padding-left:max(14px,env(safe-area-inset-left))}
   .bb-app #bb-app-nav{padding:6px;gap:4px}
   .bb-app .bb-app-nav-btn{font-size:12px;padding-inline:3px}
   .bb-app #bb-app-modulos{gap:8px}

@@ -361,7 +361,6 @@ body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var
 .mob-nav-item{display:flex;align-items:center;gap:10px;padding:13px 18px;font-size:14px;font-weight:600;color:var(--text);cursor:pointer;border-bottom:1px solid var(--border);transition:.1s;}
 .mob-nav-item:hover,.mob-nav-item.active{background:#f8f0f0;color:var(--red);}
 .mob-nav-item .mob-icon{font-size:18px;width:26px;text-align:center;}
-.mob-active-label{display:none;font-size:13px;font-weight:700;color:#fff;margin-left:8px;}
 
 @media(max-width:768px){
   .kpi-grid{grid-template-columns:1fr 1fr;}
@@ -373,7 +372,6 @@ body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var
   .portal-body{flex-direction:column;overflow-x:hidden;}
   .portal-content{flex:1;}
   .mob-menu-btn{display:flex;align-items:center;}
-  .mob-active-label{display:inline;}
   .mob-overlay.open{display:block;}
   .mob-drawer{display:flex;}
   /* Header menor */
@@ -415,7 +413,7 @@ body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var
   .dash-section-head>span{display:none;}
 }
 </style>
-<link rel="stylesheet" href="/css/bom-beef-app.css?v=2">
+<link rel="stylesheet" href="/css/bom-beef-app.css?v=3">
 <!-- F1-01: Barramento de eventos — distribuição de eventos SSE para iframes -->
 <script src="js/bb-events.js"></script>
 <script src="js/rh-documentos-aviso.js?v=1"></script>
@@ -442,7 +440,7 @@ body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var
       <input type="password" id="inp-senha" placeholder="••••••••" autocomplete="current-password">
     </div>
     <button class="lw-btn" id="btn-login" onclick="fazerLogin()">Entrar</button>
-    <div class="lw-err" id="lw-err"></div>
+    <div class="lw-err" id="lw-err" role="alert"></div>
     <details class="bb-app-install" data-bb-instalar hidden>
       <summary>Instalar na tela inicial</summary>
       <ul>
@@ -458,7 +456,7 @@ body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var
 <div id="scr-portal" class="screen">
 
   <!-- Header -->
-  <div class="ph">
+  <header class="ph" id="portal-header">
     <div class="ph-logo" id="ph-logo-wrap" style="overflow:hidden;padding:0">
       <img id="ph-logo-img" src="" style="display:none;width:100%;height:100%;object-fit:cover;border-radius:50%">
       <span id="ph-logo-emoji" style="font-size:17px">🥩</span>
@@ -475,19 +473,18 @@ body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var
     <select class="ph-store" id="ph-store" aria-label="Loja ativa" onchange="trocarLojaAtiva(this.value)"></select>
     <div class="ph-user">
       <button type="button" id="mob-menu-btn" class="mob-menu-btn" aria-label="Abrir menu" aria-controls="mob-drawer" aria-expanded="false" onclick="abrirMobMenu()">☰</button>
-      <span class="mob-active-label" id="mob-active-label">Dashboard</span>
       <div class="ph-av" id="ph-av">?</div>
       <span class="ph-uname" id="ph-uname"></span>
       <span class="ph-role" id="ph-role"></span>
       <button class="ph-logout" onclick="fazerLogout()">Sair</button>
     </div>
-  </div>
+  </header>
 
   <!-- Overlay e drawer mobile -->
   <div class="mob-overlay" id="mob-overlay" onclick="fecharMobMenu()"></div>
-  <div class="mob-drawer" id="mob-drawer">
+  <div class="mob-drawer" id="mob-drawer" role="dialog" aria-modal="true" aria-labelledby="mob-drawer-title" hidden>
     <div class="mob-drawer-head">
-      <span>🥩 Bom Beef</span>
+      <span id="mob-drawer-title">Menu Bom Beef</span>
       <button type="button" class="mob-drawer-close" aria-label="Fechar menu" onclick="fecharMobMenu()">×</button>
     </div>
     <nav id="mob-nav-items" aria-label="Módulos do sistema"></nav>
@@ -499,21 +496,21 @@ body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var
 
   <!-- Sidebar lateral (desktop) -->
   <div class="portal-body">
-  <nav class="pnav" id="pnav">
+  <nav class="pnav" id="pnav" aria-label="Módulos do sistema">
     <!-- Botão de colapso flutuante -->
     <button class="nav-toggle-btn" id="nav-toggle-btn" onclick="togglePnav()" title="Recolher menu">‹</button>
 
     <div class="pnav-section">Principal</div>
     <button type="button" class="pnav-tab" data-label="Início" onclick="showTab('inicio')" data-tab="inicio" style="display:none"><span class="tab-icon">🏠</span><span class="tab-label">Início</span></button>
-    <button class="pnav-tab" data-label="Dashboard" onclick="showTab('dashboard')" data-tab="dashboard"><span class="tab-icon">🏠</span><span class="tab-label">Dashboard</span></button>
-    <button class="pnav-tab" data-label="Central de Agentes" onclick="showTab('agentes')" data-tab="agentes" data-perfil="admin,gestor,financeiro,contabil"><span class="tab-icon">✨</span><span class="tab-label">Central de Agentes</span></button>
-    <button class="pnav-tab" data-label="Central de Importações" onclick="showTab('hub')" data-tab="hub"><span class="tab-icon">📥</span><span class="tab-label">Central de Importações</span></button>
+    <button class="pnav-tab" data-label="Painel" onclick="showTab('dashboard')" data-tab="dashboard"><span class="tab-icon">🏠</span><span class="tab-label">Painel</span></button>
+    <button class="pnav-tab" data-label="Agentes" onclick="showTab('agentes')" data-tab="agentes" data-perfil="admin,gestor,financeiro,contabil"><span class="tab-icon">✨</span><span class="tab-label">Agentes</span></button>
+    <button class="pnav-tab" data-label="Importações" onclick="showTab('hub')" data-tab="hub"><span class="tab-icon">📥</span><span class="tab-label">Importações</span></button>
 
     <div class="pnav-section">Financeiro</div>
     <button class="pnav-tab" data-label="DRE" onclick="showTab('dre')"          data-tab="dre"          data-perfil="admin,financeiro,contabil"><span class="tab-icon">📊</span><span class="tab-label">DRE</span></button>
     <button class="pnav-tab" data-label="Boletos" onclick="showTab('boletos')"      data-tab="boletos"      data-perfil="admin,gestor,financeiro,contabil"><span class="tab-icon">📄</span><span class="tab-label">Boletos</span></button>
     <button class="pnav-tab" data-label="Faturamento" onclick="showTab('faturamento')"  data-tab="faturamento"  data-perfil="admin,gestor,financeiro,contabil"><span class="tab-icon">💰</span><span class="tab-label">Faturamento</span></button>
-    <button class="pnav-tab" data-label="Análise Vendas" onclick="showTab('vendasproduto')" data-tab="vendasproduto" data-perfil="admin,gestor"><span class="tab-icon">📈</span><span class="tab-label">Análise Vendas</span></button>
+    <button class="pnav-tab" data-label="Análise de vendas" onclick="showTab('vendasproduto')" data-tab="vendasproduto" data-perfil="admin,gestor"><span class="tab-icon">📈</span><span class="tab-label">Análise de vendas</span></button>
 
     <div class="pnav-section">Estoque &amp; Compras</div>
     <button class="pnav-tab" data-label="Produtos" onclick="showTab('produtos')"  data-tab="produtos"  data-perfil="admin,gestor,estoque"><span class="tab-icon">📦</span><span class="tab-label">Produtos</span></button>
@@ -538,7 +535,7 @@ body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var
     <button class="pnav-tab" data-label="Documentação" onclick="showTab('documentacao')" data-tab="documentacao" data-perfil="admin,gestor"><span class="tab-icon">📄</span><span class="tab-label">Documentação</span></button>
 
     <div class="pnav-section">Administração</div>
-    <button class="pnav-tab" data-label="Config" onclick="showTab('config')"    data-tab="config"    data-perfil="admin,gestor"><span class="tab-icon">⚙️</span><span class="tab-label">Config</span></button>
+    <button class="pnav-tab" data-label="Configurações" onclick="showTab('config')"    data-tab="config"    data-perfil="admin,gestor"><span class="tab-icon">⚙️</span><span class="tab-label">Configurações</span></button>
     <button class="pnav-tab" data-label="Auditoria" onclick="showTab('auditoria')" data-tab="auditoria" data-perfil="admin"><span class="tab-icon">🔍</span><span class="tab-label">Auditoria</span></button>
 
     <!-- Botão de fixar (pin) no rodapé da nav -->
@@ -552,7 +549,7 @@ body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var
     <div class="portal-page" id="page-app-inicio">
       <div class="bb-app-home">
         <h1>Bom Beef Operação</h1>
-        <p>Escolha uma área para começar. O app precisa de internet.</p>
+        <p>Escolha uma área para começar.</p>
         <div id="bb-app-modulos"></div>
         <p id="bb-app-sem-acesso" hidden>Nenhum dos quatro módulos está liberado para o seu perfil. Consulte a gestão da sua loja.</p>
         <details class="bb-app-install" data-bb-instalar hidden>
@@ -571,7 +568,14 @@ body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var
       <section class="portal-home" aria-labelledby="portal-home-title">
         <h1 id="portal-home-title">Início</h1>
         <p>Escolha uma área para começar.</p>
-        <div id="portal-home-links" class="portal-home-links"></div>
+        <section id="portal-home-prioridade" aria-labelledby="portal-home-prioridade-titulo" hidden>
+          <h2 id="portal-home-prioridade-titulo">Acesso rápido</h2>
+          <div id="portal-home-rapidos" class="portal-home-links"></div>
+        </section>
+        <section id="portal-home-outras" aria-labelledby="portal-home-outras-titulo" hidden>
+          <h2 id="portal-home-outras-titulo">Outras áreas</h2>
+          <div id="portal-home-links" class="portal-home-links"></div>
+        </section>
       </section>
     </div>
 
@@ -907,7 +911,7 @@ body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var
   </div><!-- /portal-body -->
 </div><!-- /portal -->
 
-<div id="toast"></div>
+<div id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
 <script>
 // ── Estado ─────────────────────────────────────────────────────────────────
@@ -1168,6 +1172,18 @@ window.addEventListener('pagehide', () => {
 
 // ── Tabs ───────────────────────────────────────────────────────────────────
 function renderInicio() {
+  const prioridades = {
+    gestor: ['ponto','validade','retiradas','rh'],
+    caixa: ['ponto','retiradas','fiado','validade'],
+    operador: ['ponto','rh','minha-conta'],
+    estoque: ['validade','produtos','cortes'],
+    financeiro: ['dre','boletos','faturamento'],
+    contabil: ['dre','boletos','faturamento']
+  };
+  const ordem = prioridades[usuario?.perfil] || [];
+  const rapidos = $('portal-home-rapidos');
+  rapidos.replaceChildren();
+  const destaque = new Map();
   const atalhos = $('portal-home-links');
   atalhos.replaceChildren();
   for (const tab of document.querySelectorAll('.pnav-tab[data-tab][data-perfil]')) {
@@ -1180,8 +1196,13 @@ function renderInicio() {
     icone.textContent = tab.querySelector('.tab-icon')?.textContent || '';
     atalho.append(icone, tab.dataset.label);
     atalho.onclick = () => showTab(tab.dataset.tab);
-    atalhos.append(atalho);
+    const id = tab.dataset.tab;
+    if (ordem.includes(id)) destaque.set(id, atalho);
+    else atalhos.append(atalho);
   }
+  for (const id of ordem) if (destaque.has(id)) rapidos.append(destaque.get(id));
+  $('portal-home-prioridade').hidden = !rapidos.childElementCount;
+  $('portal-home-outras').hidden = !atalhos.childElementCount;
 }
 
 function filtrarTabs() {
@@ -1215,11 +1236,30 @@ function filtrarTabs() {
 function buildMobNav() {
   const items = document.getElementById('mob-nav-items');
   if (!items) return;
-  items.innerHTML = '';
-  document.querySelectorAll('.pnav-tab').forEach(function(tab) {
-    if (tab.style.display === 'none') return;
+  items.replaceChildren();
+  let grupo = null;
+  let titulo = '';
+  for (const tab of document.querySelectorAll('#pnav > .pnav-section, #pnav > .pnav-tab')) {
+    if (tab.classList.contains('pnav-section')) {
+      grupo = null;
+      titulo = tab.textContent.trim();
+      continue;
+    }
+    if (tab.style.display === 'none') continue;
     const name = tab.dataset.tab;
-    if (!name) return;
+    if (!name) continue;
+    if (!grupo) {
+      grupo = document.createElement('div');
+      grupo.className = 'mob-nav-group';
+      grupo.setAttribute('role','group');
+      grupo.setAttribute('aria-label',titulo);
+      const rotulo = document.createElement('div');
+      rotulo.className = 'mob-nav-group-label';
+      rotulo.setAttribute('aria-hidden','true');
+      rotulo.textContent = titulo;
+      grupo.append(rotulo);
+      items.append(grupo);
+    }
     const item = document.createElement('button');
     item.type = 'button';
     item.className = 'mob-nav-item' + (tab.classList.contains('active') ? ' active' : '');
@@ -1247,8 +1287,8 @@ function buildMobNav() {
       if(tab.dataset.bloqueado==='1')return;
       showTab(name);fecharMobMenu();
     };
-    items.appendChild(item);
-  });
+    grupo.append(item);
+  }
   var info = document.getElementById('mob-user-info');
   if (info) {
     var uname = document.getElementById('ph-uname');
@@ -1258,16 +1298,46 @@ function buildMobNav() {
 }
 function abrirMobMenu() {
   buildMobNav();
-  $('mob-nav-items').scrollTop=0;
+  const drawer = $('mob-drawer');
+  drawer.hidden = false;
+  $('mob-nav-items').scrollTop = 0;
   $('mob-menu-btn').setAttribute('aria-expanded','true');
-  document.getElementById('mob-drawer').classList.add('open');
-  document.getElementById('mob-overlay').classList.add('open');
+  drawer.classList.add('open');
+  $('mob-overlay').classList.add('open');
+  $('portal-header').inert = true;
+  document.querySelector('.portal-body').inert = true;
+  drawer.querySelector('.mob-drawer-close').focus();
 }
 function fecharMobMenu() {
+  const drawer = $('mob-drawer');
+  if (drawer.hidden) return;
+  $('portal-header').inert = false;
+  document.querySelector('.portal-body').inert = false;
   $('mob-menu-btn').setAttribute('aria-expanded','false');
-  document.getElementById('mob-drawer').classList.remove('open');
-  document.getElementById('mob-overlay').classList.remove('open');
+  drawer.classList.remove('open');
+  $('mob-overlay').classList.remove('open');
+  drawer.hidden = true;
+  $('mob-menu-btn').focus();
 }
+$('mob-drawer').addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    fecharMobMenu();
+  } else if (e.key === 'Tab') {
+    const botoes = $('mob-drawer').querySelectorAll('button:not(:disabled)');
+    const primeiro = botoes[0], ultimo = botoes[botoes.length-1];
+    if (e.shiftKey && document.activeElement === primeiro) {
+      e.preventDefault();
+      ultimo.focus();
+    } else if (!e.shiftKey && document.activeElement === ultimo) {
+      e.preventDefault();
+      primeiro.focus();
+    }
+  }
+});
+window.matchMedia('(max-width:768px)').addEventListener('change', e => {
+  if (!e.matches) fecharMobMenu();
+});
 
 // ── NAV COLAPSÁVEL ──────────────────────────────────────────────────────────
 (function initPnav() {
@@ -1350,15 +1420,17 @@ function showTab(tab) {
       iframe.dataset.loaded = '1';
     }
   }
-  document.querySelectorAll('.pnav-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.pnav-tab').forEach(t => {
+    t.classList.remove('active');
+    t.removeAttribute('aria-current');
+  });
   document.querySelectorAll('.portal-page, .frame-container').forEach(p => p.classList.remove('active'));
 
-  if(tabBtn) {
-    tabBtn.classList.add('active');
-    // Atualiza label no header mobile
-    const label = tabBtn.dataset.label || tabBtn.querySelector('.tab-label')?.textContent.trim() || tab;
-    var lbl = document.getElementById('mob-active-label');
-    if (lbl) lbl.textContent = label;
+  const navAtiva = tabBtn || (tab === 'app-inicio' && usuario.perfil !== 'admin'
+    ? document.querySelector('.pnav-tab[data-tab="inicio"]') : null);
+  if (navAtiva) {
+    navAtiva.classList.add('active');
+    navAtiva.setAttribute('aria-current','page');
   }
 
   if (tab === 'inicio') {
@@ -1366,7 +1438,6 @@ function showTab(tab) {
     $('page-inicio').classList.add('active');
   } else if (tab === 'app-inicio') {
     $('page-app-inicio').classList.add('active');
-    $('mob-active-label').textContent='Início';
   } else if (tab === 'dashboard') {
     $('page-dashboard').classList.add('active');
     // Atualiza KPIs ao voltar ao dashboard
