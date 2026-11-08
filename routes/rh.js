@@ -19,7 +19,7 @@ const crypto = require('crypto');
 const autenticar = require('../middleware/auth');
 const { requireNivel } = autenticar;
 const {carregarEscalas,resolverEscala,iso}=require('../lib/ponto-escala');
-const {contarPendenciasProprias}=require('../lib/rh-documentos-pendentes');
+const {contarPendenciasProprias,garantirDocumentosGerais}=require('../lib/rh-documentos-pendentes');
 
 module.exports = function (pool, app) {
   const r = express.Router();
@@ -322,17 +322,25 @@ module.exports = function (pool, app) {
       const {rows}=await pool.query(`
         SELECT d.id,d.funcionario_id,d.tipo,d.titulo,d.competencia,d.observacao,
                d.arquivo_nome,d.arquivo_mime,d.arquivo_tamanho,d.exige_confirmacao,
-               d.publicado_em,d.visualizado_em,d.confirmado_em,d.status,
+               d.publicado_em, estado.visualizado_em,estado.confirmado_em,d.status,d.abrangencia,
+               CASE WHEN $1::int IS NULL AND d.abrangencia='geral' THEN
+                 (SELECT count(*)::int FROM jsonb_each(d.recebimentos) r WHERE r.value->>'confirmado_em' IS NOT NULL)
+               END AS total_confirmacoes,
                f.nome AS funcionario_nome,f.cargo,
                CASE
-                 WHEN d.confirmado_em IS NOT NULL THEN 'confirmado'
-                 WHEN d.visualizado_em IS NOT NULL THEN 'visualizado'
+                 WHEN d.abrangencia='geral' AND $1::int IS NULL THEN 'geral'
+                 WHEN estado.confirmado_em IS NOT NULL THEN 'confirmado'
+                 WHEN estado.visualizado_em IS NOT NULL THEN 'visualizado'
                  ELSE 'pendente'
                END AS recebimento_status
         FROM rh_documentos_funcionario d
-        JOIN funcionarios f ON f.id=d.funcionario_id AND f.loja_id=d.loja_id
+        LEFT JOIN funcionarios f ON f.id=d.funcionario_id AND f.loja_id=d.loja_id
+        CROSS JOIN LATERAL (
+          SELECT CASE WHEN d.abrangencia='geral' THEN (d.recebimentos->($1::int::text)->>'visualizado_em')::timestamptz ELSE d.visualizado_em END AS visualizado_em,
+                 CASE WHEN d.abrangencia='geral' THEN (d.recebimentos->($1::int::text)->>'confirmado_em')::timestamptz ELSE d.confirmado_em END AS confirmado_em
+        ) estado
         WHERE d.status='ativo'
-          AND ($1::int IS NULL OR d.funcionario_id=$1)
+          AND (d.abrangencia='geral' OR (f.id IS NOT NULL AND ($1::int IS NULL OR d.funcionario_id=$1)))
           AND d.loja_id=$2
         ORDER BY d.publicado_em DESC,d.id DESC
         LIMIT 500
@@ -343,19 +351,16 @@ module.exports = function (pool, app) {
 
   r.get('/documentos/pendentes/count', async (req,res)=>{
     try{
-      let funcionarioId=null;
-      if(!gestorRH(req)){
-        const f=await funcionarioDoUsuario(req.user?.id,req.user?.lojaId);
-        if(!f) return res.json({ok:true,total:0});
-        funcionarioId=f.id;
-      }
+      if(!gestorRH(req))return res.json({ok:true,total:await contarPendenciasProprias(pool,req.user)});
       const {rows:[x]}=await pool.query(`
         SELECT COUNT(*)::int AS total
         FROM rh_documentos_funcionario d
-        WHERE d.status='ativo' AND d.exige_confirmacao=true AND d.confirmado_em IS NULL
-          AND ($1::int IS NULL OR d.funcionario_id=$1)
-          AND d.loja_id=$2
-      `,[funcionarioId,req.user.lojaId]);
+        JOIN funcionarios f ON f.loja_id=d.loja_id AND f.ativo=true AND COALESCE(f.freelancer,false)=false
+          AND (d.abrangencia='geral' OR f.id=d.funcionario_id)
+        WHERE d.status='ativo' AND d.exige_confirmacao=true AND d.loja_id=$1
+          AND CASE WHEN d.abrangencia='geral' THEN d.recebimentos->(f.id::text)->>'confirmado_em' IS NULL
+                   ELSE d.confirmado_em IS NULL END
+      `,[req.user.lojaId]);
       res.json({ok:true,total:Number(x?.total||0)});
     }catch(e){res.json({ok:false,total:0,erro:e.message});}
   });
@@ -364,35 +369,37 @@ module.exports = function (pool, app) {
     if(!gestorRH(req)) return res.status(403).json({ok:false,erro:'Acesso restrito à gestão'});
     uploadDocumento.single('arquivo')(req,res,err=>err?res.status(400).json({ok:false,erro:err.message}):next());
   }, async (req,res)=>{
-    const funcionarioId=Number(req.body.funcionario_id);
+    const abrangencia=req.body.abrangencia ?? 'individual';
+    const geral=abrangencia==='geral';
+    const funcionarioId=geral?null:Number(req.body.funcionario_id);
     const tipo=String(req.body.tipo||'outro');
     const tipos=['holerite','aviso_ferias','recibo_ferias','atestado','advertencia','outro'];
-    if(!funcionarioId||!tipos.includes(tipo)||!req.file) return res.status(400).json({ok:false,erro:'Funcionário, tipo e arquivo são obrigatórios'});
+    if(!['individual','geral'].includes(abrangencia)||(!geral&&(!Number.isSafeInteger(funcionarioId)||funcionarioId<=0))||(geral&&(tipo!=='outro'||req.body.funcionario_id))||!tipos.includes(tipo)||!req.file) return res.status(400).json({ok:false,erro:'Confira o destinatário e o arquivo. Documentos gerais aceitam apenas comunicados sem destinatário individual.'});
     const titulo=String(req.body.titulo||req.file.originalname||'Documento').trim();
     const competencia=String(req.body.competencia||'').trim()||null;
     const observacao=String(req.body.observacao||'').trim()||null;
     const exigeConfirmacao=String(req.body.exige_confirmacao||'true')!=='false';
     const hash=sha256(req.file.buffer);
     const ext=(req.file.originalname.split('.').pop()||'bin').replace(/[^a-zA-Z0-9]/g,'').toLowerCase();
-    const key='rh/'+String(funcionarioId)+'/'+new Date().getFullYear()+'/'+crypto.randomUUID()+'.'+ext;
+    const key='rh/'+(geral?'geral-'+req.user.lojaId:String(funcionarioId))+'/'+new Date().getFullYear()+'/'+crypto.randomUUID()+'.'+ext;
     try{
-      const {rows:[func]}=await pool.query(`
-        SELECT id FROM funcionarios
-        WHERE id=$1 AND ativo=true AND COALESCE(freelancer,false)=false
-          AND (NULLIF(current_setting('app.loja_id',true),'') IS NULL
-               OR loja_id=NULLIF(current_setting('app.loja_id',true),'')::int)
-        LIMIT 1
-      `,[funcionarioId]);
-      if(!func) return res.status(404).json({ok:false,erro:'Funcionário não encontrado'});
+      if(!geral){
+        const {rows:[func]}=await pool.query(`
+          SELECT id FROM funcionarios
+          WHERE id=$1 AND loja_id=$2 AND ativo=true AND COALESCE(freelancer,false)=false
+          LIMIT 1
+        `,[funcionarioId,req.user.lojaId]);
+        if(!func) return res.status(404).json({ok:false,erro:'Funcionário não encontrado'});
+      }
       await s3Request('PUT',key,{body:req.file.buffer,contentType:req.file.mimetype});
       const {rows}=await pool.query(`
         INSERT INTO rh_documentos_funcionario(
           funcionario_id,tipo,titulo,competencia,observacao,arquivo_nome,arquivo_mime,
-          arquivo_tamanho,arquivo_hash_sha256,storage_key,exige_confirmacao,publicado_por
-        ) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+          arquivo_tamanho,arquivo_hash_sha256,storage_key,exige_confirmacao,publicado_por,abrangencia,loja_id
+        ) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
         RETURNING id,funcionario_id,tipo,titulo,competencia,arquivo_nome,arquivo_tamanho,exige_confirmacao,publicado_em
       `,[funcionarioId,tipo,titulo,competencia,observacao,req.file.originalname,req.file.mimetype,
-          req.file.size,hash,key,exigeConfirmacao,req.user?.id||null]);
+          req.file.size,hash,key,exigeConfirmacao,req.user?.id||null,abrangencia,req.user.lojaId]);
       res.json({ok:true,data:rows[0]});
     }catch(e){res.status(500).json({ok:false,erro:e.message});}
   });
@@ -402,20 +409,27 @@ module.exports = function (pool, app) {
       const {rows}=await pool.query(`
         SELECT d.*,f.usuario_id
         FROM rh_documentos_funcionario d
-        JOIN funcionarios f ON f.id=d.funcionario_id AND f.loja_id=d.loja_id
-        WHERE d.id=$1 AND d.status='ativo'
+        LEFT JOIN funcionarios f ON f.id=d.funcionario_id AND f.loja_id=d.loja_id
+        WHERE (d.abrangencia='geral' OR f.id IS NOT NULL) AND d.id=$1 AND d.status='ativo'
           AND d.loja_id=$2
         LIMIT 1
       `,[Number(req.params.id),req.user.lojaId]);
       const doc=rows[0];
       if(!doc||Number(doc.loja_id)!==Number(req.user.lojaId)) return res.status(404).json({ok:false,erro:'Documento não encontrado'});
+      const proprio=!gestorRH(req)?await funcionarioDoUsuario(req.user?.id,req.user?.lojaId):null;
       if(!gestorRH(req)){
-        const proprio=await funcionarioDoUsuario(req.user?.id,req.user?.lojaId);
-        if(!proprio || Number(proprio.id)!==Number(doc.funcionario_id)) return res.status(403).json({ok:false,erro:'Acesso negado'});
+        if(!proprio || (doc.abrangencia!=='geral' && Number(proprio.id)!==Number(doc.funcionario_id))) return res.status(403).json({ok:false,erro:'Acesso negado'});
       }
       const s3=await s3Request('GET',doc.storage_key);
       const buf=Buffer.from(await s3.arrayBuffer());
-      if(!gestorRH(req) && !doc.visualizado_em){
+      if(proprio && doc.abrangencia==='geral'){
+        await pool.query(`
+          UPDATE rh_documentos_funcionario
+          SET recebimentos=jsonb_set(recebimentos,ARRAY[$3::int::text],jsonb_build_object('visualizado_em',NOW()))
+          WHERE id=$1 AND loja_id=$2 AND status='ativo' AND abrangencia='geral'
+            AND recebimentos->($3::int::text) IS NULL
+        `,[doc.id,req.user.lojaId,proprio.id]);
+      }else if(proprio && !doc.visualizado_em){
         await pool.query(`UPDATE rh_documentos_funcionario SET visualizado_em=NOW() WHERE id=$1 AND funcionario_id=$2 AND loja_id=$3 AND visualizado_em IS NULL`,[doc.id,doc.funcionario_id,req.user.lojaId]);
       }
       res.setHeader('Content-Type',doc.arquivo_mime||'application/octet-stream');
@@ -441,8 +455,20 @@ module.exports = function (pool, app) {
           AND loja_id=$6
         RETURNING id,confirmado_em
       `,[req.user?.id||null,ip,ua,Number(req.params.id),f.id,req.user.lojaId]);
-      if(!rows.length) return res.status(409).json({ok:false,erro:'Abra o documento antes de confirmar o recebimento.'});
-      res.json({ok:true,data:rows[0],mensagem:'Recebimento confirmado. Esta confirmação registra somente o recebimento e acesso ao documento.'});
+      const resultado=rows[0] || (await pool.query(`
+        UPDATE rh_documentos_funcionario
+        SET recebimentos=jsonb_set(recebimentos,ARRAY[$5::int::text],
+          CASE WHEN recebimentos->($5::int::text)->>'confirmado_em' IS NOT NULL
+            THEN recebimentos->($5::int::text)
+            ELSE COALESCE(recebimentos->($5::int::text),'{}'::jsonb)
+              || jsonb_build_object('confirmado_em',NOW(),'confirmado_por',$1::int,'confirmacao_ip',$2::text,'confirmacao_user_agent',$3::text)
+          END)
+        WHERE id=$4 AND loja_id=$6 AND status='ativo' AND abrangencia='geral'
+          AND (recebimentos->($5::int::text)->>'visualizado_em' IS NOT NULL OR exige_confirmacao=false)
+        RETURNING id, recebimentos->($5::int::text)->>'confirmado_em' AS confirmado_em
+      `,[req.user.id,ip,ua,Number(req.params.id),f.id,req.user.lojaId])).rows[0];
+      if(!resultado) return res.status(409).json({ok:false,erro:'Abra o documento antes de confirmar o recebimento.'});
+      res.json({ok:true,data:resultado,mensagem:'Recebimento confirmado. Esta confirmação registra somente o recebimento e acesso ao documento.'});
     }catch(e){res.status(500).json({ok:false,erro:e.message});}
   });
 
@@ -451,11 +477,9 @@ module.exports = function (pool, app) {
     try{
       const {rows}=await pool.query(`
         UPDATE rh_documentos_funcionario SET status='arquivado'
-        WHERE id=$1 AND status='ativo'
-          AND (NULLIF(current_setting('app.loja_id',true),'') IS NULL
-               OR loja_id=NULLIF(current_setting('app.loja_id',true),'')::int)
+        WHERE id=$1 AND status='ativo' AND loja_id=$2
         RETURNING id
-      `,[Number(req.params.id)]);
+      `,[Number(req.params.id),req.user.lojaId]);
       if(!rows.length) return res.status(404).json({ok:false,erro:'Documento não encontrado'});
       res.json({ok:true});
     }catch(e){res.status(500).json({ok:false,erro:e.message});}
@@ -623,6 +647,7 @@ module.exports = function (pool, app) {
         loja_id INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id)
       )
     `).catch(e=>console.warn('[rh] rh_documentos_funcionario:',e.message));
+    await garantirDocumentosGerais(pool);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_rh_docs_func_status ON rh_documentos_funcionario(loja_id,funcionario_id,status,publicado_em DESC)`).catch(()=>{});
 
         // Adiciona colunas extras em funcionarios se não existirem

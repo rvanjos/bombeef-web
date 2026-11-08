@@ -576,6 +576,7 @@ main{padding:16px;background:#f8f6f3}
           <option value="">Todos os status</option>
           <option value="pendente">Pendentes</option>
           <option value="visualizado">Visualizados</option>
+          <option value="geral">Gerais (visão de todos)</option>
           <option value="confirmado">Confirmados</option>
         </select>
       </div>
@@ -591,7 +592,14 @@ main{padding:16px;background:#f8f6f3}
         <button class="modal-close" onclick="fecharModal('modal-doc-novo')">×</button>
       </div>
       <div class="modal-body">
-        <div class="field"><label>Funcionário *</label><select id="doc-func"></select></div>
+        <div class="field"><label for="doc-abrangencia">Quem pode acessar</label>
+          <select id="doc-abrangencia" onchange="atualizarDestinoDocumento()">
+            <option value="individual">Individual — apenas o funcionário selecionado</option>
+            <option value="geral">Geral — todos os funcionários da loja</option>
+          </select>
+        </div>
+        <div class="field" id="doc-func-campo"><label>Funcionário *</label><select id="doc-func"></select></div>
+        <p id="doc-aviso-geral" hidden style="font-size:12px;color:var(--muted)">Use para comunicados e documentos sem dados pessoais. Funcionários vinculados futuramente à loja também poderão acessar.</p>
         <div class="field-row">
           <div class="field"><label>Tipo *</label>
             <select id="doc-tipo">
@@ -2617,6 +2625,8 @@ async function carregarDocumentos(){
   atualizarBadgeDocumentos();
 }
 
+function textoDocumento(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
 function renderDocumentos(){
   const gestao=_perfil==='admin';
   const filtro=gestao?(document.getElementById('docs-status-filtro')?.value||''):'';
@@ -2632,11 +2642,11 @@ function renderDocumentos(){
     return '<article style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:13px 14px;margin-bottom:9px">'+
       '<div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap">'+
         '<div style="min-width:0;flex:1">'+
-          '<div style="font-size:13px;font-weight:700">'+(tipoLabel[d.tipo]||d.tipo)+' · '+d.titulo+'</div>'+
-          (gestao?'<div style="font-size:12px;font-weight:600;margin-top:3px">'+d.funcionario_nome+'</div>':'')+
-          '<div style="font-size:11px;color:var(--muted);margin-top:4px">'+(comp?'Competência '+comp+' · ':'')+data+' · '+Math.max(1,Math.round(Number(d.arquivo_tamanho||0)/1024))+' KB</div>'+
-          (d.observacao?'<div style="font-size:11px;color:#475569;margin-top:5px">'+d.observacao+'</div>':'')+
-          '<div style="font-size:11px;margin-top:7px">'+(statusLabel[d.recebimento_status]||d.recebimento_status)+
+          '<div style="font-size:13px;font-weight:700">'+(tipoLabel[d.tipo]||textoDocumento(d.tipo))+' · '+textoDocumento(d.titulo)+'</div>'+
+          (gestao?'<div style="font-size:12px;font-weight:600;margin-top:3px">'+(d.abrangencia==='geral'?'🌐 Geral · equipe da loja':textoDocumento(d.funcionario_nome))+'</div>':'')+
+          '<div style="font-size:11px;color:var(--muted);margin-top:4px">'+(comp?'Competência '+textoDocumento(comp)+' · ':'')+data+' · '+Math.max(1,Math.round(Number(d.arquivo_tamanho||0)/1024))+' KB</div>'+
+          (d.observacao?'<div style="font-size:11px;color:#475569;margin-top:5px">'+textoDocumento(d.observacao)+'</div>':'')+
+          '<div style="font-size:11px;margin-top:7px">'+(d.recebimento_status==='geral'?(d.exige_confirmacao?Number(d.total_confirmacoes||0)+' confirmações de recebimento':'Sem exigência de confirmação'):(statusLabel[d.recebimento_status]||''))+
             (d.confirmado_em?' · '+new Date(d.confirmado_em).toLocaleString('pt-BR'):'')+'</div>'+
         '</div>'+
         '<div style="display:flex;gap:6px;flex-wrap:wrap">'+
@@ -2666,7 +2676,20 @@ async function abrirArquivoDocumento(id){
   }catch(e){toast('❌ Não foi possível abrir o documento');}
 }
 
+function atualizarDestinoDocumento(){
+  const geral=document.getElementById('doc-abrangencia').value==='geral';
+  document.getElementById('doc-func-campo').hidden=geral;
+  document.getElementById('doc-aviso-geral').hidden=!geral;
+  const tipo=document.getElementById('doc-tipo');
+  if(geral)tipo.value='outro';
+  tipo.disabled=geral;
+  document.getElementById('doc-btn-enviar').textContent=geral?'Publicar para a equipe':'Enviar';
+}
+
 function abrirNovoDocumento(){
+  document.getElementById('doc-abrangencia').value='individual';
+  document.getElementById('doc-func').value='';
+  atualizarDestinoDocumento();
   document.getElementById('doc-titulo').value='';
   document.getElementById('doc-arquivo').value='';
   document.getElementById('doc-observacao').value='';
@@ -2677,12 +2700,14 @@ function abrirNovoDocumento(){
 
 async function enviarDocumento(){
   const arquivo=document.getElementById('doc-arquivo').files[0];
-  const funcionario=document.getElementById('doc-func').value;
+  const abrangencia=document.getElementById('doc-abrangencia').value;
+  const geral=abrangencia==='geral';
+  const funcionario=geral?'':document.getElementById('doc-func').value;
   const titulo=document.getElementById('doc-titulo').value.trim();
-  if(!funcionario||!titulo||!arquivo){toast('⚠️ Funcionário, título e arquivo são obrigatórios');return;}
+  if((!geral&&!funcionario)||!titulo||!arquivo){toast(geral?'⚠️ Título e arquivo são obrigatórios':'⚠️ Funcionário, título e arquivo são obrigatórios');return;}
   if(arquivo.size>10*1024*1024){toast('⚠️ O arquivo deve ter no máximo 10 MB');return;}
   const fd=new FormData();
-  fd.append('funcionario_id',funcionario);fd.append('tipo',document.getElementById('doc-tipo').value);
+  fd.append('abrangencia',abrangencia);fd.append('funcionario_id',funcionario);fd.append('tipo',document.getElementById('doc-tipo').value);
   fd.append('competencia',document.getElementById('doc-competencia').value);
   fd.append('titulo',titulo);fd.append('observacao',document.getElementById('doc-observacao').value);
   fd.append('exige_confirmacao',document.getElementById('doc-confirmacao').checked?'true':'false');fd.append('arquivo',arquivo);
@@ -2691,9 +2716,9 @@ async function enviarDocumento(){
     const r=await fetch(BASE+'/api/rh/documentos/upload',{method:'POST',headers:{Authorization:'Bearer '+getToken()},body:fd});
     const d=await r.json();
     if(!d.ok){toast('❌ '+d.erro);return;}
-    fecharModal('modal-doc-novo');toast('✅ Documento disponibilizado ao funcionário.');await carregarDocumentos();
+    fecharModal('modal-doc-novo');toast(geral?'✅ Documento geral disponível para a equipe da loja.':'✅ Documento disponibilizado ao funcionário.');await carregarDocumentos();
   }catch(e){toast('❌ Falha ao enviar documento');}
-  finally{btn.disabled=false;btn.textContent='Enviar';}
+  finally{btn.disabled=false;atualizarDestinoDocumento();}
 }
 
 async function confirmarDocumento(id){

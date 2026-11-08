@@ -1,6 +1,7 @@
 'use strict';
 require('dotenv').config();
 const {Pool}=require('pg');
+const {garantirDocumentosGerais}=require('../lib/rh-documentos-pendentes');
 const {garantirEstruturaMultiloja}=require('../lib/multiloja');
 const {auditarSegurancaMultiloja}=require('../lib/multiloja-security');
 const {migrarChavesLegadas}=require('../lib/multiloja-legados');
@@ -55,6 +56,7 @@ async function contarHistorico(tabelas){
       FROM lojas l LEFT JOIN usuario_lojas ul ON ul.loja_id=l.id LEFT JOIN usuarios u ON u.id=ul.usuario_id
       GROUP BY l.id ORDER BY l.id`);
     console.log('[multiloja/manutencao] lojas',JSON.stringify(lojas));
+    await garantirDocumentosGerais(pool);
     const depois=await contarHistorico(Object.keys(antes));
     for(const tabela of Object.keys(antes))if(BigInt(depois[tabela])<BigInt(antes[tabela]))throw Error('Contagem histórica diminuiu em '+tabela);
     console.log('[multiloja/manutencao] preservação de registros',JSON.stringify({tabelas:Object.keys(antes).length,nenhuma_reducao:true}));
