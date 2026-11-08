@@ -161,7 +161,7 @@ function previewPagamentoSaldo(){
   const alvos=alvosPagamento(),v=Math.round(num($('m-valor').value)*100),t=Math.round(totalPagamento()*100);
   const valido=!!saldoPagFunc&&alvos.length>0&&v>0&&v<=t;
   $('m-confirmar').disabled=pagEnviando||!valido;
-  $('m-prev').textContent=v>t?'O valor ultrapassa o saldo em aberto.':valido?`A pagar: ${brl(v/100)} · Restará: ${brl((t-v)/100)}`:'';
+  $('m-prev').textContent=v>t?'O valor ultrapassa o saldo em aberto.':valido?`A pagar: ${brl(v/100)} · Restará: ${brl((t-v)/100)}${v===t?` · Quita ${alvos.length} lançamento(s).`: ''}`:'';
   let restante=valido?v:0;
   const linhas=[];
   for(const r of alvos){
