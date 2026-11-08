@@ -106,6 +106,11 @@ function abrirPendenciasPDV(){setView('pdv',document.querySelector('[data-view=p
 function renderTudo(){$('acao-pdv').hidden=!pode('pdv');$('pagar-saldo').hidden=!pode('pagamentos');renderKpis();renderAlerta();render();if(drawerFunc)renderDrawer(drawerFunc)}
 function renderKpis(){const mes=noMes(),ab=pendencias(),ant=anteriores(),pagMes=mes.filter(pago);$('k-mes').textContent=brl(mes.reduce((s,r)=>s+num(r.valor_total),0));$('k-mes-sub').textContent=`${mes.length} retirada(s) em ${mesRef()}`;$('k-aberto').textContent=brl(ab.reduce((s,r)=>s+saldoRetirada(r),0));$('k-aberto-sub').textContent=`${ab.length} lançamento(s) de todos os meses`;$('k-antigo').textContent=brl(ant.reduce((s,r)=>s+saldoRetirada(r),0));$('k-antigo-sub').textContent=`${ant.length} pendência(s) anterior(es)`;$('k-pago').textContent=brl(pagMes.reduce((s,r)=>s+num(r.valor_total),0));$('k-funcs').textContent=new Set(ab.map(r=>String(r.funcionario_id))).size}
 function renderAlerta(){const a=anteriores(),el=$('alert-antigo');if(!a.length){el.classList.remove('show');return}const meses=[...new Set(a.map(r=>r.mes))].sort((x,y)=>mesOrdem(x)-mesOrdem(y));$('alert-antigo-text').innerHTML=`⚠️ <b>${a.length} retirada(s) de meses anteriores continuam em aberto</b> — ${brl(a.reduce((s,r)=>s+num(r.valor_total),0))}. Origem: ${meses.map(esc).join(', ')}.`;el.classList.add('show')}
+window.addEventListener('message',e=>{
+  if(e.origin!==location.origin||e.source!==parent||e.data?.type!=='bb_open_retiradas_pendencias')return;
+  $('func').value='';$('busca').value='';
+  setView('aberto',document.querySelector('[data-view=aberto]'));
+});
 function setView(v,el){view=v;document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));if(el)el.classList.add('active');render()}
 function visiveis(){if(view==='aberto')return ordenar(pendencias());if(view==='mes')return ordenar(noMes());if(view==='historico')return ordenar(base());if(view==='pdv')return ordenar(base().filter(r=>!r.baixa_pdv));return []}
 const pdvSelecionados=new Set();let pdvLoteEnviando=false;

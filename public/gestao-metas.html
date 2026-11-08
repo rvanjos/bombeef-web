@@ -99,7 +99,7 @@ tr:hover td{background:#fdf9f7;}
 @media(max-width:900px){.kpi-row{grid-template-columns:repeat(2,1fr)}.content{padding:12px}.form-grid{grid-template-columns:1fr 1fr}.tbl-wrap{max-height:calc(100vh - 270px)}}
 @media(max-width:650px){.page-tools{align-items:flex-start}.page-tools .btn{padding:8px 11px}.form-grid{grid-template-columns:1fr}.kpi-row{grid-template-columns:1fr 1fr}.content{padding:10px}.tbl-wrap{max-height:none}.table-help,.meta-cols-btn{display:none}}
 </style>
-</head>
+<link rel="stylesheet" href="/css/bb-periodo.css?v=1"></head>
 <body>
 <script>if(window.self!==window.top)document.documentElement.classList.add('is-embedded');</script>
 
@@ -115,6 +115,7 @@ tr:hover td{background:#fdf9f7;}
     <button class="btn btn-p" onclick="abrirForm()">+ Nova Meta</button>
   </div>
 
+  <p class="bb-periodo-nota">Meta do mês inteiro × realizado nos dias já importados.</p>
   <!-- KPIs do mês atual -->
   <div class="kpi-row" id="kpis-mes"></div>
 
@@ -134,7 +135,7 @@ tr:hover td{background:#fdf9f7;}
     <div class="form-grid" style="margin-bottom:12px">
       <div class="fg">
         <label>Mês de referência</label>
-        <input type="month" id="f-mes">
+        <input type="month" id="f-mes" data-bb-periodo aria-label="Mês de referência">
       </div>
       <div class="fg">
         <label>Meta de faturamento (R$)</label>
