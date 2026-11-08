@@ -87,6 +87,7 @@
       acoes.append(botao('Visualizar documento',()=>abrir()),botao('Baixar',()=>abrir('baixar')),botao('Imprimir',()=>abrir('imprimir')));
       if(doc.exige_confirmacao&&!doc.confirmado_em)acoes.append(confirmar);
       card.append(el('h3',doc.titulo||'Documento'),el('p',doc.competencia?'Competência: '+doc.competencia:''),estado,acoes);
+      if(doc.abrangencia==='geral')card.append(el('p','🌐 Documento geral da loja'));
       if(doc.observacao)card.append(el('p',doc.observacao));
       if(doc.exige_confirmacao&&!doc.confirmado_em)card.append(el('p','Abra o documento antes de confirmar. O ateste registra somente o recebimento e não significa concordância com valores ou quitação.'));
       root.append(card);

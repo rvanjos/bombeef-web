@@ -3,7 +3,7 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 const {contarPendenciasProprias}=require('../lib/rh-documentos-pendentes');
 
 test('consulta usa apenas usuário autenticado e loja ativa, inclusive admin',async()=>{
- const pool={async query(sql,params){assert.deepEqual(params,[7,2]);assert.match(sql,/f\.loja_id=\$2/);assert.match(sql,/d\.loja_id=\$2/);assert.match(sql,/JOIN destinatario f ON f.id=d.funcionario_id/);assert.match(sql,/d\.status='ativo'/);assert.match(sql,/d\.exige_confirmacao=true AND d\.confirmado_em IS NULL/);assert.match(sql,/f\.usuario_id=\$1/);assert.doesNotMatch(sql,/UPDATE|INSERT|DELETE/);return {rows:[{total:3}]};}};
+ const pool={async query(sql,params){assert.deepEqual(params,[7,2]);assert.match(sql,/f\.loja_id=\$2/);assert.match(sql,/d\.loja_id=\$2/);assert.match(sql,/JOIN destinatario f ON \(f.id=d.funcionario_id OR d.abrangencia='geral'\)/);assert.match(sql,/d\.status='ativo'/);assert.match(sql,/d\.exige_confirmacao=true/);assert.match(sql,/f\.usuario_id=\$1/);assert.doesNotMatch(sql,/UPDATE|INSERT|DELETE/);return {rows:[{total:3}]};}};
  assert.equal(await contarPendenciasProprias(pool,{id:7,lojaId:2,perfil:'admin'}),3);
 });
 test('sem vínculo/documento pendente retorna zero e identidade inválida não consulta banco',async()=>{

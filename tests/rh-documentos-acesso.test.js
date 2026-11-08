@@ -12,6 +12,7 @@ function fixture(){
    if(sql.includes('SELECT d.*,f.usuario_id')){assert.match(sql,/d\.loja_id=\$2/);return {rows:docs.filter(d=>d.id===p[0]&&d.loja_id===p[1])};}
    if(sql.includes('SET visualizado_em=NOW()')){assert.match(sql,/funcionario_id=\$2 AND loja_id=\$3/);const d=docs.find(d=>d.id===p[0]&&d.funcionario_id===p[1]&&d.loja_id===p[2]);if(d)d.visualizado_em='agora';return {rows:[]};}
    if(sql.includes('confirmado_em=COALESCE')){assert.match(sql,/loja_id=\$6/);const d=docs.find(d=>d.id===p[3]&&d.funcionario_id===p[4]&&d.loja_id===p[5]&&d.visualizado_em);if(d)d.confirmado_em='agora';return {rows:d?[{id:d.id,confirmado_em:d.confirmado_em}]:[]};}
+   if(sql.includes('SET recebimentos=jsonb_set'))return {rows:[]};
    throw Error('SQL inesperado');
  }};
  const arquivo=require.resolve('../routes/rh'),mod={exports:{}};
