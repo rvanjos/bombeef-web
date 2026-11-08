@@ -176,6 +176,15 @@ body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var
   flex-direction:column;
 }
 
+/* Início discreto dos perfis operacionais */
+.portal-home {max-width:900px;margin:0 auto;padding:clamp(16px,4vw,36px)}
+.portal-home h1 {margin:0 0 6px;font-size:clamp(22px,4vw,28px)}
+.portal-home p {margin:0 0 22px;color:var(--muted)}
+.portal-home-links {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr));gap:10px}
+.portal-home-link {display:flex;align-items:center;gap:9px;min-height:48px;padding:10px 14px;text-align:left;background:#fff;border:1px solid #e5ddd6;border-radius:10px;color:inherit;font:inherit;font-weight:600;cursor:pointer}
+.portal-home-link:hover,.portal-home-link:focus-visible {border-color:var(--red)}
+.inicio-discreto .pnav-tab [id^="nav-badge-"] {display:none!important}
+
 /* Dashboard page — scrollável */
 .portal-page{
   display:none;
@@ -495,7 +504,8 @@ body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var
     <button class="nav-toggle-btn" id="nav-toggle-btn" onclick="togglePnav()" title="Recolher menu">‹</button>
 
     <div class="pnav-section">Principal</div>
-    <button class="pnav-tab active" data-label="Dashboard" onclick="showTab('dashboard')" data-tab="dashboard"><span class="tab-icon">🏠</span><span class="tab-label">Dashboard</span></button>
+    <button type="button" class="pnav-tab" data-label="Início" onclick="showTab('inicio')" data-tab="inicio" style="display:none"><span class="tab-icon">🏠</span><span class="tab-label">Início</span></button>
+    <button class="pnav-tab" data-label="Dashboard" onclick="showTab('dashboard')" data-tab="dashboard"><span class="tab-icon">🏠</span><span class="tab-label">Dashboard</span></button>
     <button class="pnav-tab" data-label="Central de Agentes" onclick="showTab('agentes')" data-tab="agentes" data-perfil="admin,gestor,financeiro,contabil"><span class="tab-icon">✨</span><span class="tab-label">Central de Agentes</span></button>
     <button class="pnav-tab" data-label="Central de Importações" onclick="showTab('hub')" data-tab="hub"><span class="tab-icon">📥</span><span class="tab-label">Central de Importações</span></button>
 
@@ -557,8 +567,16 @@ body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var
     </div>
 
 
+    <div class="portal-page" id="page-inicio">
+      <section class="portal-home" aria-labelledby="portal-home-title">
+        <h1 id="portal-home-title">Início</h1>
+        <p>Escolha uma área para começar.</p>
+        <div id="portal-home-links" class="portal-home-links"></div>
+      </section>
+    </div>
+
     <!-- DASHBOARD -->
-    <div class="portal-page active" id="page-dashboard">
+    <div class="portal-page" id="page-dashboard">
 
       <!-- Header do Dashboard -->
       <div class="dash-header">
@@ -1027,8 +1045,6 @@ async function trocarLojaAtiva(lojaId){
 }
 
 function entrarNoPortal() {
-  $('scr-login').classList.remove('active');
-  $('scr-portal').classList.add('active');
   $('ph-av').textContent   = (usuario.nome||'?')[0].toUpperCase();
   $('ph-uname').textContent = usuario.nome;
   $('ph-role').textContent  = usuario.perfil;
@@ -1039,9 +1055,15 @@ function entrarNoPortal() {
   $('dash-mes').value = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
 
   filtrarTabs();
-  window.BomBeefApp?.abrir(usuario,showTab);
+  if (document.documentElement.classList.contains('bb-app')) {
+    window.BomBeefApp.abrir(usuario,showTab);
+    if (usuario.perfil === 'admin') carregarKPIs();
+  } else {
+    showTab(usuario.perfil === 'admin' ? 'dashboard' : 'inicio');
+  }
+  $('scr-login').classList.remove('active');
+  $('scr-portal').classList.add('active');
   carregarNomeEmpresa();
-  carregarKPIs();
   carregarLogoDoServidor();
 
   // Atualiza KPIs a cada 90 segundos
@@ -1070,13 +1092,6 @@ function entrarNoPortal() {
   // Renovação automática do token — verifica a cada 30min
   setInterval(renovarTokenSeNecessario, 10 * 60 * 1000); // verifica a cada 10min
   renovarTokenSeNecessario(); // verifica imediatamente
-
-  // Verificação obrigatória de validade para operadores/gestores
-  // Alerta obrigatório para todos os perfis exceto admin (PERFIS_ORDEM: contabil→gestor→admin)
-  const perfisObrigatorios = ['gestor','estoque','caixa'];
-  if (perfisObrigatorios.includes(usuario?.perfil)) {
-    verificarConfirmacaoValidade();
-  }
 
   // Broadcast do token para todos os iframes — crítico no mobile
   // Iframes que carregam antes do login ficam esperando este sinal
@@ -1120,6 +1135,9 @@ function iniciarHeartbeatSessao() {
 async function fazerLogout() {
   BBDocumentosAviso.limpar();
   fecharMobMenu();
+  $('modal-val-confirm').style.display = 'none';
+  _bloquearNavegacao(false);
+  _valPendentesConfirmar = [];
   document.querySelectorAll('iframe').forEach(frame=>{
     try{frame.contentWindow.postMessage({type:'bb_logout'},window.location.origin);}catch(_){}
   });
@@ -1149,7 +1167,26 @@ window.addEventListener('pagehide', () => {
 });
 
 // ── Tabs ───────────────────────────────────────────────────────────────────
+function renderInicio() {
+  const atalhos = $('portal-home-links');
+  atalhos.replaceChildren();
+  for (const tab of document.querySelectorAll('.pnav-tab[data-tab][data-perfil]')) {
+    if (tab.style.display === 'none') continue;
+    const atalho = document.createElement('button');
+    atalho.type = 'button';
+    atalho.className = 'portal-home-link';
+    const icone = document.createElement('span');
+    icone.setAttribute('aria-hidden','true');
+    icone.textContent = tab.querySelector('.tab-icon')?.textContent || '';
+    atalho.append(icone, tab.dataset.label);
+    atalho.onclick = () => showTab(tab.dataset.tab);
+    atalhos.append(atalho);
+  }
+}
+
 function filtrarTabs() {
+  document.querySelector('.pnav-tab[data-tab="inicio"]').style.display =
+    usuario?.perfil === 'admin' ? 'none' : '';
   document.querySelectorAll('.pnav-tab[data-perfil]').forEach(tab => {
     const perfis = (tab.dataset.perfil||'').split(',');
     tab.style.display = perfis.includes(usuario?.perfil) ? '' : 'none';
@@ -1199,7 +1236,7 @@ function buildMobNav() {
     item.append(icon,label);
     const count = tab.querySelector('[id^="nav-badge-"]');
     const total = Number(count?.textContent);
-    if(count && count.style.display !== 'none' && Number.isSafeInteger(total) && total > 0){
+    if(!$('scr-portal').classList.contains('inicio-discreto') && count && count.style.display !== 'none' && Number.isSafeInteger(total) && total > 0){
       const badge=document.createElement('span');
       badge.className='mob-item-badge';
       badge.textContent=total;
@@ -1283,6 +1320,12 @@ function fecharMobMenu() {
 })();
 
 function showTab(tab) {
+  if (!usuario) return;
+  const tabBtn = Array.from(document.querySelectorAll('.pnav-tab[data-tab]')).find(b => b.dataset.tab === tab);
+  if (tabBtn && (tabBtn.style.display === 'none' || tabBtn.dataset.bloqueado === '1')) return;
+  if (tab === 'inicio' && document.documentElement.classList.contains('bb-app')) tab = 'app-inicio';
+  const inicioDiscreto = usuario.perfil !== 'admin' && (tab === 'inicio' || tab === 'app-inicio');
+  $('scr-portal').classList.toggle('inicio-discreto', inicioDiscreto);
   window.BomBeefApp?.selecionar(tab);
   // Mostra spinner brevemente ao trocar de aba (só na primeira vez)
   const abrOverlay = document.getElementById('aba-loading-global');
@@ -1310,7 +1353,6 @@ function showTab(tab) {
   document.querySelectorAll('.pnav-tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.portal-page, .frame-container').forEach(p => p.classList.remove('active'));
 
-  const tabBtn = document.querySelector('[data-tab="' + tab + '"]');
   if(tabBtn) {
     tabBtn.classList.add('active');
     // Atualiza label no header mobile
@@ -1319,7 +1361,10 @@ function showTab(tab) {
     if (lbl) lbl.textContent = label;
   }
 
-  if (tab === 'app-inicio') {
+  if (tab === 'inicio') {
+    renderInicio();
+    $('page-inicio').classList.add('active');
+  } else if (tab === 'app-inicio') {
     $('page-app-inicio').classList.add('active');
     $('mob-active-label').textContent='Início';
   } else if (tab === 'dashboard') {
@@ -1355,6 +1400,9 @@ function showTab(tab) {
         }
         enviarToken();
       }
+      if (tab === 'validade' && ['gestor','estoque','caixa'].includes(usuario.perfil)) {
+        verificarConfirmacaoValidade();
+      }
     }
   }
 }
@@ -1389,17 +1437,13 @@ async function renovarTokenSeNecessario() {
 let _valPendentesConfirmar = [];
 
 async function verificarConfirmacaoValidade() {
-  // Aguarda o token estar disponível (máx 5s)
-  let tentativas = 0;
-  while (!token() && tentativas < 10) {
-    await new Promise(r => setTimeout(r, 500));
-    tentativas++;
-  }
-  if (!token()) return; // sem token, não bloqueia
+  const sessao = usuario;
+  if (!token() || !sessao) return;
 
   try {
     const d = await apiFetch('/api/validade/alertas-confirmacao');
-    if (!d.ok || !d.data?.length) return; // nada a confirmar
+    if (sessao !== usuario || !$('frame-validade').classList.contains('active') ||
+        $('modal-val-confirm').style.display === 'flex' || !d.ok || !d.data?.length) return;
     _valPendentesConfirmar = d.data;
     abrirModalConfirmacaoValidade();
   } catch(e) {
@@ -1895,6 +1939,7 @@ function abrirPerdas(){
 }
 
 async function carregarKPIs() {
+  if (!usuario || (usuario.perfil !== 'admin' && !$('page-dashboard').classList.contains('active'))) return;
   setSyncStatus('loading');
 
   // Pega o mês selecionado
