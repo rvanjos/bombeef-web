@@ -223,6 +223,7 @@ body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var
 }
 
 /* ── DASHBOARD REDESIGN ──────────────────────────────────────────────── */
+.dash-block-title{font-size:16px;margin:12px 0 9px}
 .dash-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px;}
 .dash-title{font-family:'Playfair Display',serif;font-size:22px;color:var(--red);}
 .dash-sub{font-size:12px;color:var(--muted);margin-top:2px;}
@@ -595,8 +596,8 @@ body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var
       <!-- Header do Dashboard -->
       <div class="dash-header">
         <div>
-          <div class="dash-title">📈 Dashboard Gerencial</div>
-          <div class="dash-sub" id="dash-sub">Carregando dados...</div>
+          <div class="dash-title">📈 Painel gerencial</div>
+          <div id="dash-loja-ativa" class="dash-sub"></div><div class="dash-sub" id="dash-sub">Carregando dados...</div>
         </div>
         <div class="dash-mes-sel">
           <input type="month" id="dash-mes" onchange="carregarKPIs()">
@@ -620,7 +621,7 @@ body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var
 
       <!-- Central de aprovações e pendências — admin e gestor -->
       <div id="dash-pendencias-admin" class="dash-pendencias-admin" style="display:none">
-        <div class="dash-pend-head"><div><strong>🔔 Aprovações e pendências</strong><span id="dash-pend-total"></span></div><small>Selecione um módulo para analisar</small></div>
+        <div class="dash-pend-head"><div><strong>🔔 O que precisa da sua ação</strong><span id="dash-pend-total"></span></div><small>Abra a fila do módulo para analisar</small></div>
         <div class="dash-pend-grid">
           <button class="dash-pend-card rh" id="dash-pend-rh" onclick="abrirPendenciaAdmin('rh')"><span class="dpc-icon">🧑‍💼</span><span><b class="pend-count">0</b><small>Aprovações no RH</small></span><i>→</i></button>
           <button class="dash-pend-card retiradas" id="dash-pend-retiradas" onclick="abrirPendenciaAdmin('retiradas')"><span class="dpc-icon">💸</span><span><b class="pend-count">0</b><small>Retiradas pendentes</small></span><i>→</i></button>
@@ -629,6 +630,7 @@ body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var
         </div>
       </div>
 
+      <h2 class="dash-block-title">Resultado do mês</h2>
       <!-- ══ SEÇÃO 1: META + FATURAMENTO ══ -->
       <div class="fat-hero hidden" id="prog-fat">
         <div class="fat-hero-info">
@@ -1036,6 +1038,7 @@ function broadcastToken() {
 
 function renderLojaAtiva(){
   const sel=$('ph-store');
+  $('dash-loja-ativa').textContent=usuario?.loja?.nome||'';
   if(!sel) return;
   const lojas=Array.isArray(usuario?.lojas)?usuario.lojas:[];
   if(!lojas.length){sel.style.display='none';return;}
@@ -2060,6 +2063,14 @@ async function carregarPendentesAprovacao() {
 
 function abrirPendenciaAdmin(tipo){
   showTab(tipo);
+  if(['fiado','retiradas'].includes(tipo)&&$('frame-'+tipo)?.classList.contains('active')){
+    const frame=$('iframe-'+tipo);
+    const enviar=()=>frame?.contentWindow?.postMessage({type:'bb_open_'+tipo+'_pendencias'},window.location.origin);
+    const pendente=()=>{clearTimeout(timer);enviar();};
+    const timer=setTimeout(()=>{frame?.removeEventListener('load',pendente);enviar();},1600);
+    frame?.addEventListener('load',pendente,{once:true});
+    enviar();
+  }
   if(tipo==='rh'){
     const enviar=()=>{try{document.getElementById('iframe-rh')?.contentWindow?.postMessage({type:'bb_open_rh_aprovacoes'},window.location.origin)}catch(_){}};
     setTimeout(enviar,350);setTimeout(enviar,1100);

@@ -115,8 +115,9 @@ if(window.self !== window.top){
 </div>
 <div class="layout">
   <div class="sidebar">
-    <div class="sb-sec">Principal</div>
+    <div class="sb-sec">Configurações gerais</div>
     <div class="nav-item active" onclick="showPage('sistema',this)">⚙️ Sistema</div>
+    <div class="sb-sec">Unidades e acessos</div>
     <div class="nav-item admin-only" onclick="showPage('lojas',this)">🏢 Empresas e Lojas</div>
     <div class="nav-item" onclick="showPage('usuarios',this)">👤 Usuários</div>
     <div class="nav-item" onclick="showPage('funcionarios',this)">👥 Funcionários</div>
@@ -126,7 +127,7 @@ if(window.self !== window.top){
     <div class="nav-item" onclick="showPage('acoes-validade',this)">📋 Ações de Validade</div>
   </div>
 
-  <div class="content">
+  <div class="content"><p id="config-loja-ativa" hidden style="padding:8px 10px;margin-bottom:8px;background:#fff;border:1px solid var(--border);border-radius:8px"></p>
 
     <!-- SISTEMA -->
     <div class="page active" id="page-sistema">
@@ -400,6 +401,11 @@ if(window.self !== window.top){
 const {api,fmt,toast} = BB;
 let usuarios=[], funcionarios=[], metas=[], categorias=[], lojas=[], vinculosLojas=[], multilojaLiberada=false;
 
+window.addEventListener('message',e=>{
+  if(e.origin!==location.origin||e.source!==parent||e.data?.type!=='bb_token')return;
+  const el=document.getElementById('config-loja-ativa'),nome=e.data.usuario?.loja?.nome;
+  el.hidden=!nome;el.textContent=nome?'Loja ativa: '+nome:'';
+});
 window.onBBReady = () => { init(); };
 
 async function init(){

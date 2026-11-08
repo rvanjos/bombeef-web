@@ -146,7 +146,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
   .body { overflow-y: auto !important; -webkit-overflow-scrolling: touch; height: auto !important; max-height: none !important; }
 }
 </style>
-</head>
+<link rel="stylesheet" href="/css/bb-periodo.css?v=1"></head>
 <body>
 <div class="ph">
   <div class="ph-identity">
@@ -207,9 +207,9 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
 
       <!-- Intervalo personalizado -->
       <div id="flt-intervalo-wrap" style="display:none;align-items:center;gap:4px">
-        <input type="date" id="flt-data-ini" class="flt" onchange="carregar()" style="min-width:130px">
+        <input type="date" id="flt-data-ini" data-bb-periodo aria-label="Início do período" class="flt" onchange="carregar()" style="min-width:130px">
         <span style="font-size:11px;color:var(--muted)">até</span>
-        <input type="date" id="flt-data-fim" class="flt" onchange="carregar()" style="min-width:130px">
+        <input type="date" id="flt-data-fim" data-bb-periodo aria-label="Fim do período" class="flt" onchange="carregar()" style="min-width:130px">
       </div>
 
       <!-- Atalhos rápidos -->
@@ -228,6 +228,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
       <button class="btn btn-s" style="color:var(--red-l)" onclick="limparFaturamento()">🗑️ Limpar</button>
     </div>
     <div id="fat-quality" class="quality-banner" style="display:none"></div>
+    <p class="bb-periodo-nota">O realizado considera os dias importados no período. Se o mês ainda estiver em curso, compare com o mesmo intervalo de outro mês.</p>
     <!-- Indicador do período selecionado -->
     <div id="fat-periodo-label" style="font-size:11px;color:var(--muted);padding:4px 2px;margin-bottom:4px"></div>
 
@@ -282,11 +283,11 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
         <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Período:</div>
         <div style="display:flex;align-items:center;gap:6px">
           <label style="font-size:11px;color:var(--muted)">De</label>
-          <input type="month" id="men-ini" style="padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px" onchange="filtrarMensal()">
+          <input type="month" id="men-ini" data-bb-periodo aria-label="Início do período" style="padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px" onchange="filtrarMensal()">
         </div>
         <div style="display:flex;align-items:center;gap:6px">
           <label style="font-size:11px;color:var(--muted)">Até</label>
-          <input type="month" id="men-fim" style="padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px" onchange="filtrarMensal()">
+          <input type="month" id="men-fim" data-bb-periodo aria-label="Fim do período" style="padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px" onchange="filtrarMensal()">
         </div>
         <button class="btn btn-s" style="font-size:11px;padding:5px 12px" onclick="limparFiltroMensal()">✕ Limpar</button>
       </div>
@@ -327,7 +328,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
   <div id="sec-reconciliacao" style="display:none">
     <div class="toolbar" style="margin-bottom:14px">
       <label style="font-size:12px;font-weight:600;color:var(--muted)">Mês:</label>
-      <input type="month" id="rec-mes" style="padding:6px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px"
+      <input type="month" id="rec-mes" data-bb-periodo aria-label="Mês de referência" style="padding:6px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px"
         onchange="carregarReconciliacao()">
       <span style="font-size:11px;color:var(--muted);margin-left:8px">
         Cruza vendas do Xmenu com recebimentos do extrato bancário no DRE

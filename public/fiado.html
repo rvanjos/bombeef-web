@@ -708,6 +708,11 @@ function renderKPIs(k) {
 }
 
 // ── Abas ────────────────────────────────────────────────────────────────────
+window.addEventListener('message',e=>{
+  if(e.origin!==location.origin||e.source!==parent||e.data?.type!=='bb_open_fiado_pendencias')return;
+  const aba=document.getElementById('tab-aprov');
+  if(aba&&getComputedStyle(aba).display!=='none')showTab('aprovacoes',aba);
+});
 function showTab(tab, btn) {
   document.querySelectorAll('[id^="sec-"]').forEach(s => s.style.display='none');
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));

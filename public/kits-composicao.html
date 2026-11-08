@@ -161,7 +161,16 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
 /* ─────────────────────────────────────────────────────────────────────────── */
 
 </style>
-</head>
+<style>
+.kit-oferta-resumo{margin:8px 0 0}.kit-oferta-resumo>div{display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-top:1px solid var(--border)}
+.kit-oferta-resumo dd{margin:0;font-weight:800;text-align:right}
+@media(max-width:700px){
+#m-kit .kit-editor-corpo{flex-direction:column;overflow:auto!important}
+#m-kit .kit-editor-corpo>div{width:100%!important;flex:none!important;overflow:visible!important;padding:12px!important}
+#m-kit input[type="date"],#m-kit button{min-height:44px}
+#m-kit input[type="date"]{max-width:100%;font-size:16px!important}
+}
+</style></head>
 <body>
 
 <!-- Cabeçalho do módulo -->
@@ -293,14 +302,13 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
 </div>
 
 <!-- Modal de Kit -->
-<div id="m-kit" class="mbg" onclick="if(event.target===this)fecharKit()">
+<div id="m-kit" class="mbg" role="dialog" aria-modal="true" aria-labelledby="kit-t" onclick="if(event.target===this)fecharKit()">
   <div style="background:#fff;border-radius:14px;width:100%;max-width:960px;padding:0;box-shadow:0 20px 60px rgba(0,0,0,.3);display:flex;flex-direction:column;max-height:92vh;">
     <div style="background:var(--red);padding:14px 20px;border-radius:14px 14px 0 0;display:flex;align-items:center;justify-content:space-between">
-      <span id="kit-t" style="color:#fff;font-weight:700;font-size:14px">Novo Kit</span>
-      <button onclick="fecharKit()" style="background:none;border:none;color:rgba(255,255,255,.8);font-size:20px;cursor:pointer;line-height:1">×</button>
+      <div><span id="kit-t" style="color:#fff;font-weight:700;font-size:14px">Novo Kit</span><small id="kit-vigencia-resumo" style="display:block;color:#fff">Sem vigência definida</small></div>
+      <button type="button" aria-label="Fechar editor do kit" onclick="fecharKit()" style="background:none;border:none;color:rgba(255,255,255,.8);font-size:20px;cursor:pointer;line-height:1">×</button>
     </div>
-    <!-- Layout 2 colunas: esquerda rola, direita fixa -->
-    <div style="display:flex;flex:1;min-height:0;overflow:hidden;">
+    <div class="kit-editor-corpo" style="display:flex;flex:1;min-height:0;overflow:hidden;">
 
       <!-- Coluna esquerda: campos + itens -->
       <div style="flex:1;overflow-y:auto;padding:18px 20px;min-width:0;border-right:1px solid var(--border);">
@@ -323,7 +331,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
         </div>
         <!-- Preço de venda -->
         <div style="margin-bottom:14px">
-          <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:3px">Preço de Venda (R$)</label>
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:3px" for="k-pvenda">Preço de Venda (R$)</label>
           <input id="k-pvenda" type="number" step="0.01" min="0" placeholder="0,00" oninput="recalcKit()" style="width:160px;border:1px solid var(--border);border-radius:7px;padding:7px 10px;font-size:13px;font-family:inherit">
         </div>
         <!-- Período de validade do kit -->
@@ -363,6 +371,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
           <div style="font-size:12px;font-weight:700;color:#555">Venda normal (sem desconto)</div>
           <strong id="kc-venda-normal" style="display:block;margin-top:5px;font-family:'DM Mono',monospace;font-size:18px;color:#8B0000">—</strong>
           <div id="kc-venda-normal-info" style="margin-top:5px;font-size:11px;color:#777">Somando os itens vendidos separadamente.</div>
+          <dl class="kit-oferta-resumo"><div><dt>Preço do kit</dt><dd id="kc-preco-kit">—</dd></div><div><dt>Economia para o cliente</dt><dd id="kc-economia">—</dd></div><div><dt>Margem do kit</dt><dd id="kc-margem">—</dd></div></dl>
         </div>
         <div style="display:flex;flex-direction:column;gap:7px;font-size:12px">
           <div style="display:flex;justify-content:space-between;align-items:center">
@@ -841,7 +850,12 @@ function calcCustoTotalKit(custoMat){
   const custoComDesp = custoMat + despMat;
   const precoMin  = custoComDesp * mkOp;
   const precoIdeal= custoComDesp * mkIdeal;
-  const op = opSobreVenda; // para compatibilidade
+  const op = opSobreVenda;
+  const economia=vendaNormalCentavos-Math.round(pv*100);
+  _set('kc-preco-kit',pv>0?fmt.brl(pv):'—');
+  _set('kc-economia',pv>0&&kitItems.length&&!precosPendentes?(economia<0?'Sem economia':fmt.brl(economia/100)):'—');
+  _set('kc-margem',pv>0?margR.toFixed(1).replace('.',',')+'%':'—');
+  atualizarResumoVigenciaKit(); // para compatibilidade
   return{op,opSobreVenda,despMat,custoComDesp,mkOp,mkIdeal,precoMin,precoIdeal};
 }
 
@@ -1398,7 +1412,14 @@ async function verKitEditar() {
   if (id) abrirKit(id);
 }
 
+function atualizarResumoVigenciaKit(){
+  const di=document.getElementById('k-data-inicio')?.value;
+  const df=document.getElementById('k-data-fim')?.value;
+  const data=v=>v.split('-').reverse().join('/');
+  document.getElementById('kit-vigencia-resumo').textContent=di&&df?`${data(di)} a ${data(df)}`:di?`A partir de ${data(di)}`:df?`Até ${data(df)}`:'Sem vigência definida';
+}
 function atualizarNomeKit() {
+  atualizarResumoVigenciaKit();
   // Só auto-preenche o nome se estiver vazio ou seguir o padrão "Kit Dia Dia ..."
   const nome = document.getElementById('k-nome');
   if (!nome || nome.value && !nome.value.match(/^Kit Dia Dia/)) return;
