@@ -91,7 +91,7 @@ function css(){
   #dre-periodo{padding:6px;border:1px solid var(--border);border-radius:7px;max-width:145px}
   #dre-actions{position:relative}
   #dre-actions summary{cursor:pointer;list-style:none;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px}
-  #dre-actions>div{position:absolute;right:0;top:38px;min-width:210px;background:#fff;border:1px solid var(--border);border-radius:10px;padding:6px;box-shadow:0 8px 24px #0002;z-index:70}
+  #dre-actions>div{position:absolute;left:0;top:100%;min-width:210px;background:#fff;border:1px solid var(--border);border-radius:10px;padding:6px;box-shadow:0 8px 24px #0002;z-index:70}
   #dre-actions button{display:block;width:100%;text-align:left;border:0;background:#fff;padding:9px;border-radius:5px;cursor:pointer;font-size:12px}
   #dre-actions button:hover{background:#f8f4f0}
   .mbg{padding:12px;box-sizing:border-box}
