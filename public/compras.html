@@ -101,7 +101,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);fon
   .import-card{max-width:none}
 }
 </style>
-</head>
+<link rel="stylesheet" href="/css/bb-lista.css?v=1"></head>
 <body>
 
 <div class="ph">
@@ -206,7 +206,7 @@ if (window.self !== window.top) {
     <div class="fg-row" style="grid-template-columns:1fr auto">
       <div class="fg">
         <label>Produto</label>
-        <input class="inp" id="a-busca" placeholder="Digite código ou nome do produto..." oninput="onBuscaInput()" autocomplete="off">
+        <input class="inp" type="search" data-bb-lista-busca id="a-busca" placeholder="Digite código ou nome do produto..." oninput="onBuscaInput()" autocomplete="off">
         <div id="a-autocomplete" style="position:relative;z-index:99"></div>
       </div>
       <div class="fg" style="justify-content:flex-end">
@@ -1003,7 +1003,7 @@ async function carregarGiro() {
         </div>
         <div>
           <div class="pl-lbl">Buscar</div>
-          <input id="pl-busca" class="pl-inp" placeholder="Nome ou código…" style="width:180px"
+          <input type="search" data-bb-lista-busca id="pl-busca" class="pl-inp" placeholder="Nome ou código…" style="width:180px"
             oninput="filtrarListaCompra()">
         </div>
         <button onclick="carregarListaCompra()" class="btn btn-p" style="height:36px;padding:0 18px">🔄 Atualizar</button>

@@ -173,7 +173,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
   .body { overflow-x: hidden !important; overflow-y: auto !important; -webkit-overflow-scrolling: touch; height: auto !important; max-height: none !important; }
 }
 </style>
-</head>
+<link rel="stylesheet" href="/css/bb-lista.css?v=1"></head>
 <body>
 <div class="ph"><span style="font-size:20px">📦</span><h2>Produtos & Kits</h2><div class="ph-sub" id="ph-sub">—</div></div>
 <div class="tabs bb-tabs" role="tablist" aria-label="Áreas de produtos">
@@ -194,7 +194,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
       <div class="toolbar" style="flex-wrap:wrap;gap:6px">
       <button class="btn btn-g" onclick="abrirProd()">＋ Novo Produto</button>
       <button class="btn btn-s" onclick="abrirImport()">📥 Importar relatório PDV</button>
-      <div class="search-w"><input type="text" id="busca-p" placeholder="Código, descrição, fornecedor..." oninput="filtrarP()"></div>
+      <div class="search-w"><input data-bb-lista-busca type="search" id="busca-p" placeholder="Código, descrição, fornecedor..." oninput="filtrarP()"></div>
       <select id="f-cat" style="padding:6px 9px;border:1px solid var(--border);border-radius:7px;font-size:12px" onchange="filtrarP()">
         <option value="">Todas as categorias</option>
       </select>

@@ -9,12 +9,23 @@
 <style>
 :root{--red:#8b0000;--bg:#f7f4f0;--card:#fff;--text:#211d1a;--muted:#746d67;--border:#e8e0d8;--green:#18794e;--orange:#b96b00;--blue:#245f9e;--shadow:0 3px 14px rgba(50,35,25,.07)}*{box-sizing:border-box}body{margin:0;background:var(--bg);font-family:'DM Sans',Arial,sans-serif;color:var(--text)}button,input,select{font:inherit}.wrap{padding:16px;max-width:1600px;margin:auto}.top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:12px}.top h1{margin:0;color:var(--red);font-size:22px}.top p{margin:4px 0 0;color:var(--muted);font-size:12px}.actions,.filters,.tabs,.row-actions{display:flex;gap:7px;flex-wrap:wrap}.btn,input,select{min-height:38px;border:1px solid var(--border);border-radius:8px;background:#fff;padding:0 10px;font-size:12px}.btn{cursor:pointer;font-weight:700}.btn.primary{background:var(--red);color:#fff;border-color:var(--red)}.btn.green{background:var(--green);color:#fff;border-color:var(--green)}.filters{background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:10px;box-shadow:var(--shadow)}.filters input[type=search]{min-width:220px;flex:1}.kpis{display:grid;grid-template-columns:repeat(5,minmax(150px,1fr));gap:9px;margin-bottom:10px}.kpi{background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px 14px;box-shadow:var(--shadow);border-left:4px solid var(--red)}.kpi.green{border-left-color:var(--green)}.kpi.orange{border-left-color:var(--orange)}.kpi.blue{border-left-color:var(--blue)}.lab{font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:800}.val{font-size:20px;font-weight:800;margin-top:5px}.sub{font-size:10px;color:var(--muted);margin-top:3px}.tabs{margin:10px 0}.tab{border:1px solid var(--border);background:#fff;border-radius:8px;padding:8px 12px;font-size:11px;font-weight:800;cursor:pointer}.tab.active{background:var(--red);color:#fff;border-color:var(--red)}.panel{background:#fff;border:1px solid var(--border);border-radius:11px;box-shadow:var(--shadow);overflow:hidden;margin-bottom:10px}.panel-head{padding:11px 13px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;gap:8px;align-items:center}.panel-head strong{font-size:13px}.table-wrap{overflow:auto;max-height:calc(100vh - 340px)}table{width:100%;border-collapse:collapse;min-width:1100px}th{position:sticky;top:0;background:#faf8f5;color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.4px;text-align:left;padding:9px 10px;border-bottom:1px solid var(--border);z-index:2}td{font-size:11px;padding:9px 10px;border-bottom:1px solid #f1ece6;vertical-align:middle}.num{text-align:right;font-family:'DM Mono',monospace}.name{font-weight:800}.month{font-weight:800;color:var(--blue)}tr.old-debt td{background:#fff8ec}.badge{display:inline-flex;padding:3px 7px;border-radius:999px;font-size:9px;font-weight:800;white-space:nowrap}.badge.ok{background:#e8f7ee;color:#14733f}.badge.warn{background:#fff1d7;color:#8d5600}.badge.bad{background:#feecec;color:#a22020}.badge.info{background:#eaf2fc;color:#245f9e}.mini{border:1px solid var(--border);background:#fff;border-radius:6px;padding:5px 7px;font-size:9px;font-weight:800;cursor:pointer}.mini.pay{color:#14733f;border-color:#b7ddc8}.mini.pdv{color:#1d4f91}.empty{padding:30px;text-align:center;color:var(--muted);font-size:12px}.func-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:9px;padding:12px}.func-card{border:1px solid var(--border);border-radius:10px;padding:12px;cursor:pointer;background:#fff}.func-card:hover{background:#fffaf7}.func-top{display:flex;justify-content:space-between;gap:8px}.func-top b{font-size:12px}.func-amount{font-weight:800;color:var(--red)}.func-meta{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px;font-size:10px;color:var(--muted)}.func-meta b{display:block;color:var(--text);font-size:11px;margin-top:2px}.alert-old{background:#fff8e9;border:1px solid #f3cf83;border-radius:10px;padding:10px 12px;margin-bottom:10px;display:none;font-size:11px}.alert-old.show{display:flex;align-items:center;justify-content:space-between;gap:8px}.drawer{display:none}.drawer.open{display:block}.drawer-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:12px;border-bottom:1px solid var(--border)}.drawer-summary>div{padding:9px;background:#faf8f5;border-radius:8px}.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100;align-items:center;justify-content:center;padding:16px}.modal-bg.open{display:flex}.modal{background:#fff;border-radius:12px;width:min(480px,100%);box-shadow:0 18px 50px rgba(0,0,0,.25)}.modal-head{padding:14px 16px;background:var(--red);color:#fff;font-weight:800;border-radius:12px 12px 0 0}.modal-body{padding:16px}.fg{margin-bottom:10px}.fg label{display:block;font-size:10px;text-transform:uppercase;color:var(--muted);font-weight:800;margin-bottom:4px}.fg input,.fg select{width:100%}.modal-foot{padding:12px 16px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px}.errorbox{display:none;background:#feecec;color:#8f1d1d;border:1px solid #f2bcbc;border-radius:9px;padding:10px 12px;margin-bottom:10px;font-size:11px}.errorbox.show{display:block}@media(max-width:1000px){.kpis{grid-template-columns:repeat(3,1fr)}.table-wrap{max-height:none}.drawer-summary{grid-template-columns:1fr 1fr}}@media(max-width:650px){.wrap{padding:10px}.top{flex-direction:column}.kpis{grid-template-columns:1fr 1fr}.filters>*{flex:1;min-width:135px}.val{font-size:17px}.func-grid{grid-template-columns:1fr}.alert-old.show{align-items:flex-start;flex-direction:column}.table-wrap{overflow:auto}.actions .btn{flex:1}.drawer-summary{grid-template-columns:1fr 1fr}}@media print{.top .actions,.filters,.tabs,.row-actions,.mini,.btn{display:none!important}.wrap{padding:0}.table-wrap{max-height:none;overflow:visible}.panel{box-shadow:none}body{background:#fff}}
 </style>
-</head>
+<style>
+#modal-pag .modal{max-height:92dvh;display:flex;flex-direction:column}
+#modal-pag .modal-body{min-height:0;overflow:auto}
+#modal-pag .modal-head,#modal-pag .modal-foot{flex-shrink:0}
+#m-prev{flex:1 0 100%;font-size:13px;font-weight:700}
+#m-prev:empty{display:none}
+#m-desc{font-size:13px;font-weight:800}
+#m-detalhes{margin-top:8px;padding:8px;background:#f7f4f0;border-radius:8px}
+#m-itens{max-height:140px;overflow:auto;font-size:12px}
+#m-itens>div{padding:5px 0}
+@media(max-width:700px){#modal-pag button,#modal-pag input,#modal-pag select,.top .actions button{min-height:44px}#modal-pag input,#modal-pag select{font-size:16px}}
+</style></head>
 <body>
 <div class="wrap">
   <div class="top">
     <div><h1>🧾 Gestão de Retiradas</h1><p>Saldo em aberto não some na virada do mês. Cada retirada mantém o mês de origem até ser paga.</p></div>
-    <div class="actions"><button class="btn green" id="pagar-saldo" onclick="abrirPagamentoSaldo()" hidden>💸 Pagar saldo em aberto</button><button class="btn primary" onclick="location.href='/retiradas.html?legacy=1&acao=nova'">＋ Nova Retirada</button><button class="btn" onclick="window.print()">🖨️ Imprimir</button><button class="btn" onclick="exportarCSV()">⬇ CSV</button></div>
+    <div class="actions"><button class="btn green" id="pagar-saldo" onclick="abrirPagamentoSaldo()" hidden>💸 Pagar saldo em aberto</button><button class="btn primary" onclick="location.href='/retiradas.html?legacy=1&acao=nova'">＋ Nova Retirada</button><button class="btn" id="acao-pdv" onclick="abrirPendenciasPDV()" hidden>✓ PDV OK</button><button class="btn" onclick="window.print()">🖨️ Imprimir</button><button class="btn" onclick="exportarCSV()">⬇ CSV</button></div>
   </div>
 
   <div id="erro" class="errorbox"></div>
@@ -60,15 +71,15 @@
   </div>
 </div>
 
-<div class="modal-bg" id="modal-pag"><div class="modal" style="max-height:90dvh;overflow-y:auto"><div class="modal-head">💸 Pagar retiradas em aberto</div><div class="modal-body">
+<div class="modal-bg" id="modal-pag"><div class="modal"><div class="modal-head">💸 Pagar retiradas em aberto</div><div class="modal-body">
 <div class="fg"><label for="m-func">Funcionário</label><select id="m-func" onchange="consultarSaldoPagamento()"></select></div>
-<div class="fg"><div id="m-desc" style="font-weight:800;font-size:12px"></div><div id="m-itens" style="font-size:12px;max-height:120px;overflow:auto;margin-top:8px"></div></div>
+<div class="fg"><div id="m-desc" role="status"></div><details id="m-detalhes" hidden><summary>Conferir abatimentos</summary><div id="m-itens"></div></details></div>
 <div class="fg"><button class="btn green" id="m-quitar" onclick="quitarSaldoPrincipal()" disabled>Quitar todo o saldo</button><p style="font-size:12px;color:var(--muted)">Inclui todos os meses em aberto deste funcionário. Para pagar parte, ajuste o valor.</p></div>
-<div class="fg"><label for="m-valor">Valor a pagar</label><input id="m-valor" type="number" min="0.01" step="0.01" oninput="previewPagamentoSaldo()"><div id="m-prev" style="font-size:12px;margin-top:6px"></div></div>
+<div class="fg"><label for="m-valor">Valor a pagar</label><input id="m-valor" type="number" min="0.01" step="0.01" oninput="previewPagamentoSaldo()"></div>
 <div class="fg"><label for="m-data">Data do pagamento</label><input type="date" id="m-data"></div>
 <div class="fg"><label for="m-forma">Forma de pagamento</label><select id="m-forma"><option value="dinheiro">Dinheiro</option><option value="pix">Pix</option><option value="debito">Cartão Débito</option><option value="transferencia">Transferência</option><option value="desconto_folha">Desconto em Folha</option><option value="outro">Outro</option></select></div>
 <div class="fg"><label for="m-obs">Observação</label><input id="m-obs" placeholder="Opcional"></div>
-</div><div class="modal-foot"><button class="btn" onclick="fecharPag()">Cancelar</button><button class="btn green" id="m-confirmar" onclick="confirmarPag()" disabled>Confirmar pagamento</button></div></div></div>
+</div><div class="modal-foot"><div id="m-prev" role="status"></div><button class="btn" onclick="fecharPag()">Cancelar</button><button class="btn green" id="m-confirmar" onclick="confirmarPag()" disabled>Confirmar pagamento</button></div></div></div>
 
 <script>
 const {api,fmt,toast}=BB;const $=id=>document.getElementById(id);
@@ -91,7 +102,8 @@ async function init(){const d=new Date();$('mes').value=`${d.getFullYear()}-${St
 async function carregar(){erro('');$('tbody').innerHTML='<tr><td colspan="11" class="empty">Carregando...</td></tr>';try{const[a,b]=await Promise.all([api.get('/api/retiradas'),api.get(`/api/retiradas/limites?mes=${encodeURIComponent(mesRef())}`)]);if(!a?.ok)throw new Error(a?.erro||'Não foi possível carregar as retiradas');if(!b?.ok)throw new Error(b?.erro||'Não foi possível carregar os limites');retiradas=Array.isArray(a.data)?a.data:[];limites=Array.isArray(b.data)?b.data:[];permissoes=b.permissoes||{};montarFuncionarios();renderTudo()}catch(e){erro(e.message||'Erro ao carregar retiradas');$('tbody').innerHTML='<tr><td colspan="11" class="empty">Não foi possível carregar as retiradas. Use o botão Atualizar.</td></tr>'}}
 async function carregarLimites(){const b=await api.get(`/api/retiradas/limites?mes=${encodeURIComponent(mesRef())}`);if(b?.ok){limites=Array.isArray(b.data)?b.data:[];permissoes=b.permissoes||permissoes;montarFuncionarios();renderTudo()}}
 function montarFuncionarios(){const atual=$('func').value,map=new Map();for(const l of limites)map.set(String(l.id),l.nome);for(const r of retiradas)if(r.funcionario_id&&!map.has(String(r.funcionario_id)))map.set(String(r.funcionario_id),r.funcionario_nome||`Funcionário ${r.funcionario_id}`);$('func').innerHTML='<option value="">Todos os funcionários</option>'+[...map.entries()].sort((a,b)=>String(a[1]).localeCompare(String(b[1]),'pt-BR')).map(([id,n])=>`<option value="${id}">${esc(n)}</option>`).join('');if([...map.keys()].includes(atual))$('func').value=atual}
-function renderTudo(){$('pagar-saldo').hidden=!pode('pagamentos');renderKpis();renderAlerta();render();if(drawerFunc)renderDrawer(drawerFunc)}
+function abrirPendenciasPDV(){setView('pdv',document.querySelector('[data-view=pdv]'));$('painel-lista').scrollIntoView({block:'start'});}
+function renderTudo(){$('acao-pdv').hidden=!pode('pdv');$('pagar-saldo').hidden=!pode('pagamentos');renderKpis();renderAlerta();render();if(drawerFunc)renderDrawer(drawerFunc)}
 function renderKpis(){const mes=noMes(),ab=pendencias(),ant=anteriores(),pagMes=mes.filter(pago);$('k-mes').textContent=brl(mes.reduce((s,r)=>s+num(r.valor_total),0));$('k-mes-sub').textContent=`${mes.length} retirada(s) em ${mesRef()}`;$('k-aberto').textContent=brl(ab.reduce((s,r)=>s+saldoRetirada(r),0));$('k-aberto-sub').textContent=`${ab.length} lançamento(s) de todos os meses`;$('k-antigo').textContent=brl(ant.reduce((s,r)=>s+saldoRetirada(r),0));$('k-antigo-sub').textContent=`${ant.length} pendência(s) anterior(es)`;$('k-pago').textContent=brl(pagMes.reduce((s,r)=>s+num(r.valor_total),0));$('k-funcs').textContent=new Set(ab.map(r=>String(r.funcionario_id))).size}
 function renderAlerta(){const a=anteriores(),el=$('alert-antigo');if(!a.length){el.classList.remove('show');return}const meses=[...new Set(a.map(r=>r.mes))].sort((x,y)=>mesOrdem(x)-mesOrdem(y));$('alert-antigo-text').innerHTML=`⚠️ <b>${a.length} retirada(s) de meses anteriores continuam em aberto</b> — ${brl(a.reduce((s,r)=>s+num(r.valor_total),0))}. Origem: ${meses.map(esc).join(', ')}.`;el.classList.add('show')}
 function setView(v,el){view=v;document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));if(el)el.classList.add('active');render()}
@@ -128,7 +140,7 @@ async function consultarSaldoPagamento(idRetirada=null){
   if(pagEnviando)return;
   const carga=++saldoPagCarga,fid=Number($('m-func').value);
   pagId=idRetirada?Number(idRetirada):null;saldoPagItens=[];saldoPagFunc=null;
-  $('m-valor').value='';$('m-confirmar').disabled=true;$('m-quitar').disabled=true;$('m-prev').textContent='';$('m-itens').textContent='';
+  $('m-valor').value='';$('m-confirmar').disabled=true;$('m-quitar').disabled=true;$('m-prev').textContent='';$('m-itens').textContent='';$('m-detalhes').hidden=true;$('m-detalhes').open=false;
   $('m-desc').textContent=fid?'Consultando saldo...':'Selecione o funcionário.';
   if(!fid)return;
   try{
@@ -142,10 +154,25 @@ async function consultarSaldoPagamento(idRetirada=null){
 function preencherPagamentoSaldo(){
   const a=alvosPagamento();$('m-valor').value=totalPagamento().toFixed(2);
   $('m-desc').textContent=a.length?`${pagId?'Lançamento selecionado':'Saldo de todos os meses'}: ${brl(totalPagamento())} · ${a.length} lançamento(s)`:'Nenhuma retirada em aberto.';
-  $('m-itens').innerHTML=a.map(r=>`<div>${esc(fmt.date(r.dt_retirada))} · ${esc(nomeProduto(r))} · ${esc(brl(saldoRetirada(r)))}</div>`).join('');previewPagamentoSaldo();
+  previewPagamentoSaldo();
 }
 function quitarSaldoPrincipal(){if(pagEnviando)return;pagId=null;preencherPagamentoSaldo()}
-function previewPagamentoSaldo(){const v=num($('m-valor').value),t=totalPagamento();$('m-confirmar').disabled=pagEnviando||!saldoPagFunc||!alvosPagamento().length||v<=0||v>t+.005;$('m-prev').textContent=v>t+.005?'O valor ultrapassa o saldo em aberto.':v>0?(Math.abs(t-v)<.005?`Quita ${alvosPagamento().length} lançamento(s).`:`Abate as mais antigas; restará ${brl(t-v)}.`):''}
+function previewPagamentoSaldo(){
+  const alvos=alvosPagamento(),v=Math.round(num($('m-valor').value)*100),t=Math.round(totalPagamento()*100);
+  const valido=!!saldoPagFunc&&alvos.length>0&&v>0&&v<=t;
+  $('m-confirmar').disabled=pagEnviando||!valido;
+  $('m-prev').textContent=v>t?'O valor ultrapassa o saldo em aberto.':valido?`A pagar: ${brl(v/100)} · Restará: ${brl((t-v)/100)}${v===t?` · Quita ${alvos.length} lançamento(s).`: ''}`:'';
+  let restante=valido?v:0;
+  const linhas=[];
+  for(const r of alvos){
+    if(restante<=0)break;
+    const saldo=Math.round(saldoRetirada(r)*100),abatimento=Math.min(restante,saldo);
+    restante-=abatimento;
+    linhas.push(`<div>${esc(fmt.date(r.dt_retirada))} · ${esc(nomeProduto(r))} · <strong>${brl(abatimento/100)}</strong> ${abatimento===saldo?'· Quita':'· Parcial'}</div>`);
+  }
+  $('m-detalhes').hidden=!linhas.length;
+  $('m-itens').innerHTML=linhas.join('');
+}
 async function confirmarPag(){
   if(pagEnviando)return;previewPagamentoSaldo();if($('m-confirmar').disabled||saldoPagFunc!==Number($('m-func').value))return;
   const body={funcionarioId:saldoPagFunc,valorPago:num($('m-valor').value),saldoEsperado:totalPagamento(),criterio:pagId?'selecionadas':'antigas',retiradaIds:pagId?[pagId]:[],dataPagamento:$('m-data').value||null,formaPagamento:$('m-forma').value,observacao:$('m-obs').value||null};

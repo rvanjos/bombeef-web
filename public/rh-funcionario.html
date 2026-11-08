@@ -111,7 +111,7 @@ header{background:var(--red);color:#fff;padding:14px 16px 12px;display:flex;alig
 .opc-toggle{background:none;border:none;color:#8B0000;font-size:13px;font-weight:600;
   cursor:pointer;padding:10px 0;font-family:inherit;}
 </style>
-</head>
+<style>#rh-meu-ponto[hidden]{display:none!important}@media(max-width:700px){.tabs .tab{min-height:44px}}</style></head>
 <body>
 <header>
   <div class="h-icon">🧑‍💼</div>
@@ -122,7 +122,8 @@ header{background:var(--red);color:#fff;padding:14px 16px 12px;display:flex;alig
 <div class="tabs">
   <button class="tab active" onclick="showTab('lanc')">📝 Meus Lançamentos</button>
   <button class="tab" onclick="showTab('escala')">📅 Escala de Domingos</button>
-  <button class="tab" onclick="showTab('documentos')">📁 Meus Documentos</button>
+  <button class="tab" onclick="showTab('documentos')">📁 Meus documentos</button>
+  <button class="tab" id="rh-meu-ponto" onclick="abrirMeuPonto()" hidden>⏱️ Meu ponto</button>
 </div>
 <div id="tab-documentos" class="tab-content"><div id="meus-documentos" style="padding:16px;max-width:1000px;margin:auto"></div></div>
 
@@ -301,6 +302,14 @@ function fmtData(s){ if(!s)return'—'; const d=String(s).slice(0,10); const[y,m
 function toast(msg,dur=3200){ const el=document.getElementById('toast'); el.textContent=msg; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),dur); }
 function fecharModal(){ document.getElementById('modal-lanc').classList.remove('open'); }
 
+function abrirMeuPonto(){
+  if(parent!==window)parent.postMessage({type:'bb_nav',tab:'ponto'},location.origin);
+  else location.href='/ponto.html';
+}
+window.addEventListener('message',e=>{
+  if(e.origin!==location.origin||e.source!==parent||e.data?.type!=='bb_token')return;
+  document.getElementById('rh-meu-ponto').hidden=!['gestor','operador','caixa'].includes(e.data.usuario?.perfil);
+});
 function showTab(t){
   document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
   document.querySelectorAll('.tab-content').forEach(c=>c.classList.remove('active'));

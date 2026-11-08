@@ -59,7 +59,7 @@ tbody tr:last-child{border-bottom:none;}
   .cat-forn-meta{width:100%;padding-left:0}
 }
 </style>
-</head>
+<link rel="stylesheet" href="/css/bb-lista.css?v=1"></head>
 <body class="bb-page-shell">
 
 <div class="ph">
@@ -76,7 +76,7 @@ tbody tr:last-child{border-bottom:none;}
 </div>
 <div class="bb-toolbar forn-toolbar toolbar">
   <div class="bb-search search-box">
-    <input class="bb-input" type="search" id="inp-busca" placeholder="Buscar por nome, fantasia ou CNPJ..." aria-label="Buscar fornecedores" oninput="buscar()">
+    <input data-bb-lista-busca class="bb-input" type="search" id="inp-busca" placeholder="Buscar por nome, fantasia ou CNPJ..." aria-label="Buscar fornecedores" oninput="buscar()">
     <span class="bb-search-icon search-ico" aria-hidden="true">⌕</span>
   </div>
   <label class="bb-check filtro-ativo">
