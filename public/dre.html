@@ -8,8 +8,8 @@
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="/js/api.js"></script>
-<script src="/js/dre-excel.js?v=1"></script>
-<script src="/js/dre-conferencia.js?v=16"></script>
+<script src="/js/dre-excel.js?v=2"></script>
+<script src="/js/dre-conferencia.js?v=17"></script>
 <script src="/js/dre-fluxo.js?v=7"></script>
 <script src="/js/dre-cartao-c6.js?v=1"></script>
 <script src="/js/dre-cartao-ocr.js?v=1"></script>
@@ -609,7 +609,7 @@ thead th{padding:6px 9px;}
           <div id="dre-more-menu" class="dre-more-menu">
             <button onclick="document.getElementById('f-ofx').click()">🏦 Importar OFX / planilha</button>
             <button onclick="document.getElementById('f-cc').click()">💳 Importar fatura de cartão</button>
-            <button onclick="exportXLS()">📊 Exportar DRE para Excel</button>
+            <button onclick="gerarExcelDRE()">📊 Exportar DRE para Excel</button>
             <button onclick="exportarLancamentosRaw()">📋 Exportar lançamentos</button>
             <button onclick="abrirSessoes()">🗂 Histórico de sessões</button>
             <button onclick="abrirCategorias()">⚙️ Gerenciar categorias</button>
@@ -675,7 +675,7 @@ thead th{padding:6px 9px;}
 
           <div class="fsb-actions">
             <button class="fsb-btn primary" onclick="salvarTodos()" style="background:var(--green)">💾 Salvar</button>
-            <button class="fsb-btn secondary bb-desktop-only" onclick="exportXLS()">📊 Exportar Excel</button>
+            <button class="fsb-btn secondary bb-desktop-only" onclick="gerarExcelDRE()">📊 Exportar Excel</button>
             <button class="fsb-btn secondary bb-desktop-only" onclick="abrirSessoes()">🗂 Sessões</button>
 
             <button class="fsb-btn danger bb-desktop-only" onclick="limparTudo()">🗑 Limpar tudo</button>
@@ -1057,7 +1057,7 @@ thead th{padding:6px 9px;}
           <option value="comp" selected style="background:#fff;color:#1a1a1a">Competência (faturamento XMenu)</option>
         </select>
         <button id="btn-pct-full" style="padding:3px 10px;border:1px solid rgba(255,255,255,.3);border-radius:6px;font-size:12px;background:rgba(255,255,255,.15);color:#fff;cursor:pointer;font-weight:600" onclick="togglePct()" title="Mostrar % de cada categoria sobre a receita total">% Custos</button>
-        <button onclick="exportXLS()" style="padding:3px 10px;border:1px solid rgba(255,255,255,.3);border-radius:6px;font-size:12px;background:rgba(255,255,255,.15);color:#fff;cursor:pointer;font-weight:600" title="Exportar Excel com formatação">📤 Excel</button>
+        <button onclick="gerarExcelDRE()" style="padding:3px 10px;border:1px solid rgba(255,255,255,.3);border-radius:6px;font-size:12px;background:rgba(255,255,255,.15);color:#fff;cursor:pointer;font-weight:600" title="Exportar Excel com formatação">📤 Excel</button>
       </div>
       <div style="display:flex;align-items:center;gap:6px">
         <button onclick="toggleDREFullscreen()" id="btn-dre-fs" title="Tela cheia" style="background:none;border:1px solid rgba(255,255,255,.3);border-radius:6px;color:rgba(255,255,255,.9);font-size:16px;cursor:pointer;padding:2px 8px;line-height:1">⛶</button>
@@ -5207,6 +5207,8 @@ window.togglePct = function togglePct() {
 }
 let _dreRenderTimer=null;
 window.renderDRE = function renderDRE(){
+  const regimeWorkspace=document.getElementById('dre-ws-regime');
+  if(regimeWorkspace)regimeWorkspace.value=getModo();
   clearTimeout(_dreRenderTimer);
   _dreRenderTimer=setTimeout(()=>{
   setTimeout(()=>{
@@ -7441,6 +7443,9 @@ Isso irá reconstruir a sessão a partir dos dados salvos individualmente na tab
 }
 
 function setSt(s){
+  const ws=document.getElementById('dre-ws-save');
+  if(ws){ws.dataset.state=s;ws.textContent=({ok:'Salvo',load:'Salvando…',err:'Falha ao salvar — tente novamente'})[s]||'';}
+
   const d=document.getElementById('sd'),t=document.getElementById('st');
   const ind=document.getElementById('save-ind');
   if(s==='ok'){
