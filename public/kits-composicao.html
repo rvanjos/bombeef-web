@@ -851,11 +851,7 @@ function calcCustoTotalKit(custoMat){
   const precoMin  = custoComDesp * mkOp;
   const precoIdeal= custoComDesp * mkIdeal;
   const op = opSobreVenda;
-  const economia=vendaNormalCentavos-Math.round(pv*100);
-  _set('kc-preco-kit',pv>0?fmt.brl(pv):'—');
-  _set('kc-economia',pv>0&&kitItems.length&&!precosPendentes?(economia<0?'Sem economia':fmt.brl(economia/100)):'—');
-  _set('kc-margem',pv>0?margR.toFixed(1).replace('.',',')+'%':'—');
-  atualizarResumoVigenciaKit(); // para compatibilidade
+// para compatibilidade
   return{op,opSobreVenda,despMat,custoComDesp,mkOp,mkIdeal,precoMin,precoIdeal};
 }
 
@@ -1219,6 +1215,11 @@ function recalcKit(){
   const margR  = pv > 0 ? (lucroR / pv * 100) : 0;
   const op = opSobreVenda;
 
+  const economia=vendaNormalCentavos-Math.round(pv*100);
+  _set('kc-preco-kit',pv>0?fmt.brl(pv):'—');
+  _set('kc-economia',pv>0&&kitItems.length&&!precosPendentes?(economia<0?'Sem economia':fmt.brl(economia/100)):'—');
+  _set('kc-margem',pv>0?margR.toFixed(1).replace('.',',')+'%':'—');
+  atualizarResumoVigenciaKit();
   // Custo materiais — sempre
   _set('kc-mat', matDescartado>0
     ? fmt.brl(matReal)+` (⏱ ${fmt.brl(matDescartado)} s/ margem)`
