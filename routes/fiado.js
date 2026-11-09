@@ -439,14 +439,18 @@ module.exports = function(pool, app) {
   // ── PUT /vendas/:id/editar — editar itens/preços de venda aberta/parcial ──
   r.put('/vendas/:id/editar', permitir('fiado_editar',['gestor']), async (req, res) => {
     const { itens, observacoes } = req.body;
-    if (!itens || !itens.length) return res.status(400).json({ ok:false, erro:'itens obrigatórios' });
+    if (!Array.isArray(itens) || !itens.length || itens.some(i=>!i||typeof i.nome_produto!=='string'||!i.nome_produto.trim()||!Number.isFinite(Number(i.quantidade))||Number(i.quantidade)<=0||[i.valor_unit_venda,i.valor_unit_custo,i.desconto_pct].some(n=>!Number.isFinite(Number(n??0))||Number(n??0)<0)||Number(i.desconto_pct||0)>100)) return res.status(400).json({ ok:false, erro:'itens obrigatórios' });
 
+    const loja=req.user?.lojaId;
+    let client, concluido=false;
     try {
+      client=await pool.connect();
+      await client.query('BEGIN');
       // Só permite editar vendas abertas ou parcialmente pagas
-      const { rows: [venda] } = await pool.query(
+      const { rows: [venda] } = await client.query(
         `SELECT v.*, c.tipo_cliente, c.desconto_pct AS desc_cliente, c.nome AS cliente_nome
-         FROM vendas_fiado v JOIN clientes_fiado c ON c.id=v.cliente_id WHERE v.id=$1`,
-        [parseInt(req.params.id)]
+         FROM vendas_fiado v JOIN clientes_fiado c ON c.id=v.cliente_id AND c.loja_id=v.loja_id WHERE v.id=$1 AND v.loja_id=$2 FOR UPDATE OF v`,
+        [parseInt(req.params.id),loja]
       );
       if (!venda) return res.status(404).json({ ok:false, erro:'Venda não encontrada' });
       if (!['aberto','parcial','aguardando'].includes(venda.status)) {
@@ -481,39 +485,40 @@ module.exports = function(pool, app) {
       }
       const novo_saldo = Math.max(0, total_final - ja_pago);
 
-      const client = await pool.connect();
-      try {
-        await client.query('BEGIN');
+      const status=venda.status==='aguardando'?'aguardando':centavos(novo_saldo)===0?'pago':centavos(ja_pago)>0?'parcial':'aberto';
         // Atualizar cabeçalho da venda
         await client.query(
           `UPDATE vendas_fiado SET
              subtotal_venda=$1, desconto_total=$2, total_final=$3, saldo_restante=$4,
-             observacoes=COALESCE($5, observacoes), updated_at=NOW()
-           WHERE id=$6`,
+             observacoes=$5, status=$7, updated_at=NOW()
+           WHERE id=$6 AND loja_id=$8`,
           [subtotal.toFixed(2), desconto_total.toFixed(2), total_final.toFixed(2),
-           novo_saldo.toFixed(2), observacoes||null, parseInt(req.params.id)]
+           novo_saldo.toFixed(2), observacoes===undefined?venda.observacoes:observacoes, parseInt(req.params.id), status, loja]
         );
         // Substituir itens
-        await client.query(`DELETE FROM itens_venda_fiado WHERE venda_id=$1`, [parseInt(req.params.id)]);
+        await client.query(`DELETE FROM itens_venda_fiado WHERE venda_id=$1 AND loja_id=$2`, [parseInt(req.params.id),loja]);
         for (const item of itens) {
           await client.query(
-            `INSERT INTO itens_venda_fiado(venda_id,codigo_produto,nome_produto,quantidade,valor_unit_venda,valor_unit_custo,desconto_pct,valor_final_item)
-             VALUES($1,$2,$3,$4,$5,$6,$7,$8)`,
+            `INSERT INTO itens_venda_fiado(venda_id,codigo_produto,nome_produto,quantidade,valor_unit_venda,valor_unit_custo,desconto_pct,valor_final_item,loja_id)
+             VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
             [parseInt(req.params.id), item.codigo_produto||null, item.nome_produto,
              item.quantidade, item.valor_unit_venda||0, item.valor_unit_custo||0,
-             item._desc||0, item._final.toFixed(2)]
+             item._desc||0, item._final.toFixed(2),loja]
           );
         }
         await client.query('COMMIT');
+        concluido=true;
         await log(venda.cliente_id, 'venda_editada',
           `Venda editada: ${itens.length} item(s), novo total R$ ${total_final.toFixed(2)}`,
           req.user?.nome, parseInt(req.params.id));
         res.json({ ok:true, novo_total: total_final, novo_saldo });
-      } catch(e) {
-        await client.query('ROLLBACK');
-        res.status(500).json({ ok:false, erro:e.message });
-      } finally { client.release(); }
     } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
+    finally {
+      if(client){
+        if(!concluido)await client.query('ROLLBACK').catch(()=>{});
+        client.release();
+      }
+    }
   });
 
   r.put('/vendas/:id/aprovar', async (req, res) => {

@@ -118,7 +118,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
 .fiado-ext-saldos>div{display:grid;gap:3px;padding:8px;border-radius:8px;background:var(--bg)}
 .fiado-ext-saldos span{font-size:11px;color:var(--muted)}#ext-credito{color:var(--green)}
 @media(max-width:700px){#m-extrato button,#m-extrato select,#m-extrato input{min-height:44px}#m-extrato select,#m-extrato input{font-size:16px}}
-</style></head>
+</style><style>.fiado-ext-editar{margin-left:8px}@media(max-width:700px){.fiado-ext-editar{min-height:44px}}</style></head>
 <body>
 <div class="ph">
   <div class="ph-identity">
@@ -808,7 +808,8 @@ function renderVendas() {
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap">
         <div>
           <div style="font-weight:700;font-size:13px">${v.cliente_nome} <span class="badge ${STATUS_CLASS[v.status]||''}">${STATUS_LABEL[v.status]||v.status}</span></div>
-          <div style="font-size:11px;color:var(--muted);margin-top:2px">${v.data_compra?.slice(0,10).split('-').reverse().join('/')} · ${(v.itens||[]).length} iten(s) · por ${v.usuario_resp||'—'}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">${v.data_compra?.slice(0,10).split('-').reverse().join('/')} · ${(v.itens||[]).length} iten(s) · por ${evEsc(v.usuario_resp||'—')}
+</div>
           ${v.status==='aguardando'?'<div style="font-size:10px;background:#ede9fe;color:#5b21b6;padding:2px 7px;border-radius:4px;display:inline-block;margin-top:3px">⏳ Aguardando aprovação do admin</div>':''}
           ${v.status==='reprovado'?`<div style="font-size:10px;color:var(--red-l);margin-top:2px">❌ ${v.motivo_reprovacao||''}</div>`:''}
           <div style="margin-top:5px">
@@ -825,7 +826,7 @@ function renderVendas() {
       </div>
       <div style="display:flex;gap:5px;margin-top:8px;flex-wrap:wrap">
         <button class="btn btn-gray btn-sm" onclick="verItensVenda(${v.id})">📋 Itens</button>
-        ${'aberto parcial aguardando'.includes(v.status)?`<button class="btn btn-gray btn-sm" onclick="abrirEditarVenda(${v.id})" title="Editar itens ou preços">✏️ Editar</button>`:''}
+        ${vendaPodeEditar(v)?`<button class="btn btn-gray btn-sm" onclick="abrirEditarVenda(${v.id})" title="Editar itens ou preços">✏️ Editar</button>`:''}
         ${v.status==='aberto'||v.status==='parcial'?`<button class="btn btn-green btn-sm" onclick="abrirPagamentoVenda(${v.id},${v.cliente_id})">💵 Pagar</button>`:''}
         ${v.status!=='cancelado'&&v.status!=='reprovado'&&v.status!=='pago'?`<button class="btn btn-gray btn-sm" onclick="abrirCancelar(${v.id})">🚫</button>`:''}
       </div>
@@ -1502,7 +1503,8 @@ function renderExtrato(clienteId) {
             📦 Compra — ${fmtDtBr(v.data_compra)} ${badge} ${badgeContexto}
           </td>
           <td colspan="3" style="padding:8px 12px;text-align:right;font-size:11px;color:var(--muted)">
-            por ${v.usuario_resp||'—'}
+            por ${evEsc(v.usuario_resp||'—')}
+            ${window.__bbUsuario?.perfil==='admin'&&vendaPodeEditar(v)?`<button class="btn btn-gray btn-sm fiado-ext-editar" onclick="abrirEditarVenda(${Number(v.id)})">Editar compra</button>`:''}
           </td>
           <td style="padding:8px 12px;text-align:right;font-size:11px;font-weight:700;color:var(--red-l)">
             +${fmt.brl(parseFloat(v.total_final||0))}
@@ -2252,15 +2254,20 @@ function abrirNovaVendaCliente(id) {
 // ── Editar Venda ─────────────────────────────────────────────────────────────
 let _evVendaId = null;
 let _evItens   = [];
+let _evCliente = null;
+const vendaPodeEditar = v => ['aberto','parcial','aguardando'].includes(v?.status);
+const evEsc = v => String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function evPreco(it){return Number((_evCliente?.tipo_cliente==='socio'?it.valor_unit_custo:it.valor_unit_venda)??0);}
+
 
 async function abrirEditarVenda(vendaId) {
   // Buscar venda com itens
   const venda = _vendas.find(v => v.id === vendaId);
-  if (!venda) return;
+  if (!vendaPodeEditar(venda)) return;
   _evVendaId = vendaId;
   _evItens   = (venda.itens || []).map(i => ({ ...i }));
 
-  const cli = _clientes.find(c => c.id === venda.cliente_id);
+  const cli = _evCliente = _clientes.find(c => c.id === venda.cliente_id);
   document.getElementById('ev-subtitulo').textContent =
     `${cli?.nome || '—'} · ${venda.data_compra?.slice(0,10).split('-').reverse().join('/')}`;
   document.getElementById('ev-obs').value = venda.observacoes || '';
@@ -2279,18 +2286,18 @@ function evRenderItens() {
   wrap.innerHTML = _evItens.map((it, idx) => `
     <div style="display:grid;grid-template-columns:2fr 80px 100px 28px;gap:6px;align-items:center;padding:7px 0;border-bottom:1px solid #f5efe8">
       <div>
-        <input type="text" value="${(it.nome_produto||'').replace(/"/g,'&quot;')}" placeholder="Nome do produto"
+        <input type="text" value="${evEsc(it.nome_produto)}" placeholder="Nome do produto"
           onchange="_evItens[${idx}].nome_produto=this.value;evAtualizarTotal()"
           style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:'DM Sans',sans-serif">
-        <input type="text" value="${it.codigo_produto||''}" placeholder="Código (opcional)"
+        <input type="text" value="${evEsc(it.codigo_produto)}" placeholder="Código (opcional)"
           onchange="_evItens[${idx}].codigo_produto=this.value"
           style="width:100%;padding:4px 8px;border:1px solid var(--border);border-radius:6px;font-size:11px;color:var(--muted);font-family:'DM Sans',sans-serif;margin-top:3px">
       </div>
       <input type="number" value="${parseFloat(it.quantidade||1)}" min="0.001" step="0.001" placeholder="Qtd"
         onchange="_evItens[${idx}].quantidade=parseFloat(this.value)||1;evAtualizarTotal()"
         style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;text-align:right;font-family:'DM Mono',monospace">
-      <input type="number" value="${parseFloat(it.valor_unit_venda||it.valor_unit_custo||0)}" min="0" step="0.01" placeholder="R$ unit"
-        onchange="_evItens[${idx}].valor_unit_venda=parseFloat(this.value)||0;_evItens[${idx}].valor_unit_custo=parseFloat(this.value)||0;evAtualizarTotal()"
+      <input type="number" value="${evPreco(it)}" min="0" step="0.01" placeholder="R$ unit"
+        onchange="_evItens[${idx}][_evCliente?.tipo_cliente==='socio'?'valor_unit_custo':'valor_unit_venda']=this.valueAsNumber;evAtualizarTotal()"
         style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;text-align:right;font-family:'DM Mono',monospace">
       <button onclick="_evItens.splice(${idx},1);evRenderItens()" style="background:none;border:none;cursor:pointer;font-size:16px;color:var(--red-l);padding:0">×</button>
     </div>`).join('') +
@@ -2315,37 +2322,48 @@ function evAdicionarItem() {
 
 function evAtualizarTotal() {
   const total = _evItens.reduce((s, it) => {
-    return s + parseFloat(it.valor_unit_venda||it.valor_unit_custo||0) * parseFloat(it.quantidade||1);
+    const desconto=_evCliente?.tipo_cliente==='socio'?0:Number((_evCliente?.tipo_cliente==='especial'?_evCliente.desconto_pct:it.desconto_pct)||0);
+    return s+evPreco(it)*Number(it.quantidade||1)*(1-desconto/100);
   }, 0);
   document.getElementById('ev-total').textContent = fmt.brl(total);
 }
 
 async function salvarEdicaoVenda() {
-  if (!_evVendaId) return;
+  if (!_evVendaId || document.getElementById('ev-btn-salvar').disabled) return;
   const itensValidos = _evItens.filter(it => it.nome_produto?.trim());
   if (!itensValidos.length) { BB.toast('⚠️ Adicione ao menos 1 item'); return; }
 
   const btn = document.getElementById('ev-btn-salvar');
   btn.textContent = '⏳ Salvando...'; btn.disabled = true;
 
+  try {
   const d = await api.put(`/api/fiado/vendas/${_evVendaId}/editar`, {
     itens: itensValidos.map(it => ({
       nome_produto:     it.nome_produto.trim(),
       codigo_produto:   it.codigo_produto || null,
       quantidade:       parseFloat(it.quantidade||1),
-      valor_unit_venda: parseFloat(it.valor_unit_venda||it.valor_unit_custo||0),
-      valor_unit_custo: parseFloat(it.valor_unit_custo||it.valor_unit_venda||0),
+      valor_unit_venda: Number(it.valor_unit_venda??0),
+      valor_unit_custo: Number(it.valor_unit_custo??0),
       desconto_pct:     parseFloat(it.desconto_pct||0),
     })),
     observacoes: document.getElementById('ev-obs').value.trim() || null,
   });
 
-  btn.textContent = '💾 Salvar Alterações'; btn.disabled = false;
-
-  if (!d.ok) { BB.toast('❌ ' + (d.erro || 'Erro ao salvar')); return; }
+  if (!d?.ok) { BB.toast('❌ ' + (d?.erro || 'Erro ao salvar')); return; }
   BB.toast(`✅ Venda atualizada — novo total: ${fmt.brl(d.novo_total)}`);
   fecharEditarVenda();
-  await carregarDados(); // recarrega tudo
+  await carregarTudo();
+  const id=window._extratoClienteId;
+  if(document.getElementById('m-extrato').classList.contains('open')&&id){
+    const cli=_clientes.find(c=>Number(c.id)===Number(id));
+    if(cli){
+      document.getElementById('ext-divida').textContent=fmt.brl(Number(cli.saldo_aberto||0));
+      document.getElementById('ext-credito').textContent=fmt.brl(Number(cli.credito_saldo||0));
+    }
+    renderExtrato(id);
+  }
+  } catch(_) { BB.toast('Não foi possível concluir. Atualize o extrato antes de tentar novamente.'); }
+  finally { btn.textContent='💾 Salvar Alterações';btn.disabled=false; }
 }
 </script>
 <script>
