@@ -853,6 +853,12 @@ thead th{padding:6px 9px;}
         <input type="month" id="cc-mes-input" style="width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:8px;font-size:14px">
         <div style="font-size:11px;color:var(--muted);margin-top:4px">⚠️ Use o mês que você vai <strong>pagar</strong> a fatura, não o mês das compras.</div>
       </div>
+      <div id="cc-pdf-senha-grupo" class="fg" style="margin-top:12px" hidden>
+        <label for="cc-pdf-senha">Senha do PDF (se protegido)</label>
+        <input id="cc-pdf-senha" type="password" autocomplete="off" aria-describedby="cc-pdf-senha-ajuda" style="width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:8px;font-size:16px">
+        <div id="cc-pdf-senha-ajuda" style="font-size:11px;color:var(--muted);margin-top:4px">Use a senha que o banco informa para abrir a fatura. A senha não é salva.</div>
+        <div id="cc-pdf-senha-erro" role="alert" style="font-size:12px;color:var(--red);margin-top:4px"></div>
+      </div>
       <label style="display:flex;gap:8px;font-size:12px;margin-top:12px"><input id="cc-salvar-direto" type="checkbox" checked>Salvar agora e classificar só as pendências depois</label>
     </div>
     <div class="mdf" style="gap:10px">
@@ -1846,6 +1852,9 @@ let _ccrEditarId=null, _ccrEnviando=false;
 async function procCC(file) {
   // Pede confirmação do mês antes de processar
   _ccFilePendente = file;
+  document.getElementById('cc-pdf-senha-grupo').hidden=!/\.pdf$/i.test(file.name);
+  document.getElementById('cc-pdf-senha').value='';
+  document.getElementById('cc-pdf-senha-erro').textContent='';
   // Pré-preenche com o mesRef atual
   const [mm, yyyy] = mesRef.split('/');
   document.getElementById('cc-mes-input').value = `${yyyy}-${mm}`;
@@ -1892,7 +1901,10 @@ async function ccOnSelectCartao() {
 }
 
 async function confirmarImportCC() {
-  fecharModal('m-cc-mes');
+  const campoSenha=document.getElementById('cc-pdf-senha');
+  let senha=campoSenha.value;
+  const erroSenha=document.getElementById('cc-pdf-senha-erro');
+  erroSenha.textContent='';
   const file = _ccFilePendente;
   if (!file) return;
 
@@ -1909,6 +1921,7 @@ async function confirmarImportCC() {
 
   const ymVal = document.getElementById('cc-mes-input').value;
   if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(ymVal)){toast('Selecione o mês da fatura');document.getElementById('m-cc-mes').classList.add('open');return;}
+  fecharModal('m-cc-mes');
   _ccFilePendente=null;
   const [yyyy, mm] = ymVal.split('-');
   const mesCC = `${mm}/${yyyy}`; // ex: "02/2026"
@@ -1919,8 +1932,12 @@ async function confirmarImportCC() {
     toast('💳 Lendo fatura PDF...');
     try {
       const fd=new FormData();fd.append('arquivo',file);
-      const leitura=await api.upload('/api/dre/cartao-pdf/preview',fd);
-      if(leitura.ok && leitura.preview?.banco==='CAIXA'){
+      // A senha do C6 é usada apenas no leitor do navegador.
+      const c6=/\bc6\b/i.test(bandeira);
+      if(senha&&!c6)fd.append('senha',senha);
+      const leitura=senha&&c6?null:await api.upload('/api/dre/cartao-pdf/preview',fd);
+      fd.delete('senha');
+      if(leitura?.ok && leitura.preview?.banco==='CAIXA'){
         if(!leitura.preview.conferencia_ok)throw new Error('A soma dos lançamentos não confere com o total da fatura. Revise o arquivo antes de importar.');
         const lancs=converterPreviewCaixa(leitura.preview,mesCC);
         if(!lancs.length)throw new Error('Nenhum lançamento com valor encontrado na fatura');
@@ -1929,7 +1946,10 @@ async function confirmarImportCC() {
         return;
       }
       const buf = await file.arrayBuffer();
-      const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+      const tarefa = pdfjsLib.getDocument({data:buf,password:senha});
+      let pdf;
+      try { pdf=await tarefa.promise; } catch(e){ await tarefa.destroy().catch(()=>{});throw e; }
+      senha='';
       try {
       let fullText = '';
       const textosPaginas=[];
@@ -2004,9 +2024,16 @@ async function confirmarImportCC() {
       abrirRevisaoCC(lancs, mesCC, bandeira, file.name,document.getElementById('cc-salvar-direto')?.checked);
       } finally { await pdf.destroy(); }
     } catch(e) {
-      console.error('[procCC PDF]', e);
-      toast('❌ Erro ao ler PDF: ' + e.message);
-    }
+      if(e?.name==='PasswordException'){
+        _ccFilePendente=file;
+        erroSenha.textContent=e.code===2?'Senha incorreta. Confira a senha da fatura e tente novamente.':'Este PDF está protegido. Informe a senha da fatura para continuar.';
+        document.getElementById('m-cc-mes').classList.add('open');
+        campoSenha.focus();
+      } else {
+        console.error('[procCC PDF]',e?.name);
+        toast('❌ Erro ao ler PDF: '+e.message);
+      }
+    } finally { senha=''; }
     return;
   }
   // CSV / XLSX — roteamento unificado por conteúdo
@@ -7418,6 +7445,10 @@ async function delSessao(id){if(!confirm('Remover sessão?'))return;await api.de
 function fecharModal(id){
   const el=document.getElementById(id);
   if(!el) return;
+  if(id==='m-cc-mes'){
+    document.getElementById('cc-pdf-senha').value='';
+    _ccFilePendente=null;
+  }
   // Modais que usam style.display em vez de classe .open
   if(id==='m-drill' || id==='m-pagar-boleto' || el.style.display) {
     el.style.display='none';
