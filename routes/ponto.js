@@ -262,18 +262,24 @@ module.exports = function(pool) {
     return 'ok';
   }
 
-  // Regra operacional: até 15 minutos de excedente total diário não gera extra.
+  // Regra operacional: até 30 minutos de excedente total diário não gera extra.
   // Acima do limite, apura o excedente integral; marcações originais são preservadas.
   function calcularExtraMinutos(horasTrab, jornadaHoras, trocaFolga=false) {
     if (trocaFolga || horasTrab === null || horasTrab === undefined) return 0;
     const excedente = Math.max(0, Math.round(Number(horasTrab)*60 - Number(jornadaHoras ?? 8)*60));
-    return excedente > 15 ? excedente : 0;
+    return excedente > 30 ? excedente : 0;
   }
 
   function calcularIntervaloSuprimido(saidaInt, retornoInt, intervaloMin) {
     if (!saidaInt || !retornoInt) return 0;
     const realizado = Math.max(0, Math.round((new Date(retornoInt)-new Date(saidaInt))/60000));
-    return Math.max(0, Number(intervaloMin||60) - realizado);
+    return Math.max(0, Number(intervaloMin??60) - realizado);
+  }
+
+  function intervaloApurado(p,previsto) {
+    if(p.saida_intervalo&&p.retorno_intervalo)
+      return calcularIntervaloSuprimido(p.saida_intervalo,p.retorno_intervalo,previsto);
+    return p.almoco_corrido_confirmado?Number(previsto??60):0;
   }
 
   async function atualizarApuracaoPonto(pontoId,versoes) {
@@ -308,16 +314,16 @@ module.exports = function(pool) {
     if(escala)Object.assign(p,{horario_entrada_efetivo:escala.horario_entrada,horario_saida_efetivo:escala.horario_saida,jornada_horas_efetiva:escala.jornada_horas,intervalo_min_efetivo:escala.intervalo_min});
     const horas=calcHoras(p.entrada,p.saida,p.saida_intervalo,p.retorno_intervalo,p.intervalo_min_efetivo);
     const extra=calcularExtraMinutos(horas,p.jornada_horas_efetiva,p.troca_folga,p.entrada,p.saida,p.horario_entrada_efetivo,p.horario_saida_efetivo);
-    const intervalo=p.almoco_corrido_confirmado
-      ? Number(p.intervalo_min_efetivo??60)
-      : calcularIntervaloSuprimido(p.saida_intervalo,p.retorno_intervalo,p.intervalo_min_efetivo);
-    const precisaAprovacao=!p.troca_folga && (extra>0 || intervalo>0 || p.almoco_corrido_confirmado);
+    // As batidas atuais prevalecem sobre a confirmação antiga de almoço corrido.
+    const intervalo=intervaloApurado(p,p.intervalo_min_efetivo);
+    const precisaAprovacao=!p.troca_folga && (extra>0 || intervalo>0);
     const novoStatus=precisaAprovacao
       ? (['aprovado','rejeitado'].includes(p.aprovacao_status) ? 'pendente' : 'pendente')
       : 'nao_aplicavel';
     const { rows: upd } = await pool.query(`
       UPDATE ponto_registros SET
         extra_minutos=$1,
+        status=CASE WHEN status='hora_extra' AND $1=0 THEN 'ok' ELSE status END,
         intervalo_suprimido_min=$2,
         aprovacao_status=$3,
         aprovacao_por=CASE WHEN $3='pendente' THEN NULL ELSE aprovacao_por END,
@@ -950,7 +956,7 @@ module.exports = function(pool) {
         LIMIT 300
       `,[status]);
       const vs=await carregarEscalas(pool,req.user.lojaId);
-      rows.forEach(p=>{const d=resolverEscala(vs,p.funcionario_id,req.user.lojaId,p.data_ref);if(d)Object.assign(p,{horario_entrada_previsto:d.horario_entrada,horario_saida_previsto:d.horario_saida,jornada_prevista_horas:d.jornada_horas,intervalo_previsto_min:d.intervalo_min});});
+      rows.forEach(p=>{if(p.saida_intervalo&&p.retorno_intervalo)p.almoco_corrido_confirmado=false;const d=resolverEscala(vs,p.funcionario_id,req.user.lojaId,p.data_ref);if(d)Object.assign(p,{horario_entrada_previsto:d.horario_entrada,horario_saida_previsto:d.horario_saida,jornada_prevista_horas:d.jornada_horas,intervalo_previsto_min:d.intervalo_min});});
       res.json({ok:true,data:rows});
     }catch(e){res.status(500).json({ok:false,erro:e.message});}
   });
