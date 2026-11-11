@@ -31,7 +31,7 @@ test('apuração usa domingo escalado de cinco horas sem extra e distingue domin
  const s=fs.readFileSync(require.resolve('../routes/ponto'),'utf8');
  for(const [data,extra] of [['2026-11-08',0],['2026-11-15',300]]){
   const p={id:1,funcionario_id:4,loja_id:2,data_ref:data,entrada:data+'T12:00:00Z',saida:data+'T17:00:00Z',jornada_horas_efetiva:0,intervalo_min_efetivo:60,aprovacao_status:'pendente'},calls=[];
-  const c={pool:{query:async(sql,params)=>{calls.push({sql,params});return {rows:sql.trim().startsWith('SELECT')?[p]:[{extra_minutos:params[0]}]};}},escalaDia:async()=>E.resolverEscala([versao()],4,2,data),calcHoras:()=>5,calcularExtraMinutos:(horas,prev)=>Math.max(0,Math.round((horas-prev)*60)),calcularIntervaloSuprimido:()=>0};
+  const c={pool:{query:async(sql,params)=>{calls.push({sql,params});return {rows:sql.trim().startsWith('SELECT')?[p]:[{extra_minutos:params[0]}]};}},escalaDia:async()=>E.resolverEscala([versao()],4,2,data),calcHoras:()=>5,calcularExtraMinutos:(horas,prev)=>Math.max(0,Math.round((horas-prev)*60)),calcularIntervaloSuprimido:()=>0,intervaloApurado:()=>0};
   vm.createContext(c);vm.runInContext(s.slice(s.indexOf('async function atualizarApuracaoPonto('),s.indexOf('async function recalcularPendenciasRecentes(')),c);const r=await c.atualizarApuracaoPonto(1);assert.equal(r.extra_minutos,extra);assert.equal(p.entrada,data+'T12:00:00Z');
  }
 });

@@ -271,7 +271,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
         </div>
       </div>
       <div style="margin-bottom:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:9px 11px;font-size:11px;color:#475569">
-        <b>Apuração de horas extras:</b> excedente total de até 15 minutos no dia não gera hora extra. Acima desse limite, o excedente integral segue para aprovação.
+        <b>Apuração de horas extras:</b> excedente total de até 30 minutos no dia não gera hora extra. Acima desse limite, o excedente integral segue para aprovação.
         <input type="hidden" id="jor-tolerancia" value="10">
       </div>
       <div>
@@ -933,11 +933,11 @@ async function abrirAprovacoesPonto(){
     const hp=s=>s?Number(String(s).slice(0,2))*60+Number(String(s).slice(3,5)):null;
     const entDif=(hm(x.entrada)!==null&&hp(x.horario_entrada_previsto)!==null)?hp(x.horario_entrada_previsto)-hm(x.entrada):0;
     const saiDif=(hm(x.saida)!==null&&hp(x.horario_saida_previsto)!==null)?hm(x.saida)-hp(x.horario_saida_previsto):0;
-    if(entDif>5) motivos.push('🟢 Entrada antecipada: '+entDif+' min');
-    if(saiDif>5) motivos.push('🔴 Saída após horário: '+saiDif+' min');
+    if(extra>0 && entDif>5) motivos.push('🟢 Entrada antecipada: '+entDif+' min');
+    if(extra>0 && saiDif>5) motivos.push('🔴 Saída após horário: '+saiDif+' min');
     if(extra && entDif<=5 && saiDif<=5) motivos.push('⏫ Excedente de jornada: '+extra+' min');
     if(inter) motivos.push('🍽️ Intervalo/almoço: '+inter+' min');
-    if(x.almoco_corrido_confirmado) motivos.push('🥪 Almoço corrido/sem marcação');
+    if(x.almoco_corrido_confirmado && !(x.saida_intervalo&&x.retorno_intervalo)) motivos.push('🥪 Almoço corrido/sem marcação');
     if(x.entrada_manual||x.saida_manual) motivos.push('✏️ Registro manual/ajustado');
     const justificativas=[
       x.almoco_corrido_justificativa?'<b>Justificativa do almoço:</b> '+aprovEsc(x.almoco_corrido_justificativa):'',
