@@ -37,6 +37,37 @@
     if(t.id)return loja+'|'+origem+'|id|'+t.id;
     return loja+'|'+origem+'|'+ref(t)+'|'+JSON.stringify([t.data,t.valor,t.lancamento,t.mes,t.parcela,t.totalParcelas]);
   }
+  // Apenas na entrada de um extrato: compara ocorrências, sem fundir histórico.
+  function compararImportacao(existentes,novos){
+    const norm=v=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/\s+/g,' ').trim();
+    const conteudo=t=>{
+      if(!banco(t))return null;
+      const scope=escopoBanco(t),[instituicao,conta]=scope.split(':');
+      const descricao=norm(t.lancamento||t.descricao),favorecido=norm(t.razaoSocial||t.fornecedor);
+      if(!instituicao||!conta||!/^\d{4}-\d{2}-\d{2}$/.test(String(t.data))||!Number.isFinite(Number(t.valor))||!Number(t.valor))return null;
+      if(descricao.length<12&&favorecido.length<5)return null;
+      return JSON.stringify([t.loja_id||'',scope,assinaturaMovimento(t),descricao,favorecido,norm(t.cnpjDoc)]);
+    };
+    const identidades=new Map(),fitids=new Map(),grupos=new Map(),usados=new Set();
+    const fit=t=>banco(t)&&t.fitid?JSON.stringify([t.loja_id||'',escopoBanco(t),String(t.fitid),assinaturaMovimento(t)]):null;
+    const guardar=(map,k,t)=>{if(k){if(!map.has(k))map.set(k,[]);map.get(k).push(t);}};
+    for(const t of existentes||[]){
+      if(t.ignorar&&t.duplicadoDe)continue;
+      guardar(identidades,identidade(t),t);guardar(fitids,fit(t),t);guardar(grupos,conteudo(t),t);
+    }
+    const matches=(novos||[]).map(t=>{
+      const a=(identidades.get(identidade(t))||[]).find(x=>!usados.has(x))||(fitids.get(fit(t))||[]).find(x=>!usados.has(x));
+      if(a)usados.add(a);return a||null;
+    });
+    // Reserva primeiro os IDs comprovados, depois compara somente arquivos diferentes.
+    (novos||[]).forEach((t,i)=>{
+      if(matches[i]||!t.extratoArquivoHash)return;
+      const candidatos=grupos.get(conteudo(t))||[];
+      const a=candidatos.find(x=>!usados.has(x)&&x.extratoArquivoHash!==t.extratoArquivoHash&&!(x.fitid&&t.fitid&&String(x.fitid)!==String(t.fitid)));
+      if(a){matches[i]=a;usados.add(a);}
+    });
+    return matches;
+  }
   function deduplicar(fontes){
     const vistos=new Map(),suprimidos=[],aliases=new Map();
     const qualidade=t=>(t.ignorarAlteradoEm?2000:0)+(t.ignorar?0:1000)+(t.boletoId||t.faturaCC||t.vinculadoFaturaCC?200:0)+(t._categoriaEditada?100:0)+(t.item_db_id?20:0)+(t.categoria?2:0)+(t.documentoBoletoId||t.cartaoItemRef?1:0)+(t.fonte==='BOLETO'?5:0);
@@ -216,5 +247,5 @@
     }
     return {linhas,pendencias,suprimidos,faturasPendentes,vinculosInferidos:notas.vinculos};
   }
-  return {resolver,pagamentoCartao,identidade,contaBanco,escopoBanco,deduplicar,detectarDuplicidades,planejarReimportacoes};
+  return {resolver,pagamentoCartao,compararImportacao,identidade,contaBanco,escopoBanco,deduplicar,detectarDuplicidades,planejarReimportacoes};
 });

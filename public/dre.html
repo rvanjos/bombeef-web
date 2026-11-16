@@ -10,7 +10,7 @@
 <script src="/js/api.js"></script>
 <script src="/js/dre-excel.js?v=2"></script>
 <script src="/js/dre-conferencia.js?v=19"></script>
-<script src="/js/dre-fluxo.js?v=8"></script>
+<script src="/js/dre-fluxo.js?v=9"></script>
 <script src="/js/dre-cartao-c6.js?v=1"></script>
 <script src="/js/dre-cartao-ocr.js?v=1"></script>
 <script>
@@ -2937,9 +2937,10 @@ function addLancs(novos, fileName) {
   const existentes=new Map(TXS.map(t=>[DREFluxo.identidade(t),t]));
   const chaveBanco=t=>['EXTRATO','OFX','CSV','XLSX'].includes(String(t.fonte||'').toUpperCase())&&t.fitid?JSON.stringify([t.loja_id||'',DREFluxo.escopoBanco(t),t.fitid,t.data,Math.round(Number(t.valor)*100)]):null;
   const bancarios=new Map(TXS.filter(t=>chaveBanco(t)).map(t=>[chaveBanco(t),t]));
+  const correspondencias=DREFluxo.compararImportacao(TXS,novos);
   let n=0,dup=0,atualiz=0;
-  for(const l of novos){
-    const chave=DREFluxo.identidade(l),existing=existentes.get(chave)||(chaveBanco(l)&&bancarios.get(chaveBanco(l)));
+  for(const [indice,l] of novos.entries()){
+    const chave=DREFluxo.identidade(l),existing=existentes.get(chave)||(chaveBanco(l)&&bancarios.get(chaveBanco(l)))||correspondencias[indice];
     if(existing){
       if(String(l.fonte||'').startsWith('BOLETO')){
         const categoria=existing.categoria||l.categoria;
