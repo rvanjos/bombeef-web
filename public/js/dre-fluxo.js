@@ -20,12 +20,18 @@
     const conta=norm(t.acctId||t.conta||partes[1]);
     return [codigo,conta].join(':');
   }
+  function assinaturaMovimento(t){
+    const raw=String(t.data||'').trim();
+    const iso=raw.match(/^(\d{4})-(\d{2})-(\d{2})/),br=raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    const data=iso?iso[0]:br?`${br[3]}-${br[2]}-${br[1]}`:raw;
+    return JSON.stringify([data,Number.isFinite(Number(t.valor))&&t.valor!==null&&t.valor!==''?cents(t.valor):null]);
+  }
   function identidade(t){
     const loja=String(t.loja_id||'');
     const origem=documento(t)?'BOLETO':banco(t)?'BANCO':String(t.fonte||'');
     if(documento(t)&&t.boletoId)return loja+'|'+origem+'|'+t.boletoId;
-    if(banco(t)&&t.extratoArquivoHash&&Number.isInteger(t.extratoLinha))return loja+'|'+origem+'|ARQUIVO|'+t.extratoArquivoHash+'|'+t.extratoLinha;
-    if(banco(t)&&t.fitid)return loja+'|'+origem+'|'+escopoBanco(t)+'|'+t.fitid;
+    if(banco(t)&&t.extratoArquivoHash&&Number.isInteger(t.extratoLinha))return loja+'|'+origem+'|ARQUIVO|'+escopoBanco(t)+'|'+t.extratoArquivoHash+'|'+t.extratoLinha+'|'+assinaturaMovimento(t);
+    if(banco(t)&&t.fitid)return loja+'|'+origem+'|'+escopoBanco(t)+'|'+t.fitid+'|'+assinaturaMovimento(t);
     if(t.fonte==='CC'&&(t.item_hash||t.hash_item_persistido))return loja+'|CC|'+(t.fatura_db_id||ref(t))+'|'+(t.item_hash||t.hash_item_persistido);
     if(t.fonte==='CC'&&t.item_db_id&&t.fatura_db_id)return loja+'|CCDB|'+t.fatura_db_id+'|'+t.item_db_id;
     if(t.id)return loja+'|'+origem+'|id|'+t.id;
@@ -41,7 +47,7 @@
       const temOrigem=t.id||(banco(t)&&(t.fitid||(t.extratoArquivoHash&&Number.isInteger(t.extratoLinha))))||(documento(t)&&t.boletoId)||(t.fonte==='CC'&&(t.item_db_id||t.hash_item_persistido||t.item_hash));
       const k=temOrigem?identidade(t):'sem-identidade|'+vistos.size;
       // A linha do mesmo arquivo e o FITID são identidades alternativas, não excludentes.
-      const fit=banco(t)&&t.fitid?String(t.loja_id||'')+'|'+escopoBanco(t)+'|'+t.fitid:null;
+      const fit=banco(t)&&t.fitid?String(t.loja_id||'')+'|'+escopoBanco(t)+'|'+t.fitid+'|'+assinaturaMovimento(t):null;
       const ant=vistos.get(k)||(fit&&porOrigem.get(fit));
       const conflito=ant&&(['boletoId','faturaCC','vinculadoA'].some(c=>ant[c]&&t[c]&&String(ant[c])!==String(t[c]))||(ant._categoriaEditada&&t._categoriaEditada&&ant.categoria&&t.categoria&&ant.categoria!==t.categoria));
       if(ant&&!conflito&&cents(ant.valor)===cents(t.valor)&&String(ant.data||'')===String(t.data||'')){

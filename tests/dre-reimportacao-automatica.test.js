@@ -70,3 +70,45 @@ test('reimportação na tela não adiciona novas cópias nem substitui categoria
  assert.equal(ts.length,1);assert.equal(a.categoria,'Receita ajustada');
  const rows=[0,1].map(extratoLinha=>tx(undefined,{extratoArquivoHash:'csv',extratoLinha}));ctx.addLancs(rows,'extrato.csv');ctx.addLancs(rows,'extrato.csv');assert.equal(ts.length,3);
 });
+
+test('FITID repetido com data, valor ou sinal diferente não é reimportação',()=>{
+ const a=tx('a',{fitid:'reutilizado',bankId:'341',acctId:'123',loja_id:7});
+ for(const extra of [{valor:400},{valor:-309.71},{data:'2026-10-06'}]){
+  const b={...a,...extra,id:'b'};
+  assert.notEqual(F.identidade(a),F.identidade(b));
+  assert.equal(C.analisar([a,b]).reimportacoes.length,0);
+  assert.equal(C.analisar([a,b]).reimportacoesAutomaticas.length,0);
+  assert.equal(F.deduplicar([a,b]).fontes.length,2);
+ }
+});
+
+test('FITIDs distintos não viram reimportação por coincidência de data e valor',()=>{
+ const ts=[tx('a',{fitid:'um',bankId:'341',acctId:'123'}),tx('b',{fitid:'outro',bankId:'341',acctId:'123'})];
+ assert.equal(C.analisar(ts).reimportacoes.length,0);
+ assert.equal(F.deduplicar(ts).fontes.length,2);
+});
+
+test('importador mantém movimento com FITID reutilizado e elimina apenas o reenvio idêntico',()=>{
+ const a=tx('a',{fitid:'f',bankId:'341',acctId:'123',categoria:'Receita ajustada'}),ts=[a];
+ const ctx={TXS:ts,DREFluxo:F,files:[],toast(){},showTable(){},updMesFiltro(){},render(){},updStats(){},renderDRE(){},autoSv(){},tentarVincularFaturaAuto(){}};
+ vm.createContext(ctx);vm.runInContext(html.slice(html.indexOf('function addLancs('),html.indexOf('function showTable(')),ctx);
+ const novos=[tx('b',{fitid:'f',bankId:'341',acctId:'123',valor:400}),tx('c',{fitid:'f',bankId:'341',acctId:'123',data:'2026-10-06'})];
+ ctx.addLancs(novos,'novo.ofx');assert.equal(ts.length,3);
+ ctx.addLancs(novos,'novo.ofx');assert.equal(ts.length,3);
+ assert.equal(a.categoria,'Receita ajustada');
+});
+
+test('merge de sessões preserva FITID com valores e datas divergentes',()=>{
+ const s=fs.readFileSync(require.resolve('../routes/dre'),'utf8');
+ const inicio=s.indexOf('  function mergeTransacoes(');
+ const fim=s.indexOf('\n  //',inicio+20);
+ // Extrai a função por contagem de chaves para não incluir registro de rotas.
+ let pos=s.indexOf('{',inicio),nivel=1,i=pos+1;
+ for(;i<s.length&&nivel;i++){if(s[i]==='{')nivel++;else if(s[i]==='}')nivel--;}
+ const ctx={DREFluxo:F,console:{log(){}}};vm.createContext(ctx);vm.runInContext(s.slice(inicio,i),ctx);
+ const a=tx('a',{fitid:'f',bankId:'341',acctId:'123'});
+ const novos=[tx('b',{fitid:'f',bankId:'341',acctId:'123',valor:400}),tx('c',{fitid:'f',bankId:'341',acctId:'123',data:'2026-10-06'})];
+ const r=ctx.mergeTransacoes([a],novos);
+ assert.equal(r.length,3);
+ assert.equal(ctx.mergeTransacoes(r,novos).length,3);
+});

@@ -122,6 +122,10 @@
     function registrarGrupo(grupo, motivo, confianca) {
       const unicos = Array.from(new Map(grupo.map(t => [String(t.id), t])).values());
       if (unicos.length < 2) return;
+      // FITID pode ser reutilizado pelo banco: nunca basta sozinho.
+      if(unicos.some(t=>!/^\d{4}-\d{2}-\d{2}$/.test(dataCanonica(t.data))||!Number.isFinite(Number(t.valor))))return;
+      if(new Set(unicos.map(t=>JSON.stringify([t.loja_id||'',fluxo()?.escopoBanco(t)||'',dataCanonica(t.data),centavos(t.valor)]))).size!==1)return;
+      if(new Set(unicos.map(t=>String(t.fitid||'').trim()).filter(Boolean)).size>1)return;
       if(unicos.filter(t=>!t.ignorar).length<2)return;
       if (unicos.every(t => idsEmDuplicidade.has(String(t.id)))) return;
       const assinatura = unicos.map(t => String(t.id)).sort().join('|');
@@ -144,7 +148,7 @@
 
     const porFitid = new Map();
     banco.forEach(t => {
-      const fitid = [t.loja_id||'',fluxo()?.escopoBanco(t)||'',String(t.fitid||'').trim()].join('|');
+      const fitid = [t.loja_id||'',fluxo()?.escopoBanco(t)||'',String(t.fitid||'').trim(),dataCanonica(t.data),centavos(t.valor)].join('|');
       if (!t.fitid) return;
       if (!porFitid.has(fitid)) porFitid.set(fitid, []);
       porFitid.get(fitid).push(t);
