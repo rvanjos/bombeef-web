@@ -1439,6 +1439,9 @@ module.exports = function (pool, app) {
     const registrarGrupo=(grupo,motivo,confianca)=>{
       const unicos=Array.from(new Map(grupo.map(t=>[String(t?.id??''),t])).values()).filter(Boolean);
       if(unicos.length<2) return;
+      if(unicos.some(t=>!dataIsoValida(t.data)||!Number.isFinite(Number(t.valor))))return;
+      if(new Set(unicos.map(t=>JSON.stringify([t.loja_id||'',DREFluxo.escopoBanco(t),dataIsoValida(t.data),Math.round(Number(t.valor)*100)]))).size!==1)return;
+      if(new Set(unicos.map(t=>String(t.fitid||'').trim()).filter(Boolean)).size>1)return;
       const assinatura=unicos.map(t=>String(t?.id??'')).sort().join('|');
       if(!assinatura||assinaturas.has(assinatura)) return;
       assinaturas.add(assinatura);
@@ -1452,8 +1455,8 @@ module.exports = function (pool, app) {
 
     const porFitid=new Map();
     for(const t of extratos){
-      const fitid=normDre(t?.fitid);
-      if(!fitid) continue;
+      if(!t?.fitid)continue;
+      const fitid=JSON.stringify([t.loja_id||'',DREFluxo.escopoBanco(t),String(t.fitid).trim(),dataIsoValida(t.data),Math.round(Number(t.valor)*100)]);
       if(!porFitid.has(fitid)) porFitid.set(fitid,[]);
       porFitid.get(fitid).push(t);
     }
@@ -1462,6 +1465,7 @@ module.exports = function (pool, app) {
     const porExata=new Map();
     for(const t of extratos){
       const chave=[
+        t.loja_id||'',DREFluxo.escopoBanco(t),
         dataIsoValida(t?.data)||String(t?.data||''),
         Math.round(Number(t?.valor||0)*100),
         normDre(t?.lancamento||t?.descricao||''),

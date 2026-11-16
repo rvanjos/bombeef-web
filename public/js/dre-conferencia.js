@@ -6,7 +6,7 @@
   }
   function tags(){
     return '<link rel="stylesheet" href="/css/dre-v2.css?v=4" data-dre-v2="1">' +
-      '<script src="/js/dre-conferencia-core.js?v=5"><\/script>' +
+      '<script src="/js/dre-conferencia-core.js?v=6"><\/script>' +
       '<script src="/js/dre-v2.js?v=4" data-dre-v2="1"><\/script>' +
       '<script src="/js/dre-cartao-pagamentos.js?v=5" data-dre-cartao-pag="1"><\/script>' +
       '<script src="/js/dre-conferencia-v2.js?v=2" data-dre-conf-v2="1"><\/script>' +
@@ -21,7 +21,7 @@
       if (!document.querySelector('link[data-dre-v2]')) {
         var l=document.createElement('link'); l.rel='stylesheet'; l.href='/css/dre-v2.css?v=4'; l.dataset.dreV2='1'; document.head.appendChild(l);
       }
-      var c=document.createElement('script'); c.src='/js/dre-conferencia-core.js?v=5'; c.onload=function(){
+      var c=document.createElement('script'); c.src='/js/dre-conferencia-core.js?v=6'; c.onload=function(){
         var s=document.createElement('script'); s.src='/js/dre-v2.js?v=4'; s.dataset.dreV2='1'; s.onload=function(){
           var p=document.createElement('script'); p.src='/js/dre-cartao-pagamentos.js?v=5'; p.dataset.dreCartaoPag='1'; p.onload=function(){
             var q=document.createElement('script'); q.src='/js/dre-conferencia-v2.js?v=2'; q.dataset.dreConfV2='1'; q.onload=function(){
