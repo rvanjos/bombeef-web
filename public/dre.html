@@ -3162,6 +3162,7 @@ async function setCat(id, cat) {
     if(!await _sincronizarCategoriesCC([{...t,categoria:cat||null}],t.faturaCC)){return false;}
   }
   t.categoria = cat;
+  t._categoriaEditada = true;
   if (cat) t.needsReview = false;
   if (!t.mes) t.mes = mesRef;
   if (!t.mesCaixa) t.mesCaixa = mesRef;
@@ -3194,7 +3195,8 @@ async function setCat(id, cat) {
   const mesLanc = t.mes || mesRef;
   salvarMesDebounce(mesLanc);
   autoSv();
-  if(t.fonte==='CC'){render();renderDRE();}
+  if(t.fonte==='CC')render();
+  renderDRE();
   return true;
 }
 
@@ -5244,11 +5246,17 @@ window.renderDRE = function renderDRE(){
     const scroll=document.getElementById('dre-modal-scroll');
     if(inner&&scroll) inner.style.width=scroll.scrollWidth+'px';
   },50);
-  _garantirFatPorMes().then(() => _buildDRE(document.getElementById('dre-body'),false));
+  _garantirFatPorMes().then(() => {
+    _buildDRE(document.getElementById('dre-body'),false);
+    if(document.getElementById('m-dre')?.classList.contains('open')) {
+      _buildDRE(document.getElementById('dre-full-body'),true);
+    }
+  });
   },40);
 }
 window.renderDREFull = function renderDREFull(){
-  _garantirFatPorMes().then(() => _buildDRE(document.getElementById('dre-full-body'),true));
+  // Todas as alterações passam pela mesma atualização das duas visualizações.
+  renderDRE();
 }
 
 // Garante que bb_fat_por_mes está carregado — busca da API se localStorage vazio
