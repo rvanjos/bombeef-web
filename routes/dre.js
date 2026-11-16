@@ -1593,7 +1593,10 @@ module.exports = function (pool, app) {
     const resultado = [...existentes];
     let novosAdicionados = 0, atualizados = 0, duplicatasIgnoradas = 0;
 
-    for (const t of novos) {
+    const correspondencias=DREFluxo.compararImportacao(existentes,novos);
+    for (const [indice,t] of novos.entries()) {
+      const anterior=correspondencias[indice];
+      if(anterior&&String(anterior.id)!==String(t.id)&&['EXTRATO','OFX','CSV','XLSX'].includes(String(t.fonte||'').toUpperCase())){duplicatasIgnoradas++;continue;}
       if (['EXTRATO','OFX'].includes(t.fonte)&&t.fitid) {
         const idx = resultado.findIndex(x => DREFluxo.identidade(x) === DREFluxo.identidade(t));
         if (idx >= 0) {
@@ -1976,7 +1979,7 @@ module.exports = function (pool, app) {
         if (sessaoExist.rows.length) {
           const txExist = extrairTransacoes(sessaoExist.rows[0].dados_json);
           const antes=DREFluxo.deduplicar(txExist).fontes;
-          duplicatasEstimadas=Math.max(0,antes.length+lancamentos.length-DREFluxo.deduplicar([...antes,...lancamentos]).fontes.length);
+          duplicatasEstimadas=DREFluxo.compararImportacao(antes,lancamentos).filter(Boolean).length;
         }
       }
       res.json({ ok: true, lancamentos, total: lancamentos.length, duplicatasEstimadas, boletosQuitados });

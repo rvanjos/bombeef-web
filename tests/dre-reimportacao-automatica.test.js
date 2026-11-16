@@ -112,3 +112,43 @@ test('merge de sessões preserva FITID com valores e datas divergentes',()=>{
  assert.equal(r.length,3);
  assert.equal(ctx.mergeTransacoes(r,novos).length,3);
 });
+
+const extrato=(id,hash,extra={})=>tx(id,{valor:-186.18,data:'2026-10-26',lancamento:'BOLETO',razaoSocial:'GRUPO ALTAMED VALINHOS',contaBancaria:'Itaú · 6474998215',extratoArquivoHash:hash,extratoLinha:0,...extra});
+test('extratos de períodos sobrepostos reconhecem conteúdo sem FITID e preservam ignorados e classificação',()=>{
+ const a=extrato('a','mensal',{categoria:'Saúde Ocupacional',_categoriaEditada:true}),ignorado=extrato('i','mensal',{valor:-120,ignorar:true});
+ const novos=[extrato('b','semanal'),extrato('j','semanal',{valor:-120}),extrato('c','semanal',{valor:-35})];
+ const antes=JSON.stringify([a,ignorado]);const matches=F.compararImportacao([a,ignorado],novos);
+ assert.equal(matches[0],a);assert.equal(matches[1],ignorado);assert.equal(matches[2],null);assert.equal(JSON.stringify([a,ignorado]),antes);
+});
+test('sobreposição preserva multiplicidade e reserva identidades antes de comparar conteúdo',()=>{
+ const a=extrato('a','h1'),b=extrato('b','h1',{extratoLinha:1});
+ assert.equal(F.compararImportacao([a],[extrato('c','h2'),extrato('d','h2',{extratoLinha:1})]).filter(Boolean).length,1);
+ const matches=F.compararImportacao([a,b],[extrato('c','h2'),{...a}]);assert.equal(matches[0],b);assert.equal(matches[1],a);
+ assert.equal(F.compararImportacao([a],[b])[0],null);
+});
+test('comparação entre arquivos exige conta, loja, data, centavos, sinal, descrição e favorecido exatos',()=>{
+ const a=extrato('a','h1');
+ for(const extra of [{data:'2026-10-27'},{valor:-186.19},{valor:186.18},{lancamento:'PIX'},{razaoSocial:'OUTRO FORNECEDOR'},{contaBancaria:'Itaú · 123'},{loja_id:2},{contaBancaria:''}]){
+  assert.equal(F.compararImportacao([a],[extrato('b','h2',extra)])[0],null);
+ }
+ assert.equal(F.compararImportacao([extrato('a','h1',{fitid:'id1'})],[extrato('b','h2',{fitid:'id2'})])[0],null);
+ assert.equal(F.compararImportacao([extrato('a','h1',{contaBancaria:''})],[extrato('b','h2',{contaBancaria:''})])[0],null);
+ assert.equal(F.compararImportacao([extrato('a',undefined)],[extrato('b','h2')])[0].id,'a');
+});
+test('importação visual de outro período adiciona somente ocorrências ausentes',()=>{
+ const a=extrato('a','h1',{categoria:'Saúde Ocupacional'}),ts=[a];
+ const ctx={TXS:ts,DREFluxo:F,files:[],toast(){},showTable(){},updMesFiltro(){},render(){},updStats(){},renderDRE(){},autoSv(){},tentarVincularFaturaAuto(){}};
+ vm.createContext(ctx);vm.runInContext(html.slice(html.indexOf('function addLancs('),html.indexOf('function showTable(')),ctx);
+ const rows=[extrato('b','h2'),extrato('c','h2',{extratoLinha:1}),extrato('d','h2',{valor:-35,extratoLinha:2})];
+ ctx.addLancs(rows,'semana.ofx');assert.equal(ts.length,3);assert.equal(a.categoria,'Saúde Ocupacional');
+ ctx.addLancs(rows,'semana.ofx');assert.equal(ts.length,3);
+});
+test('merge no servidor bloqueia cópia de outro arquivo sem sobrescrever categoria existente',()=>{
+ const s=fs.readFileSync(require.resolve('../routes/dre'),'utf8'),inicio=s.indexOf('  function mergeTransacoes(');
+ let pos=s.indexOf('{',inicio),nivel=1,i=pos+1;
+ for(;i<s.length&&nivel;i++){if(s[i]==='{')nivel++;else if(s[i]==='}')nivel--;}
+ const ctx={DREFluxo:F,console:{log(){}}};vm.createContext(ctx);vm.runInContext(s.slice(inicio,i),ctx);
+ const a=extrato('a','h1',{categoria:'Saúde Ocupacional'}),b=extrato('b','h2',{categoria:'Outra categoria'});
+ const r=ctx.mergeTransacoes([a],[b,extrato('c','h2',{valor:-35})]);assert.equal(r.length,2);assert.equal(r[0].categoria,a.categoria);
+ const editado={...a,categoria:'Correção manual'};assert.equal(ctx.mergeTransacoes([a],[editado])[0].categoria,'Correção manual');
+});
