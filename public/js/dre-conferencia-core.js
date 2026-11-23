@@ -258,7 +258,7 @@
       totalTransacoes: lista.length,
       totalBanco: banco.length,
       reimportacoes: exatas,
-      reimportacoesAutomaticas: automaticas.suprimidos.filter(t=>String(t.motivo).startsWith('Mesma identidade de origem:')),
+      reimportacoesAutomaticas: automaticas.suprimidos.filter(t=>/^(Mesma identidade de origem:|Reimportação entre arquivos:)/.test(String(t.motivo))),
       pagamentosParecidos,
       conciliacoes,
       mesesInvalidos,

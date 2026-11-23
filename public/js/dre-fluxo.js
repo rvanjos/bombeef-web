@@ -63,7 +63,7 @@
     (novos||[]).forEach((t,i)=>{
       if(matches[i]||!t.extratoArquivoHash)return;
       const candidatos=grupos.get(conteudo(t))||[];
-      const a=candidatos.find(x=>!usados.has(x)&&x.extratoArquivoHash!==t.extratoArquivoHash&&!(x.fitid&&t.fitid&&String(x.fitid)!==String(t.fitid)));
+      const a=candidatos.find(x=>!usados.has(x)&&x.extratoArquivoHash!==t.extratoArquivoHash&&(!(x.fitid&&t.fitid&&String(x.fitid)!==String(t.fitid))||!!x.extratoArquivoHash));
       if(a){matches[i]=a;usados.add(a);}
     });
     return matches;
@@ -92,13 +92,40 @@
         suprimidos.push({id:outro.id,representadoPor:manter.id,motivo:'Mesma identidade de origem: '+manter.id,valor:outro.valor});
       }else{const chave=ant?k+'|conflito|'+String(t.id):k;vistos.set(chave,t);chaves.set(t,chave);if(fit&&!ant)porOrigem.set(fit,t);}
     }
+    // Exportações sobrepostas podem regenerar FITID. Preserve a multiplicidade
+    // de cada arquivo e só reúna conteúdo exato com conta identificada.
+    const lotes=new Map(),consolidados=[];
+    const referenciados=new Set(fontes.flatMap(t=>['vinculadoA','cartaoItemRef','extratoId'].map(c=>String(t[c]||'')).filter(Boolean)));
+    for(const t of new Set(vistos.values())){
+      if(!banco(t)||!t.extratoArquivoHash){consolidados.push(t);continue;}
+      if(!lotes.has(t.extratoArquivoHash))lotes.set(t.extratoArquivoHash,[]);
+      lotes.get(t.extratoArquivoHash).push(t);
+    }
+    // Legados sem arquivo continuam exigindo revisão, mesmo com conteúdo igual.
+    for(const lote of lotes.values()){
+      const conhecidos=consolidados.filter(t=>t.extratoArquivoHash);
+      const matches=compararImportacao(conhecidos,lote);
+      lote.forEach((t,i)=>{
+        const ant=matches[i];
+        const conflito=ant&&(ant.ignorar||t.ignorar||ant.ignorarAlteradoEm||t.ignorarAlteradoEm||
+          ['boletoId','faturaCC','vinculadoA','cartaoItemRef'].some(k=>ant[k]&&t[k]&&String(ant[k])!==String(t[k]))||
+          (ant.categoria&&t.categoria&&ant.categoria!==t.categoria)||ant.mes!==t.mes||ant.mesCaixa!==t.mesCaixa);
+        if(!ant||conflito){consolidados.push(t);return;}
+        const manter=qualidade(t)>qualidade(ant)?t:ant,outro=manter===t?ant:t;
+        if(referenciados.has(String(outro.id))){consolidados.push(t);return;}
+        const canonico=!manter.categoria&&outro.categoria?{...manter,categoria:outro.categoria,grupoKey:outro.grupoKey,_categoriaEditada:outro._categoriaEditada}:manter;
+        consolidados[consolidados.indexOf(ant)]=canonico;
+        aliases.set(String(outro.id),String(manter.id));
+        suprimidos.push({id:outro.id,representadoPor:manter.id,motivo:'Reimportação entre arquivos: '+manter.id,valor:outro.valor});
+      });
+    }
     const final=id=>{const visitados=new Set();while(aliases.has(id)&&!visitados.has(id)){visitados.add(id);id=aliases.get(id);}return id;};
-    return {fontes:[...new Set(vistos.values())].map(t=>t.cartaoItemRef&&aliases.has(String(t.cartaoItemRef))?{...t,cartaoItemRef:final(String(t.cartaoItemRef))}:t),suprimidos};
+    return {fontes:consolidados.map(t=>t.cartaoItemRef&&aliases.has(String(t.cartaoItemRef))?{...t,cartaoItemRef:final(String(t.cartaoItemRef))}:t),suprimidos};
   }
   function detectarDuplicidades(txs){
     const norm=v=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/[^A-Z0-9]/g,'');
     const grupos=new Map(),pares=[];
-    for(const t of txs||[]){
+    for(const t of deduplicar(txs||[]).fontes){
       if(t.ignorar||(!banco(t)&&t.fonte!=='CC')||!t.data||!Number(t.valor))continue;
       const k=[t.loja_id||'',banco(t)?'BANCO':'CC',String(t.data).slice(0,10),cents(t.valor),t.fonte==='CC'?(t.mesCaixa||''):''].join('|');
       if(!grupos.has(k))grupos.set(k,[]);grupos.get(k).push(t);
