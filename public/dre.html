@@ -9,8 +9,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="/js/api.js"></script>
 <script src="/js/dre-excel.js?v=2"></script>
-<script src="/js/dre-conferencia.js?v=19"></script>
-<script src="/js/dre-fluxo.js?v=9"></script>
+<script src="/js/dre-conferencia.js?v=20"></script>
+<script src="/js/dre-fluxo.js?v=10"></script>
+<script src="/js/dre-analise-gastos.js?v=1"></script>
 <script src="/js/dre-cartao-c6.js?v=1"></script>
 <script src="/js/dre-cartao-ocr.js?v=1"></script>
 <script>
@@ -5621,6 +5622,7 @@ function calcularMotorDRE(mesAlvo, modoOverride, basePreparada) {
 function _buildDRE(el, full) {
   if (!el) return;
   const baseDRE = prepararBaseDRE(getModo());
+  if(!full)window.DREAnaliseGastos?.atualizar(baseDRE,mesRef);
   const {at,data,dataNaoOper,meses,sg,sgt} = baseDRE;
   const motores=new Map();
   const motorMes=m=>{if(!motores.has(m))motores.set(m,calcularMotorDRE(m,getModo(),baseDRE));return motores.get(m);};

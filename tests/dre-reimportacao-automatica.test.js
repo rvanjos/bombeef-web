@@ -131,7 +131,7 @@ test('comparação entre arquivos exige conta, loja, data, centavos, sinal, desc
  for(const extra of [{data:'2026-10-27'},{valor:-186.19},{valor:186.18},{lancamento:'PIX'},{razaoSocial:'OUTRO FORNECEDOR'},{contaBancaria:'Itaú · 123'},{loja_id:2},{contaBancaria:''}]){
   assert.equal(F.compararImportacao([a],[extrato('b','h2',extra)])[0],null);
  }
- assert.equal(F.compararImportacao([extrato('a','h1',{fitid:'id1'})],[extrato('b','h2',{fitid:'id2'})])[0],null);
+ assert.equal(F.compararImportacao([extrato('a','h1',{fitid:'id1'})],[extrato('b','h2',{fitid:'id2'})])[0].id,'a');
  assert.equal(F.compararImportacao([extrato('a','h1',{contaBancaria:''})],[extrato('b','h2',{contaBancaria:''})])[0],null);
  assert.equal(F.compararImportacao([extrato('a',undefined)],[extrato('b','h2')])[0].id,'a');
 });
@@ -151,4 +151,17 @@ test('merge no servidor bloqueia cópia de outro arquivo sem sobrescrever catego
  const a=extrato('a','h1',{categoria:'Saúde Ocupacional'}),b=extrato('b','h2',{categoria:'Outra categoria'});
  const r=ctx.mergeTransacoes([a],[b,extrato('c','h2',{valor:-35})]);assert.equal(r.length,2);assert.equal(r[0].categoria,a.categoria);
  const editado={...a,categoria:'Correção manual'};assert.equal(ctx.mergeTransacoes([a],[editado])[0].categoria,'Correção manual');
+});
+
+test('exportações diferentes com FITID regenerado contam uma vez sem alterar histórico',()=>{
+ const ts=[extrato('a','h1',{fitid:'primeiro'}),extrato('b','h2',{fitid:'regenerado'})],antes=JSON.stringify(ts);
+ for(const modo of ['comp','caixa'])assert.equal(F.resolver(ts,modo).linhas.length,1);
+ assert.equal(F.detectarDuplicidades(ts).length,0);assert.equal(C.analisar(ts).reimportacoesAutomaticas.length,1);assert.equal(JSON.stringify(ts),antes);
+});
+test('multiplicidade entre três exportações e conflitos de categoria continuam protegidos',()=>{
+ const ts=[extrato('a','h1',{fitid:'a'}),extrato('b','h1',{fitid:'b',extratoLinha:1}),extrato('c','h2',{fitid:'c'}),extrato('d','h2',{fitid:'d',extratoLinha:1}),extrato('e','h3',{fitid:'e'})];
+ assert.equal(F.resolver(ts).linhas.length,2);
+ assert.equal(F.resolver([ts[0],{...ts[2],categoria:'Outra',_categoriaEditada:true}]).linhas.length,2);
+ for(const extra of [{valor:-186.19},{data:'2026-10-27'},{contaBancaria:'Itaú · 999'},{loja_id:4},{mes:'09/2026'}])assert.equal(F.resolver([ts[0],{...ts[2],...extra}]).linhas.length,2);
+ assert.equal(F.resolver([ts[0],{...ts[2],extratoArquivoHash:undefined}]).linhas.length,2);
 });
