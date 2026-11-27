@@ -33,3 +33,7 @@ test('permissão de publicação não concede leitura dos documentos dos outros'
 test('código de confirmação tem limite de tentativas, expiração e envio com intervalo',()=>{
  const s=fs.readFileSync('lib/usuarios-perfil-rotas.js','utf8');assert.match(s,/email_codigo_tentativas<5/);assert.match(s,/email_codigo_expira>NOW\(\)/);assert.match(s,/INTERVAL '1 minute'/);assert.match(s,/exigirAdminGlobal\(pool\)/);assert.notEqual(P.hashCodigo(1,'a@example.com','123456'),P.hashCodigo(2,'a@example.com','123456'));
 });
+
+test('login legado não é confundido com e-mail real de notificação',()=>{
+ assert.equal(P.LOGIN.test('dani@valinhos'),true);assert.equal(P.LOGIN.test('jiu@valinhos'),true);assert.equal(P.EMAIL.test('dani@valinhos'),false);assert.throws(()=>P.dadosPerfil({email_notificacoes:'dani@valinhos'}));assert.equal(P.LOGIN.test('user name@valinhos'),false);
+});

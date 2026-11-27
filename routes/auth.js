@@ -22,7 +22,7 @@ const { exigirAdminGlobal } = require('../lib/admin-global');
 const { verificarToken } = require('../lib/auth-token');
 const { alterarSenha, abrirSessaoAutenticada } = require('../lib/auth-password');
 const {executarComoSistema}=require('../lib/tenant-context');
-const {garantirPerfil,salvarPerfil,PERFIS,EMAIL}=require('../lib/usuarios-perfil');
+const {garantirPerfil,salvarPerfil,PERFIS,LOGIN}=require('../lib/usuarios-perfil');
 const {auditarSegurancaMultiloja}=require('../lib/multiloja-security');
 const {
   garantirEstruturaMultiloja,
@@ -551,7 +551,7 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
   // ── POST /usuarios ─────────────────────────────────────────────────────────
   r.post('/usuarios', autenticar('admin'), async (req, res) => {
     const { nome, email, senha, perfil, permissoes } = req.body;
-    if(!PERFIS.includes(perfil||'caixa')||!EMAIL.test(String(email||''))||String(senha||'').length<8)return res.status(400).json({ok:false,erro:'Confira o perfil, e-mail e uma senha com pelo menos 8 caracteres'});
+    if(!PERFIS.includes(perfil||'caixa')||!LOGIN.test(String(email||''))||String(senha||'').length<8)return res.status(400).json({ok:false,erro:'Confira o perfil, e-mail e uma senha com pelo menos 8 caracteres'});
     if (!nome || !email || !senha) {
       return res.status(400).json({ ok: false, erro: 'nome, email e senha são obrigatórios' });
     }
@@ -590,7 +590,7 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
     const { nome, email, perfil, ativo, permissoes } = req.body;
     if(Number(req.params.id)===Number(req.user.id)&&perfil&&perfil!=='admin')return res.status(400).json({ok:false,erro:'Não é possível retirar sua própria permissão de administrador'});
     if(perfil!==undefined&&!PERFIS.includes(perfil))return res.status(400).json({ok:false,erro:'Perfil inválido'});
-    if(email!==undefined&&!EMAIL.test(String(email)))return res.status(400).json({ok:false,erro:'E-mail inválido'});
+    if(email!==undefined&&!LOGIN.test(String(email)))return res.status(400).json({ok:false,erro:'E-mail inválido'});
     const client=await pool.connect();
     try {
       await client.query('BEGIN');
