@@ -2713,7 +2713,8 @@ async function enviarDocumento(){
     const r=await fetch(BASE+'/api/rh/documentos/upload',{method:'POST',headers:{Authorization:'Bearer '+getToken()},body:fd});
     const d=await r.json();
     if(!d.ok){toast('❌ '+d.erro);return;}
-    fecharModal('modal-doc-novo');toast(geral?'✅ Documento geral disponível para a equipe da loja.':'✅ Documento disponibilizado ao funcionário.');await carregarDocumentos();
+    const aviso=d.notificacao_email?.erro||(!d.notificacao_email?.servico_configurado?'Avisos por e-mail aguardam configuração.':`Avisos agendados: ${d.notificacao_email.enfileirados} destinatário(s) com e-mail confirmado.`);
+    fecharModal('modal-doc-novo');toast((geral?'✅ Documento geral disponível para a equipe da loja. ':'✅ Documento disponibilizado ao funcionário. ')+aviso);await carregarDocumentos();
   }catch(e){toast('❌ Falha ao enviar documento');}
   finally{btn.disabled=false;atualizarDestinoDocumento();}
 }

@@ -22,6 +22,7 @@ const { exigirAdminGlobal } = require('../lib/admin-global');
 const { verificarToken } = require('../lib/auth-token');
 const { alterarSenha, abrirSessaoAutenticada } = require('../lib/auth-password');
 const {executarComoSistema}=require('../lib/tenant-context');
+const {garantirPerfil,salvarPerfil,PERFIS,EMAIL}=require('../lib/usuarios-perfil');
 const {auditarSegurancaMultiloja}=require('../lib/multiloja-security');
 const {
   garantirEstruturaMultiloja,
@@ -101,6 +102,7 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_login_sessoes_atividade ON login_sessoes(ultima_atividade DESC)`);
     await pool.query(`ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS permissoes JSONB NOT NULL DEFAULT '{}'::jsonb`);
 
+    await garantirPerfil(pool);
     // Cria admin padrão se não existir
     const { rows } = await pool.query(`SELECT id FROM usuarios WHERE perfil='admin' LIMIT 1`);
     if (rows.length === 0) {
@@ -140,7 +142,8 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
     }
     return initPromise;
   };
-  garantirTabelas().catch(() => {});
+  garantirTabelas().then(()=>require('../lib/rh-email-avisos').iniciar(pool)).catch(() => {});
+  require('../lib/usuarios-perfil-rotas').instalar(r,pool,garantirTabelas);
 
   const abrirSessao = async (usuarioId, req, lojaId = null) => {
     await garantirTabelas();
@@ -536,7 +539,7 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
   r.get('/usuarios', autenticar('admin'), async (req, res) => {
     try {
       const { rows } = await pool.query(
-        `SELECT id, nome, email, perfil, ativo, ultimo_login, criado_em, COALESCE(permissoes,'{}'::jsonb) AS permissoes
+        `SELECT id, nome, email, perfil, ativo, ultimo_login, criado_em, COALESCE(permissoes,'{}'::jsonb) AS permissoes,telefone,cargo,departamento,nome_social,email_notificacoes,email_confirmado_em,avisos_email
          FROM usuarios ORDER BY nome ASC`
       );
       res.json({ ok: true, data: rows });
@@ -548,6 +551,7 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
   // ── POST /usuarios ─────────────────────────────────────────────────────────
   r.post('/usuarios', autenticar('admin'), async (req, res) => {
     const { nome, email, senha, perfil, permissoes } = req.body;
+    if(!PERFIS.includes(perfil||'caixa')||!EMAIL.test(String(email||''))||String(senha||'').length<8)return res.status(400).json({ok:false,erro:'Confira o perfil, e-mail e uma senha com pelo menos 8 caracteres'});
     if (!nome || !email || !senha) {
       return res.status(400).json({ ok: false, erro: 'nome, email e senha são obrigatórios' });
     }
@@ -567,6 +571,7 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
         INSERT INTO usuario_lojas (usuario_id, loja_id, perfil, permissoes, principal)
         VALUES ($1, $2, $3, $4::jsonb, true)
       `, [rows[0].id, loja.loja_id, perfil || 'caixa', JSON.stringify(permissoes || {})]);
+      await salvarPerfil(client,rows[0].id,req.body);
       await client.query('COMMIT');
       res.json({ ok: true, data: rows[0] });
     } catch (e) {
@@ -583,8 +588,13 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
   // ── PUT /usuarios/:id ──────────────────────────────────────────────────────
   r.put('/usuarios/:id', autenticar('admin'), async (req, res) => {
     const { nome, email, perfil, ativo, permissoes } = req.body;
+    if(Number(req.params.id)===Number(req.user.id)&&perfil&&perfil!=='admin')return res.status(400).json({ok:false,erro:'Não é possível retirar sua própria permissão de administrador'});
+    if(perfil!==undefined&&!PERFIS.includes(perfil))return res.status(400).json({ok:false,erro:'Perfil inválido'});
+    if(email!==undefined&&!EMAIL.test(String(email)))return res.status(400).json({ok:false,erro:'E-mail inválido'});
+    const client=await pool.connect();
     try {
-      await pool.query(`
+      await client.query('BEGIN');
+      await client.query(`
         UPDATE usuarios SET
           nome  = COALESCE($1, nome),
           email = COALESCE($2, email),
@@ -593,12 +603,12 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
           permissoes = COALESCE($5::jsonb, permissoes),
           atualizado_em = NOW()
         WHERE id = $6
-      `, [nome || null, email?.toLowerCase() || null, perfil || null,
+      `, [nome || null, email?.toLowerCase().trim() || null, perfil || null,
           ativo !== undefined ? ativo : null,
           permissoes !== undefined ? JSON.stringify(permissoes) : null,
           parseInt(req.params.id)]);
       if (req.user.lojaId) {
-        await pool.query(`
+        await client.query(`
           UPDATE usuario_lojas SET
             perfil = COALESCE($1, perfil),
             permissoes = COALESCE($2::jsonb, permissoes),
@@ -613,10 +623,13 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
           req.user.lojaId,
         ]);
       }
+      await salvarPerfil(client,parseInt(req.params.id),req.body);
+      await client.query('COMMIT');
       res.json({ ok: true });
     } catch (e) {
+      await client.query('ROLLBACK').catch(()=>{});
       res.status(500).json({ ok: false, erro: e.message });
-    }
+    } finally {client.release();}
   });
 
   // ── DELETE /usuarios/:id ───────────────────────────────────────────────────

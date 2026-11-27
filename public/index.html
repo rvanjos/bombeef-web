@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
+<script src="/js/usuarios-perfil.js?v=1" defer></script>
 <meta charset="UTF-8">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -484,6 +485,7 @@ body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var
       <div class="ph-av" id="ph-av">?</div>
       <span class="ph-uname" id="ph-uname"></span>
       <span class="ph-role" id="ph-role"></span>
+      <button class="ph-logout" onclick="BBPerfil.abrir()">Meu perfil</button>
       <button class="ph-logout" onclick="fazerLogout()">Sair</button>
     </div>
   </header>
@@ -1065,7 +1067,8 @@ function entrarNoPortal() {
   $('ph-av').textContent   = (usuario.nome||'?')[0].toUpperCase();
   $('ph-uname').textContent = usuario.nome;
   $('ph-uname').title = usuario.nome || '';
-  $('ph-role').textContent  = usuario.perfil;
+  $('ph-role').textContent  = usuario.perfil==='gestor'?'Gerente':usuario.perfil;
+  window.BBPerfil?.iniciar(apiFetch,usuario.id);
   renderLojaAtiva();
 
   // Define mês atual no seletor
@@ -1151,6 +1154,7 @@ function iniciarHeartbeatSessao() {
 }
 
 async function fazerLogout() {
+  window.BBPerfil?.limpar();
   BBDocumentosAviso.limpar();
   fecharMobMenu();
   $('modal-val-confirm').style.display = 'none';
