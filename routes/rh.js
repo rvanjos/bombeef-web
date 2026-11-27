@@ -19,6 +19,7 @@ const crypto = require('crypto');
 const autenticar = require('../middleware/auth');
 const { requireNivel } = autenticar;
 const {carregarEscalas,resolverEscala,iso}=require('../lib/ponto-escala');
+const emailAvisos=require('../lib/rh-email-avisos');
 const {contarPendenciasProprias,garantirDocumentosGerais}=require('../lib/rh-documentos-pendentes');
 
 module.exports = function (pool, app) {
@@ -115,6 +116,7 @@ module.exports = function (pool, app) {
   // Documentos trabalhistas são sensíveis: somente admin gerencia o conjunto.
   // Qualquer outro perfil, inclusive gestor operacional, acessa apenas o próprio vínculo.
   function gestorRH(req){ return req.user?.perfil==='admin'; }
+  function podePublicarDocumento(req){return gestorRH(req)||(req.user?.perfil==='gestor'&&req.user?.permissoes?.rh_documentos_publicar===true);}
   // BB-SSE-AUTOPUBLISH — avisa os outros modulos quando algo muda aqui.
   // Roda em todas as rotas, mas so publica em mutacao bem-sucedida.
   const _pub = (c, d) => { try { app?.locals?.ssePublish?.(c, d); } catch(_) {} };
@@ -365,8 +367,13 @@ module.exports = function (pool, app) {
     }catch(e){res.json({ok:false,total:0,erro:e.message});}
   });
 
+  r.get('/documentos/publicacao',async(req,res)=>{
+    if(!podePublicarDocumento(req))return res.json({ok:true,permitido:false,data:[]});
+    try{const {rows}=await pool.query(`SELECT id,nome,cargo FROM funcionarios WHERE loja_id=$1 AND ativo=true AND COALESCE(freelancer,false)=false ORDER BY nome`,[req.user.lojaId]);res.json({ok:true,permitido:true,data:rows});}catch(_){res.status(500).json({ok:false,erro:'Não foi possível consultar os destinatários'});}
+  });
+
   r.post('/documentos/upload', (req,res,next)=>{
-    if(!gestorRH(req)) return res.status(403).json({ok:false,erro:'Acesso restrito à gestão'});
+    if(!podePublicarDocumento(req)) return res.status(403).json({ok:false,erro:'Sem permissão para publicar documentos'});
     uploadDocumento.single('arquivo')(req,res,err=>err?res.status(400).json({ok:false,erro:err.message}):next());
   }, async (req,res)=>{
     const abrangencia=req.body.abrangencia ?? 'individual';
@@ -400,7 +407,9 @@ module.exports = function (pool, app) {
         RETURNING id,funcionario_id,tipo,titulo,competencia,arquivo_nome,arquivo_tamanho,exige_confirmacao,publicado_em
       `,[funcionarioId,tipo,titulo,competencia,observacao,req.file.originalname,req.file.mimetype,
           req.file.size,hash,key,exigeConfirmacao,req.user?.id||null,abrangencia,req.user.lojaId]);
-      res.json({ok:true,data:rows[0]});
+      let notificacao_email;
+      try{notificacao_email=await emailAvisos.enfileirar(pool,rows[0],req.user.lojaId);}catch(_){notificacao_email={erro:'Não foi possível agendar o aviso por e-mail'};}
+      res.json({ok:true,data:rows[0],notificacao_email});
     }catch(e){res.status(500).json({ok:false,erro:e.message});}
   });
 

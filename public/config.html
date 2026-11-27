@@ -196,7 +196,7 @@ if(window.self !== window.top){
     <!-- USUÁRIOS -->
     <div class="page" id="page-usuarios">
       <div class="pg-title">Usuários do Sistema</div>
-      <div class="pg-sub">Gerencie quem tem acesso e com qual nível</div>
+      <div class="pg-sub">Gerencie quem tem acesso, funções operacionais e dados de contato. Documentos pessoais continuam restritos ao titular e ao administrador.</div><div class="card" id="email-status-usuarios">Consultando serviço de avisos…</div>
       <div style="margin-bottom:14px"><button class="btn btn-p" onclick="abrirUsuario()">＋ Novo Usuário</button></div>
       <div class="card" style="padding:0;overflow:hidden">
         <table class="tbl"><thead><tr><th>Nome</th><th>E-mail</th><th>Perfil</th><th>Status</th><th>Ações</th></tr></thead>
@@ -295,17 +295,23 @@ if(window.self !== window.top){
       <input type="hidden" id="u-id">
       <div class="fg"><label>Nome *</label><input id="u-nome" placeholder="Nome completo"></div>
       <div class="fg"><label>E-mail *</label><input type="email" id="u-email" placeholder="email@bombeef.com.br"></div>
-      <div class="fg" id="u-senha-wrap"><label>Senha *</label><input type="password" id="u-senha" placeholder="Mínimo 6 caracteres"></div>
+      <div class="fg" id="u-senha-wrap"><label>Senha *</label><input type="password" id="u-senha" placeholder="Mínimo 8 caracteres"></div>
       <div class="fg"><label>Perfil de Acesso</label>
        <select id="u-perfil">
   <option value="caixa">Caixa — Retiradas e Validade</option>
   <option value="estoque">Estoque — Produtos e Validade</option>
   <option value="financeiro">Financeiro — Boletos e DRE</option>
   <option value="contabil">Contábil — Somente leitura (DRE, Boletos, Faturamento)</option>
-  <option value="gestor">Gestor — Todos os módulos exceto DRE</option>
+  <option value="gestor">Gerente operacional — sem DRE, aprovação de ponto ou gestão de usuários</option>
   <option value="admin">Admin — Acesso Total</option>
 </select>
       </div>
+      <div class="fg-row"><div class="fg"><label>Telefone</label><input id="u-telefone" maxlength="30"></div><div class="fg"><label>Nome social / preferência</label><input id="u-nome_social" maxlength="120"></div></div>
+      <div class="fg-row"><div class="fg"><label>Cargo</label><input id="u-cargo" maxlength="100"></div><div class="fg"><label>Setor</label><input id="u-departamento" maxlength="100"></div></div>
+      <div class="fg"><label>E-mail para avisos</label><input id="u-email_notificacoes" type="email"><small>Separado do login. O usuário confirma este endereço no próprio perfil.</small></div>
+      <label><input id="u-avisos_email" type="checkbox"> Receber avisos do RH por e-mail</label>
+      <div style="margin:14px 0"><button type="button" class="btn btn-s" onclick="padraoGerente()">Aplicar padrão gerente operacional</button><p style="font-size:11px;margin-top:6px">Pode editar retiradas e fiado, receber pagamentos, gerenciar kits e publicar documentos. Sem consultar documentos alheios, DRE ou aprovar ponto.</p></div>
+      <div class="fg"><label><input type="checkbox" id="u-p-rh-publicar"> Publicar documentos para funcionários (sem ler documentos de terceiros)</label></div>
       <div class="fg" id="u-permissoes-wrap">
         <label>Permissões adicionais — Retiradas</label>
         <div style="display:grid;gap:8px;background:#faf7f4;border:1px solid var(--border);border-radius:9px;padding:12px">
@@ -517,15 +523,17 @@ async function ativarLoja(id){
 }
 
 // ── Usuários ───────────────────────────────────────────────────────────────
+async function statusAvisosUsuarios(){const d=await api.get('/auth/perfil/avisos/status');const el=document.getElementById('email-status-usuarios');if(!el)return;el.textContent=d.ok?(d.configurado?'Envio de e-mails configurado. ':'Envio de e-mails ainda não configurado: o administrador deve definir RESEND_API_KEY e EMAIL_FROM no Railway. ')+(d.data||[]).map(x=>x.status+': '+x.quantidade).join(' · '):'Não foi possível consultar os avisos.';if(d.configurado){const b=document.createElement('button');b.className='btn btn-s';b.textContent='Reprocessar avisos com falha';b.onclick=async()=>{b.disabled=true;const r=await api.post('/auth/perfil/avisos/reprocessar',{});toast(r.ok?'Fila reprocessada':r.erro);statusAvisosUsuarios();};el.append(b);}}
 async function carregarUsuarios(){
   const d = await api.get('/auth/usuarios');
   if(!d.ok) return;
   usuarios = d.data;
+  statusAvisosUsuarios();
   const tb = document.getElementById('tbody-usr');
-  const perfis={admin:'Admin',gestor:'Gestor',financeiro:'Financeiro',estoque:'Estoque',caixa:'Caixa'};
+  const perfis={admin:'Admin',gestor:'Gerente operacional',financeiro:'Financeiro',estoque:'Estoque',caixa:'Caixa'};
   tb.innerHTML = usuarios.map(u=>`<tr>
     <td><b>${escLoja(u.nome)}</b></td>
-    <td style="font-size:12px">${escLoja(u.email)}</td>
+    <td style="font-size:12px">${escLoja(u.email)}<br><small>${escLoja(u.telefone||'Sem telefone')} · ${escLoja(u.cargo||'Sem cargo')} · ${escLoja(u.departamento||'Sem setor')}</small><br><small>Avisos: ${escLoja(u.email_notificacoes||'não cadastrado')} · ${u.email_confirmado_em?'confirmado':'não confirmado'}</small><br><small>Último acesso: ${u.ultimo_login?escLoja(new Date(u.ultimo_login).toLocaleString('pt-BR')):'nunca'}</small></td>
     <td><span class="pill" style="background:#e8e0ff;color:#4a2080">${escLoja(perfis[u.perfil]||u.perfil)}</span></td>
     <td><span class="pill ${u.ativo?'pill-ok':'pill-off'}">${u.ativo?'Ativo':'Inativo'}</span></td>
    <td>
@@ -582,6 +590,9 @@ function abrirUsuario(id){
   document.getElementById('u-email').value = u?.email||'';
   document.getElementById('u-senha').value = '';
   document.getElementById('u-perfil').value= u?.perfil||'caixa';
+  for(const k of ['telefone','nome_social','cargo','departamento','email_notificacoes'])document.getElementById('u-'+k).value=u?.[k]||'';
+  document.getElementById('u-avisos_email').checked=!!u?.avisos_email;
+  document.getElementById('u-p-rh-publicar').checked=!!u?.permissoes?.rh_documentos_publicar;
   const p=u?.permissoes||{};
   document.getElementById('u-p-ret-ver').checked=!!p.retiradas_visualizar_equipe;
   document.getElementById('u-p-ret-lancar').checked=!!p.retiradas_lancar_equipe;
@@ -598,6 +609,7 @@ function abrirUsuario(id){
   document.getElementById('u-senha-wrap').style.display = u?'none':'';
   document.getElementById('modal-usr').classList.add('open');
 }
+function padraoGerente(){document.getElementById('u-perfil').value='gestor';for(const id of ['u-p-ret-ver','u-p-ret-lancar','u-p-ret-pagar','u-p-ret-pdv','u-p-ret-editar','u-p-fia-clientes','u-p-fia-lancar','u-p-fia-editar','u-p-fia-cancelar','u-p-fia-pagar','u-p-fia-pdv','u-p-kits-gerenciar','u-p-rh-publicar'])document.getElementById(id).checked=true;}
 function fecharUsr(){ document.getElementById('modal-usr').classList.remove('open'); }
 
 async function salvarUsr(){
@@ -607,7 +619,10 @@ async function salvarUsr(){
     email:  document.getElementById('u-email').value.trim(),
     senha:  document.getElementById('u-senha').value,
     perfil: document.getElementById('u-perfil').value,
+    ...Object.fromEntries(['telefone','nome_social','cargo','departamento','email_notificacoes'].map(k=>[k,document.getElementById('u-'+k).value])),
+    avisos_email:document.getElementById('u-avisos_email').checked,
     permissoes: {
+      rh_documentos_publicar:document.getElementById('u-p-rh-publicar').checked,
       retiradas_visualizar_equipe:document.getElementById('u-p-ret-ver').checked,
       retiradas_lancar_equipe:document.getElementById('u-p-ret-lancar').checked,
       retiradas_pagamentos:document.getElementById('u-p-ret-pagar').checked,
@@ -625,7 +640,7 @@ async function salvarUsr(){
   if(!body.nome||!body.email){ toast('Nome e e-mail obrigatórios'); return; }
   if(!id && !body.senha){ toast('Senha obrigatória para novo usuário'); return; }
   const d = id
-    ? await api.put(`/auth/usuarios/${id}`, {nome:body.nome,email:body.email,perfil:body.perfil,permissoes:body.permissoes})
+    ? await api.put(`/auth/usuarios/${id}`, {...body,senha:undefined})
     : await api.post('/auth/usuarios', body);
   if(!d.ok){ toast('Erro: '+d.erro); return; }
   toast(id?'Usuário atualizado!':'Usuário criado!');
@@ -1101,7 +1116,7 @@ async function abrirSenhaPropia() {
       </div>
       <div class="fg">
         <label>Nova Senha *</label>
-        <input type="password" id="senha-nova" placeholder="Mínimo 6 caracteres" autocomplete="new-password">
+        <input type="password" id="senha-nova" placeholder="Mínimo 8 caracteres" autocomplete="new-password">
       </div>
       <div class="fg">
         <label>Confirmar Nova Senha *</label>
