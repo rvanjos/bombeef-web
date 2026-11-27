@@ -594,6 +594,8 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
     const client=await pool.connect();
     try {
       await client.query('BEGIN');
+      const {rows:[antes]}=await client.query(`SELECT id,nome,email,perfil,ativo,permissoes FROM usuarios WHERE id=$1 FOR UPDATE`,[parseInt(req.params.id)]);
+      req.auditoria={antes};
       await client.query(`
         UPDATE usuarios SET
           nome  = COALESCE($1, nome),

@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
+<script src="/js/fiado-correcao-pagamento.js?v=1" defer></script>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Compras Pendentes</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -667,14 +668,27 @@ window.onBBReady = async () => {
   adicionarItemVenda();
 };
 
+let _podeCorrigirPagamento=false;
+function botaoCorrigirPagamento(id){return _podeCorrigirPagamento?`<button type="button" class="btn btn-gray btn-sm" style="margin:5px 0" onclick="BBFiadoCorrecao.abrir(${Number(id)})">Corrigir pagamento</button>`:'';}
+async function atualizarAposCorrecaoPagamento(clienteId){
+  await carregarTudo();
+  if(document.getElementById('m-detalhe').classList.contains('open'))await abrirDetalhe(Number(clienteId));
+  if(document.getElementById('m-extrato').classList.contains('open')&&Number(window._extratoClienteId)===Number(clienteId)){
+    const cli=_clientes.find(c=>Number(c.id)===Number(clienteId));
+    if(cli){document.getElementById('ext-divida').textContent=fmt.brl(Number(cli.saldo_aberto||0));document.getElementById('ext-credito').textContent=fmt.brl(Number(cli.credito_saldo||0));}
+    renderExtrato(clienteId);
+  }
+}
 async function carregarTudo() {
   document.getElementById('ph-sub').textContent = 'Carregando...';
-  const [rc, rv, rp, rk] = await Promise.all([
+  const [rc, rv, rp, rk, ra] = await Promise.all([
     api.get('/api/fiado/clientes'),
     api.get('/api/fiado/vendas'),
     api.get('/api/fiado/pagamentos'),
     api.get('/api/fiado/kpis'),
+    api.get('/api/fiado/permissoes'),
   ]);
+  _podeCorrigirPagamento=!!ra?.data?.corrigir_pagamentos;
   if (rc.ok) _clientes = rc.data;
   if (rv.ok) _vendas   = rv.data;
   if (rp.ok) _pagamentos = rp.data;
@@ -848,7 +862,7 @@ function renderPagamentos() {
       <td class="mono" style="font-weight:700;color:var(--green)">${fmt.brl(parseFloat(p.valor_pago))}</td>
       <td>${FORMA_LABEL[p.forma_pagamento]||p.forma_pagamento}</td>
       <td style="font-size:11px;color:var(--muted)">${abatidas} venda(s)<br>Aplicado: ${fmt.brl((p.vendas_abatidas||[]).reduce((n,a)=>n+Number(a.valor_abatido||0),0))}<br>Crédito gerado: ${fmt.brl(Number(p.credito_gerado||0))}<br>Crédito usado: ${fmt.brl(Number(p.credito_utilizado||0))}</td>
-      <td style="font-size:11px;color:var(--muted)">${p.observacoes||'—'}</td>
+      <td style="font-size:11px;color:var(--muted)">${p.observacoes||'—'}<br>${botaoCorrigirPagamento(p.id)}${Number(p.versao||0)>0?'<small>Pagamento corrigido · revisão '+Number(p.versao)+'</small>':''}</td>
     </tr>`;
   }).join('') || `<tr><td colspan="6" class="empty">Nenhum pagamento registrado</td></tr>`;
 }
@@ -1376,7 +1390,7 @@ async function abrirDetalhe(id) {
           <td>${p.data_pagamento?.slice(0,10).split('-').reverse().join('/')}</td>
           <td class="mono" style="color:var(--green);font-weight:700">${fmt.brl(Number(p.valor_pago||0)+Number(p.credito_utilizado||0))}</td>
           <td>${p.forma_pagamento}</td>
-          <td style="font-size:11px;color:var(--muted)">${p.observacoes||'—'}</td>
+          <td style="font-size:11px;color:var(--muted)">${p.observacoes||'—'}<br>${botaoCorrigirPagamento(p.id)}${Number(p.versao||0)>0?'<small>Pagamento corrigido · revisão '+Number(p.versao)+'</small>':''}</td>
         </tr>`).join('')}</tbody>
       </table></div>` : '<div class="empty">Nenhum pagamento</div>'}
     </div>
@@ -1565,7 +1579,7 @@ function renderExtrato(clienteId) {
             💵 Pagamento — ${fmtDtBr(p.data_pagamento)}
             ${detalheAbatimento}
           </td>
-          <td colspan="2" style="padding:8px 12px;font-size:11px;color:var(--muted);vertical-align:top">${FORMA[p.forma_pagamento]||p.forma_pagamento}</td>
+          <td colspan="2" style="padding:8px 12px;font-size:11px;color:var(--muted);vertical-align:top">${FORMA[p.forma_pagamento]||p.forma_pagamento}<br>${botaoCorrigirPagamento(p.id)}</td>
           <td style="padding:8px 12px;font-size:11px;color:var(--muted);vertical-align:top">${p.observacoes||''}<br>Recebido: ${fmt.brl(Number(p.valor_pago||0))}<br>Crédito gerado: ${fmt.brl(Number(p.credito_gerado||0))}<br>Crédito usado: ${fmt.brl(Number(p.credito_utilizado||0))}</td>
           <td style="padding:8px 12px;text-align:right;font-size:13px;font-weight:700;font-family:'DM Mono',monospace;color:var(--green);vertical-align:top">
             -${fmt.brl(Number(p.valor_pago||0)+Number(p.credito_utilizado||0))}

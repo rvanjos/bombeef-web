@@ -4,7 +4,9 @@
  */
 const express = require('express');
 const autenticar = require('../middleware/auth');
+const correcaoPagamento=require('../lib/fiado-correcao-pagamento');
 const { distribuirPagamento, centavos } = require('../lib/fiado-pagamento');
+const estruturasFiado=new WeakMap();
 
 module.exports = function(pool, app) {
   const r = express.Router();
@@ -118,6 +120,12 @@ module.exports = function(pool, app) {
     await pool.query(`ALTER TABLE pagamentos_fiado ADD COLUMN IF NOT EXISTS usuario_id INTEGER`);
     await pool.query(`ALTER TABLE pagamentos_fiado ADD COLUMN IF NOT EXISTS idempotencia TEXT`);
     await pool.query(`ALTER TABLE pagamentos_fiado ADD COLUMN IF NOT EXISTS requisicao JSONB`);
+    await pool.query(`ALTER TABLE pagamentos_fiado ADD COLUMN IF NOT EXISTS versao INTEGER NOT NULL DEFAULT 0`);
+    await pool.query(`ALTER TABLE pagamento_venda_fiado ADD COLUMN IF NOT EXISTS revisao INTEGER NOT NULL DEFAULT 0`);
+    await pool.query(`CREATE TABLE IF NOT EXISTS fiado_pagamento_revisoes(
+      id BIGSERIAL PRIMARY KEY,pagamento_id INTEGER NOT NULL REFERENCES pagamentos_fiado(id),loja_id INTEGER NOT NULL REFERENCES lojas(id),versao INTEGER NOT NULL,
+      idempotencia TEXT NOT NULL,requisicao JSONB NOT NULL,antes JSONB NOT NULL,depois JSONB NOT NULL,motivo TEXT NOT NULL,usuario_id INTEGER NOT NULL,usuario_nome TEXT NOT NULL,
+      criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),UNIQUE(loja_id,idempotencia),UNIQUE(pagamento_id,versao))`);
     await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS uq_fiado_pagamento_requisicao ON pagamentos_fiado(loja_id,idempotencia) WHERE idempotencia IS NOT NULL`);
 
     await pool.query(`
@@ -133,7 +141,8 @@ module.exports = function(pool, app) {
         loja_id           INTEGER NOT NULL DEFAULT bb_loja_padrao() REFERENCES lojas(id)
       )`).catch(()=>{});
   }
-  const estruturaPronta = initTables().then(() => null, e => e);
+  let estruturaPronta=estruturasFiado.get(pool);
+  if(!estruturaPronta){estruturaPronta=initTables().then(()=>null,e=>e);estruturasFiado.set(pool,estruturaPronta);}
   r.use(async (req,res,next) => {
     const erro = await estruturaPronta;
     if (erro) return res.status(503).json({ok:false,erro:'Estrutura de crédito indisponível. Tente novamente após a atualização.'});
@@ -645,13 +654,32 @@ module.exports = function(pool, app) {
     } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
   });
 
+  r.get('/permissoes', (req,res)=>res.json({ok:true,data:{corrigir_pagamentos:correcaoPagamento.podeCorrigir(req.user)}}));
+  const exigirCorrecao=(req,res,next)=>correcaoPagamento.podeCorrigir(req.user)?next():res.status(403).json({ok:false,erro:'A correção exige administrador ou gerente com permissão específica.'});
+  r.get('/pagamentos/:id/correcao',exigirCorrecao,async(req,res)=>{
+    try{
+      const {rows:[p]}=await pool.query(`SELECT p.*,c.nome AS cliente_nome,c.credito_saldo,
+        COALESCE((SELECT SUM(v.saldo_restante) FROM vendas_fiado v WHERE v.cliente_id=c.id AND v.loja_id=p.loja_id AND v.status IN('aberto','parcial')),0) AS saldo_aberto
+        FROM pagamentos_fiado p JOIN clientes_fiado c ON c.id=p.cliente_id AND c.loja_id=p.loja_id AND c.tipo_cliente<>'funcionario' WHERE p.id=$1 AND p.loja_id=$2`,[Number(req.params.id),req.user.lojaId]);
+      if(!p)return res.status(404).json({ok:false,erro:'Pagamento não encontrado nesta loja.'});
+      const {rows:vendas}=await pool.query(`SELECT id,data_compra,total_final,saldo_restante,status FROM vendas_fiado WHERE cliente_id=$1 AND loja_id=$2 AND status IN('aberto','parcial','pago') ORDER BY data_compra,id`,[p.cliente_id,req.user.lojaId]);
+      const {rows:revisoes}=await pool.query(`SELECT versao,motivo,usuario_nome,criado_em,requisicao,antes->'pagamento'->>'valor_pago' AS valor_anterior,depois->'data'->>'valor_pago' AS valor_corrigido FROM fiado_pagamento_revisoes WHERE pagamento_id=$1 AND loja_id=$2 ORDER BY versao DESC`,[p.id,req.user.lojaId]);
+      const {rows:rateios}=await pool.query(`SELECT venda_id,valor_abatido FROM pagamento_venda_fiado WHERE pagamento_id=$1 AND loja_id=$2 AND revisao=$3 ORDER BY id`,[p.id,req.user.lojaId,p.versao]);
+      res.json({ok:true,data:p,vendas,revisoes,rateios});
+    }catch(_){res.status(500).json({ok:false,erro:'Não foi possível consultar este pagamento.'});}
+  });
+  r.put('/pagamentos/:id/correcao',exigirCorrecao,async(req,res)=>{
+    try{const {auditoria_antes,...resultado}=await correcaoPagamento.corrigir(pool,Number(req.params.id),req.user.lojaId,req.user,req.body);req.auditoria={antes:auditoria_antes};res.json({ok:true,...resultado});}
+    catch(e){res.status(e.status||500).json({ok:false,erro:e.status?e.message:'Não foi possível corrigir o pagamento. Nenhuma alteração foi aplicada.'});}
+  });
+
   r.get('/pagamentos', async (req, res) => {
     const { cliente_id } = req.query;
     try {
       const { rows } = await pool.query(`
         SELECT p.*,
           (SELECT json_agg(json_build_object('venda_id',pv.venda_id,'valor_abatido',pv.valor_abatido))
-           FROM pagamento_venda_fiado pv WHERE pv.pagamento_id=p.id) AS vendas_abatidas
+           FROM pagamento_venda_fiado pv WHERE pv.pagamento_id=p.id AND pv.loja_id=p.loja_id AND pv.revisao=p.versao) AS vendas_abatidas
         FROM pagamentos_fiado p
         JOIN clientes_fiado c ON c.id=p.cliente_id AND c.tipo_cliente <> 'funcionario'
         WHERE ($1::int IS NULL OR p.cliente_id=$1)
