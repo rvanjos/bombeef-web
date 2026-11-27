@@ -2,11 +2,12 @@
 
 const express = require('express');
 const autenticar = require('../middleware/auth');
+const {exigirAdminGlobal}=require('../lib/admin-global');
 const audit = require('../lib/auditoria');
 
 module.exports = function(pool) {
   const r = express.Router();
-  r.use(autenticar('admin'));
+  r.use(autenticar('admin'),exigirAdminGlobal(pool));
   audit.init(pool).catch(e => console.error('[auditoria/init]', e.message));
 
   r.get('/resumo', async (req, res) => {
@@ -17,13 +18,13 @@ module.exports = function(pool) {
           COUNT(*) FILTER (WHERE sucesso=false)::int falhas,
           COUNT(*) FILTER (WHERE acao='EXCLUIR')::int exclusoes,
           COUNT(DISTINCT usuario_id)::int usuarios
-          FROM auditoria_eventos WHERE criado_em >= NOW() - ($1 || ' days')::interval`, [dias]),
+          FROM auditoria_eventos WHERE criado_em >= NOW() - ($1 || ' days')::interval AND loja_id=$2`, [dias,req.user.lojaId]),
         pool.query(`SELECT modulo, COUNT(*)::int total FROM auditoria_eventos
-          WHERE criado_em >= NOW() - ($1 || ' days')::interval GROUP BY modulo ORDER BY total DESC LIMIT 10`, [dias]),
+          WHERE criado_em >= NOW() - ($1 || ' days')::interval AND loja_id=$2 GROUP BY modulo ORDER BY total DESC LIMIT 10`, [dias,req.user.lojaId]),
         pool.query(`SELECT id, criado_em, modulo, acao, usuario_nome, erro FROM auditoria_eventos
-          WHERE sucesso=false AND criado_em >= NOW() - ($1 || ' days')::interval ORDER BY criado_em DESC LIMIT 10`, [dias]),
+          WHERE sucesso=false AND criado_em >= NOW() - ($1 || ' days')::interval AND loja_id=$2 ORDER BY criado_em DESC LIMIT 10`, [dias,req.user.lojaId]),
         pool.query(`SELECT COALESCE(usuario_nome,'Sistema') usuario, COUNT(*)::int total FROM auditoria_eventos
-          WHERE criado_em >= NOW() - ($1 || ' days')::interval GROUP BY usuario_nome ORDER BY total DESC LIMIT 10`, [dias]),
+          WHERE criado_em >= NOW() - ($1 || ' days')::interval AND loja_id=$2 GROUP BY usuario_nome ORDER BY total DESC LIMIT 10`, [dias,req.user.lojaId]),
       ]);
       res.json({ ok:true, data:{ totais:totais.rows[0], modulos:modulos.rows, falhas:falhas.rows, usuarios:usuarios.rows } });
     } catch(e) { res.status(500).json({ok:false, erro:e.message}); }
@@ -31,16 +32,16 @@ module.exports = function(pool) {
 
   r.get('/eventos', async (req, res) => {
     try {
-      const limite = Math.min(parseInt(req.query.limite) || 50, 500);
+      const limite = Math.max(1,Math.min(parseInt(req.query.limite) || 50, 500));
       const pagina = Math.max(parseInt(req.query.pagina) || 1, 1);
-      const params = [];
-      const conds = [];
+      const params = [req.user.lojaId];
+      const conds = ['loja_id=$1'];
       const add = (v, sql) => { params.push(v); conds.push(sql.replace('?', '$' + params.length)); };
       if (req.query.modulo) add(req.query.modulo, 'modulo = ?');
       if (req.query.acao) add(req.query.acao, 'acao = ?');
       if (req.query.usuario) add('%' + req.query.usuario + '%', `COALESCE(usuario_nome,'') ILIKE ?`);
-      if (req.query.data_ini) add(req.query.data_ini, 'criado_em >= ?::date');
-      if (req.query.data_fim) add(req.query.data_fim, `criado_em < ?::date + interval '1 day'`);
+      if (req.query.data_ini) add(req.query.data_ini, "criado_em >= (?::date::timestamp AT TIME ZONE 'America/Sao_Paulo')");
+      if (req.query.data_fim) add(req.query.data_fim, `criado_em < ((?::date + interval '1 day') AT TIME ZONE 'America/Sao_Paulo')`);
       if (req.query.sucesso === 'true' || req.query.sucesso === 'false') add(req.query.sucesso === 'true', 'sucesso = ?');
       const where = conds.length ? 'WHERE ' + conds.join(' AND ') : '';
       const count = await pool.query(`SELECT COUNT(*)::int total FROM auditoria_eventos ${where}`, params);
@@ -51,15 +52,30 @@ module.exports = function(pool) {
     } catch(e) { res.status(500).json({ok:false, erro:e.message}); }
   });
 
-  r.get('/filtros', async (_req, res) => {
+  r.get('/filtros', async (req, res) => {
     try {
       const [m,a,u] = await Promise.all([
-        pool.query('SELECT DISTINCT modulo valor FROM auditoria_eventos ORDER BY modulo'),
-        pool.query('SELECT DISTINCT acao valor FROM auditoria_eventos ORDER BY acao'),
-        pool.query(`SELECT DISTINCT usuario_nome valor FROM auditoria_eventos WHERE usuario_nome IS NOT NULL ORDER BY usuario_nome`),
+        pool.query('SELECT DISTINCT modulo valor FROM auditoria_eventos WHERE loja_id=$1 ORDER BY modulo',[req.user.lojaId]),
+        pool.query('SELECT DISTINCT acao valor FROM auditoria_eventos WHERE loja_id=$1 ORDER BY acao',[req.user.lojaId]),
+        pool.query(`SELECT DISTINCT usuario_nome valor FROM auditoria_eventos WHERE usuario_nome IS NOT NULL AND loja_id=$1 ORDER BY usuario_nome`,[req.user.lojaId]),
       ]);
       res.json({ok:true, data:{modulos:m.rows, acoes:a.rows, usuarios:u.rows}});
     } catch(e) { res.status(500).json({ok:false, erro:e.message}); }
+  });
+
+  r.get('/acessos',async(req,res)=>{
+    try{
+      const params=[req.user.lojaId],cond=['s.loja_id=$1'];
+      const add=(v,q)=>{params.push(v);cond.push(q.replace('?', '$'+params.length));};
+      if(req.query.usuario)add('%'+String(req.query.usuario).slice(0,120)+'%', 'u.nome ILIKE ?');
+      if(req.query.data_ini)add(req.query.data_ini,"s.iniciado_em >= (?::date::timestamp AT TIME ZONE 'America/Sao_Paulo')");
+      if(req.query.data_fim)add(req.query.data_fim,"s.iniciado_em < ((?::date+interval '1 day') AT TIME ZONE 'America/Sao_Paulo')");
+      const pagina=Math.max(1,parseInt(req.query.pagina)||1),where=cond.join(' AND ');
+      const {rows:[cont]}=await pool.query(`SELECT COUNT(*)::integer AS total FROM login_sessoes s JOIN usuarios u ON u.id=s.usuario_id WHERE ${where}`,params);
+      params.push(50,(pagina-1)*50);
+      const {rows}=await pool.query(`SELECT s.id,s.usuario_id,u.nome AS usuario_nome,s.iniciado_em,s.ultima_atividade,s.encerrado_em,s.encerramento,s.ip FROM login_sessoes s JOIN usuarios u ON u.id=s.usuario_id WHERE ${where} ORDER BY s.iniciado_em DESC,s.id DESC LIMIT $${params.length-1} OFFSET $${params.length}`,params);
+      res.json({ok:true,data:rows,total:cont.total,pagina,paginas:Math.ceil(cont.total/50)});
+    }catch(_){res.status(500).json({ok:false,erro:'Não foi possível consultar os acessos'});}
   });
 
   r.get('/dre/conflitos-resolvidos', async (req, res) => {
