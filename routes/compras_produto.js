@@ -9,7 +9,7 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 
 
 module.exports = function(pool, app) {
   const r = express.Router();
-  r.use(autenticar(['admin','gestor']));
+  r.use(autenticar(['admin','gestor','gerente_operacional']));
   // BB-SSE-AUTOPUBLISH — avisa os outros modulos quando algo muda aqui.
   // Roda em todas as rotas, mas so publica em mutacao bem-sucedida.
   const _pub = (c, d) => { try { app?.locals?.ssePublish?.(c, d); } catch(_) {} };

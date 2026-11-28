@@ -29,7 +29,7 @@ module.exports = function(pool, app) {
   ]);
 
   // ── POST /movimento — registra movimento e atualiza estoque ──────────────────
-  r.post('/movimento', autenticar(['admin','gestor','estoque']), async (req, res) => {
+  r.post('/movimento', autenticar(['admin','gestor','gerente_operacional','estoque']), async (req, res) => {
     const {
       produto_id,
       tipo_movimento,

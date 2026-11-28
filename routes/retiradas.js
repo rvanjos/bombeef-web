@@ -158,7 +158,7 @@ module.exports = function (pool, app) {
         [req.user?.id]
       );
       if (!rows.length) return res.status(403).json({ ok:false, erro:'Usuário não encontrado' });
-      const permissoes = rows[0].permissoes || {};
+      const permissoes = req.user?.perfil==='gerente_operacional' ? (req.user.permissoes||{}) : (rows[0].permissoes || {});
       req.podeRetirada = chave => permissoes[chave] === true;
       req.funcionarioProprio = rows[0].id ? rows[0] : null;
       if (!req.podeRetirada('retiradas_visualizar_equipe')) {

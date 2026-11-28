@@ -18,7 +18,7 @@ const events  = require('../lib/events');
 module.exports = function (pool, app) {
   const publish = (canal, dados) => { try { app?.locals?.ssePublish?.(canal, dados); } catch(_) {} };
   const r = express.Router();
-  r.use(autenticar(['admin','gestor','estoque']));
+  r.use(autenticar(['admin','gestor','gerente_operacional','estoque']));
 
   // ── INIT TABELAS ────────────────────────────────────────────────────────────
   async function initTables() {

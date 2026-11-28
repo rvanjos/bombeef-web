@@ -9,7 +9,7 @@ module.exports = function (pool) {
   const r = express.Router();
   r.use(autenticar());
   const gerenciarKits = async (req,res,next) => {
-    if (['admin','gestor'].includes(req.user?.perfil)) return next();
+    if (['admin','gestor','gerente_operacional'].includes(req.user?.perfil)) return next();
     try {
       const { rows } = await pool.query(
         `SELECT COALESCE(permissoes,'{}'::jsonb) AS permissoes FROM usuarios WHERE id=$1 AND ativo=true`,
