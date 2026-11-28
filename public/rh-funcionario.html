@@ -309,7 +309,7 @@ function abrirMeuPonto(){
 }
 window.addEventListener('message',e=>{
   if(e.origin!==location.origin||e.source!==parent||e.data?.type!=='bb_token')return;
-  document.getElementById('rh-meu-ponto').hidden=!['gestor','operador','caixa'].includes(e.data.usuario?.perfil);
+  document.getElementById('rh-meu-ponto').hidden=!['gestor','gerente_operacional','operador','caixa'].includes(e.data.usuario?.perfil);
 });
 function showTab(t){
   document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));

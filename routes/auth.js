@@ -78,7 +78,7 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
         email       TEXT UNIQUE NOT NULL,
         senha_hash  TEXT NOT NULL,
         perfil      TEXT NOT NULL DEFAULT 'caixa'
-                    CHECK (perfil IN ('admin','gestor','financeiro','estoque','caixa','contabil')),
+                    CHECK (perfil IN ('admin','gestor','gerente_operacional','financeiro','estoque','caixa','contabil')),
         ativo       BOOLEAN DEFAULT true,
         ultimo_login TIMESTAMPTZ,
         criado_em   TIMESTAMPTZ DEFAULT NOW(),
@@ -103,6 +103,7 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
     await pool.query(`ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS permissoes JSONB NOT NULL DEFAULT '{}'::jsonb`);
 
     await garantirPerfil(pool);
+    await pool.query(`ALTER TABLE usuarios DROP CONSTRAINT IF EXISTS usuarios_perfil_check; ALTER TABLE usuarios ADD CONSTRAINT usuarios_perfil_check CHECK (perfil IN ('admin','gestor','gerente_operacional','financeiro','estoque','caixa','contabil'));`);
     // Cria admin padrão se não existir
     const { rows } = await pool.query(`SELECT id FROM usuarios WHERE perfil='admin' LIMIT 1`);
     if (rows.length === 0) {
@@ -123,6 +124,8 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
     }
 
     await garantirEstruturaMultiloja(pool);
+    const gerentesMigrados=await require('../lib/gerente-operacional').migrarDaniela(pool);
+    console.log('[auth] perfil operacional: migrações aplicadas',gerentesMigrados);
     if (process.env.RUN_MULTILOJA_MIGRATIONS === '1') {
       iniciarMigracaoOperacionalMultiloja(pool).catch(e => {
         console.error('[multiloja] migração operacional em segundo plano:', e.message);
@@ -153,13 +156,6 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
     `, [usuarioId, lojaId, req.ip || null, String(req.headers['user-agent'] || '').slice(0, 500) || null]);
     return rows[0].id;
   };
-
-  // Atualiza constraint de perfil para incluir 'contabil' (bancos existentes)
-  pool.query(`
-    ALTER TABLE usuarios DROP CONSTRAINT IF EXISTS usuarios_perfil_check;
-    ALTER TABLE usuarios ADD CONSTRAINT usuarios_perfil_check
-      CHECK (perfil IN ('admin','gestor','financeiro','estoque','caixa','contabil'));
-  `).catch(() => {}); // silencia se tabela ainda não existe
 
   // ── POST /refresh — renova token sem precisar fazer login novamente ────────
   r.post('/refresh', async (req, res) => {

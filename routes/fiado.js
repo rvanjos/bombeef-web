@@ -12,6 +12,7 @@ module.exports = function(pool, app) {
   const r = express.Router();
   r.use(autenticar());
   const permitir = (chave, perfisPadrao=[]) => async (req, res, next) => {
+    if(req.user?.perfil==='gerente_operacional')return req.user.permissoes?.[chave]===true?next():res.status(403).json({ok:false,erro:'Sem permissão nesta loja.'});
     if (req.user?.perfil === 'admin' || perfisPadrao.includes(req.user?.perfil)) return next();
     try {
       const { rows } = await pool.query(
@@ -330,7 +331,7 @@ module.exports = function(pool, app) {
     } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
   });
 
-  r.post('/clientes', permitir('fiado_clientes',['gestor']), async (req, res) => {
+  r.post('/clientes', permitir('fiado_clientes',['gestor','gerente_operacional']), async (req, res) => {
     const { nome, telefone, tipo_cliente='normal', desconto_pct=0, limite_credito, status='ativo', observacoes } = req.body;
     if (!nome?.trim()) return res.status(400).json({ ok:false, erro:'Nome obrigatório' });
     if (tipo_cliente === 'funcionario') return res.status(409).json({ ok:false, erro:'Funcionários devem ser cadastrados e movimentados no módulo Retiradas.' });
@@ -345,7 +346,7 @@ module.exports = function(pool, app) {
     } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
   });
 
-  r.put('/clientes/:id', permitir('fiado_clientes',['gestor']), async (req, res) => {
+  r.put('/clientes/:id', permitir('fiado_clientes',['gestor','gerente_operacional']), async (req, res) => {
     const { nome, telefone, tipo_cliente, desconto_pct, limite_credito, status, observacoes } = req.body;
     try {
       const { rows } = await pool.query(
@@ -378,7 +379,7 @@ module.exports = function(pool, app) {
     } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
   });
 
-  r.post('/vendas', permitir('fiado_lancar',['gestor','caixa']), async (req, res) => {
+  r.post('/vendas', permitir('fiado_lancar',['gestor','gerente_operacional','caixa']), async (req, res) => {
     const { cliente_id, data_compra, itens=[], observacoes } = req.body;
     if (!cliente_id || !itens.length) return res.status(400).json({ ok:false, erro:'cliente e itens obrigatórios' });
     const cli = await pool.query(`SELECT * FROM clientes_fiado WHERE id=$1 AND tipo_cliente <> 'funcionario'`, [cliente_id]);
@@ -446,7 +447,7 @@ module.exports = function(pool, app) {
   });
 
   // ── PUT /vendas/:id/editar — editar itens/preços de venda aberta/parcial ──
-  r.put('/vendas/:id/editar', permitir('fiado_editar',['gestor']), async (req, res) => {
+  r.put('/vendas/:id/editar', permitir('fiado_editar',['gestor','gerente_operacional']), async (req, res) => {
     const { itens, observacoes } = req.body;
     if (!Array.isArray(itens) || !itens.length || itens.some(i=>!i||typeof i.nome_produto!=='string'||!i.nome_produto.trim()||!Number.isFinite(Number(i.quantidade))||Number(i.quantidade)<=0||[i.valor_unit_venda,i.valor_unit_custo,i.desconto_pct].some(n=>!Number.isFinite(Number(n??0))||Number(n??0)<0)||Number(i.desconto_pct||0)>100)) return res.status(400).json({ ok:false, erro:'itens obrigatórios' });
 
@@ -531,7 +532,7 @@ module.exports = function(pool, app) {
   });
 
   r.put('/vendas/:id/aprovar', async (req, res) => {
-    if (!['admin','gestor'].includes(req.user?.perfil)) return res.status(403).json({ ok:false, erro:'Sem permissão' });
+    if (!['admin','gestor','gerente_operacional'].includes(req.user?.perfil)) return res.status(403).json({ ok:false, erro:'Sem permissão' });
     try {
       const { rows } = await pool.query(
         `UPDATE vendas_fiado SET status='aberto', saldo_restante=total_final,
@@ -545,7 +546,7 @@ module.exports = function(pool, app) {
   });
 
   r.put('/vendas/:id/reprovar', async (req, res) => {
-    if (!['admin','gestor'].includes(req.user?.perfil)) return res.status(403).json({ ok:false, erro:'Sem permissão' });
+    if (!['admin','gestor','gerente_operacional'].includes(req.user?.perfil)) return res.status(403).json({ ok:false, erro:'Sem permissão' });
     const { motivo } = req.body;
     if (!motivo?.trim()) return res.status(400).json({ ok:false, erro:'Motivo obrigatório' });
     try {
@@ -562,7 +563,7 @@ module.exports = function(pool, app) {
     } catch(e) { res.status(500).json({ ok:false, erro:e.message }); }
   });
 
-  r.put('/vendas/:id/cancelar', permitir('fiado_cancelar',['gestor']), async (req, res) => {
+  r.put('/vendas/:id/cancelar', permitir('fiado_cancelar',['gestor','gerente_operacional']), async (req, res) => {
     const { motivo } = req.body;
     if (!motivo?.trim()) return res.status(400).json({ ok:false, erro:'Motivo obrigatório' });
     try {
@@ -579,7 +580,7 @@ module.exports = function(pool, app) {
   });
 
   // ── PAGAMENTOS ─────────────────────────────────────────────────────────────
-  r.post('/pagamentos', permitir('fiado_pagamentos',['gestor']), async (req, res) => {
+  r.post('/pagamentos', permitir('fiado_pagamentos',['gestor','gerente_operacional']), async (req, res) => {
     const { cliente_id, data_pagamento, valor_pago, forma_pagamento='dinheiro', observacoes, venda_id, saldo_esperado, idempotencia } = req.body;
     const loja = req.user?.lojaId;
     const valor = centavos(valor_pago);
@@ -634,7 +635,7 @@ module.exports = function(pool, app) {
   });
 
   // ── PATCH /vendas/:id/baixa-pdv — marca que a venda foi lançada no PDV ──────
-  r.patch('/vendas/:id/baixa-pdv', permitir('fiado_pdv',['gestor','financeiro']), async (req, res) => {
+  r.patch('/vendas/:id/baixa-pdv', permitir('fiado_pdv',['gestor','gerente_operacional','financeiro']), async (req, res) => {
     const { desfazer } = req.body;
     try {
       await pool.query(`ALTER TABLE vendas_fiado ADD COLUMN IF NOT EXISTS baixa_pdv BOOLEAN DEFAULT false`).catch(()=>{});

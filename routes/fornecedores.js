@@ -70,7 +70,7 @@ module.exports = (pool) => {
 
   // ── POST /api/fornecedores/sincronizar ──────────────────────────────────────
   // Popula fornecedores e fornecedor_produtos a partir do histórico de compras
-  router.post('/sincronizar', autenticar(['admin','gestor']), async (req, res) => {
+  router.post('/sincronizar', autenticar(['admin','gestor','gerente_operacional']), async (req, res) => {
     try {
       // 1. Upsert de todos os fornecedores distintos em compras_produto
       const { rows: fornRows } = await pool.query(`
@@ -416,7 +416,7 @@ module.exports = (pool) => {
 
 
   // ── POST /dedup — remove fornecedores duplicados por CNPJ ──────────────────
-  router.post('/dedup', autenticar(['admin','gestor']), async (req, res) => {
+  router.post('/dedup', autenticar(['admin','gestor','gerente_operacional']), async (req, res) => {
     try {
       // A tabela de produção é legada: o CNPJ é a PK e pode não existir coluna id.
       // Usa ctid somente dentro desta instrução atômica para identificar cada linha.

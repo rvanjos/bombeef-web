@@ -61,7 +61,7 @@ test('admin mantém gestão e escopo meu também respeita o vínculo pessoal',as
  const f=fixture();const r=await f.chamar('/documentos','get',{user:{perfil:'admin'}});assert.deepEqual(r.body.data.map(d=>d.id),[101,202]);const proprio=await f.chamar('/documentos','get',{user:{perfil:'admin'},query:{escopo:'meu',funcionario_id:22}});assert.deepEqual(proprio.body.data.map(d=>d.id),[101]);
 });
 test('cadeia Express completa permite lista, popup, arquivo e ateste próprios em todos os perfis de funcionário',async()=>{
- for(const perfil of ['gestor','operador','caixa','estoque','financeiro','contabil']){
+ for(const perfil of ['gestor','gerente_operacional','operador','caixa','estoque','financeiro','contabil']){
   const f=fixture(),u={id:7,perfil,lojaId:1};
   const lista=await f.viaRouter('/documentos?escopo=meu&funcionario_id=22','GET',u);assert.equal(lista.status,200,perfil+' deve alcançar a rota de documentos');assert.deepEqual(lista.body.data.map(d=>d.id),[101]);
   const aviso=await f.viaRouter('/documentos/meus-pendentes','GET',u);assert.equal(aviso.status,200);assert.equal(aviso.body.total,1);

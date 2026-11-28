@@ -116,7 +116,7 @@ module.exports = function (pool, app) {
   // Documentos trabalhistas são sensíveis: somente admin gerencia o conjunto.
   // Qualquer outro perfil, inclusive gestor operacional, acessa apenas o próprio vínculo.
   function gestorRH(req){ return req.user?.perfil==='admin'; }
-  function podePublicarDocumento(req){return gestorRH(req)||(req.user?.perfil==='gestor'&&req.user?.permissoes?.rh_documentos_publicar===true);}
+  function podePublicarDocumento(req){return gestorRH(req)||(['gestor','gerente_operacional'].includes(req.user?.perfil)&&req.user?.permissoes?.rh_documentos_publicar===true);}
   // BB-SSE-AUTOPUBLISH — avisa os outros modulos quando algo muda aqui.
   // Roda em todas as rotas, mas so publica em mutacao bem-sucedida.
   const _pub = (c, d) => { try { app?.locals?.ssePublish?.(c, d); } catch(_) {} };

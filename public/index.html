@@ -526,26 +526,26 @@ body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var
     <button class="pnav-tab" data-label="Análise de vendas" onclick="showTab('vendasproduto')" data-tab="vendasproduto" data-perfil="admin,gestor"><span class="tab-icon">📈</span><span class="tab-label">Análise de vendas</span></button>
 
     <div class="pnav-section">Estoque &amp; Compras</div>
-    <button class="pnav-tab" data-label="Produtos" onclick="showTab('produtos')"  data-tab="produtos"  data-perfil="admin,gestor,estoque"><span class="tab-icon">📦</span><span class="tab-label">Produtos</span></button>
-    <button class="pnav-tab" data-label="Cortes" onclick="showTab('cortes')"    data-tab="cortes"    data-perfil="admin,gestor,estoque"><span class="tab-icon">🔪</span><span class="tab-label">Cortes</span></button>
-    <button class="pnav-tab" data-label="Validade" onclick="showTab('validade')"  data-tab="validade"  data-perfil="admin,gestor,estoque,caixa"><span class="tab-icon">🗓</span><span class="tab-label">Validade</span></button>
-    <button class="pnav-tab" data-label="Compras" onclick="showTab('compras')"   data-tab="compras"   data-perfil="admin,gestor"><span class="tab-icon">🛒</span><span class="tab-label">Compras</span></button>
-    <button class="pnav-tab" data-label="Fornecedores" onclick="showTab('fornecedores')" data-tab="fornecedores" data-perfil="admin,gestor"><span class="tab-icon">🏭</span><span class="tab-label">Fornecedores</span></button>
+    <button class="pnav-tab" data-label="Produtos" onclick="showTab('produtos')"  data-tab="produtos"  data-perfil="gerente_operacional,admin,gestor,estoque"><span class="tab-icon">📦</span><span class="tab-label">Produtos</span></button>
+    <button class="pnav-tab" data-label="Cortes" onclick="showTab('cortes')"    data-tab="cortes"    data-perfil="gerente_operacional,admin,gestor,estoque"><span class="tab-icon">🔪</span><span class="tab-label">Cortes</span></button>
+    <button class="pnav-tab" data-label="Validade" onclick="showTab('validade')"  data-tab="validade"  data-perfil="gerente_operacional,admin,gestor,estoque,caixa"><span class="tab-icon">🗓</span><span class="tab-label">Validade</span></button>
+    <button class="pnav-tab" data-label="Compras" onclick="showTab('compras')"   data-tab="compras"   data-perfil="gerente_operacional,admin,gestor"><span class="tab-icon">🛒</span><span class="tab-label">Compras</span></button>
+    <button class="pnav-tab" data-label="Fornecedores" onclick="showTab('fornecedores')" data-tab="fornecedores" data-perfil="gerente_operacional,admin,gestor"><span class="tab-icon">🏭</span><span class="tab-label">Fornecedores</span></button>
 
     <div class="pnav-section">Comercial</div>
-    <button class="pnav-tab" data-label="Promoções" onclick="showTab('promocoes')" data-tab="promocoes" data-perfil="admin,gestor,estoque"><span class="tab-icon">🎯</span><span class="tab-label">Promoções</span></button>
-    <button class="pnav-tab" data-label="Kits" onclick="showTab('kits')"      data-tab="kits"      data-perfil="admin,gestor,estoque"><span class="tab-icon">🎁</span><span class="tab-label">Kits</span></button>
-    <button class="pnav-tab" data-label="Metas" onclick="showTab('metas')"     data-tab="metas"     data-perfil="admin,gestor"><span class="tab-icon">🏆</span><span class="tab-label">Metas</span></button>
+    <button class="pnav-tab" data-label="Promoções" onclick="showTab('promocoes')" data-tab="promocoes" data-perfil="gerente_operacional,admin,gestor,estoque"><span class="tab-icon">🎯</span><span class="tab-label">Promoções</span></button>
+    <button class="pnav-tab" data-label="Kits" onclick="showTab('kits')"      data-tab="kits"      data-perfil="gerente_operacional,admin,gestor,estoque"><span class="tab-icon">🎁</span><span class="tab-label">Kits</span></button>
+    <button class="pnav-tab" data-label="Metas" onclick="showTab('metas')"     data-tab="metas"     data-perfil="gerente_operacional,admin,gestor"><span class="tab-icon">🏆</span><span class="tab-label">Metas</span></button>
 
     <div class="pnav-section">Pessoas</div>
-    <button class="pnav-tab" data-label="RH" onclick="showTab('rh')"          data-tab="rh"          data-perfil="admin,gestor,operador,caixa,estoque,financeiro,contabil"><span class="tab-icon">🧑‍💼</span><span class="tab-label">RH</span><span id="nav-badge-rh" style="display:none;background:#dc2626;color:#fff;border-radius:9px;padding:0 5px;font-size:10px;margin-left:3px;font-weight:700">0</span></button>
-    <button class="pnav-tab" data-label="Ponto" onclick="showTab('ponto')" data-tab="ponto" data-perfil="admin,gestor,operador,caixa"><span class="tab-icon">⏱️</span><span class="tab-label">Ponto</span><span id="nav-badge-ponto" style="display:none;background:#dc2626;color:#fff;border-radius:9px;padding:0 5px;font-size:10px;margin-left:3px;font-weight:700">0</span></button>
+    <button class="pnav-tab" data-label="RH" onclick="showTab('rh')"          data-tab="rh"          data-perfil="gerente_operacional,admin,gestor,operador,caixa,estoque,financeiro,contabil"><span class="tab-icon">🧑‍💼</span><span class="tab-label">RH</span><span id="nav-badge-rh" style="display:none;background:#dc2626;color:#fff;border-radius:9px;padding:0 5px;font-size:10px;margin-left:3px;font-weight:700">0</span></button>
+    <button class="pnav-tab" data-label="Ponto" onclick="showTab('ponto')" data-tab="ponto" data-perfil="gerente_operacional,admin,gestor,operador,caixa"><span class="tab-icon">⏱️</span><span class="tab-label">Ponto</span><span id="nav-badge-ponto" style="display:none;background:#dc2626;color:#fff;border-radius:9px;padding:0 5px;font-size:10px;margin-left:3px;font-weight:700">0</span></button>
     <button class="pnav-tab" data-label="Minha Conta" onclick="showTab('minha-conta')" data-tab="minha-conta" data-perfil="operador,caixa"><span class="tab-icon">💼</span><span class="tab-label">Minha Conta</span></button>
 
     <div class="pnav-section">Operacional</div>
-    <button class="pnav-tab" data-label="Retiradas" onclick="showTab('retiradas')" data-tab="retiradas" data-perfil="admin,gestor,caixa"><span class="tab-icon">💸</span><span class="tab-label">Retiradas</span><span id="nav-badge-retiradas-pend" style="display:none;background:#dc2626;color:#fff;border-radius:9px;padding:0 5px;font-size:10px;margin-left:3px;font-weight:700">0</span></button>
-    <button class="pnav-tab" data-label="Fiado" onclick="showTab('fiado')"     data-tab="fiado"     data-perfil="admin,gestor,caixa"><span class="tab-icon">💳</span><span class="tab-label">Fiado</span><span id="nav-badge-fiado" style="display:none;background:#dc2626;color:#fff;border-radius:9px;padding:0 5px;font-size:10px;margin-left:3px;font-weight:700">0</span></button>
-    <button class="pnav-tab" data-label="Documentação" onclick="showTab('documentacao')" data-tab="documentacao" data-perfil="admin,gestor"><span class="tab-icon">📄</span><span class="tab-label">Documentação</span></button>
+    <button class="pnav-tab" data-label="Retiradas" onclick="showTab('retiradas')" data-tab="retiradas" data-perfil="gerente_operacional,admin,gestor,caixa"><span class="tab-icon">💸</span><span class="tab-label">Retiradas</span><span id="nav-badge-retiradas-pend" style="display:none;background:#dc2626;color:#fff;border-radius:9px;padding:0 5px;font-size:10px;margin-left:3px;font-weight:700">0</span></button>
+    <button class="pnav-tab" data-label="Fiado" onclick="showTab('fiado')"     data-tab="fiado"     data-perfil="gerente_operacional,admin,gestor,caixa"><span class="tab-icon">💳</span><span class="tab-label">Fiado</span><span id="nav-badge-fiado" style="display:none;background:#dc2626;color:#fff;border-radius:9px;padding:0 5px;font-size:10px;margin-left:3px;font-weight:700">0</span></button>
+    <button class="pnav-tab" data-label="Documentação" onclick="showTab('documentacao')" data-tab="documentacao" data-perfil="gerente_operacional,admin,gestor"><span class="tab-icon">📄</span><span class="tab-label">Documentação</span></button>
 
     <div class="pnav-section">Administração</div>
     <button class="pnav-tab" data-label="Configurações" onclick="showTab('config')"    data-tab="config"    data-perfil="admin,gestor"><span class="tab-icon">⚙️</span><span class="tab-label">Configurações</span></button>
@@ -1067,7 +1067,7 @@ function entrarNoPortal() {
   $('ph-av').textContent   = (usuario.nome||'?')[0].toUpperCase();
   $('ph-uname').textContent = usuario.nome;
   $('ph-uname').title = usuario.nome || '';
-  $('ph-role').textContent  = usuario.perfil==='gestor'?'Gerente':usuario.perfil;
+  $('ph-role').textContent  = usuario.perfil==='gerente_operacional'?'Gerente operacional':usuario.perfil;
   window.BBPerfil?.iniciar(apiFetch,usuario.id);
   renderLojaAtiva();
 
@@ -1192,6 +1192,7 @@ window.addEventListener('pagehide', () => {
 function renderInicio() {
   const prioridades = {
     gestor: ['ponto','validade','retiradas','rh'],
+    gerente_operacional: ['retiradas','fiado','compras','rh','ponto'],
     caixa: ['ponto','retiradas','fiado','validade'],
     operador: ['ponto','rh','minha-conta'],
     estoque: ['validade','produtos','cortes'],

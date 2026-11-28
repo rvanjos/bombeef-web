@@ -93,6 +93,29 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
 .bb-footer { display: none !important; }
 /* ─────────────────────────────────────────────────────────────────────────── */
 
+
+/* Configurações legíveis, ações visíveis e formulários sem corte em telas pequenas. */
+.usr-edit{margin-top:10px;white-space:normal;min-height:44px}
+#usuarios-tabela td{overflow-wrap:anywhere}
+#usuarios-tabela .pill{white-space:normal}
+.modal-head{position:sticky;top:0;background:#fff;z-index:2}
+.modal-foot{position:sticky;bottom:0;background:#fff;z-index:2;flex-wrap:wrap}
+.modal-close{min-width:44px;min-height:44px}
+.modal{max-height:calc(100dvh - 24px)}
+@media(max-width:900px){
+ .layout{display:block}.sidebar{display:none}.mobile-nav{display:flex!important;position:sticky;top:0;z-index:10;flex-wrap:wrap;overflow:visible}
+ .mobile-nav-btn{min-height:44px;padding:10px;font-size:13px}.content{padding:12px;overflow:visible}
+ #usuarios-tabela,#usuarios-tabela tbody{display:block;width:100%;min-width:0!important}
+ #usuarios-tabela thead{display:none}#usuarios-tabela tr{display:flex;flex-direction:column;padding:16px;border-bottom:2px solid var(--border);gap:9px}
+ #usuarios-tabela td{display:block;width:100%!important;padding:0;border:0;font-size:14px;white-space:normal!important}
+ #usuarios-tabela td:first-child{font-size:17px}#usuarios-tabela .usr-edit{width:100%;justify-content:center}
+ #usuarios-tabela td:last-child{display:flex;gap:8px}.act-btn{min-height:44px;min-width:44px}
+ .fg-row,.fg-row3{grid-template-columns:1fr}.fg input,.fg select,.fg textarea{font-size:16px;min-height:44px}
+ .modal-bg{padding:6px}.modal{max-height:calc(100dvh - 12px);max-width:640px}.modal-body{padding:14px}
+ #bb-multiloja-admin-link{position:static!important;transform:none!important;max-width:calc(100% - 24px);margin:12px;white-space:normal}
+ #email-status-usuarios{font-size:12px;padding:12px;margin-bottom:12px}
+}
+
 </style>
 </head>
 <body>
@@ -195,11 +218,11 @@ if(window.self !== window.top){
 
     <!-- USUÁRIOS -->
     <div class="page" id="page-usuarios">
-      <div class="pg-title">Usuários do Sistema</div>
+      <div class="pg-title">Usuários e permissões</div><p class="pg-sub">Use <strong>Editar perfil e permissões</strong> no cartão de cada pessoa. O perfil <strong>Gestor</strong> é o anterior; <strong>Gerente operacional</strong> é um perfil separado.</p>
       <div class="pg-sub">Gerencie quem tem acesso, funções operacionais e dados de contato. Documentos pessoais continuam restritos ao titular e ao administrador.</div><div class="card" id="email-status-usuarios">Consultando serviço de avisos…</div>
       <div style="margin-bottom:14px"><button class="btn btn-p" onclick="abrirUsuario()">＋ Novo Usuário</button></div>
       <div class="card" style="padding:0;overflow:hidden">
-        <table class="tbl"><thead><tr><th>Nome</th><th>E-mail</th><th>Perfil</th><th>Status</th><th>Ações</th></tr></thead>
+        <table class="tbl" id="usuarios-tabela"><thead><tr><th>Nome / edição</th><th>Contato</th><th>Perfil</th><th>Status</th><th>Ações</th></tr></thead>
         <tbody id="tbody-usr"></tbody></table>
       </div>
     </div>
@@ -302,7 +325,8 @@ if(window.self !== window.top){
   <option value="estoque">Estoque — Produtos e Validade</option>
   <option value="financeiro">Financeiro — Boletos e DRE</option>
   <option value="contabil">Contábil — Somente leitura (DRE, Boletos, Faturamento)</option>
-  <option value="gestor">Gerente operacional — sem DRE, aprovação de ponto ou gestão de usuários</option>
+  <option value="gestor">Gestor — perfil anterior</option>
+  <option value="gerente_operacional">Gerente operacional — perfil novo</option>
   <option value="admin">Admin — Acesso Total</option>
 </select>
       </div>
@@ -524,16 +548,16 @@ async function ativarLoja(id){
 }
 
 // ── Usuários ───────────────────────────────────────────────────────────────
-async function statusAvisosUsuarios(){const d=await api.get('/auth/perfil/avisos/status');const el=document.getElementById('email-status-usuarios');if(!el)return;el.textContent=d.ok?(d.configurado?'Envio de e-mails configurado. ':'Envio de e-mails ainda não configurado: o administrador deve definir RESEND_API_KEY e EMAIL_FROM no Railway. ')+(d.data||[]).map(x=>x.status+': '+x.quantidade).join(' · '):'Não foi possível consultar os avisos.';if(d.configurado){const b=document.createElement('button');b.className='btn btn-s';b.textContent='Reprocessar avisos com falha';b.onclick=async()=>{b.disabled=true;const r=await api.post('/auth/perfil/avisos/reprocessar',{});toast(r.ok?'Fila reprocessada':r.erro);statusAvisosUsuarios();};el.append(b);}}
+async function statusAvisosUsuarios(){const d=await api.get('/auth/perfil/avisos/status');const el=document.getElementById('email-status-usuarios');if(!el)return;el.textContent=d.ok?(d.configurado?'Envio de e-mails configurado. ':'Avisos por e-mail ainda não estão ativos. Isso não impede salvar usuários ou permissões. ')+(d.data||[]).map(x=>x.status+': '+x.quantidade).join(' · '):'Não foi possível consultar os avisos.';if(d.configurado){const b=document.createElement('button');b.className='btn btn-s';b.textContent='Reprocessar avisos com falha';b.onclick=async()=>{b.disabled=true;const r=await api.post('/auth/perfil/avisos/reprocessar',{});toast(r.ok?'Fila reprocessada':r.erro);statusAvisosUsuarios();};el.append(b);}}
 async function carregarUsuarios(){
   const d = await api.get('/auth/usuarios');
   if(!d.ok) return;
   usuarios = d.data;
   statusAvisosUsuarios();
   const tb = document.getElementById('tbody-usr');
-  const perfis={admin:'Admin',gestor:'Gerente operacional',financeiro:'Financeiro',estoque:'Estoque',caixa:'Caixa'};
+  const perfis={admin:'Admin',gestor:'Gestor',gerente_operacional:'Gerente operacional',financeiro:'Financeiro',estoque:'Estoque',caixa:'Caixa'};
   tb.innerHTML = usuarios.map(u=>`<tr>
-    <td><b>${escLoja(u.nome)}</b></td>
+    <td><b>${escLoja(u.nome)}</b><br><button class="btn btn-s usr-edit" onclick="abrirUsuario(${Number(u.id)})">Editar perfil e permissões</button></td>
     <td style="font-size:12px">${escLoja(u.email)}<br><small>${escLoja(u.telefone||'Sem telefone')} · ${escLoja(u.cargo||'Sem cargo')} · ${escLoja(u.departamento||'Sem setor')}</small><br><small>Avisos: ${escLoja(u.email_notificacoes||'não cadastrado')} · ${u.email_confirmado_em?'confirmado':'não confirmado'}</small><br><small>Último acesso: ${u.ultimo_login?escLoja(new Date(u.ultimo_login).toLocaleString('pt-BR')):'nunca'}</small></td>
     <td><span class="pill" style="background:#e8e0ff;color:#4a2080">${escLoja(perfis[u.perfil]||u.perfil)}</span></td>
     <td><span class="pill ${u.ativo?'pill-ok':'pill-off'}">${u.ativo?'Ativo':'Inativo'}</span></td>
@@ -611,7 +635,7 @@ function abrirUsuario(id){
   document.getElementById('u-senha-wrap').style.display = u?'none':'';
   document.getElementById('modal-usr').classList.add('open');
 }
-function padraoGerente(){document.getElementById('u-perfil').value='gestor';for(const id of ['u-p-ret-ver','u-p-ret-lancar','u-p-ret-pagar','u-p-ret-pdv','u-p-ret-editar','u-p-fia-clientes','u-p-fia-lancar','u-p-fia-editar','u-p-fia-cancelar','u-p-fia-pagar','u-p-fia-pdv','u-p-kits-gerenciar','u-p-rh-publicar'])document.getElementById(id).checked=true;}
+function padraoGerente(){document.getElementById('u-perfil').value='gerente_operacional';for(const id of ['u-p-ret-ver','u-p-ret-lancar','u-p-ret-pagar','u-p-ret-pdv','u-p-ret-editar','u-p-fia-clientes','u-p-fia-lancar','u-p-fia-editar','u-p-fia-cancelar','u-p-fia-pagar','u-p-fia-corrigir','u-p-fia-pdv','u-p-kits-gerenciar','u-p-rh-publicar'])document.getElementById(id).checked=true;}
 function fecharUsr(){ document.getElementById('modal-usr').classList.remove('open'); }
 
 async function salvarUsr(){
