@@ -102,8 +102,10 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_login_sessoes_atividade ON login_sessoes(ultima_atividade DESC)`);
     await pool.query(`ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS permissoes JSONB NOT NULL DEFAULT '{}'::jsonb`);
 
+    console.log('[auth] preparação dos perfis: cadastro');
     await garantirPerfil(pool);
     await pool.query(`ALTER TABLE usuarios DROP CONSTRAINT IF EXISTS usuarios_perfil_check; ALTER TABLE usuarios ADD CONSTRAINT usuarios_perfil_check CHECK (perfil IN ('admin','gestor','gerente_operacional','financeiro','estoque','caixa','contabil'));`);
+    console.log('[auth] preparação dos perfis: tipos prontos');
     // Cria admin padrão se não existir
     const { rows } = await pool.query(`SELECT id FROM usuarios WHERE perfil='admin' LIMIT 1`);
     if (rows.length === 0) {
@@ -123,6 +125,7 @@ r.put('/usuarios/:id/reativar', autenticar('admin'), async (req, res) => {
       console.log('[auth] usuário administrador inicial criado');
     }
 
+    console.log('[auth] preparação dos perfis: vínculos');
     await garantirEstruturaMultiloja(pool);
     const gerentesMigrados=await require('../lib/gerente-operacional').migrarDaniela(pool);
     console.log('[auth] perfil operacional: migrações aplicadas',gerentesMigrados);
