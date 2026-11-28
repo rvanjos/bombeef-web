@@ -13,6 +13,11 @@
       if(tentativa<2)await new Promise(resolve=>setTimeout(resolve,500));
     }
     if(atual!==geracao||!resposta?.ok||!Number.isSafeInteger(resposta.total)||resposta.total<=0)return;
+    // Não empilhar dois modais nativos: o segundo torna o primeiro inerte no Safari.
+    if(document.querySelector('#bb-meu-perfil[open]')){
+      document.querySelector('#bb-meu-perfil[open]').addEventListener('close',()=>{if(atual===geracao)verificar({consultar,abrir});},{once:true});
+      return;
+    }
     const anterior=document.activeElement;
     const d=document.createElement('dialog');dialogo=d;
     d.id='bb-documentos-aviso';d.setAttribute('aria-labelledby','bb-documentos-aviso-titulo');
